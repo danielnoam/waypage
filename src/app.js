@@ -9,7 +9,7 @@
 // only use what an earlier part, or its own, has declared. A part's
 // functions can call into any part, since nothing is tapped until all of
 // them have loaded. app-start.js runs last and starts things up.
-const APP_VERSION = "1.18.0";
+const APP_VERSION = "1.19.0";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
@@ -171,6 +171,13 @@ paintTheme(state.theme);
 // which src/reader.js copies into the page like the theme's colours.
 const SIZE_MIN = 14, SIZE_MAX = 32;
 const SPACING_MIN = 1.2, SPACING_MAX = 2.2;
+// Letter and word spacing in em, paragraph spacing a multiple of the usual
+// gap (1.19.0). 0, 0 and 1 leave the page's own.
+const SPACES = {
+  letters: { min: -0.05, max: 0.15, step: 0.01 },
+  words: { min: 0, max: 0.5, step: 0.05 },
+  paras: { min: 0, max: 3, step: 0.25 },
+};
 // Every Latin font is followed by a Hebrew one (src/fonts.css), which
 // gives a Hebrew page its letters: the one picked, or else the one
 // matching the Latin font's style.
@@ -194,8 +201,14 @@ const HEBREW = [
   { value: "heebo", label: "Heebo", family: '"Heebo"' },
 ];
 const MARGINS = { narrow: ["var(--s-3)", "44rem"], normal: ["20px", "38rem"], wide: ["var(--s-7)", "32rem"] };
-const READING_DEFAULT = { size: 19, spacing: 1.6, font: "serif", hebrew: "auto", margins: "normal", layout: "scroll", spread: "auto", rail: true };
+const READING_DEFAULT = { size: 19, spacing: 1.6, letters: 0, words: 0, paras: 1, font: "serif", hebrew: "auto", margins: "normal", align: "auto", layout: "scroll", spread: "auto", rail: true };
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+// Text alignment (1.19.0). "auto" leaves the clip or file as it came.
+const ALIGNS = [
+  { value: "auto", label: "Original" }, { value: "left", label: "Left" }, { value: "justify", label: "Justified" },
+  { value: "center", label: "Centered" }, { value: "right", label: "Right" },
+];
 
 // Before 0.24.0 size was a step of five and spacing a word.
 function readingPrefs() {
@@ -206,7 +219,12 @@ function readingPrefs() {
   r.spacing = Number.isFinite(r.spacing) ? clamp(Math.round(r.spacing * 20) / 20, SPACING_MIN, SPACING_MAX) : READING_DEFAULT.spacing;
   if (!FONTS.some((f) => f.value === r.font)) r.font = READING_DEFAULT.font;
   if (!HEBREW.some((f) => f.value === r.hebrew)) r.hebrew = READING_DEFAULT.hebrew;
+  for (const [k, s] of Object.entries(SPACES)) {
+    r[k] = Number.isFinite(r[k]) ? clamp(Math.round(r[k] / s.step) * s.step, s.min, s.max) : READING_DEFAULT[k];
+    r[k] = Math.round(r[k] * 100) / 100;
+  }
   if (!MARGINS[r.margins]) r.margins = READING_DEFAULT.margins;
+  if (!ALIGNS.some((a) => a.value === r.align)) r.align = READING_DEFAULT.align;
   if (r.layout !== "pages") r.layout = "scroll";
   if (!["one", "two", "auto"].includes(r.spread)) r.spread = "auto";
   r.rail = r.rail !== false;
@@ -228,6 +246,10 @@ function paintReading() {
   root.setProperty("--reader-font", fontStack(r));
   root.setProperty("--reader-pad", MARGINS[r.margins][0]);
   root.setProperty("--reader-measure", MARGINS[r.margins][1]);
+  root.setProperty("--reader-ls", r.letters ? r.letters + "em" : "normal");
+  root.setProperty("--reader-ws", r.words ? r.words + "em" : "normal");
+  root.setProperty("--reader-ps", String(r.paras));
+  document.documentElement.dataset.readAlign = r.align;
   if (C.reader) C.reader.applyTheme();
 }
 
