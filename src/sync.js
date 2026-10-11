@@ -144,7 +144,12 @@
     for (const k of keys) {
       if (CONTENT.includes(k)) out[k] = !same(l.savedAt, r.savedAt) ? contentFrom[k] : pick(k);
       else if (k === "readOn") out[k] = readFrom[k];
-      else if (READING.includes(k)) out[k] = same(l[k], r[k]) ? l[k] : same(l[k], b[k]) ? r[k] : same(r[k], b[k]) ? l[k] : readFrom[k];
+      // Where you are goes with the side read last (1.21.0). Three ways
+      // only when both were read at the same time: a library that went
+      // back (an older copy on disk) read as a change made here, and sent
+      // the old place everywhere.
+      else if (READING.includes(k)) out[k] = (l.readAt || 0) !== (r.readAt || 0) ? readFrom[k]
+        : same(l[k], r[k]) ? l[k] : same(l[k], b[k]) ? r[k] : same(r[k], b[k]) ? l[k] : readFrom[k];
       else if (k === "tags") out[k] = mergeTags(b.tags, l.tags, r.tags);
       else if (k === "marks") out[k] = mergeMarks(b.marks, l.marks, r.marks);
       else out[k] = pick(k);

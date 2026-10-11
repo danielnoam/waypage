@@ -380,6 +380,7 @@ async function reportText() {
     "Waypage " + APP_VERSION + (C.platform.build && C.platform.build.builtAt ? " (built " + String(C.platform.build.builtAt).slice(0, 10) + ")" : "") + ", " + (C.platform.native ? C.platform.os + " app" : "browser"),
     await C.platform.deviceLine(),
     countLine(state.pages.length) + ", theme " + state.theme + ", sync " + (C.sync.on ? "on" : "off"),
+    load(START_KEY, []).map((t) => "Start: " + t.shown + " ms (scripts " + t.scripts + ", library " + t.library + ") with " + t.clips + " clips").join("\n") || "Start: not measured",
     "",
     lines.length ? "Log:\n" + lines.join("\n") : "Log: empty",
   ].join("\n");
@@ -433,6 +434,7 @@ function aboutGroup() {
     list,
     !C.platform.native && !installed && !installPrompt && ios
       ? el("p", { class: "footnote install-hint" }, "To install Waypage, tap Share, then Add to Home Screen.") : null,
+    startLine() ? el("p", { class: "footnote start-line" }, startLine()) : null,
     el("p", { class: "footnote" }, "Clips stay " + ON_HERE + ". Waypage collects nothing."));
 }
 

@@ -384,6 +384,29 @@ const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
       await p.evaluate(() => { delete state.pages.find((x) => /Long Haul/.test(x.title)).file; });
     });
 
+    await test("a clip open only a moment doesn't become Continue reading, and old history isn't reopened (1.21.0)", async () => {
+      const got = await p.evaluate(async () => {
+        const p0 = state.pages[0];
+        p0.readAt = 1; p0.at = 0.3; p0.finished = false;
+        const before = p0.readAt;
+        await openPage(p0.id);
+        await new Promise((r) => setTimeout(r, 500));
+        history.back();
+        await new Promise((r) => setTimeout(r, 3500));
+        const brief = p0.readAt;
+        // An entry from a launch before this one is skipped, not opened.
+        history.pushState({ view: "reader", page: p0.id }, "");
+        History.prototype.replaceState.call(history, { view: "reader", page: p0.id, launch: "older" }, "");
+        history.pushState({ view: "menu" }, "");
+        history.back();
+        await new Promise((r) => setTimeout(r, 400));
+        return { before, brief, open: !!state.open, view: (history.state && history.state.view) || "" };
+      });
+      assert.strictEqual(got.brief, got.before, "a quick look stamped it as read");
+      assert.strictEqual(got.open, false, "an old entry opened its clip");
+      assert.strictEqual(got.view, "");
+    });
+
     await test("nothing went wrong along the way", async () => {
       assert.deepStrictEqual(p.errors, [], p.errors.join(" | "));
     });

@@ -20,12 +20,19 @@ function syncSoon(ms = runs.size ? 20000 : 4000) {
   clearTimeout(syncTimer);
   syncTimer = setTimeout(() => { syncTimer = null; if (C.sync.running) syncSoon(ms); else syncNow(); }, ms);
 }
+// A change on this device not yet sent (1.21.0), so going to another
+// app sends it even when no sync was due, and one made while a sync ran
+// goes in another right after it.
+let unsynced = false;
 async function syncNow(quiet = true) {
   if (!C.sync.on || C.sync.paused) return null;
   if (!navigator.onLine && quiet) return null;
   if (waitsForWifi(DATA_SYNC_KEY)) { if (!quiet) toast("Sync waits for Wi-Fi. Change that below."); return null; }
   clearTimeout(syncTimer);
   syncTimer = null;
+  const joined = C.sync.running;
+  const sending = unsynced;
+  if (!joined) unsynced = false;
   let res = null;
   try {
     res = await C.sync.run({
@@ -59,8 +66,10 @@ async function syncNow(quiet = true) {
       onProgress: () => { if (state.section === "sync") renderSection(); paintDownloads(); },
     });
   } catch (e) {
+    if (!joined) unsynced = unsynced || sending;
     if (!quiet) toast(C.sync.last.error || "Sync stopped. Try again.");
   }
+  if (joined && unsynced) return syncNow(quiet);
   if (state.section === "sync") renderSection();
   paintDownloads();
   if (res && res.downloads.length) { syncQueue.push(...res.downloads.map((p) => p.id)); keepQueue(); fetchPictures(); }

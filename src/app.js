@@ -9,11 +9,20 @@
 // only use what an earlier part, or its own, has declared. A part's
 // functions can call into any part, since nothing is tapped until all of
 // them have loaded. app-start.js runs last and starts things up.
-const APP_VERSION = "1.20.0";
+const APP_VERSION = "1.21.0";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
 const M = C.motion;
+
+// Every history entry carries this launch's mark (1.21.0). After a restart
+// the entries from before are still behind the first one, and Back into
+// one of them opened that old clip again.
+const LAUNCH = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+for (const name of ["pushState", "replaceState"]) {
+  const real = history[name].bind(history);
+  history[name] = (s, ...rest) => real(s && typeof s === "object" ? { ...s, launch: LAUNCH } : s, ...rest);
+}
 // Each theme is a token set in src/styles.css; "system" (Auto) picks
 // the light or dark one chosen for it from the phone's setting.
 const THEMES = [
