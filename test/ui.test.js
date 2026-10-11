@@ -307,8 +307,13 @@ const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
         await new Promise((r) => setTimeout(r, 100));
         const d = document.getElementById("readerFrame").contentDocument;
         const para = d.querySelector("p:not([class])");
+        // A book's paragraph is often a div with its own centring.
+        const div = d.createElement("div");
+        div.style.textAlign = "center";
+        div.textContent = "A paragraph made of a div.";
+        d.body.append(div);
         const cs = getComputedStyle(para);
-        const out = { align: cs.textAlign, ls: parseFloat(cs.letterSpacing), ws: parseFloat(cs.wordSpacing), mb: parseFloat(cs.marginBottom), fs: parseFloat(getComputedStyle(d.body).fontSize) };
+        const out = { divAlign: getComputedStyle(div).textAlign, h1Align: getComputedStyle(d.querySelector("h1")).textAlign, align: cs.textAlign, ls: parseFloat(cs.letterSpacing), ws: parseFloat(cs.wordSpacing), mb: parseFloat(cs.marginBottom), fs: parseFloat(getComputedStyle(d.body).fontSize) };
         setReading({ align: "auto", letters: 0, words: 0, paras: 1 });
         await new Promise((r) => setTimeout(r, 100));
         out.back = getComputedStyle(para).textAlign;
@@ -317,6 +322,8 @@ const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
         return out;
       });
       assert.strictEqual(got.align, "justify");
+      assert.strictEqual(got.divAlign, "justify");
+      assert.strictEqual(got.h1Align, "justify");
       assert.ok(Math.abs(got.ls - got.fs * 0.05) < 0.5, "letter spacing " + got.ls);
       assert.ok(Math.abs(got.ws - got.fs * 0.2) < 0.5, "word spacing " + got.ws);
       assert.strictEqual(got.mb, 32);
@@ -434,6 +441,44 @@ const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
       await q.locator("#sidebar .side-item", { hasText: "Collections" }).click();
       await q.locator("#sidebar").waitFor({ state: "hidden" });
       await until(q, () => document.querySelectorAll(".library .tile, .library [data-name]").length > 0 && !document.querySelector(".library .page-card:not([data-name])"));
+      // Library from inside Collections goes back to the library (1.20.0).
+      await q.waitForTimeout(500);
+      await q.click("#sideBtn");
+      await q.locator("#sidebar .side-item", { hasText: "Library" }).click();
+      await until(q, () => !state.part && !state.side && !(history.state && history.state.view));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("feeds: no count beside a feed in the sidebar, and picked posts save together (1.20.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(() => {
+        const now = Date.now();
+        localStorage.setItem("waypage.feeds", JSON.stringify([{ url: "https://example.com/feed", title: "Example News", days: 7,
+          items: [1, 2, 3].map((i) => ({ id: "p" + i, url: "https://example.com/post" + i, title: "Post " + i, date: now - i * 60000 })) }]));
+      });
+      await q.reload();
+      await q.click("#sideBtn");
+      const feedRow = q.locator("#sidebar .side-item", { hasText: "Example News" });
+      await feedRow.waitFor();
+      assert.strictEqual(await feedRow.locator(".side-n").count(), 0, "a count shows beside the feed");
+      await feedRow.click();
+      await q.locator("#feeds .post", { hasText: "Post 1" }).waitFor();
+      await q.waitForTimeout(400);
+      await q.locator("#feeds .feed-select").click();
+      await until(q, () => document.body.classList.contains("picking-posts") && !document.getElementById("selOpen").hidden);
+      assert.ok(await q.locator("#selOpen").isVisible() && !(await q.locator("#selTags").isVisible()));
+      await q.locator("#feeds .post", { hasText: "Post 1" }).locator(".post-open").click();
+      await q.locator("#feeds .post", { hasText: "Post 3" }).locator(".post-open").click();
+      assert.strictEqual(await q.textContent("#selectCount"), "2 posts picked");
+      const saved = await q.evaluate(async () => {
+        const got = [];
+        window.saveFeedPosts = (list) => { got.push(...list.map((x) => x.it.url)); };
+        await savePickedPosts();
+        return got;
+      });
+      assert.deepStrictEqual(saved.sort(), ["https://example.com/post1", "https://example.com/post3"]);
+      await until(q, () => !state.feedPick && !document.body.classList.contains("selecting"));
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

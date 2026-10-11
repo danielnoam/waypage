@@ -1736,6 +1736,16 @@ html { -webkit-tap-highlight-color: transparent; }
 .chip-label { overflow: hidden; text-overflow: ellipsis; max-width: 12rem; }
 .feed-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin: calc(-1 * var(--s-2)) 0 calc(-1 * var(--s-2)); }
 .feed-head .meta { margin: 0 0 0 var(--s-1); min-width: 0; }
+.feed-head-acts { display: flex; flex: none; }
+/* Picking posts (1.20.0) shares the library's bars, with its own actions. */
+.select-bar .post-only, .picking-posts .select-bar .select-act:not(.post-only) { display: none; }
+.picking-posts .select-bar .post-only { display: flex; }
+.picking-posts .post > .post-act, .picking-posts .post > .post-saved, .picking-posts .feed-select,
+.picking-posts .feed-group + .section-head .btn-text, .picking-posts .section-head .btn-text { visibility: hidden; }
+.picking-posts .post { padding-inline-end: var(--s-7); }
+.picking-posts .post .pick { position: absolute; top: 50%; margin-top: -12px; inset-inline-end: var(--s-4); }
+.picking-posts .post.picked { background: var(--surface); }
+.picking-posts #feeds { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
 .feed-check { flex-shrink: 0; }
 @media (hover: none) and (pointer: coarse) { .feed-check { display: none; } .feed-head { min-height: var(--tap); } }
 

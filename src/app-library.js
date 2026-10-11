@@ -983,7 +983,7 @@ function endSelect() {
 let picksPainted = false;
 function paintPicks() {
   const on = !!state.select;
-  document.body.classList.toggle("selecting", on);
+  document.body.classList.toggle("selecting", on || !!state.feedPick);
   // Nothing to clear when nothing was picked (1.2.0): every card was
   // visited on every redraw.
   if (!on && !picksPainted) return;
