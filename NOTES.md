@@ -3,6 +3,21 @@
 Why things are the way they are, newest first. Each entry starts with a
 bold title and its version so a search finds it.
 
+## Rules every release keeps
+
+Moved here from TODO.md (11 Oct 2026), which now lists only open work.
+
+- A page has **any number of tags** and is in **one folder at most**.
+- A folder is an **ordered set**: a name on the page (`folder`) plus its
+  place (`folderAt`), no separate folders file. Reordering rewrites
+  `folderAt`; a folder exists while a page names it.
+- Saved HTML stays untrusted: sandboxed iframe, no `allow-scripts`, strict
+  CSP. Anything new that renders saved content keeps to that.
+- No build step, no dependencies. Anything that looks like it needs a
+  library is written small in src/, or is a native plugin in native/.
+
+## Entries
+
 - **Big pictures made smaller (1.18.0).** Daniel asked to compress very
   large comics and pictures. `store.squeeze` reuses the preview shrink's
   canvas path: no wider than 1600 px (save.js FULL_WIDTH, enough for a
