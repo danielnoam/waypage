@@ -8,8 +8,8 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="src/fonts.css?v=1.19.0">
-  <link rel="stylesheet" href="src/styles.css?v=1.19.0">
+  <link rel="stylesheet" href="src/fonts.css?v=1.20.0">
+  <link rel="stylesheet" href="src/styles.css?v=1.20.0">
 </head>
 <body>
   <div class="app" id="libraryView">
@@ -262,6 +262,8 @@
     <button class="select-act" id="selTags" type="button"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.2"></circle></svg>Tags</button>
     <button class="select-act" id="selFolder" type="button"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>Collection</button>
     <button class="select-act" id="selRead" type="button"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span id="selReadLabel">Mark read</span></button>
+    <button class="select-act post-only" id="selOpen" type="button"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>Open</button>
+    <button class="select-act post-only" id="selSave" type="button"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Save</button>
     <button class="select-act danger" id="selDelete" type="button"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg>Delete</button>
   </div>
   <div class="screen-catch" id="screenCatch" hidden></div>
@@ -295,26 +297,26 @@
   </div>
   <div class="toast" id="toast" role="status" hidden></div>
 
-  <script src="src/platform.js?v=1.19.0"></script>
-  <script src="src/motion.js?v=1.19.0"></script>
-  <script src="src/vendor/Readability.js?v=1.19.0"></script>
-  <script src="src/store.js?v=1.19.0"></script>
-  <script src="src/save.js?v=1.19.0"></script>
-  <script src="src/feeds.js?v=1.19.0"></script>
-  <script src="src/backup.js?v=1.19.0"></script>
-  <script src="src/imports.js?v=1.19.0"></script>
-  <script src="src/sync.js?v=1.19.0"></script>
-  <script src="src/qr.js?v=1.19.0"></script>
-  <script src="src/epub.js?v=1.19.0"></script>
-  <script src="src/files.js?v=1.19.0"></script>
-  <script src="src/pdf.js?v=1.19.0"></script>
-  <script src="src/reader.js?v=1.19.0"></script>
-  <script src="src/app.js?v=1.19.0"></script>
-  <script src="src/app-reader.js?v=1.19.0"></script>
-  <script src="src/app-library.js?v=1.19.0"></script>
-  <script src="src/app-saving.js?v=1.19.0"></script>
-  <script src="src/app-places.js?v=1.19.0"></script>
-  <script src="src/app-settings.js?v=1.19.0"></script>
-  <script src="src/app-start.js?v=1.19.0"></script>
+  <script src="src/platform.js?v=1.20.0"></script>
+  <script src="src/motion.js?v=1.20.0"></script>
+  <script src="src/vendor/Readability.js?v=1.20.0"></script>
+  <script src="src/store.js?v=1.20.0"></script>
+  <script src="src/save.js?v=1.20.0"></script>
+  <script src="src/feeds.js?v=1.20.0"></script>
+  <script src="src/backup.js?v=1.20.0"></script>
+  <script src="src/imports.js?v=1.20.0"></script>
+  <script src="src/sync.js?v=1.20.0"></script>
+  <script src="src/qr.js?v=1.20.0"></script>
+  <script src="src/epub.js?v=1.20.0"></script>
+  <script src="src/files.js?v=1.20.0"></script>
+  <script src="src/pdf.js?v=1.20.0"></script>
+  <script src="src/reader.js?v=1.20.0"></script>
+  <script src="src/app.js?v=1.20.0"></script>
+  <script src="src/app-reader.js?v=1.20.0"></script>
+  <script src="src/app-library.js?v=1.20.0"></script>
+  <script src="src/app-saving.js?v=1.20.0"></script>
+  <script src="src/app-places.js?v=1.20.0"></script>
+  <script src="src/app-settings.js?v=1.20.0"></script>
+  <script src="src/app-start.js?v=1.20.0"></script>
 </body>
 </html>

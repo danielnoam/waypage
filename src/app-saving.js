@@ -1449,12 +1449,14 @@ function renderFeeds() {
   const checked = Math.max(0, ...(picked ? [picked] : feeds).map((f) => f.checkedAt || 0));
   const line = feedsChecking ? "Checking…" : picked && picked.error ? picked.error
     : checked ? "Checked " + whenText(checked) : "Not checked yet";
+  const list = (picked ? [picked] : feeds).flatMap((f) => feedPosts(f).map((it) => ({ f, it })))
+    .sort((a, b) => postAt(b.it) - postAt(a.it));
   nodes.push(el("div", { class: "feed-head" },
     el("p", { class: "meta" + (picked && picked.error && !feedsChecking ? " warn" : "") }, line),
     // Phones pull down to check; a pointer gets the button.
-    el("button", { class: "btn-text feed-check", type: "button", "data-key": "check", onclick: () => checkNow(picked) }, "Check now")));
-  const list = (picked ? [picked] : feeds).flatMap((f) => feedPosts(f).map((it) => ({ f, it })))
-    .sort((a, b) => postAt(b.it) - postAt(a.it));
+    el("span", { class: "feed-head-acts" },
+      list.length ? el("button", { class: "btn-text feed-select", type: "button", "data-key": "select", onclick: () => startFeedPick() }, "Select") : null,
+      el("button", { class: "btn-text feed-check", type: "button", "data-key": "check", onclick: () => checkNow(picked) }, "Check now"))));
   let day = null, group = null;
   for (const x of list) {
     const d = dayName(postAt(x.it));
@@ -1475,6 +1477,7 @@ function renderFeeds() {
         : "Nothing posted in the last " + (FEED_DAYS.find((o) => o.value === String(days)) || FEED_DAYS[1]).label.replace(/^A /, "").toLowerCase() + "."))));
   }
   root.replaceChildren(...nodes);
+  if (state.feedPick) paintPostPicks();
   const chips = root.querySelector(".feed-chips");
   if (chips) chips.scrollLeft = scrollX;
   if (active && active[0]) {

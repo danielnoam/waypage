@@ -16,6 +16,8 @@ function route(s) {
   if (view !== "side") closeSide();
   if (view === "side" && !state.side) history.back();
   if (view !== "select" && !(view === "menu" && s.select)) endSelect();
+  if (view !== "feedPick") endFeedPick();
+  if (view === "feedPick" && !state.feedPick) history.back();
   if (view !== "news") closeNews();
   if (view !== "downloads") closeDownloads();
   if (!inSettings) closeSettings();
@@ -54,7 +56,7 @@ function toLibrary() {
   if (!(history.state && history.state.view)) return Promise.resolve();
   return new Promise((resolve) => {
     addEventListener("popstate", () => resolve(), { once: true });
-    history.go(-[state.folder, state.open, state.sheet, state.image, state.settings, state.section, state.batch, state.news, state.select, state.menu, state.downloads, state.side, state.part, state.finding].filter(Boolean).length || -1);
+    history.go(-[state.folder, state.open, state.sheet, state.image, state.settings, state.section, state.batch, state.news, state.select, state.feedPick, state.menu, state.downloads, state.side, state.part, state.finding].filter(Boolean).length || -1);
   });
 }
 
@@ -92,7 +94,9 @@ $("librarySearch").addEventListener("blur", () => { if (!state.query) { searchOp
 const topBar = $("topBar");
 addEventListener("scroll", () => topBar.classList.toggle("scrolled", scrollY > 0), { passive: true });
 $("selectCancel").addEventListener("click", () => history.back());
-$("selectAll").addEventListener("click", selectAll);
+$("selectAll").addEventListener("click", () => (state.feedPick ? pickAllPosts() : selectAll()));
+$("selOpen").addEventListener("click", openPickedPosts);
+$("selSave").addEventListener("click", savePickedPosts);
 $("selTags").addEventListener("click", () => openMenu("tags"));
 $("selFolder").addEventListener("click", () => openMenu("folder"));
 $("selRead").addEventListener("click", readPicked);

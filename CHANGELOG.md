@@ -2,6 +2,22 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.20.0] - 2026-10-11
+
+### Added
+- Feeds has Select: pick several posts, then Open sends them all to the
+  browser and Save saves them all.
+
+### Changed
+- A feed in the sidebar no longer shows a count beside it.
+
+### Fixed
+- Library in the sidebar goes back to the library from inside
+  Collections, Clips, a collection or the favourites.
+- Alignment reaches every block of text, not only paragraphs marked as
+  such: many pages and books build theirs from divs, which kept their
+  own alignment. Code, tables and pictures keep theirs.
+
 ## [1.19.0] - 2026-10-11
 
 ### Added

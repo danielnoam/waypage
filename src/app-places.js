@@ -74,7 +74,8 @@ function postRow(f, it, withFeed) {
   const saved = savedAs(it.url);
   const busy = !saved && savingUrl(it.url);
   const when = whenText(postAt(it));
-  const open = () => (saved ? openPage(saved.id) : previewPost(f, it));
+  const key = f.url + " " + postKey(it);
+  const open = () => (state.feedPick ? tapPost(key) : saved ? openPage(saved.id) : previewPost(f, it));
   const outside = el("button", { class: "post-act", type: "button", "aria-label": "Open " + it.title + " in the browser",
     onclick: () => C.platform.openOutside(it.url) }, feedIcon("out", 18));
   let right;
@@ -85,14 +86,93 @@ function postRow(f, it, withFeed) {
     if (busy) { right.disabled = true; right.append(el("span", { class: "spinner", "aria-hidden": "true" })); }
     else right.append(feedIcon("add", 18));
   }
-  return el("div", { class: "post", "data-key": "post:" + f.url + " " + postKey(it) },
-    el("button", { class: "post-open", type: "button", "aria-label": (saved ? "Read " : "Open ") + it.title, onclick: open }),
+  const isPicked = !!state.feedPick && state.feedPick.has(key);
+  const openBtn = el("button", { class: "post-open", type: "button", "aria-label": (saved ? "Read " : "Open ") + it.title, onclick: open });
+  if (state.feedPick) openBtn.setAttribute("aria-pressed", String(isPicked));
+  return el("div", { class: "post" + (isPicked ? " picked" : ""), "data-key": "post:" + key, "data-post": key },
+    openBtn, pickMark(),
     withFeed ? feedMark(f) : null,
     el("span", { class: "post-body" },
       withFeed ? el("span", { class: "post-feed", dir: "auto" }, f.title) : null,
       el("span", { class: "post-title", dir: "auto" }, it.title),
       el("span", { class: "post-meta" }, saved ? readingLine(saved) + " · " + when : when)),
     outside, right);
+}
+
+// ---- Picking several posts (1.20.0) ----
+// Feeds' Select turns taps into picks, using the library's bars: Open
+// sends every picked post to the browser, Save saves them all. A history
+// entry, so Back leaves it.
+
+function feedPostsShown() {
+  const picked = state.feed && feeds.find((f) => f.url === state.feed);
+  return (picked ? [picked] : feeds).flatMap((f) => feedPosts(f).map((it) => ({ f, it, key: f.url + " " + postKey(it) })));
+}
+const pickedPosts = () => feedPostsShown().filter((x) => state.feedPick && state.feedPick.has(x.key));
+
+function startFeedPick(fromHistory) {
+  if (state.feedPick) return;
+  state.feedPick = new Set();
+  if (!fromHistory) history.pushState({ view: "feedPick" }, "");
+  document.body.classList.add("selecting", "picking-posts");
+  $("selectHead").hidden = false;
+  $("selectBar").hidden = false;
+  M.edgeIn($("selectHead"), "top");
+  M.edgeIn($("selectBar"), "bottom");
+  renderFeeds();
+  paintPostPicks();
+  $("selectCancel").focus({ preventScroll: true });
+}
+
+function endFeedPick() {
+  if (!state.feedPick) return;
+  state.feedPick = null;
+  document.body.classList.remove("selecting", "picking-posts");
+  for (const [id, edge] of [["selectHead", "top"], ["selectBar", "bottom"]]) M.edgeOut($(id), edge).then(() => { if (!state.select && !state.feedPick) $(id).hidden = true; });
+  renderFeeds();
+}
+
+function tapPost(key) {
+  state.feedPick.has(key) ? state.feedPick.delete(key) : state.feedPick.add(key);
+  paintPostPicks();
+}
+
+function pickAllPosts() {
+  const all = feedPostsShown();
+  const every = all.length && all.every((x) => state.feedPick.has(x.key));
+  for (const x of all) every ? state.feedPick.delete(x.key) : state.feedPick.add(x.key);
+  paintPostPicks();
+}
+
+function paintPostPicks() {
+  if (!state.feedPick) return;
+  for (const row of $("feeds").querySelectorAll("[data-post]")) {
+    const on = state.feedPick.has(row.dataset.post);
+    row.classList.toggle("picked", on);
+    row.querySelector(".post-open").setAttribute("aria-pressed", String(on));
+  }
+  const list = pickedPosts();
+  const all = feedPostsShown();
+  $("selectCount").textContent = list.length ? list.length + (list.length === 1 ? " post" : " posts") + " picked" : "Pick posts";
+  $("selectAll").textContent = all.length && all.every((x) => state.feedPick.has(x.key)) ? "Pick none" : "Select all";
+  $("selOpen").disabled = !list.length;
+  $("selSave").disabled = !list.some((x) => !savedAs(x.it.url) && !savingUrl(x.it.url));
+}
+
+async function openPickedPosts() {
+  const list = pickedPosts();
+  if (!list.length) return;
+  await back();
+  // One after another, so the browser takes each as a tab of its own.
+  list.forEach((x, i) => setTimeout(() => C.platform.openOutside(x.it.url), i * 400));
+}
+
+async function savePickedPosts() {
+  const list = pickedPosts().filter((x) => !savedAs(x.it.url) && !savingUrl(x.it.url));
+  if (!list.length) return;
+  await back();
+  saveFeedPosts(list);
+  toast("Saving " + countLine(list.length));
 }
 
 // A post read in the app without saving it: the reader shows it, and
@@ -222,7 +302,12 @@ function renderSide() {
       el("p", { class: "side-title" }, "Waypage"),
       big && !inFeeds && !inMarks ? el("button", { class: "icon-btn side-search", type: "button", "aria-label": "Search", title: "Search (/)",
         onclick: () => (pinned.matches ? toLibrary() : back()).then(() => { if (state.place !== "library") goPlace("library"); openSearch(); }) }, sideSvg("search")) : null),
-    item(feedIcon("library"), "Library", inLibrary, count(state.pages.length, "side-count"), () => goPlace("library")),
+    // From inside Collections, Clips, a collection or the favourites
+    // (1.20.0), Library steps all the way back to the library itself.
+    item(feedIcon("library"), "Library", inLibrary, count(state.pages.length, "side-count"), () =>
+      inLib && (state.part || state.folder || state.filter === "favourites")
+        ? toLibrary().then(() => { if (state.filter === "favourites") setFilter("all"); return goPlace("library"); })
+        : goPlace("library")),
     ...favs.slice(0, FAV_MAX).map((f) => f.folder
       ? item(sideCover(f.folder), f.folder, state.folder === f.folder, count(freshCount(f.folder)), () => openFromSide(f.folder), "side-sub")
       : item(clipCover(f.page), f.page.title, state.open === f.page, null, () => fromSide().then(() => openPage(f.page.id)), "side-sub")),
@@ -237,7 +322,7 @@ function renderSide() {
     item(feedIcon("feeds"), "Feeds", inFeeds && !state.feed, fresh ? el("span", { class: "side-pill" }, fresh + " new") : null,
       () => goPlace("feeds")),
     ...[...feeds].sort((a, b) => latest(b) - latest(a)).slice(0, SIDE_MAX).map((f) =>
-      withFeed(item(feedMark(f, true), f.title, inFeeds && state.feed === f.url, count(waitingIn(f)), () => goPlace("feeds", f.url), "side-sub"), f)),
+      withFeed(item(feedMark(f, true), f.title, inFeeds && state.feed === f.url, null, () => goPlace("feeds", f.url), "side-sub"), f)),
     // Every highlight in the library (1.8.0), a place of its own.
     el("hr", { class: "side-line" }),
     item(sideSvg("marks"), "Highlights", inMarks, count(marked, "side-count"), () => goPlace("highlights")),

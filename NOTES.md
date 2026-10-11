@@ -18,6 +18,19 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Picking posts, the sidebar's Library (1.20.0).** Picking posts reuses
+  the library's select bars (body.picking-posts swaps the actions for
+  Open and Save) and its own history entry, "feedPick". Open sends each
+  post to the browser 400 ms apart so each lands as its own tab. Library
+  in the sidebar used to call goPlace, which only closed the sidebar and
+  left the Collections or Clips part in place; it now goes back through
+  history (toLibrary) first.
+- **Alignment on every block (1.20.0).** 1.19.0 aligned only p, li, dd,
+  blockquote and figcaption; Daniel found most paragraphs didn't change,
+  most likely because they were divs (books and some sites). It now sets
+  body and every element but pre, tables, figures, pictures and comics,
+  since an excluded element would only inherit body's value anyway;
+  headings follow the choice too.
 - **Alignment, spacing, and a native library move (1.19.0).** Alignment's
   "auto" is labelled Original: it sets nothing, so a book's own CSS
   (often justified, centred breaks) stays. Any other choice puts

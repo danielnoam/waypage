@@ -26,8 +26,13 @@ h2 { margin: var(--s-6) 0 var(--s-3); font: 600 var(--fs-heading)/var(--lh-headi
 h3, h4, h5, h6 { margin: var(--s-5) 0 var(--s-2); font-size: var(--reader-fs, var(--fs-body)); line-height: var(--reader-lh, var(--lh-body)); font-weight: 600; }
 p, ul, ol, dl, blockquote, pre, table, details { margin: 0 0 calc(var(--s-4) * var(--reader-ps, 1)); }
 /* Alignment from Settings (1.19.0) wins over the page's own; without it the
-   page keeps what it came with. */
-html[data-co-align] body :is(p, li, dd, blockquote, figcaption) { text-align: var(--co-align) !important; }
+   page keeps what it came with. Every block of text, whatever it's made of
+   (1.19.1: many pages and books use divs and spans, not p), headings
+   too, but not code, tables, pictures or comics. */
+html[data-co-align] body,
+html[data-co-align] body :not(pre, pre *, table, table *, figure, figure *, img, picture, .co-comic, .co-comic *, .co-placeholder, .co-placeholder *) {
+  text-align: var(--co-align) !important;
+}
 html[data-co-align="left"] { --co-align: left; }
 html[data-co-align="right"] { --co-align: right; }
 html[data-co-align="center"] { --co-align: center; }
