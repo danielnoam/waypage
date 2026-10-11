@@ -1,36 +1,15 @@
 # TODO
 
-The work, one release at a time, in this order (Daniel, 2 Oct 2026). Each
-release is small enough to ship, try on the phone and move on. When one
-ships, its section leaves this file and its items go to CHANGELOG.md. A
-new ask goes into the release it fits, or a new one, and the order is
-Daniel's to change.
-
-Decisions every release keeps:
-
-- A page has **any number of tags** and is in **one folder at most**.
-- A folder is an **ordered set**: a name on the page (`folder`) plus its
-  place (`folderAt`), no separate folders file. Reordering rewrites
-  `folderAt`; a folder exists while a page names it.
-- Saved HTML stays untrusted: sandboxed iframe, no `allow-scripts`, strict
-  CSP. Anything new that renders saved content (EPUB, comics reader,
-  export) keeps to that.
-- No build step, no dependencies. Anything that looks like it needs a
-  library (zip, EPUB) is written small in src/, or is a native plugin in
-  native/ beside share.
-
----
+Only what's left. When something ships it leaves this file and goes to
+CHANGELOG.md; the rules every release keeps are at the top of NOTES.md.
 
 ## Next
 
-Nothing queued: 1.14.0 and 1.15.0 (10 Oct 2026) shipped what Daniel
-asked for. New asks go here.
+Nothing queued.
 
----
+## Open, smaller
 
-## Smaller, open
-
-- **Moving a big library** is file by file over the bridge: fine for
+- **Moving a big library** goes file by file over the bridge: fine for
   hundreds of megabytes; a native copy would be quicker for gigabytes.
 - **A collection widget on iOS.** Android's asks which collection; on iOS
   that is an App Intent configuration (iOS 17).
@@ -38,26 +17,20 @@ asked for. New asks go here.
   nothing between pages (a non-persistent data store), so a signed-in
   site whose article only appears after its scripts run still saves as
   the start there. Copying the site's cookies into that store before the
-  page loads would do it. Android's PageRender already shares them.
-- **Downloads in the background on iOS (0.27.9).** Still the half minute
-  iOS gives the page in progress. Going further means saving in Swift
-  around background `URLSession` downloads, a second copy of the saving
-  code: only if the half minute turns out not to be enough.
-
----
+  page loads would fix it. Android's already shares them.
+- **Downloads in the background on iOS.** Still the half minute iOS
+  gives the app. Going further means saving in Swift around background
+  `URLSession` downloads, a second copy of the saving code: only if the
+  half minute turns out not to be enough.
 
 ## Parked: the stores (Daniel, 10 Oct 2026: "we don't care for stores for now")
 
-- **Before shipping to other people:** desktop browser version (and its
-  worker) in v1 or not; Apple Developer Program or Android first; name
-  checks (App Store, Play, trademark); privacy policy and store data
-  forms (sign-in cookies stay on the phone and go only to their own
-  site); real icon assets via @capacitor/assets in CI.
-- **The Apple Developer Program.** A free Apple account through AltStore
-  or SideStore has 3 active apps, extensions included, so Waypage with
-  its share extension and widgets fills it; the program lifts that, ends
-  the 7-day re-signing, and is the way to TestFlight and the App Store.
-- **Saving any site in a browser: a server (Daniel, 4 Oct 2026).** A
-  stateless fetch worker behind a token, rate-limited, storing nothing,
-  so the browser can save (and follow feeds from) sites that don't allow
-  CORS. Only with a desktop browser version.
+- **Before shipping to other people:** desktop browser version in v1 or
+  not; Apple Developer Program or Android first; name checks; privacy
+  policy and store data forms; real icon assets via @capacitor/assets.
+- **The Apple Developer Program.** A free account (AltStore/SideStore) has
+  3 active apps, extensions included, which Waypage fills; the program
+  ends the 7-day re-signing and opens TestFlight and the App Store.
+- **Saving any site in a browser needs a server.** A stateless fetch
+  worker behind a token, rate-limited, storing nothing. Only with a
+  desktop browser version.
