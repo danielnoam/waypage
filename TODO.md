@@ -7,10 +7,13 @@ CHANGELOG.md; the rules every release keeps are at the top of NOTES.md.
 
 Nothing queued.
 
-## Open, smaller
+## iOS release (later, Daniel 11 Oct 2026)
 
-- **Moving a big library** goes file by file over the bridge: fine for
-  hundreds of megabytes; a native copy would be quicker for gigabytes.
+Everything iOS-only, kept for one iOS release.
+
+- **Moving a big library, natively.** Android copies in Java since
+  1.19.0; iOS still moves file by file over the bridge. A FileManager
+  copy would do it at disk speed.
 - **A collection widget on iOS.** Android's asks which collection; on iOS
   that is an App Intent configuration (iOS 17).
 - **Pages drawn by script, signed in, on iOS.** iOS's PageRender keeps

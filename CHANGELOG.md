@@ -2,6 +2,19 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.19.0] - 2026-10-11
+
+### Added
+- Alignment under Text in the reader's settings: Original (whatever the
+  clip or book came with), Left, Justified, Centered or Right.
+- Spacing under Text: lines, letters, words and paragraphs, each with its
+  own slider. Reset text puts them back too.
+
+### Changed
+- Moving the library to another place (Settings, Storage) copies the
+  files natively on Android, at the phone's disk speed, instead of one at
+  a time through the app's JavaScript. iOS still moves them the old way.
+
 ## [1.18.0] - 2026-10-10
 
 ### Added

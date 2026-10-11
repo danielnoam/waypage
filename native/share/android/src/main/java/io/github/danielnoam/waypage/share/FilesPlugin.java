@@ -62,6 +62,11 @@ import java.util.concurrent.ConcurrentHashMap;
  *   folderList({ tree, path })      { files: [{ name, type, size }] }
  *   folderDelete({ tree, path })    a file, or a folder and all in it
  *   folderMoveIn({ tree, path, from })  a file:// in the app moved in
+ *   copyFiles({ from, to, paths })  copies each path from one library to
+ *                                   another off the WebView's thread (1.19.0);
+ *                                   from and to are { tree } or { dir }, an
+ *                                   absolute path; "copied" { done, total }
+ *                                   as it goes; resolves { done }
  *
  * A watched folder (1.1.0, app.js) is read, never written:
  *
@@ -168,6 +173,64 @@ public class FilesPlugin extends Plugin {
         } catch (Exception e) {
             call.reject("Couldn't keep " + path, e);
         }
+    }
+
+    @PluginMethod
+    public void copyFiles(PluginCall call) {
+        JSObject from = call.getObject("from");
+        JSObject to = call.getObject("to");
+        JSArray paths = call.getArray("paths");
+        if (from == null || to == null || paths == null) { call.reject("Nothing to copy"); return; }
+        new Thread(() -> {
+            int total = paths.length();
+            int done = 0;
+            String path = "";
+            byte[] buf = new byte[1 << 16];
+            try {
+                for (int i = 0; i < total; i++) {
+                    path = paths.getString(i);
+                    try (InputStream in = openIn(from, path); OutputStream out = openOut(to, path)) {
+                        int n;
+                        while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                    }
+                    done++;
+                    if (done % 20 == 0 || done == total) {
+                        JSObject ev = new JSObject();
+                        ev.put("done", done);
+                        ev.put("total", total);
+                        notifyListeners("copied", ev);
+                    }
+                }
+                JSObject res = new JSObject();
+                res.put("done", done);
+                call.resolve(res);
+            } catch (Exception e) {
+                call.reject("Couldn't copy " + path + (e.getMessage() == null ? "" : ": " + e.getMessage()), e);
+            }
+        }).start();
+    }
+
+    private InputStream openIn(JSObject end, String path) throws java.io.IOException {
+        String tree = end.getString("tree");
+        if (tree == null) return new FileInputStream(new File(end.getString("dir"), path));
+        Uri doc = find(Uri.parse(tree), path, false);
+        InputStream in = doc == null ? null : getContext().getContentResolver().openInputStream(doc);
+        if (in == null) throw new java.io.FileNotFoundException(path);
+        return in;
+    }
+
+    private OutputStream openOut(JSObject end, String path) throws java.io.IOException {
+        String tree = end.getString("tree");
+        if (tree == null) {
+            File f = new File(end.getString("dir"), path);
+            File dir = f.getParentFile();
+            if (dir != null && !dir.isDirectory() && !dir.mkdirs()) throw new java.io.IOException("can't make " + dir);
+            return new java.io.FileOutputStream(f);
+        }
+        Uri doc = find(Uri.parse(tree), path, true);
+        OutputStream out = doc == null ? null : getContext().getContentResolver().openOutputStream(doc, "wt");
+        if (out == null) throw new java.io.IOException("can't write " + path);
+        return out;
     }
 
     @PluginMethod

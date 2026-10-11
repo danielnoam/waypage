@@ -1410,10 +1410,13 @@ function seg(name, label, options, current, onpick, cls) {
 
 const themeOptions = (list, short) => list.map((t) => ({ value: t.value, label: (short && t.short) || t.label, swatch: [t.value] }));
 
-function slider(label, min, max, step, onvalue) {
-  return el("input", { class: "range", type: "range", min, max, step, "aria-label": label,
+function slider(label, min, max, step, onvalue, pref) {
+  return el("input", { class: "range", type: "range", min, max, step, "aria-label": label, "data-pref": pref,
     oninput: (e) => onvalue(Number(e.target.value)) });
 }
+
+const TEXT_PREFS = ["font", "hebrew", "size", "align", "spacing", "letters", "words", "paras"];
+const prefsOf = (o, keys) => Object.fromEntries(keys.map((k) => [k, o[k]]));
 
 let readingGroups = 0;
 function readingControls(withTheme) {
@@ -1460,12 +1463,18 @@ function readingControls(withTheme) {
         sample: f.family ? el("span", { class: "seg-sample", lang: "he", dir: "rtl", style: "font-family: " + f.family, "aria-hidden": "true" }, "עברית") : null })))),
     row("Text size", el("div", { class: "stepper" },
       el("button", { class: "step-btn small", type: "button", "data-step": "-1", "aria-label": "Smaller text", onclick: () => nudge(-1) }, "A"),
-      slider("Text size", SIZE_MIN, SIZE_MAX, 1, (v) => setReading({ size: v })),
+      slider("Text size", SIZE_MIN, SIZE_MAX, 1, (v) => setReading({ size: v }), "size"),
       el("button", { class: "step-btn large", type: "button", "data-step": "1", "aria-label": "Larger text", onclick: () => nudge(1) }, "A")), "size"),
     pinchSwitch(),
-    row("Spacing", el("div", { class: "stepper" },
-      slider("Line spacing", SPACING_MIN, SPACING_MAX, 0.05, (v) => setReading({ spacing: v }))), "spacing"),
-    el("button", { class: "btn-quiet reset", type: "button", onclick: () => { const r0 = readingPrefs(); setReading({ ...READING_DEFAULT, layout: r0.layout, margins: r0.margins, spread: r0.spread, rail: r0.rail }); } }, "Reset text"));
+    row("Alignment", fontPick("align", "Alignment", ALIGNS)),
+    // Spacing (1.19.0), headed on its own so the labels stay one word.
+    el("h2", { class: "overline rc-sub" }, "Spacing"),
+    row("Lines", el("div", { class: "stepper" },
+      slider("Line spacing", SPACING_MIN, SPACING_MAX, 0.05, (v) => setReading({ spacing: v }), "spacing")), "spacing"),
+    ...[["letters", "Letters", "Letter spacing"], ["words", "Words", "Word spacing"], ["paras", "Paragraphs", "Paragraph spacing"]].map(([k, name, aria]) =>
+      row(name, el("div", { class: "stepper" },
+        slider(aria, SPACES[k].min, SPACES[k].max, SPACES[k].step, (v) => setReading({ [k]: v }), k)), k)),
+    el("button", { class: "btn-quiet reset", type: "button", onclick: () => setReading(prefsOf(READING_DEFAULT, TEXT_PREFS)) }, "Reset text"));
   const box = el("div", { class: "reading-controls" }, layout, text);
   syncReadingControls(box);
   requestAnimationFrame(() => box.querySelectorAll(".seg.scroll").forEach(showPicked));
@@ -1480,13 +1489,18 @@ function showPicked(row) {
 
 function syncReadingControls(box) {
   const r = readingPrefs();
-  const [size, spacing] = box.querySelectorAll(".range");
-  size.value = r.size;
-  size.setAttribute("aria-valuetext", r.size + " pixels");
-  spacing.value = r.spacing;
-  spacing.setAttribute("aria-valuetext", r.spacing.toFixed(2));
-  box.querySelector('[data-value="size"]').textContent = r.size + " px";
-  box.querySelector('[data-value="spacing"]').textContent = r.spacing.toFixed(2);
+  const shown = {
+    size: r.size + " px", spacing: r.spacing.toFixed(2),
+    letters: r.letters ? (r.letters > 0 ? "+" : "") + r.letters.toFixed(2) + " em" : "Normal",
+    words: r.words ? "+" + r.words.toFixed(2) + " em" : "Normal",
+    paras: r.paras === 1 ? "Normal" : r.paras + "×",
+  };
+  for (const [k, text] of Object.entries(shown)) {
+    const range = box.querySelector('.range[data-pref="' + k + '"]');
+    range.value = r[k];
+    range.setAttribute("aria-valuetext", k === "size" ? r.size + " pixels" : text);
+    box.querySelector('[data-value="' + k + '"]').textContent = text;
+  }
   box.querySelector('[data-step="-1"]').disabled = r.size <= SIZE_MIN;
   box.querySelector('[data-step="1"]').disabled = r.size >= SIZE_MAX;
   const rail = box.querySelector('[data-pref="rail"]');
@@ -1496,8 +1510,7 @@ function syncReadingControls(box) {
   }
   box.querySelectorAll(".font-pick").forEach((d) => d.set(r[d.dataset.pref]));
   // Reset text leaves the layout as it is.
-  const dflt = Object.keys(READING_DEFAULT).every((k) => ["layout", "margins", "spread", "rail"].includes(k) || r[k] === READING_DEFAULT[k]);
-  box.querySelector(".reset").disabled = dflt;
+  box.querySelector(".reset").disabled = TEXT_PREFS.every((k) => r[k] === READING_DEFAULT[k]);
 }
 
 // The theme lives in two places (Aa and Settings); keep both radios true.

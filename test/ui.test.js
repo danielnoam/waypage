@@ -301,6 +301,30 @@ const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
       await p.evaluate(() => document.getElementById("readerView").classList.remove("bar-away"));
     });
 
+    await test("alignment and letter, word and paragraph spacing reach the clip (1.19.0)", async () => {
+      const got = await p.evaluate(async () => {
+        setReading({ align: "justify", letters: 0.05, words: 0.2, paras: 2 });
+        await new Promise((r) => setTimeout(r, 100));
+        const d = document.getElementById("readerFrame").contentDocument;
+        const para = d.querySelector("p:not([class])");
+        const cs = getComputedStyle(para);
+        const out = { align: cs.textAlign, ls: parseFloat(cs.letterSpacing), ws: parseFloat(cs.wordSpacing), mb: parseFloat(cs.marginBottom), fs: parseFloat(getComputedStyle(d.body).fontSize) };
+        setReading({ align: "auto", letters: 0, words: 0, paras: 1 });
+        await new Promise((r) => setTimeout(r, 100));
+        out.back = getComputedStyle(para).textAlign;
+        out.attr = d.documentElement.hasAttribute("data-co-align");
+        out.mb1 = parseFloat(getComputedStyle(para).marginBottom);
+        return out;
+      });
+      assert.strictEqual(got.align, "justify");
+      assert.ok(Math.abs(got.ls - got.fs * 0.05) < 0.5, "letter spacing " + got.ls);
+      assert.ok(Math.abs(got.ws - got.fs * 0.2) < 0.5, "word spacing " + got.ws);
+      assert.strictEqual(got.mb, 32);
+      assert.notStrictEqual(got.back, "justify");
+      assert.strictEqual(got.attr, false);
+      assert.strictEqual(got.mb1, 16);
+    });
+
     await test("held half a second, the brightness slider swipes to the other side (1.16.0)", async () => {
       await p.evaluate(() => {
         C.platform.brightness = { available: true, get: async () => ({ level: 0.5 }), set: async () => {} };

@@ -18,6 +18,20 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Alignment, spacing, and a native library move (1.19.0).** Alignment's
+  "auto" is labelled Original: it sets nothing, so a book's own CSS
+  (often justified, centred breaks) stays. Any other choice puts
+  `data-co-align` on the frame's root and reader.css forces it with
+  !important on p, li, dd, blockquote and figcaption only, so headings
+  and the page's own centring of titles keep theirs. Justified turns on
+  hyphens to avoid gaps. Letter and word spacing are em on the body
+  (0 means "normal", so a book's own spacing wins); paragraph spacing
+  multiplies the usual gap. They sit under a Spacing heading inside the
+  Text tab rather than a fourth tab, which made "Read aloud" wrap at
+  phone width. The library move calls FilesPlugin.copyFiles on Android
+  (a thread, streams, "copied" every 20 files) with { dir } for app or
+  Documents storage and { tree } for a picked folder; iOS keeps the
+  fetch-and-write loop until the iOS release in TODO.md.
 - **Big pictures made smaller (1.18.0).** Daniel asked to compress very
   large comics and pictures. `store.squeeze` reuses the preview shrink's
   canvas path: no wider than 1600 px (save.js FULL_WIDTH, enough for a

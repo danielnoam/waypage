@@ -11,7 +11,8 @@
   const TOKENS = ["bg", "surface", "ink", "muted", "accent", "line", "preview", "mark", "video", "on-video", "scrim",
     "serif", "sans", "measure", "s-1", "s-2", "s-3", "s-4", "s-5", "s-6", "s-7", "r-sm", "r-md", "r-full",
     "fs-title", "lh-title", "fs-heading", "lh-heading", "fs-body", "lh-body", "fs-label", "lh-label", "fs-meta", "lh-meta",
-    "reader-fs", "reader-lh", "reader-font", "reader-pad", "reader-measure"];
+    "reader-fs", "reader-lh", "reader-font", "reader-pad", "reader-measure",
+    "reader-ls", "reader-ws", "reader-ps"];
   const NEAR = 2;
 
   let frame = null, doc = null, scrollTimer = null, scrollFrame = 0, topSpace = null, bottomSpace = null;
@@ -48,6 +49,9 @@
     const css = getComputedStyle(document.documentElement);
     for (const t of TOKENS) doc.documentElement.style.setProperty("--" + t, css.getPropertyValue("--" + t).trim());
     doc.documentElement.style.colorScheme = css.colorScheme;
+    const align = document.documentElement.dataset.readAlign;
+    if (align && align !== "auto") doc.documentElement.setAttribute("data-co-align", align);
+    else doc.documentElement.removeAttribute("data-co-align");
     // A new text size or margin moves the columns: back to the same place.
     if (isPaged()) requestAnimationFrame(() => { if (isPaged()) relayout(at); });
   }
