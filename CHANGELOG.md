@@ -2,6 +2,23 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.21.0] - 2026-10-11
+
+### Fixed
+- Sync sends what changed when you leave the app, even straight after
+  reading: before, a place read just now often wasn't sent until the
+  next time the app was open.
+- A reading place no longer goes back after a restart or a sync. The
+  library on disk is written in order, and when two places differ the
+  one read later wins, so an older copy can't be sent everywhere.
+- Continue reading counts a clip only once it has been open for a few
+  seconds, and Back never reopens a clip from before the app restarted,
+  which could quietly make another clip the one to continue.
+
+### Added
+- About shows how long the app took to open (scripts, library, first
+  screen), and a problem report includes the last few starts.
+
 ## [1.20.0] - 2026-10-11
 
 ### Added

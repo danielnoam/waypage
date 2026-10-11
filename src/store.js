@@ -167,8 +167,17 @@
     await writeIndexOnly(pages);
     if (onIndex) onIndex();
   }
-  async function writeIndexOnly(pages) {
+  // One write after another, in the order asked (1.21.0): two at once
+  // could land out of order, leaving an older library on disk (a reading
+  // place going back after a restart).
+  let indexWrites = Promise.resolve();
+  function writeIndexOnly(pages) {
     const text = JSON.stringify(pages);
+    const next = indexWrites.then(() => writeIndexText(text));
+    indexWrites = next.catch(() => {});
+    return next;
+  }
+  async function writeIndexText(text) {
     if (FS()) {
       await (await B()).write("library.json", text, true);
       return;

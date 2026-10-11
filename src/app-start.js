@@ -9,6 +9,7 @@ if (C.platform.android && C.platform.plugin("Files") && C.platform.plugin("Files
 }
 
 function route(s) {
+  if (s && s.view && s.launch !== LAUNCH) { history.replaceState(null, ""); s = null; }
   const view = s && s.view;
   const inSettings = view === "settings" || (view === "news" && s.over === "settings");
   if (view !== "reader") closeReader();
@@ -249,16 +250,37 @@ async function saveText(text, subject) {
   }
 }
 
+// How long opening took (1.21.0), kept for the last few starts and shown
+// in About and in a problem report: the scripts, the library read from
+// disk, and the first screen drawn. Measured from the page starting to
+// load, so not the phone starting the app around it.
+const START_KEY = "waypage.startTimes";
+const startAt = { scripts: performance.now() };
+function noteStart() {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const t = { at: Date.now(), clips: state.pages.length, scripts: Math.round(startAt.scripts), library: Math.round(startAt.library - startAt.scripts), shown: Math.round(performance.now()) };
+    store(START_KEY, [...load(START_KEY, []), t].slice(-5));
+  }));
+}
+function startLine() {
+  const list = load(START_KEY, []);
+  const t = list[list.length - 1];
+  if (!t) return "";
+  const s = (ms) => (ms / 1000).toFixed(1) + " s";
+  return "Opened in " + s(t.shown) + " with " + countLine(t.clips) + ": scripts " + s(t.scripts) + ", library " + s(t.library) + ", first screen " + s(t.shown - t.scripts - t.library) + ".";
+}
+
 paintPlace();
 // The library is read as soon as its place is known, beside the build's
 // details rather than after them (1.2.0).
-const firstIndex = C.store.ready.then(() => Promise.all([C.store.readIndex(), loadThumbs()]));
+const firstIndex = C.store.ready.then(() => Promise.all([C.store.readIndex(), loadThumbs()])).then((got) => { startAt.library = performance.now(); return got; });
 Promise.all([C.platform.ready, firstIndex]).then(([, [pages]]) => {
   state.pages = Array.isArray(pages) ? pages : [];
   loaded = true;
   setTimeout(() => oneEach().then((n) => { if (n) toast("Removed " + (n === 1 ? "a clip that was" : n + " clips that were") + " saved twice."); }), 1200);
   if (history.state && history.state.view) history.replaceState(null, "");
   paintPlace();
+  noteStart();
   noteVersion();
   if (C.store.problem) setTimeout(() => toast(C.store.problem), 800);
   tidyOldFiles();
@@ -277,7 +299,7 @@ Promise.all([C.platform.ready, firstIndex]).then(([, [pages]]) => {
   takeWidget();
   C.platform.widgets.onOpen(takeWidget);
   updateWidgets();
-  C.store.onIndex = () => syncSoon();
+  C.store.onIndex = () => { unsynced = true; syncSoon(); };
   takeSetupLink();
   setTimeout(healPictures, 4000);
   addEventListener("hashchange", takeSetupLink);
@@ -286,7 +308,16 @@ Promise.all([C.platform.ready, firstIndex]).then(([, [pages]]) => {
   paintSync();
   watchSoon(2500);
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) { flushIndex(); if (positionTimer) savePositions(); updateWidgets(); if (syncTimer) syncNow(); return; }
+    // Going to another app (1.21.0): what's written is sent once it's on
+    // disk. Before, it went only if a sync was already waiting, and a
+    // place read just now usually wasn't one yet.
+    if (document.hidden) {
+      const writes = [flushIndex()];
+      if (positionTimer) writes.push(savePositions());
+      updateWidgets();
+      Promise.all(writes).then(() => { if (unsynced || syncTimer) syncNow(); });
+      return;
+    }
     takeFeedNews();
     takeWidget();
     syncSoon(1000);

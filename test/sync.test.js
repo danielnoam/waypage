@@ -164,6 +164,19 @@ test("the place in the text (spot, 1.3.0) goes with the device that read last", 
   assert.deepStrictEqual([m2.pages[0].at, m2.pages[0].spot], [0.3, "5/0"]);
 });
 
+test("a library that went back on disk doesn't send the old place everywhere (1.21.0)", () => {
+  // Synced at 0.6; then an older copy of the library came back on this
+  // device (0.3, read earlier). GitHub and the base still say 0.6.
+  const base = lib([page("a1b2", { at: 0.6, spot: "9/40", readAt: 200 })]);
+  const local = lib([page("a1b2", { at: 0.3, spot: "5/0", readAt: 150 })]);
+  const remote = lib([page("a1b2", { at: 0.6, spot: "9/40", readAt: 200 })]);
+  const m = S.merge(base, local, remote, NOW);
+  assert.deepStrictEqual([m.pages[0].at, m.pages[0].spot, m.pages[0].readAt], [0.6, "9/40", 200]);
+  // Marked unread here, nothing read since: still this device's change.
+  const unread = lib([page("a1b2", { at: 0, readAt: 200 })]);
+  assert.strictEqual(S.merge(base, unread, remote, NOW).pages[0].at, 0);
+});
+
 test("the device that read last (readOn, 1.4.2) goes with its place", () => {
   const base = lib([page("a1b2", { at: 0.2, readAt: 100, readOn: "phone" })]);
   // The phone read again but older than the tablet: the tablet's name stays with the tablet's place.

@@ -298,9 +298,18 @@ function show(p, html) {
   // itself only changes when you move (notePosition, reader.js's
   // restore doesn't count), and furtherRead compares with the time
   // from before this open.
+  // Only once it's been open a few seconds (1.21.0): a clip that flashed
+  // up on the way somewhere else (Back through history, a wrong tap)
+  // became Continue reading.
   openedReadAt = p.readAt || 0;
-  p.readAt = Date.now();
-  p.readOn = deviceName();
+  clearTimeout(openStamp);
+  openStamp = setTimeout(() => {
+    if (state.open !== p) return;
+    p.readAt = Date.now();
+    p.readOn = deviceName();
+    clearTimeout(positionTimer);
+    positionTimer = setTimeout(savePositions, 1500);
+  }, OPEN_COUNTS);
   showOffline();
   $("readProgress").dir = p.dir || "ltr";
   $("readerContents").hidden = true;
@@ -735,6 +744,8 @@ async function goTo(p, turn) {
 // the end, kept in the library index; written a moment after scrolling
 // stops, and when the page is closed.
 let positionTimer = null;
+let openStamp = null;
+const OPEN_COUNTS = 3000;
 function notePosition(p, f, s) {
   const at = Math.round(f * 1000) / 1000;
   // Read just now only when the place really moved (1.10.1): pictures

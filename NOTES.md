@@ -18,6 +18,27 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Sync on leaving, places that went back, Continue reading (1.21.0).**
+  Daniel: sync sometimes didn't happen when he swiped away fast, came
+  back to an older place, and Continue reading showed a clip he hadn't
+  opened. Found in the code, not on a phone: (1) on hide, sync ran only
+  if its timer was already set, but the timer is set after the index
+  write lands, so a place saved on the way out was never sent; now an
+  `unsynced` flag (set by store.onIndex) sends it once the writes are
+  done, and a change made while a sync ran gets a second run. (2)
+  writeIndex calls could run at once and land out of order, leaving an
+  older library.json on disk; they're queued now. The three-way merge
+  then read that older place as a change made here (local differs from
+  base, remote equals base) and sent it everywhere; READING keys now go
+  with the later readAt whenever the two readAts differ. (3) show()
+  stamped readAt on every open, including a clip popped open by Back into
+  a history entry left over from before a restart (history survives a
+  WebView reload); now the stamp waits 3 s of being open, and every
+  entry carries the launch's mark (history.pushState is wrapped), so
+  route() drops entries from an earlier launch. Startup: nothing to fix
+  without numbers from the phone, so it now measures itself
+  (waypage.startTimes, About, the report). In Chromium at 4x CPU slowdown
+  with 400 clips the first card shows at about 0.7 s, JS about 0.2 s of it.
 - **Picking posts, the sidebar's Library (1.20.0).** Picking posts reuses
   the library's select bars (body.picking-posts swaps the actions for
   Open and Save) and its own history entry, "feedPick". Open sends each
