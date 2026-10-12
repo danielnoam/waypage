@@ -29,13 +29,16 @@
   // Fields that come with the page's text, so the copy saved last wins
   // them all together.
   const CONTENT = ["url", "title", "site", "byline", "licence", "savedAt", "minutes", "lang", "dir", "mode", "images",
-    "comic", "next", "prev", "requested", "series", "source", "file", "cut", "archived"];
+    "comic", "next", "prev", "requested", "series", "source", "file", "cut", "archived", "editedAt"];
   // Every field an index entry can carry through a backup or sync
   // (backup.cleanMeta); anything else on a page stays on its device.
   const SYNCED = new Set(["id", "url", "title", "site", "byline", "licence", "savedAt", "minutes", "lang", "dir", "mode", "images",
-    "at", "finished", "readAt", "readOn", "spot", "comic", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "file", "marks", "cut", "archived"]);
+    "at", "finished", "readAt", "readOn", "spot", "comic", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "file", "marks", "cut", "archived", "editedAt"]);
   // Where the reader is, which goes with whichever device read last.
   const READING = ["at", "finished", "readAt", "readOn", "spot"];
+  // Which copy of a page's text this is: when it was saved, or edited
+  // since in Edit clips (1.22.0), so an edit goes up like a save again.
+  const ver = (p) => Math.max(p.savedAt || 0, p.editedAt || 0);
 
   const load = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } };
   const keep = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* not kept */ } };
@@ -139,10 +142,10 @@
     const out = {};
     const keys = new Set([...Object.keys(l), ...Object.keys(r)]);
     const pick = (k) => (same(l[k], r[k]) || !same(l[k], b[k]) ? l[k] : r[k]);
-    const contentFrom = (r.savedAt || 0) > (l.savedAt || 0) ? r : l;
+    const contentFrom = ver(r) > ver(l) ? r : l;
     const readFrom = (r.readAt || 0) > (l.readAt || 0) ? r : l;
     for (const k of keys) {
-      if (CONTENT.includes(k)) out[k] = !same(l.savedAt, r.savedAt) ? contentFrom[k] : pick(k);
+      if (CONTENT.includes(k)) out[k] = ver(l) !== ver(r) ? contentFrom[k] : pick(k);
       else if (k === "readOn") out[k] = readFrom[k];
       // Where you are goes with the side read last (1.21.0). Three ways
       // only when both were read at the same time: a library that went
@@ -174,7 +177,7 @@
       if (at) { const k = key(p.url); i = at.has(k) ? at.get(k) : -1; if (i < 0) at.set(k, kept.length); }
       else i = kept.findIndex((x) => same(x.url, p.url));
       if (i < 0) { kept.push(p); continue; }
-      const [win, lose] = (p.savedAt || 0) > (kept[i].savedAt || 0) ? [{ ...p }, kept[i]] : [{ ...kept[i] }, p];
+      const [win, lose] = ver(p) > ver(kept[i]) ? [{ ...p }, kept[i]] : [{ ...kept[i] }, p];
       const tags = mergeTags([], win.tags, lose.tags);
       if (tags.length) win.tags = tags;
       const marks = mergeMarks([], win.marks, lose.marks);
@@ -706,13 +709,13 @@
       const got = await mergeOff(before, load(BASE_KEY, null), remote ? remote.data : null, waiting, feedsBefore, getSeen ? getSeen() : 0, Date.now(), sameUrl, urlKey);
       merged = got.merged;
       const remoteDoc = got.remoteDoc;
-      for (const [id, f] of Object.entries(uploaded)) if (merged.pages.some((p) => p.id === id && p.savedAt === f.at)) merged.files[id] = f;
+      for (const [id, f] of Object.entries(uploaded)) if (merged.pages.some((p) => p.id === id && ver(p) === f.at)) merged.files[id] = f;
       // Text this device has and GitHub doesn't: every page saved here, or
       // saved again since.
       const mine = new Map(before.map((p) => [p.id, p]));
-      const todo = links ? [] : merged.pages.filter((p) => mine.has(p.id) && mine.get(p.id).savedAt === p.savedAt && (!merged.files[p.id] || merged.files[p.id].at !== p.savedAt));
+      const todo = links ? [] : merged.pages.filter((p) => mine.has(p.id) && ver(mine.get(p.id)) === ver(p) && (!merged.files[p.id] || merged.files[p.id].at !== ver(p)));
       const sentOne = (p, sha, packShas) => {
-        merged.files[p.id] = uploaded[p.id] = { at: p.savedAt, sha };
+        merged.files[p.id] = uploaded[p.id] = { at: ver(p), sha };
         if (packShas.length) merged.files[p.id].packs = packShas;
         keep(SENT_KEY, uploaded);
         up++;
@@ -740,7 +743,7 @@
         } catch (e) {
           // An empty repo has no branch to commit on: one by one, below.
           if (e.status !== 409) throw e;
-          i = todo.findIndex((p) => !uploaded[p.id] || uploaded[p.id].at !== p.savedAt);
+          i = todo.findIndex((p) => !uploaded[p.id] || uploaded[p.id].at !== ver(p));
           if (i < 0) i = todo.length;
         }
       }
@@ -790,11 +793,11 @@
     for (const m of merged.pages) {
       const have = at.get(m.id);
       // Saved again elsewhere, with links only: the copy here stays.
-      if (have && (have.savedAt === m.savedAt || links)) {
+      if (have && (ver(have) === ver(m) || links)) {
         const next = { ...m };
         for (const k of Object.keys(have)) if (DEVICE.includes(k) || !SYNCED.has(k)) next[k] = have[k];
         decided.set(m.id, next);
-      } else if (!links && merged.files[m.id] && merged.files[m.id].at === m.savedAt) want.push({ m, have });
+      } else if (!links && merged.files[m.id] && merged.files[m.id].at === ver(m)) want.push({ m, have });
       else if (!have) {
         stillWaiting.push(m.id);
         // No text on GitHub (its device syncs links only) or not wanted.
@@ -824,7 +827,7 @@
         const d = some.get(p.id);
         if (!snapshot.has(p.id) || !some.has(p.id)) out.push(p);
         else if (snapshot.get(p.id) !== JSON.stringify(p)) {
-          if (d && d.savedAt !== p.savedAt) { const both = { ...p }; for (const k of CONTENT.concat(DEVICE)) { if (d[k] === undefined) delete both[k]; else both[k] = d[k]; } out.push(both); }
+          if (d && ver(d) !== ver(p)) { const both = { ...p }; for (const k of CONTENT.concat(DEVICE)) { if (d[k] === undefined) delete both[k]; else both[k] = d[k]; } out.push(both); }
           else out.push(p);
         } else if (d) out.push(d);
       }

@@ -177,6 +177,21 @@ test("a library that went back on disk doesn't send the old place everywhere (1.
   assert.strictEqual(S.merge(base, unread, remote, NOW).pages[0].at, 0);
 });
 
+test("a clip's text edited in Edit clips goes like a save, the later of the two winning (1.22.0)", () => {
+  const base = lib([page("a1b2", { minutes: 4 })]);
+  const edited = lib([page("a1b2", { minutes: 3, editedAt: 300 })]);
+  // Saved again elsewhere before the edit: the edit wins, all its text fields with it.
+  const resaved = lib([page("a1b2", { savedAt: 200, minutes: 6, title: "New" })]);
+  const m = S.merge(base, edited, resaved, NOW);
+  assert.deepStrictEqual([m.pages[0].minutes, m.pages[0].editedAt, m.pages[0].savedAt, m.pages[0].title], [3, 300, 100, "Page a1b2"]);
+  // Saved again after the edit: the new save wins, and isn't an edit.
+  const later = lib([page("a1b2", { savedAt: 400, minutes: 6 })]);
+  const n = S.merge(base, edited, later, NOW);
+  assert.deepStrictEqual([n.pages[0].minutes, n.pages[0].editedAt, n.pages[0].savedAt], [6, undefined, 400]);
+  // Nothing new on GitHub: the edit goes up.
+  assert.strictEqual(S.merge(base, edited, base, NOW).pages[0].editedAt, 300);
+});
+
 test("the device that read last (readOn, 1.4.2) goes with its place", () => {
   const base = lib([page("a1b2", { at: 0.2, readAt: 100, readOn: "phone" })]);
   // The phone read again but older than the tablet: the tablet's name stays with the tablet's place.

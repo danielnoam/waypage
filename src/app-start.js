@@ -102,6 +102,7 @@ $("selTags").addEventListener("click", () => openMenu("tags"));
 $("selFolder").addEventListener("click", () => openMenu("folder"));
 $("selRead").addEventListener("click", readPicked);
 $("selDelete").addEventListener("click", deletePicked);
+$("selEdit").addEventListener("click", editPicked);
 $("menuCatch").addEventListener("click", () => history.back());
 longPress($("library"));
 longPress($("folderBody"));

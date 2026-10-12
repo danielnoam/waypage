@@ -647,6 +647,46 @@ const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
       await q.context().close();
     });
 
+    await test("Edit clips finds ~~*~~ across tags, removes it, leaves the licence, and undoes (1.22.0)", async () => {
+      const q = await page(browser, 390);
+      const one = "<!doctype html><html><body><p>Keep this ~~drop <b>this</b> too~~ part.</p><p>~~whole~~</p><p class=\"co-licence\">~~licence~~</p></body></html>";
+      await q.evaluate(async (html) => {
+        const S = window.Waypage.store;
+        const c = (i, folder) => ({ id: "ed" + i, url: "https://example.com/ed" + i, title: "Clip " + i, site: "example.com", savedAt: 1000 + i, minutes: 1, mode: "links", at: 0, finished: false, ...(folder ? { folder } : {}) });
+        await S.writeIndex([c(1, "Notes"), c(2, "Notes"), c(3, "Other")]);
+        await S.writePage("ed1", html, c(1));
+        await S.writePage("ed2", "<!doctype html><html><body><p>Nothing here</p></body></html>", c(2));
+        await S.writePage("ed3", "<!doctype html><html><body><p>Also ~~x~~ here</p></body></html>", c(3));
+      }, one);
+      await q.reload();
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Edit clips" }).click();
+      await q.fill("#editFind", "~~*~~");
+      await q.locator("#editResult .row", { hasText: "Find" }).click();
+      await q.locator("#editResult .section-lead", { hasText: "Found" }).waitFor();
+      assert.strictEqual(await q.textContent("#editResult .section-lead"), "Found 3 times in 2 clips.");
+      assert.ok(await q.locator(".edit-sample del", { hasText: "~~drop this too~~" }).count() === 1);
+      await q.locator("#editResult .row", { hasText: "Remove from 2 clips" }).click();
+      await until(q, () => !!document.querySelector("#editResult") && /Undo/.test(document.querySelector("#editResult").textContent));
+      const after = await q.evaluate(async () => ({ one: await window.Waypage.store.readPage("ed1"), three: await window.Waypage.store.readPage("ed3"), page: state.pages.find((p) => p.id === "ed1") }));
+      assert.ok(/<p>Keep this\s+part\.<\/p>/.test(after.one) && !/whole/.test(after.one) && /~~licence~~/.test(after.one), after.one);
+      assert.ok(/<p>Also\s+here<\/p>/.test(after.three), after.three);
+      assert.ok(after.page.editedAt > 0, "the edit isn't marked for sync");
+      await q.locator("#editResult .row", { hasText: "Undo" }).click();
+      await until(q, async () => /~~whole~~/.test(await window.Waypage.store.readPage("ed1")));
+      // Titles, in one collection only.
+      await q.locator(".seg-item", { hasText: "Titles" }).click();
+      await q.locator("label.choice", { hasText: "Collections" }).click();
+      await q.locator(".edit-folders label.row", { hasText: "Notes" }).locator("input").click();
+      await q.fill("#editFind", "Clip");
+      await q.fill("#editPut", "Note");
+      await q.locator("#editResult .row", { hasText: "Find" }).click();
+      await q.locator("#editResult .row", { hasText: "Replace in 2 clips" }).click();
+      await until(q, () => state.pages.find((p) => p.id === "ed1").title === "Note 1" && state.pages.find((p) => p.id === "ed3").title === "Clip 3");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("Saving has the switch for making full images smaller, on by default (1.18.0)", async () => {
       const q = await page(browser, 390);
       await q.click("#settingsBtn");

@@ -2,6 +2,18 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.22.0] - 2026-10-12
+
+### Added
+- Settings › Edit clips: find words in many clips at once and remove
+  them, or replace them, in the clips' text or their titles. Pick all
+  clips, some collections, or clips picked in the library (the selection
+  bar has Edit). `*` stands for any words in a paragraph, so `~~*~~`
+  removes two pairs of tildes and everything between them; Match case
+  and Regular expression are switches. Find shows how many and a few
+  examples before anything changes, and Undo puts the last change back.
+- Edited text syncs to your other devices like a clip saved again.
+
 ## [1.21.1] - 2026-10-12
 
 ### Changed

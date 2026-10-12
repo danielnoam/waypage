@@ -1578,6 +1578,54 @@
     return copy.textContent.split("\n").map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean).join("\n");
   }
 
+  // Edit clips (1.22.0): each match of `re` (global) in the clip's text
+  // becomes rep(match), "" removing it, even across bold or links inside
+  // one paragraph. The app's own lines (header, licence, next) stay as
+  // they are, and a paragraph left with nothing in it goes. Resolves to
+  // the number changed; `samples` collects a few, before and after.
+  const LEAVES = "p, li, h1, h2, h3, h4, h5, h6, figcaption, blockquote, pre, td, th, dt, dd, caption, summary";
+  const OURS = ".co-head, .co-licence, .co-next, .co-credit, script, style";
+  function replaceText(body, re, rep, samples) {
+    const doc = body.ownerDocument;
+    const units = new Map();
+    const walk = doc.createTreeWalker(body, 4);
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+      if (!n.data || n.parentElement.closest(OURS)) continue;
+      const key = n.parentElement.closest(LEAVES) || n;
+      if (!units.has(key)) units.set(key, []);
+      units.get(key).push(n);
+    }
+    let count = 0;
+    for (const [key, nodes] of units) {
+      const lens = nodes.map((n) => n.data.length);
+      const starts = [];
+      lens.reduce((at, len, i) => { starts[i] = at; return at + len; }, 0);
+      const text = nodes.map((n) => n.data).join("");
+      re.lastIndex = 0;
+      const found = [...text.matchAll(re)].filter((m) => m[0]);
+      if (!found.length) continue;
+      const spot = (pos, end) => {
+        const i = nodes.findIndex((n, k) => (end ? pos > starts[k] && pos <= starts[k] + lens[k] : pos >= starts[k] && pos < starts[k] + lens[k]));
+        return [nodes[i], pos - starts[i]];
+      };
+      for (const m of found.reverse()) {
+        const put = rep(m);
+        if (samples && samples.length < 5) {
+          const from = Math.max(0, m.index - 40), to = Math.min(text.length, m.index + m[0].length + 40);
+          samples.push({ before: (from ? "…" : "") + text.slice(from, m.index), found: m[0], put, after: text.slice(m.index + m[0].length, to) + (to < text.length ? "…" : "") });
+        }
+        const r = doc.createRange();
+        r.setStart(...spot(m.index, false));
+        r.setEnd(...spot(m.index + m[0].length, true));
+        r.deleteContents();
+        if (put) r.insertNode(doc.createTextNode(put));
+        count++;
+      }
+      if (key.nodeType === 1 && key !== body && !key.textContent.trim() && !key.querySelector("img, picture, video, iframe, svg, math, table")) key.remove();
+    }
+    return count;
+  }
+
   // ---- Saving ----
 
   function newId() {
@@ -1823,7 +1871,7 @@
   C.save = {
     get compress() { return compress; }, set compress(v) { compress = v !== false; }, compressPictures,
     pageSource, preview,
-    save, findArchived, unWayback, formatDate, SaveError, ContentsPage, cutShort, findChapters, pageImage, siteIcon, keepCover, siteRule, removeHidden, scriptJson, chapterNumber, pickChapters, comicGroup, isPanel, retryMissing, saveFullImages, setPictures, findNext, creditLine, cleanSaved, savedPageHtml, newId, textDir, isNextText, isPrevText, plainText,
+    save, findArchived, unWayback, formatDate, SaveError, ContentsPage, cutShort, findChapters, pageImage, siteIcon, keepCover, siteRule, removeHidden, scriptJson, chapterNumber, pickChapters, comicGroup, isPanel, retryMissing, saveFullImages, setPictures, findNext, creditLine, cleanSaved, savedPageHtml, newId, textDir, isNextText, isPrevText, plainText, replaceText,
     wikipediaPage, wikimediaThumb, parseSrcset, pickWidth, youtubeId, vimeoId, extOf, isTrackingPixel, readingMinutes, siteName,
   };
 })();

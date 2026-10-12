@@ -18,6 +18,18 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Edit clips (1.22.0).** Daniel: bulk edit clips from Settings, picking
+  clips or collections, removing things like `~~words~~` or renaming
+  titles. Matches are found per paragraph (save.replaceText), across
+  bold and links inside it, never in the app's own header, licence or
+  next lines; a paragraph left empty goes. Text edits set `editedAt`,
+  and sync now takes a clip's text version as the later of savedAt and
+  editedAt, so an edit goes up like a save and the later one wins.
+  The other device fetches the edited text again, which for a clip with
+  saved pictures means its pictures come down again too. Title-only
+  edits don't set editedAt (the three-way merge carries a title). Undo
+  is kept in memory only, until the app closes.
+
 - **Hold a post to pick posts (1.21.1).** Daniel: Feeds needs no Select
   button, holding should work like the library. Holding a post (or
   right-clicking it) starts picking with that post picked; holding while

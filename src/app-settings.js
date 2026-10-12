@@ -492,6 +492,241 @@ function browserStorageGroup() {
   return box;
 }
 
+// ---- Edit clips (1.22.0) ----
+// Find and replace across many clips at once: in their text (a match
+// replaced, or removed with nothing to put instead) or their titles.
+// * stands for any words, so ~~*~~ finds everything between two pairs
+// of tildes. Find shows how many and a few examples first; the change
+// can be undone until the app closes.
+const edit = { scope: "all", folders: new Set(), picked: [], what: "text", find: "", put: "", matchCase: false, regex: false, found: null, busy: "", undo: null };
+const editClips = () => {
+  const ok = (p) => !p.link && !p.preview;
+  if (edit.scope === "picked") return state.pages.filter((p) => ok(p) && edit.picked.includes(p.id));
+  if (edit.scope === "folders") return state.pages.filter((p) => ok(p) && p.folder && [...edit.folders].some((f) => sameTag(f, p.folder)));
+  return state.pages.filter(ok);
+};
+function editPattern() {
+  if (!edit.find) return null;
+  const src = edit.regex ? edit.find : edit.find.split("*").map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[\\s\\S]*?");
+  try { return new RegExp(src, "g" + (edit.matchCase ? "" : "i")); } catch (e) { return null; }
+}
+// What a match becomes: `put` as typed, or with $1 and the like when
+// Find is a regular expression.
+function editRep(re) {
+  if (!edit.regex) return () => edit.put;
+  const one = new RegExp(re.source, re.flags.replace("g", ""));
+  return (m) => m[0].replace(one, edit.put);
+}
+const editRedraw = () => { if (state.section === "edit") renderSection(); };
+const editChanged = () => { edit.found = null; editRedraw(); };
+
+function editGroup() {
+  const clips = editClips();
+  const folders = allFolders();
+  const scope = el("section", { class: "settings-section edit-sec" },
+    el("h2", { class: "overline" }, "Which clips"),
+    choiceList("edit-scope", "Which clips", [
+      { value: "all", label: "All clips", note: countLine(state.pages.filter((p) => !p.link && !p.preview).length) },
+      folders.length ? { value: "folders", label: "Collections", note: "The ones you tick below" } : null,
+      { value: "picked", label: "Clips you pick", note: edit.picked.length ? countLine(edit.picked.length) + " picked in the library" : "Pick them in the library, then tap Edit" },
+    ].filter(Boolean), edit.scope, (v) => { edit.scope = v; editChanged(); }),
+    edit.scope === "folders" ? el("div", { class: "group edit-folders" }, ...folders.map((f) => el("label", { class: "row" },
+      el("span", { class: "choice-text" },
+        el("span", { class: "choice-label", dir: "auto" }, f),
+        el("span", { class: "choice-note" }, countLine(folderPages(f).length))),
+      el("input", { class: "switch", type: "checkbox", role: "switch", checked: edit.folders.has(f),
+        onchange: (e) => { e.target.checked ? edit.folders.add(f) : edit.folders.delete(f); editChanged(); } })))) : null,
+    edit.scope === "picked" ? el("div", { class: "group" },
+      el("button", { class: "row", type: "button", onclick: pickToEdit }, el("span", { class: "row-label accent" }, edit.picked.length ? "Pick again in the library" : "Pick clips in the library"))) : null);
+
+  const field = (id, label, key, placeholder) => el("div", { class: "rc-row stack" },
+    el("label", { class: "rc-label", for: id }, label),
+    el("input", { class: "feed-input", id, type: "text", autocomplete: "off", autocapitalize: "off", spellcheck: "false", value: edit[key], placeholder,
+      oninput: (e) => { edit[key] = e.target.value; edit.found = null; editResult(); } }));
+  const toggle = (key, label, note) => el("label", { class: "row" },
+    el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, label), el("span", { class: "choice-note" }, note)),
+    el("input", { class: "switch", type: "checkbox", role: "switch", checked: edit[key], onchange: (e) => { edit[key] = e.target.checked; editChanged(); } }));
+  const change = el("section", { class: "settings-section edit-sec" },
+    el("h2", { class: "overline" }, "Change"),
+    el("div", { class: "group" },
+      el("div", { class: "rc-list" },
+        el("div", { class: "rc-row stack" }, el("span", { class: "rc-label" }, "In"),
+          seg("edit-what", "Change", [{ value: "text", label: "Text" }, { value: "titles", label: "Titles" }], edit.what, (v) => { edit.what = v; editChanged(); })),
+        field("editFind", "Find", "find", edit.regex ? "A regular expression" : "Words, or ~~*~~"),
+        field("editPut", "Replace with", "put", "Nothing: it's removed"))),
+    el("div", { class: "group" },
+      toggle("matchCase", "Match case", "Capital and small letters count as different"),
+      toggle("regex", "Regular expression", "Find is a pattern, with $1 and so on in Replace with")),
+    el("p", { class: "footnote" }, edit.regex ? "A match stays within one paragraph." : "* stands for any words in the same paragraph: ~~*~~ finds two pairs of tildes and everything between them."));
+
+  return [scope, change, el("section", { class: "settings-section edit-sec edit-result", id: "editResult" }, ...editResultNodes(clips))];
+}
+function editResult() {
+  const box = $("editResult");
+  if (box) box.replaceChildren(...editResultNodes(editClips()));
+}
+function editResultNodes(clips) {
+  const re = editPattern();
+  const f = edit.found;
+  const nodes = [];
+  const busy = !!edit.busy;
+  nodes.push(el("div", { class: "group" },
+    el("button", { class: "row", type: "button", ...(re && clips.length && !busy ? {} : { disabled: "" }), onclick: findEdits },
+      el("span", { class: "choice-text" },
+        el("span", { class: "choice-label accent" }, edit.busy || (f ? "Find again" : "Find")),
+        el("span", { class: "choice-note" }, !edit.find ? "Type what to find" : !re ? "That isn't a pattern Find can use" : "In " + countLine(clips.length))))));
+  if (f) {
+    nodes.push(el("p", { class: "section-lead", role: "status" }, f.times
+      ? "Found " + f.times + (f.times === 1 ? " time" : " times") + " in " + countLine(f.ids.length) + "."
+      : "Not found in " + (clips.length === 1 ? "this clip." : "these " + clips.length + " clips.")));
+    if (f.samples.length) nodes.push(el("ol", { class: "group edit-samples" }, ...f.samples.map((x) => el("li", { class: "edit-sample", dir: "auto" },
+      x.title ? el("span", { class: "choice-note" }, x.title) : null,
+      el("span", { class: "edit-text" }, x.before, el("del", {}, x.found), x.put ? el("ins", {}, x.put) : null, x.after)))));
+    if (f.times) nodes.push(el("div", { class: "group" },
+      el("button", { class: "row", type: "button", ...(busy ? { disabled: "" } : {}), onclick: applyEdits },
+        el("span", { class: "row-label accent" }, edit.put ? "Replace in " + countLine(f.ids.length) : "Remove from " + countLine(f.ids.length)))),
+      el("p", { class: "footnote" }, edit.what === "text" ? "Your other devices get the changed text when they sync. A highlight on changed words may not be found again." : "Your other devices get the new titles when they sync."));
+  }
+  if (edit.undo && !busy) nodes.push(el("div", { class: "group" },
+    el("button", { class: "row", type: "button", onclick: undoEdits }, el("span", { class: "row-label" }, "Undo the last change (" + countLine(edit.undo.length) + ")"))));
+  return nodes;
+}
+// A list of radio rows like choiceGroup's, without its section.
+function choiceList(name, label, options, current, set) {
+  const list = el("div", { class: "group", role: "radiogroup", "aria-label": label });
+  for (const o of options) {
+    const check = el("span", { class: "choice-check", "aria-hidden": "true" });
+    check.innerHTML = CHECK;
+    list.append(el("label", { class: "choice" },
+      el("input", { class: "visually-hidden", type: "radio", name, value: o.value, checked: o.value === current, onchange: () => set(o.value) }),
+      el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, o.label), o.note ? el("span", { class: "choice-note" }, o.note) : null),
+      check));
+  }
+  return list;
+}
+
+function pickToEdit() {
+  toLibrary().then(() => { startSelect([]); toast("Pick the clips to edit, then tap Edit."); });
+}
+// From the library's Edit: the picked clips, here.
+async function editPicked() {
+  edit.picked = picked().map((p) => p.id);
+  edit.scope = "picked";
+  edit.found = null;
+  await back();
+  openSettings(false, "edit");
+}
+
+async function findEdits() {
+  const re = editPattern();
+  const clips = editClips();
+  if (!re || !clips.length || edit.busy) return;
+  const rep = editRep(re);
+  const found = { ids: [], times: 0, samples: [], re: re.source + "/" + re.flags, what: edit.what, put: edit.put };
+  edit.busy = "Looking…";
+  editResult();
+  try {
+    for (const [i, p] of clips.entries()) {
+      if (edit.what === "titles") {
+        const n = [...p.title.matchAll(re)].filter((m) => m[0]).length;
+        if (n) {
+          found.ids.push(p.id); found.times += n;
+          if (found.samples.length < 5) found.samples.push({ before: "", found: p.title, put: editTitle(p.title, re, rep) || "", after: "" });
+        }
+        continue;
+      }
+      const html = await C.store.readPage(p.id).catch(() => null);
+      if (!html) continue;
+      const samples = [];
+      const n = C.save.replaceText(new DOMParser().parseFromString(html, "text/html").body, re, rep, found.samples.length < 5 ? samples : null);
+      if (n) {
+        found.ids.push(p.id); found.times += n;
+        for (const x of samples.reverse()) if (found.samples.length < 5) found.samples.push({ ...x, title: p.title });
+      }
+      if (i % 10 === 9) { edit.busy = "Looking… " + (i + 1) + " of " + clips.length; editResult(); await new Promise((go) => setTimeout(go, 0)); }
+    }
+    edit.found = found;
+  } finally {
+    edit.busy = "";
+    editResult();
+  }
+}
+function editTitle(title, re, rep) {
+  re.lastIndex = 0;
+  return title.replace(re, (...a) => (a[0] ? rep([a[0]]) : "")).replace(/\s+/g, " ").trim();
+}
+
+async function applyEdits() {
+  const f = edit.found;
+  const re = editPattern();
+  if (!f || !re || edit.busy || f.re !== re.source + "/" + re.flags || f.what !== edit.what || f.put !== edit.put) { edit.found = null; editResult(); return; }
+  const rep = editRep(re);
+  const undo = [];
+  let changed = 0;
+  edit.busy = "Changing…";
+  editResult();
+  try {
+    for (const [i, id] of f.ids.entries()) {
+      const p = state.pages.find((x) => x.id === id);
+      if (!p) continue;
+      if (edit.what === "titles") {
+        const t = editTitle(p.title, re, rep);
+        if (t && t !== p.title) { undo.push({ id, title: p.title }); p.title = t; changed++; }
+        continue;
+      }
+      const html = await C.store.readPage(id).catch(() => null);
+      if (!html) continue;
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      if (!C.save.replaceText(doc.body, re, rep)) continue;
+      undo.push({ id, html, editedAt: p.editedAt });
+      await rewriteClip(p, "<!doctype html>\n" + doc.documentElement.outerHTML, html);
+      changed++;
+      if (i % 5 === 4) { edit.busy = "Changing… " + (i + 1) + " of " + f.ids.length; editResult(); }
+    }
+  } finally {
+    edit.busy = "";
+    edit.found = null;
+    if (undo.length) edit.undo = undo;
+    await C.store.writeIndex(state.pages);
+    renderLibrary();
+    editRedraw();
+  }
+  toast(changed ? "Changed " + countLine(changed) + "." : "Nothing changed.");
+}
+// A clip's text written again, and its search text and size with it;
+// the edit time sends it to the other devices.
+async function rewriteClip(p, html, was) {
+  p.editedAt = Date.now();
+  const body = new DOMParser().parseFromString(html, "text/html").body;
+  const text = C.save.plainText(body);
+  p.bytes = Math.max(0, (p.bytes || 0) + C.store.bytesOf(html) - C.store.bytesOf(was));
+  await C.store.writePage(p.id, html, p);
+  await C.store.writeText(p.id, text).catch(() => {});
+  texts.set(p.id, { text, folded: fold(text) });
+}
+async function undoEdits() {
+  const list = edit.undo;
+  if (!list || edit.busy) return;
+  edit.undo = null;
+  edit.busy = "Undoing…";
+  editResult();
+  try {
+    for (const u of list) {
+      const p = state.pages.find((x) => x.id === u.id);
+      if (!p) continue;
+      if (u.title != null) { p.title = u.title; continue; }
+      const now = await C.store.readPage(u.id).catch(() => "");
+      await rewriteClip(p, u.html, now || "");
+    }
+  } finally {
+    edit.busy = "";
+    await C.store.writeIndex(state.pages);
+    renderLibrary();
+    editRedraw();
+  }
+  toast("Undone: " + countLine(list.length) + " back as they were.");
+}
+
 // Settings is a short menu; each entry is a screen of its own.
 const updateOut = () => ["available", "downloading", "ready"].includes(upd.phase) && upd.latest;
 // Settings sorted by what you came to change (1.12.0): how it looks,
@@ -508,6 +743,7 @@ const SECTIONS = {
   saving: { title: "Saving", build: () => [choiceGroup(SETTINGS[1]), compressGroup(), dataGroup(DATA_SAVE_KEY, "Save", "Pages and pictures come down on any connection.", "Saves wait in Downloads until you're on Wi-Fi; feeds, new chapters and missing pictures check then too."), signedGroup(), watchGroup(), importGroup()],
     value: () => SETTINGS[1].options.find((o) => o.value === SETTINGS[1].get()).label },
   sync: { title: "Sync", build: syncSections, value: () => (C.sync.on ? (C.sync.last.error ? "Stopped" : "On") : "Off") },
+  edit: { title: "Edit clips", build: editGroup, value: () => "" },
   storage: { title: "Storage", build: () => [storageGroup(), ...roomGroup(), placeGroup(), backupGroup(), browserStorageGroup()], value: () => formatSize(totalBytes()) },
   updates: { title: "About", build: () => [updatesGroup(), aboutGroup()], value: () => (updateOut() ? upd.latest + " is out" : APP_VERSION) },
   report: { title: "Report a problem", build: () => [reportGroup()], value: () => { const n = C.platform.log.list().length; return n ? n + (n === 1 ? " note" : " notes") : ""; } },
@@ -530,7 +766,7 @@ function renderSettings() {
         el("div", { class: "row update-row out" },
           el("span", { class: "row-label accent" }, "Waypage " + upd.latest + " is out"),
           el("button", { class: "btn-small", type: "button", onclick: () => openSection("updates") }, "View"))) : null,
-      el("div", { class: "group" }, row("appearance"), row("reading"), row("library")),
+      el("div", { class: "group" }, row("appearance"), row("reading"), row("library"), row("edit")),
       el("div", { class: "group" }, row("saving"), row("sync"), row("storage")),
       el("div", { class: "group" }, row("updates"), row("report"))));
 }
