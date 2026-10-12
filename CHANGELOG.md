@@ -2,6 +2,23 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.23.0] - 2026-10-12
+
+### Fixed
+- Read aloud with Go on to the next clip goes on with the app put away
+  or another app open (Android): the next clip, when it's saved, is
+  handed to the phone's reader before the end, instead of waiting for
+  the app to be looked at. The reader turns to it when you're back.
+
+### Added
+- A clip in a collection, or with a site's previous page, has Previous
+  at the top, like Next at the end.
+- A collection button beside Contents in the reader lists the
+  collection's clips, the open one marked, to jump to any of them.
+- An app update downloads in Downloads (Android), with its progress,
+  Pause and Resume; it goes on with the app put away, a paused one picks
+  up where it stopped, and the installer opens when you're back.
+
 ## [1.22.0] - 2026-10-12
 
 ### Added

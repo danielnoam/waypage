@@ -687,6 +687,69 @@ const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
       await q.context().close();
     });
 
+    await test("a clip in a collection has Previous at the top and the collection's clips by Contents (1.23.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (i) => ({ id: "ch" + i, url: "https://example.com/ch" + i, title: "Chapter " + i, site: "example.com", savedAt: 1000 + i, minutes: 1, mode: "links", at: 0, finished: false, folder: "Saga", folderAt: 1000 + i });
+        await S.writeIndex([c(1), c(2), c(3)]);
+        for (const i of [1, 2, 3]) await S.writePage("ch" + i, "<!doctype html><html><body><h1>Chapter " + i + "</h1><p>First words of chapter " + i + ".</p><div>Loose text<br>on two lines</div><p>Last words.</p></body></html>", c(i));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => openPage("ch2"));
+      const top = q.frameLocator("#readerFrame").locator(".co-before");
+      await top.waitFor();
+      assert.ok(/Previous in Saga\s*Chapter 1/.test(await top.innerText()), await top.innerText());
+      assert.ok(/Next in Saga\s*Chapter 3/.test(await q.frameLocator("#readerFrame").locator(".co-after").innerText()));
+      // Read aloud's blocks from the saved file are the open clip's.
+      const same = await q.evaluate(async () => {
+        const html = await window.Waypage.store.readPage("ch2");
+        return JSON.stringify(window.Waypage.reader.readableIn(html)) === JSON.stringify(window.Waypage.reader.readable()) && window.Waypage.reader.readable().length;
+      });
+      assert.strictEqual(same, 5, "the saved file's blocks differ from the open clip's");
+      await top.click();
+      await until(q, () => state.open && state.open.id === "ch1");
+      await q.locator("#readerFolder").click();
+      const rows = q.locator("#readingSheet .folder-row");
+      await rows.first().waitFor();
+      assert.strictEqual(await rows.count(), 3);
+      assert.strictEqual(await rows.nth(0).getAttribute("aria-current"), "page");
+      await rows.nth(2).click();
+      await until(q, () => state.open && state.open.id === "ch3" && !state.sheet);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("an app update downloads in Downloads, with Pause and Resume (1.23.0)", async () => {
+      const q = await page(browser, 390);
+      const got = await q.evaluate(async () => {
+        const P = window.Waypage.platform;
+        P.android = true;
+        let paused = 0;
+        P.pauseUpdate = () => { paused++; return Promise.resolve(true); };
+        P.downloadUpdate = (v, onProgress) => new Promise((ok, no) => { onProgress(0.4, 4e6, 1e7); window.finishUpdate = (how) => (how === "pause" ? no(Object.assign(new Error("Paused"), { code: "PAUSED" })) : ok("file:///cache/Waypage-9.9.9.apk")); });
+        P.openInstaller = () => { window.installed = true; return Promise.resolve(); };
+        setUpd({ phase: "available", latest: "9.9.9" });
+        startUpdate();
+        openDownloads();
+        await new Promise((go) => setTimeout(go, 400));
+        const card = document.querySelector("#downloads .app-update");
+        const status = card && card.querySelector(".status-text").textContent;
+        card.querySelector(".card-actions button").click();
+        window.finishUpdate("pause");
+        await new Promise((go) => setTimeout(go, 100));
+        const after = document.querySelector("#downloads .app-update .card-actions button").textContent;
+        return { status, paused, phase: upd.phase, after };
+      });
+      assert.deepStrictEqual(got, { status: "40% · 4.0 MB of 10 MB", paused: 1, phase: "paused", after: "Resume" }, JSON.stringify(got));
+      await q.evaluate(() => { document.querySelector("#downloads .app-update .card-actions button").click(); });
+      await q.evaluate(() => new Promise((go) => setTimeout(go, 100)).then(() => window.finishUpdate("done")));
+      await until(q, () => upd.phase === "ready" && window.installed === true);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("Saving has the switch for making full images smaller, on by default (1.18.0)", async () => {
       const q = await page(browser, 390);
       await q.click("#settingsBtn");

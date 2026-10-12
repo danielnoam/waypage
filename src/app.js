@@ -9,7 +9,7 @@
 // only use what an earlier part, or its own, has declared. A part's
 // functions can call into any part, since nothing is tapped until all of
 // them have loaded. app-start.js runs last and starts things up.
-const APP_VERSION = "1.22.0";
+const APP_VERSION = "1.23.0";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
@@ -634,7 +634,9 @@ function renderDownloads() {
     nodes.push(node);
   };
   const going = state.saving.filter((s) => !s.error && !(s.run && !s.run.done));
-  if (runs.size || going.length) keep("h:going", () => sectionHead("Downloading"));
+  const app = updShown();
+  if (runs.size || going.length || app) keep("h:going", () => sectionHead("Downloading"));
+  if (app) keep("u:" + upd.latest, updateCard, upd.phase + upd.error);
   for (const r of runs) keep("r:" + r.id, () => runCard(r), [r.paused, r.stopped, failedOf(r).length].join());
   for (const s of going) keep("s:" + s.key, () => savingCard(s));
   const shown = new Set(state.finished.map((e) => e.run).filter(Boolean));
@@ -656,10 +658,51 @@ function renderDownloads() {
       el("p", { class: "empty-text" }, "Clips you save show their progress here, and stay here once they're done until you close the app.")));
   }
   root.replaceChildren(...nodes);
+  if (app) paintUpdateCard();
   for (const s of going) updateSavingCard(s);
   for (const r of runs) updateRunCard(r);
   if (state.downloads) fresh.forEach((node) => M.appear(node));
   paintDownloads();
+}
+
+// The app's own update (1.23.0): its download, Pause and Resume, then
+// Install, like a clip being saved.
+// The app update's phase: idle, checking, current, failed, available,
+// downloading, paused, ready (app-start.js checks and downloads it).
+const upd = { phase: "idle", latest: null, notes: "", pct: 0, bytes: 0, total: 0, apk: null, error: "" };
+const UPD_OUT = ["available", "downloading", "paused", "ready"];
+const updShown = () => C.platform.android && ["downloading", "paused", "ready"].includes(upd.phase) && !!upd.latest;
+function updateCard() {
+  const st = upd.phase;
+  const act = st === "downloading" ? ["Pause", pauseUpdate] : st === "paused" ? ["Resume", startUpdate] : ["Install", install];
+  return el("div", { class: "card saving app-update wide", role: "group", "aria-label": "Waypage " + upd.latest },
+    el("span", { class: "card-body" },
+      el("span", { class: "card-site" }, "App update"),
+      el("span", { class: "card-title" }, "Waypage " + upd.latest),
+      st === "ready" ? null : el("span", { class: "progress", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(upd.pct) },
+        el("span", { class: "progress-fill" })),
+      el("span", { class: "card-status" + (st === "downloading" ? " accent" : upd.error ? " warn" : "") },
+        st === "downloading" ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
+        el("span", { class: "status-text" }, updStatus())),
+      el("span", { class: "card-actions" },
+        el("button", { class: st === "ready" ? "btn-small" : "btn-quiet", type: "button", onclick: act[1] }, act[0]))));
+}
+function updStatus() {
+  if (upd.phase === "ready") return "Ready to install";
+  if (upd.error) return upd.error;
+  const size = upd.total > 0 ? " · " + formatSize(upd.bytes) + " of " + formatSize(upd.total) : "";
+  return (upd.phase === "paused" ? "Paused at " : "") + upd.pct + "%" + size;
+}
+function paintUpdateCard() {
+  paintDownloads();
+  const card = $("downloads").querySelector(".app-update");
+  if (!card) return;
+  const bar = card.querySelector(".progress");
+  if (bar) {
+    bar.setAttribute("aria-valuenow", String(upd.pct));
+    card.querySelector(".progress-fill").style.transform = "scaleX(" + upd.pct / 100 + ")";
+  }
+  card.querySelector(".status-text").textContent = updStatus();
 }
 
 function clearFinished() {
@@ -710,6 +753,8 @@ function paintDownloads() {
     else { const page = r.current && !r.current.waiting ? savingShare(r.current) || 0 : 0; units += r.saved + r.failed + 1; got += r.saved + r.failed + page; }
   }
   for (const s of singles) { units += 1; got += s.waiting ? 0 : savingShare(s) || 0; }
+  const app = upd.phase === "downloading";
+  if (app) { units += 1; got += upd.pct / 100; }
   const busy = units > 0;
   const share = busy ? Math.min(1, got / units) : 0;
   const failed = !busy && state.saving.some((s) => s.error);
@@ -733,9 +778,9 @@ function paintDownloads() {
     return;
   }
   const one = active.length === 1 && !singles.length ? active[0] : null;
-  const title = one ? (one.files ? "Adding " + one.label : (one.again ? "Saving again in " : "Saving into ") + (one.folder || "your library"))
+  const title = app && units === 1 ? "Downloading Waypage " + upd.latest : one ? (one.files ? "Adding " + one.label : (one.again ? "Saving again in " : "Saving into ") + (one.folder || "your library"))
     : !active.length && singles.length === 1 ? "Saving a clip from " + singles[0].site : "Saving " + Math.round(units) + " clips";
-  const text = one ? (one.total ? one.saved + one.failed + " of " + one.total + " done" : countLine(one.saved) + " saved") + (one.paused ? " · Paused" : "")
+  const text = app && units === 1 ? upd.pct + "% done" : one ? (one.total ? one.saved + one.failed + " of " + one.total + " done" : countLine(one.saved) + " saved") + (one.paused ? " · Paused" : "")
     : Math.round(share * 100) + "% done";
   const o = { title, text, done: Math.round(share * 1000), total: 1000 };
   const said = JSON.stringify(o);

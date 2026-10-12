@@ -52,6 +52,11 @@ public class SpeechService extends Service {
     }
 
     static Job pending;
+    // The clip to read when this one ends (1.23.0), queued by the app
+    // while it's awake, so going on needs no WebView: put away, the app's
+    // page can't draw the next clip to read it.
+    static Job queued;
+    static String queuedAfter;
     static Listener listener;
     static SpeechService running;
 
@@ -200,6 +205,16 @@ public class SpeechService extends Service {
     private void said(String id) {
         if (job == null || !id.equals(generation + ":" + index) || !"playing".equals(state)) return;
         if (index + 1 >= job.items.length) {
+            Job next = queued;
+            if (next != null && next.items != null && next.items.length > 0 && job.key != null && job.key.equals(queuedAfter)) {
+                queued = null;
+                queuedAfter = null;
+                next.rate = job.rate;
+                job = next;
+                index = Math.max(0, Math.min(job.start, job.items.length - 1));
+                speakCurrent();
+                return;
+            }
             finish("ended");
             return;
         }

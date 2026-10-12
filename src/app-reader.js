@@ -313,6 +313,7 @@ function show(p, html) {
   showOffline();
   $("readProgress").dir = p.dir || "ltr";
   $("readerContents").hidden = true;
+  $("readerFolder").hidden = !(p.folder && !p.preview && folderPages(p.folder).length > 1);
   $("readerView").classList.remove("bar-away");
   jumpFrom = null;
   $("jumpBack").hidden = true;
@@ -325,7 +326,7 @@ function show(p, html) {
   fill($("readerName"), p.site ? el("span", { class: "reader-site" }, p.site) : null, el("span", { class: "reader-title" }, p.title));
   readerScrolled(p.at || 0, 0);
   return C.reader.open($("readerFrame"), html, p, {
-    at: p.at || 0, spot: p.spot || "", next: endLink(p),
+    at: p.at || 0, spot: p.spot || "", next: endLink(p), prev: startLink(p),
     onPosition: (f, s) => notePosition(p, f, s),
     onScroll: readerScrolled,
     onImage: openImage,
@@ -686,6 +687,27 @@ function railNow() {
 }
 $("railBack").addEventListener("click", () => $("readerBack").click());
 
+// The clips in this one's collection, in order (1.23.0); a tap turns to
+// that clip, the one open marked.
+function folderList() {
+  const p = state.open;
+  const list = p && p.folder ? folderPages(p.folder) : [];
+  const rows = list.map((q, i) => {
+    const b = el("button", { class: "row contents-row folder-row", type: "button", onclick: () => { if (q !== state.open) goTo(q); else history.back(); } },
+      el("span", { class: "folder-n", "aria-hidden": "true" }, String(i + 1)),
+      el("span", { class: "choice-text" },
+        el("span", { class: "row-label", dir: "auto" }, q.title),
+        el("span", { class: "choice-note" }, q.finished ? "Finished" : readingLine(q))));
+    if (q === p) b.setAttribute("aria-current", "page");
+    return el("li", null, b);
+  });
+  const nav = el("nav", { class: "contents", "aria-label": p ? p.folder : "Collection" },
+    el("p", { class: "menu-title", dir: "auto" }, p ? p.folder : ""),
+    el("ol", { class: "group contents-list" }, ...rows));
+  requestAnimationFrame(() => { const r = nav.querySelector("[aria-current]"); if (r) r.scrollIntoView({ block: "center" }); });
+  return nav;
+}
+
 // The page's h2 and h3 headings; a tap goes there.
 function contentsList() {
   const now = C.reader.section();
@@ -713,6 +735,23 @@ function endLink(p) {
   const had = savedAs(p.next);
   if (had) return { over: "Next on " + p.site, title: had.title, go: () => goTo(had, true) };
   return { over: "Next on " + p.site, title: "Save it and read on", go: () => followAndOpen(p) };
+}
+
+// What the top of a page offers (1.23.0): the page before it in its
+// folder, else the site's previous page (saved already, or to save now).
+function startLink(p) {
+  if (p.preview) return null;
+  const prev = neighbour(p, -1);
+  if (prev) return { over: "Previous in " + p.folder, title: prev.title, go: () => goTo(prev) };
+  if (typeof p.prev !== "string" || !p.prev) return null;
+  const had = savedAs(p.prev);
+  if (had) return { over: "Previous on " + p.site, title: had.title, go: () => goTo(had) };
+  return { over: "Previous on " + p.site, title: "Save it and read it", go: async () => {
+    if (!navigator.onLine) { toast("You're offline. The page before saves when you're back online."); return; }
+    toast("Saving the page before…");
+    const got = await follow(p, 1, true, true);
+    if (got && state.open === p) goTo(got);
+  } };
 }
 
 async function followAndOpen(p) {
@@ -874,13 +913,60 @@ async function startAloud(from, spot) {
   const start = Math.max(0, first);
   Object.assign(aloud, { key: p.id, map });
   setAloud("playing", start);
+  queued = null;
   try {
     await speech.play({ items, start, lang: p.lang || "", voice: voiceFor(p), rate: load(RATE_KEY, 1),
       title: p.title, subtitle: p.folder || p.site || "", key: p.id });
+    queueNext();
   } catch (e) {
     setAloud("stopped", -1);
     toast("Couldn't read aloud. Check the phone's text-to-speech settings.");
   }
+}
+
+// Going on with the app put away (1.23.0). At the end of a clip the app
+// opened the next one in the reader to read it, which a page in the
+// background can't draw, so nothing went on until the app was looked at.
+// Now, while a clip is read with Go on to the next clip on, the next one
+// (already saved) is read from its file and handed to the phone, which
+// goes straight on to it; the app catches up when it's back.
+let queued = null, openOnReturn = "";
+async function queueNext() {
+  const p = aloudPage();
+  let next = p && aloudOn() && load(GO_ON_KEY, false) ? neighbour(p, 1) || (p.next ? savedAs(p.next) : null) : null;
+  if (next && (next.file || next.link || next.preview)) next = null;
+  if (!next) {
+    if (queued) { queued = null; speech.queue({ after: "", items: [] }); }
+    return;
+  }
+  if (queued && queued.key === next.id && queued.after === p.id) return;
+  let html;
+  try { html = await C.store.readPage(next.id); } catch (e) { html = null; }
+  if (!html || aloud.key !== p.id) return;
+  const texts = C.reader.readableIn(html, { footnotes: !!load(FOOTNOTES_KEY, false), edges: !!load(EDGES_KEY, false) });
+  if (!texts.length) return;
+  const { items, map } = pieces(texts.map((text, block) => ({ text, block })));
+  queued = { key: next.id, after: p.id, map };
+  const ok = await speech.queue({ after: p.id, items, start: 0, lang: next.lang || "", voice: voiceFor(next),
+    title: next.title, subtitle: next.folder || next.site || "", key: next.id });
+  if (!ok) queued = null;
+}
+// The phone went on to the queued clip: the one before is finished, and
+// the reader turns to the new one now, or when the app is back.
+function wentOn(key) {
+  if (!queued || queued.key !== key) return false;
+  const was = aloudPage();
+  const next = state.pages.find((x) => x.id === key);
+  if (!next) return false;
+  if (was) { was.finished = true; was.at = 1; delete was.spot; savePositions(); }
+  Object.assign(aloud, { key, map: queued.map });
+  queued = null;
+  wentOnFrom = "";
+  if (was && state.open && state.open.id === was.id) {
+    if (document.hidden) openOnReturn = key;
+    else goTo(next, true);
+  }
+  return true;
 }
 
 // Where the selected word starts in the block's spoken text: the copy of
@@ -1302,16 +1388,25 @@ $("aloudBarOpen").addEventListener("click", async () => {
 addEventListener("resize", () => { if (!$("aloudBar").hidden) placeAloudBar(); });
 
 speech.onProgress(({ key, index, state: st }) => {
-  if (!key || key !== aloud.key) return;
+  if (!key) return;
+  const moved = key !== aloud.key;
+  if (moved && !wentOn(key)) return;
   setAloud(st, index);
+  if (moved) queueNext();
 });
 // Back from the lock screen: the reading may have moved on or ended
 // while the page slept.
 document.addEventListener("visibilitychange", async () => {
   if (document.hidden || !aloudOn()) return;
   const now = await speech.state();
-  if (now.key && now.key === aloud.key) setAloud(now.state, now.index);
-  else setAloud("stopped", -1);
+  if (now.key && (now.key === aloud.key || wentOn(now.key))) {
+    setAloud(now.state, now.index);
+    queueNext();
+  } else setAloud("stopped", -1);
+  // Gone on to the next clip while the app was away: the reader turns to it.
+  const p = openOnReturn && openOnReturn === aloud.key ? aloudPage() : null;
+  openOnReturn = "";
+  if (p && state.open && state.open.id !== p.id && !document.hidden) goTo(p, true);
 });
 
 $("readerAloud").hidden = !speech.available;
@@ -1393,6 +1488,7 @@ function aloudControls() {
     const input = el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!load(key, false),
       onchange: () => {
         store(key, input.checked);
+        if (key === GO_ON_KEY) queueNext();
         if (restart && aloud.state !== "stopped" && state.open && aloud.key === state.open.id) startAloud(blockAt(aloud.index));
       } });
     return el("label", { class: "rc-row switch-row" },
@@ -1564,6 +1660,7 @@ const SHEETS = {
   reading: { button: "readerAa", label: "Reader settings", build: readerSettings },
   page: { button: "readerMore", label: "This clip", build: () => state.open.preview ? previewSheet(state.open) : pageSheet(state.open, "reader") },
   contents: { button: "readerContents", label: "Contents", build: contentsList },
+  folder: { button: "readerFolder", label: "Clips in this collection", build: folderList },
   marks: { button: "readerMarks", label: "Highlights", build: () => marksView(state.open) },
   // From the text itself (1.14.0), with no button of their own.
   note: { label: "Note", build: () => noteSheet(noteNow) },
@@ -1597,7 +1694,7 @@ function openSheet(kind, fromHistory) {
     sheet.style.top = sheet.style.left = sheet.style.right = "";
     M.rise(sheet);
   }
-  const first = kind === "contents" ? $("readingSheet").querySelector("[aria-current]") || $("readingSheet").querySelector("button")
+  const first = kind === "contents" || kind === "folder" ? $("readingSheet").querySelector("[aria-current]") || $("readingSheet").querySelector("button")
     : $("readingSheet").querySelector("button:not(:disabled), input:checked");
   if (first && kind !== "page") afterStart(() => { if (state.sheet === kind) first.focus({ preventScroll: true }); });
 }

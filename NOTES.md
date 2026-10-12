@@ -18,6 +18,27 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Read aloud going on with the app away (1.23.0).** Daniel: with the
+  app minimized, read aloud didn't move to the next clip until he came
+  back. The service released its wake lock and stopped at a clip's end,
+  and the app then had to draw the next clip in the reader, which a
+  page in the background doesn't. Now the app reads the next saved
+  clip's blocks from its file (reader.readableIn, the same blocks the
+  open clip gives) and queues them with SpeechService (Speech.queue);
+  the service goes straight on and reports the new key, and the app
+  catches up (wentOn). Only a saved next clip is queued: one still to
+  be saved from the site goes on the old way, with the app open. iOS
+  has no queue yet (TODO, iOS release).
+- **Update downloads in Downloads (1.23.0).** Daniel: the update should
+  download in Downloads, keep going with the app away, and pause.
+  Downloads.fetch downloads into the cache as Waypage-x.apk.part with
+  Range requests, so Resume, even after the app was closed, asks only
+  for the rest; pauseFetch stops it. Filesystem.downloadFile, used
+  before, can neither pause nor resume.
+- **Previous and the collection list (1.23.0).** Daniel asked for a
+  Previous button at the top of a clip in a collection, and a button by
+  Contents listing the collection's clips.
+
 - **Edit clips (1.22.0).** Daniel: bulk edit clips from Settings, picking
   clips or collections, removing things like `~~words~~` or renaming
   titles. Matches are found per paragraph (save.replaceText), across
