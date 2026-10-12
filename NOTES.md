@@ -18,6 +18,15 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Picked rings and backwards turns (1.23.1).** The layout rules for a
+  picked item were written `.selecting:is([data-layout=…])`, but
+  `.selecting` is on body and `data-layout` on `.app`, so they never
+  matched; they need the descendant space. The folder sheet centred its
+  open row with `scrollIntoView`, which also scrolls every ancestor, the
+  reader included, while the sheet rises: that was the page dropping in.
+  `centreIn` scrolls only `#readingBody`. `M.pageOut/pageIn` take a
+  direction; `goTo(p, -1)` turns backwards.
+
 - **Read aloud going on with the app away (1.23.0).** Daniel: with the
   app minimized, read aloud didn't move to the next clip until he came
   back. The service released its wake lock and stopped at a clip's end,

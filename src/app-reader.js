@@ -693,7 +693,7 @@ function folderList() {
   const p = state.open;
   const list = p && p.folder ? folderPages(p.folder) : [];
   const rows = list.map((q, i) => {
-    const b = el("button", { class: "row contents-row folder-row", type: "button", onclick: () => { if (q !== state.open) goTo(q); else history.back(); } },
+    const b = el("button", { class: "row contents-row folder-row", type: "button", onclick: () => { if (q !== state.open) goTo(q, i < list.indexOf(state.open) ? -1 : 1); else history.back(); } },
       el("span", { class: "folder-n", "aria-hidden": "true" }, String(i + 1)),
       el("span", { class: "choice-text" },
         el("span", { class: "row-label", dir: "auto" }, q.title),
@@ -704,8 +704,18 @@ function folderList() {
   const nav = el("nav", { class: "contents", "aria-label": p ? p.folder : "Collection" },
     el("p", { class: "menu-title", dir: "auto" }, p ? p.folder : ""),
     el("ol", { class: "group contents-list" }, ...rows));
-  requestAnimationFrame(() => { const r = nav.querySelector("[aria-current]"); if (r) r.scrollIntoView({ block: "center" }); });
+  requestAnimationFrame(() => centreIn(nav.querySelector("[aria-current]")));
   return nav;
+}
+
+// The open row in the middle of the sheet (1.23.1). scrollIntoView moved
+// every scroller above it too, the reader's page with them, while the
+// sheet was still rising: the whole page dropped in from the top.
+function centreIn(row) {
+  const box = $("readingBody");
+  if (!row || !box.contains(row)) return;
+  const r = row.getBoundingClientRect(), b = box.getBoundingClientRect();
+  box.scrollTop += r.top - b.top - (b.height - r.height) / 2;
 }
 
 // The page's h2 and h3 headings; a tap goes there.
@@ -721,7 +731,7 @@ function contentsList() {
     return el("li", null, b);
   });
   const nav = el("nav", { class: "contents", "aria-label": "Contents" }, el("ol", { class: "group contents-list" }, ...rows));
-  if (current > 0) requestAnimationFrame(() => { const r = nav.querySelector("[aria-current]"); if (r) r.scrollIntoView({ block: "center" }); });
+  if (current > 0) requestAnimationFrame(() => centreIn(nav.querySelector("[aria-current]")));
   return nav;
 }
 
@@ -742,15 +752,15 @@ function endLink(p) {
 function startLink(p) {
   if (p.preview) return null;
   const prev = neighbour(p, -1);
-  if (prev) return { over: "Previous in " + p.folder, title: prev.title, go: () => goTo(prev) };
+  if (prev) return { over: "Previous in " + p.folder, title: prev.title, go: () => goTo(prev, -1) };
   if (typeof p.prev !== "string" || !p.prev) return null;
   const had = savedAs(p.prev);
-  if (had) return { over: "Previous on " + p.site, title: had.title, go: () => goTo(had) };
+  if (had) return { over: "Previous on " + p.site, title: had.title, go: () => goTo(had, -1) };
   return { over: "Previous on " + p.site, title: "Save it and read it", go: async () => {
     if (!navigator.onLine) { toast("You're offline. The page before saves when you're back online."); return; }
     toast("Saving the page before…");
     const got = await follow(p, 1, true, true);
-    if (got && state.open === p) goTo(got);
+    if (got && state.open === p) goTo(got, -1);
   } };
 }
 
@@ -764,7 +774,8 @@ async function followAndOpen(p) {
 // Next or previous in a folder: the reader stays and its page changes,
 // in the same history entry, so back still leaves the reader.
 // From the end link (0.28.2) the page turns: the one read slides away
-// to the left and the next comes in from the right.
+// to the left and the next comes in from the right; turn -1 (1.23.1) is
+// backwards, the page before coming in from the left or the top.
 async function goTo(p, turn) {
   let html;
   try { html = await C.store.readPage(p.id); } catch (e) { html = null; }
@@ -774,8 +785,9 @@ async function goTo(p, turn) {
   history.replaceState(readerState(p), "");
   const frame = $("readerFrame");
   const side = C.reader.paged;
-  if (turn) await M.pageOut(frame, side);
-  try { await show(p, html); } finally { if (turn) await M.pageIn(frame, side); }
+  const dir = turn === -1 ? -1 : 1;
+  if (turn) await M.pageOut(frame, side, dir);
+  try { await show(p, html); } finally { if (turn) await M.pageIn(frame, side, dir); }
   frame.focus();
 }
 
