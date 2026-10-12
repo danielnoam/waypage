@@ -1740,7 +1740,7 @@ html { -webkit-tap-highlight-color: transparent; }
 /* Picking posts (1.20.0) shares the library's bars, with its own actions. */
 .select-bar .post-only, .picking-posts .select-bar .select-act:not(.post-only) { display: none; }
 .picking-posts .select-bar .post-only { display: flex; }
-.picking-posts .post > .post-act, .picking-posts .post > .post-saved, .picking-posts .feed-select,
+.picking-posts .post > .post-act, .picking-posts .post > .post-saved,
 .picking-posts .feed-group + .section-head .btn-text, .picking-posts .section-head .btn-text { visibility: hidden; }
 .picking-posts .post { padding-inline-end: var(--s-7); }
 .picking-posts .post .pick { position: absolute; top: 50%; margin-top: -12px; inset-inline-end: var(--s-4); }

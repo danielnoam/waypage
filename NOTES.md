@@ -18,6 +18,11 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Hold a post to pick posts (1.21.1).** Daniel: Feeds needs no Select
+  button, holding should work like the library. Holding a post (or
+  right-clicking it) starts picking with that post picked; holding while
+  picking toggles it. The + and browser buttons on a post don't start it.
+
 - **Sync on leaving, places that went back, Continue reading (1.21.0).**
   Daniel: sync sometimes didn't happen when he swiped away fast, came
   back to an older place, and Continue reading showed a clip he hadn't

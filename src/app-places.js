@@ -100,7 +100,7 @@ function postRow(f, it, withFeed) {
 }
 
 // ---- Picking several posts (1.20.0) ----
-// Feeds' Select turns taps into picks, using the library's bars: Open
+// Holding a post (1.22.0, was a Select button) turns taps into picks, using the library's bars: Open
 // sends every picked post to the browser, Save saves them all. A history
 // entry, so Back leaves it.
 
@@ -623,11 +623,19 @@ function saveTyped(text) {
 // ---- Gestures (0.28.2) ----
 
 // Holding a feed (its chip, or its row in the sidebar), or right-clicking
-// it, opens its settings.
+// it, opens its settings. Holding a post starts picking posts with it
+// picked, as holding a clip does in the library.
 function holdFeeds(root) {
   let timer = null, start = null, fired = false;
   const cancel = () => { clearTimeout(timer); timer = null; };
+  const target = (e) => e.target.closest(".post-act") ? null : e.target.closest("[data-post], [data-feed]");
   const open = (node) => {
+    if (node.dataset.post) {
+      if (navigator.vibrate) navigator.vibrate(10);
+      if (!state.feedPick) startFeedPick();
+      tapPost(node.dataset.post);
+      return;
+    }
     const f = feeds.find((x) => x.url === node.dataset.feed);
     if (!f) return;
     if (navigator.vibrate) navigator.vibrate(10);
@@ -635,7 +643,7 @@ function holdFeeds(root) {
   };
   root.addEventListener("pointerdown", (e) => {
     fired = false;
-    const node = e.button === 0 && e.target.closest("[data-feed]");
+    const node = e.button === 0 && target(e);
     if (!node) return;
     start = { x: e.clientX, y: e.clientY };
     cancel();
@@ -645,7 +653,7 @@ function holdFeeds(root) {
   for (const t of ["pointerup", "pointercancel", "pointerleave"]) root.addEventListener(t, cancel);
   root.addEventListener("click", (e) => { if (fired) { fired = false; e.preventDefault(); e.stopPropagation(); } }, true);
   root.addEventListener("contextmenu", (e) => {
-    const node = e.target.closest("[data-feed]");
+    const node = target(e);
     if (!node) return;
     e.preventDefault();
     cancel();

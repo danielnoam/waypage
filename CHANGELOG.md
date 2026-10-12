@@ -2,6 +2,13 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.21.1] - 2026-10-12
+
+### Changed
+- Feeds has no Select button any more: hold a post to start picking
+  posts, as holding a clip does in the library. A right-click does the
+  same with a mouse.
+
 ## [1.21.0] - 2026-10-11
 
 ### Fixed
