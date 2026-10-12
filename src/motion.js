@@ -232,15 +232,17 @@
   // The reader going on to the next page of a collection (0.30.3): in
   // Pages it turns sideways (1.11.0), the page read leaving past the left
   // edge and the next coming in from the right; scrolling, it goes on
-  // down (1.11.1), the next coming up from the bottom.
+  // down (1.11.1), the next coming up from the bottom. Going back (dir
+  // -1, 1.23.1) runs the other way: the page before comes in from the
+  // left, or down from the top.
   const along = (side, d) => (side ? "translateX(" : "translateY(") + d + "%)";
-  function pageOut(el, side = true) {
-    return one(el, [{ transform: "none" }, { transform: along(side, -100) }], "control", false)
+  function pageOut(el, side = true, dir = 1) {
+    return one(el, [{ transform: "none" }, { transform: along(side, -100 * dir) }], "control", false)
       .then(() => { el.style.visibility = "hidden"; });
   }
-  function pageIn(el, side = true) {
+  function pageIn(el, side = true, dir = 1) {
     el.style.visibility = "";
-    return one(el, [{ transform: along(side, 100) }, { transform: "none" }], "sheet", true);
+    return one(el, [{ transform: along(side, 100 * dir) }, { transform: "none" }], "sheet", true);
   }
 
   // The spring as CSS custom properties, for transitions styles.css owns

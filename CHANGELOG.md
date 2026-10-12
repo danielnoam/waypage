@@ -2,6 +2,19 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.23.1] - 2026-10-12
+
+### Fixed
+- A picked collection in Shelf and Grid has its ring around the name,
+  count and progress bar, clear of them, instead of running through
+  them. A picked clip row in Shelf and One list gets its accent line
+  again (that rule never matched).
+- The collection button in the reader opens its list like Contents does;
+  the whole page no longer drops in from the top first.
+- Previous (and an earlier clip picked from the collection list) turns
+  back: the page before comes in from the top, or from the left in
+  Pages.
+
 ## [1.23.0] - 2026-10-12
 
 ### Fixed

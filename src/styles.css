@@ -1411,7 +1411,7 @@ html { -webkit-tap-highlight-color: transparent; }
   box-shadow: inset 0 -1px 0 var(--line);
 }
 :is([data-layout="shelf"], [data-layout="list"]) .page-card:not(.continue) .card-thumb { width: 64px; height: 96px; }
-.selecting:is([data-layout="shelf"], [data-layout="list"]) .picked.page-card:not(.continue) { box-shadow: inset 0 -2px 0 var(--accent); }
+.selecting :is([data-layout="shelf"], [data-layout="list"]) .picked.page-card:not(.continue) { box-shadow: inset 0 -2px 0 var(--accent); }
 
 /* Shelf and Grid: collections are covers, two to three wide. */
 :is([data-layout="shelf"], [data-layout="grid"]) .tile {
@@ -1423,7 +1423,12 @@ html { -webkit-tap-highlight-color: transparent; }
   box-shadow: 0 1px 2px var(--shadow), 0 4px 12px var(--shadow);
 }
 :is([data-layout="shelf"], [data-layout="grid"]) .tile-name { font-size: var(--fs-meta); line-height: var(--lh-meta); font-family: var(--sans); font-weight: 600; }
-.selecting:is([data-layout="shelf"], [data-layout="grid"]) .picked.tile { box-shadow: 0 0 0 2px var(--accent); }
+/* A picked cover's ring goes around its name and progress too, clear of
+   them (1.23.1): hugging the tile, it ran through the progress bar. */
+.selecting :is([data-layout="shelf"], [data-layout="grid"]) .picked.tile {
+  box-shadow: none; outline: 2px solid var(--accent); outline-offset: 5px; border-radius: var(--r-md);
+}
+.selecting :is([data-layout="shelf"], [data-layout="grid"]) .folder-strip { padding-top: var(--s-2); padding-bottom: var(--s-3); }
 [data-layout="grid"] .folder-strip {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4) var(--s-3);
   overflow: visible; margin: 0; padding: var(--s-1) 0 var(--s-2);
@@ -1443,7 +1448,7 @@ html { -webkit-tap-highlight-color: transparent; }
 [data-layout="list"] .tile-kind { display: inline; }
 [data-layout="list"] .tile .progress { margin-top: 0; }
 [data-layout="list"] .tile-new { top: var(--s-1); inset-inline-end: var(--s-1); padding: 0 6px; }
-.selecting[data-layout="list"] .picked.tile { box-shadow: inset 0 -2px 0 var(--accent); }
+.selecting [data-layout="list"] .picked.tile { box-shadow: inset 0 -2px 0 var(--accent); }
 
 /* Grid: pages are cards two wide, the picture on top. Saves in progress
    and Continue reading take the whole width. */
@@ -1890,6 +1895,9 @@ html { -webkit-tap-highlight-color: transparent; }
   [data-layout="grid"] .library { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: var(--s-3); }
   :is([data-layout="shelf"], [data-layout="grid"]) .tile { flex-basis: 152px; }
   .folder-strip { margin-inline: 0; padding-inline: 0; }
+  /* Room at the sides for a picked cover's ring, which the strip's
+     scrolling would cut. */
+  .selecting [data-layout="shelf"] .folder-strip { margin-inline: calc(-1 * var(--s-2)); padding-inline: var(--s-2); }
   [data-layout="grid"] .folder-strip, .folder-strip.folder-grid { grid-template-columns: repeat(auto-fill, minmax(152px, 1fr)); }
   .continue { padding: var(--s-4); }
 

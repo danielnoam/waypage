@@ -708,8 +708,12 @@ const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
         return JSON.stringify(window.Waypage.reader.readableIn(html)) === JSON.stringify(window.Waypage.reader.readable()) && window.Waypage.reader.readable().length;
       });
       assert.strictEqual(same, 5, "the saved file's blocks differ from the open clip's");
+      await q.evaluate(() => { const M = window.Waypage.motion, inn = M.pageIn; window.turns = []; M.pageIn = (el, side, dir) => { window.turns.push(dir); return inn(el, side, dir); }; });
       await top.click();
       await until(q, () => state.open && state.open.id === "ch1");
+      // Going back, the page before comes in from the top (1.23.1).
+      await until(q, () => window.turns.length === 1);
+      assert.deepStrictEqual(await q.evaluate(() => window.turns), [-1]);
       await q.locator("#readerFolder").click();
       const rows = q.locator("#readingSheet .folder-row");
       await rows.first().waitFor();
@@ -717,6 +721,30 @@ const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
       assert.strictEqual(await rows.nth(0).getAttribute("aria-current"), "page");
       await rows.nth(2).click();
       await until(q, () => state.open && state.open.id === "ch3" && !state.sheet);
+      await until(q, () => window.turns.length === 2);
+      assert.strictEqual(await q.evaluate(() => window.turns[1]), 1);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a picked collection's ring goes round its name and progress (1.23.1)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        localStorage.setItem("waypage.layout", JSON.stringify("shelf"));
+        const c = (i, f) => ({ id: "rg" + i, url: "https://example.com/rg" + i, title: "Clip " + i, site: "example.com", savedAt: 1000 + i, minutes: 1, mode: "links", at: 0.4, finished: false, folder: f });
+        await window.Waypage.store.writeIndex([c(1, "Notes"), c(2, "Notes"), c(3)]);
+      });
+      await q.reload();
+      await q.waitForSelector(".tile[data-ids]");
+      const got = await q.evaluate(async () => {
+        const t = document.querySelector(".tile[data-ids]");
+        startSelect(t.dataset.ids.split(","));
+        await new Promise((go) => setTimeout(go, 300));
+        const s = getComputedStyle(t), r = t.getBoundingClientRect(), bar = t.querySelector(".progress").getBoundingClientRect();
+        return { style: s.outlineStyle, off: parseFloat(s.outlineOffset), clear: bar.bottom <= r.bottom };
+      });
+      assert.strictEqual(got.style, "solid");
+      assert.ok(got.off >= 4 && got.clear, JSON.stringify(got));
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });
