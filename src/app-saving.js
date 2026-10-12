@@ -1464,7 +1464,6 @@ function renderFeeds() {
     el("p", { class: "meta" + (picked && picked.error && !feedsChecking ? " warn" : "") }, line),
     // Phones pull down to check; a pointer gets the button.
     el("span", { class: "feed-head-acts" },
-      list.length ? el("button", { class: "btn-text feed-select", type: "button", "data-key": "select", onclick: () => startFeedPick() }, "Select") : null,
       el("button", { class: "btn-text feed-check", type: "button", "data-key": "check", onclick: () => checkNow(picked) }, "Check now"))));
   let day = null, group = null;
   for (const x of list) {

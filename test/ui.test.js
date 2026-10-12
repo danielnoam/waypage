@@ -488,10 +488,14 @@ const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
       await feedRow.click();
       await q.locator("#feeds .post", { hasText: "Post 1" }).waitFor();
       await q.waitForTimeout(400);
-      await q.locator("#feeds .feed-select").click();
+      assert.strictEqual(await q.locator("#feeds .feed-select").count(), 0, "Feeds still has a Select button");
+      await q.locator("#feeds .post", { hasText: "Post 1" }).locator(".post-open").hover();
+      await q.mouse.down();
+      await q.waitForTimeout(650);
+      await q.mouse.up();
       await until(q, () => document.body.classList.contains("picking-posts") && !document.getElementById("selOpen").hidden);
       assert.ok(await q.locator("#selOpen").isVisible() && !(await q.locator("#selTags").isVisible()));
-      await q.locator("#feeds .post", { hasText: "Post 1" }).locator(".post-open").click();
+      assert.strictEqual(await q.textContent("#selectCount"), "1 post picked", "holding a post doesn't pick it");
       await q.locator("#feeds .post", { hasText: "Post 3" }).locator(".post-open").click();
       assert.strictEqual(await q.textContent("#selectCount"), "2 posts picked");
       const saved = await q.evaluate(async () => {
