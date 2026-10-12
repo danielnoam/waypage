@@ -1220,7 +1220,7 @@ html { -webkit-tap-highlight-color: transparent; }
   background: var(--surface); border-color: var(--line); border-style: solid; border-width: 0;
 }
 .select-head { top: 0; padding: var(--s-2) var(--s-2); padding-top: calc(var(--s-2) + env(safe-area-inset-top)); border-bottom-width: 1px; }
-.select-bar { bottom: 0; padding: var(--s-1) var(--s-2) calc(var(--s-1) + env(safe-area-inset-bottom)); border-top-width: 1px; justify-content: space-around; }
+.select-bar { bottom: 0; padding: var(--s-1) var(--s-2) calc(var(--s-1) + env(safe-area-inset-bottom)); border-top-width: 1px; justify-content: space-around; gap: 0; }
 .select-head[hidden], .select-bar[hidden] { display: none; }
 .select-count { margin: 0; flex: 1; text-align: center; font-weight: 600; }
 .btn-text {
@@ -1229,7 +1229,7 @@ html { -webkit-tap-highlight-color: transparent; }
   color: var(--accent); font-weight: 600; cursor: pointer;
 }
 .select-act {
-  flex: 1; max-width: 120px; min-height: 56px;
+  flex: 1; min-width: 0; max-width: 120px; min-height: 56px; white-space: nowrap;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   border: 0; border-radius: var(--r-md); background: transparent; color: var(--accent);
   font: 500 var(--fs-meta)/var(--lh-meta) var(--sans); cursor: pointer;
@@ -2175,3 +2175,14 @@ kbd {
   }
   .viewer-zoom .icon-btn { color: var(--on-video); border-radius: var(--r-full); }
 }
+
+/* Edit clips (1.22.0): a few of what Find found, struck through and
+   with what goes in their place. */
+.edit-sec .group + .group, .edit-sec .group + .edit-samples, .edit-sec .edit-samples + .group { margin-top: var(--s-3); }
+.edit-samples { list-style: none; margin: 0; padding: 0; }
+.edit-sample { display: flex; flex-direction: column; gap: var(--s-1); padding: var(--s-3) var(--s-4); }
+.edit-sample + .edit-sample { border-top: 1px solid var(--line); }
+.edit-text { font-size: var(--fs-label); line-height: var(--lh-label); overflow-wrap: anywhere; }
+.edit-text del { color: var(--warn); text-decoration-thickness: 2px; }
+.edit-text ins { color: var(--accent); text-decoration: none; font-weight: 600; }
+.edit-result .row:disabled .choice-label { color: var(--muted); }

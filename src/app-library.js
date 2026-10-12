@@ -1001,7 +1001,7 @@ function paintPicks() {
   $("selectCount").textContent = list.length ? countLine(list.length) + " picked" : "Pick clips";
   $("selectAll").textContent = scope.length && scope.every((p) => state.select.has(p.id)) ? "Pick none" : "Select all";
   $("selReadLabel").textContent = list.length && list.every((p) => p.finished) ? "Mark unread" : "Mark read";
-  for (const id of ["selTags", "selFolder", "selRead", "selDelete"]) $(id).disabled = !list.length;
+  for (const id of ["selTags", "selFolder", "selRead", "selEdit", "selDelete"]) $(id).disabled = !list.length;
 }
 
 function selectAll() {
