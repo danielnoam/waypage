@@ -23,7 +23,7 @@
   const isPaged = () => paged && !comic && !!doc;
   // The "Next" link this file adds at the end of a page in a folder; only
   // that element (not a look-alike in the page) moves on.
-  let nextLink = null, onNext = null, onImage = null, onTap = null, onMark = null;
+  let nextLink = null, onNext = null, prevLink = null, onPrev = null, onImage = null, onTap = null, onMark = null;
   let onLink = null, onNote = null, onJump = null;
   // The page's h2 and h3 headings, found once it's shown.
   let heads = [];
@@ -186,6 +186,7 @@
     }
     e.preventDefault();
     if (a === nextLink) { onNext(); return; }
+    if (a === prevLink) { onPrev(); return; }
     const href = a.getAttribute("href");
     if (href.startsWith("#")) {
       let id = href.slice(1);
@@ -499,6 +500,20 @@
       && !el.querySelector(BLOCKS) && !hidden(el) && !inNotes(el) && !(readOpts.edges && el.closest(EDGES)))
       .map((el) => ({ el, text: speechText(el) })).filter((b) => /[\p{L}\p{N}]/u.test(b.text));
     return blocks.map((b) => b.text);
+  }
+  // The blocks of a clip that isn't open, from its saved HTML (1.23.0):
+  // Read aloud going on to the next clip while the app is put away, where
+  // the reader can't draw it. The same blocks the open clip would have.
+  function readableIn(html, opts) {
+    const was = { doc, blocks };
+    try {
+      doc = new DOMParser().parseFromString(html, "text/html");
+      blocks = [];
+      return readable(opts);
+    } finally {
+      doc = was.doc;
+      blocks = was.blocks;
+    }
   }
   // The first block not yet scrolled past, where reading starts.
   function firstShown() {
@@ -1034,7 +1049,7 @@
   // `next` ({ over, title, go }) adds a link to the next page at the end;
   // `top` () gives the height the bar covers; onImage(info) opens a tapped
   // image.
-  function open(iframe, html, meta, { at = 0, spot: spotAt = "", onPosition, onScroll, next, top, onImage: image, onTap: tap, onMark: mark, onSelect, pages: asPages, bottom, onKey, onEdge: edge, onPinch: pinchTo, onLink: link, onNote: note, onJump: jumped } = {}) {
+  function open(iframe, html, meta, { at = 0, spot: spotAt = "", onPosition, onScroll, next, prev, top, onImage: image, onTap: tap, onMark: mark, onSelect, pages: asPages, bottom, onKey, onEdge: edge, onPinch: pinchTo, onLink: link, onNote: note, onJump: jumped } = {}) {
     frame = iframe;
     turning = null;
     paged = !!asPages;
@@ -1062,6 +1077,8 @@
     doc = null;
     nextLink = null;
     onNext = next ? next.go : null;
+    prevLink = null;
+    onPrev = prev ? prev.go : null;
     placeholders = new WeakMap();
     return new Promise((resolve) => {
       iframe.onload = () => {
@@ -1071,20 +1088,23 @@
         applyTheme();
         applyConnection();
         applyTop();
-        if (next) {
-          nextLink = doc.createElement("a");
-          nextLink.href = "#";
-          nextLink.className = "co-next";
+        // The next page at the end, and the one before at the top (1.23.0).
+        const stepLink = (to, cls) => {
+          const a = doc.createElement("a");
+          a.href = "#";
+          a.className = "co-next " + cls;
           const over = doc.createElement("span");
           over.className = "co-next-over";
-          over.textContent = next.over;
+          over.textContent = to.over;
           const title = doc.createElement("span");
           title.className = "co-next-title";
           title.dir = "auto";
-          title.textContent = next.title;
-          nextLink.append(over, title);
-          doc.body.append(nextLink);
-        }
+          title.textContent = to.title;
+          a.append(over, title);
+          return a;
+        };
+        if (next) doc.body.append(nextLink = stepLink(next, "co-after"));
+        if (prev) doc.body.prepend(prevLink = stepLink(prev, "co-before"));
         heads = [...doc.body.querySelectorAll("h2, h3")].filter((h) => clean(h));
         doc.addEventListener("click", onClick);
         // Loose text is wrapped now, not on the first selection (1.11.1):
@@ -1161,6 +1181,8 @@
     heads = [];
     nextLink = null;
     onNext = null;
+    prevLink = null;
+    onPrev = null;
     blocks = [];
     anchors = [];
     spans = [];
@@ -1171,5 +1193,5 @@
   addEventListener("resize", applyTop);
   addEventListener("offline", applyConnection);
 
-  C.reader = { open, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, headings, section, jumpTo, readable, firstShown, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
+  C.reader = { open, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, headings, section, jumpTo, readable, readableIn, firstShown, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
 })();

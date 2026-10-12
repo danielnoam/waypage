@@ -22,6 +22,8 @@ import org.json.JSONArray;
  *   play({ items, start, lang, voice, rate, title, subtitle, key })
  *   pause() resume() stop() seek({ index }) skip({ by }) rate({ rate })
  *   state()                      { key, index, state }
+ *   queue({ after, items, start, lang, voice, title, subtitle, key })
+ *                                the clip to go on to when `after` ends
  *
  * and a "progress" event { key, index, state } as each paragraph starts and
  * when the reading pauses, ends or stops ("playing", "paused", "ended",
@@ -108,6 +110,30 @@ public class SpeechPlugin extends Plugin {
         } catch (Exception e) {
             call.reject("Couldn't start reading aloud", e);
         }
+    }
+
+    @PluginMethod
+    public void queue(PluginCall call) {
+        JSONArray items = call.getArray("items");
+        SpeechService.Job job = null;
+        if (items != null && items.length() > 0) {
+            job = new SpeechService.Job();
+            job.items = new String[items.length()];
+            for (int i = 0; i < items.length(); i++) job.items[i] = items.optString(i, "");
+            job.start = call.getInt("start", 0);
+            job.lang = call.getString("lang", "");
+            job.voice = call.getString("voice", "");
+            job.title = call.getString("title", "Read aloud");
+            job.subtitle = call.getString("subtitle", "");
+            job.key = call.getString("key", "");
+        }
+        final SpeechService.Job next = job;
+        final String after = call.getString("after", "");
+        main.post(() -> {
+            SpeechService.queued = next;
+            SpeechService.queuedAfter = next == null ? null : after;
+            call.resolve();
+        });
     }
 
     @PluginMethod

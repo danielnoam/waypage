@@ -11,6 +11,10 @@ Nothing queued.
 
 Everything iOS-only, kept for one iOS release.
 
+- **Read aloud going on to the next clip, put away, on iOS.** Android's
+  speech service takes the next clip from the app since 1.23.0 and goes
+  straight on; iOS's Speech plugin has no queue yet, so there the app
+  still has to be open at the end of a clip.
 - **Moving a big library, natively.** Android copies in Java since
   1.19.0; iOS still moves file by file over the bridge. A FileManager
   copy would do it at disk speed.

@@ -338,6 +338,16 @@
       if (S) { try { return await S.state(); } catch (e) { return { key: "", index: -1, state: "stopped" }; } }
       return { key: web.key, index: web.i, state: web.items.length ? web.state : "stopped" };
     },
+    // The clip to go on to when the clip `after` ends (1.23.0), read by
+    // the phone with no help from the page, which can't draw it while the
+    // app is put away. { after, items, start, lang, voice, title, subtitle, key };
+    // no items clears it. Resolves false where the phone can't (iOS for
+    // now, a browser): the app goes on itself at the end, as before.
+    async queue(o) {
+      const S = plugin("Speech");
+      if (!S || os !== "android") return false;
+      try { await S.queue(o); return true; } catch (e) { return false; }
+    },
   };
 
   // Downloads (0.27.9). While anything is being saved the app asks to be
@@ -556,11 +566,27 @@
   const APK_MIME = "application/vnd.android.package-archive";
   const repo = () => (build && build.repo) || null;
   // `file` is the release's APK: Waypage.apk once Waypage is Waypage (0.36.0).
+  // Since 1.23.0 it comes through Downloads' own fetch, which goes on
+  // with the app put away and can pause and pick up where it stopped: a
+  // pause rejects with code "PAUSED". Older builds use Filesystem.
   async function downloadUpdate(version, onProgress, file = "Waypage.apk") {
     const FS = plugin("Filesystem");
     if (os !== "android" || !FS || !plugin("FileOpener") || !repo()) return null;
     const url = "https://github.com/" + repo() + "/releases/download/app-v" + version + "/" + file;
     const path = file.replace(/\.apk$/, "") + "-" + version + ".apk";
+    const D = plugin("Downloads");
+    if (D && typeof D.fetch === "function") {
+      const heard = await D.addListener("fetched", (p) => {
+        if (onProgress && p && p.path === path) onProgress(p.total > 0 ? Math.min(1, p.bytes / p.total) : 0, p.bytes, p.total);
+      });
+      try {
+        return (await D.fetch({ url, path })).uri;
+      } catch (e) {
+        if (!(e && e.code === "UNIMPLEMENTED") && !/not implemented/i.test(String((e && e.message) || e))) throw e;
+      } finally {
+        if (heard && heard.remove) heard.remove();
+      }
+    }
     const listener = await FS.addListener("progress", (p) => {
       if (onProgress && p && p.contentLength > 0) onProgress(Math.min(1, p.bytes / p.contentLength));
     });
@@ -570,6 +596,10 @@
       if (listener && listener.remove) listener.remove();
     }
     return (await FS.getUri({ path, directory: "CACHE" })).uri;
+  }
+  function pauseUpdate() {
+    const D = plugin("Downloads");
+    return D && typeof D.pauseFetch === "function" ? D.pauseFetch().then(() => true, () => false) : Promise.resolve(false);
   }
   function openInstaller(uri) {
     return plugin("FileOpener").openFile({ path: uri, mimeType: APK_MIME });
@@ -582,7 +612,7 @@
       const { files } = await FS.readdir({ path: "", directory: "CACHE" });
       for (const f of files || []) {
         const name = typeof f === "string" ? f : f.name;
-        const m = /^Waypage-(\d+\.\d+\.\d+)\.apk$/.exec(name || "");
+        const m = /^Waypage-(\d+\.\d+\.\d+)\.apk(\.part)?$/.exec(name || "");
         if (m && !isNewer(m[1], currentVersion)) await FS.deleteFile({ path: name, directory: "CACHE" });
       }
     } catch (e) { /* nothing to tidy */ }
@@ -885,6 +915,7 @@
     exitApp,
     download,
     downloadUpdate,
+    pauseUpdate,
     openInstaller,
     clearOldUpdates,
     releasesUrl() { return repo() ? "https://github.com/" + repo() + "/releases/latest" : null; },

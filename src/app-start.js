@@ -80,6 +80,7 @@ $("readKeys").addEventListener("click", () => openMenu("keys"));
 // The notification's Stop (Android) stops every run.
 C.platform.downloads.onStop(() => {
   for (const r of [...runs]) stopRun(r);
+  pauseUpdate();
   if (C.sync.on && (C.sync.running || syncQueue.length || fetchingPictures)) pauseSync(true);
 });
 $("sectionBack").addEventListener("click", () => history.back());
@@ -168,6 +169,7 @@ $("readerMore").addEventListener("click", () => toggleSheet("page"));
 $("readerAa").addEventListener("click", () => toggleSheet("reading"));
 $("readerMarks").addEventListener("click", () => { if (state.sheet !== "marks") markFocus = null; toggleSheet("marks"); });
 $("readerContents").addEventListener("click", () => toggleSheet("contents"));
+$("readerFolder").addEventListener("click", () => toggleSheet("folder"));
 $("sheetCatch").addEventListener("click", () => history.back());
 dragToClose($("readingSheet"), null, () => !!state.sheet && !$("readingSheet").dataset.pop, () => history.back());
 dragToClose($("menuSheet"), $("menuCatch"), () => !!state.menu && !wide.matches, () => history.back());
@@ -351,20 +353,26 @@ function isNewerVersion(a, b) {
   return false;
 }
 
-// phase: idle, checking, current, failed, available, downloading, ready.
-const upd = { phase: "idle", latest: null, notes: "", pct: 0, apk: null, error: "" };
+// `upd`, the update's state, is in app.js: Downloads shows it (1.23.0).
 
 function setUpd(change) {
+  const was = upd.phase + upd.error;
   Object.assign(upd, change);
   paintUpdateBar();
-  if (state.settings) renderSettings();
-  if (state.section === "updates" && $("updatesSection")) $("updatesSection").replaceWith(updatesGroup());
+  if (was !== upd.phase + upd.error || !("pct" in change)) {
+    if (state.settings) renderSettings();
+    if (state.section === "updates" && $("updatesSection")) $("updatesSection").replaceWith(updatesGroup());
+    renderDownloads();
+  } else {
+    if (state.section === "updates" && $("updatesSection")) $("updatesSection").replaceWith(updatesGroup());
+    paintUpdateCard();
+  }
 }
 
 async function checkForNewerApp() {
   const build = await C.platform.ready;
   if (!C.platform.native || !build || !build.repo) return;
-  if (upd.phase === "checking" || upd.phase === "downloading") return;
+  if (["checking", "downloading", "paused"].includes(upd.phase)) return;
   C.platform.clearOldUpdates(APP_VERSION, isNewerVersion);
   setUpd({ phase: "checking" });
   try {
@@ -385,15 +393,23 @@ async function checkForNewerApp() {
 // if that's dismissed, Install reopens it from the same file. iOS installs
 // nothing an app hands it: a sideloaded build is updated from AltStore or
 // SideStore, so there it opens the release.
+// The download is a card in Downloads (1.23.0), with Pause and Resume,
+// and goes on with the app put away; a paused one picks up where it
+// stopped, even after the app was closed.
+let installWhenBack = false;
 async function startUpdate() {
   if (C.platform.ios) { C.platform.openOutside(C.platform.releasesUrl()); return; }
   if (upd.phase === "ready") return install();
-  setUpd({ phase: "downloading", pct: 0 });
+  if (upd.phase === "downloading") { openDownloads(); return; }
+  const resuming = upd.phase === "paused";
+  setUpd({ phase: "downloading", error: "" });
+  if (!resuming && !state.downloads) toast("Downloading Waypage " + upd.latest + ".", "Downloads", () => openDownloads());
   let apk;
   try {
-    apk = await C.platform.downloadUpdate(upd.latest, (f) => setUpd({ pct: Math.round(f * 100) }));
+    apk = await C.platform.downloadUpdate(upd.latest, (f, bytes, total) => setUpd({ pct: Math.round(f * 100), bytes: bytes || 0, total: total || 0 }));
   } catch (e) {
-    setUpd({ phase: "available", error: "The download didn't finish. Try again." });
+    if (e && e.code === "PAUSED") { setUpd({ phase: "paused" }); return; }
+    setUpd({ phase: "paused", error: "The download stopped. Resume picks up where it was." });
     return;
   }
   if (!apk) {
@@ -401,9 +417,20 @@ async function startUpdate() {
     C.platform.openOutside(C.platform.apkUrl());
     return;
   }
-  setUpd({ phase: "ready", apk, error: "" });
-  install();
+  setUpd({ phase: "ready", apk, error: "", pct: 100 });
+  // Android won't open the installer over another app: it opens when
+  // Waypage is back.
+  if (document.hidden) installWhenBack = true;
+  else install();
 }
+function pauseUpdate() {
+  if (upd.phase === "downloading") C.platform.pauseUpdate();
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden || !installWhenBack) return;
+  installWhenBack = false;
+  if (upd.phase === "ready") install();
+});
 
 async function install() {
   try {
@@ -418,7 +445,7 @@ async function install() {
 let barDismissed = null;
 function paintUpdateBar() {
   const bar = $("updateBar");
-  const out = ["available", "downloading", "ready"].includes(upd.phase) && upd.latest;
+  const out = UPD_OUT.includes(upd.phase) && upd.latest;
   const fresh = !out && justUpdated;
   const key = out ? "out:" + upd.latest : fresh ? "new:" + APP_VERSION : null;
   if (!key || barDismissed === key) {
@@ -426,11 +453,12 @@ function paintUpdateBar() {
     return;
   }
   $("updateText").textContent = out
-    ? (upd.phase === "downloading" ? "Downloading " + upd.latest + " · " + upd.pct + "%" : upd.phase === "ready" ? "Waypage " + upd.latest + " is ready to install" : "Waypage " + upd.latest + " is out")
+    ? (upd.phase === "downloading" ? "Downloading " + upd.latest + " · " + upd.pct + "%" : upd.phase === "paused" ? "Paused: Waypage " + upd.latest + " · " + upd.pct + "%"
+      : upd.phase === "ready" ? "Waypage " + upd.latest + " is ready to install" : "Waypage " + upd.latest + " is out")
     : "Updated to " + APP_VERSION;
   const btn = $("updateBtn");
   btn.textContent = out ? "View" : "What's new";
-  btn.onclick = () => (out ? openSettings(false, "updates") : openNews());
+  btn.onclick = () => (out && upd.phase !== "available" ? openDownloads() : out ? openSettings(false, "updates") : openNews());
   $("updateClose").onclick = () => {
     barDismissed = key;
     if (fresh) justUpdated = false;
@@ -457,19 +485,19 @@ function noteVersion() {
 function updatesGroup() {
   const list = el("div", { class: "group" });
   if (C.platform.native) {
-    const out = ["available", "downloading", "ready"].includes(upd.phase);
+    const out = UPD_OUT.includes(upd.phase);
     const status = {
       idle: "Tap to check for updates", checking: "Checking…", current: "You have the latest version",
       failed: upd.error, available: "Waypage " + upd.latest + " is out",
-      downloading: "Downloading " + upd.latest + " · " + upd.pct + "%", ready: "Waypage " + upd.latest + " is ready to install",
+      downloading: "Downloading " + upd.latest + " · " + upd.pct + "%", paused: "Paused at " + upd.pct + "%", ready: "Waypage " + upd.latest + " is ready to install",
     }[upd.phase];
-    const busy = upd.phase === "checking" || upd.phase === "downloading";
+    const busy = upd.phase === "checking";
     const version = el("button", { class: "row update-row" + (out ? " out" : ""), type: "button", onclick: () => (out ? startUpdate() : checkForNewerApp()) },
       busy ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
       el("span", { class: "choice-text" },
         el("span", { class: "row-label" }, "Version " + APP_VERSION),
         el("span", { class: "choice-note" + (out ? " accent" : upd.phase === "failed" ? " warn" : ""), role: "status" }, status)),
-      out ? el("span", { class: "btn-small", "aria-hidden": "true" }, upd.phase === "downloading" ? upd.pct + "%" : C.platform.ios ? "Get it" : upd.phase === "ready" ? "Install" : "Update") : null);
+      out ? el("span", { class: "btn-small", "aria-hidden": "true" }, upd.phase === "downloading" ? upd.pct + "%" : C.platform.ios ? "Get it" : upd.phase === "ready" ? "Install" : upd.phase === "paused" ? "Resume" : "Update") : null);
     version.disabled = busy;
     list.append(version);
     if (out && upd.error) list.append(el("div", { class: "row" }, el("span", { class: "row-label warn" }, upd.error)));

@@ -110,6 +110,8 @@ figure .co-placeholder { border-width: 0 0 1.5px; border-radius: 0; }
   background: var(--surface); color: var(--ink); text-decoration: none;
   font-family: var(--sans);
 }
+/* The page before, at the top (1.23.0): the same card, above the title. */
+.co-next.co-before { margin-top: 0; margin-bottom: var(--s-5); }
 .co-next-over { font: 600 var(--fs-meta)/var(--lh-meta) var(--sans); color: var(--muted); }
 .co-next-title { font: 600 var(--fs-label)/var(--lh-label) var(--serif); color: var(--accent); }
 /* An image chapter (0.22.0): the panels edge to edge at phone width, one

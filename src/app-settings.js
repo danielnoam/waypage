@@ -728,7 +728,7 @@ async function undoEdits() {
 }
 
 // Settings is a short menu; each entry is a screen of its own.
-const updateOut = () => ["available", "downloading", "ready"].includes(upd.phase) && upd.latest;
+const updateOut = () => UPD_OUT.includes(upd.phase) && upd.latest;
 // Settings sorted by what you came to change (1.12.0): how it looks,
 // how you read, the library; then saving, sync and storage; then About.
 const SECTIONS = {
