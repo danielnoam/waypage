@@ -18,6 +18,16 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Keep the screen on while reading aloud (1.24.0).** Daniel asked for
+  it. Android sets FLAG_KEEP_SCREEN_ON on the activity window
+  (`Speech.keepScreen`), not a wake lock: it only holds while the app is
+  on screen, which is the point, and the system clears it with the
+  window. Elsewhere `navigator.wakeLock` ("screen"), taken again on
+  visibilitychange since the browser drops it when hidden; an app
+  without the native method (iOS, an older APK) falls back to it.
+  `keepAwake()` runs from setAloud, so it follows every state change;
+  platform skips repeat native calls with the same value.
+
 - **Picked rings and backwards turns (1.23.1).** The layout rules for a
   picked item were written `.selecting:is([data-layout=…])`, but
   `.selecting` is on body and `data-layout` on `.app`, so they never

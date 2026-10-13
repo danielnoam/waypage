@@ -2,6 +2,14 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.24.0] - 2026-10-13
+
+### Added
+- Read aloud has "Keep the screen on" (in Aa and Settings › Reading ›
+  Read aloud): while the voice is speaking the screen doesn't dim or
+  lock, so you can follow along. Paused or finished, it dims as usual.
+  Off by default.
+
 ## [1.23.1] - 2026-10-12
 
 ### Fixed
