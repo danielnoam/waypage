@@ -770,6 +770,43 @@ const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
       await q.context().close();
     });
 
+    await test("sync takes where you got to first, before texts go up or come down (1.24.1)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t" }));
+        const c = (id, more) => ({ id, url: "https://example.com/" + id, title: "Clip " + id, site: "example.com", savedAt: 100, minutes: 1, mode: "links", at: 0, ...more });
+        await window.Waypage.store.writeIndex([c("had1"), c("mine1", { savedAt: 300 })]);
+        await window.Waypage.store.writePage("had1", "<!doctype html><html><body><p>Had.</p></body></html>", c("had1"));
+        await window.Waypage.store.writePage("mine1", "<!doctype html><html><body><p>Mine.</p></body></html>", c("mine1", { savedAt: 300 }));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const c = (id, more) => ({ id, url: "https://example.com/" + id, title: "Clip " + id, site: "example.com", savedAt: 100, minutes: 1, mode: "links", at: 0, ...more });
+        const remote = { format: 1, deleted: {}, files: { had1: { at: 100, sha: "s1" }, new1: { at: 200, sha: "s2" } },
+          pages: [c("had1", { at: 0.7, readAt: 5000, readOn: "Tablet" }), c("new1", { savedAt: 200 })] };
+        const b64 = (t) => btoa(unescape(encodeURIComponent(t)));
+        const seen = [];
+        const placeNow = () => (state.pages.find((p) => p.id === "had1") || {}).at;
+        window.fetch = async (url, opts = {}) => {
+          const method = opts.method || "GET";
+          const ok = (j, text) => new Response(text != null ? text : JSON.stringify(j), { status: 200 });
+          if (/\/repos\/me\/waypage-data$/.test(url)) return ok({ name: "waypage-data" });
+          if (/contents\/library\.json/.test(url) && method === "GET") return ok({ sha: "lib1", content: b64(JSON.stringify(remote)) });
+          if (/contents\/pages\/new1\.html/.test(url)) { seen.push(["down", placeNow()]); return ok(null, "<!doctype html><html><body><p>New.</p></body></html>"); }
+          if (/contents\/pages\/mine1\.html/.test(url) && method === "PUT") { seen.push(["up", placeNow()]); return ok({ content: { sha: "s3" } }); }
+          if (/contents\/library\.json/.test(url) && method === "PUT") return ok({ content: { sha: "lib2" } });
+          return new Response("{}", { status: 404 });
+        };
+        await syncNow(true);
+        return { seen, at: placeNow(), ids: state.pages.map((p) => p.id).sort() };
+      });
+      assert.deepStrictEqual(got.seen, [["up", 0.7], ["down", 0.7]], JSON.stringify(got));
+      assert.strictEqual(got.at, 0.7);
+      assert.deepStrictEqual(got.ids, ["had1", "mine1", "new1"]);
+      await q.context().close();
+    });
+
     await test("an app update downloads in Downloads, with Pause and Resume (1.23.0)", async () => {
       const q = await page(browser, 390);
       const got = await q.evaluate(async () => {

@@ -18,6 +18,16 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Places before texts (1.24.1).** Daniel: sync should bring where you
+  left off first, then the files. The merged entries were only applied
+  at the end of `once()`, after every upload and download. Now
+  `placesFirst` settles, right after the first merge, every clip this
+  device has at the same version (or all, with links only), and marks
+  them in `snapshot` so the later settles don't read them as edits made
+  meanwhile. A clip saved again elsewhere still waits for its new text,
+  since its old place may not fit it. A 409 retry merges again; the end
+  settle writes the final values over the early ones.
+
 - **Keep the screen on while reading aloud (1.24.0).** Daniel asked for
   it. Android sets FLAG_KEEP_SCREEN_ON on the activity window
   (`Speech.keepScreen`), not a wake lock: it only holds while the app is
