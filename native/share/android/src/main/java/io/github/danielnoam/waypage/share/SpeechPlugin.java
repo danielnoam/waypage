@@ -4,6 +4,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.Voice;
+import android.view.WindowManager;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -24,6 +25,7 @@ import org.json.JSONArray;
  *   state()                      { key, index, state }
  *   queue({ after, items, start, lang, voice, title, subtitle, key })
  *                                the clip to go on to when `after` ends
+ *   keepScreen({ on })           keeps the screen from going dark (1.24.0)
  *
  * and a "progress" event { key, index, state } as each paragraph starts and
  * when the reading pauses, ends or stops ("playing", "paused", "ended",
@@ -132,6 +134,16 @@ public class SpeechPlugin extends Plugin {
         main.post(() -> {
             SpeechService.queued = next;
             SpeechService.queuedAfter = next == null ? null : after;
+            call.resolve();
+        });
+    }
+
+    @PluginMethod
+    public void keepScreen(PluginCall call) {
+        boolean on = call.getBoolean("on", false);
+        getActivity().runOnUiThread(() -> {
+            if (on) getActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            else getActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             call.resolve();
         });
     }

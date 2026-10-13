@@ -270,6 +270,8 @@
     tell({ key: web.key, index: web.i, state: how });
     web.items = [];
   }
+  const awake = { want: false, lock: null, native: null, noNative: false };
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && awake.want && !awake.lock) speech.keepScreen(true); });
   const speech = {
     get available() { return !!plugin("Speech") || !!(synth && window.SpeechSynthesisUtterance); },
     // Whether it goes on with the screen off and the app put away.
@@ -332,6 +334,24 @@
       const S = plugin("Speech");
       if (S) { try { await S.stop(); } catch (e) { /* nothing was reading */ } return; }
       if (web.items.length) webEnd("stopped");
+    },
+    // The screen kept on while reading aloud (1.24.0): the window flag on
+    // Android, else the browser's wake lock, taken again on coming back
+    // since the browser lets it go when the page is hidden.
+    async keepScreen(on) {
+      awake.want = on;
+      const S = plugin("Speech");
+      if (S && !awake.noNative) {
+        if (awake.native === on) return;
+        try { await S.keepScreen({ on }); awake.native = on; return; } catch (e) { awake.noNative = true; /* iOS or an older app: the wake lock */ }
+      }
+      if (!on) { if (awake.lock) { awake.lock.release().catch(() => {}); awake.lock = null; } return; }
+      if (awake.lock || !navigator.wakeLock || document.hidden) return;
+      try {
+        awake.lock = await navigator.wakeLock.request("screen");
+        awake.lock.addEventListener("release", () => { awake.lock = null; });
+        if (!awake.want) speech.keepScreen(false);
+      } catch (e) { /* not allowed here */ }
     },
     async state() {
       const S = plugin("Speech");

@@ -870,6 +870,7 @@ const FOOTNOTES_KEY = "waypage.aloudFootnotes";
 const EDGES_KEY = "waypage.aloudSkipEdges";
 // Read next by itself at the end of a clip (1.6.0), when there's a next.
 const GO_ON_KEY = "waypage.aloudGoOn";
+const AWAKE_KEY = "waypage.aloudScreenOn";
 let wentOnFrom = "";
 const PIECE = 600;
 
@@ -1241,6 +1242,10 @@ function moveAloud(d) {
   speech.seek(i);
 }
 
+// With "Keep the screen on" (1.24.0), only while the voice is speaking:
+// paused or done, the phone dims as it would.
+function keepAwake() { speech.keepScreen(aloud.state === "playing" && !!load(AWAKE_KEY, false)); }
+
 function setAloud(st, index) {
   const on = st === "playing" || st === "paused";
   // At the end, the clip stays "being read" while there's a next clip
@@ -1270,6 +1275,7 @@ function setAloud(st, index) {
     setTimeout(() => { if (aloud.state === "ended" && aloud.key === wentOnFrom) readNext(); }, 800);
   }
   if (!on && !ended) aloud.key = "";
+  keepAwake();
   showAloudBar();
   if (st === "error") toast("The phone's voice stopped. Try again, or pick another voice in Aa.");
 }
@@ -1501,6 +1507,7 @@ function aloudControls() {
       onchange: () => {
         store(key, input.checked);
         if (key === GO_ON_KEY) queueNext();
+        if (key === AWAKE_KEY) keepAwake();
         if (restart && aloud.state !== "stopped" && state.open && aloud.key === state.open.id) startAloud(blockAt(aloud.index));
       } });
     return el("label", { class: "rc-row switch-row" },
@@ -1513,6 +1520,7 @@ function aloudControls() {
     check(FOOTNOTES_KEY, "Read footnotes", "The notes at the end, as part of the clip."),
     check(EDGES_KEY, "Skip headers and footers", "Just the body: no title, captions or page heads."),
     check(GO_ON_KEY, "Go on to the next clip", "At the end, the next chapter or the page it links to starts by itself.", false),
+    check(AWAKE_KEY, "Keep the screen on", "While reading aloud, so you can follow along.", false),
     note);
 }
 const rateText = (v) => (Math.round(v * 10) / 10) + "×";

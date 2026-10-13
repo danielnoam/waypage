@@ -749,6 +749,27 @@ const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
       await q.context().close();
     });
 
+    await test("Keep the screen on holds only while reading aloud speaks (1.24.0)", async () => {
+      const q = await page(browser, 390);
+      const got = await q.evaluate(async () => {
+        const calls = [];
+        window.Waypage.platform.speech.keepScreen = (on) => { calls.push(on); return Promise.resolve(); };
+        aloud.key = "x";
+        setAloud("playing", 0);
+        const off = calls[calls.length - 1];
+        localStorage.setItem("waypage.aloudScreenOn", "true");
+        setAloud("playing", 1);
+        const on = calls[calls.length - 1];
+        setAloud("paused", 1);
+        const paused = calls[calls.length - 1];
+        setAloud("stopped", -1);
+        return { off, on, paused, last: calls[calls.length - 1] };
+      });
+      assert.deepStrictEqual(got, { off: false, on: true, paused: false, last: false });
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("an app update downloads in Downloads, with Pause and Resume (1.23.0)", async () => {
       const q = await page(browser, 390);
       const got = await q.evaluate(async () => {
