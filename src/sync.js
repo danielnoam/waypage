@@ -698,6 +698,45 @@
     // Links only (0.30.3): this device sends no text and takes none; pages
     // new to it are saved again from their links, here.
     const links = !!cfg.links;
+    const byId = new Map(before.map((p) => [p.id, p]));
+    // What came down so far goes into the library every few pages, so a
+    // run cut off part way keeps them (1.13.0).
+    const settleSome = async (some, final) => {
+      const live = getPages();
+      const out = [];
+      for (const p of live) {
+        const d = some.get(p.id);
+        if (!snapshot.has(p.id) || !some.has(p.id)) out.push(p);
+        else if (snapshot.get(p.id) !== JSON.stringify(p)) {
+          if (d && ver(d) !== ver(p)) { const both = { ...p }; for (const k of CONTENT.concat(DEVICE)) { if (d[k] === undefined) delete both[k]; else both[k] = d[k]; } out.push(both); }
+          else out.push(p);
+        } else if (d) out.push(d);
+      }
+      for (const [id, d] of some) if (d && !live.some((p) => p.id === id)) out.push(d);
+      out.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+      if (!final) { await setPages(out); return []; }
+      const kept = new Set(out.map((p) => p.id));
+      const gone = [...some].filter(([id, d]) => d === null && !kept.has(id)).map(([id]) => id);
+      return { out, gone };
+    };
+    // Where you got to comes first (1.24.1): the clips this device already
+    // has take the other devices' places, Continue reading and the rest
+    // as soon as library.json is read, before any text goes up or comes
+    // down. Marked as seen, so the settles after don't take them for
+    // changes made here meanwhile.
+    const placesFirst = async (merged) => {
+      const early = new Map();
+      for (const m of merged.pages) {
+        const have = byId.get(m.id);
+        if (!have || !(ver(have) === ver(m) || links)) continue;
+        const next = { ...m };
+        for (const k of Object.keys(have)) if (DEVICE.includes(k) || !SYNCED.has(k)) next[k] = have[k];
+        if (JSON.stringify(next) !== JSON.stringify(have)) early.set(m.id, next);
+      }
+      if (!early.size) return;
+      await settleSome(early, false);
+      for (const p of getPages()) if (early.has(p.id)) snapshot.set(p.id, JSON.stringify(p));
+    };
     let up = 0;
     let merged, remote;
     for (let tries = 0; ; tries++) {
@@ -709,6 +748,7 @@
       const got = await mergeOff(before, load(BASE_KEY, null), remote ? remote.data : null, waiting, feedsBefore, getSeen ? getSeen() : 0, Date.now(), sameUrl, urlKey);
       merged = got.merged;
       const remoteDoc = got.remoteDoc;
+      if (tries === 0 && remote) await placesFirst(merged);
       for (const [id, f] of Object.entries(uploaded)) if (merged.pages.some((p) => p.id === id && ver(p) === f.at)) merged.files[id] = f;
       // Text this device has and GitHub doesn't: every page saved here, or
       // saved again since.
@@ -818,26 +858,6 @@
     try { baseText = localStorage.getItem(BASE_KEY); } catch (e) { baseText = null; }
     if (mergedText !== baseText) { try { localStorage.setItem(BASE_KEY, mergedText); } catch (e) { /* not kept */ } }
 
-    // What came down so far goes into the library every few pages, so a
-    // run cut off part way keeps them (1.13.0).
-    const settleSome = async (some, final) => {
-      const live = getPages();
-      const out = [];
-      for (const p of live) {
-        const d = some.get(p.id);
-        if (!snapshot.has(p.id) || !some.has(p.id)) out.push(p);
-        else if (snapshot.get(p.id) !== JSON.stringify(p)) {
-          if (d && ver(d) !== ver(p)) { const both = { ...p }; for (const k of CONTENT.concat(DEVICE)) { if (d[k] === undefined) delete both[k]; else both[k] = d[k]; } out.push(both); }
-          else out.push(p);
-        } else if (d) out.push(d);
-      }
-      for (const [id, d] of some) if (d && !live.some((p) => p.id === id)) out.push(d);
-      out.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
-      if (!final) { await setPages(out); return []; }
-      const kept = new Set(out.map((p) => p.id));
-      const gone = [...some].filter(([id, d]) => d === null && !kept.has(id)).map(([id]) => id);
-      return { out, gone };
-    };
     let down = 0;
     const downloads = [];
     // Texts are asked for a few at a time (1.13.0); each one is still

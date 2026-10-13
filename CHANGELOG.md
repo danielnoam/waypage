@@ -2,6 +2,15 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.24.1] - 2026-10-13
+
+### Changed
+- Sync brings in where you got to first: as soon as it has read the
+  library on GitHub, the clips you already have take their places,
+  finished marks and Continue reading from your other devices. Sending
+  and bringing in clips' text comes after, so a big sync no longer holds
+  your place back until it's done.
+
 ## [1.24.0] - 2026-10-13
 
 ### Added

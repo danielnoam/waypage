@@ -9,7 +9,7 @@
 // only use what an earlier part, or its own, has declared. A part's
 // functions can call into any part, since nothing is tapped until all of
 // them have loaded. app-start.js runs last and starts things up.
-const APP_VERSION = "1.24.0";
+const APP_VERSION = "1.24.1";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
