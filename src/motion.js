@@ -186,6 +186,17 @@
   const edgeIn = (el, edge = "bottom") => one(el, [{ transform: past(el, edge) }, { transform: "none" }], "sheet", true);
   const edgeOut = (el, edge = "bottom") => one(el, [{ transform: "none" }, { transform: past(el, edge) }], "sheet", false);
 
+  // The read-aloud card and the reader's player are one thing (1.26.1):
+  // the card comes out of the player as its clip closes, and goes back
+  // into it as the clip opens, scaled evenly so its type never stretches.
+  function morph(el, r, into) {
+    if (!r || !r.width) return into ? edgeOut(el, "bottom") : edgeIn(el, "bottom");
+    const a = box(el), s = Math.min(r.width / a.width, r.height / a.height);
+    const dx = r.left + r.width / 2 - (a.left + a.width / 2), dy = r.top + r.height / 2 - (a.top + a.height / 2);
+    const f = [{ transform: "translate(" + dx + "px, " + dy + "px) scale(" + s + ")" }, { transform: "none" }];
+    return one(el, into ? back(f) : f, "sheet", !into);
+  }
+
   // Something new in a list grows from nothing where it lands; something
   // removed shrinks to nothing (1.11.0). Its neighbours slide (flip).
   const appear = (el) => one(el, [{ transform: "scale(0)" }, { transform: "none" }], "sheet", true);
@@ -260,6 +271,6 @@
   window.Waypage = window.Waypage || {};
   window.Waypage.motion = {
     busy, timing, reduced, still, setStill, desk, push, pop, grow, shrink, rise, sink, settle, dim, slideIn, slideOut, slideBack,
-    popFrom, popInto, edgeIn, edgeOut, appear, vanish, measure, flip, ghostOut, fromPast, pageOut, pageIn, sideDrift,
+    popFrom, popInto, edgeIn, edgeOut, morph, appear, vanish, measure, flip, ghostOut, fromPast, pageOut, pageIn, sideDrift,
   };
 })();

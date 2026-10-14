@@ -2,11 +2,17 @@
 
 All notable changes to Carry-on. Newest first.
 
-## [Unreleased]
+## [1.26.1] - 2026-10-14
 
 ### Fixed
 - The collection widget's Continue stays on one line, its type
   shrinking to fit instead of wrapping (Android 8+).
+- The widget's read aloud starts where the clip was left. It started at
+  the top, because it began before the page had gone back to its place.
+
+### Changed
+- The read-aloud card comes out of the reader's player as the clip
+  closes, and goes back into it when the clip being read opens.
 
 ## [1.26.0] - 2026-10-14
 

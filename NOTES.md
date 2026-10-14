@@ -18,6 +18,18 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Read aloud fixes (1.26.1).**
+  - The widget's read aloud began in the reader's `open().then`. The
+    page goes back to its place only after `fonts.ready`, so
+    `firstShown()` saw the top, and the light then scrolled there.
+    `C.reader.placed()` now settles after that restore, and the "here"
+    start waits for it.
+  - The card and the player are treated as one object, `M.morph`. It is
+    scaled evenly (never stretched) from the player's rect to the
+    card's. The player is hidden while the card is out of it, so there
+    is never two of it.
+  - The docked card (pinned sidebar) still comes from the edge.
+
 - **Read aloud over Bluetooth (1.26.0).** Daniel wants a car's and
   earbuds' previous, next and pause to do what the app's do, and the
   chapter and collection shown on them.
