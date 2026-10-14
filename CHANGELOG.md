@@ -2,6 +2,12 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [Unreleased]
+
+### Fixed
+- The collection widget's Continue stays on one line, its type
+  shrinking to fit instead of wrapping (Android 8+).
+
 ## [1.26.0] - 2026-10-14
 
 ### Changed
