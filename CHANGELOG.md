@@ -2,6 +2,18 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.27.0] - 2026-10-14
+
+### Added
+- Backups in Google Drive, in Settings › Google Drive, beside GitHub
+  sync. Connect your Google account once, then Back up now or let it
+  back up every week on Wi-Fi. Drive keeps the last three backups, in a
+  Waypage folder. Pick what goes in: clips, files (books, PDFs and
+  comics), and the feeds you follow. Any of the three restores on
+  another phone or in a browser, keeping whichever copy of a clip was
+  saved last. Waypage can see only the backups it makes. On Android and
+  the web copy; iOS comes with the iOS release.
+
 ## [1.26.4] - 2026-10-14
 
 ### Fixed

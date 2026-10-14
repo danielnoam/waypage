@@ -278,6 +278,11 @@ paintPlace();
 // details rather than after them (1.2.0).
 const firstIndex = C.store.ready.then(() => Promise.all([C.store.readIndex(), loadThumbs()])).then((got) => { startAt.library = performance.now(); return got; });
 Promise.all([C.platform.ready, firstIndex]).then(([, [pages]]) => {
+  // Google's sign-in window, back at this address only to hand over.
+  if (C.drive.closing) {
+    document.body.replaceChildren(el("p", { class: "drive-done" }, "Google Drive is connected. You can close this window."));
+    return;
+  }
   state.pages = Array.isArray(pages) ? pages : [];
   loaded = true;
   setTimeout(() => oneEach().then((n) => { if (n) toast("Removed " + (n === 1 ? "a clip that was" : n + " clips that were") + " saved twice."); }), 1200);
@@ -308,6 +313,9 @@ Promise.all([C.platform.ready, firstIndex]).then(([, [pages]]) => {
   addEventListener("hashchange", takeSetupLink);
   setTimeout(() => syncNow(), 2000);
   setTimeout(fetchPictures, 3000);
+  if (C.drive.resume === "connect") driveConnect(null);
+  else if (C.drive.resume === "backup") driveBackUp(false);
+  else setTimeout(driveDue, 8000);
   paintSync();
   watchSoon(2500);
   document.addEventListener("visibilitychange", () => {
@@ -325,6 +333,7 @@ Promise.all([C.platform.ready, firstIndex]).then(([, [pages]]) => {
     takeWidget();
     syncSoon(1000);
     watchSoon(800);
+    setTimeout(driveDue, 3000);
   });
 });
 addEventListener("online", () => { saveWaiting(); dailyCheck(false); checkFeeds(false); syncSoon(1000); fetchPictures(); });

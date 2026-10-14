@@ -1336,6 +1336,7 @@ html { -webkit-tap-highlight-color: transparent; }
 .nav-row[aria-current] { background: var(--bg); }
 .storage-total { margin: 0 0 var(--s-1) var(--s-1); font: 700 var(--fs-title)/var(--lh-title) var(--serif); }
 .settings-section > .section-lead { margin-bottom: var(--s-5); }
+.drive-done { margin: 0; padding: var(--s-8) var(--s-5); text-align: center; color: var(--ink); font-size: var(--fs-meta); }
 .update-card { border-color: var(--accent); }
 
 

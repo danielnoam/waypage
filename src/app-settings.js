@@ -743,6 +743,7 @@ const SECTIONS = {
   saving: { title: "Saving", build: () => [choiceGroup(SETTINGS[1]), compressGroup(), dataGroup(DATA_SAVE_KEY, "Save", "Pages and pictures come down on any connection.", "Saves wait in Downloads until you're on Wi-Fi; feeds, new chapters and missing pictures check then too."), signedGroup(), watchGroup(), importGroup()],
     value: () => SETTINGS[1].options.find((o) => o.value === SETTINGS[1].get()).label },
   sync: { title: "Sync", build: syncSections, value: () => (C.sync.on ? (C.sync.last.error ? "Stopped" : "On") : "Off") },
+  drive: { title: "Google Drive", build: driveSections, value: driveValue },
   edit: { title: "Edit clips", build: editGroup, value: () => "" },
   storage: { title: "Storage", build: () => [storageGroup(), ...roomGroup(), placeGroup(), backupGroup(), browserStorageGroup()], value: () => formatSize(totalBytes()) },
   updates: { title: "About", build: () => [updatesGroup(), aboutGroup()], value: () => (updateOut() ? upd.latest + " is out" : APP_VERSION) },
@@ -767,7 +768,7 @@ function renderSettings() {
           el("span", { class: "row-label accent" }, "Waypage " + upd.latest + " is out"),
           el("button", { class: "btn-small", type: "button", onclick: () => openSection("updates") }, "View"))) : null,
       el("div", { class: "group" }, row("appearance"), row("reading"), row("library"), row("edit")),
-      el("div", { class: "group" }, row("saving"), row("sync"), row("storage")),
+      el("div", { class: "group" }, row("saving"), row("sync"), C.drive.available ? row("drive") : null, row("storage")),
       el("div", { class: "group" }, row("updates"), row("report"))));
 }
 

@@ -1501,3 +1501,201 @@ function renderFeeds() {
     if (target) target.focus({ preventScroll: true });
   }
 }
+
+// ---- Google Drive backups (1.27.0) ----
+// Beside sync, not instead of it: Back up now, a weekly backup on Wi-Fi
+// while Waypage is open, the last three kept, and any of them restored
+// the way a backup file is (the copy saved last wins).
+
+let driveRun = null;      // { restore, text } while one runs
+let driveFiles = null;    // the backups in Drive, once listed
+let driveListError = "";
+let driveDueSaid = false;
+
+const driveWhen = (at) => new Date(at).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
+function driveSay(text) {
+  if (driveRun) driveRun.text = text;
+  const n = document.getElementById("driveStatus");
+  if (n) n.textContent = text;
+}
+const driveBusy = () => (driveRun ? { disabled: "" } : {});
+function drivePaint() {
+  if (state.section === "drive") renderSection();
+  if (state.settings) renderSettings();
+}
+function driveValue() {
+  if (!C.drive.on) return "Off";
+  if (driveRun) return driveRun.restore ? "Restoring" : "Backing up";
+  const l = C.drive.last;
+  return l.error ? "Didn't back up" : l.at ? whenText(l.at).replace(/^./, (c) => c.toUpperCase()) : "On";
+}
+
+function driveSections() {
+  if (!C.drive.on) {
+    return [el("section", { class: "settings-section" },
+      el("h2", { class: "overline" }, "Back up to Google Drive"),
+      el("p", { class: "section-lead" }, "A copy of your library in your own Google Drive, made every week and whenever you ask, to bring back on a new phone or after a mistake."),
+      el("div", { class: "group" },
+        el("button", { class: "row", type: "button", onclick: (e) => driveConnect(e.currentTarget) },
+          el("span", { class: "row-label accent" }, "Connect Google Drive"))),
+      el("p", { class: "footnote" }, "Waypage can only see the backups it makes, in a Waypage folder in your Drive. Nothing else there is opened or read."))];
+  }
+  const l = C.drive.last;
+  const status = driveRun ? driveRun.text
+    : l.error ? l.error
+    : l.at ? "Last backup " + whenText(l.at) + (l.size ? ", " + formatSize(l.size) : "")
+    : "No backup yet";
+  const what = C.drive.what;
+  const sw = (key, label, note) => el("label", { class: "row" },
+    el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, label), note ? el("span", { class: "choice-note" }, note) : null),
+    el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!what[key], ...driveBusy(),
+      onchange: (e) => { C.drive.setWhat(key, e.target.checked); renderSection(); } }));
+  if (!driveFiles && !driveListError && !driveRun) driveRefresh();
+  const list = driveFiles ? driveFiles.map((f) => el("button", { class: "row", type: "button", ...driveBusy(), onclick: () => driveRestore(f) },
+    el("span", { class: "choice-text" },
+      el("span", { class: "choice-label" }, driveWhen(f.at)),
+      el("span", { class: "choice-note" }, [formatSize(f.size), f.clips ? countLine(f.clips) : "", f.from ? "from " + f.from : ""].filter(Boolean).join(" · "))),
+    el("span", { class: "row-value accent" }, "Restore"))) : [];
+  return [
+    el("section", { class: "settings-section" },
+      el("div", { class: "group" },
+        el("button", { class: "row", type: "button", ...driveBusy(), onclick: () => driveBackUp(false) },
+          el("span", { class: "choice-text" },
+            el("span", { class: "choice-label accent" }, "Back up now"),
+            el("span", { class: "choice-note" + (l.error && !driveRun ? " warn" : ""), id: "driveStatus", role: "status" }, status))),
+        el("label", { class: "row" },
+          el("span", { class: "choice-text" },
+            el("span", { class: "choice-label" }, "Every week"),
+            el("span", { class: "choice-note" }, C.platform.native ? "On Wi-Fi, while Waypage is open" : "Asks first, since this browser signs in to Google for an hour at a time")),
+          el("input", { class: "switch", type: "checkbox", role: "switch", checked: C.drive.auto,
+            onchange: (e) => { C.drive.auto = e.target.checked; } }))),
+      el("p", { class: "footnote" }, "Drive keeps the last " + C.drive.KEEP + " backups; an older one is deleted when a new one is made.")),
+    el("section", { class: "settings-section" },
+      el("h2", { class: "overline" }, "What goes in"),
+      el("div", { class: "group" },
+        sw("clips", "Clips", "With their pictures, highlights and where you were"),
+        sw("files", "Files", "Books, PDFs and comics, usually the biggest part"),
+        sw("feeds", "Feeds you follow", "")),
+      el("p", { class: "footnote" }, "Tags, collections and favourites go with the clips and files they're on.")),
+    el("section", { class: "settings-section" },
+      el("h2", { class: "overline" }, "Restore"),
+      el("div", { class: "group" }, ...(list.length ? list
+        : driveListError === DRIVE_SIGN_IN ? [el("button", { class: "row", type: "button", onclick: driveSignIn }, el("span", { class: "row-label accent" }, "Sign in to Google to see them"))]
+        : [el("div", { class: "row" }, el("span", { class: "row-label" + (driveListError ? " warn" : "") }, driveListError || (driveFiles ? "No backups in Drive yet" : "Looking in Drive…")))])),
+      el("p", { class: "footnote" }, "Restoring adds what isn't here and keeps whichever copy of a clip was saved last. Nothing here is deleted.")),
+    el("section", { class: "settings-section" },
+      el("div", { class: "group" },
+        el("button", { class: "row", type: "button", ...driveBusy(), onclick: driveDisconnect },
+          el("span", { class: "row-label warn" }, "Disconnect Google Drive"))),
+      el("p", { class: "footnote" }, (C.drive.email ? "Connected as " + C.drive.email + ". " : "") + "The backups stay in your Drive.")),
+  ];
+}
+
+async function driveConnect(btn) {
+  if (btn) { btn.disabled = true; btn.querySelector(".row-label").textContent = "Connecting…"; }
+  try {
+    await C.drive.connect();
+    driveFiles = null;
+    driveListError = "";
+    toast("Google Drive connected");
+  } catch (e) {
+    if (!(e instanceof C.drive.DriveError)) console.error(e);
+    if (!e || e.code !== "again") toast(e instanceof C.drive.DriveError ? e.message : "Couldn't connect. Try again.");
+  }
+  drivePaint();
+}
+
+async function driveDisconnect() {
+  await C.drive.disconnect();
+  driveFiles = null;
+  driveListError = "";
+  drivePaint();
+  toast("Disconnected. Your backups stay in Google Drive.");
+}
+
+const DRIVE_SIGN_IN = "signin";
+async function driveSignIn() {
+  try { await C.drive.getToken(true); } catch (e) { if (!e || e.code !== "again") toast((e && e.message) || "Couldn't sign in. Try again."); return; }
+  driveFiles = null;
+  driveListError = "";
+  driveRefresh();
+}
+async function driveRefresh() {
+  try {
+    driveFiles = await C.drive.list();
+    driveListError = "";
+  } catch (e) {
+    driveListError = e instanceof C.drive.DriveError && e.code === "signin" ? DRIVE_SIGN_IN : (e && e.message) || "Couldn't look in Drive";
+    if (!(e instanceof C.drive.DriveError)) console.error(e);
+  }
+  if (state.section === "drive") renderSection();
+}
+
+// What a backup holds, from Settings › Google Drive › What goes in.
+function driveContents() {
+  const w = C.drive.what;
+  const pages = state.pages.filter((p) => (p.file ? w.files : w.clips));
+  return { pages, feeds: w.feeds ? feeds : [] };
+}
+
+async function driveBackUp(auto) {
+  if (driveRun || !C.drive.on) return;
+  const { pages, feeds: fs } = driveContents();
+  if (!pages.length && !fs.length) { if (!auto) toast("There's nothing to back up with what's picked."); return; }
+  driveRun = { restore: false, text: "Getting ready…" };
+  drivePaint();
+  let out = null;
+  try {
+    // Asked for first: a browser can open Google's window only straight
+    // from the tap.
+    await C.drive.getToken(!auto, "backup");
+    out = await C.backup.exportLibrary(pages, (done, total) => driveSay("Packing, " + done + " of " + total), fs);
+    driveSay("Sending to Drive…");
+    const made = await C.drive.upload(out, { device: load(DEVICE_KEY, "") || guessedName(), clips: pages.length },
+      (done, total) => driveSay("Sending to Drive, " + (total ? Math.round((done / total) * 100) + "%" : formatSize(done))));
+    C.drive.last = { at: Date.now(), size: made.size || (out.blob ? out.blob.size : 0) };
+    driveFiles = null;
+    if (!auto) toast("Backed up to Google Drive");
+  } catch (e) {
+    if (!(e instanceof C.drive.DriveError)) console.error(e);
+    const msg = e instanceof C.drive.DriveError ? e.message : "Couldn't make the backup. Free some space and try again.";
+    C.drive.last = { ...C.drive.last, error: msg, tried: Date.now() };
+    if (!auto && (!e || e.code !== "again")) toast(msg);
+  }
+  if (out && out.uri) C.platform.plugin("Filesystem").deleteFile({ path: out.name, directory: "CACHE" }).catch(() => {});
+  driveRun = null;
+  drivePaint();
+}
+
+async function driveRestore(f) {
+  if (driveRun) return;
+  const asked = C.drive.getToken(true);
+  driveRun = { restore: true, text: "Bringing the backup down…" };
+  drivePaint();
+  try {
+    await asked;
+    const file = await C.drive.download(f.id, (done, total) => driveSay("Bringing it down, " + (total > 0 ? Math.round((done / total) * 100) + "%" : formatSize(done))));
+    await restoreBackup(file, driveSay);
+    renderLibrary();
+  } catch (e) {
+    const told = e instanceof C.drive.DriveError || /Waypage/.test((e && e.message) || "");
+    if (!told) console.error(e);
+    toast(told ? e.message : "Couldn't restore that backup. Try again.");
+  }
+  driveRun = null;
+  drivePaint();
+}
+
+// The weekly backup, looked for on opening and on coming back: a week
+// since the last one, on Wi-Fi, and not again within six hours of one
+// that failed. A browser without a live sign-in asks with a toast.
+function driveDue() {
+  if (!C.drive.available || !C.drive.on || !C.drive.auto || driveRun || document.hidden) return;
+  const l = C.drive.last;
+  if (Date.now() - (l.at || 0) < C.drive.WEEK || Date.now() - (l.tried || 0) < 6 * 3600e3) return;
+  if (!navigator.onLine || C.platform.metered) return;
+  if (C.drive.signedIn) { driveBackUp(true); return; }
+  if (driveDueSaid) return;
+  driveDueSaid = true;
+  toast("Your weekly Google Drive backup is due", "Back up", () => driveBackUp(false));
+}
