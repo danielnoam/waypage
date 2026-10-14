@@ -857,6 +857,49 @@ const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
       await q.context().close();
     });
 
+    await test("the widget's read aloud starts where the clip was left, and the bar comes out of the player (1.26.1)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = { id: "r1", url: "https://example.com/r1", title: "Long chapter", site: "example.com", savedAt: 1000, minutes: 9, mode: "links", at: 0.6, spot: "40/0", folder: "Saga", folderAt: 1000 };
+        await S.writeIndex([c]);
+        let body = "<h1>Long chapter</h1>";
+        for (let i = 1; i <= 80; i++) body += "<p>Paragraph " + i + " of the long chapter, with enough words to fill a line or two.</p>";
+        await S.writePage("r1", "<!doctype html><html><body>" + body + "</body></html>", c);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const sp = window.Waypage.platform.speech;
+        sp.play = (o) => { window.played = o; return Promise.resolve(); };
+        sp.stop = () => Promise.resolve();
+        const morphs = [];
+        const M = window.Waypage.motion, was = M.morph;
+        M.morph = (el, r, into) => { morphs.push(into ? "into" : "out"); return was(el, r, into); };
+        const wait = (f) => new Promise((ok) => { const t = setInterval(() => { if (f()) { clearInterval(t); ok(); } }, 50); });
+        window.Waypage.platform.widgets.take = () => Promise.resolve({ kind: "page", id: "r1", aloud: true });
+        await takeWidget();
+        await wait(() => window.played);
+        const o = window.played, from = o.blocks[o.start];
+        await new Promise((ok) => setTimeout(ok, 500));
+        closeReader();
+        await wait(() => !document.getElementById("aloudBar").hidden);
+        const held = document.getElementById("aloudPlayer").style.visibility;
+        await wait(() => document.getElementById("readerView").hidden);
+        const back = document.getElementById("aloudPlayer").style.visibility;
+        openPage("r1");
+        await wait(() => document.getElementById("aloudBar").hidden);
+        return { from, morphs, held, back, after: document.getElementById("aloudPlayer").style.visibility };
+      });
+      assert.ok(got.from >= 30, JSON.stringify(got));
+      assert.deepStrictEqual(got.morphs, ["out", "into"], JSON.stringify(got));
+      assert.strictEqual(got.held, "hidden");
+      assert.strictEqual(got.back, "");
+      assert.strictEqual(got.after, "");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("an app update downloads in Downloads, with Pause and Resume (1.23.0)", async () => {
       const q = await page(browser, 390);
       const got = await q.evaluate(async () => {

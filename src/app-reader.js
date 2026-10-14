@@ -296,6 +296,7 @@ function show(p, html) {
   // when "Keep reading when you leave the clip" is off (1.25.0).
   if (aloud.key && aloud.key !== p.id && !aloudAuto && !load(KEEP_KEY, true)) stopAloud();
   state.open = p;
+  $("aloudPlayer").style.visibility = "";
   // Opening counts as reading for the order of things (sort by read, the
   // sidebar, Continue reading); the merge is safe because the place
   // itself only changes when you move (notePosition, reader.js's
@@ -354,7 +355,8 @@ function show(p, html) {
     // Reading aloud carries on across clips (1.4.0): its light and
     // player show again when its clip is the one open.
     setAloud(aloud.state, aloud.index);
-    if (aloudAuto) { const top = aloudAuto !== "here"; aloudAuto = false; startAloud(top ? 0 : undefined); }
+    if (aloudAuto === "here") { aloudAuto = false; C.reader.placed().then(() => { if (state.open === p) startAloud(); }); }
+    else if (aloudAuto) { aloudAuto = false; startAloud(0); }
   });
 }
 
@@ -839,8 +841,11 @@ function closeReader() {
   brightClose();
   closeFind(true);
   $("jumpBack").hidden = true;
+  const player = $("aloudPlayer");
+  const from = aloudHere() && !player.hidden ? player.getBoundingClientRect() : null;
+  if (from) player.style.visibility = "hidden";
   state.open = null;
-  showAloudBar();
+  showAloudBar(from);
   // The library redraws (where you got to) before the reader shrinks
   // into its card (1.11.1), so the card it lands on is already the new
   // one; after it, the card changed a frame late. Only what changed is
@@ -849,6 +854,7 @@ function closeReader() {
   if (state.folder) renderFolder();
   popScreen($("readerView")).then(() => {
     if (state.open) return;
+    player.style.visibility = "";
     C.reader.close();
     C.files.closeHeld();
   });
@@ -1341,7 +1347,9 @@ function setAloud(st, index) {
 // The bar along the bottom of the app while a clip is read aloud away
 // from its page (1.4.0): pause or play, the clip's name (a tap opens
 // it), and Stop; at the end, Read next.
-function showAloudBar() {
+// `from` is where the reader's player was as its clip closed: the bar
+// comes out of it (1.26.1).
+function showAloudBar(from) {
   const bar = $("aloudBar");
   const p = aloudPage();
   const show = !!p && (aloudOn() || aloud.state === "ended") && !aloudHere();
@@ -1349,7 +1357,15 @@ function showAloudBar() {
     if (!bar.hidden && !bar.dataset.leaving) {
       bar.dataset.leaving = "1";
       document.body.classList.remove("aloud-bar-up", "aloud-docked");
-      M.edgeOut(bar, nearEdge(bar)).then(() => { if (bar.dataset.leaving) { bar.hidden = true; delete bar.dataset.leaving; } });
+      // Opening the clip being read, the bar goes back into the player,
+      // which shows once it has landed.
+      const player = $("aloudPlayer");
+      const into = aloudHere() && aloud.state !== "ended" && playerSpot();
+      if (into) player.style.visibility = "hidden";
+      (into ? M.morph(bar, into, true) : M.edgeOut(bar, nearEdge(bar))).then(() => {
+        if (into) player.style.visibility = "";
+        if (bar.dataset.leaving) { bar.hidden = true; delete bar.dataset.leaving; }
+      });
     }
     return;
   }
@@ -1364,7 +1380,16 @@ function showAloudBar() {
   const coming = bar.hidden || bar.dataset.leaving;
   if (coming) { delete bar.dataset.leaving; bar.hidden = false; }
   placeAloudBar();
-  if (coming) M.edgeIn(bar, nearEdge(bar));
+  if (coming) from && !bar.classList.contains("docked") ? M.morph(bar, from) : M.edgeIn(bar, nearEdge(bar));
+}
+// Where the reader's player will sit, laid out ahead of setAloud so the
+// bar has somewhere to go; null when the reader isn't on screen.
+function playerSpot() {
+  if ($("readerView").hidden) return null;
+  $("readerView").classList.add("aloud");
+  $("aloudPlayer").hidden = false;
+  const r = $("aloudPlayer").getBoundingClientRect();
+  return r.width ? r : null;
 }
 
 // Which edge of the screen a floating bar is nearer, to come and go by.

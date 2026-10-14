@@ -308,6 +308,9 @@
     anchors = doc ? [...doc.body.querySelectorAll(BLOCKS + ", .co-comic img")].filter((el) => !el.closest(SKIP) && !el.querySelector(BLOCKS)) : [];
   }
   let restoredAt = 0;
+  // Settles once the page is back where it was left (1.26.1): reading
+  // aloud from there waits for it, or it starts from the top.
+  let placed = Promise.resolve();
   function spot() {
     if (!doc || !anchors.length) return "";
     const edge = (topSpace ? topSpace() : 0) + 8;
@@ -1143,7 +1146,7 @@
         // Back to where the page was left, once the fonts have set the
         // text's height; the end of a finished page isn't worth returning to.
         const ready = doc.fonts && doc.fonts.ready ? doc.fonts.ready : Promise.resolve();
-        ready.then(() => {
+        placed = ready.then(() => {
           if (!doc) return;
           const w = iframe.contentWindow;
           const back = at > 0.01 && at < 0.97 ? at : 0;
@@ -1193,5 +1196,5 @@
   addEventListener("resize", applyTop);
   addEventListener("offline", applyConnection);
 
-  C.reader = { open, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, headings, section, jumpTo, readable, readableIn, firstShown, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
+  C.reader = { open, placed: () => placed, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, headings, section, jumpTo, readable, readableIn, firstShown, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
 })();
