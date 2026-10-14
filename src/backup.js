@@ -217,7 +217,9 @@
 
   // Writes the backup and resolves to { uri } in the app (a file in its
   // cache, for the share sheet) or { blob } in a browser.
-  async function exportLibrary(pages, onProgress, feeds) {
+  // `gate`, when given, is awaited between clips: false stops the backup
+  // (1.27.1), which then throws an Error with code "cancelled".
+  async function exportLibrary(pages, onProgress, feeds, gate) {
     const native = C.platform.native;
     const name = "waypage-backup-" + today() + ".zip";
     const file = native ? await S().cacheFile(name) : null;
@@ -239,6 +241,7 @@
         if (words != null) await zip.add("pages/" + p.id + "/text.txt", utf8(words));
       }
       if (onProgress) onProgress(++done, pages.length);
+      if (gate && !(await gate())) throw Object.assign(new Error("Stopped."), { code: "cancelled" });
     }
     await zip.finish();
     return native ? { uri: await file.uri(), name } : { blob: new Blob(parts, { type: "application/zip" }), name };

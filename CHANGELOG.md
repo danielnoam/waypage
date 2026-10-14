@@ -2,6 +2,18 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.27.1] - 2026-10-14
+
+### Changed
+- Connecting Google Drive no longer starts a backup by itself. The
+  first weekly backup comes a week after you connect.
+- A Google Drive backup can be paused, resumed and stopped, from
+  Settings › Google Drive or from its card in Downloads. In the app, a
+  paused backup goes on from where it got to. A restore can be stopped
+  while it's coming down.
+- Settings: Sync is now GitHub sync. Edit clips and watched folders
+  are now inside Library.
+
 ## [1.27.0] - 2026-10-14
 
 ### Added

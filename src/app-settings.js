@@ -134,6 +134,17 @@ function readingGroup() {
     el("p", { class: "footnote" }, "The same as the reader's settings, behind the gear while you read."));
 }
 
+// Edit clips, inside Library since 1.27.1 (it was its own menu entry).
+function editNavGroup() {
+  return el("section", { class: "settings-section" },
+    el("div", { class: "group" },
+      el("button", { class: "row nav-row", type: "button", onclick: () => openSection("edit", false, true) },
+        el("span", { class: "choice-text" },
+          el("span", { class: "choice-label" }, "Edit clips"),
+          el("span", { class: "choice-note" }, "Find and replace words across many clips at once")),
+        el("span", { class: "row-chev", "aria-hidden": "true" }, "›"))));
+}
+
 function libraryGroup() {
   const input = el("input", { class: "switch", type: "checkbox", role: "switch", checked: load(CONTINUE_KEY, true),
     onchange: (e) => { store(CONTINUE_KEY, e.target.checked); renderLibrary(); } });
@@ -738,13 +749,13 @@ const SECTIONS = {
     value: () => { const r = readingPrefs(); return (FONTS.find((f) => f.value === r.font) || FONTS[0]).label + " · " + r.size + " px"; } },
   library: { title: "Library", build: () => [
     choiceGroup({ key: LAYOUT_KEY, label: "Layout", get: layout, set: (v) => { store(LAYOUT_KEY, v); renderLibrary(); }, options: LAYOUTS }),
-    libraryGroup()],
+    libraryGroup(), watchGroup(), editNavGroup()],
     value: () => (LAYOUTS.find((l) => l.value === layout()) || LAYOUTS[0]).label },
-  saving: { title: "Saving", build: () => [choiceGroup(SETTINGS[1]), compressGroup(), dataGroup(DATA_SAVE_KEY, "Save", "Pages and pictures come down on any connection.", "Saves wait in Downloads until you're on Wi-Fi; feeds, new chapters and missing pictures check then too."), signedGroup(), watchGroup(), importGroup()],
+  saving: { title: "Saving", build: () => [choiceGroup(SETTINGS[1]), compressGroup(), dataGroup(DATA_SAVE_KEY, "Save", "Pages and pictures come down on any connection.", "Saves wait in Downloads until you're on Wi-Fi; feeds, new chapters and missing pictures check then too."), signedGroup(), importGroup()],
     value: () => SETTINGS[1].options.find((o) => o.value === SETTINGS[1].get()).label },
-  sync: { title: "Sync", build: syncSections, value: () => (C.sync.on ? (C.sync.last.error ? "Stopped" : "On") : "Off") },
+  sync: { title: "GitHub sync", build: syncSections, value: () => (C.sync.on ? (C.sync.last.error ? "Stopped" : "On") : "Off") },
   drive: { title: "Google Drive", build: driveSections, value: driveValue },
-  edit: { title: "Edit clips", build: editGroup, value: () => "" },
+  edit: { title: "Edit clips", build: editGroup, value: () => "", parent: "library" },
   storage: { title: "Storage", build: () => [storageGroup(), ...roomGroup(), placeGroup(), backupGroup(), browserStorageGroup()], value: () => formatSize(totalBytes()) },
   updates: { title: "About", build: () => [updatesGroup(), aboutGroup()], value: () => (updateOut() ? upd.latest + " is out" : APP_VERSION) },
   report: { title: "Report a problem", build: () => [reportGroup()], value: () => { const n = C.platform.log.list().length; return n ? n + (n === 1 ? " note" : " notes") : ""; } },
@@ -757,7 +768,7 @@ function renderSettings() {
       el("span", { class: "row-label" }, s.title),
       el("span", { class: "row-value" + (key === "updates" && updateOut() ? " accent" : "") }, s.value()),
       el("span", { class: "row-chev", "aria-hidden": "true" }, "›"));
-    if (state.section === key) b.setAttribute("aria-current", "page");
+    if (state.section === key || (SECTIONS[state.section] || {}).parent === key) b.setAttribute("aria-current", "page");
     return b;
   };
   const out = updateOut();
@@ -767,7 +778,7 @@ function renderSettings() {
         el("div", { class: "row update-row out" },
           el("span", { class: "row-label accent" }, "Waypage " + upd.latest + " is out"),
           el("button", { class: "btn-small", type: "button", onclick: () => openSection("updates") }, "View"))) : null,
-      el("div", { class: "group" }, row("appearance"), row("reading"), row("library"), row("edit")),
+      el("div", { class: "group" }, row("appearance"), row("reading"), row("library")),
       el("div", { class: "group" }, row("saving"), row("sync"), C.drive.available ? row("drive") : null, row("storage")),
       el("div", { class: "group" }, row("updates"), row("report"))));
 }
@@ -781,13 +792,15 @@ function renderSection() {
 
 // On a phone a section is pushed over the menu; on a desktop it sits
 // beside it, and another entry swaps it in place.
-function openSection(key, fromHistory) {
+// `deeper`: a page inside the one that's open (Library's Edit clips,
+// 1.27.1), so Back goes to that one rather than the menu.
+function openSection(key, fromHistory, deeper) {
   if (!SECTIONS[key] || state.section === key) return;
   const swap = !!state.section;
   state.section = key;
   renderSection();
   const entry = { view: "settings", section: key };
-  if (!fromHistory) swap ? history.replaceState(entry, "") : history.pushState(entry, "");
+  if (!fromHistory) swap && !deeper ? history.replaceState(entry, "") : history.pushState(entry, "");
   renderSettings();
   $("sectionBody").scrollTop = 0;
   if (!swap) pushScreen($("sectionView")).then(() => { if (!wide.matches) $("sectionBack").focus(); });

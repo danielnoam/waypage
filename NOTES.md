@@ -18,6 +18,28 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Drive Pause and Stop (1.27.1).**
+  - Android's upload is now `session` plus `send`. `send` first asks
+    Drive how far it got (`Content-Range: bytes */N`, 308 with
+    `Range`), then sends the rest. Pause calls `cancel()`, which drops
+    the connection, and keeps the session URL in `ctl`. Resume sends
+    on.
+  - The browser's multipart XHR is aborted on Pause and sent whole
+    again on Resume. If Drive had all of it before the abort, the
+    backup can land twice; pruning to 3 covers that.
+  - Packing pauses between clips (`exportLibrary`'s new `gate`).
+  - A restore stops only while downloading. Once `restoreLibrary`
+    writes clips, the index has to follow (`merging`).
+  - `cfg.since` is set at connect, so `driveDue` counts the week from
+    there. Daniel didn't want a backup on connecting.
+- **Settings regrouped again (1.27.1, Daniel).**
+  - Sync is titled "GitHub sync", so it isn't confused with Google
+    Drive.
+  - Edit clips is a row inside Library (`SECTIONS.edit.parent`), and
+    `openSection(…, deeper)` pushes history so Back returns to
+    Library.
+  - Watched folders moved from Saving to Library.
+
 - **PiP names only when it's big (1.27.0).** Daniel didn't want the
   collection and clip name in the small window. The PiP is 16:9, so its
   height stands for its size: at 169px or less, with a paragraph to

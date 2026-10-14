@@ -1507,25 +1507,92 @@ function renderFeeds() {
 // while Waypage is open, the last three kept, and any of them restored
 // the way a backup file is (the copy saved last wins).
 
-let driveRun = null;      // { restore, text } while one runs
+// While one runs: { restore, text, share, paused, stopped, ctl }. Pause and
+// Stop are in Downloads and in Settings (1.27.1).
+let driveRun = null;
 let driveFiles = null;    // the backups in Drive, once listed
 let driveListError = "";
 let driveDueSaid = false;
 
 const driveWhen = (at) => new Date(at).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
-function driveSay(text) {
-  if (driveRun) driveRun.text = text;
+function driveSay(text, share) {
+  if (!driveRun) return;
+  driveRun.text = text;
+  if (share !== undefined) driveRun.share = share;
   const n = document.getElementById("driveStatus");
-  if (n) n.textContent = text;
+  if (n) n.textContent = driveStatusText();
+  paintDriveCard();
+}
+function driveStatusText() {
+  const r = driveRun;
+  return r.stopped ? "Stopping…" : r.paused ? "Paused · " + r.text : r.text;
+}
+async function driveGate() {
+  const r = driveRun;
+  while (r && r.paused && !r.stopped) await new Promise((go) => { r.wake = go; });
+  return !!r && !r.stopped;
+}
+// Pausing a transfer breaks it off; Resume sends on from where Drive got
+// to (the app) or sends the file again (a browser).
+function drivePause(on) {
+  const r = driveRun;
+  if (!r || r.stopped) return;
+  r.paused = on;
+  if (on && r.ctl.stop) r.ctl.stop();
+  if (!on && r.wake) { r.wake(); r.wake = null; }
+  drivePaint();
+}
+function driveStop() {
+  const r = driveRun;
+  if (!r) return;
+  r.stopped = true;
+  if (r.ctl.stop) r.ctl.stop();
+  if (r.wake) { r.wake(); r.wake = null; }
+  drivePaint();
+}
+const driveCanStop = () => !!driveRun && !driveRun.merging;
+function driveControls(cls) {
+  const r = driveRun;
+  if (!driveCanStop()) return null;
+  return el("span", { class: cls },
+    r.restore ? null : el("button", { class: "btn-small", type: "button", ...(r.stopped ? { disabled: "" } : {}), onclick: () => drivePause(!r.paused) }, r.paused ? "Resume" : "Pause"),
+    el("button", { class: "btn-quiet danger", type: "button", ...(r.stopped ? { disabled: "" } : {}), onclick: driveStop }, "Stop"));
+}
+// The run as a card in Downloads, like the app's own update.
+function driveCard() {
+  const r = driveRun;
+  return el("div", { class: "card saving drive-run wide", role: "group", "aria-label": r.restore ? "Restoring from Google Drive" : "Backing up to Google Drive" },
+    el("span", { class: "card-body" },
+      el("span", { class: "card-site" }, "Google Drive"),
+      el("span", { class: "card-title" }, r.restore ? "Restoring your library" : "Backing up your library"),
+      el("span", { class: "progress", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100" }, el("span", { class: "progress-fill" })),
+      el("span", { class: "card-status" + (r.paused ? "" : " accent") },
+        r.paused ? null : el("span", { class: "spinner", "aria-hidden": "true" }),
+        el("span", { class: "status-text" }, driveStatusText())),
+      driveControls("card-actions")));
+}
+function paintDriveCard() {
+  paintDownloads();
+  const card = $("downloads").querySelector(".drive-run");
+  if (!card || !driveRun) return;
+  const share = driveRun.share;
+  const bar = card.querySelector(".progress");
+  bar.classList.toggle("busy", share == null);
+  if (share == null) bar.removeAttribute("aria-valuenow");
+  else bar.setAttribute("aria-valuenow", String(Math.round(share * 100)));
+  bar.querySelector(".progress-fill").style.transform = "scaleX(" + (share || 0) + ")";
+  card.querySelector(".status-text").textContent = driveStatusText();
 }
 const driveBusy = () => (driveRun ? { disabled: "" } : {});
 function drivePaint() {
   if (state.section === "drive") renderSection();
   if (state.settings) renderSettings();
+  renderDownloads();
+  paintDriveCard();
 }
 function driveValue() {
   if (!C.drive.on) return "Off";
-  if (driveRun) return driveRun.restore ? "Restoring" : "Backing up";
+  if (driveRun) return driveRun.paused ? "Paused" : driveRun.restore ? "Restoring" : "Backing up";
   const l = C.drive.last;
   return l.error ? "Didn't back up" : l.at ? whenText(l.at).replace(/^./, (c) => c.toUpperCase()) : "On";
 }
@@ -1541,7 +1608,7 @@ function driveSections() {
       el("p", { class: "footnote" }, "Waypage can only see the backups it makes, in a Waypage folder in your Drive. Nothing else there is opened or read."))];
   }
   const l = C.drive.last;
-  const status = driveRun ? driveRun.text
+  const status = driveRun ? driveStatusText()
     : l.error ? l.error
     : l.at ? "Last backup " + whenText(l.at) + (l.size ? ", " + formatSize(l.size) : "")
     : "No backup yet";
@@ -1563,6 +1630,7 @@ function driveSections() {
           el("span", { class: "choice-text" },
             el("span", { class: "choice-label accent" }, "Back up now"),
             el("span", { class: "choice-note" + (l.error && !driveRun ? " warn" : ""), id: "driveStatus", role: "status" }, status))),
+        driveRun ? el("div", { class: "row" }, driveControls("drive-actions")) : null,
         el("label", { class: "row" },
           el("span", { class: "choice-text" },
             el("span", { class: "choice-label" }, "Every week"),
@@ -1642,21 +1710,37 @@ async function driveBackUp(auto) {
   if (driveRun || !C.drive.on) return;
   const { pages, feeds: fs } = driveContents();
   if (!pages.length && !fs.length) { if (!auto) toast("There's nothing to back up with what's picked."); return; }
-  driveRun = { restore: false, text: "Getting ready…" };
+  const run = driveRun = { restore: false, text: "Getting ready…", share: null, paused: false, stopped: false, ctl: {} };
   drivePaint();
   let out = null;
   try {
     // Asked for first: a browser can open Google's window only straight
     // from the tap.
     await C.drive.getToken(!auto, "backup");
-    out = await C.backup.exportLibrary(pages, (done, total) => driveSay("Packing, " + done + " of " + total), fs);
-    driveSay("Sending to Drive…");
-    const made = await C.drive.upload(out, { device: load(DEVICE_KEY, "") || guessedName(), clips: pages.length },
-      (done, total) => driveSay("Sending to Drive, " + (total ? Math.round((done / total) * 100) + "%" : formatSize(done))));
+    out = await C.backup.exportLibrary(pages, (done, total) => driveSay("Packing, " + done + " of " + total, (done / total) * 0.3), fs, driveGate);
+    if (!(await driveGate())) throw new C.drive.DriveError("Stopped.", "cancelled");
+    driveSay("Sending to Drive…", 0.3);
+    const info = { device: load(DEVICE_KEY, "") || guessedName(), clips: pages.length };
+    const sent = (done, total) => driveSay("Sending to Drive, " + (total ? Math.round((done / total) * 100) + "%" : formatSize(done)), total ? 0.3 + 0.7 * (done / total) : null);
+    let made;
+    for (;;) {
+      try { made = await C.drive.upload(out, info, sent, run.ctl); break; }
+      catch (e) {
+        if (e && e.code === "cancelled" && run.paused && await driveGate()) { driveSay("Sending to Drive…"); continue; }
+        throw e;
+      }
+    }
     C.drive.last = { at: Date.now(), size: made.size || (out.blob ? out.blob.size : 0) };
     driveFiles = null;
     if (!auto) toast("Backed up to Google Drive");
   } catch (e) {
+    if (e && e.code === "cancelled") {
+      toast("Backup stopped");
+      if (out && out.uri) C.platform.plugin("Filesystem").deleteFile({ path: out.name, directory: "CACHE" }).catch(() => {});
+      driveRun = null;
+      drivePaint();
+      return;
+    }
     if (!(e instanceof C.drive.DriveError)) console.error(e);
     const msg = e instanceof C.drive.DriveError ? e.message : "Couldn't make the backup. Free some space and try again.";
     C.drive.last = { ...C.drive.last, error: msg, tried: Date.now() };
@@ -1670,14 +1754,19 @@ async function driveBackUp(auto) {
 async function driveRestore(f) {
   if (driveRun) return;
   const asked = C.drive.getToken(true);
-  driveRun = { restore: true, text: "Bringing the backup down…" };
+  const run = driveRun = { restore: true, text: "Bringing the backup down…", share: null, paused: false, stopped: false, ctl: {} };
   drivePaint();
   try {
     await asked;
-    const file = await C.drive.download(f.id, (done, total) => driveSay("Bringing it down, " + (total > 0 ? Math.round((done / total) * 100) + "%" : formatSize(done))));
-    await restoreBackup(file, driveSay);
+    const file = await C.drive.download(f.id, (done, total) => driveSay("Bringing it down, " + (total > 0 ? Math.round((done / total) * 100) + "%" : formatSize(done)), total > 0 ? (done / total) * 0.5 : null), run.ctl);
+    if (run.stopped) throw new C.drive.DriveError("Stopped.", "cancelled");
+    // Merging can't stop halfway: the clips are written before the index.
+    run.merging = true;
+    drivePaint();
+    await restoreBackup(file, (t) => { const m = /(\d+) of (\d+)/.exec(t); driveSay(t, m ? 0.5 + 0.5 * (m[1] / m[2]) : undefined); });
     renderLibrary();
   } catch (e) {
+    if (e && e.code === "cancelled") { toast("Restore stopped. Nothing was changed."); driveRun = null; drivePaint(); return; }
     const told = e instanceof C.drive.DriveError || /Waypage/.test((e && e.message) || "");
     if (!told) console.error(e);
     toast(told ? e.message : "Couldn't restore that backup. Try again.");
@@ -1687,12 +1776,12 @@ async function driveRestore(f) {
 }
 
 // The weekly backup, looked for on opening and on coming back: a week
-// since the last one, on Wi-Fi, and not again within six hours of one
+// since the last one (or since connecting, 1.27.1), on Wi-Fi, and not again within six hours of one
 // that failed. A browser without a live sign-in asks with a toast.
 function driveDue() {
   if (!C.drive.available || !C.drive.on || !C.drive.auto || driveRun || document.hidden) return;
   const l = C.drive.last;
-  if (Date.now() - (l.at || 0) < C.drive.WEEK || Date.now() - (l.tried || 0) < 6 * 3600e3) return;
+  if (Date.now() - Math.max(l.at || 0, C.drive.since) < C.drive.WEEK || Date.now() - (l.tried || 0) < 6 * 3600e3) return;
   if (!navigator.onLine || C.platform.metered) return;
   if (C.drive.signedIn) { driveBackUp(true); return; }
   if (driveDueSaid) return;
