@@ -900,6 +900,48 @@ const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
       await q.context().close();
     });
 
+    await test("reading on to the next chapter doesn't flash the read-aloud card (1.26.3)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (i) => ({ id: "n" + i, url: "https://example.com/n" + i, title: "Chapter " + i, site: "example.com", savedAt: 1000 + i, minutes: 1, mode: "links", at: 0, folder: "Saga", folderAt: 1000 + i });
+        await S.writeIndex([c(1), c(2), c(3)]);
+        for (const i of [1, 2, 3]) await S.writePage("n" + i, "<!doctype html><html><body><h1>Chapter " + i + "</h1>" + "<p>Words.</p>".repeat(30) + "</body></html>", c(i));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const sp = window.Waypage.platform.speech;
+        sp.play = () => Promise.resolve();
+        sp.stop = () => Promise.resolve();
+        const bar = document.getElementById("aloudBar"), shown = [];
+        new MutationObserver(() => { if (!bar.hidden) shown.push(state.open && state.open.id); }).observe(bar, { attributes: true, attributeFilter: ["hidden"] });
+        const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
+        openPage("n1");
+        await pause(900);
+        startAloud();
+        await pause(300);
+        // Read next, at the end of a chapter.
+        readNext();
+        await pause(1500);
+        const afterNext = [state.open.id, aloud.key];
+        // Going on by itself, the phone already reading the next one.
+        queued = { key: "n3", map: [0] };
+        if (wentOn("n3")) setAloud("playing", 0);
+        await pause(1500);
+        // Moving on by hand while it reads: the card shows, as before.
+        goTo(state.pages.find((x) => x.id === "n1"), -1);
+        await pause(1200);
+        return { shown, afterNext, end: [state.open.id, aloud.key], byHand: !bar.hidden };
+      });
+      assert.deepStrictEqual(got.afterNext, ["n2", "n2"], JSON.stringify(got));
+      assert.deepStrictEqual(got.end, ["n1", "n3"], JSON.stringify(got));
+      assert.deepStrictEqual(got.shown, ["n1"], JSON.stringify(got));
+      assert.ok(got.byHand);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("an app update downloads in Downloads, with Pause and Resume (1.23.0)", async () => {
       const q = await page(browser, 390);
       const got = await q.evaluate(async () => {

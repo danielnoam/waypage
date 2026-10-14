@@ -18,6 +18,19 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **No card while turning to the clip being read (1.26.3).** Moving on
+  to the next chapter, the reader's open clip and the reading's clip
+  differ for half a second to a second, so `showAloudBar` thought the
+  reading was elsewhere and showed the card. This happened two ways:
+  - Read next: `aloudAuto` was set, and the key moved only at
+    `startAloud`.
+  - Going on by itself: `wentOn` moved the key first, then `goTo`.
+
+  The card now stays hidden while `aloudAuto` is pending, or while
+  `heading` (set at the top of `goTo`, before its first await) is the
+  reading's clip. Moving to another chapter by hand while one is read
+  still shows the card: that reading really is elsewhere.
+
 - **The card opens out of the play button (1.26.2).** Daniel found
   1.26.1's card "spawned": a whole card, scaled down over the player,
   doesn't look like the player, so it read as something new appearing.

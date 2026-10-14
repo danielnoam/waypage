@@ -781,18 +781,27 @@ async function followAndOpen(p) {
 // From the end link (0.28.2) the page turns: the one read slides away
 // to the left and the next comes in from the right; turn -1 (1.23.1) is
 // backwards, the page before coming in from the left or the top.
+// The clip the reader is turning to, while it turns (1.26.3).
+let heading = "";
 async function goTo(p, turn) {
+  heading = p.id;
   let html;
   try { html = await C.store.readPage(p.id); } catch (e) { html = null; }
-  if (!html) { toast("This clip's file is missing. Delete it and save it again."); return; }
+  if (!html) {
+    if (heading === p.id) { heading = ""; showAloudBar(); }
+    toast("This clip's file is missing. Delete it and save it again.");
+    return;
+  }
   if (state.sheet) await new Promise((resolve) => { addEventListener("popstate", () => resolve(), { once: true }); history.back(); });
   if (positionTimer) savePositions();
   history.replaceState(readerState(p), "");
   const frame = $("readerFrame");
   const side = C.reader.paged;
   const dir = turn === -1 ? -1 : 1;
-  if (turn) await M.pageOut(frame, side, dir);
-  try { await show(p, html); } finally { if (turn) await M.pageIn(frame, side, dir); }
+  try {
+    if (turn) await M.pageOut(frame, side, dir);
+    try { await show(p, html); } finally { if (turn) await M.pageIn(frame, side, dir); }
+  } finally { if (heading === p.id) heading = ""; }
   frame.focus();
 }
 
@@ -1354,7 +1363,10 @@ function setAloud(st, index) {
 function showAloudBar(from) {
   const bar = $("aloudBar");
   const p = aloudPage();
-  const show = !!p && (aloudOn() || aloud.state === "ended") && !aloudHere();
+  // Not while the reader is on its way to the clip being read: reading
+  // on to the next chapter showed the card for a moment (1.26.3).
+  const going = !!state.open && (!!aloudAuto || heading === aloud.key);
+  const show = !!p && (aloudOn() || aloud.state === "ended") && !aloudHere() && !going;
   if (!show) {
     if (!bar.hidden && !bar.dataset.leaving) {
       bar.dataset.leaving = "1";
