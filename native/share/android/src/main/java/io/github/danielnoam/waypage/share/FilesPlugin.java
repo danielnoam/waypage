@@ -74,6 +74,10 @@ import java.util.concurrent.ConcurrentHashMap;
  *                           file in it and its folders; ok false when the
  *                           folder itself can't be read (gone, or the
  *                           permission was taken back)
+ *
+ *   reveal({ uri, tree })   opens the folder a file sits in, in the phone's
+ *                           Files app (1.27.2); tree is its watched folder.
+ *                           { opened, where }, where the folder's path
  */
 @CapacitorPlugin(name = "Files")
 public class FilesPlugin extends Plugin {
@@ -492,6 +496,98 @@ public class FilesPlugin extends Plugin {
         }
         String last = tree.getLastPathSegment();
         return last == null ? "Folder" : last.replaceFirst("^.*:", "");
+    }
+
+    @PluginMethod
+    public void reveal(PluginCall call) {
+        Uri uri = address(call);
+        if (uri == null) return;
+        String treeText = call.getString("tree");
+        new Thread(() -> {
+            JSObject out = new JSObject();
+            try {
+                Uri tree = treeText == null ? null : Uri.parse(treeText);
+                String authority = uri.getAuthority();
+                String docId = DocumentsContract.getDocumentId(uri);
+                List<String> ids = pathTo(tree, uri, docId);
+                String parent = ids.size() > 1 ? ids.get(ids.size() - 2) : null;
+                if (parent == null && docId.contains("/")) parent = docId.substring(0, docId.lastIndexOf('/'));
+                if (parent == null && tree != null) parent = DocumentsContract.getTreeDocumentId(tree);
+                List<String> names = new ArrayList<>();
+                if (ids.size() > 1) {
+                    for (String id : ids.subList(0, ids.size() - 1)) names.add(nameOf(tree, id));
+                } else if (parent != null) {
+                    names.add(parent.replaceFirst("^[^:]*:", ""));
+                }
+                out.put("where", android.text.TextUtils.join("/", names).replaceAll("^/+|/+$", ""));
+                if (parent == null) {
+                    out.put("opened", false);
+                    call.resolve(out);
+                    return;
+                }
+                Uri folder = DocumentsContract.buildDocumentUri(authority, parent);
+                out.put("opened", show(folder));
+            } catch (Exception e) {
+                out.put("opened", false);
+            }
+            call.resolve(out);
+        }).start();
+    }
+
+    // The ids from the watched folder (or the provider's top) down to the
+    // file, when the provider can say; just the file's own otherwise.
+    private List<String> pathTo(Uri tree, Uri uri, String docId) {
+        List<String> ids = new ArrayList<>();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                Uri from = tree != null ? DocumentsContract.buildDocumentUriUsingTree(tree, docId) : uri;
+                DocumentsContract.Path path = DocumentsContract.findDocumentPath(getContext().getContentResolver(), from);
+                if (path != null && path.getPath() != null) ids.addAll(path.getPath());
+            } catch (Exception e) {
+                // Not every provider answers.
+            }
+        }
+        if (ids.isEmpty()) ids.add(docId);
+        return ids;
+    }
+
+    private String nameOf(Uri tree, String id) {
+        if (tree == null) return id.replaceFirst("^[^:]*:", "");
+        try (Cursor c = getContext().getContentResolver().query(DocumentsContract.buildDocumentUriUsingTree(tree, id),
+            new String[] { DocumentsContract.Document.COLUMN_DISPLAY_NAME }, null, null, null)) {
+            if (c != null && c.moveToFirst() && !c.isNull(0)) return c.getString(0);
+        } catch (Exception e) {
+            // The id stands in.
+        }
+        return id.replaceFirst("^[^:]*:", "");
+    }
+
+    // The Files app at a folder. It browses a folder it's handed on most
+    // phones; where it won't, its picker opened there shows the same.
+    private boolean show(Uri folder) {
+        Intent view = new Intent(Intent.ACTION_VIEW);
+        view.setDataAndType(folder, DocumentsContract.Document.MIME_TYPE_DIR);
+        view.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        for (String pkg : new String[] { null, "com.google.android.documentsui", "com.android.documentsui" }) {
+            try {
+                if (pkg != null) view.setPackage(pkg);
+                getActivity().startActivity(view);
+                return true;
+            } catch (Exception e) {
+                // The next one.
+            }
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false;
+        try {
+            Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            pick.addCategory(Intent.CATEGORY_OPENABLE);
+            pick.setType("*/*");
+            pick.putExtra(DocumentsContract.EXTRA_INITIAL_URI, folder);
+            getActivity().startActivity(pick);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     // The picked address, with its lasting permission taken. null when the

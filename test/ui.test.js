@@ -73,6 +73,34 @@ async function until(p, fn, arg, ms = 10000) {
 }
 const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
 
+
+// A small EPUB, stored (not deflated): chapter titles are plain styled
+// paragraphs, as many books have them, and the book's nav lists them.
+function epubBytes() {
+  const crcTable = [...Array(256)].map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = (b) => { let c = 0xffffffff; for (const x of b) c = crcTable[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const files = [
+    ["mimetype", "application/epub+zip"],
+    ["META-INF/container.xml", '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/book.opf" media-type="application/oebps-package+xml"/></rootfiles></container>'],
+    ["OEBPS/book.opf", '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Plain Chapters</dc:title><dc:language>en</dc:language></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="a" href="text/a.xhtml" media-type="application/xhtml+xml"/><item id="b" href="text/b.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="a"/><itemref idref="b"/></spine></package>'],
+    ["OEBPS/nav.xhtml", '<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><body><nav epub:type="toc"><ol><li><a href="text/a.xhtml">The First Part</a><ol><li><a href="text/a.xhtml#later">A Later Scene</a></li></ol></li><li><a href="text/b.xhtml">The Second Part</a></li></ol></nav></body></html>'],
+    ["OEBPS/text/a.xhtml", '<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body><p class="ct">ONE</p><p>' + "Words of the first part. ".repeat(40) + '</p><p id="later">' + "A later scene begins. ".repeat(40) + "</p></body></html>"],
+    ["OEBPS/text/b.xhtml", '<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body><p class="ct">TWO</p><p>' + "Words of the second part. ".repeat(40) + "</p></body></html>"],
+  ];
+  const parts = [], central = [];
+  let at = 0;
+  for (const [name, text] of files) {
+    const n = Buffer.from(name), d = Buffer.from(text), c = crc(d);
+    const h = Buffer.alloc(30); h.writeUInt32LE(0x04034b50, 0); h.writeUInt16LE(20, 4); h.writeUInt32LE(c, 14); h.writeUInt32LE(d.length, 18); h.writeUInt32LE(d.length, 22); h.writeUInt16LE(n.length, 26);
+    const e = Buffer.alloc(46); e.writeUInt32LE(0x02014b50, 0); e.writeUInt16LE(20, 4); e.writeUInt16LE(20, 6); e.writeUInt32LE(c, 16); e.writeUInt32LE(d.length, 20); e.writeUInt32LE(d.length, 24); e.writeUInt16LE(n.length, 28); e.writeUInt32LE(at, 42);
+    parts.push(h, n, d); central.push(e, n);
+    at += 30 + n.length + d.length;
+  }
+  const cd = Buffer.concat(central);
+  const end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(files.length, 8); end.writeUInt16LE(files.length, 10); end.writeUInt32LE(cd.length, 12); end.writeUInt32LE(at, 16);
+  return Buffer.concat([...parts, cd, end]);
+}
+
 (async () => {
   const server = await startServer();
   const browser = await pw.chromium.launch(process.env.PLAYWRIGHT_CHROMIUM ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM } : {});
@@ -1013,6 +1041,28 @@ const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
       await sw.click();
       assert.strictEqual(await q.evaluate(() => window.Waypage.save.compress), false);
       assert.strictEqual(await q.evaluate(() => localStorage.getItem("waypage.compress")), "false");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a book's own contents are listed when its chapter titles aren't headings (1.27.2)", async () => {
+      const q = await page(browser, 390);
+      const bytes = [...epubBytes()];
+      const id = await q.evaluate(async (b) => {
+        const file = new File([new Uint8Array(b)], "plain.epub", { type: "application/epub+zip" });
+        const meta = await window.Waypage.files.bring(file, "epub", { has: () => false });
+        const list = await window.Waypage.store.readIndex();
+        await window.Waypage.store.writeIndex([meta, ...list]);
+        return meta.id;
+      }, bytes);
+      await q.reload();
+      await q.locator(".page-card", { hasText: "Plain Chapters" }).first().click();
+      await q.locator("#readerView:not([hidden])").waitFor();
+      await frameText(q).getByText("Words of the first part").first().waitFor();
+      await until(q, () => !document.getElementById("readerContents").hidden);
+      const heads = await q.evaluate(() => window.Waypage.reader.headings());
+      assert.deepStrictEqual(heads.map((h) => h.text), ["The First Part", "A Later Scene", "The Second Part"]);
+      assert.deepStrictEqual(heads.map((h) => h.level), [2, 3, 2]);
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

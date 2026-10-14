@@ -118,12 +118,35 @@ async function drawOne(doc, n, width) {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
+// The PDF's bookmarks (1.27.2): [{ title, page, depth }], page from 1,
+// three levels at most, the first 300.
+async function outlineOf(doc) {
+  const items = await doc.getOutline();
+  const out = [];
+  const walk = async (list, depth) => {
+    for (const it of list || []) {
+      if (out.length >= 300) return;
+      try {
+        const dest = typeof it.dest === "string" ? await doc.getDestination(it.dest) : it.dest;
+        const ref = Array.isArray(dest) ? dest[0] : null;
+        const page = ref == null ? -1 : typeof ref === "number" ? ref : await doc.getPageIndex(ref);
+        const title = String(it.title || "").replace(/\s+/g, " ").trim();
+        if (page >= 0 && title) out.push({ title: title.slice(0, 200), page: page + 1, depth: Math.min(3, depth) });
+      } catch (e) { /* one that leads nowhere */ }
+      await walk(it.items, depth + 1);
+    }
+  };
+  await walk(items, 1);
+  return out;
+}
+
 async function read(job) {
   const doc = await load(job);
   const count = Math.min(doc.numPages, job.maxPages || 2000);
   const meta = await doc.getMetadata().catch(() => null);
   const info = (meta && meta.info) || {};
   const out = { title: String(info.Title || "").trim(), byline: String(info.Author || "").trim(), pages: doc.numPages };
+  out.outline = await outlineOf(doc).catch(() => []);
 
   // The words, page by page: items grouped into lines by their place on
   // the page, lines into paragraphs by the gap between them.
