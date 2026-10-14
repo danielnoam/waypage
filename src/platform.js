@@ -783,6 +783,17 @@
         return { ok: !!got.ok, name: got.name || "", files: (got.files || []).map((f) => ({ ref: f.uri, path: f.path || f.name, name: f.name, size: f.size || 0 })) };
       } catch (e) { return { ok: false, files: [] }; }
     },
+    // The folder a file sits in, opened in the phone's Files app (1.27.2,
+    // Android). { opened, where }, where its path ("Download/Books").
+    get canReveal() { return os === "android" && !!plugin("Files"); },
+    async reveal(ref, tree) {
+      const F = plugin("Files");
+      if (!F || os !== "android") return { opened: false, where: "" };
+      try {
+        const got = await F.reveal(tree ? { uri: ref, tree } : { uri: ref });
+        return { opened: !!got.opened, where: got.where || "" };
+      } catch (e) { return { opened: false, where: "" }; }
+    },
     // Whether the file is still where it was, and how big it is now.
     async info(ref) {
       const F = plugin("Files");

@@ -18,6 +18,22 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Book contents (1.27.2).** The reader built Contents only from h2/h3,
+  so books whose chapters are styled paragraphs had none. `fromEpub` now
+  reads the EPUB 3 nav (else the NCX) and puts `data-toc` (depth 1-3)
+  and `data-toc-t` (its title) on each target; `fromPdf` does the same
+  from pdf.js's outline, with `data-toc-p` for the page. The reader uses
+  `[data-toc]` when there are at least 2, else headings. cleanSaved
+  keeps both attributes, since it runs again over the whole book. Older
+  linked EPUBs are marked when opened (`epubMarks`); if the file can't
+  be read the book opens as before.
+- **Show in folder (1.27.2).** `FilesPlugin.reveal` finds the parent
+  folder with `findDocumentPath` (from the watched tree when there is
+  one), else the docId's parent path, else the watched tree's root, and
+  opens it with ACTION_VIEW and the directory MIME type. Where nothing
+  browses a folder, the picker opened at that folder shows the same. If
+  that fails too, a toast says the path. Copied clips have no folder.
+
 - **Watched folder names (1.27.1).** `pickedFolder` named the folder from
   the tree URI's last segment. That's a path for the phone's storage, but
   an opaque id (`acc=1;doc=encoded=…`) for Google Drive. It now asks the

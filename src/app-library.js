@@ -818,6 +818,7 @@ function pageSheet(p, where) {
         p.file ? null : tileButton("share", "Share", () => shareLink(p)),
         p.link ? null : tileButton("send", "Export", () => { exporting = true; draw(); }),
         p.file ? null : tileButton("original", "Original", () => C.platform.openOutside(p.url)),
+        p.link && C.platform.files.canReveal ? tileButton("folder", "Folder", () => showFolder(p)) : null,
         favTile(p, draw)),
       el("h3", { class: "overline" }, p.link ? "This file" : "This clip"),
       p.preview || inReader || !(p.marks || []).length ? null : el("div", { class: "group" },
@@ -1253,6 +1254,7 @@ function clipMenu(node, x, y) {
   const pop = el("div", { class: "pop-menu clip-pop", id: "clipPop", role: "menu", "aria-label": p.title },
     item("open", "Open", () => openPage(p.id), { key: "Enter" }),
     p.file ? null : item("original", "Open the original", () => C.platform.openOutside(p.url)),
+    p.link && C.platform.files.canReveal ? item("folder", "Show in folder", () => showFolder(p)) : null,
     sep(),
     item("star", p.fav ? "Unfavourite" : "Favourite", () => setFavourite([p], !p.fav), { key: "F" }),
     item("tag", "Tags and collection…", () => openMenu("page", p)),
@@ -1707,6 +1709,12 @@ function watches() {
   return list.filter((w) => w && w.tree);
 }
 const saveWatch = (w) => store(WATCHES_KEY, watches().map((x) => (x.tree === w.tree ? w : x)));
+// Where a file read from outside sits, in the phone's Files app (1.27.2).
+async function showFolder(p) {
+  const w = watchOf(p);
+  const got = await C.platform.files.reveal(p.link, w ? w.tree : null);
+  if (!got.opened) toast(got.where ? "It's in " + got.where : "Couldn't open its folder");
+}
 const watchOf = (p) => (p && p.watched ? watches().find((w) => w.tree === p.watched) || null : null);
 function watchSoon(ms = 1500) {
   if (!C.platform.files.canWatch || !watches().length || watchStopped) return;

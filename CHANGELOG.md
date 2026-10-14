@@ -2,6 +2,16 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.27.2] - 2026-10-14
+
+### Added
+- Books now show their own Contents. Waypage reads the table of
+  contents an EPUB comes with, and a PDF's bookmarks, so a book whose
+  chapter titles aren't styled as headings still gets a Contents
+  button. Books you already have get it the next time you open them.
+- Show in folder (Android): hold a file you read from outside and tap
+  Folder to see where it sits in the phone's Files app.
+
 ## [1.27.1] - 2026-10-14
 
 ### Changed

@@ -174,10 +174,94 @@
     const cover = coverItem && /^image\//.test(coverItem.type) ? await picture(coverItem.path) : null;
     const creators = [...opf.getElementsByTagNameNS("*", "creator")].map((n) => n.textContent.replace(/\s+/g, " ").trim()).filter(Boolean);
     const spineEl = opf.getElementsByTagNameNS("*", "spine")[0];
+    markContents(book, await epubContents(opf, manifest, spineEl, xml, entries).catch(() => []), chapterOf);
     return {
       body: book, pics, cover, title: first("title"), byline: creators.join(", "), lang: first("language"),
       dir: spineEl && spineEl.getAttribute("page-progression-direction") === "rtl" ? "rtl" : "",
     };
+  }
+
+  // The book's own table of contents (1.27.2), as [{ title, path, frag,
+  // depth }]: EPUB 3's nav document, else EPUB 2's NCX. Many books don't
+  // mark chapter titles as headings, so this is what other readers list.
+  async function epubContents(opf, manifest, spineEl, xml, entries) {
+    const items = [...manifest.values()];
+    const nav = items.find((it) => /(^|\s)nav(\s|$)/.test(it.props) && entries.has(it.path));
+    const text = (n) => (n ? n.textContent.replace(/\s+/g, " ").trim() : "");
+    const out = [];
+    if (nav) {
+      const doc = await xml(nav.path);
+      const navs = [...doc.getElementsByTagNameNS("*", "nav")];
+      const toc = navs.find((n) => /(^|\s)toc(\s|$)/.test(n.getAttributeNS("http://www.idpf.org/2007/ops", "type") || n.getAttribute("epub:type") || "")) || navs[0];
+      const walk = (ol, depth) => {
+        for (const li of [...(ol ? ol.children : [])]) {
+          if (li.localName !== "li") continue;
+          const a = [...li.children].find((c) => c.localName === "a" || c.localName === "span");
+          const href = a && a.getAttribute("href");
+          if (href) out.push({ title: text(a), href: resolveHref(nav.path, href), depth });
+          const sub = [...li.children].find((c) => c.localName === "ol");
+          if (sub) walk(sub, depth + 1);
+        }
+      };
+      if (toc) walk([...toc.children].find((c) => c.localName === "ol"), 1);
+      if (out.length) return out;
+    }
+    const ncx = manifest.get(spineEl && spineEl.getAttribute("toc")) || items.find((it) => it.type === "application/x-dtbncx+xml");
+    if (!ncx || !entries.has(ncx.path)) return out;
+    const doc = await xml(ncx.path);
+    const walk = (parent, depth) => {
+      for (const np of [...parent.children]) {
+        if (np.localName !== "navPoint") continue;
+        const label = [...np.children].find((c) => c.localName === "navLabel");
+        const content = [...np.children].find((c) => c.localName === "content");
+        const href = content && content.getAttribute("src");
+        if (href) out.push({ title: text(label), href: resolveHref(ncx.path, href), depth });
+        walk(np, depth + 1);
+      }
+    };
+    const map = doc.getElementsByTagNameNS("*", "navMap")[0];
+    if (map) walk(map, 1);
+    return out;
+  }
+  // Books whose file has no contents to give, so it isn't read for them again.
+  const unmarkable = new Set();
+  async function epubMarks(blob, entries, body) {
+    const xml = async (path) => new DOMParser().parseFromString(decode(await B().zipRead(blob, entries.get(path))), "application/xml");
+    const rootfile = (await xml("META-INF/container.xml")).getElementsByTagName("rootfile")[0];
+    const opfPath = rootfile && rootfile.getAttribute("full-path");
+    if (!opfPath || !entries.has(opfPath)) return;
+    const opf = await xml(opfPath);
+    const manifest = new Map();
+    for (const item of opf.getElementsByTagNameNS("*", "item")) {
+      manifest.set(item.getAttribute("id"), { path: resolve(opfPath, item.getAttribute("href") || ""), type: item.getAttribute("media-type") || "", props: item.getAttribute("properties") || "" });
+    }
+    const spine = [...opf.getElementsByTagNameNS("*", "itemref")].map((r) => manifest.get(r.getAttribute("idref")))
+      .filter((it) => it && /html/.test(it.type) && entries.has(it.path));
+    const chapterOf = new Map(spine.map((it, i) => [it.path, i]));
+    markContents(body, await epubContents(opf, manifest, opf.getElementsByTagNameNS("*", "spine")[0], xml, entries), chapterOf);
+  }
+  const resolveHref = (from, href) => ({ path: resolve(from, href), frag: href.includes("#") ? href.slice(href.indexOf("#") + 1) : "" });
+
+  // Marks where each entry starts with data-toc (its depth) and data-toc-t
+  // (its title), which the reader lists instead of the headings. Entries
+  // that land nowhere are left out; fewer than two leaves the headings.
+  function markContents(book, entries, chapterOf) {
+    const marks = [];
+    for (const e of entries) {
+      const i = chapterOf.get(e.href.path);
+      if (i == null || !e.title) continue;
+      let frag = e.href.frag;
+      try { frag = decodeURIComponent(frag); } catch (err) { /* as it is */ }
+      const id = frag ? "c" + i + "-" + frag : "c" + i;
+      const at = book.querySelector('[id="' + id.replace(/["\\]/g, "\\$&") + '"]') || book.querySelector('[id="c' + i + '"]');
+      if (!at || marks.some(([m]) => m === at)) continue;
+      marks.push([at, e]);
+    }
+    if (marks.length < 2) return;
+    for (const [at, e] of marks) {
+      at.setAttribute("data-toc", String(Math.min(3, e.depth)));
+      at.setAttribute("data-toc-t", e.title.slice(0, 200));
+    }
   }
 
   // ---- Markdown and text ----
@@ -436,6 +520,8 @@
     }
     const root = out.createElement("div");
     root.className = "co-body";
+    // Each page's first element, for the PDF's bookmarks (1.27.2).
+    const at = new Map();
     if (got.images && got.sizes) {
       // A scan kept in its file: a slot the size of each page, drawn when
       // it's reached; only the first is drawn now, for the card.
@@ -446,6 +532,7 @@
         img.setAttribute("width", w);
         img.setAttribute("height", h);
         root.append(img);
+        at.set(i + 1, img);
         if (i === 0 && got.images[0]) await pics.put(img, got.images[0], "image/jpeg", false, "page:1");
         else { img.setAttribute("data-in", "page:" + (i + 1)); pics.n++; }
       }
@@ -456,20 +543,37 @@
         const img = out.createElement("img");
         img.setAttribute("alt", "");
         root.append(img);
+        at.set(i + 1, img);
         await pics.put(img, b, "image/jpeg", false, "page:" + (i + 1));
         if (onProgress) onProgress(i + 1, got.images.length, "pictures");
       }
       if (!pics.n) throw new FileError("There's nothing to read in this PDF.");
     } else {
+      let page = 1;
       for (const b of got.blocks || []) {
-        if (b.t === "page") continue;
+        if (b.t === "page") { page = b.n; continue; }
         const el = out.createElement(b.t === "h" ? "h2" : "p");
         el.textContent = b.s;
         root.append(el);
+        if (!at.has(page)) at.set(page, el);
       }
       if (!root.textContent.trim()) throw new FileError("There's nothing to read in this PDF.");
       // The first page as the card's picture (1.2.1).
       if (got.cover) await pics.cover(got.cover, "image/jpeg");
+    }
+    const marks = [];
+    for (const o of got.outline || []) {
+      let n = o.page;
+      while (n > 1 && !at.has(n)) n--;
+      const el = at.get(n);
+      if (el && !marks.some(([m]) => m === el)) marks.push([el, o]);
+    }
+    if (marks.length > 1) {
+      for (const [el, o] of marks) {
+        el.setAttribute("data-toc", String(o.depth));
+        el.setAttribute("data-toc-t", o.title);
+        el.setAttribute("data-toc-p", String(o.page));
+      }
     }
     return { root, title: got.title || baseName(file.name), byline: got.byline, scan: !!got.images };
   }
@@ -490,7 +594,19 @@
     const doc = new DOMParser().parseFromString(html, "text/html");
     const into = printed(meta) ? doc.querySelector(".co-body") : null;
     const slots = [...doc.querySelectorAll("img[data-in]")];
-    if (!slots.length && !into) return html;
+    // A book added before 1.27.2 gets its own contents from the file.
+    const body = doc.querySelector(".co-body");
+    const unmarked = meta.file.kind === "epub" && body && !body.querySelector("[data-toc]") && !unmarkable.has(meta.id);
+    if (!slots.length && !into) {
+      if (!unmarked) return html;
+      // Only for the contents: a file out of reach still opens.
+      try {
+        const blob = await C.platform.files.blob(meta.link, meta.file.size);
+        await epubMarks(blob, await B().zipEntries(blob), body);
+      } catch (e) { /* as it was */ }
+      if (!body.querySelector("[data-toc]")) { unmarkable.add(meta.id); return html; }
+      return "<!doctype html>\n" + doc.documentElement.outerHTML;
+    }
     let blob;
     try {
       blob = await C.platform.files.blob(meta.link, meta.file.size);
@@ -502,6 +618,10 @@
     if (meta.file.kind === "pdf") return fillPdf(doc, slots, blob, meta, into);
     const entries = await B().zipEntries(blob).catch(() => null);
     if (!entries) throw new FileError("Waypage can't read " + meta.file.name + " any more.");
+    if (unmarked) {
+      await epubMarks(blob, entries, body).catch(() => {});
+      if (!body.querySelector("[data-toc]")) unmarkable.add(meta.id);
+    }
     for (const img of slots) {
       const e = entries.get(img.getAttribute("data-in"));
       if (!e) { img.className = "co-missing"; continue; }
@@ -545,6 +665,8 @@
     // nearly every PDF's pages are one size.
     const sizeOf = (n) => pdf.sizes[n - 1] || pdf.sizes[pdf.sizes.length - 1] || null;
     if (into) {
+      // The bookmarks go onto their printed pages.
+      const marks = [...into.querySelectorAll("[data-toc][data-toc-p]")];
       into.classList.add("co-comic", "co-printed");
       slots = Array.from({ length: pdf.count || pdf.pages }, (_, i) => {
         const img = doc.createElement("img");
@@ -553,6 +675,12 @@
         return img;
       });
       into.replaceChildren(...slots);
+      for (const m of marks) {
+        const slot = slots[Number(m.getAttribute("data-toc-p")) - 1];
+        if (!slot || slot.hasAttribute("data-toc")) continue;
+        slot.setAttribute("data-toc", m.getAttribute("data-toc"));
+        slot.setAttribute("data-toc-t", m.getAttribute("data-toc-t"));
+      }
     }
     for (const img of slots) {
       const n = Number(String(img.getAttribute("data-in")).replace(/^page:/, ""));

@@ -1415,6 +1415,11 @@
           const h = node.getAttribute("href") || "";
           if (h.startsWith("#") || /^(https?|mailto):/i.test(h)) el.setAttribute("href", h);
         }
+        // A book's own contents (files.js, 1.27.2).
+        if (/^[1-3]$/.test(node.getAttribute("data-toc") || "")) {
+          el.setAttribute("data-toc", node.getAttribute("data-toc"));
+          el.setAttribute("data-toc-t", (node.getAttribute("data-toc-t") || "").slice(0, 200));
+        }
         if (tag === "span" && node.hasAttribute("data-site")) el.setAttribute("data-site", node.getAttribute("data-site"));
         if (tag === "span" && cls.includes("co-play")) el.setAttribute("aria-hidden", "true");
         if (tag === "img") {

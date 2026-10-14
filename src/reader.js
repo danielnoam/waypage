@@ -356,10 +356,11 @@
     return room <= 0 ? 1 : Math.min(1, Math.max(0, w.scrollY / room));
   }
 
-  const clean = (h) => h.textContent.replace(/\s+/g, " ").trim();
+  // A book's own contents (1.27.2) name each entry in data-toc-t.
+  const clean = (h) => (h.getAttribute("data-toc-t") || h.textContent).replace(/\s+/g, " ").trim();
 
   function headings() {
-    return heads.map((h) => ({ level: h.tagName === "H3" ? 3 : 2, text: clean(h) }));
+    return heads.map((h) => ({ level: h.hasAttribute("data-toc") ? (Number(h.getAttribute("data-toc")) > 1 ? 3 : 2) : h.tagName === "H3" ? 3 : 2, text: clean(h) }));
   }
 
   // The heading of the part being read: the last one above the bar's edge,
@@ -1108,7 +1109,10 @@
         };
         if (next) doc.body.append(nextLink = stepLink(next, "co-after"));
         if (prev) doc.body.prepend(prevLink = stepLink(prev, "co-before"));
-        heads = [...doc.body.querySelectorAll("h2, h3")].filter((h) => clean(h));
+        // A book's own table of contents when it came with one (1.27.2),
+        // else the page's h2 and h3 headings.
+        const marked = [...doc.body.querySelectorAll("[data-toc]")].filter((h) => clean(h));
+        heads = marked.length > 1 ? marked : [...doc.body.querySelectorAll("h2, h3")].filter((h) => clean(h));
         doc.addEventListener("click", onClick);
         // Loose text is wrapped now, not on the first selection (1.11.1):
         // wrapping the words being selected dropped that selection.
