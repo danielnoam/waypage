@@ -1907,13 +1907,29 @@ function watchIntoPick(w) {
   const names = allFolders();
   const options = [{ value: "", label: "Its subfolders" }, ...[...new Set([...(w.into ? [w.into] : []), ...names])].map((f) => ({ value: f, label: f })),
     { value: WATCH_NEW, label: "New collection…" }];
-  const set = (into) => {
+  // The folder's files already here move too (1.28.1): a picked
+  // collection is made by the files in it, so with none moved it didn't
+  // show at all.
+  const set = async (into) => {
     const now = watches().find((x) => x.tree === w.tree);
     if (!now) return;
     if (into) now.into = into; else delete now.into;
     saveWatch(now);
+    const at = Date.now();
+    let moved = 0;
+    for (const p of state.pages) {
+      if (p.watched !== w.tree) continue;
+      const dir = into || ((p.file && p.file.path) || "").split("/").slice(-2, -1)[0];
+      const to = dir ? folderName(dir) : null;
+      if ((p.folder || null) === to) continue;
+      if (to) Object.assign(p, { folder: to, folderAt: at }); else { delete p.folder; delete p.folderAt; }
+      moved++;
+    }
+    if (moved) { await C.store.writeIndex(state.pages); renderLibrary(); updateWidgets(); }
     renderSection();
-    toast(into ? "New files from " + w.name + " go into " + into : "New files from " + w.name + " go into collections named after their folders");
+    const files = moved === 1 ? "1 file" : moved + " files";
+    toast(into ? (moved ? "Moved " + files + " into " + into + ". New ones go there too." : "New files from " + w.name + " go into " + into)
+      : (moved ? "Moved " + files + " back into collections named after their folders" : "New files from " + w.name + " go into collections named after their folders"));
   };
   return dropdown({ label: "New files from " + w.name + " go into", cls: "field-pick watch-pick", value: w.into || "", options,
     onpick: (v) => {
