@@ -580,8 +580,9 @@ html.native .reader-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
 @media (prefers-reduced-motion: reduce) { .aloud-bar.snapping { transition: none; } }
 .aloud-bar[hidden] { display: none; }
 /* Picture in picture (1.25.0): the app as a small window outside itself
-   while reading aloud. Everything else steps aside for the clip's name and
-   the paragraph being read; the window's own buttons do the rest. */
+   while reading aloud. Everything else steps aside for the paragraph being
+   read, and the clip's name above it once the window is made bigger
+   (1.27.0); the window's own buttons do the rest. */
 .pip-view {
   position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; justify-content: center; gap: 2px;
   padding: var(--s-2) var(--s-3); background: var(--bg); color: var(--ink); overflow: hidden;
@@ -590,8 +591,9 @@ html.native .reader-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
 body.pip > :not(.pip-view) { visibility: hidden; }
 .pip-over, .pip-state { margin: 0; font: 600 var(--fs-meta)/var(--lh-meta) var(--sans); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pip-title { margin: 0; font: 600 var(--fs-label)/var(--lh-label) var(--serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pip-text { margin: 0; font: var(--fs-meta)/var(--lh-meta) var(--serif); color: var(--ink); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.pip-text { margin: 0; font: var(--fs-meta)/var(--lh-meta) var(--serif); color: var(--ink); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .pip-text:empty, .pip-over:empty, .pip-state:empty { display: none; }
+@media (max-height: 169px) { .pip-view.has-text .pip-over, .pip-view.has-text .pip-title { display: none; } }
 .aloud-bar .icon-btn { border-radius: var(--r-full); color: var(--ink); }
 .aloud-bar-text {
   flex: 1; min-width: 0; display: flex; align-items: center;

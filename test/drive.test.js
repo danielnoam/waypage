@@ -101,10 +101,10 @@ async function google(route) {
 
 async function page(browser) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
-  // The copy here has no Web client ID of its own; the test gives it one.
+  // A test client ID in place of the real one.
   await ctx.route(/\/src\/drive\.js/, async (route) => {
     const res = await route.fetch();
-    route.fulfill({ response: res, body: (await res.text()).replace('const WEB_CLIENT = "";', 'const WEB_CLIENT = "test.apps.googleusercontent.com";') });
+    route.fulfill({ response: res, body: (await res.text()).replace(/const WEB_CLIENT = "[^"]*";/, 'const WEB_CLIENT = "test.apps.googleusercontent.com";') });
   });
   await ctx.route(/^https:\/\/(accounts\.google\.com|www\.googleapis\.com|oauth2\.googleapis\.com)\//, google);
   const p = await ctx.newPage();

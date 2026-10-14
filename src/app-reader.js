@@ -1297,14 +1297,16 @@ function floatOut() {
 }
 function paintPip() {
   const p = aloudPage();
-  $("pipTitle").textContent = p ? p.title : "";
-  $("pipOver").textContent = p ? p.folder || p.site || "" : "";
   let text = "";
   if (p && state.open && state.open.id === p.id) {
     const texts = C.reader.readable({ footnotes: !!load(FOOTNOTES_KEY, false), edges: !!load(EDGES_KEY, false) });
     text = texts[blockAt(aloud.index)] || "";
   }
   $("pipText").textContent = text;
+  $("pipTitle").textContent = p ? p.title : "";
+  $("pipOver").textContent = p ? p.folder || p.site || "" : "";
+  // A small window shows only the words being read (1.27.0).
+  $("pipView").classList.toggle("has-text", !!text);
   $("pipState").textContent = aloud.state === "paused" ? "Paused" : "";
 }
 let pipCheck = null;
