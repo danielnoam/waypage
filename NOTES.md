@@ -18,6 +18,11 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **PiP names only when it's big (1.27.0).** Daniel didn't want the
+  collection and clip name in the small window. The PiP is 16:9, so its
+  height stands for its size: at 169px or less, with a paragraph to
+  show, `.has-text` hides the names. With no paragraph, the title still
+  fills it.
 - **Google Drive backups (1.27.0).**
   - Scope is `drive.file` only, which Google counts as non-sensitive,
     so no verification or security assessment is needed. The app sees

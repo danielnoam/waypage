@@ -14,6 +14,11 @@ All notable changes to Carry-on. Newest first.
   saved last. Waypage can see only the backups it makes. On Android and
   the web copy; iOS comes with the iOS release.
 
+### Changed
+- The read-aloud picture-in-picture window shows only the words being
+  read. The collection and clip name come back when you make the
+  window bigger.
+
 ## [1.26.4] - 2026-10-14
 
 ### Fixed
