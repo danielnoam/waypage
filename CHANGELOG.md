@@ -2,6 +2,13 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.26.2] - 2026-10-14
+
+### Fixed
+- The read-aloud card no longer pops into view as it leaves the
+  reader. It opens out from the player's play button as it moves, and
+  folds back into that button when the clip is opened again.
+
 ## [1.26.1] - 2026-10-14
 
 ### Fixed

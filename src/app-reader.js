@@ -296,7 +296,7 @@ function show(p, html) {
   // when "Keep reading when you leave the clip" is off (1.25.0).
   if (aloud.key && aloud.key !== p.id && !aloudAuto && !load(KEEP_KEY, true)) stopAloud();
   state.open = p;
-  $("aloudPlayer").style.visibility = "";
+  $("aloudPlay").style.visibility = "";
   // Opening counts as reading for the order of things (sort by read, the
   // sidebar, Continue reading); the merge is safe because the place
   // itself only changes when you move (notePosition, reader.js's
@@ -841,8 +841,10 @@ function closeReader() {
   brightClose();
   closeFind(true);
   $("jumpBack").hidden = true;
-  const player = $("aloudPlayer");
-  const from = aloudHere() && !player.hidden ? player.getBoundingClientRect() : null;
+  // The play button flies out as the card (1.26.2); the rest of the
+  // player leaves with the reader.
+  const player = $("aloudPlay");
+  const from = aloudHere() && !$("aloudPlayer").hidden ? player.getBoundingClientRect() : null;
   if (from) player.style.visibility = "hidden";
   state.open = null;
   showAloudBar(from);
@@ -1357,12 +1359,12 @@ function showAloudBar(from) {
     if (!bar.hidden && !bar.dataset.leaving) {
       bar.dataset.leaving = "1";
       document.body.classList.remove("aloud-bar-up", "aloud-docked");
-      // Opening the clip being read, the bar goes back into the player,
-      // which shows once it has landed.
-      const player = $("aloudPlayer");
+      // Opening the clip being read, the bar goes back into the player's
+      // play button, which shows once it has landed.
+      const player = $("aloudPlay");
       const into = aloudHere() && aloud.state !== "ended" && playerSpot();
       if (into) player.style.visibility = "hidden";
-      (into ? M.morph(bar, into, true) : M.edgeOut(bar, nearEdge(bar))).then(() => {
+      (into ? M.morph(bar, into, true, $("aloudBarPlay")) : M.edgeOut(bar, nearEdge(bar))).then(() => {
         if (into) player.style.visibility = "";
         if (bar.dataset.leaving) { bar.hidden = true; delete bar.dataset.leaving; }
       });
@@ -1380,7 +1382,7 @@ function showAloudBar(from) {
   const coming = bar.hidden || bar.dataset.leaving;
   if (coming) { delete bar.dataset.leaving; bar.hidden = false; }
   placeAloudBar();
-  if (coming) from && !bar.classList.contains("docked") ? M.morph(bar, from) : M.edgeIn(bar, nearEdge(bar));
+  if (coming) from && !bar.classList.contains("docked") ? M.morph(bar, from, false, $("aloudBarPlay")) : M.edgeIn(bar, nearEdge(bar));
 }
 // Where the reader's player will sit, laid out ahead of setAloud so the
 // bar has somewhere to go; null when the reader isn't on screen.
@@ -1388,7 +1390,7 @@ function playerSpot() {
   if ($("readerView").hidden) return null;
   $("readerView").classList.add("aloud");
   $("aloudPlayer").hidden = false;
-  const r = $("aloudPlayer").getBoundingClientRect();
+  const r = $("aloudPlay").getBoundingClientRect();
   return r.width ? r : null;
 }
 
