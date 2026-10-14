@@ -322,6 +322,7 @@ public class FilesPlugin extends Plugin {
             }
             out.put("ok", ok);
             out.put("files", files);
+            if (ok) out.put("name", folderName(tree));
             call.resolve(out);
         }).start();
     }
@@ -472,11 +473,25 @@ public class FilesPlugin extends Plugin {
         Uri uri = taken(result, true);
         if (call == null) return;
         if (uri == null) { call.resolve(new JSObject()); return; }
-        JSObject out = new JSObject();
-        out.put("uri", uri.toString());
-        String last = uri.getLastPathSegment();
-        out.put("name", last == null ? "Folder" : last.replaceFirst("^.*:", ""));
-        call.resolve(out);
+        new Thread(() -> {
+            JSObject out = new JSObject();
+            out.put("uri", uri.toString());
+            out.put("name", folderName(uri));
+            call.resolve(out);
+        }).start();
+    }
+
+    // The folder's own name from its provider (1.27.1). The address's last
+    // part is a path on the phone, but an id for a Google Drive folder.
+    private String folderName(Uri tree) {
+        try (Cursor c = getContext().getContentResolver().query(root(tree),
+            new String[] { DocumentsContract.Document.COLUMN_DISPLAY_NAME }, null, null, null)) {
+            if (c != null && c.moveToFirst() && !c.isNull(0) && !c.getString(0).trim().isEmpty()) return c.getString(0).trim();
+        } catch (Exception e) {
+            // Falls back to the address below.
+        }
+        String last = tree.getLastPathSegment();
+        return last == null ? "Folder" : last.replaceFirst("^.*:", "");
     }
 
     // The picked address, with its lasting permission taken. null when the

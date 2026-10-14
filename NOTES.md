@@ -18,6 +18,11 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Watched folder names (1.27.1).** `pickedFolder` named the folder from
+  the tree URI's last segment. That's a path for the phone's storage, but
+  an opaque id (`acc=1;doc=encoded=…`) for Google Drive. It now asks the
+  provider for the root document's DISPLAY_NAME. `folderScan` returns it
+  too, so a folder saved under the id is renamed on its next look.
 - **Drive Pause and Stop (1.27.1).**
   - Android's upload is now `session` plus `send`. `send` first asks
     Drive how far it got (`Content-Range: bytes */N`, 308 with
