@@ -9,7 +9,7 @@
 // only use what an earlier part, or its own, has declared. A part's
 // functions can call into any part, since nothing is tapped until all of
 // them have loaded. app-start.js runs last and starts things up.
-const APP_VERSION = "1.27.0";
+const APP_VERSION = "1.27.1";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
@@ -635,8 +635,9 @@ function renderDownloads() {
   };
   const going = state.saving.filter((s) => !s.error && !(s.run && !s.run.done));
   const app = updShown();
-  if (runs.size || going.length || app) keep("h:going", () => sectionHead("Downloading"));
+  if (runs.size || going.length || app || driveRun) keep("h:going", () => sectionHead("Downloading"));
   if (app) keep("u:" + upd.latest, updateCard, upd.phase + upd.error);
+  if (driveRun) keep("d:drive", driveCard, [driveRun.restore, driveRun.paused, driveRun.stopped, !!driveRun.merging].join());
   for (const r of runs) keep("r:" + r.id, () => runCard(r), [r.paused, r.stopped, failedOf(r).length].join());
   for (const s of going) keep("s:" + s.key, () => savingCard(s));
   const shown = new Set(state.finished.map((e) => e.run).filter(Boolean));
@@ -755,6 +756,8 @@ function paintDownloads() {
   for (const s of singles) { units += 1; got += s.waiting ? 0 : savingShare(s) || 0; }
   const app = upd.phase === "downloading";
   if (app) { units += 1; got += upd.pct / 100; }
+  const drive = !!driveRun;
+  if (drive) { units += 1; got += driveRun.share || 0; }
   const busy = units > 0;
   const share = busy ? Math.min(1, got / units) : 0;
   const failed = !busy && state.saving.some((s) => s.error);
@@ -778,9 +781,9 @@ function paintDownloads() {
     return;
   }
   const one = active.length === 1 && !singles.length ? active[0] : null;
-  const title = app && units === 1 ? "Downloading Waypage " + upd.latest : one ? (one.files ? "Adding " + one.label : (one.again ? "Saving again in " : "Saving into ") + (one.folder || "your library"))
+  const title = drive && units === 1 ? (driveRun.restore ? "Restoring from Google Drive" : "Backing up to Google Drive") : app && units === 1 ? "Downloading Waypage " + upd.latest : one ? (one.files ? "Adding " + one.label : (one.again ? "Saving again in " : "Saving into ") + (one.folder || "your library"))
     : !active.length && singles.length === 1 ? "Saving a clip from " + singles[0].site : "Saving " + Math.round(units) + " clips";
-  const text = app && units === 1 ? upd.pct + "% done" : one ? (one.total ? one.saved + one.failed + " of " + one.total + " done" : countLine(one.saved) + " saved") + (one.paused ? " · Paused" : "")
+  const text = drive && units === 1 ? driveStatusText() : app && units === 1 ? upd.pct + "% done" : one ? (one.total ? one.saved + one.failed + " of " + one.total + " done" : countLine(one.saved) + " saved") + (one.paused ? " · Paused" : "")
     : Math.round(share * 100) + "% done";
   const o = { title, text, done: Math.round(share * 1000), total: 1000 };
   const said = JSON.stringify(o);

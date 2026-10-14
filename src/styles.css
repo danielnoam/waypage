@@ -2217,3 +2217,4 @@ kbd {
 .edit-text del { color: var(--warn); text-decoration-thickness: 2px; }
 .edit-text ins { color: var(--accent); text-decoration: none; font-weight: 600; }
 .edit-result .row:disabled .choice-label { color: var(--muted); }
+.drive-actions { display: flex; gap: var(--s-2); align-items: center; }

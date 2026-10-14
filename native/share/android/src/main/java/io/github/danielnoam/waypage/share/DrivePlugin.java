@@ -32,10 +32,12 @@ import java.util.Collections;
  *
  *   authorize({ ask })   { token }; with ask false it never shows a screen
  *                        and rejects "consent" when one would be needed
- *   upload({ uri, token, meta })   the backup file in the cache, as one
- *                        resumable upload; meta is the Drive file's JSON.
- *                        Resolves to Drive's answer, { id, size, ... }
- *   download({ id, token, name })  a Drive file into the cache: { uri, size }
+ *   session({ uri, token, meta })  { session }: a resumable upload for the
+ *                        backup file in the cache; meta is the Drive file's JSON
+ *   send({ uri, session })   the file, from where Drive has it up to (1.27.1);
+ *                        resolves to Drive's answer, { id, size, ... }
+ *   download({ id, token })  a Drive file into the cache: { uri, size }
+ *   cancel()             stops a send or download; it rejects "cancelled"
  *
  * Both transfers send "progress" { done, total } as they go.
  */
@@ -46,6 +48,8 @@ public class DrivePlugin extends Plugin {
     private static final String FILES = "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,size,createdTime,description";
     private ActivityResultLauncher<IntentSenderRequest> consent;
     private PluginCall asking;
+    private volatile HttpURLConnection current;
+    private volatile boolean cancelled;
 
     @Override
     public void load() {
@@ -99,20 +103,22 @@ public class DrivePlugin extends Plugin {
         call.resolve(out);
     }
 
+    // The upload's address at Drive, good for a week: the file is sent to
+    // it, and after a pause or a dropped connection sent on from where
+    // Drive says it got to.
     @PluginMethod
-    public void upload(PluginCall call) {
-        String uri = call.getString("uri");
+    public void session(PluginCall call) {
         String token = call.getString("token");
         String meta = call.getString("meta", "{}");
+        String uri = call.getString("uri");
         if (uri == null || token == null) {
             call.reject("No file");
             return;
         }
-        File file = new File(Uri.parse(uri).getPath());
+        long total = new File(Uri.parse(uri).getPath()).length();
         new Thread(() -> {
-            HttpURLConnection start = null, put = null;
+            HttpURLConnection start = null;
             try {
-                long total = file.length();
                 start = (HttpURLConnection) new URL(FILES).openConnection();
                 start.setRequestMethod("POST");
                 start.setDoOutput(true);
@@ -126,30 +132,94 @@ public class DrivePlugin extends Plugin {
                 int code = start.getResponseCode();
                 String session = start.getHeaderField("Location");
                 if (code != 200 || session == null) throw new Failed(code, text(start));
-
-                put = (HttpURLConnection) new URL(session).openConnection();
-                put.setRequestMethod("PUT");
-                put.setDoOutput(true);
-                put.setRequestProperty("Content-Type", "application/zip");
-                put.setFixedLengthStreamingMode(total);
-                put.setConnectTimeout(30000);
-                put.setReadTimeout(120000);
-                try (InputStream in = new FileInputStream(file); OutputStream o = put.getOutputStream()) {
-                    copy(in, o, total);
-                }
-                code = put.getResponseCode();
-                String said = text(put);
-                if (code != 200 && code != 201) throw new Failed(code, said);
-                call.resolve(new JSObject(said));
+                JSObject out = new JSObject();
+                out.put("session", session);
+                call.resolve(out);
             } catch (Failed f) {
                 call.reject(f.getMessage(), String.valueOf(f.code));
             } catch (Exception e) {
                 call.reject(e.getMessage(), "network");
             } finally {
                 if (start != null) start.disconnect();
-                if (put != null) put.disconnect();
             }
         }).start();
+    }
+
+    // Sends the file to a session from where Drive has it up to; resolves
+    // to Drive's answer, { id, size, ... }. cancel() stops it ("cancelled").
+    @PluginMethod
+    public void send(PluginCall call) {
+        String uri = call.getString("uri");
+        String session = call.getString("session");
+        if (uri == null || session == null || !session.startsWith("https://www.googleapis.com/")) {
+            call.reject("No file");
+            return;
+        }
+        File file = new File(Uri.parse(uri).getPath());
+        cancelled = false;
+        new Thread(() -> {
+            try {
+                long total = file.length();
+                long from = 0;
+                HttpURLConnection ask = open(session);
+                ask.setRequestProperty("Content-Range", "bytes */" + total);
+                ask.setFixedLengthStreamingMode(0);
+                ask.getOutputStream().close();
+                int code = ask.getResponseCode();
+                if (code == 200 || code == 201) {
+                    call.resolve(new JSObject(text(ask)));
+                    return;
+                }
+                if (code != 308) throw new Failed(code, text(ask));
+                String range = ask.getHeaderField("Range");
+                if (range != null && range.matches("bytes=0-\\d+")) from = Long.parseLong(range.substring(8)) + 1;
+                ask.disconnect();
+
+                HttpURLConnection put = open(session);
+                current = put;
+                put.setRequestProperty("Content-Type", "application/zip");
+                put.setRequestProperty("Content-Range", "bytes " + from + "-" + (total - 1) + "/" + total);
+                put.setFixedLengthStreamingMode(total - from);
+                try (InputStream in = new FileInputStream(file); OutputStream o = put.getOutputStream()) {
+                    long skip = from;
+                    while (skip > 0) {
+                        long went = in.skip(skip);
+                        if (went <= 0) throw new java.io.IOException("short file");
+                        skip -= went;
+                    }
+                    copy(in, o, total, from);
+                }
+                code = put.getResponseCode();
+                String said = text(put);
+                if (code != 200 && code != 201) throw new Failed(code, said);
+                call.resolve(new JSObject(said));
+            } catch (Failed f) {
+                call.reject(f.getMessage(), cancelled ? "cancelled" : String.valueOf(f.code));
+            } catch (Exception e) {
+                call.reject(e.getMessage(), cancelled ? "cancelled" : "network");
+            } finally {
+                HttpURLConnection c = current;
+                current = null;
+                if (c != null) c.disconnect();
+            }
+        }).start();
+    }
+
+    @PluginMethod
+    public void cancel(PluginCall call) {
+        cancelled = true;
+        HttpURLConnection c = current;
+        if (c != null) new Thread(c::disconnect).start();
+        call.resolve();
+    }
+
+    private static HttpURLConnection open(String session) throws java.io.IOException {
+        HttpURLConnection c = (HttpURLConnection) new URL(session).openConnection();
+        c.setRequestMethod("PUT");
+        c.setDoOutput(true);
+        c.setConnectTimeout(30000);
+        c.setReadTimeout(120000);
+        return c;
     }
 
     @PluginMethod
@@ -161,10 +231,12 @@ public class DrivePlugin extends Plugin {
             return;
         }
         File out = new File(getContext().getCacheDir(), "drive-backup.zip");
+        cancelled = false;
         new Thread(() -> {
             HttpURLConnection get = null;
             try {
                 get = (HttpURLConnection) new URL("https://www.googleapis.com/drive/v3/files/" + id + "?alt=media").openConnection();
+                current = get;
                 get.setRequestProperty("Authorization", "Bearer " + token);
                 get.setConnectTimeout(30000);
                 get.setReadTimeout(120000);
@@ -172,7 +244,7 @@ public class DrivePlugin extends Plugin {
                 if (code != 200) throw new Failed(code, text(get));
                 long total = get.getContentLengthLong();
                 try (InputStream in = get.getInputStream(); OutputStream o = new FileOutputStream(out)) {
-                    copy(in, o, total);
+                    copy(in, o, total, 0);
                 }
                 JSObject res = new JSObject();
                 res.put("uri", Uri.fromFile(out).toString());
@@ -182,16 +254,17 @@ public class DrivePlugin extends Plugin {
                 call.reject(f.getMessage(), String.valueOf(f.code));
             } catch (Exception e) {
                 out.delete();
-                call.reject(e.getMessage(), "network");
+                call.reject(e.getMessage(), cancelled ? "cancelled" : "network");
             } finally {
+                current = null;
                 if (get != null) get.disconnect();
             }
         }).start();
     }
 
-    private void copy(InputStream in, OutputStream o, long total) throws java.io.IOException {
+    private void copy(InputStream in, OutputStream o, long total, long from) throws java.io.IOException {
         byte[] buf = new byte[1 << 16];
-        long done = 0, told = 0;
+        long done = from, told = from;
         int n;
         while ((n = in.read(buf)) > 0) {
             o.write(buf, 0, n);

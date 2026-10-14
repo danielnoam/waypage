@@ -182,7 +182,10 @@
 
   // Sends `out` (exportLibrary's { uri } in the app, { blob } in a
   // browser) and keeps the newest KEEP. Resolves to the new file.
-  async function upload(out, info, onProgress) {
+  // `ctl.stop()` (set here) breaks the transfer off: it rejects
+  // "cancelled". Called again with the same `ctl`, the app goes on from
+  // where Drive got to; a browser starts the file again.
+  async function upload(out, info, onProgress, ctl = {}) {
     const dir = await folder();
     const meta = { name: out.name, parents: [dir], mimeType: "application/zip",
       description: "Waypage backup" + (info.device ? " from " + info.device : ""),
@@ -191,16 +194,22 @@
     const D = P();
     if (D && out.uri) {
       const heard = onProgress ? await D.addListener("progress", (p) => onProgress(p.done, p.total)) : null;
+      ctl.stop = () => D.cancel().catch(() => {});
       try {
-        made = await D.upload({ uri: out.uri, token: await getToken(false), meta: JSON.stringify(meta) });
+        if (!ctl.session) ctl.session = (await D.session({ uri: out.uri, token: await getToken(false), meta: JSON.stringify(meta) })).session;
+        made = await D.send({ uri: out.uri, session: ctl.session });
       } catch (e) {
+        if (e && e.code === "cancelled") throw new DriveError("Stopped.", "cancelled");
         if (e && e.code === "401") setToken(null);
+        // A session Drive has forgotten (404, 410) starts over next time.
+        if (e && /^(404|410)$/.test(e.code || "")) ctl.session = null;
         throw e && /^\d+$/.test(e.code || "") ? failure(Number(e.code), parseBody(e.message)) : new DriveError("The backup didn't finish sending. Try again on a steadier connection.", "network");
       } finally {
+        ctl.stop = null;
         if (heard) heard.remove();
       }
     } else {
-      made = await send(out.blob, meta, await getToken(false), onProgress);
+      made = await send(out.blob, meta, await getToken(false), onProgress, ctl);
     }
     await prune(dir).catch(() => {});
     return { id: made.id, size: Number(made.size) || 0 };
@@ -208,7 +217,7 @@
   const parseBody = (msg) => { try { return JSON.parse(String(msg).replace(/^[^{]*/, "")); } catch (e) { return null; } };
 
   // One multipart request, with XMLHttpRequest for its upload progress.
-  function send(blob, meta, t, onProgress) {
+  function send(blob, meta, t, onProgress, ctl) {
     const cut = "waypage" + Math.random().toString(36).slice(2);
     const body = new Blob(["--" + cut + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(meta) +
       "\r\n--" + cut + "\r\nContent-Type: application/zip\r\n\r\n", blob, "\r\n--" + cut + "--\r\n"]);
@@ -218,13 +227,17 @@
       x.setRequestHeader("Authorization", "Bearer " + t);
       x.setRequestHeader("Content-Type", "multipart/related; boundary=" + cut);
       if (onProgress) x.upload.onprogress = (e) => onProgress(e.loaded, e.total);
+      ctl.stop = () => x.abort();
+      const done = () => { ctl.stop = null; };
       x.onload = () => {
+        done();
         let got = null;
         try { got = JSON.parse(x.responseText); } catch (e) { got = null; }
         if (x.status >= 200 && x.status < 300 && got && got.id) ok(got);
         else { if (x.status === 401) setToken(null); no(failure(x.status, got)); }
       };
-      x.onerror = () => no(new DriveError("The backup didn't finish sending. Try again on a steadier connection.", "network"));
+      x.onabort = () => { done(); no(new DriveError("Stopped.", "cancelled")); };
+      x.onerror = () => { done(); no(new DriveError("The backup didn't finish sending. Try again on a steadier connection.", "network")); };
       x.send(body);
     });
   }
@@ -236,27 +249,38 @@
 
   // A backup as something restoreLibrary reads: a Blob in a browser, the
   // app's stand-in for a file in its cache in the app.
-  async function download(id, onProgress) {
+  async function download(id, onProgress, ctl = {}) {
     const D = P();
     if (D) {
       const heard = onProgress ? await D.addListener("progress", (p) => onProgress(p.done, p.total)) : null;
+      ctl.stop = () => D.cancel().catch(() => {});
       try {
         const got = await D.download({ id, token: await getToken(false) });
         return await C.platform.files.blob(got.uri, got.size);
       } catch (e) {
+        if (e && e.code === "cancelled") throw new DriveError("Stopped.", "cancelled");
         if (e && e.code === "401") setToken(null);
         throw e instanceof DriveError ? e : e && /^\d+$/.test(e.code || "") ? failure(Number(e.code), parseBody(e.message))
           : new DriveError("Couldn't bring the backup down. Try again.", "network");
       } finally {
+        ctl.stop = null;
         if (heard) heard.remove();
       }
     }
     const t = await getToken(false);
+    const ac = new AbortController();
+    ctl.stop = () => ac.abort();
     let res;
-    try { res = await fetch(API + "/files/" + encodeURIComponent(id) + "?alt=media", { headers: { Authorization: "Bearer " + t } }); }
-    catch (e) { throw new DriveError("Couldn't bring the backup down. Try again.", "network"); }
-    if (!res.ok) throw failure(res.status, await res.json().catch(() => null));
-    return await res.blob();
+    try { res = await fetch(API + "/files/" + encodeURIComponent(id) + "?alt=media", { headers: { Authorization: "Bearer " + t }, signal: ac.signal }); }
+    catch (e) { ctl.stop = null; throw ac.signal.aborted ? new DriveError("Stopped.", "cancelled") : new DriveError("Couldn't bring the backup down. Try again.", "network"); }
+    try {
+      if (!res.ok) throw failure(res.status, await res.json().catch(() => null));
+      return await res.blob();
+    } catch (e) {
+      throw ac.signal.aborted ? new DriveError("Stopped.", "cancelled") : e;
+    } finally {
+      ctl.stop = null;
+    }
   }
 
   // ---- Connecting ----
@@ -264,7 +288,8 @@
   async function connect() {
     await getToken(true, "connect");
     const about = await api("/about?fields=user(emailAddress)");
-    cfg = { email: (about && about.user && about.user.emailAddress) || "", auto: true, what: { clips: true, files: true, feeds: true }, last: {} };
+    // The first weekly backup is a week after connecting (1.27.1), not now.
+    cfg = { email: (about && about.user && about.user.emailAddress) || "", auto: true, what: { clips: true, files: true, feeds: true }, last: {}, since: Date.now() };
     save();
     await folder();
     return cfg.email;
@@ -292,6 +317,8 @@
     get what() { return cfg ? { clips: true, files: true, feeds: true, ...(cfg.what || {}) } : null; },
     setWhat(k, v) { if (!cfg) return; cfg.what = { ...this.what, [k]: !!v }; save(); },
     get last() { return (cfg && cfg.last) || {}; },
+    get since() { return (cfg && cfg.since) || 0; },
+    set since(v) { if (cfg) { cfg.since = v; save(); } },
     set last(v) { if (cfg) { cfg.last = v || {}; save(); } },
     // Whether a token is at hand without asking (always in the app).
     get signedIn() { return C.platform.native ? !!P() : live(token); },

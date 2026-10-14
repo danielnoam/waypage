@@ -40,7 +40,7 @@ function startServer() {
 }
 
 // ---- A fake Google ----
-const drive = { files: new Map(), n: 0, signIns: 0 };
+const drive = { files: new Map(), n: 0, signIns: 0, slow: 0, uploads: 0 };
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type", "Access-Control-Allow-Methods": "GET, POST, DELETE, PATCH" };
 const json = (route, status, body) => route.fulfill({ status, headers: { ...CORS, "Content-Type": "application/json" }, body: body == null ? "" : JSON.stringify(body) });
 const pick = (f, fields) => {
@@ -62,6 +62,8 @@ async function google(route) {
   const p = url.pathname;
   if (p === "/drive/v3/about") return json(route, 200, { user: { emailAddress: "reader@example.com" } });
   if (p === "/upload/drive/v3/files" && req.method() === "POST") {
+    drive.uploads++;
+    if (drive.slow) await new Promise((go) => setTimeout(go, drive.slow));
     const body = req.postDataBuffer();
     const cut = "--" + /boundary=([^;]+)/.exec(req.headers()["content-type"])[1];
     const first = body.indexOf("\r\n\r\n") + 4;
@@ -146,6 +148,10 @@ async function connect(p) {
       await p.locator(".page-card .card-title", { hasText: "The Long Haul Flight" }).waitFor({ timeout: 10000 });
       await connect(p);
       assert.strictEqual(drive.signIns, 1);
+      await p.waitForTimeout(500);
+      await p.evaluate(() => driveDue());
+      await p.waitForTimeout(500);
+      assert.strictEqual(drive.uploads, 0, "it backed up on connecting");
       assert.ok([...drive.files.values()].some((f) => f.name === "Waypage" && f.mimeType === "application/vnd.google-apps.folder"), "no Waypage folder");
     });
 
@@ -177,9 +183,31 @@ async function connect(p) {
       await p.locator("label.row", { hasText: "Clips" }).locator("input").check();
     });
 
+    await test("a backup can be paused, resumed and stopped, here and in Downloads", async () => {
+      drive.slow = 1500;
+      const before = drive.n;
+      await p.locator(".row", { hasText: "Back up now" }).click();
+      await p.locator("#driveStatus", { hasText: "Sending to Drive" }).waitFor();
+      await p.locator("#sectionBody .drive-actions button", { hasText: "Pause" }).click();
+      await p.locator("#driveStatus", { hasText: "Paused" }).waitFor();
+      await p.waitForTimeout(1800);
+      assert.ok(await p.locator("#driveStatus", { hasText: "Paused" }).count(), "it went on while paused");
+      await p.locator("#sectionBody .drive-actions button", { hasText: "Resume" }).click();
+      await p.locator("#driveStatus", { hasText: "Last backup" }).waitFor({ timeout: 15000 });
+      assert.ok(drive.n > before, "the backup didn't finish after Resume");
+      await p.locator(".row", { hasText: "Back up now" }).click();
+      await p.locator("#driveStatus", { hasText: "Sending to Drive" }).waitFor();
+      assert.strictEqual(await p.evaluate(() => { renderDownloads(); return !!document.querySelector("#downloads .drive-run .card-actions"); }), true, "no card in Downloads");
+      await p.evaluate(() => document.querySelector("#downloads .drive-run .btn-quiet.danger").click());
+      await p.locator("text=Backup stopped").waitFor();
+      await p.waitForTimeout(1800);
+      assert.ok(!(await p.evaluate(() => window.Waypage.drive.last.error)), "stopping counted as a failure");
+      drive.slow = 0;
+    });
+
     await test("a week after the last backup, the next one goes by itself", async () => {
       const made = drive.n;
-      await p.evaluate(() => { window.Waypage.drive.last = { at: Date.now() - 8 * 24 * 3600e3 }; driveDue(); });
+      await p.evaluate(() => { window.Waypage.drive.last = { at: Date.now() - 8 * 24 * 3600e3 }; window.Waypage.drive.since = 0; driveDue(); });
       await until(p, () => !document.querySelector("#sectionBody button[disabled]") && window.Waypage.drive.last.at > Date.now() - 6e4, null, 15000);
       assert.ok(drive.n > made, "no backup was sent");
       await p.evaluate(() => driveDue());
