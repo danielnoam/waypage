@@ -152,7 +152,8 @@
                 android:textSize="12sp" />
         </LinearLayout>
     </LinearLayout>
-    <!-- Continue, and beside it the same with read aloud (1.25.0). -->
+    <!-- Continue, and beside it the same with read aloud (1.25.0). Its
+         label stays on one line, its type shrinking to fit (1.26.1). -->
     <LinearLayout
         android:id="@+id/w_goRow"
         android:layout_width="match_parent"
@@ -165,10 +166,16 @@
             android:layout_width="0dp"
             android:layout_height="40dp"
             android:layout_weight="1"
+            android:autoSizeMaxTextSize="13sp"
+            android:autoSizeMinTextSize="9sp"
+            android:autoSizeStepGranularity="1sp"
+            android:autoSizeTextType="uniform"
             android:background="@drawable/waypage_widget_pill"
+            android:ellipsize="end"
             android:gravity="center"
-            android:paddingLeft="14dp"
-            android:paddingRight="14dp"
+            android:maxLines="1"
+            android:paddingLeft="10dp"
+            android:paddingRight="10dp"
             android:text="@string/waypage_w_start"
             android:textColor="@color/waypage_w_bg"
             android:textSize="13sp"
