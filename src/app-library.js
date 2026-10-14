@@ -1752,6 +1752,8 @@ async function lookInOne(w, said, scan) {
       return out;
     }
     if (w.lost) { delete w.lost; saveWatch(w); }
+    // A Drive folder picked before 1.27.1 was named by its id.
+    if (got.name && got.name !== w.name) { w.name = out.name = got.name; saveWatch(w); }
     const there = got.files.filter((f) => WATCH_EXTS.test(f.name));
     const refs = new Set(there.map((f) => f.ref));
     // Files removed from Waypage stay out while they're in the folder.

@@ -14,6 +14,11 @@ All notable changes to Carry-on. Newest first.
 - Settings: Sync is now GitHub sync. Edit clips and watched folders
   are now inside Library.
 
+### Fixed
+- A watched folder in Google Drive showed a long code instead of its
+  name. It now shows the folder's name, including a folder already
+  added.
+
 ## [1.27.0] - 2026-10-14
 
 ### Added

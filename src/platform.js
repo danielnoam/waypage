@@ -780,7 +780,7 @@
       if (!F || !F.folderScan) return { ok: false, files: [] };
       try {
         const got = await F.folderScan({ tree });
-        return { ok: !!got.ok, files: (got.files || []).map((f) => ({ ref: f.uri, path: f.path || f.name, name: f.name, size: f.size || 0 })) };
+        return { ok: !!got.ok, name: got.name || "", files: (got.files || []).map((f) => ({ ref: f.uri, path: f.path || f.name, name: f.name, size: f.size || 0 })) };
       } catch (e) { return { ok: false, files: [] }; }
     },
     // Whether the file is still where it was, and how big it is now.
