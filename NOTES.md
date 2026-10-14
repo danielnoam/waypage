@@ -27,6 +27,15 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
     srcdoc. Instead the frame carries `.unready` (visibility hidden)
     from srcdoc until `placed` settles. Meanwhile `.reader-frame`'s own
     `var(--bg)` shows, and the restore jump is hidden too.
+- **Continue reading kept in its collection (1.26.4).**
+  - `continuePage` used the collection's next chapter only when the
+    clip read last was finished.
+  - Opening that next chapter for 3s stamps its `readAt`, which makes it
+    the clip read last. Left near its top (at ≤ 0.02), though, it was
+    neither finished nor "going", so the fallback picked an unrelated
+    clip.
+  - Now any clip read last that's in a collection goes to
+    `folderNextIndex`.
 
 - **No card while turning to the clip being read (1.26.3).** Moving on
   to the next chapter, the reader's open clip and the reading's clip

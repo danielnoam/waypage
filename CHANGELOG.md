@@ -8,6 +8,9 @@ All notable changes to Carry-on. Newest first.
 - Opening a clip no longer flashes a white, unstyled page for a frame.
   The page stays out of sight until its theme is on and it's back where
   it was left.
+- Continue reading stays on a collection's next chapter after you open
+  it from there and go back without reading far. It used to jump to a
+  clip from somewhere else.
 
 ## [1.26.3] - 2026-10-14
 
