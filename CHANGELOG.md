@@ -2,6 +2,17 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.26.0] - 2026-10-14
+
+### Changed
+- Read aloud with a car, earbuds or any Bluetooth player (Android):
+  their previous and next go a paragraph back or on, as the app's own
+  buttons do, and pause and play follow them. They show the clip's
+  name, its collection, and which clip of the collection it is.
+- The reading now counts as this app playing, so those buttons reach it
+  rather than the last music app, and a Bluetooth link no longer drops
+  between paragraphs and cuts their first words.
+
 ## [1.25.0] - 2026-10-14
 
 ### Added

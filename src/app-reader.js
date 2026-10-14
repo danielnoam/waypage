@@ -943,12 +943,22 @@ async function startAloud(from, spot) {
   queued = null;
   try {
     await speech.play({ items, start, lang: p.lang || "", voice: voiceFor(p), rate: load(RATE_KEY, 1),
-      title: p.title, subtitle: p.folder || p.site || "", key: p.id });
+      key: p.id, blocks: map, ...mediaInfo(p) });
     queueNext();
   } catch (e) {
     setAloud("stopped", -1);
     toast("Couldn't read aloud. Check the phone's text-to-speech settings.");
   }
+}
+
+// What the phone shows of the reading (1.26.0), on the lock screen and
+// over Bluetooth in a car or on earbuds: the clip as the track, its
+// collection as the artist and album, and its place in the collection.
+function mediaInfo(p) {
+  const list = p.folder ? folderPages(p.folder) : [];
+  const at = list.indexOf(p);
+  return { title: p.title, subtitle: p.folder || p.site || "", album: p.folder || p.site || "",
+    track: at >= 0 ? at + 1 : 0, tracks: at >= 0 ? list.length : 0 };
 }
 
 // Going on with the app put away (1.23.0). At the end of a clip the app
@@ -975,7 +985,7 @@ async function queueNext() {
   const { items, map } = pieces(texts.map((text, block) => ({ text, block })));
   queued = { key: next.id, after: p.id, map };
   const ok = await speech.queue({ after: p.id, items, start: 0, lang: next.lang || "", voice: voiceFor(next),
-    title: next.title, subtitle: next.folder || next.site || "", key: next.id });
+    key: next.id, blocks: map, ...mediaInfo(next) });
   if (!ok) queued = null;
 }
 // The phone went on to the queued clip: the one before is finished, and

@@ -10,6 +10,8 @@ import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
+import android.media.AudioFormat;
+import android.media.AudioTrack;
 import android.media.AudioManager;
 import android.media.MediaMetadata;
 import android.media.session.MediaSession;
@@ -43,7 +45,9 @@ public class SpeechService extends Service {
     static class Job {
         String[] items;
         int start;
-        String lang, voice, title, subtitle, key;
+        String lang, voice, title, subtitle, key, album;
+        int[] blocks;
+        int track, tracks;
         float rate = 1f;
     }
 
@@ -98,8 +102,8 @@ public class SpeechService extends Service {
         session.setCallback(new MediaSession.Callback() {
             @Override public void onPlay() { resume(); }
             @Override public void onPause() { pause(); }
-            @Override public void onSkipToNext() { move(index + 1); }
-            @Override public void onSkipToPrevious() { move(index - 1); }
+            @Override public void onSkipToNext() { step(1); }
+            @Override public void onSkipToPrevious() { step(-1); }
             @Override public void onStop() { finish("stopped"); }
         });
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
@@ -148,8 +152,8 @@ public class SpeechService extends Service {
             play();
         } else if (PAUSE.equals(action)) pause();
         else if (RESUME.equals(action)) resume();
-        else if (NEXT.equals(action)) move(index + 1);
-        else if (PREV.equals(action)) move(index - 1);
+        else if (NEXT.equals(action)) step(1);
+        else if (PREV.equals(action)) step(-1);
         else if (SEEK.equals(action) && intent != null) move(intent.getIntExtra("value", index));
         else if (RATE.equals(action) && intent != null && job != null) {
             job.rate = intent.getFloatExtra("rate", job.rate);
@@ -166,6 +170,7 @@ public class SpeechService extends Service {
             return;
         }
         wake.acquire(60 * 60 * 1000L);
+        hushOn();
         speakCurrent();
     }
 
@@ -229,12 +234,23 @@ public class SpeechService extends Service {
         generation++;
         if (tts != null) tts.stop();
         if (wake.isHeld()) wake.release();
+        hushOff();
         report();
     }
 
     private void resume() {
         if (job == null || "playing".equals(state)) return;
         play();
+    }
+
+    // Previous and next from anywhere (the notification, a car, earbuds,
+    // the small window): a paragraph at a time, to its first piece, as the
+    // app's own buttons go (1.26.0).
+    private void step(int d) {
+        if (job == null) return;
+        if (job.blocks == null) { move(index + d); return; }
+        int want = job.blocks[index] + d;
+        for (int i = 0; i < job.blocks.length; i++) if (job.blocks[i] == want) { move(i); return; }
     }
 
     private void move(int to) {
@@ -249,12 +265,49 @@ public class SpeechService extends Service {
         generation++;
         if (tts != null) tts.stop();
         if (wake != null && wake.isHeld()) wake.release();
+        hushOff();
         dropFocus();
         report();
         job = null;
         if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE);
         else stopForeground(true);
         stopSelf();
+    }
+
+    // The voice plays in the speech engine's own app, so to Android this
+    // app isn't the one playing, and a car's or earbuds' buttons went to
+    // whatever played last. A silent sound of its own, looping while it
+    // reads, makes it the one playing (1.26.0); it also keeps a Bluetooth
+    // link awake between paragraphs, so their first words aren't cut.
+    private AudioTrack hush;
+
+    private void hushOn() {
+        try {
+            if (hush == null) {
+                int rate = 8000;
+                short[] zeros = new short[rate / 2];
+                hush = new AudioTrack.Builder()
+                    .setAudioAttributes(attributes())
+                    .setAudioFormat(new AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(rate)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build())
+                    .setBufferSizeInBytes(zeros.length * 2)
+                    .setTransferMode(AudioTrack.MODE_STATIC)
+                    .build();
+                hush.write(zeros, 0, zeros.length);
+                hush.setLoopPoints(0, zeros.length, -1);
+            }
+            if (hush.getPlayState() != AudioTrack.PLAYSTATE_PLAYING) hush.play();
+        } catch (Exception e) {
+            hushOff();
+            if (hush != null) { hush.release(); hush = null; }
+        }
+    }
+
+    private void hushOff() {
+        try { if (hush != null && hush.getPlayState() == AudioTrack.PLAYSTATE_PLAYING) hush.pause(); } catch (Exception e) { /* gone */ }
     }
 
     private boolean takeFocus() {
@@ -287,14 +340,21 @@ public class SpeechService extends Service {
         if (listener != null && job != null) listener.onProgress(job.key, index, state);
         if (job == null || "ended".equals(state) || "stopped".equals(state) || "error".equals(state)) return;
         boolean playing = "playing".equals(state);
-        session.setMetadata(new MediaMetadata.Builder()
+        // What a car's screen or the earbuds' app shows (1.26.0): the clip,
+        // its collection, and which one of the collection it is.
+        MediaMetadata.Builder meta = new MediaMetadata.Builder()
             .putString(MediaMetadata.METADATA_KEY_TITLE, job.title)
+            .putString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE, job.title)
             .putString(MediaMetadata.METADATA_KEY_ARTIST, job.subtitle)
-            .build());
+            .putString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE, job.subtitle);
+        if (job.album != null && !job.album.isEmpty()) meta.putString(MediaMetadata.METADATA_KEY_ALBUM, job.album);
+        if (job.track > 0) meta.putLong(MediaMetadata.METADATA_KEY_TRACK_NUMBER, job.track);
+        if (job.tracks > 0) meta.putLong(MediaMetadata.METADATA_KEY_NUM_TRACKS, job.tracks);
+        session.setMetadata(meta.build());
         session.setPlaybackState(new PlaybackState.Builder()
             .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE
                 | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_STOP)
-            .setState(playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, index, playing ? 1f : 0f)
+            .setState(playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, PlaybackState.PLAYBACK_POSITION_UNKNOWN, playing ? 1f : 0f)
             .build());
         session.setActive(true);
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
@@ -353,6 +413,7 @@ public class SpeechService extends Service {
         if (tts != null) tts.shutdown();
         tts = null;
         if (session != null) session.release();
+        if (hush != null) { hush.release(); hush = null; }
         if (wake != null && wake.isHeld()) wake.release();
         dropFocus();
         if (running == this) running = null;
