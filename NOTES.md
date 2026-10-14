@@ -18,6 +18,17 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **The card opens out of the play button (1.26.2).** Daniel found
+  1.26.1's card "spawned": a whole card, scaled down over the player,
+  doesn't look like the player, so it read as something new appearing.
+  Now only the card's play button shows at the start, exactly over the
+  player's (both 44px, accent).
+  - The card is revealed around it by a `clip-path` inset while it
+    travels. The open end is inset -40px so the shadow isn't cut off.
+  - Only `#aloudPlay` is hidden while the card is out; prev and next
+    leave with the reader.
+  - Reduced motion still gets the 120ms fade.
+
 - **Read aloud fixes (1.26.1).**
   - The widget's read aloud began in the reader's `open().then`. The
     page goes back to its place only after `fonts.ready`, so

@@ -186,14 +186,24 @@
   const edgeIn = (el, edge = "bottom") => one(el, [{ transform: past(el, edge) }, { transform: "none" }], "sheet", true);
   const edgeOut = (el, edge = "bottom") => one(el, [{ transform: "none" }, { transform: past(el, edge) }], "sheet", false);
 
-  // The read-aloud card and the reader's player are one thing (1.26.1):
-  // the card comes out of the player as its clip closes, and goes back
-  // into it as the clip opens, scaled evenly so its type never stretches.
-  function morph(el, r, into) {
+  // The read-aloud card and the reader's player are one thing (1.26.1).
+  // From 1.26.2 only the card's `part` (its play button) is showing at
+  // first, sitting exactly on the player's play button at `r`; the card
+  // then opens out around it as it travels, clipped, so nothing pops in.
+  // Going back runs it the other way and lands on the player's button.
+  function morph(el, r, into, part) {
     if (!r || !r.width) return into ? edgeOut(el, "bottom") : edgeIn(el, "bottom");
-    const a = box(el), s = Math.min(r.width / a.width, r.height / a.height);
-    const dx = r.left + r.width / 2 - (a.left + a.width / 2), dy = r.top + r.height / 2 - (a.top + a.height / 2);
-    const f = [{ transform: "translate(" + dx + "px, " + dy + "px) scale(" + s + ")" }, { transform: "none" }];
+    const a = box(el), p = part ? box(part) : a;
+    const s = r.width / p.width;
+    const dx = r.left + r.width / 2 - (p.left + p.width / 2), dy = r.top + r.height / 2 - (p.top + p.height / 2);
+    const t = p.top - a.top, l = p.left - a.left, b = a.bottom - p.bottom, w = a.right - p.right;
+    const rad = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
+    const origin = l + p.width / 2 + "px " + (t + p.height / 2) + "px";
+    // The open end reaches past the card, so its shadow isn't cut off.
+    const f = [
+      { transform: "translate(" + dx + "px, " + dy + "px) scale(" + s + ")", transformOrigin: origin, clipPath: "inset(" + t + "px " + w + "px " + b + "px " + l + "px round " + p.height / 2 + "px)" },
+      { transform: "none", transformOrigin: origin, clipPath: "inset(-40px round " + (rad + 40) + "px)" },
+    ];
     return one(el, into ? back(f) : f, "sheet", !into);
   }
 
