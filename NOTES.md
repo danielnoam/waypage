@@ -18,6 +18,16 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **No white frame as a clip opens (1.26.4).**
+  - The theme's tokens and color-scheme reach the frame only in
+    `applyTheme`, on load. Its first paint had no `--bg`.
+  - In Night, a frame whose color-scheme differs from the app's also
+    gets an opaque white backdrop.
+  - The CSP allows no inline style, so the tokens can't go into the
+    srcdoc. Instead the frame carries `.unready` (visibility hidden)
+    from srcdoc until `placed` settles. Meanwhile `.reader-frame`'s own
+    `var(--bg)` shows, and the restore jump is hidden too.
+
 - **No card while turning to the clip being read (1.26.3).** Moving on
   to the next chapter, the reader's open clip and the reading's clip
   differ for half a second to a second, so `showAloudBar` thought the

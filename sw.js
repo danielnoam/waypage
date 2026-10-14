@@ -7,7 +7,7 @@
 // release's changed files new URLs. Third-party requests are never touched.
 //
 // ASSETS is also exactly what tools/build-www.js copies into the app.
-const CACHE = "waypage-v51";
+const CACHE = "waypage-v52";
 const ASSETS = [
   "./", "./index.html",
   "./src/fonts.css", "./src/styles.css", "./src/reader.css",
