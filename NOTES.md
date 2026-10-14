@@ -18,6 +18,13 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Watched folder collection moves what's there (1.28.1).** A collection
+  exists only as `folder` on its pages, so `w.into` alone made nothing
+  appear. `watchIntoPick`'s set now re-files every page with
+  `watched === w.tree`: into `w.into`, or back to its subfolder from
+  `file.path`. This overrides a collection someone picked by hand for a
+  watched file.
+
 - **Sync screen (1.28.0).** `#syncView` is a screen like Downloads (a
   panel under its button on a wide screen). `renderSyncPage` in
   app-saving.js rebuilds it when `syncPageSig()` changes; paintSync runs

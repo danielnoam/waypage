@@ -1100,7 +1100,7 @@ function epubBytes() {
       await q.context().close();
     });
 
-    await test("a watched folder's new files go into the collection picked for it (1.28.0)", async () => {
+    await test("a watched folder's files go into the collection picked for it (1.28.0, 1.28.1)", async () => {
       const q = await page(browser, 390);
       const bytes = [...epubBytes()];
       const got = await q.evaluate(async (b) => {
@@ -1122,6 +1122,12 @@ function epubBytes() {
       await face.click();
       await q.locator(".dropdown-item", { hasText: "Its subfolders" }).click();
       assert.strictEqual(await q.evaluate(() => watches()[0].into), undefined);
+      await until(q, () => state.pages[0].folder === "Sci-fi");
+      // Picking a collection moves the files already there (1.28.1).
+      await q.evaluate(() => { window.prompt = () => "Google Drive"; });
+      await face.click();
+      await q.locator(".dropdown-item", { hasText: "New collection" }).click();
+      await until(q, () => state.pages[0].folder === "Google Drive" && watches()[0].into === "Google Drive");
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

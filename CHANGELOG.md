@@ -2,6 +2,14 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.28.1] - 2026-10-14
+
+### Fixed
+- Picking a collection for a watched folder now moves the files already
+  added from it, not only new ones. Before, a new collection had no
+  files in it, so it didn't show. Picking "Its subfolders" puts them
+  back into collections named after their folders.
+
 ## [1.28.0] - 2026-10-14
 
 ### Added
