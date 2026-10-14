@@ -2,6 +2,28 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.28.0] - 2026-10-14
+
+### Added
+- A Sync screen. The sync button at the top of the library opens it,
+  like Downloads: GitHub sync with its progress, Sync now and Pause, and
+  Google Drive with Back up now and its progress, Pause and Stop. The
+  button is there when either is on.
+- Watched folders: under each folder, pick the collection its new files
+  go into. "Its subfolders" keeps the old way, a collection named after
+  the folder each file is in.
+- PDFs added before 1.27.2 that are read from where they are get their
+  bookmarks as Contents when opened.
+
+### Changed
+- A backup going up to Google Drive is on the Sync screen, not in
+  Downloads. A restore, which comes down, stays in Downloads.
+
+### Fixed
+- The Downloads button on the "Downloading Waypage" message did nothing
+  when the update was started from Settings: Downloads opened behind
+  Settings.
+
 ## [1.27.2] - 2026-10-14
 
 ### Added

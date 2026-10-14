@@ -1746,7 +1746,7 @@ async function lookInFolder(said, only) {
     if (added || gone || got.some((g) => g.joined)) { renderLibrary(); updateWidgets(); }
     return { added, gone };
   })();
-  try { return await watching; } finally { watching = null; if (state.section === "saving") renderSection(); }
+  try { return await watching; } finally { watching = null; if (state.section === "library") renderSection(); }
 }
 async function lookInOne(w, said, scan) {
   const out = { name: w.name, added: 0, gone: 0, joined: 0, failed: [], lost: false };
@@ -1810,7 +1810,8 @@ async function lookInOne(w, said, scan) {
         if (meta.already) { run.total--; continue; }
         meta.watched = w.tree;
         meta.file.path = f.path.slice(0, 500);
-        const dir = f.path.split("/").slice(-2, -1)[0];
+        // The collection picked for the folder (1.28.0), else its subfolder's name.
+        const dir = w.into || f.path.split("/").slice(-2, -1)[0];
         if (dir) { meta.folder = folderName(dir); meta.folderAt = Date.now(); }
         state.pages.unshift(meta);
         await C.store.writeIndex(state.pages);
@@ -1888,6 +1889,9 @@ function watchGroup() {
     el("button", { class: "row-x", type: "button", "aria-label": "Stop watching " + w.name, title: "Stop watching", onclick: () => stopWatching(w) },
       el("span", { class: "visually-hidden" }, "Stop watching"),
       svgX())));
+  // Under each folder, the collection its new files go into (1.28.0).
+  for (const [i, w] of [...list.entries()].reverse()) rows.splice(i + 1, 0, el("div", { class: "row watch-into" },
+    el("span", { class: "row-label" }, "New files go into"), watchIntoPick(w)));
   rows.push(el("button", { class: "row", type: "button", onclick: pickWatched }, el("span", { class: "row-label accent" }, list.length ? "Watch another folder" : "Watch a folder")));
   const lost = list.filter((w) => w.lost).map((w) => w.name);
   return el("section", { class: "settings-section", id: "watchSection" },
@@ -1895,8 +1899,29 @@ function watchGroup() {
     el("div", { class: "group" }, ...rows),
     el("p", { class: "footnote" }, list.length
       ? (lost.length ? "Waypage can't open " + lost.join(" or ") + " any more. Pick it again to carry on. " : "")
-        + "Waypage looks in " + (list.length === 1 ? "it" : "them") + " each time it opens, or when you tap the arrow. Their folders become collections, and a file you delete there leaves Waypage too."
+        + "Waypage looks in " + (list.length === 1 ? "it" : "them") + " each time it opens, or when you tap the arrow. New files go into the collection picked under each, or one named after their folder, and a file you delete there leaves Waypage too."
       : "Pick a folder, like Books, and Waypage adds what's in it each time it opens. Each file is read from where it is, so it doesn't sync."));
+}
+const WATCH_NEW = "\u0000new";
+function watchIntoPick(w) {
+  const names = allFolders();
+  const options = [{ value: "", label: "Its subfolders" }, ...[...new Set([...(w.into ? [w.into] : []), ...names])].map((f) => ({ value: f, label: f })),
+    { value: WATCH_NEW, label: "New collection…" }];
+  const set = (into) => {
+    const now = watches().find((x) => x.tree === w.tree);
+    if (!now) return;
+    if (into) now.into = into; else delete now.into;
+    saveWatch(now);
+    renderSection();
+    toast(into ? "New files from " + w.name + " go into " + into : "New files from " + w.name + " go into collections named after their folders");
+  };
+  return dropdown({ label: "New files from " + w.name + " go into", cls: "field-pick watch-pick", value: w.into || "", options,
+    onpick: (v) => {
+      if (v !== WATCH_NEW) { set(v); return; }
+      const typed = prompt("Name the new collection");
+      if (typed && cleanTag(typed)) set(folderName(typed));
+      else renderSection();
+    } });
 }
 const svgRefresh = () => { const s = el("span", { class: "row-x-icon", "aria-hidden": "true" }); s.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v5h-5"></path></svg>'; return s; };
 const svgX = () => { const s = el("span", { class: "row-x-icon", "aria-hidden": "true" }); s.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>'; return s; };
@@ -1910,7 +1935,7 @@ async function pickWatched() {
     if (had.lost) { delete had.lost; saveWatch(had); }
     else toast("Already watching " + got.name + ".");
   } else store(WATCHES_KEY, [...list, { tree: got.ref, name: got.name }]);
-  if (state.section === "saving") renderSection();
+  if (state.section === "library") renderSection();
   await lookInFolder(true, { tree: got.ref });
 }
 // A file removed from Waypage that's still in its watched folder isn't
@@ -1927,7 +1952,7 @@ async function stopWatching(w) {
   for (const p of state.pages) if (p.watched === w.tree) delete p.watched;
   await C.store.writeIndex(state.pages);
   store(WATCHES_KEY, watches().filter((x) => x.tree !== w.tree));
-  if (state.section === "saving") renderSection();
+  if (state.section === "library") renderSection();
   toast("Stopped watching " + w.name + ". Its files stay in your library.");
 }
 

@@ -694,6 +694,18 @@
       if (!pdf.sizes[n - 1]) img.setAttribute("data-guess", "");
       img.removeAttribute("data-in");
     }
+    // A PDF added before 1.27.2 gets its bookmarks from the file (1.28.0).
+    if (!doc.querySelector("[data-toc]") && !unmarkable.has(meta.id)) {
+      const pages = into ? slots : [...doc.querySelectorAll(".co-body > img")];
+      const marks = [];
+      for (const o of await pdf.outline().catch(() => [])) {
+        const at = pages[Math.min(o.page, pages.length) - 1];
+        if (at && !marks.some(([m]) => m === at)) marks.push([at, o]);
+      }
+      if (marks.length > 1) {
+        for (const [at, o] of marks) { at.setAttribute("data-toc", String(o.depth)); at.setAttribute("data-toc-t", o.title); }
+      } else unmarkable.add(meta.id);
+    }
     pdf.onSizes = () => { if (held === h && h.frame) fixSizes(h); };
     return "<!doctype html>\n" + doc.documentElement.outerHTML;
   }

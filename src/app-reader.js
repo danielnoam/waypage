@@ -64,12 +64,12 @@ function zoomFrom(screen) {
 }
 
 // On a big screen (1.5.0) Save with options opens as a dialog and
-// Downloads as a panel under its button, each over a catch that closes
+// Downloads and Sync (1.28.0) as panels under their buttons, each over a catch that closes
 // it; a post opened from Feeds at 1280 px reads in a pane beside them.
-const DIALOGS = { batchView: "dialog", downloadsView: "panel" };
+const DIALOGS = { batchView: "dialog", downloadsView: "panel", syncView: "panel" };
 const asDialog = (screen) => (wide.matches && DIALOGS[screen.id]) || "";
 // The button a dialog or panel grows out of (1.11.0).
-const ANCHORS = { batchView: "severalBtn", downloadsView: "downloadsBtn" };
+const ANCHORS = { batchView: "severalBtn", downloadsView: "downloadsBtn", syncView: "syncBtn" };
 const anchorOf = (screen) => { const b = ANCHORS[screen.id] && $(ANCHORS[screen.id]); return b && b.offsetParent ? b : null; };
 const asPane = (screen) => screen.id === "readerView" && pinned.matches && innerWidth >= 1280 && state.place !== "library" && !state.folder;
 

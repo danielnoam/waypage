@@ -18,6 +18,26 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Sync screen (1.28.0).** `#syncView` is a screen like Downloads (a
+  panel under its button on a wide screen). `renderSyncPage` in
+  app-saving.js rebuilds it when `syncPageSig()` changes; paintSync runs
+  with every paintDownloads, so it follows sync and Drive progress. A
+  backup's card (`driveCard`) is there; Downloads keeps only a restore's.
+  The bar's ring counts only a restore; a backup still gets the app's
+  notification while nothing downloads. The sync button shows when
+  GitHub sync or Drive is on.
+- **Screens opened from Settings (1.28.0).** Downloads sits before
+  Settings in the page, so pushing it while Settings was up put it
+  underneath. openDownloads and openSyncPage go back to the library
+  first (`toLibrary`) when Settings, What's new or the other one is up.
+- **Older PDFs' bookmarks (1.28.0).** The pdf.js frame answers an
+  "outline" job for the PDF it holds open; fillPdf marks the page slots
+  when the clip has no `data-toc`. Copied clips from before 1.27.2 have
+  no file to read, so they need adding again.
+- **Watched folder collection (1.28.0).** `w.into` on the watch, set from
+  the dropdown under its row; lookInOne uses it before the subfolder's
+  name. It applies to files added from then on.
+
 - **Book contents (1.27.2).** The reader built Contents only from h2/h3,
   so books whose chapters are styled paragraphs had none. `fromEpub` now
   reads the EPUB 3 nav (else the NCX) and puts `data-toc` (depth 1-3)

@@ -183,7 +183,7 @@ async function connect(p) {
       await p.locator("label.row", { hasText: "Clips" }).locator("input").check();
     });
 
-    await test("a backup can be paused, resumed and stopped, here and in Downloads", async () => {
+    await test("a backup can be paused, resumed and stopped, here and on the Sync screen (1.28.0)", async () => {
       drive.slow = 1500;
       const before = drive.n;
       await p.locator(".row", { hasText: "Back up now" }).click();
@@ -197,12 +197,19 @@ async function connect(p) {
       assert.ok(drive.n > before, "the backup didn't finish after Resume");
       await p.locator(".row", { hasText: "Back up now" }).click();
       await p.locator("#driveStatus", { hasText: "Sending to Drive" }).waitFor();
-      assert.strictEqual(await p.evaluate(() => { renderDownloads(); return !!document.querySelector("#downloads .drive-run .card-actions"); }), true, "no card in Downloads");
-      await p.evaluate(() => document.querySelector("#downloads .drive-run .btn-quiet.danger").click());
+      assert.strictEqual(await p.evaluate(() => { renderDownloads(); return !!document.querySelector("#downloads .drive-run"); }), false, "a backup showed in Downloads");
+      await p.evaluate(() => openSyncPage());
+      await p.locator("#syncView:not([hidden])").waitFor();
+      assert.strictEqual(await p.locator("#syncBtn").isVisible(), true, "no sync button with only Drive on");
+      await p.locator("#syncList .drive-run .btn-quiet.danger", { hasText: "Stop" }).click();
       await p.locator("text=Backup stopped").waitFor();
+      await p.locator("#syncList .card", { hasText: "Back up now" }).waitFor();
       await p.waitForTimeout(1800);
       assert.ok(!(await p.evaluate(() => window.Waypage.drive.last.error)), "stopping counted as a failure");
       drive.slow = 0;
+      await p.evaluate(() => history.back());
+      await p.locator("#syncView[hidden]").waitFor({ state: "attached" });
+      await openDrive(p);
     });
 
     await test("a week after the last backup, the next one goes by itself", async () => {

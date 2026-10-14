@@ -514,7 +514,7 @@ function onKeys(e) {
   }
   const go = (fn) => { e.preventDefault(); fn(); };
   if (k === "?") { go(() => { if (state.menu && state.menu.kind === "keys") history.back(); else if (!state.menu) openMenu("keys"); }); return; }
-  if (state.menu || state.sheet || state.image || state.side || state.batch || state.downloads || state.news) return;
+  if (state.menu || state.sheet || state.image || state.side || state.batch || state.downloads || state.syncPage || state.news) return;
   if (state.open) {
     const p = state.open;
     const size = (d) => setReading({ size: clamp(readingPrefs().size + d, SIZE_MIN, SIZE_MAX) });

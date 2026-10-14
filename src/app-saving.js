@@ -225,35 +225,48 @@ function syncNote() {
   if (left) return { title: "Syncing your library", text: "Getting pictures for " + countLine(left), done: 0, total: 0 };
   return null;
 }
-// The bar's sync button (1.13.0): there while sync is on, so its state
-// is a look away rather than in Settings. A ring while it runs (filling
-// when it can count), a dot when the last run failed, dimmed while
-// paused or waiting for Wi-Fi. It opens Settings, Sync.
-let syncPainted = "";
+// The bar's sync button (1.13.0): there while GitHub sync or Google
+// Drive is on, so their state is a look away. A ring while either runs
+// (filling when it can count), a dot when the last sync failed, dimmed
+// while paused or waiting for Wi-Fi. It opens the Sync screen (1.28.0).
+let syncPainted = "", syncPageSaid = "", syncLabel = "";
 function paintSync() {
   const btn = $("syncBtn");
   if (!btn) return;
   const on = C.sync.on;
+  const backing = !!driveRun && !driveRun.restore;
   const running = on && (C.sync.running || !!syncNote());
   const now = syncProgress();
-  const part = C.sync.running ? now.part : null;
+  const part = C.sync.running ? now.part : !running && backing ? driveRun.share : null;
   const held = on && !running && (C.sync.paused || waitsForWifi(DATA_SYNC_KEY));
   const failed = on && !running && !held && !!C.sync.last.error;
-  const label = !on ? "Sync" : running ? (C.sync.running ? "Sync: " + now.text : "Sync: " + syncNote().text)
+  const label = running ? (C.sync.running ? "Sync: " + now.text : "Sync: " + syncNote().text)
+    : backing ? "Sync: backing up to Google Drive"
+    : !on ? "Sync"
     : C.sync.paused ? "Sync: paused" : held ? "Sync: waiting for Wi-Fi"
     : failed ? "Sync: " + C.sync.last.error : C.sync.last.at ? "Sync: synced " + whenText(C.sync.last.at) : "Sync: not synced yet";
-  const said = [on, running, part, held, failed, label].join("|");
-  if (said === syncPainted) return;
-  syncPainted = said;
-  btn.hidden = !on;
-  btn.classList.toggle("busy", running);
-  btn.classList.toggle("looking", running && part == null);
-  btn.classList.toggle("held", held);
-  btn.classList.toggle("failed", failed);
-  btn.querySelector(".dl-ring-fill").style.strokeDashoffset = String(!running ? 100 : part != null ? 100 - part * 100 : 75);
-  btn.setAttribute("aria-label", label);
-  btn.title = label;
+  const busy = running || backing;
+  const said = [on, C.drive.on, busy, part, held, failed, label].join("|");
+  if (said !== syncPainted) {
+    syncPainted = said;
+    btn.hidden = !on && !C.drive.on;
+    btn.classList.toggle("busy", busy);
+    btn.classList.toggle("looking", busy && part == null);
+    btn.classList.toggle("held", held && !backing);
+    btn.classList.toggle("failed", failed && !backing);
+    btn.querySelector(".dl-ring-fill").style.strokeDashoffset = String(!busy ? 100 : part != null ? 100 - part * 100 : 75);
+    btn.setAttribute("aria-label", label);
+    btn.title = label;
+  }
+  syncLabel = label;
+  if (state.syncPage && syncPageSig() !== syncPageSaid) renderSyncPage();
 }
+function syncPageSig() {
+  const l = C.drive.last, r = driveRun;
+  return [syncLabel, C.sync.paused, C.sync.last.at, C.sync.last.error, syncAfter(), C.drive.on, l.at, l.error,
+    r ? [r.restore, r.paused, r.stopped, !!r.merging].join() : ""].join("|");
+}
+
 function syncAfter() {
   const saving = state.saving.filter((s) => s.synced && !s.error).length;
   const failed = state.saving.filter((s) => s.synced && s.error).length;
@@ -1573,23 +1586,104 @@ function driveCard() {
 }
 function paintDriveCard() {
   paintDownloads();
-  const card = $("downloads").querySelector(".drive-run");
-  if (!card || !driveRun) return;
-  const share = driveRun.share;
-  const bar = card.querySelector(".progress");
-  bar.classList.toggle("busy", share == null);
-  if (share == null) bar.removeAttribute("aria-valuenow");
-  else bar.setAttribute("aria-valuenow", String(Math.round(share * 100)));
-  bar.querySelector(".progress-fill").style.transform = "scaleX(" + (share || 0) + ")";
-  card.querySelector(".status-text").textContent = driveStatusText();
+  if (!driveRun) return;
+  // A backup's card is on the Sync screen, a restore's in Downloads.
+  for (const card of document.querySelectorAll(".drive-run")) {
+    const share = driveRun.share;
+    const bar = card.querySelector(".progress");
+    bar.classList.toggle("busy", share == null);
+    if (share == null) bar.removeAttribute("aria-valuenow");
+    else bar.setAttribute("aria-valuenow", String(Math.round(share * 100)));
+    bar.querySelector(".progress-fill").style.transform = "scaleX(" + (share || 0) + ")";
+    card.querySelector(".status-text").textContent = driveStatusText();
+  }
 }
 const driveBusy = () => (driveRun ? { disabled: "" } : {});
 function drivePaint() {
   if (state.section === "drive") renderSection();
+  if (state.syncPage) renderSyncPage();
   if (state.settings) renderSettings();
   renderDownloads();
   paintDriveCard();
 }
+// ---- The Sync screen (1.28.0) ----
+// From the bar's sync button, like Downloads: GitHub sync and Google
+// Drive backups, each with its progress and controls. A restore comes
+// down, so it's in Downloads.
+function renderSyncPage() {
+  const root = $("syncList");
+  const r = driveRun;
+  syncPageSaid = syncPageSig();
+  root.replaceChildren(
+    sectionHead("GitHub sync"), githubCard(),
+    C.drive.available ? sectionHead("Google Drive") : null,
+    C.drive.available ? (r && !r.restore ? driveCard() : driveRestCard()) : null);
+  if (r && !r.restore) paintDriveCard();
+}
+const toSettings = (section) => toLibrary().then(() => openSettings(false, section));
+function githubCard() {
+  if (!C.sync.on) {
+    return el("div", { class: "card wide", role: "group", "aria-label": "GitHub sync" },
+      el("span", { class: "card-body" },
+        el("span", { class: "card-site" }, "GitHub"),
+        el("span", { class: "card-title" }, "Not set up"),
+        el("span", { class: "card-status" }, "Keeps your library the same on your phone and computer."),
+        el("span", { class: "card-actions" },
+          el("button", { class: "btn-small", type: "button", onclick: () => toSettings("sync") }, "Set up"))));
+  }
+  const last = C.sync.last, now = syncProgress(), paused = C.sync.paused, running = C.sync.running;
+  const status = running ? now.text : paused ? "Paused" + (last.at ? ". Last synced " + whenText(last.at) : "")
+    : waitsForWifi(DATA_SYNC_KEY) ? "Waiting for Wi-Fi" + (last.at ? ". Last synced " + whenText(last.at) : "")
+    : last.error ? last.error : last.at ? "Synced " + whenText(last.at) : "Not synced yet";
+  const after = running ? "" : syncAfter();
+  return el("div", { class: "card saving sync-run wide", role: "group", "aria-label": "GitHub sync" },
+    el("span", { class: "card-body" },
+      el("span", { class: "card-site" }, C.sync.account),
+      el("span", { class: "card-title" }, running ? "Syncing your library" : "Your library"),
+      running ? el("span", { class: "progress" + (now.part == null ? " busy" : ""), "aria-hidden": "true" },
+        el("span", { class: "progress-fill", style: "transform: scaleX(" + (now.part || 0) + ")" })) : null,
+      el("span", { class: "card-status" + (running ? " accent" : last.error ? " warn" : ""), role: "status" },
+        running ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
+        el("span", { class: "status-text" }, status)),
+      after ? el("span", { class: "card-status accent" }, after) : null,
+      el("span", { class: "card-actions" },
+        paused || running ? null : el("button", { class: "btn-small", type: "button", onclick: () => syncNow(false) }, "Sync now"),
+        el("button", { class: paused ? "btn-small" : "btn-quiet", type: "button", onclick: () => pauseSync(!paused) }, paused ? "Resume" : "Pause"),
+        el("button", { class: "btn-quiet", type: "button", onclick: () => toSettings("sync") }, "Settings"))));
+}
+// Google Drive when no backup is going up: when the last one was, and
+// Back up now.
+function driveRestCard() {
+  const on = C.drive.on, l = C.drive.last;
+  const status = !on ? "A copy of your library in your own Google Drive, every week and whenever you ask."
+    : driveRun ? "Restoring a backup, in Downloads"
+    : l.error ? l.error
+    : l.at ? "Last backup " + whenText(l.at) + (l.size ? ", " + formatSize(l.size) : "") : "No backup yet";
+  return el("div", { class: "card wide", role: "group", "aria-label": "Google Drive" },
+    el("span", { class: "card-body" },
+      el("span", { class: "card-site" }, "Google Drive"),
+      el("span", { class: "card-title" }, on ? "Backups" : "Not connected"),
+      el("span", { class: "card-status" + (on && l.error && !driveRun ? " warn" : "") }, status),
+      el("span", { class: "card-actions" },
+        on ? el("button", { class: "btn-small", type: "button", ...driveBusy(), onclick: () => driveBackUp(false) }, "Back up now") : null,
+        el("button", { class: on ? "btn-quiet" : "btn-small", type: "button", onclick: () => toSettings("drive") }, on ? "Settings" : "Set up"))));
+}
+function openSyncPage(fromHistory) {
+  if (state.syncPage) return;
+  if (!fromHistory && (state.settings || state.news || state.downloads)) { toLibrary().then(() => openSyncPage()); return; }
+  state.syncPage = true;
+  paintSync();
+  renderSyncPage();
+  if (!fromHistory) history.pushState({ view: "sync" }, "");
+  $("syncBody").scrollTop = 0;
+  pushScreen($("syncView")).then(() => $("syncBack").focus());
+}
+function closeSyncPage() {
+  if (!state.syncPage) return;
+  state.syncPage = false;
+  popScreen($("syncView"));
+}
+
 function driveValue() {
   if (!C.drive.on) return "Off";
   if (driveRun) return driveRun.paused ? "Paused" : driveRun.restore ? "Restoring" : "Backing up";
