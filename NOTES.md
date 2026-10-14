@@ -18,6 +18,31 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Read aloud's small window, leaving a clip, the widget's read aloud
+  (1.25.0).** Daniel asked for read aloud picture in picture outside the
+  app, optional, and a switch to stop reading when he leaves a clip.
+  - Android's own picture in picture, not an overlay window: an overlay
+    needs "Display over other apps", which Play restricts and users
+    distrust. The whole activity shrinks; `body.pip` hides the app and
+    shows `#pipView` (clip, paragraph). A PiP window doesn't take taps,
+    so previous, pause and next are RemoteActions to SpeechService, the
+    same intents as the notification's buttons.
+  - It enters by itself on going home (`setAutoEnterEnabled`), which is
+    Android 12+. Before that it needs `onUserLeaveHint` in MainActivity,
+    which is generated; not worth patching for old phones.
+  - The page learns it's in the window by asking `Speech.pipState()` on
+    resize and visibilitychange, rather than an androidx listener, so the
+    plugin needs no new dependency.
+  - `tools/android-manifest.js` adds supportsPictureInPicture and
+    resizeableActivity to MainActivity's tag.
+  - Keep reading off: `show()` stops reading when another clip opens and
+    it wasn't reading aloud going on (`aloudAuto`, or `wentOn` already
+    moved `aloud.key`); `closeReader` stops it too.
+  - Widget: `?aloud=1` on the page link; `aloudFrom(id)` opens the clip
+    and starts from `firstShown()`, the place it was left.
+- **Read aloud bar padding (1.24.2, shipped in 1.25.0).** 2px above the
+  buttons and the gesture inset below put them on the bar's top edge.
+
 - **Places before texts (1.24.1).** Daniel: sync should bring where you
   left off first, then the files. The merged entries were only applied
   at the end of `once()`, after every upload and download. Now

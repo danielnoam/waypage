@@ -152,20 +152,35 @@
                 android:textSize="12sp" />
         </LinearLayout>
     </LinearLayout>
-    <TextView
-        android:id="@+id/w_go"
+    <!-- Continue, and beside it the same with read aloud (1.25.0). -->
+    <LinearLayout
+        android:id="@+id/w_goRow"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:background="@drawable/waypage_widget_pill"
-        android:gravity="center"
-        android:minHeight="40dp"
-        android:paddingLeft="14dp"
-        android:paddingRight="14dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp"
-        android:text="@string/waypage_w_start"
-        android:textColor="@color/waypage_w_bg"
-        android:textSize="13sp"
-        android:textStyle="bold" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+        <TextView
+            android:id="@+id/w_go"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:background="@drawable/waypage_widget_pill"
+            android:gravity="center"
+            android:paddingLeft="14dp"
+            android:paddingRight="14dp"
+            android:text="@string/waypage_w_start"
+            android:textColor="@color/waypage_w_bg"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+        <ImageView
+            android:id="@+id/w_aloud"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginLeft="8dp"
+            android:background="@drawable/waypage_widget_pill"
+            android:contentDescription="@string/waypage_w_aloud"
+            android:padding="10dp"
+            android:src="@drawable/waypage_w_aloud" />
+    </LinearLayout>
 </FrameLayout>

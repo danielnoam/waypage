@@ -19,6 +19,10 @@ Everything iOS-only, kept for one iOS release.
   window flag since 1.24.0; iOS falls back to the browser's wake lock,
   which older iOS doesn't have. `isIdleTimerDisabled` in the Speech
   plugin's `keepScreen` would do it everywhere.
+- **Read aloud in a small window on iOS.** Android shrinks the app into
+  picture in picture since 1.25.0. iOS only allows that for video
+  (AVPictureInPictureController), so it would mean drawing the window
+  as a video; the lock screen's player covers most of it already.
 - **Moving a big library, natively.** Android copies in Java since
   1.19.0; iOS still moves file by file over the bridge. A FileManager
   copy would do it at disk speed.

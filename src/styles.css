@@ -546,7 +546,9 @@ html.native .reader-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
 .aloud-player .aloud-play { background: var(--accent); color: var(--accent-ink); }
 .aloud-play .aloud-play-icon, .aloud-play.paused .aloud-pause-icon { display: none; }
 .aloud-play.paused .aloud-play-icon { display: block; }
-.reader.aloud .read-left { align-items: center; padding-top: 2px; padding-bottom: calc(2px + env(safe-area-inset-bottom)); }
+/* Even room above and below the buttons (1.24.2): 2px above sat them on
+   the bar's top edge, most of all over a phone's gesture area. */
+.reader.aloud .read-left { align-items: center; padding-top: var(--s-2); padding-bottom: calc(var(--s-2) + env(safe-area-inset-bottom)); }
 .reader.aloud .read-section, .reader.aloud .read-time { flex: 1 1 0; }
 .reader.aloud .read-time { text-align: end; }
 .reader.aloud.bar-away .read-left { transform: none; opacity: 1; }
@@ -577,6 +579,19 @@ html.native .reader-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
 .aloud-bar.snapping { transition: left var(--spring-control-ms, 300ms) var(--spring-control, ease-out), top var(--spring-control-ms, 300ms) var(--spring-control, ease-out); }
 @media (prefers-reduced-motion: reduce) { .aloud-bar.snapping { transition: none; } }
 .aloud-bar[hidden] { display: none; }
+/* Picture in picture (1.25.0): the app as a small window outside itself
+   while reading aloud. Everything else steps aside for the clip's name and
+   the paragraph being read; the window's own buttons do the rest. */
+.pip-view {
+  position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  padding: var(--s-2) var(--s-3); background: var(--bg); color: var(--ink); overflow: hidden;
+}
+.pip-view[hidden] { display: none; }
+body.pip > :not(.pip-view) { visibility: hidden; }
+.pip-over, .pip-state { margin: 0; font: 600 var(--fs-meta)/var(--lh-meta) var(--sans); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pip-title { margin: 0; font: 600 var(--fs-label)/var(--lh-label) var(--serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pip-text { margin: 0; font: var(--fs-meta)/var(--lh-meta) var(--serif); color: var(--ink); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.pip-text:empty, .pip-over:empty, .pip-state:empty { display: none; }
 .aloud-bar .icon-btn { border-radius: var(--r-full); color: var(--ink); }
 .aloud-bar-text {
   flex: 1; min-width: 0; display: flex; align-items: center;

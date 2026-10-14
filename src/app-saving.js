@@ -1267,7 +1267,13 @@ async function takeWidget() {
   }
   if (got.kind === "search") { await goPlace("library"); openSearch(); return; }
   if (got.kind === "paste") { await goPlace("library"); saveCopied(); return; }
-  if (got.kind === "page" && state.pages.some((p) => p.id === got.id)) { openPage(got.id); return; }
+  if (got.kind === "page" && state.pages.some((p) => p.id === got.id)) {
+    // The collection widget's read aloud (1.25.0): opens it and reads on
+    // from where it was left; one already reading aloud just goes on.
+    if (got.aloud) { aloudFrom(got.id); return; }
+    openPage(got.id);
+    return;
+  }
   if (got.kind === "mark" && state.pages.some((p) => p.id === got.id)) { markAfterOpen = got.mark || null; openPage(got.id); return; }
   if (got.kind === "post" && got.url) {
     await goPlace("feeds");

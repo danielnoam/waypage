@@ -292,6 +292,9 @@ function warmPdf() {
 const readerState = (p, sheet, image) => ({ view: "reader", page: p.id, folder: state.folder || undefined, sheet: sheet || undefined, image: image || undefined });
 
 function show(p, html) {
+  // Another clip opened by hand, not by reading aloud going on, stops it
+  // when "Keep reading when you leave the clip" is off (1.25.0).
+  if (aloud.key && aloud.key !== p.id && !aloudAuto && !load(KEEP_KEY, true)) stopAloud();
   state.open = p;
   // Opening counts as reading for the order of things (sort by read, the
   // sidebar, Continue reading); the merge is safe because the place
@@ -351,7 +354,7 @@ function show(p, html) {
     // Reading aloud carries on across clips (1.4.0): its light and
     // player show again when its clip is the one open.
     setAloud(aloud.state, aloud.index);
-    if (aloudAuto) { aloudAuto = false; startAloud(0); }
+    if (aloudAuto) { const top = aloudAuto !== "here"; aloudAuto = false; startAloud(top ? 0 : undefined); }
   });
 }
 
@@ -829,7 +832,9 @@ function closeReader() {
   if (C.sync.on && navigator.onLine) syncNow();
   closeSheet(true);
   if (state.image) { state.image = false; $("imageViewer").hidden = true; $("viewerImg").removeAttribute("src"); }
-  // Reading aloud goes on (1.4.0): the bar along the bottom carries it.
+  // Reading aloud goes on (1.4.0): the bar along the bottom carries it,
+  // unless "Keep reading when you leave the clip" is off (1.25.0).
+  if (!load(KEEP_KEY, true)) stopAloud();
   hideReadHere();
   brightClose();
   closeFind(true);
@@ -864,6 +869,13 @@ const aloudOn = () => aloud.state === "playing" || aloud.state === "paused";
 const aloudHere = () => (aloudOn() || aloud.state === "ended") && !!state.open && state.open.id === aloud.key;
 const aloudPage = () => state.pages.find((x) => x.id === aloud.key) || null;
 let aloudAuto = false;
+// Opens a clip and reads it aloud from where it was left (1.25.0).
+function aloudFrom(id) {
+  if (aloud.key === id && aloud.state === "playing") { if (!state.open || state.open.id !== id) openPage(id); return; }
+  if (state.open && state.open.id === id) { startAloud(); return; }
+  aloudAuto = "here";
+  openPage(id);
+}
 // Speed is a slider since 0.34.0, from half to three times.
 const RATE_MIN = 0.5, RATE_MAX = 3;
 const FOOTNOTES_KEY = "waypage.aloudFootnotes";
@@ -871,6 +883,8 @@ const EDGES_KEY = "waypage.aloudSkipEdges";
 // Read next by itself at the end of a clip (1.6.0), when there's a next.
 const GO_ON_KEY = "waypage.aloudGoOn";
 const AWAKE_KEY = "waypage.aloudScreenOn";
+const PIP_KEY = "waypage.aloudPip";
+const KEEP_KEY = "waypage.aloudKeepGoing";
 let wentOnFrom = "";
 const PIECE = 600;
 
@@ -1246,6 +1260,39 @@ function moveAloud(d) {
 // paused or done, the phone dims as it would.
 function keepAwake() { speech.keepScreen(aloud.state === "playing" && !!load(AWAKE_KEY, false)); }
 
+// Picture in picture (1.25.0): while reading aloud, going home leaves a
+// small window with the clip's name, the paragraph being read and the
+// window's own previous, pause and next. On unless switched off.
+function floatOut() {
+  const on = aloud.state === "playing" || aloud.state === "paused";
+  speech.pip(on && !!load(PIP_KEY, true), aloud.state !== "paused");
+  if (document.body.classList.contains("pip")) paintPip();
+}
+function paintPip() {
+  const p = aloudPage();
+  $("pipTitle").textContent = p ? p.title : "";
+  $("pipOver").textContent = p ? p.folder || p.site || "" : "";
+  let text = "";
+  if (p && state.open && state.open.id === p.id) {
+    const texts = C.reader.readable({ footnotes: !!load(FOOTNOTES_KEY, false), edges: !!load(EDGES_KEY, false) });
+    text = texts[blockAt(aloud.index)] || "";
+  }
+  $("pipText").textContent = text;
+  $("pipState").textContent = aloud.state === "paused" ? "Paused" : "";
+}
+let pipCheck = null;
+function checkPip() {
+  clearTimeout(pipCheck);
+  pipCheck = setTimeout(async () => {
+    const on = await speech.inPip();
+    document.body.classList.toggle("pip", on);
+    $("pipView").hidden = !on;
+    if (on) paintPip();
+  }, 120);
+}
+addEventListener("resize", checkPip);
+document.addEventListener("visibilitychange", checkPip);
+
 function setAloud(st, index) {
   const on = st === "playing" || st === "paused";
   // At the end, the clip stays "being read" while there's a next clip
@@ -1276,6 +1323,7 @@ function setAloud(st, index) {
   }
   if (!on && !ended) aloud.key = "";
   keepAwake();
+  floatOut();
   showAloudBar();
   if (st === "error") toast("The phone's voice stopped. Try again, or pick another voice in Aa.");
 }
@@ -1502,12 +1550,13 @@ function aloudControls() {
     // Applied when the thumb is let go: a phone's voice restarts its sentence on each change.
     onchange: (e) => { const v = Number(e.target.value); store(RATE_KEY, v); if (aloud.state !== "stopped") speech.rate(v); } });
   speed.value = rate;
-  const check = (key, text, note, restart = true) => {
-    const input = el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!load(key, false),
+  const check = (key, text, note, restart = true, on = false) => {
+    const input = el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!load(key, on),
       onchange: () => {
         store(key, input.checked);
         if (key === GO_ON_KEY) queueNext();
         if (key === AWAKE_KEY) keepAwake();
+        if (key === PIP_KEY) floatOut();
         if (restart && aloud.state !== "stopped" && state.open && aloud.key === state.open.id) startAloud(blockAt(aloud.index));
       } });
     return el("label", { class: "rc-row switch-row" },
@@ -1521,6 +1570,8 @@ function aloudControls() {
     check(EDGES_KEY, "Skip headers and footers", "Just the body: no title, captions or page heads."),
     check(GO_ON_KEY, "Go on to the next clip", "At the end, the next chapter or the page it links to starts by itself.", false),
     check(AWAKE_KEY, "Keep the screen on", "While reading aloud, so you can follow along.", false),
+    check(KEEP_KEY, "Keep reading when you leave the clip", "Off: it stops when you go back or open another clip.", false, true),
+    speech.background ? check(PIP_KEY, "Small window outside the app", "Going home, the reading stays in a window you can move. Off: only in the app.", false, true) : null,
     note);
 }
 const rateText = (v) => (Math.round(v * 10) / 10) + "×";

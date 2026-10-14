@@ -807,6 +807,51 @@ const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
       await q.context().close();
     });
 
+    await test("the collection widget's read aloud, Keep reading when you leave, and the small window (1.25.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (i) => ({ id: "w" + i, url: "https://example.com/w" + i, title: "Chapter " + i, site: "example.com", savedAt: 1000 + i, minutes: 1, mode: "links", at: 0, folder: "Saga", folderAt: 1000 + i });
+        await S.writeIndex([c(1), c(2)]);
+        for (const i of [1, 2]) await S.writePage("w" + i, "<!doctype html><html><body><h1>Chapter " + i + "</h1>" + "<p>Words of chapter " + i + ".</p>".repeat(5) + "</body></html>", c(i));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const sp = window.Waypage.platform.speech, plays = [], pips = [];
+        sp.play = (o) => { plays.push(o.key); return Promise.resolve(); };
+        sp.stop = () => Promise.resolve();
+        sp.pip = (on, playing) => { pips.push(on + ":" + playing); return Promise.resolve(true); };
+        let inPip = false;
+        sp.inPip = () => Promise.resolve(inPip);
+        const wait = (f) => new Promise((ok) => { const t = setInterval(() => { if (f()) { clearInterval(t); ok(); } }, 50); });
+        window.Waypage.platform.widgets.take = () => Promise.resolve({ kind: "page", id: "w1", aloud: true });
+        await takeWidget();
+        await wait(() => plays.length === 1);
+        const reading = aloud.key === "w1" && aloud.state === "playing" && state.open && state.open.id === "w1";
+        // The small window shows the clip and the paragraph being read.
+        inPip = true;
+        dispatchEvent(new Event("resize"));
+        await wait(() => document.body.classList.contains("pip"));
+        const pip = { title: document.getElementById("pipTitle").textContent, text: document.getElementById("pipText").textContent, asked: pips.includes("true:true") };
+        inPip = false;
+        dispatchEvent(new Event("resize"));
+        await wait(() => !document.body.classList.contains("pip"));
+        // With the switch off, opening another clip by hand stops it.
+        localStorage.setItem("waypage.aloudKeepGoing", "false");
+        openPage("w2");
+        await wait(() => state.open && state.open.id === "w2");
+        return { reading, pip, after: aloud.state, offPip: pips[pips.length - 1] };
+      });
+      assert.ok(got.reading, JSON.stringify(got));
+      assert.strictEqual(got.pip.title, "Chapter 1");
+      assert.ok(/Chapter 1|Words of chapter 1/.test(got.pip.text) && got.pip.asked, JSON.stringify(got.pip));
+      assert.strictEqual(got.after, "stopped");
+      assert.strictEqual(got.offPip, "false:true");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("an app update downloads in Downloads, with Pause and Resume (1.23.0)", async () => {
       const q = await page(browser, 390);
       const got = await q.evaluate(async () => {
