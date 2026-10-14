@@ -1257,11 +1257,13 @@ function ghost(n, r) {
 
 // The page to carry on with: the one read last that isn't finished.
 function continuePage() {
-  // The clip read last, finished just now (1.10.1): in a collection, the
-  // next one in it to read, rather than whatever other clip was read
-  // before it. Otherwise the clip read last that isn't finished.
+  // The clip read last, in a collection (1.10.1): the next one in it to
+  // read, rather than whatever other clip was read before it. Otherwise the clip read last that isn't finished.
+  // Not only once it's finished (1.26.4): the next chapter, opened from
+  // here and left near its top, counted as nothing read, and Continue
+  // reading went to some clip elsewhere.
   const last = state.pages.reduce((a, p) => ((p.readAt || 0) > ((a && a.readAt) || 0) ? p : a), null);
-  if (last && last.finished && last.folder) {
+  if (last && last.folder) {
     const list = folderPages(last.folder);
     const i = folderNextIndex(list);
     if (i >= 0) return list[i];

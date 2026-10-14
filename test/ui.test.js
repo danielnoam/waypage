@@ -942,6 +942,32 @@ const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
       await q.context().close();
     });
 
+    await test("Continue reading stays on a chapter opened from it and left near its top (1.26.4)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store, now = Date.now();
+        const c = (i, more) => ({ id: "v" + i, url: "https://example.com/v" + i, title: "Part " + i, site: "example.com", savedAt: 1000 + i, minutes: 5, mode: "links", at: 0, folder: "Book", folderAt: 1000 + i, ...more });
+        const other = { id: "elsewhere", url: "https://example.com/e", title: "Elsewhere", site: "example.com", savedAt: 900, minutes: 5, mode: "links", at: 0.5, readAt: now - 60000 };
+        const pages = [other, c(1, { finished: true, at: 1, readAt: now - 10000 }), c(2), c(3)];
+        await S.writeIndex(pages);
+        for (const p of pages) await S.writePage(p.id, "<!doctype html><html><body><h1>" + p.title + "</h1>" + "<p>Words of the part.</p>".repeat(80) + "</body></html>", p);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const before = continuePage().id;
+        openPage(before);
+        await new Promise((ok) => setTimeout(ok, 3600));
+        const stamped = !!state.pages.find((x) => x.id === before).readAt;
+        closeReader();
+        await new Promise((ok) => setTimeout(ok, 600));
+        return { before, stamped, after: continuePage().id };
+      });
+      assert.deepStrictEqual(got, { before: "v2", stamped: true, after: "v2" }, JSON.stringify(got));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("an app update downloads in Downloads, with Pause and Resume (1.23.0)", async () => {
       const q = await page(browser, 390);
       const got = await q.evaluate(async () => {
