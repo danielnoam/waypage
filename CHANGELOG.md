@@ -2,6 +2,13 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.26.3] - 2026-10-14
+
+### Fixed
+- Reading aloud on to the next chapter (Read next, or going on by
+  itself) no longer flashes the read-aloud card for a moment, as if
+  another chapter were being read than the one on screen.
+
 ## [1.26.2] - 2026-10-14
 
 ### Fixed
