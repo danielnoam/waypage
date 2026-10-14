@@ -18,6 +18,36 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Google Drive backups (1.27.0).**
+  - Scope is `drive.file` only, which Google counts as non-sensitive,
+    so no verification or security assessment is needed. The app sees
+    only the files it made. A Drive browser inside the app would need
+    the restricted `drive.readonly` scope and a paid assessment. Daniel
+    picked backup and restore only.
+  - Android: `DrivePlugin.java` gets the token from Play Services'
+    AuthorizationClient. Google matches the Android client by package
+    name plus the release key's SHA-1, so no client ID or secret is in
+    the code. It also moves the zip itself, a resumable upload streamed
+    from the cache file, and a download into the cache. Base64 over the
+    bridge would be far too slow for a big library.
+  - The web copy uses the OAuth implicit flow in a popup.
+    - The redirect is the app's own address. `drive.js` reads the token
+      from the hash at load, hands it over through `localStorage` and a
+      BroadcastChannel, and closes the popup.
+    - `w.closed` is not trusted, because Google's COOP cuts the popup
+      off from the opener.
+    - When the popup is blocked, the tab itself goes to Google, and the
+      state carries what to do on return (`resume`).
+    - The token lasts an hour. So "every week" on the web asks with a
+      toast instead of going alone.
+  - "Every week" is checked on opening and on coming back to the app,
+    not by a background job: `exportLibrary` needs the app running.
+    After a failed attempt it doesn't try again for 6 hours.
+  - Backups are tagged with appProperties `waypage=backup`, plus device
+    and clips. Pruning to the last 3 lists only those, newest first.
+  - `test/drive.test.js` fakes accounts.google.com and the Drive API with
+    Playwright routes and injects a Web client ID into drive.js.
+
 - **No white frame as a clip opens (1.26.4).**
   - The theme's tokens and color-scheme reach the frame only in
     `applyTheme`, on load. Its first paint had no `--bg`.

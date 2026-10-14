@@ -11,6 +11,11 @@ Nothing queued.
 
 Everything iOS-only, kept for one iOS release.
 
+- **Google Drive backups on iOS.** Android and the web copy have them
+  since 1.27.0. iOS needs an iOS client in the Google Cloud project, the
+  GoogleSignIn pod in native/share for the token, and a Drive plugin
+  with the same `authorize`, `upload` and `download` as Android's
+  DrivePlugin.java.
 - **Read aloud going on to the next clip, put away, on iOS.** Android's
   speech service takes the next clip from the app since 1.23.0 and goes
   straight on; iOS's Speech plugin has no queue yet, so there the app

@@ -1623,16 +1623,7 @@ async function openFile(file, btn, open, ref) {
     }
     if (ref && !link) C.platform.files.release(ref);
     if (kind === "backup") {
-      const res = await C.backup.restoreLibrary(file, state.pages, sameUrl, (done, total) => say("Restoring, " + done + " of " + total));
-      state.pages = res.pages;
-      await C.store.writeIndex(state.pages);
-      texts.clear();
-      await loadThumbs();
-      if (res.added + res.replaced) C.store.keepStored();
-      const followed = restoreFeeds(res.feeds);
-      const n = res.added + res.replaced;
-      const what = [n ? countLine(n) : "", followed ? (followed === 1 ? "1 feed" : followed + " feeds") : ""].filter(Boolean).join(" and ");
-      toast((what ? "Restored " + what : "Nothing new to restore") + (res.kept ? ". " + res.kept + " already here" + (res.kept === 1 ? " was" : " were") + " kept." : "."));
+      await restoreBackup(file, say);
     } else if (kind === "zip") {
       toast("This zip isn't a Waypage backup, an EPUB or a comic, so it can't be opened here.");
     } else if (!kind) {
@@ -1675,6 +1666,20 @@ async function openFile(file, btn, open, ref) {
   if (btn) btn.disabled = false;
   if (state.settings) renderSettings();
   if (state.section) renderSection();
+}
+
+// A backup merged in: a file opened here, or one from Google Drive.
+async function restoreBackup(file, say) {
+  const res = await C.backup.restoreLibrary(file, state.pages, sameUrl, (done, total) => say("Restoring, " + done + " of " + total));
+  state.pages = res.pages;
+  await C.store.writeIndex(state.pages);
+  texts.clear();
+  await loadThumbs();
+  if (res.added + res.replaced) C.store.keepStored();
+  const followed = restoreFeeds(res.feeds);
+  const n = res.added + res.replaced;
+  const what = [n ? countLine(n) : "", followed ? (followed === 1 ? "1 feed" : followed + " feeds") : ""].filter(Boolean).join(" and ");
+  toast((what ? "Restored " + what : "Nothing new to restore") + (res.kept ? ". " + res.kept + " already here" + (res.kept === 1 ? " was" : " were") + " kept." : "."));
 }
 
 // ---- A watched folder (1.1.0) ----
