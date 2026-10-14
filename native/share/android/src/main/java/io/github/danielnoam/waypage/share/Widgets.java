@@ -235,7 +235,7 @@ final class Widgets {
         JSONObject c = name.isEmpty() ? null : find(ctx, name);
         for (int row : FAVS) v.setViewVisibility(row, View.GONE);
         v.setViewVisibility(R.id.w_empty, View.VISIBLE);
-        v.setViewVisibility(R.id.w_go, View.GONE);
+        v.setViewVisibility(R.id.w_goRow, View.GONE);
         if (c == null) {
             v.setTextViewText(R.id.w_head, name.isEmpty() ? "Collection" : name);
             v.setTextViewText(R.id.w_empty, name.isEmpty() ? "Tap to pick a collection." : "This collection is gone. Tap to pick another.");
@@ -253,9 +253,12 @@ final class Widgets {
         String next = c.optString("next", "");
         String button = c.optString("button", "");
         if (!next.isEmpty() && !button.isEmpty()) {
-            v.setViewVisibility(R.id.w_go, View.VISIBLE);
+            Uri page = Uri.parse("waypage-widget://page/" + Uri.encode(next));
+            v.setViewVisibility(R.id.w_goRow, View.VISIBLE);
             v.setTextViewText(R.id.w_go, button);
-            v.setOnClickPendingIntent(R.id.w_go, open(ctx, 200000 + id, Uri.parse("waypage-widget://page/" + Uri.encode(next))));
+            v.setOnClickPendingIntent(R.id.w_go, open(ctx, 200000 + id, page));
+            // The same clip, read aloud from where it was left (1.25.0).
+            v.setOnClickPendingIntent(R.id.w_aloud, open(ctx, 300000 + id, page.buildUpon().appendQueryParameter("aloud", "1").build()));
         }
         JSONArray clips = c.optJSONArray("clips");
         // Only the clip to read next, over the button (1.10.2).

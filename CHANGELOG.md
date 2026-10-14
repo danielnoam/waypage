@@ -2,6 +2,26 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.25.0] - 2026-10-14
+
+### Added
+- Read aloud in a small window outside the app (Android 12 and later):
+  going home while it reads leaves a window you can move, with the
+  clip's name, the paragraph being read, and previous, pause and next.
+  "Small window outside the app" in Read aloud turns it off, leaving
+  it in the app only.
+- "Keep reading when you leave the clip" in Read aloud, on by default.
+  Off, reading aloud stops when you go back to the library or open
+  another clip yourself; going on to the next clip by itself still
+  works.
+- The collection widget has a read aloud button beside a narrower
+  Continue: it opens the next clip and starts reading it aloud from
+  where you left it.
+
+### Fixed
+- The read aloud buttons on the reader's bottom bar sit in its middle,
+  with even room above and below, instead of against its top edge.
+
 ## [1.24.1] - 2026-10-13
 
 ### Changed

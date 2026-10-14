@@ -17,7 +17,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  *   update({ reading: { id, title, meta, at } | null,
  *            feeds: { following, fresh, posts: [{ title, site, url }] } })
  *   renamed({ from, to })   a collection widget follows a renamed collection
- *   take()    { kind: "page" | "mark" | "post" | "feeds" | "library" | "favourites" | "collection", id, mark, url, name } once,
+ *   take()    { kind: "page" | "mark" | "post" | "feeds" | "library" | "favourites" | "collection", id, mark, url, name, aloud } once,
  *             what a widget's tap asked to open, or {}; the app icon's
  *             shortcuts (1.14.0) add "reading", "search" and "paste"
  *   copied()  { text }, what's on the clipboard, for Save the copied link
@@ -48,6 +48,7 @@ public class WidgetsPlugin extends Plugin {
         out.put("kind", kind);
         if ((kind.equals("page") || kind.equals("mark")) && u.getLastPathSegment() != null) out.put("id", u.getLastPathSegment());
         if (kind.equals("mark")) out.put("mark", u.getQueryParameter("mark"));
+        if (kind.equals("page") && "1".equals(u.getQueryParameter("aloud"))) out.put("aloud", true);
         if (kind.equals("post")) out.put("url", u.getQueryParameter("url"));
         if (kind.equals("collection")) out.put("name", u.getQueryParameter("name"));
         pending = out;

@@ -270,7 +270,7 @@
     tell({ key: web.key, index: web.i, state: how });
     web.items = [];
   }
-  const awake = { want: false, lock: null, native: null, noNative: false };
+  const awake = { want: false, lock: null, native: null, noNative: false, pip: "", noPip: false };
   document.addEventListener("visibilitychange", () => { if (!document.hidden && awake.want && !awake.lock) speech.keepScreen(true); });
   const speech = {
     get available() { return !!plugin("Speech") || !!(synth && window.SpeechSynthesisUtterance); },
@@ -352,6 +352,21 @@
         awake.lock.addEventListener("release", () => { awake.lock = null; });
         if (!awake.want) speech.keepScreen(false);
       } catch (e) { /* not allowed here */ }
+    },
+    // Picture in picture outside the app while reading aloud (1.25.0),
+    // Android 12 and later. Told again only when it changes.
+    async pip(on, playing) {
+      const S = plugin("Speech");
+      if (!S || awake.noPip) return false;
+      const want = on + ":" + playing;
+      if (awake.pip === want) return true;
+      try { const r = await S.pip({ on, playing }); awake.pip = want; if (!r.supported) awake.noPip = true; return !!r.supported; }
+      catch (e) { awake.noPip = true; return false; }
+    },
+    async inPip() {
+      const S = plugin("Speech");
+      if (!S || awake.noPip) return false;
+      try { return !!(await S.pipState()).on; } catch (e) { return false; }
     },
     async state() {
       const S = plugin("Speech");

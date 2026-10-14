@@ -1,9 +1,17 @@
 package io.github.danielnoam.waypage.share;
 
+import android.app.PendingIntent;
+import android.app.PictureInPictureParams;
+import android.app.RemoteAction;
+import android.content.Context;
+import android.content.Intent;
+import android.graphics.drawable.Icon;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.Voice;
+import android.util.Rational;
 import android.view.WindowManager;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -26,6 +34,9 @@ import org.json.JSONArray;
  *   queue({ after, items, start, lang, voice, title, subtitle, key })
  *                                the clip to go on to when `after` ends
  *   keepScreen({ on })           keeps the screen from going dark (1.24.0)
+ *   pip({ on, playing })         { supported } going home goes on in a
+ *                                small window with the reading's buttons
+ *   pipState()                   { on } whether it is in that window now
  *
  * and a "progress" event { key, index, state } as each paragraph starts and
  * when the reading pauses, ends or stops ("playing", "paused", "ended",
@@ -146,6 +157,51 @@ public class SpeechPlugin extends Plugin {
             else getActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             call.resolve();
         });
+    }
+
+    // Picture in picture (1.25.0): while reading aloud, going home shrinks
+    // the app into a small window (Android 12's auto-enter), with
+    // previous, play or pause and next as the window's own buttons.
+    @PluginMethod
+    public void pip(PluginCall call) {
+        JSObject o = new JSObject();
+        if (Build.VERSION.SDK_INT < 31) { o.put("supported", false); call.resolve(o); return; }
+        boolean on = call.getBoolean("on", false);
+        boolean playing = call.getBoolean("playing", true);
+        getActivity().runOnUiThread(() -> {
+            try {
+                getActivity().setPictureInPictureParams(pipParams(on, playing));
+                o.put("supported", true);
+            } catch (Exception e) { o.put("supported", false); }
+            call.resolve(o);
+        });
+    }
+
+    @PluginMethod
+    public void pipState(PluginCall call) {
+        JSObject o = new JSObject();
+        o.put("on", Build.VERSION.SDK_INT >= 26 && getActivity().isInPictureInPictureMode());
+        call.resolve(o);
+    }
+
+    private PictureInPictureParams pipParams(boolean on, boolean playing) {
+        List<RemoteAction> actions = new ArrayList<>();
+        actions.add(pipAction(android.R.drawable.ic_media_previous, "Previous paragraph", SpeechService.PREV, 21));
+        actions.add(playing ? pipAction(android.R.drawable.ic_media_pause, "Pause", SpeechService.PAUSE, 22)
+            : pipAction(android.R.drawable.ic_media_play, "Play", SpeechService.RESUME, 22));
+        actions.add(pipAction(android.R.drawable.ic_media_next, "Next paragraph", SpeechService.NEXT, 23));
+        return new PictureInPictureParams.Builder()
+            .setAspectRatio(new Rational(16, 9))
+            .setActions(actions)
+            .setAutoEnterEnabled(on)
+            .build();
+    }
+
+    private RemoteAction pipAction(int icon, String label, String action, int code) {
+        Context ctx = getContext();
+        Intent i = new Intent(ctx, SpeechService.class).setAction(action);
+        PendingIntent pi = PendingIntent.getService(ctx, code, i, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        return new RemoteAction(Icon.createWithResource(ctx, icon), label, label, pi);
     }
 
     @PluginMethod

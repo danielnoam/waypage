@@ -28,6 +28,9 @@
 //   res/xml/waypage_shortcuts.xml: Continue reading, Search and Save the
 //   copied link, each opening the app as a widget's tap does.
 //
+// - Picture in picture on MainActivity (1.25.0): reading aloud goes on in
+//   a small window when you go home, if Read aloud's switch allows it.
+//
 // Idempotent, and fails loudly if a tag it needs can't be found.
 const fs = require("fs");
 const path = require("path");
@@ -63,8 +66,19 @@ const TAGS = {
 };
 const INDENT = { manifest: "    ", application: "        ", "main-activity": "            " };
 
+// Attributes on MainActivity's own tag.
+const ATTRS = ['android:supportsPictureInPicture="true"', 'android:resizeableActivity="true"'];
+
 function patch(xml) {
   let out = xml;
+  for (const attr of ATTRS) {
+    const name = attr.split("=")[0];
+    const m = TAGS["main-activity"].exec(out);
+    if (!m) throw new Error("no <main-activity> tag in AndroidManifest.xml");
+    if (m[0].includes(name + "=")) continue;
+    const open = m[0].replace(/<activity\b/, "<activity " + attr);
+    out = out.slice(0, m.index) + open + out.slice(m.index + m[0].length);
+  }
   for (const { inside, xml: entry } of ENTRIES) {
     const name = entry.match(/android:name="([^"]+)"/)[1];
     if (out.includes('android:name="' + name + '"')) continue;
@@ -83,4 +97,4 @@ if (require.main === module) {
   const n = ENTRIES.length;
   console.log("android: manifest " + (before === patch(before) ? "already has" : "gained") + " " + n + " Waypage entr" + (n === 1 ? "y" : "ies"));
 }
-module.exports = { patch, ENTRIES };
+module.exports = { patch, ENTRIES, ATTRS };
