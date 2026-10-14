@@ -9,7 +9,7 @@
 // only use what an earlier part, or its own, has declared. A part's
 // functions can call into any part, since nothing is tapped until all of
 // them have loaded. app-start.js runs last and starts things up.
-const APP_VERSION = "1.27.2";
+const APP_VERSION = "1.28.0";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
@@ -150,6 +150,8 @@ const state = {
   finished: [],
   // Whether the Downloads screen is up.
   downloads: false,
+  // Whether the Sync screen is up (1.28.0).
+  syncPage: false,
   open: null,
   settings: false,
   sheet: false,
@@ -635,9 +637,10 @@ function renderDownloads() {
   };
   const going = state.saving.filter((s) => !s.error && !(s.run && !s.run.done));
   const app = updShown();
-  if (runs.size || going.length || app || driveRun) keep("h:going", () => sectionHead("Downloading"));
+  const restoring = !!driveRun && driveRun.restore;
+  if (runs.size || going.length || app || restoring) keep("h:going", () => sectionHead("Downloading"));
   if (app) keep("u:" + upd.latest, updateCard, upd.phase + upd.error);
-  if (driveRun) keep("d:drive", driveCard, [driveRun.restore, driveRun.paused, driveRun.stopped, !!driveRun.merging].join());
+  if (restoring) keep("d:drive", driveCard, [driveRun.restore, driveRun.paused, driveRun.stopped, !!driveRun.merging].join());
   for (const r of runs) keep("r:" + r.id, () => runCard(r), [r.paused, r.stopped, failedOf(r).length].join());
   for (const s of going) keep("s:" + s.key, () => savingCard(s));
   const shown = new Set(state.finished.map((e) => e.run).filter(Boolean));
@@ -756,7 +759,8 @@ function paintDownloads() {
   for (const s of singles) { units += 1; got += s.waiting ? 0 : savingShare(s) || 0; }
   const app = upd.phase === "downloading";
   if (app) { units += 1; got += upd.pct / 100; }
-  const drive = !!driveRun;
+  // A backup going up is on the Sync screen; only a restore downloads.
+  const drive = !!driveRun && driveRun.restore;
   if (drive) { units += 1; got += driveRun.share || 0; }
   const busy = units > 0;
   const share = busy ? Math.min(1, got / units) : 0;
@@ -770,7 +774,7 @@ function paintDownloads() {
   if (!busy) {
     // A sync (and its pictures) keeps the same notification while it
     // runs, so it goes on with the app in the background (0.30.4).
-    const sync = syncNote();
+    const sync = driveRun ? { title: "Backing up to Google Drive", text: driveStatusText(), done: Math.round((driveRun.share || 0) * 1000), total: 1000 } : syncNote();
     if (sync) {
       const said = JSON.stringify(sync);
       if (said !== toldNative) { toldNative = said; C.platform.downloads.update(sync); }
@@ -794,6 +798,8 @@ function paintDownloads() {
 
 function openDownloads(fromHistory) {
   if (state.downloads) return;
+  // From Settings (the update's toast) it opened under them (1.28.0).
+  if (!fromHistory && (state.settings || state.news || state.syncPage)) { toLibrary().then(() => openDownloads()); return; }
   state.downloads = true;
   renderDownloads();
   if (!fromHistory) history.pushState({ view: "downloads" }, "");

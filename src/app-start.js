@@ -21,6 +21,7 @@ function route(s) {
   if (view === "feedPick" && !state.feedPick) history.back();
   if (view !== "news") closeNews();
   if (view !== "downloads") closeDownloads();
+  if (view !== "sync") closeSyncPage();
   if (!inSettings) closeSettings();
   else if (!s.section) {
     // Back from a section beside the menu leaves Settings altogether.
@@ -49,6 +50,7 @@ function route(s) {
   if (inSettings) { openSettings(true); if (s.section) openSection(s.section, true); }
   if (view === "news") openNews(true);
   if (view === "downloads") openDownloads(true);
+  if (view === "sync") openSyncPage(true);
 }
 
 // Back to the library from whatever screen is up, through history so the
@@ -57,7 +59,7 @@ function toLibrary() {
   if (!(history.state && history.state.view)) return Promise.resolve();
   return new Promise((resolve) => {
     addEventListener("popstate", () => resolve(), { once: true });
-    history.go(-[state.folder, state.open, state.sheet, state.image, state.settings, state.section, state.batch, state.news, state.select, state.feedPick, state.menu, state.downloads, state.side, state.part, state.finding].filter(Boolean).length || -1);
+    history.go(-[state.folder, state.open, state.sheet, state.image, state.settings, state.section, state.batch, state.news, state.select, state.feedPick, state.menu, state.downloads, state.syncPage, state.side, state.part, state.finding].filter(Boolean).length || -1);
   });
 }
 
@@ -73,7 +75,8 @@ dragSide();
 pullToCheck($("libraryView"));
 $("sideCatch").addEventListener("click", () => history.back());
 $("downloadsBtn").addEventListener("click", () => openDownloads());
-$("syncBtn").addEventListener("click", () => { if (state.settings) openSection("sync"); else openSettings(false, "sync"); });
+$("syncBtn").addEventListener("click", () => openSyncPage());
+$("syncBack").addEventListener("click", () => history.back());
 $("downloadsBack").addEventListener("click", () => history.back());
 $("screenCatch").addEventListener("click", () => history.back());
 $("readKeys").addEventListener("click", () => openMenu("keys"));

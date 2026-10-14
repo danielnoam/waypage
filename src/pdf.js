@@ -33,7 +33,7 @@ const FIRST = 16, BATCH = 16;
 addEventListener("message", async (e) => {
   const job = e.data;
   if (!job) return;
-  if (job.kind === "open" || job.kind === "draw" || job.kind === "close") {
+  if (job.kind === "open" || job.kind === "draw" || job.kind === "close" || job.kind === "outline") {
     queue = queue.then(async () => {
       try {
         if (job.kind === "close") {
@@ -58,6 +58,9 @@ addEventListener("message", async (e) => {
               await new Promise((go) => setTimeout(go, 0));
             }
           })().catch(() => {});
+        } else if (job.kind === "outline") {
+          if (!held) throw new Error("No PDF open");
+          post({ id: job.id, outline: await outlineOf(held).catch(() => []) });
         } else {
           if (!held) throw new Error("No PDF open");
           const bytes = await drawOne(held, job.n, job.width);
@@ -395,6 +398,8 @@ post({ ready: true });
         if (closed) throw new Error("closed");
         return new Uint8Array((await b.ask({ kind: "draw", n, width })).bytes);
       };
+      // Its bookmarks, for a PDF added before 1.27.2 (1.28.0).
+      handle.outline = async () => (closed ? [] : (await b.ask({ kind: "outline" })).outline || []);
       handle.close = close;
       return handle;
     } catch (e) {

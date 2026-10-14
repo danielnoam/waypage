@@ -74,6 +74,34 @@ async function until(p, fn, arg, ms = 10000) {
 const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
 
 
+// A three-page PDF with two bookmarks, Part One on page 1 and Part Two on
+// page 3, its offsets counted so pdf.js reads it without repair.
+function pdfBytes() {
+  const objs = [];
+  const page = (n) => "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Contents " + (6 + n) + " 0 R /Resources << /Font << /F1 10 0 R >> >> >>";
+  objs[1] = "<< /Type /Catalog /Pages 2 0 R /Outlines 11 0 R /PageMode /UseOutlines >>";
+  objs[2] = "<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R] /Count 3 >>";
+  for (let n = 0; n < 3; n++) {
+    objs[3 + n] = page(n);
+    const said = ["The night train left the city at nine and nobody spoke.", "By morning the hills were white and the stove had gone out.", "In the second part the river freezes and the town waits."][n];
+    const text = "BT /F1 14 Tf 40 340 Td (" + said + ") Tj 0 -20 Td (" + said.split("").reverse().join("") + ") Tj ET";
+    objs[6 + n] = "<< /Length " + text.length + " >>\nstream\n" + text + "\nendstream";
+  }
+  objs[9] = "<< >>";
+  objs[10] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
+  objs[11] = "<< /Type /Outlines /First 12 0 R /Last 13 0 R /Count 2 >>";
+  objs[12] = "<< /Title (Part One) /Parent 11 0 R /Next 13 0 R /Dest [3 0 R /XYZ 0 400 0] >>";
+  objs[13] = "<< /Title (Part Two) /Parent 11 0 R /Prev 12 0 R /Dest [5 0 R /XYZ 0 400 0] >>";
+  let out = "%PDF-1.4\n";
+  const at = [];
+  for (let i = 1; i < objs.length; i++) { at[i] = out.length; out += i + " 0 obj\n" + objs[i] + "\nendobj\n"; }
+  const xref = out.length;
+  out += "xref\n0 " + objs.length + "\n0000000000 65535 f \n";
+  for (let i = 1; i < objs.length; i++) out += String(at[i]).padStart(10, "0") + " 00000 n \n";
+  out += "trailer\n<< /Size " + objs.length + " /Root 1 0 R >>\nstartxref\n" + xref + "\n%%EOF\n";
+  return Buffer.from(out, "latin1");
+}
+
 // A small EPUB, stored (not deflated): chapter titles are plain styled
 // paragraphs, as many books have them, and the book's nav lists them.
 function epubBytes() {
@@ -1026,6 +1054,74 @@ function epubBytes() {
       await q.evaluate(() => { document.querySelector("#downloads .app-update .card-actions button").click(); });
       await q.evaluate(() => new Promise((go) => setTimeout(go, 100)).then(() => window.finishUpdate("done")));
       await until(q, () => upd.phase === "ready" && window.installed === true);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("the update toast's Downloads opens Downloads from Settings (1.28.0)", async () => {
+      const q = await page(browser, 390);
+      await q.click("#settingsBtn");
+      await q.locator("#settingsView:not([hidden])").waitFor();
+      await q.evaluate(() => {
+        window.Waypage.platform.android = true;
+        window.Waypage.platform.downloadUpdate = () => new Promise(() => {});
+        setUpd({ phase: "available", latest: "9.9.9" });
+        startUpdate();
+      });
+      await q.click("#toast .toast-act");
+      await until(q, () => state.downloads && !state.settings);
+      await q.waitForTimeout(600);
+      const top = await q.evaluate(() => document.elementFromPoint(195, 300).closest(".screen").id);
+      assert.strictEqual(top, "downloadsView");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a PDF's bookmarks are its contents, read when saved and when opened (1.28.0)", async () => {
+      const q = await page(browser, 390);
+      const bytes = [...pdfBytes()];
+      const got = await q.evaluate(async (b) => {
+        const pdf = await window.Waypage.pdf.open(new Uint8Array(b));
+        const outline = await pdf.outline();
+        pdf.close();
+        const file = new File([new Uint8Array(b)], "plain.pdf", { type: "application/pdf" });
+        const meta = await window.Waypage.files.bring(file, "pdf", { has: () => false });
+        const html = await window.Waypage.store.readPage(meta.id);
+        const marks = [...new DOMParser().parseFromString(html, "text/html").querySelectorAll("[data-toc]")].map((n) => n.getAttribute("data-toc-t") + "@" + n.getAttribute("data-toc-p"));
+        return { outline, marks };
+      }, bytes);
+      assert.deepStrictEqual(got, {
+        outline: [{ title: "Part One", page: 1, depth: 1 }, { title: "Part Two", page: 3, depth: 1 }],
+        marks: ["Part One@1", "Part Two@3"],
+      }, JSON.stringify(got));
+      // pdf.js's sandboxed frame asks for a service worker it can't have.
+      const errors = q.errors.filter((e) => !/serviceWorker/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a watched folder's new files go into the collection picked for it (1.28.0)", async () => {
+      const q = await page(browser, 390);
+      const bytes = [...epubBytes()];
+      const got = await q.evaluate(async (b) => {
+        const F = window.Waypage.platform.files;
+        const book = new File([new Uint8Array(b)], "plain.epub", { type: "application/epub+zip" });
+        Object.defineProperty(F, "canWatch", { get: () => true });
+        F.scan = async () => ({ ok: true, name: "Books", files: [{ ref: "content://books/plain.epub", path: "Sci-fi/plain.epub", name: "plain.epub", size: book.size }] });
+        F.blob = async () => book;
+        localStorage.setItem("waypage.watches", JSON.stringify([{ tree: "content://books", name: "Books", into: "Novels" }]));
+        await lookInFolder(false);
+        return state.pages.map((p) => p.folder);
+      }, bytes);
+      assert.deepStrictEqual(got, ["Novels"], JSON.stringify(got));
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Library" }).click();
+      const face = q.locator(".watch-into .dropdown-face");
+      await face.waitFor();
+      assert.strictEqual(await face.textContent(), "Novels");
+      await face.click();
+      await q.locator(".dropdown-item", { hasText: "Its subfolders" }).click();
+      assert.strictEqual(await q.evaluate(() => watches()[0].into), undefined);
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });
