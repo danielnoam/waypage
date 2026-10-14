@@ -23,6 +23,10 @@ Everything iOS-only, kept for one iOS release.
   picture in picture since 1.25.0. iOS only allows that for video
   (AVPictureInPictureController), so it would mean drawing the window
   as a video; the lock screen's player covers most of it already.
+- **Read aloud over Bluetooth on iOS.** Android's media session takes a
+  car's or earbuds' previous and next a paragraph at a time and shows the
+  clip, its collection and its number since 1.26.0. iOS's Speech plugin
+  would set MPNowPlayingInfoCenter and MPRemoteCommandCenter the same way.
 - **Moving a big library, natively.** Android copies in Java since
   1.19.0; iOS still moves file by file over the bridge. A FileManager
   copy would do it at disk speed.

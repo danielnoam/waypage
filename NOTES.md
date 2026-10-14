@@ -18,6 +18,21 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Read aloud over Bluetooth (1.26.0).** Daniel wants a car's and
+  earbuds' previous, next and pause to do what the app's do, and the
+  chapter and collection shown on them.
+  - The voice is played by the speech engine's app (Google's TTS), not
+    Waypage, so Android's media-button routing, which follows the app
+    that last played sound, could hand the buttons to another app. A
+    silent looping AudioTrack (8 kHz, MODE_STATIC) while it reads makes
+    Waypage the player; paused, it stops. Not checked in a car yet.
+  - Previous and next from the session, notification and PiP go by
+    paragraph (`step`, using the `blocks` the app passes), as the app's
+    buttons do; before, they went a piece at a time.
+  - Metadata: title, display title, artist and subtitle (collection or
+    site), album, track number and count in the collection. Position is
+    PLAYBACK_POSITION_UNKNOWN, so cars don't show a clock.
+
 - **Read aloud's small window, leaving a clip, the widget's read aloud
   (1.25.0).** Daniel asked for read aloud picture in picture outside the
   app, optional, and a switch to stop reading when he leaves a clip.

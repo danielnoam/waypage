@@ -819,7 +819,7 @@ const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
       await q.waitForSelector("#saveUrl");
       const got = await q.evaluate(async () => {
         const sp = window.Waypage.platform.speech, plays = [], pips = [];
-        sp.play = (o) => { plays.push(o.key); return Promise.resolve(); };
+        sp.play = (o) => { plays.push(o.key); window.played = o; return Promise.resolve(); };
         sp.stop = () => Promise.resolve();
         sp.pip = (on, playing) => { pips.push(on + ":" + playing); return Promise.resolve(true); };
         let inPip = false;
@@ -841,11 +841,16 @@ const frameText = (p) => p.frameLocator("#readerFrame").locator("body");
         localStorage.setItem("waypage.aloudKeepGoing", "false");
         openPage("w2");
         await wait(() => state.open && state.open.id === "w2");
-        return { reading, pip, after: aloud.state, offPip: pips[pips.length - 1] };
+        // What a car or earbuds get (1.26.0): a paragraph for each piece,
+        // and the collection with the clip's place in it.
+        const o = window.played;
+        const media = { blocks: Array.isArray(o.blocks) && o.blocks.length === o.items.length, album: o.album, track: o.track, tracks: o.tracks, title: o.title };
+        return { reading, pip, media, after: aloud.state, offPip: pips[pips.length - 1] };
       });
       assert.ok(got.reading, JSON.stringify(got));
       assert.strictEqual(got.pip.title, "Chapter 1");
       assert.ok(/Chapter 1|Words of chapter 1/.test(got.pip.text) && got.pip.asked, JSON.stringify(got.pip));
+      assert.deepStrictEqual(got.media, { blocks: true, album: "Saga", track: 1, tracks: 2, title: "Chapter 1" });
       assert.strictEqual(got.after, "stopped");
       assert.strictEqual(got.offPip, "false:true");
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));

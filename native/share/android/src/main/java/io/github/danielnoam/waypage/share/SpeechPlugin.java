@@ -28,7 +28,7 @@ import org.json.JSONArray;
  * The reading itself is SpeechService, which goes on with the screen off:
  *
  *   voices()                     { voices: [{ id, name, lang, online, quality }] }
- *   play({ items, start, lang, voice, rate, title, subtitle, key })
+ *   play({ items, start, lang, voice, rate, title, subtitle, key, blocks, album, track, tracks })
  *   pause() resume() stop() seek({ index }) skip({ by }) rate({ rate })
  *   state()                      { key, index, state }
  *   queue({ after, items, start, lang, voice, title, subtitle, key })
@@ -106,16 +106,8 @@ public class SpeechPlugin extends Plugin {
             call.reject("Nothing to read");
             return;
         }
-        SpeechService.Job job = new SpeechService.Job();
-        job.items = new String[items.length()];
-        for (int i = 0; i < items.length(); i++) job.items[i] = items.optString(i, "");
-        job.start = call.getInt("start", 0);
-        job.lang = call.getString("lang", "");
-        job.voice = call.getString("voice", "");
+        SpeechService.Job job = jobFrom(call, items);
         job.rate = call.getFloat("rate", 1f);
-        job.title = call.getString("title", "Read aloud");
-        job.subtitle = call.getString("subtitle", "");
-        job.key = call.getString("key", "");
         SpeechService.pending = job;
         try {
             SpeechService.send(getContext(), SpeechService.PLAY, null, null);
@@ -125,20 +117,36 @@ public class SpeechPlugin extends Plugin {
         }
     }
 
+    // blocks: the paragraph each item is in, so previous and next from a
+    // car or earbuds go a paragraph at a time, as in the app (1.26.0);
+    // album, track and tracks: what Bluetooth shows of it.
+    private static SpeechService.Job jobFrom(PluginCall call, JSONArray items) {
+        SpeechService.Job job = new SpeechService.Job();
+        job.items = new String[items.length()];
+        for (int i = 0; i < items.length(); i++) job.items[i] = items.optString(i, "");
+        JSONArray blocks = call.getArray("blocks");
+        if (blocks != null && blocks.length() == items.length()) {
+            job.blocks = new int[blocks.length()];
+            for (int i = 0; i < blocks.length(); i++) job.blocks[i] = blocks.optInt(i, i);
+        }
+        job.start = call.getInt("start", 0);
+        job.lang = call.getString("lang", "");
+        job.voice = call.getString("voice", "");
+        job.title = call.getString("title", "Read aloud");
+        job.subtitle = call.getString("subtitle", "");
+        job.album = call.getString("album", "");
+        job.track = call.getInt("track", 0);
+        job.tracks = call.getInt("tracks", 0);
+        job.key = call.getString("key", "");
+        return job;
+    }
+
     @PluginMethod
     public void queue(PluginCall call) {
         JSONArray items = call.getArray("items");
         SpeechService.Job job = null;
         if (items != null && items.length() > 0) {
-            job = new SpeechService.Job();
-            job.items = new String[items.length()];
-            for (int i = 0; i < items.length(); i++) job.items[i] = items.optString(i, "");
-            job.start = call.getInt("start", 0);
-            job.lang = call.getString("lang", "");
-            job.voice = call.getString("voice", "");
-            job.title = call.getString("title", "Read aloud");
-            job.subtitle = call.getString("subtitle", "");
-            job.key = call.getString("key", "");
+            job = jobFrom(call, items);
         }
         final SpeechService.Job next = job;
         final String after = call.getString("after", "");
