@@ -982,6 +982,7 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
    moment so a quick one doesn't flash it, and the text once it's set. */
 .reader-wait { display: none; }
 .reader.waiting .reader-frame { visibility: hidden; }
+.reader-frame.unready { visibility: hidden; }
 .reader.waiting .reader-wait {
   position: absolute; inset: 0; z-index: 2; pointer-events: none;
   display: flex; align-items: center; justify-content: center;

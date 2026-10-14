@@ -1160,9 +1160,12 @@
           restoredAt = performance.now();
           if (!back && onPosition && position() === 1) onPosition(1, spot());
           if (onScroll) onScroll(position(), isPaged() ? 0 : w.scrollY);
-        });
+        }).finally(() => iframe.classList.remove("unready"));
         resolve();
       };
+      // Kept out of sight until it's themed and back at its place
+      // (1.26.4): before, its first frame showed unstyled, on white.
+      iframe.classList.add("unready");
       iframe.srcdoc = srcdoc(html, C.store.pageDirUrl(meta.id));
     });
   }

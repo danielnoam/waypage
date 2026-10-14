@@ -2,6 +2,13 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.26.4] - 2026-10-14
+
+### Fixed
+- Opening a clip no longer flashes a white, unstyled page for a frame.
+  The page stays out of sight until its theme is on and it's back where
+  it was left.
+
 ## [1.26.3] - 2026-10-14
 
 ### Fixed
