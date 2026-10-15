@@ -7,6 +7,10 @@
 // words, the notes and the titles. A tap opens the clip at the highlight.
 let marksQuery = "";
 let marksHead = null;
+// Highlights come a screen's worth of clips at a time, the rest as the
+// end nears (1.28.4): two thousand at once took the phone two seconds.
+const MARKS_FIRST = 25, MARKS_MORE = 40;
+let marksUpTo = MARKS_FIRST, marksList = "", marksSeen = null;
 const marksMatch = (p, m, q) => !q || [m.text, m.note || "", p.title].some((t) => t.toLowerCase().includes(q));
 function marksShown() {
   const q = marksQuery.trim().toLowerCase();
@@ -39,12 +43,14 @@ function renderHighlights() {
   }
   const clips = marksShown();
   const shown = clips.reduce((n, c) => n + c.list.length, 0);
+  if (marksQuery !== marksList) { marksList = marksQuery; marksUpTo = MARKS_FIRST; }
+  const more = clips.length > marksUpTo;
   marksHead.hidden = !total;
   marksHead.querySelector(".hl-count").textContent = marksQuery.trim()
     ? (shown === 1 ? "1 highlight" : shown + " highlights") + " found"
     : (total === 1 ? "1 highlight" : total + " highlights") + " in " + (clips.length === 1 ? "1 clip" : clips.length + " clips");
   marksHead.querySelector(".hl-copy").hidden = !shown;
-  const nodes = clips.map(({ p, list }) => el("section", { class: "hl-clip", "data-key": "hl:" + p.id },
+  const nodes = clips.slice(0, marksUpTo).map(({ p, list }) => el("section", { class: "hl-clip", "data-key": "hl:" + p.id },
     el("button", { class: "hl-title", type: "button", onclick: () => openPage(p.id) },
       el("span", { class: "hl-name", dir: "auto" }, p.title),
       el("span", { class: "meta" }, p.site || "")),
@@ -57,9 +63,19 @@ function renderHighlights() {
       el("h2", { class: "empty-title" }, "No highlights yet"),
       el("p", { class: "empty-text" }, "Select words in a clip and tap Highlight. Every highlight in your library gathers here, with its note.")));
   } else if (!clips.length) nodes.push(el("p", { class: "empty-text hl-none" }, "No highlights match that."));
+  if (more) nodes.push(el("div", { class: "lib-more", "aria-hidden": "true" }));
   // The search field stays put, so typing in it keeps its focus.
   if (marksHead.parentNode !== root) root.replaceChildren(marksHead, el("div", { class: "hl-list" }));
   fill(root.querySelector(".hl-list"), ...nodes);
+  if (more) {
+    if (!marksSeen) marksSeen = new IntersectionObserver((hits) => {
+      if (!hits.some((h) => h.isIntersecting) || $("highlights").hidden) return;
+      marksUpTo += MARKS_MORE;
+      renderHighlights();
+    }, { rootMargin: "1500px 0px" });
+    marksSeen.disconnect();
+    marksSeen.observe(nodes[nodes.length - 1]);
+  }
 }
 
 async function checkNow(f) {

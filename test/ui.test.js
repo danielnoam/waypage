@@ -480,11 +480,38 @@ function epubBytes() {
       await q.waitForTimeout(600);
       const atFirst = await q.evaluate(() => document.querySelectorAll(".library .page-card").length);
       assert.ok(atFirst < 400, "the first screen stops short: " + atFirst);
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 14; i++) {
         await q.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
         await q.waitForTimeout(250);
       }
       await q.waitForFunction(() => document.querySelectorAll(".library .page-card").length >= 400, null, { timeout: 15000 });
+      // A search starts again from the first screen (1.28.4).
+      await q.evaluate(() => { scrollTo(0, 0); $("librarySearch").value = "Clip 3"; onSearch(); });
+      await q.waitForTimeout(500);
+      const found = await q.evaluate(() => document.querySelectorAll(".library .page-card").length);
+      assert.ok(found > 0 && found <= 30, "a search draws a first screen: " + found);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Highlights lists a screen of clips first, the rest as it is scrolled (1.28.4)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const list = [];
+        for (let i = 0; i < 90; i++) list.push({ id: "hl" + i, url: "https://example.com/h" + i, title: "Marked " + i, site: "example.com", savedAt: 1e12 - i, minutes: 3, mode: "links", at: 0, finished: false, marks: [{ id: "m" + i, text: "Words of note " + i, at: 1e12 - i }] });
+        await window.Waypage.store.writeIndex(list);
+      });
+      await q.reload();
+      await q.evaluate(() => goPlace("highlights"));
+      await q.locator("#highlights .hl-clip").first().waitFor();
+      await q.waitForTimeout(400);
+      const first = await q.evaluate(() => document.querySelectorAll("#highlights .hl-clip").length);
+      assert.ok(first < 90, "the first screen stops short: " + first);
+      for (let i = 0; i < 6; i++) {
+        await q.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
+        await q.waitForTimeout(250);
+      }
+      await q.waitForFunction(() => document.querySelectorAll("#highlights .hl-clip").length === 90, null, { timeout: 10000 });
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

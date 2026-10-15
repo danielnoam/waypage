@@ -9,7 +9,7 @@
 // only use what an earlier part, or its own, has declared. A part's
 // functions can call into any part, since nothing is tapped until all of
 // them have loaded. app-start.js runs last and starts things up.
-const APP_VERSION = "1.28.3";
+const APP_VERSION = "1.28.4";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
@@ -1224,12 +1224,15 @@ function changePart(part) {
 // The cards, tiles and section heads on screen now, by what they show.
 function libSnap() {
   const m = new Map();
-  if (covered($("libraryView")) || $("libraryView").hidden) return m;
+  if (covered($("libraryView")) || $("libraryView").hidden || $("library").hidden) return m;
   const all = $("library").querySelectorAll(".card, .tile, .section-head");
   for (let i = 0; i < all.length && m.size < 120; i++) {
     const n = all[i], id = n.dataset.name ? "f:" + n.dataset.name : n.dataset.ids ? "p:" + n.dataset.ids : "h:" + n.textContent;
     if (m.has(id)) continue;
     const r = n.getBoundingClientRect();
+    // Past the screen's bottom, so is everything after it (1.28.4):
+    // measuring hundreds of cards below took half a second.
+    if (r.width && r.top > innerHeight && !n.closest(".folder-strip")) break;
     if (!r.width || r.bottom < 0 || r.top > innerHeight) continue;
     m.set(id, { n, r });
   }
@@ -1339,15 +1342,19 @@ const FIRST_SCREEN = 30;
 // the end of the list nears the screen (1.28.3). Drawn in tasks right
 // after the first screen (1.7.1), three thousand clips kept a phone busy
 // for seconds after it opened, and a tap in that time hung.
-const NEXT_SCREENS = 150;
-let drawUpTo = FIRST_SCREEN, growing = false, moreSeen = null;
+const NEXT_SCREENS = 60;
+// What's drawn so far stays through a redraw of the same list (a clip
+// landing, coming back from the reader); another list (a search, a
+// filter, a sort, a part) starts again at the first screen (1.28.4),
+// as a search with hundreds of cards drawn redrew them all each letter.
+let drawUpTo = FIRST_SCREEN, growing = false, moreSeen = null, drawnList = "";
 function watchMore(node) {
   if (!moreSeen) moreSeen = new IntersectionObserver((hits) => {
     if (!hits.some((h) => h.isIntersecting) || !loaded) return;
     drawUpTo += NEXT_SCREENS;
     growing = true;
     try { renderLibrary(); } finally { growing = false; }
-  }, { rootMargin: "1200px 0px" });
+  }, { rootMargin: "1500px 0px" });
   // Watched afresh each draw: the mark stays in view when the cards
   // added don't reach past the margin, and only a change is reported.
   moreSeen.unobserve(node);
@@ -1372,6 +1379,8 @@ function renderLibrary() {
   paintSearch();
   const how = layout();
   $("libraryView").dataset.layout = how;
+  const listKey = [state.query, state.filter, state.sort, state.part, state.place, how].join("\x1f");
+  if (listKey !== drawnList) { drawnList = listKey; drawUpTo = FIRST_SCREEN; }
   const nodes = [];
   const fresh = [];
   // A kept card whose content changed (reading progress, a renamed page)
