@@ -2,6 +2,20 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.28.4] - 2026-10-15
+
+### Fixed
+- With a big library, searching redrew every card already scrolled to
+  on each letter, and so did a filter, a sort or coming back to the
+  library. Each of those now starts again from the first screen and
+  draws the rest as you scroll.
+- Highlights drew every highlight at once, which took seconds with
+  thousands. It shows a screen of clips and the rest as you scroll.
+- Going back to the library from Highlights measured hundreds of cards
+  for no reason.
+- Cards now come sixty at a time as you scroll, in shorter steps, so
+  scrolling a long library stays smooth.
+
 ## [1.28.3] - 2026-10-15
 
 ### Fixed

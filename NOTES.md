@@ -18,6 +18,25 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Every screen measured with 3000 clips (1.28.4).** Daniel asked for
+  the app.js split first; that was done in 1.14.0 (seven app-*.js
+  files), so this went to measuring instead (/tmp/claude-0/sp/perf.js,
+  perf2.js, prof2.js at 6x throttling). Found: a search keystroke 1.8 s
+  of long tasks, because `drawUpTo` kept its scrolled-to size and the
+  search redrew up to 500 cards a letter; Highlights 1.8 s drawing 2250
+  rows; back to the library 0.6 s in libSnap measuring every card
+  below the screen (the library was hidden, so every rect was empty and
+  the 120 cap never hit). Fixes: `drawnList` key (query, filter, sort,
+  part, place, layout) resets `drawUpTo`; Highlights pages 25 clips then
+  40 with its own sentinel (`marksUpTo`, `marksList`); libSnap returns
+  when #library is hidden and breaks at the first card past the bottom
+  (strip tiles aside). After: search 0.3 s, Highlights 0, back 0.1 s.
+  Sidebar (0.09 s), collection (0.19 s), settings, downloads, sheet and
+  the reader (0.07 s) were already under a frame or two at 6x.
+- **NEXT_SCREENS 150 -> 60 (1.28.4).** A pass is mostly DOM building
+  (el, setAttribute, insertBefore), so a smaller pass is a shorter task
+  while scrolling; the 1500px margin keeps the end out of reach.
+
 - **The rest of the library draws on scroll (1.28.3).** The 150-a-pass
   `setTimeout(0)` chain after the first screen (1.7.1) re-ran the whole
   renderLibrary each pass: with 3000 clips at 6x throttling that was
