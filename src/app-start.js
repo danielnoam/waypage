@@ -257,8 +257,8 @@ async function saveText(text, subject) {
 }
 
 // How long opening took (1.21.0), kept for the last few starts and shown
-// in About and in a problem report: the scripts, the library read from
-// disk, and the first screen drawn. Measured from the page starting to
+// under Report a problem (1.28.3, About until then) and in the report:
+// the scripts, the library read from disk, and the first screen drawn. Measured from the page starting to
 // load, so not the phone starting the app around it.
 const START_KEY = "waypage.startTimes";
 const startAt = { scripts: performance.now() };

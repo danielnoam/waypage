@@ -2,6 +2,19 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.28.3] - 2026-10-15
+
+### Fixed
+- A big library (thousands of clips) kept the phone busy for seconds
+  after the app opened, drawing every card, so taps in that time hung.
+  Now the first screen is drawn and the rest follow as you scroll down.
+- On a phone the library's index is read from the app's own address
+  instead of through the plugin bridge, which copied the text twice more
+  on the way.
+
+### Changed
+- The "Opened in …" timing line moved from About to Report a problem.
+
 ## [1.28.2] - 2026-10-15
 
 ### Fixed

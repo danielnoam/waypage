@@ -9,7 +9,7 @@
 // only use what an earlier part, or its own, has declared. A part's
 // functions can call into any part, since nothing is tapped until all of
 // them have loaded. app-start.js runs last and starts things up.
-const APP_VERSION = "1.28.2";
+const APP_VERSION = "1.28.3";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
@@ -1335,16 +1335,29 @@ let onScreen = [];
 let firstRender = true;
 let loaded = false;
 const FIRST_SCREEN = 30;
-// After the first screen the rest come this many at a time, each in a
-// task of its own (1.7.1): two thousand clips in one go held a slow
-// phone's taps and scrolling up for over a second after they showed.
+// After the first screen the rest come this many at a time, drawn as
+// the end of the list nears the screen (1.28.3). Drawn in tasks right
+// after the first screen (1.7.1), three thousand clips kept a phone busy
+// for seconds after it opened, and a tap in that time hung.
 const NEXT_SCREENS = 150;
-let drawUpTo = FIRST_SCREEN, moreTimer = 0;
+let drawUpTo = FIRST_SCREEN, growing = false, moreSeen = null;
+function watchMore(node) {
+  if (!moreSeen) moreSeen = new IntersectionObserver((hits) => {
+    if (!hits.some((h) => h.isIntersecting) || !loaded) return;
+    drawUpTo += NEXT_SCREENS;
+    growing = true;
+    try { renderLibrary(); } finally { growing = false; }
+  }, { rootMargin: "1200px 0px" });
+  // Watched afresh each draw: the mark stays in view when the cards
+  // added don't reach past the margin, and only a change is reported.
+  moreSeen.unobserve(node);
+  moreSeen.observe(node);
+}
 // Android's version, from the Files plugin (0.33.0): what the storage
 // places and the empty library's way back (1.1.0) offer.
 let androidSdk = 0;
 function renderLibrary() {
-  const before = flipping || firstRender ? null : libSnap();
+  const before = flipping || firstRender || growing ? null : libSnap();
   const root = $("library");
   const old = new Map([...root.querySelectorAll(":scope > [data-key]")].map((n) => [n.dataset.key, n]));
   const n = state.pages.length;
@@ -1398,10 +1411,10 @@ function renderLibrary() {
     }
   }
   const loose = flat || favs ? pages : pages.filter((p) => !p.folder);
-  // The first draw of a big library shows a screen's worth of cards and
-  // draws the rest right after (1.2.1): every card at once held the
+  // A big library shows a screen's worth of cards and draws the rest as
+  // they're scrolled to (1.2.1, 1.28.3): every card at once held the
   // first paint back on a phone.
-  const first = loaded && firstRender ? drawUpTo : Infinity;
+  const first = loaded ? drawUpTo : Infinity;
   let more = false;
   const some = (list) => { if (list.length <= first) return list; more = true; return list.slice(0, first); };
   if (how === "list" && !flat) {
@@ -1457,6 +1470,7 @@ function renderLibrary() {
       for (const p of some(mine)) keep("p:" + p.id, () => pageCard(p), pageSig(p));
     }
   }
+  if (more) keep("more", () => el("div", { class: "lib-more", "aria-hidden": "true" }));
   if (n && !pages.length && ts.length) {
     keep("none:q", () => el("div", { class: "empty wide" },
       el("p", { class: "empty-text", "data-q": "" }),
@@ -1497,8 +1511,8 @@ function renderLibrary() {
   // drawn, as two hundred animations at once dropped it to a few frames
   // a second.
   if (before && fresh.length <= 6 && old.size - (nodes.length - fresh.length) <= 6) libFlip(before, true);
-  if (more && !moreTimer) moreTimer = setTimeout(() => { moreTimer = 0; drawUpTo += NEXT_SCREENS; renderLibrary(); }, 0);
-  else if (loaded && firstRender) { firstRender = false; warmPdf(); }
+  if (more) watchMore(nodes.find((x) => x.dataset.key === "more"));
+  if (loaded && firstRender) { firstRender = false; warmPdf(); }
   paintPicks();
   renderDownloads();
   if (state.place === "feeds") renderFeeds();

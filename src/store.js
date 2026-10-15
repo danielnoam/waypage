@@ -148,8 +148,20 @@
   // phone's backup can outgrow) to IndexedDB in 0.27.12; localStorage is
   // read until the first write, and is the fallback where IndexedDB fails.
   const IDB_INDEX = "__library";
+  // On a phone the index is fetched from the library's own address
+  // (1.28.3), as a card's preview is: read over the plugin bridge, three
+  // thousand clips went through two more copies of the text on the way.
   async function readIndex() {
     if (FS()) {
+      if (dataUrl) {
+        try {
+          const res = await fetch(dataUrl + "library.json", { cache: "no-store" });
+          if (res.ok) {
+            const got = await res.json();
+            if (Array.isArray(got)) return got;
+          }
+        } catch (e) { /* the bridge below */ }
+      }
       try {
         return JSON.parse(await (await B()).read("library.json"));
       } catch (e) { return []; }

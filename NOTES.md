@@ -18,6 +18,26 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **The rest of the library draws on scroll (1.28.3).** The 150-a-pass
+  `setTimeout(0)` chain after the first screen (1.7.1) re-ran the whole
+  renderLibrary each pass: with 3000 clips at 6x throttling that was
+  2.9 s of long tasks after open (the last ending 3.3 s in), and a tap
+  in them hung. Now `drawUpTo` applies to every render, a `.lib-more`
+  sentinel after the cards is watched by an IntersectionObserver
+  (rootMargin 1200px) and each hit adds NEXT_SCREENS. After: 0.5 s busy,
+  last long task ends at 0.8 s. `growing` skips the FLIP snapshot on
+  those passes. `drawUpTo` never shrinks, so a filter or a return from a
+  screen keeps what was drawn. Measured with /tmp/claude-0/sp/start.js
+  (long tasks after reload) and start2.js (per-function times).
+- **readIndex fetches library.json (1.28.3).** With a backend `base()`
+  URL (`_capacitor_file_` or `_waypage_folder_`) the index is fetched
+  with `cache: "no-store"` and parsed by `res.json()`; the bridge
+  `readFile` is the fallback. The service worker isn't registered in the
+  app, so nothing caches that fetch. In a browser the IndexedDB path is
+  unchanged.
+- **Start line under Report a problem (1.28.3).** Daniel asked for it
+  there; the report text already carried the last five starts.
+
 - **No more `inert` on the library (1.28.2).** Measured at 6x CPU
   throttling with 300 cards: `libraryView.inert = true` cost 50-70 ms
   (an inherited flag restyles every card; `pointer-events: none` costs

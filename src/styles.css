@@ -428,6 +428,7 @@ html.native .top-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top));
 @keyframes spin { to { transform: rotate(360deg); } }
 /* The library while it's read (1.7.1): in the middle, and only after a
    moment, so a quick start doesn't flash it. */
+.lib-more { grid-column: 1 / -1; height: 1px; }
 .lib-loading {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-3);
   min-height: 50vh; color: var(--muted); font: 400 var(--fs-label)/var(--lh-label) var(--sans);
