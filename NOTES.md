@@ -18,6 +18,26 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **No more `inert` on the library (1.28.2).** Measured at 6x CPU
+  throttling with 300 cards: `libraryView.inert = true` cost 50-70 ms
+  (an inherited flag restyles every card; `pointer-events: none` costs
+  about the same), and it ran on every push, pop, sheet and sidebar.
+  `cover(node, on)` in app-reader.js sets `data-covered` and
+  `aria-hidden` (1 ms); a `focusin` listener sends focus that lands in
+  a covered screen to the topmost open one. Pointer isolation was never
+  from inert: a screen, catch or sheet always covers the one below.
+  After the change the remaining long tasks are paint.
+- **`state.part` starts null (1.28.2).** It was undefined, so `route()`
+  saw `null !== undefined` on the first Back and ran `changePart(null)`:
+  a full renderLibrary plus FLIP.
+- **Watched folder collection on each look (1.28.2).** `w.intoAt` is
+  set when a collection is picked (or on the first look for a 1.28.0
+  pick); lookInOne moves the folder's pages whose `folderAt` is older
+  than it. So a file moved by hand after the pick stays.
+- Perf scripts used: /tmp/claude-0/sp/perf.js (long tasks per step),
+  trace.js (devtools.timeline sums), inert.js (toggle costs). Not in
+  the repo.
+
 - **Watched folder collection moves what's there (1.28.1).** A collection
   exists only as `folder` on its pages, so `w.into` alone made nothing
   appear. `watchIntoPick`'s set now re-files every page with

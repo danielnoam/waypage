@@ -9,7 +9,7 @@
 // only use what an earlier part, or its own, has declared. A part's
 // functions can call into any part, since nothing is tapped until all of
 // them have loaded. app-start.js runs last and starts things up.
-const APP_VERSION = "1.28.1";
+const APP_VERSION = "1.28.2";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
@@ -152,6 +152,10 @@ const state = {
   downloads: false,
   // Whether the Sync screen is up (1.28.0).
   syncPage: false,
+  // The part of the library shown alone ("collections", "pages"), or
+  // null. Left unset, the first Back compared undefined with null and
+  // redrew the whole library (1.28.2).
+  part: null,
   open: null,
   settings: false,
   sheet: false,
@@ -1220,7 +1224,7 @@ function changePart(part) {
 // The cards, tiles and section heads on screen now, by what they show.
 function libSnap() {
   const m = new Map();
-  if ($("libraryView").inert || $("libraryView").hidden) return m;
+  if (covered($("libraryView")) || $("libraryView").hidden) return m;
   const all = $("library").querySelectorAll(".card, .tile, .section-head");
   for (let i = 0; i < all.length && m.size < 120; i++) {
     const n = all[i], id = n.dataset.name ? "f:" + n.dataset.name : n.dataset.ids ? "p:" + n.dataset.ids : "h:" + n.textContent;

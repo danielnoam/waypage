@@ -1094,8 +1094,8 @@ function openMenu(kind, page) {
   const open = state.menu;
   afterSettle(() => {
     if (state.menu !== open) return;
-    menuUnder = [state.folder ? $("folderView") : $("libraryView"), $("selectHead"), $("selectBar")].filter((n) => !n.inert);
-    menuUnder.forEach((n) => { n.inert = true; });
+    menuUnder = [state.folder ? $("folderView") : $("libraryView"), $("selectHead"), $("selectBar")].filter((n) => !covered(n));
+    menuUnder.forEach((n) => cover(n, true));
     const first = $("menuSheet").querySelector("button:not(:disabled)");
     if (first && !$("menuSheet").contains(document.activeElement)) first.focus({ preventScroll: true });
   });
@@ -1114,7 +1114,7 @@ function closeMenu() {
   const sheet = $("menuSheet"), catcher = $("menuCatch");
   M.dim(catcher, false).then(() => { if (!state.menu) catcher.hidden = true; });
   (wide.matches ? M.popInto(sheet, menuFrom) : M.sink(sheet, sheetDrop(sheet))).then(() => { if (!state.menu) sheet.hidden = true; delete sheet.dataset.drop; });
-  afterSettle(() => was.forEach((n) => { n.inert = false; }));
+  afterSettle(() => was.forEach((n) => cover(n, false)));
 }
 
 function redrawMenu() {
@@ -1788,6 +1788,17 @@ async function lookInOne(w, said, scan) {
       had.file.path = f.path.slice(0, 500);
       joined++;
     }
+    // Files here before a collection was picked for the folder follow it
+    // (1.28.2), once: one moved by hand since then stays.
+    if (w.into && !w.intoAt) { w.intoAt = Date.now(); saveWatch(w); }
+    if (w.into) {
+      const to = folderName(w.into);
+      for (const p of state.pages) {
+        if (p.watched !== w.tree || p.folder === to || (p.folderAt || 0) >= w.intoAt) continue;
+        Object.assign(p, { folder: to, folderAt: w.intoAt });
+        joined++;
+      }
+    }
     if (joined) await C.store.writeIndex(state.pages);
     out.joined = joined;
     const fresh = there.filter((f) => !known.has(f.ref) && !(w.skip || []).includes(f.ref))
@@ -1913,9 +1924,9 @@ function watchIntoPick(w) {
   const set = async (into) => {
     const now = watches().find((x) => x.tree === w.tree);
     if (!now) return;
-    if (into) now.into = into; else delete now.into;
-    saveWatch(now);
     const at = Date.now();
+    if (into) { now.into = into; now.intoAt = at; } else { delete now.into; delete now.intoAt; }
+    saveWatch(now);
     let moved = 0;
     for (const p of state.pages) {
       if (p.watched !== w.tree) continue;

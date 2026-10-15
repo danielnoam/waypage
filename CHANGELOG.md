@@ -2,6 +2,20 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.28.2] - 2026-10-15
+
+### Fixed
+- A big library made the app stall for a moment each time a screen,
+  sheet or the sidebar opened or closed, so a tap right then seemed to
+  do nothing. The library underneath is no longer made inert, which
+  restyled every card; it's covered instead, which costs nothing.
+- The first Back after opening the app redrew the whole library for no
+  reason.
+- Files that were already in a watched folder when you picked a
+  collection for it now move into that collection the next time
+  Waypage looks in the folder, even if they didn't move when you picked
+  it. A file you moved by hand since then stays where you put it.
+
 ## [1.28.1] - 2026-10-14
 
 ### Fixed
