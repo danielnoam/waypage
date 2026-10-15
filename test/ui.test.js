@@ -468,7 +468,7 @@ function epubBytes() {
     });
     await p.context().close();
 
-    await test("a library of 400 clips draws every card, in steps", async () => {
+    await test("a library of 400 clips draws every card as it is scrolled", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
         const list = [];
@@ -477,6 +477,13 @@ function epubBytes() {
       });
       await q.reload();
       await q.locator(".page-card").first().waitFor();
+      await q.waitForTimeout(600);
+      const atFirst = await q.evaluate(() => document.querySelectorAll(".library .page-card").length);
+      assert.ok(atFirst < 400, "the first screen stops short: " + atFirst);
+      for (let i = 0; i < 8; i++) {
+        await q.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
+        await q.waitForTimeout(250);
+      }
       await q.waitForFunction(() => document.querySelectorAll(".library .page-card").length >= 400, null, { timeout: 15000 });
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();

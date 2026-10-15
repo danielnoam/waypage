@@ -419,7 +419,8 @@ function reportGroup() {
       el("button", { class: "row", type: "button", onclick: send }, el("span", { class: "row-label accent" }, "Send the report")),
       el("button", { class: "row", type: "button", onclick: issue }, el("span", { class: "row-label accent" }, "Open an issue on GitHub")),
       el("button", { class: "row", type: "button", onclick: async () => copyText(await reportText(), "Report copied") }, el("span", { class: "row-label accent" }, "Copy the report"))),
-    el("p", { class: "footnote" }, "Nothing leaves " + HERE + " unless you send it. The report holds what you wrote, Waypage's version, the phone's model and system, and the notes below, with addresses cut to their pages."),
+    el("p", { class: "footnote" }, "Nothing leaves " + HERE + " unless you send it. The report holds what you wrote, Waypage's version, the phone's model and system, how long opening took, and the notes below, with addresses cut to their pages."),
+    startLine() ? el("p", { class: "footnote start-line" }, startLine()) : null,
     el("h2", { class: "overline" }, list.length ? "What went wrong lately" : "Nothing went wrong lately"),
     list.length ? el("ol", { class: "group report-log" }, ...list.slice().reverse().slice(0, 30).map((x) => el("li", { class: "report-line" },
       el("span", { class: "meta" }, logTime(x.at) + " · " + x.kind + (x.n ? " ×" + x.n : "")),
@@ -445,7 +446,6 @@ function aboutGroup() {
     list,
     !C.platform.native && !installed && !installPrompt && ios
       ? el("p", { class: "footnote install-hint" }, "To install Waypage, tap Share, then Add to Home Screen.") : null,
-    startLine() ? el("p", { class: "footnote start-line" }, startLine()) : null,
     el("p", { class: "footnote" }, "Clips stay " + ON_HERE + ". Waypage collects nothing."));
 }
 
