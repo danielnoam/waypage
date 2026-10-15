@@ -378,7 +378,7 @@ function openSide() {
   M.slideIn(side, M.reduced() ? null : lib).then(() => { if (state.side && !pinned.matches && !M.reduced()) lib.style.transform = M.sideDrift(side); });
   afterSettle(() => {
     if (!state.side) return;
-    $("libraryView").inert = true;
+    cover($("libraryView"), true);
     const at = side.querySelector("[aria-current]") || side.querySelector("button");
     if (at) at.focus({ preventScroll: true });
   });
@@ -393,7 +393,7 @@ function closeSide() {
   if (pinned.matches) {
     catcher.hidden = true;
     side.style.pointerEvents = "";
-    $("libraryView").inert = false;
+    cover($("libraryView"), false);
     $("libraryView").style.transform = "";
     return;
   }
@@ -408,7 +408,7 @@ function closeSide() {
   M.slideOut(side, from, M.reduced() ? null : lib).then(() => { if (!state.side) side.hidden = true; });
   afterSettle(() => {
     if (state.side) return;
-    $("libraryView").inert = false;
+    cover($("libraryView"), false);
     if (had) $("sideBtn").focus({ preventScroll: true });
   });
 }

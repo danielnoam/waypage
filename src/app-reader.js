@@ -3,7 +3,7 @@
 // its sheets) and the image viewer. See app.js for how the parts share.
 // ---- Screens ----
 // The reader and Settings are pushed over the library, which stays laid
-// out underneath (inert, not hidden) so its scroll position survives. Each
+// out underneath (covered, not hidden) so its scroll position survives. Each
 // push is a history entry, so Android's back gesture pops it.
 
 // The reader can open over a folder's screen; everything else is over the library.
@@ -22,9 +22,28 @@ const pinned = mq("(min-width: 1024px)");
 // The sidebar is drawn when it's open over the page or pinned beside it.
 const sideShown = () => state.side || pinned.matches;
 
+// A screen underneath another is covered (1.28.2): hidden from assistive
+// tech, and focus that lands in it is sent back up. It was `inert`, which
+// restyles every card in the library (50 ms and more on a phone with a
+// big library) each time a screen or the sidebar opened or closed. Taps
+// can't reach it anyway: the screen above, a catch or a sheet covers it.
+function cover(node, on) {
+  if (!!node.dataset.covered === on) return;
+  if (on) { node.dataset.covered = "1"; node.setAttribute("aria-hidden", "true"); }
+  else { delete node.dataset.covered; node.removeAttribute("aria-hidden"); }
+}
+const covered = (node) => !!node.dataset.covered;
+document.addEventListener("focusin", (e) => {
+  if (!e.target.closest || !e.target.closest("[data-covered]")) return;
+  const tops = [...document.querySelectorAll(".screen:not([hidden]):not([data-covered]), #sidebar:not([hidden]), #menuSheet:not([hidden])")];
+  const top = tops[tops.length - 1];
+  const first = top && top.querySelector("button:not(:disabled), [href], input:not(:disabled), [tabindex]:not([tabindex=\"-1\"])");
+  if (first) first.focus({ preventScroll: true }); else e.target.blur();
+});
+
 // Each push counts, so a pop's animation ending after the same screen
 // was pushed again (back, then a quick tap on it) doesn't hide it and
-// leave the screen underneath inert, taking no taps.
+// leave the screen underneath covered.
 const pushes = new WeakMap();
 
 // The panel just tapped (a card, a collection, Continue reading, a
@@ -92,7 +111,7 @@ function pushScreen(screen) {
       c.hidden = false;
       M.dim(c, true);
       const n = pushes.get(screen);
-      afterSettle(() => { if (pushes.get(screen) === n && !screen.hidden && !screen.dataset.leaving) below(screen).inert = true; });
+      afterSettle(() => { if (pushes.get(screen) === n && !screen.hidden && !screen.dataset.leaving) cover(below(screen), true); });
     } else screen.dataset.pane = "1";
     screen.hidden = false;
     showAloudBar();
@@ -113,14 +132,12 @@ function pushScreen(screen) {
   // library that restyles every card, which held the push's first frame
   // back by a tenth of a second on a phone (0.30.4).
   const n = pushes.get(screen);
-  moved.then(() => { if (pushes.get(screen) === n && !screen.hidden && !screen.dataset.leaving) under.inert = true; });
+  moved.then(() => { if (pushes.get(screen) === n && !screen.hidden && !screen.dataset.leaving) cover(under, true); });
   return moved;
 }
 // Heavy work after an animation's first frame, so it starts at once.
 const afterStart = (fn) => requestAnimationFrame(() => setTimeout(fn, 0));
-// Making the library inert, or live again, restyles every card: a long
-// frame that stalled the sidebar and sheets just after they set off
-// (0.30.8). It waits until the spring has all but landed.
+// Work after a spring has all but landed (0.30.8).
 const afterSettle = (fn) => setTimeout(fn, M.reduced() ? 130 : 300);
 
 function popScreen(screen) {
@@ -132,7 +149,7 @@ function popScreen(screen) {
     if (screen.dataset.dialog) {
       const c = $("screenCatch"), under = below(screen);
       M.dim(c, false).then(() => { if (screen.dataset.leaving) c.hidden = true; });
-      afterSettle(() => { if (pushes.get(screen) === n) under.inert = false; });
+      afterSettle(() => { if (pushes.get(screen) === n) cover(under, false); });
     }
     const to = screen.dataset.dialog && anchorOf(screen);
     return (screen.dataset.dialog ? M.popInto(screen, to && to.getBoundingClientRect()) : M.pop(screen)).then(hide).then(() => showAloudBar());
@@ -145,7 +162,7 @@ function popScreen(screen) {
   // hidden in the same frame it lands so the panel shows at once.
   const to = from && panelNow(from, under);
   const moved = to ? M.shrink(screen, to.rect, from.radius, to.panel, hide) : M.pop(screen, under);
-  afterSettle(() => { if (pushes.get(screen) === n) under.inert = false; });
+  afterSettle(() => { if (pushes.get(screen) === n) cover(under, false); });
   return moved.then(hide).then(() => showAloudBar());
 }
 
