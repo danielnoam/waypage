@@ -34,13 +34,16 @@
   // What went wrong lately (1.9.0), for Report a problem: errors nothing
   // caught, console errors, and saves that failed, the last LOG_KEEP of
   // them in localStorage. Addresses keep their page but lose their query,
-  // where sign-in tokens and tracking live. Nothing leaves the phone
+  // where sign-in tokens and tracking live, and anything that looks like a
+  // GitHub or Google token is cut (1.29.1). Nothing leaves the phone
   // unless the person sends a report.
   const LOG_KEY = "waypage.log";
   const LOG_KEEP = 60;
   const cleanText = (t) => String(t == null ? "" : t)
     .replace(/(https?:\/\/[^\s?#"'<>)]+)[?#][^\s"'<>)]*/g, "$1")
     .replace(/(token|key|password|secret)=[^\s&]+/gi, "$1=…")
+    .replace(/\b(github_pat_|gh[pousr]_|ya29\.)[\w.-]+/g, "$1…")
+    .replace(/(Bearer\s+)\S+/gi, "$1…")
     .slice(0, 600);
   function logList() {
     try { const v = JSON.parse(localStorage.getItem(LOG_KEY)); return Array.isArray(v) ? v : []; } catch (e) { return []; }
@@ -91,7 +94,11 @@
     } catch (e) { return false; }
   };
   const nativeOpen = window.open.bind(window);
+  // Only web and mail addresses leave the app (1.29.1): a clip's address
+  // can come from a backup or a synced library, and a javascript: one
+  // opened here would run with the app's plugins.
   function openOutside(url) {
+    if (!/^(https?|mailto):/i.test(String(url || "").trim())) return false;
     const L = plugin("AppLauncher");
     if (L) {
       Promise.resolve(L.openUrl({ url: String(url) }))

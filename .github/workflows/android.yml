@@ -20,7 +20,12 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     steps:
+      # The job's token isn't left in .git/config for every later step
+      # (npm packages, Gradle plugins) to find; only the release step gets
+      # it, through GH_TOKEN.
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -53,7 +58,7 @@ jobs:
 
       - name: Icon and splash
         run: >-
-          npx --yes @capacitor/assets@3 generate --android
+          npx --yes @capacitor/assets@3.0.5 generate --android
           --iconBackgroundColor '#2F5D8A' --iconBackgroundColorDark '#2F5D8A'
           --splashBackgroundColor '#F7F4EE' --splashBackgroundColorDark '#F7F4EE'
 

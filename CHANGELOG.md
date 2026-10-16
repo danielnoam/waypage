@@ -2,6 +2,28 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.29.1] - 2026-10-16
+
+### Changed
+- Setting up GitHub sync now makes the private waypage-data repo first,
+  then a token for that repo only. The old steps asked for a token that
+  could reach and change every repo on your account. If you set up sync
+  before this version, make a new token for waypage-data only and
+  connect again with it, then delete the old one on GitHub.
+- Sync checks once a day that waypage-data is still private, and stops
+  with a note if it was made public.
+- Report a problem says that an issue on GitHub is public, and cuts
+  anything that looks like a GitHub or Google token out of its notes.
+
+### Fixed
+- A clip's "Open the original" only opens web and mail addresses, so an
+  odd address in an imported backup can't run anything in the app.
+- An imported email drops the invisible tracking pictures senders put in
+  to learn when and where a message was opened.
+- Google Drive's sign-in check uses a properly random code.
+- The app builds no longer leave GitHub's access token where the build
+  tools could read it, and the icon tool is pinned to one version.
+
 ## [1.29.0] - 2026-10-16
 
 ### Changed

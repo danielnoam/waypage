@@ -181,13 +181,14 @@ function syncSteps() {
     el("p", { class: "section-lead" }, "Keeps your clips, tags, collections, favourites and where you are the same on every device, through a private repo on your GitHub. Each device gets the pictures itself."),
     el("div", { class: "group" },
       outRow("https://github.com/signup", "1", "Make a free GitHub account", "Skip this if you have one."),
-      outRow(C.sync.KEY_URL, "2", "Make a token for Waypage", "GitHub fills it in. Under Repository access pick All repositories, then Generate token, and copy it."),
+      outRow(C.sync.NEW_REPO_URL, "2", "Make a private repo for your library", "GitHub fills it in. Keep it Private, then Create repository."),
+      outRow(C.sync.KEY_URL, "3", "Make a token for that repo only", "GitHub fills it in. Under Repository access pick Only select repositories, then waypage-data. Generate token, and copy it."),
       el("div", { class: "row sync-step sync-paste" },
-        el("span", { class: "step-num", "aria-hidden": "true" }, "3"),
+        el("span", { class: "step-num", "aria-hidden": "true" }, "4"),
         el("div", { class: "choice-text" },
           el("span", { class: "choice-label" }, "Paste it here"),
           input, go, note))),
-    el("p", { class: "footnote" }, "The token stays on this device and goes only to GitHub. Waypage makes a private repo called waypage-data for your library."));
+    el("p", { class: "footnote" }, "The token stays on this device and goes only to GitHub. Made for waypage-data only, it can't touch anything else on your account. Sync stops if that repo is ever made public."));
 }
 function syncJoin() {
   const scan = C.platform.canScan ? el("button", { class: "row", type: "button", onclick: scanSync },
@@ -195,12 +196,12 @@ function syncJoin() {
   return el("section", { class: "settings-section" },
     el("h2", { class: "overline" }, "Already syncing on another device?"),
     scan ? el("div", { class: "group" }, scan) : null,
-    el("p", { class: "footnote" }, (scan ? "" : "Open its setup link here, or paste it in step 3. ") + "The code and link are on that device, in Settings, Sync."));
+    el("p", { class: "footnote" }, (scan ? "" : "Open its setup link here, or paste it in step 4. ") + "The code and link are on that device, in Settings, Sync."));
 }
 async function scanSync() {
   let text = null;
   try { text = await C.platform.scanQr(() => toast("Getting the scanner ready…")); }
-  catch (e) { toast("Couldn't scan. Paste the setup link in step 3 instead."); return; }
+  catch (e) { toast("Couldn't scan. Paste the setup link in step 4 instead."); return; }
   if (!text) return;
   if (!C.sync.tokenIn(text)) { toast("That isn't a Waypage setup code. Show the one in Settings, Sync on a synced device."); return; }
   const err = await connectSync(text);

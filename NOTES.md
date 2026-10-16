@@ -18,6 +18,30 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Privacy and security checkup (1.29.1).** Daniel asked that our data
+  and the user's be private and secure. Checked: saved HTML (allowlist
+  rebuild in save.js, reader frame without allow-scripts, CSP), the PDF
+  sandbox, native plugins (no JavaScript bridges on the hidden browsers,
+  no exported components but the widget picker), backups (no tokens in
+  them), the report log, Drive's OAuth, CI secrets. Fixed: the sync
+  token was "All repositories" with Contents and Administration write,
+  never expiring, kept in the WebView's storage and shown as a QR code;
+  leaked, it could push to danielnoam/waypage itself and so into every
+  update. Now the repo is made first and the token is for it alone with
+  Contents only; adoptOld's rename works only for older tokens, and falls
+  back to the old name without it. Also: openOutside refuses non-web
+  schemes, email trackers (pictures 3 px or less, or hidden) are dropped
+  on import, the log cuts token-shaped strings, checkout doesn't persist
+  the job token, @capacitor/assets pinned to 3.0.5. Left as they are,
+  with reasons: remote pictures load when a clip is opened online (by
+  design: previews offline, full online; the image host sees the visit);
+  Android Auto Backup stays on (Google's backup is end-to-end encrypted
+  with the screen lock, and it carries the library across phones); the
+  web copy shares danielnoam.github.io's storage with every other Pages
+  site on the account, so its sync token is as safe as the least safe of
+  them (a custom domain would separate it); the waypage-data repo isn't
+  encrypted, it's private on GitHub.
+
 - **Long clips lay out as they're reached (1.29.0).** Daniel asked how
   EPUBs and PDFs could open much faster. Measured (Playwright, 390px,
   6x throttling; a generator for a 400-chapter EPUB, an 800-page text
