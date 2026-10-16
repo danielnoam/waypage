@@ -454,6 +454,18 @@
     if (type === "text/html" && got.html == null) got.html = inCharset(partBytes(part), param(ct, "charset"));
     else if (type === "text/plain" && got.text == null) got.text = inCharset(partBytes(part), param(ct, "charset"));
   }
+  // A picture a few pixels across that the message doesn't carry is a
+  // tracker (1.29.1): loaded from the sender's server, it tells them the
+  // message was opened, when, and from where.
+  const pixel = (img) => {
+    const style = img.getAttribute("style") || "";
+    const side = (a) => {
+      const v = parseFloat(img.getAttribute(a) || (style.match(new RegExp("(?:^|;)\\s*" + a + "\\s*:\\s*([\\d.]+)px", "i")) || [])[1]);
+      return isFinite(v) ? v : null;
+    };
+    const w = side("width"), h = side("height");
+    return (w != null && w <= 3) || (h != null && h <= 3) || /display\s*:\s*none/i.test(style);
+  };
   function fromEmail(bytes, name) {
     const top = mimePart(latin1(bytes));
     const got = { html: null, text: null, images: new Map() };
@@ -471,7 +483,7 @@
       const b = got.images.get(key);
       const token = b && b.length && pics.add(b);
       if (token) img.setAttribute("src", token);
-      else if (/^cid:/i.test(src)) img.remove();
+      else if (/^cid:/i.test(src) || pixel(img)) img.remove();
     }
     const page = fromHtml("<!doctype html><title></title>" + doc.body.outerHTML, name);
     const meta = [sender, isFinite(when) ? new Date(when).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" }) : ""].filter(Boolean).join(", ");

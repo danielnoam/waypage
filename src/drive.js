@@ -67,7 +67,7 @@
   let waiting = null;
   function signIn(then) {
     if (!WEB_CLIENT) return Promise.reject(new DriveError("Google Drive isn't set up in this copy.", "setup"));
-    const nonce = Math.random().toString(36).slice(2, 12);
+    const nonce = [...crypto.getRandomValues(new Uint8Array(12))].map((b) => b.toString(16).padStart(2, "0")).join("");
     keep(ASK_KEY, nonce);
     keep(HAND_KEY, null);
     const url = (how) => "https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams({

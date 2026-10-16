@@ -30,7 +30,12 @@ jobs:
     env:
       HAS_SIGNING_KEY: ${{ secrets.ANDROID_KEYSTORE_B64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' }}
     steps:
+      # The job's token isn't left in .git/config for every later step
+      # (npm packages, Gradle plugins) to find; only the release step gets
+      # it, through GH_TOKEN.
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -61,7 +66,7 @@ jobs:
 
       - name: Icon and splash
         run: >-
-          npx --yes @capacitor/assets@3 generate --ios
+          npx --yes @capacitor/assets@3.0.5 generate --ios
           --iconBackgroundColor '#2F5D8A' --iconBackgroundColorDark '#2F5D8A'
           --splashBackgroundColor '#F7F4EE' --splashBackgroundColorDark '#F7F4EE'
 

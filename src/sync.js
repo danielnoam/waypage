@@ -20,6 +20,7 @@
   const SENT_KEY = "waypage.syncSent";   // pages sent before library.json was (1.13.0)
   const REPO = "waypage-data";
   const OLD_REPO = "carryon-data"; // Carry-on's name for it, before 1.0.0
+  const DAY = 24 * 3600 * 1000;
   const LOCAL = /^images\//;
   const KEEP_DELETED = 90 * 24 * 3600 * 1000;
 
@@ -468,13 +469,18 @@
   // Connecting: whose token it is, and the repo, made private if missing.
   // ---- Setting up (0.30.1) ----
 
+  // The repo is made first, private (1.29.1), so the token can be for it
+  // alone: a token for All repositories that could also make and rename
+  // repos reached everything on the account, this app's own code too.
   // GitHub's page for a new key, filled in: a fine-grained token that never
-  // expires (sync shouldn't stop in a month), allowed to make the repo
-  // (Administration) and write it (Contents). Which repos it reaches can't
-  // be filled in, so the steps say to pick All repositories.
+  // expires (sync shouldn't stop in a month) that writes the repo
+  // (Contents). Which repo it reaches can't be filled in, so the steps say
+  // to pick it.
+  const NEW_REPO_URL = "https://github.com/new?name=" + REPO + "&visibility=private&description=Waypage%27s+library";
   const KEY_URL = "https://github.com/settings/personal-access-tokens/new?name=Waypage+sync" +
     "&description=Keeps+Waypage%27s+library+in+step+through+a+private+repo+called+" + REPO +
-    "&expires_in=none&contents=write&administration=write";
+    "&expires_in=none&contents=write";
+  const PUBLIC_REPO = "Your " + REPO + " repo is public, so anyone could read your library. Sync is stopped until you make it private on GitHub, in the repo's Settings.";
   // Another device joins from a link to the web copy with the token after
   // the # (which a browser never sends to the server), as LifeLog's setup
   // link does; the app takes the same link from a QR code or pasted.
@@ -494,11 +500,16 @@
       cfg.owner = (await me.json()).login;
       let repo = await call(API + "/repos/" + cfg.owner + "/" + REPO, { headers: headers() });
       if (repo.status === 404) repo = await adoptOld();
-      if (repo.ok) { const j = await repo.json(); cfg.branch = j.default_branch || "main"; cfg.repo = j.name || cfg.repo; }
+      if (repo.ok) {
+        const j = await repo.json();
+        if (j.private === false) throw new SyncError(PUBLIC_REPO);
+        cfg.branch = j.default_branch || "main";
+        cfg.repo = j.name || cfg.repo;
+      }
       else if (repo.status === 404) {
         const made = await call(API + "/user/repos", { method: "POST", headers: headers({ "Content-Type": "application/json" }),
           body: JSON.stringify({ name: REPO, private: true, auto_init: true, description: "Waypage's library" }) });
-        if (!made.ok) throw new SyncError("Waypage couldn't make its " + REPO + " repo. Make the token again with All repositories picked under Repository access, then connect.");
+        if (!made.ok) throw new SyncError("Waypage can't find your " + REPO + " repo. Make it in step 2, then make the token with only that repo picked.");
         cfg.branch = (await made.json()).default_branch || "main";
       } else throw await fail(repo);
       if (was && was.links) cfg.links = true;
@@ -640,7 +651,7 @@
   // whose pictures this device fetches next and `fromLinks` the pages it
   // saves itself from their links; throws SyncError.
   // Carry-on's carryon-data becomes waypage-data (1.0.0): renamed when the
-  // token may (it has Administration: write since it could make the repo),
+  // token may (one made before 1.29.1 has Administration: write),
   // used as it is when not. Resolves to the repo's response, or the 404.
   async function adoptOld() {
     const old = await call(API + "/repos/" + cfg.owner + "/" + OLD_REPO, { headers: headers() });
@@ -652,11 +663,19 @@
     return moved.ok ? moved : old;
   }
   // A copy set up under Carry-on still names carryon-data: once a phone has
-  // renamed it, GitHub answers the old name with the new one.
+  // renamed it, GitHub answers the old name with the new one. Once a day
+  // it also checks the repo is still private (1.29.1): true when it isn't,
+  // and nothing goes up.
   async function settle() {
-    if (!cfg || cfg.repo === REPO) return;
+    if (!cfg || (cfg.repo === REPO && cfg.looked > Date.now() - DAY)) return false;
     const r = await call(API + "/repos/" + cfg.owner + "/" + cfg.repo, { headers: headers() });
-    if (r.ok) { const name = (await r.json()).name; if (name && name !== cfg.repo) { cfg.repo = name; keep(CFG_KEY, cfg); } }
+    if (!r.ok) return false;
+    const j = await r.json();
+    if (j.name && j.name !== cfg.repo) cfg.repo = j.name;
+    if (j.private === false) return true;
+    cfg.looked = Date.now();
+    keep(CFG_KEY, cfg);
+    return false;
   }
 
   function run({ getPages, setPages, getFeeds, setFeeds, getSeen, setSeen, sameUrl, urlKey, onProgress }) {
@@ -665,7 +684,7 @@
     const told = (p) => { progress = p; if (onProgress) onProgress(p); };
     running = (async () => {
       try {
-        await settle().catch(() => {});
+        if (await settle().catch(() => false)) throw new SyncError(PUBLIC_REPO);
         const res = await once(getPages, setPages, sameUrl || ((a, b) => a === b), told, getFeeds, setFeeds, getSeen, setSeen, urlKey);
         last = { at: Date.now(), error: "" };
         cfg.at = last.at;
@@ -948,7 +967,7 @@
   }
 
   C.sync = {
-    merge, mergeTags, mergeMarks, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, tokenIn, setupLink,
+    merge, mergeTags, mergeMarks, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
     share, clean, same, urlKey, sameUrl, peek, poll,
     get on() { return !!cfg; },
     get account() { return cfg ? cfg.owner + "/" + cfg.repo : ""; },
