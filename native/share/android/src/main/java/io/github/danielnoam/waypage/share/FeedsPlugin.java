@@ -1,9 +1,12 @@
 package io.github.danielnoam.waypage.share;
 
+import android.app.NotificationManager;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.provider.Settings;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -19,19 +22,24 @@ import org.json.JSONObject;
  * Feeds checked with the app closed (src/app.js, 0.28.4), through
  * FeedCheckJob:
  *
- *   watch({ feeds: [{ url, title, known }], ask })
+ *   watch({ feeds: [{ url, title, known }], ask, notes })
  *                 the feeds to read and the posts the app has; none stops
  *                 the checks. `ask` asks to notify (Android 13), once a run.
- *   news()        { feeds: [url], open } once: the feeds with new posts
- *                 since, and whether the app was opened from the
- *                 notification. Takes the notification away.
+ *                 `notes` is how to notify, see FeedCheckJob (1.30.0).
+ *   news()        { feeds: [url], open, feed, save } once: the feeds with
+ *                 new posts since, whether a notification opened the app,
+ *                 the feed it was for and the post its Save asked for.
+ *                 Takes the notifications away.
+ *   allowed()     { allowed }: whether the phone lets Waypage notify.
+ *   settings()    opens the phone's notification settings for Waypage.
  *
- * and an "open" event when the notification brings the running app back.
+ * and an "open" event when a notification brings the running app back.
  */
 @CapacitorPlugin(name = "Feeds")
 public class FeedsPlugin extends Plugin {
 
     private boolean asked, opened;
+    private String feed, save;
 
     @Override
     public void load() {
@@ -48,6 +56,17 @@ public class FeedsPlugin extends Plugin {
         if (intent == null || !FeedCheckJob.OPEN.equals(intent.getAction())) return false;
         intent.setAction(Intent.ACTION_MAIN);
         opened = true;
+        feed = intent.getStringExtra(FeedCheckJob.FEED);
+        save = intent.getStringExtra(FeedCheckJob.SAVE);
+        // A Save button doesn't take its notification away by itself.
+        int note = intent.getIntExtra(FeedCheckJob.NOTE_ID, 0);
+        if (save != null && note != 0) {
+            NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+            nm.cancel("waypage-feeds", note);
+        }
+        intent.removeExtra(FeedCheckJob.FEED);
+        intent.removeExtra(FeedCheckJob.SAVE);
+        intent.removeExtra(FeedCheckJob.NOTE_ID);
         return true;
     }
 
@@ -60,6 +79,8 @@ public class FeedsPlugin extends Plugin {
             call.reject("Couldn't keep the feeds");
             return;
         }
+        JSObject notes = call.getObject("notes");
+        if (notes != null) getContext().getSharedPreferences(FeedCheckJob.PREFS, Context.MODE_PRIVATE).edit().putString("notes", notes.toString()).apply();
         FeedCheckJob.schedule(getContext(), feeds.length() > 0);
         if (call.getBoolean("ask", false)) askToNotify();
         call.resolve();
@@ -77,8 +98,33 @@ public class FeedsPlugin extends Plugin {
         JSObject out = new JSObject();
         out.put("feeds", urls);
         out.put("open", opened);
+        if (feed != null) out.put("feed", feed);
+        if (save != null) out.put("save", save);
         opened = false;
+        feed = save = null;
         call.resolve(out);
+    }
+
+    @PluginMethod
+    public void allowed(PluginCall call) {
+        NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+        JSObject out = new JSObject();
+        out.put("allowed", nm.areNotificationsEnabled());
+        call.resolve(out);
+    }
+
+    @PluginMethod
+    public void settings(PluginCall call) {
+        String pkg = getContext().getPackageName();
+        Intent i = Build.VERSION.SDK_INT >= 26
+            ? new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, pkg)
+            : new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + pkg));
+        try {
+            getContext().startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Couldn't open the phone's settings");
+        }
     }
 
     private void askToNotify() {

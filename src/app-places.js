@@ -926,7 +926,9 @@ function feedSheet() {
         { value: "previews", label: "Previews" }, { value: "full", label: "Full" }, { value: "links", label: "Links" },
       ], f.images || load(IMAGES_KEY, "previews"), (v) => set({ images: v }))) : null,
       row("Save into", into),
-      row("Skip posts older than", seg("feed-days", "Skip posts older than", FEED_DAYS, String(f.days || 7), (v) => set({ days: Number(v) })))),
+      row("Skip posts older than", seg("feed-days", "Skip posts older than", FEED_DAYS, String(f.days || 7), (v) => set({ days: Number(v) }))),
+      C.platform.native && notesPrefs().on ? row("Notifications", seg("feed-notes", "Notifications", [{ value: "on", label: "On" }, { value: "off", label: "Off" }],
+        feedQuiet(f) ? "off" : "on", (v) => setFeedQuiet(f, v === "off"))) : null),
     el("p", { class: "footnote" + (f.error ? " warn" : "") }, f.error || (f.checkedAt ? "Checked " + whenText(f.checkedAt) + ". " : "") + rateLine(f.items) + "."),
     el("button", { class: "sheet-row", type: "button", onclick: (e) => {
       e.currentTarget.disabled = true;
