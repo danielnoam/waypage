@@ -2,6 +2,14 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.29.2] - 2026-10-16
+
+### Added
+- A device that set up GitHub sync before 1.29.1 shows "Make a safer
+  token" at the top of Settings › GitHub sync: make a token for
+  waypage-data only, paste it in, and delete the old one, without
+  turning sync off.
+
 ## [1.29.1] - 2026-10-16
 
 ### Changed

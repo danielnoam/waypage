@@ -18,6 +18,11 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Old sync tokens (1.29.2).** GitHub doesn't say what a token can
+  reach, so a config without `scoped` (set by connect from 1.29.2) counts
+  as made under the old All-repositories steps. The swap reuses connect,
+  which keeps Links only and starts the next sync from a full merge.
+
 - **Privacy and security checkup (1.29.1).** Daniel asked that our data
   and the user's be private and secure. Checked: saved HTML (allowlist
   rebuild in save.js, reader frame without allow-scripts, CSP), the PDF
