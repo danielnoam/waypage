@@ -419,16 +419,28 @@
   // and saving itself once it's opened.
   const feedChecks = {
     // [{ url, title, known }]: the feeds and the post ids they have.
-    watch(feeds, ask) {
+    // notes (1.30.0): { style: "each" | "together" | "off", quiet: [url] }.
+    watch(feeds, ask, notes) {
       const F = plugin("Feeds");
-      if (F) F.watch({ feeds, ask: !!ask }).catch(() => {});
+      if (F) F.watch({ feeds, ask: !!ask, notes }).catch(() => {});
     },
-    // { feeds: [url], open }: feeds with new posts since, and whether the
-    // notification opened the app.
+    // { feeds: [url], open, feed, save }: feeds with new posts since,
+    // whether a notification opened the app, the feed it was for and the
+    // post its Save asked for.
     async news() {
       const F = plugin("Feeds");
       if (F) { try { return await F.news(); } catch (e) { /* none */ } }
       return { feeds: [], open: false };
+    },
+    // Whether the phone lets Waypage notify; null where it can't tell.
+    async allowed() {
+      const F = plugin("Feeds");
+      if (F && F.allowed) { try { return !!(await F.allowed()).allowed; } catch (e) { /* older app */ } }
+      return null;
+    },
+    settings() {
+      const F = plugin("Feeds");
+      if (F && F.settings) F.settings().catch(() => {});
     },
     onOpen(f) {
       const F = plugin("Feeds");

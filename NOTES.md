@@ -18,6 +18,23 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Notifications setting (1.30.0).** Daniel asked for a way to turn
+  notifications off and for feed posts to come one by one, showing what's
+  in the feed, with the one grouped notification kept as an option. The
+  setting is this phone's own (`waypage.notes`: `on`, `posts` "each" or
+  "together", `quiet` feed urls), not synced, and reaches the background
+  check through `Feeds.watch`'s `notes` (Android preferences "notes", iOS
+  feeds-notes.json). The check now reads each new post's title, summary
+  (description/summary, else the full text, as plain words, 300
+  characters) and link. Only posts found in that run are posted on their
+  own, at most five a feed, the rest counted in the feed's group (Android)
+  or one "N more" (iOS), so a swiped-away post never comes back. Save opens
+  the app with the feed and link (`news().save`), which saves it like a
+  feed post, into the feed's collection with its pictures setting. A
+  quiet feed is still checked, so the widget and Feeds still know.
+  Saving, sync and Read aloud keep their running notifications: Android
+  needs them for a foreground service, so the switch can't hide those,
+  and the page says so.
 - **Privacy and security checkup (1.29.1).** Daniel asked that our data
   and the user's be private and secure. Checked: saved HTML (allowlist
   rebuild in save.js, reader frame without allow-scripts, CSP), the PDF

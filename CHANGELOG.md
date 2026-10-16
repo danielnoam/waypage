@@ -2,6 +2,17 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.30.0] - 2026-10-16
+
+### Added
+- Settings › Notifications. Turn notifications off altogether, or pick
+  how new feed posts arrive: each post on its own, showing its title and
+  the start of what it says, grouped by feed and with a Save button; or
+  all together in one notification, as before. Each feed can be kept
+  quiet, there or in the feed's own menu, and Sound and more opens the
+  phone's own settings for Waypage.
+- Tapping a feed's notification opens that feed in Feeds.
+
 ## [1.29.1] - 2026-10-16
 
 ### Changed

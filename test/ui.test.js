@@ -618,6 +618,43 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("Notifications: off, each post or all together, feeds kept quiet, and a notification's Save (1.30.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(() => {
+        localStorage.setItem("waypage.feeds", JSON.stringify([{ url: "https://example.com/feed", title: "Example News", days: 7, mode: "show", folder: "News", checkedAt: Date.now(), items: [] }]));
+      });
+      await q.reload();
+      const sent = await q.evaluate(async () => {
+        const P = window.Waypage.platform;
+        P.native = true;
+        const got = [];
+        P.feedChecks.watch = (list, ask, notes) => got.push(notes);
+        openSettings();
+        openSection("notifications");
+        await new Promise((r) => setTimeout(r, 300));
+        document.querySelector('#sectionBody input[value="together"]').click();
+        await new Promise((r) => setTimeout(r, 1200));
+        [...document.querySelectorAll("#sectionBody .row")].find((r) => r.textContent.includes("Example News")).querySelector("input").click();
+        await new Promise((r) => setTimeout(r, 1200));
+        [...document.querySelectorAll("#sectionBody .row")].find((r) => r.textContent.includes("New posts from")).querySelector("input").click();
+        for (let i = 0; i < 40 && got.length < 3; i++) await new Promise((r) => setTimeout(r, 100));
+        return { got, rows: document.querySelectorAll("#sectionBody .row").length };
+      });
+      assert.deepStrictEqual(sent.got.map((n) => n.style), ["together", "together", "off"]);
+      assert.deepStrictEqual(sent.got[1].quiet, ["https://example.com/feed"]);
+      assert.strictEqual(sent.rows, 1, "the rest stays while notifications are off");
+      const saved = await q.evaluate(async () => {
+        const got = [];
+        window.saveFeedPosts = (list) => { got.push(...list.map((x) => x.f.url + " " + x.it.url)); };
+        window.Waypage.platform.feedChecks.news = async () => ({ feeds: [], open: true, feed: "https://example.com/feed", save: "https://example.com/post9" });
+        await takeFeedNews();
+        return { got, place: state.place, feed: state.feed };
+      });
+      assert.deepStrictEqual(saved, { got: ["https://example.com/feed https://example.com/post9"], place: "feeds", feed: "https://example.com/feed" });
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("the app icon's shortcuts search, and save the copied link (1.14.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate((url) => {
