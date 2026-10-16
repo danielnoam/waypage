@@ -76,6 +76,24 @@ function compressGroup() {
     el("p", { class: "footnote" }, "For clips already saved, Storage has Make pictures smaller."));
 }
 
+// Pictures on tap (1.30.1): a clip opened online loads nothing from the
+// web until a picture is tapped. Off by default, as full pictures online
+// is how saving works (CLAUDE.md).
+const TAP_PICTURES_KEY = "waypage.tapPictures";
+C.reader.tapPictures = load(TAP_PICTURES_KEY, false);
+function tapPicturesGroup() {
+  return el("section", { class: "settings-section" },
+    el("h2", { class: "overline" }, "Pictures online"),
+    el("div", { class: "group" },
+      el("label", { class: "row" },
+        el("span", { class: "choice-text" },
+          el("span", { class: "choice-label" }, "Load pictures only when tapped"),
+          el("span", { class: "choice-note" }, "Full-size and linked pictures come from their sites, which can see when you read. With this on, nothing loads until you tap it")),
+        el("input", { class: "switch", type: "checkbox", role: "switch", checked: load(TAP_PICTURES_KEY, false),
+          onchange: (e) => { store(TAP_PICTURES_KEY, e.target.checked); C.reader.tapPictures = e.target.checked; } }))),
+    el("p", { class: "footnote" }, "Previews saved on the phone always show. Applies to the next clip you open."));
+}
+
 // On mobile data (1.4.1): save or sync as always, or wait for Wi-Fi.
 // Only the app can tell the two apart (on iOS since 1.6.0); in a browser
 // the group stays out.
@@ -797,7 +815,7 @@ const SECTIONS = {
     choiceGroup({ key: LAYOUT_KEY, label: "Layout", get: layout, set: (v) => { store(LAYOUT_KEY, v); renderLibrary(); }, options: LAYOUTS }),
     libraryGroup(), watchGroup(), editNavGroup()],
     value: () => (LAYOUTS.find((l) => l.value === layout()) || LAYOUTS[0]).label },
-  saving: { title: "Saving", build: () => [choiceGroup(SETTINGS[1]), compressGroup(), dataGroup(DATA_SAVE_KEY, "Save", "Pages and pictures come down on any connection.", "Saves wait in Downloads until you're on Wi-Fi; feeds, new chapters and missing pictures check then too."), signedGroup(), importGroup()],
+  saving: { title: "Saving", build: () => [choiceGroup(SETTINGS[1]), compressGroup(), tapPicturesGroup(), dataGroup(DATA_SAVE_KEY, "Save", "Pages and pictures come down on any connection.", "Saves wait in Downloads until you're on Wi-Fi; feeds, new chapters and missing pictures check then too."), signedGroup(), importGroup()],
     value: () => SETTINGS[1].options.find((o) => o.value === SETTINGS[1].get()).label },
   sync: { title: "GitHub sync", build: syncSections, value: () => (C.sync.on ? (C.sync.last.error ? "Stopped" : "On") : "Off") },
   drive: { title: "Google Drive", build: driveSections, value: driveValue },

@@ -513,6 +513,7 @@
         cfg.branch = (await made.json()).default_branch || "main";
       } else throw await fail(repo);
       if (was && was.links) cfg.links = true;
+      cfg.scoped = true;
       keep(CFG_KEY, cfg);
       keep(BASE_KEY, null);
       keep(WAIT_KEY, null);
@@ -970,6 +971,9 @@
     merge, mergeTags, mergeMarks, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
     share, clean, same, urlKey, sameUrl, peek, poll,
     get on() { return !!cfg; },
+    // Connected before 1.29.1's steps, so with a token for All
+    // repositories (1.30.1). Gone once a new token is connected.
+    get oldToken() { return !!cfg && !cfg.scoped; },
     get account() { return cfg ? cfg.owner + "/" + cfg.repo : ""; },
     get running() { return !!running; },
     get last() { return last; },

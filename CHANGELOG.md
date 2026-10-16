@@ -2,6 +2,19 @@
 
 All notable changes to Carry-on. Newest first.
 
+<<<<<<< HEAD
+## [1.30.1] - 2026-10-16
+
+### Added
+- A device that set up GitHub sync before 1.29.1 shows "Make a safer
+  token" at the top of Settings › GitHub sync: make a token for
+  waypage-data only, paste it in, and delete the old one, without
+  turning sync off.
+- Settings › Saving › Load pictures only when tapped. Full-size and
+  linked pictures come from their sites, which can see when you read a
+  clip; with this on, a clip opened online loads nothing from the web
+  until you tap a picture. Previews saved on the phone always show.
+=======
 ## [1.30.0] - 2026-10-16
 
 ### Added
@@ -12,6 +25,7 @@ All notable changes to Carry-on. Newest first.
   quiet, there or in the feed's own menu, and Sound and more opens the
   phone's own settings for Waypage.
 - Tapping a feed's notification opens that feed in Feeds.
+>>>>>>> origin/main
 
 ## [1.29.1] - 2026-10-16
 

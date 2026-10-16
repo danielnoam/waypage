@@ -150,7 +150,7 @@ async function fetchPictures() {
 // off, the three steps to a first device and a way in for the next one;
 // on, the state and a code that sets up another device.
 function syncSections() {
-  return C.sync.on ? [syncState(), syncWhat(), dataGroup(DATA_SYNC_KEY, "Sync", "Syncs on any connection.", "Syncs when you're on Wi-Fi. Changes wait until then."), syncShare(), syncLeave()] : [syncSteps(), syncJoin()];
+  return C.sync.on ? [C.sync.oldToken ? syncNewToken() : null, syncState(), syncWhat(), dataGroup(DATA_SYNC_KEY, "Sync", "Syncs on any connection.", "Syncs when you're on Wi-Fi. Changes wait until then."), syncShare(), syncLeave()] : [syncSteps(), syncJoin()];
 }
 async function connectSync(text, btn) {
   if (btn) { btn.disabled = true; btn.textContent = "Connecting…"; }
@@ -189,6 +189,33 @@ function syncSteps() {
           el("span", { class: "choice-label" }, "Paste it here"),
           input, go, note))),
     el("p", { class: "footnote" }, "The token stays on this device and goes only to GitHub. Made for waypage-data only, it can't touch anything else on your account. Sync stops if that repo is ever made public."));
+}
+// A token made under the old steps reaches every repo on the account
+// (1.30.1): swapped here for one made for waypage-data alone, without
+// leaving sync. Another device using the old token asks again once the
+// old one is deleted.
+function syncNewToken() {
+  const input = el("input", { class: "feed-input", type: "password", autocomplete: "off", spellcheck: "false",
+    placeholder: "github_pat_…", "aria-label": "New GitHub token" });
+  const note = el("p", { class: "choice-note warn", role: "status" });
+  const go = el("button", { class: "btn-primary", type: "button" }, "Connect");
+  const connect = async () => {
+    if (C.sync.tokenIn(input.value)) { note.textContent = "Paste a new token, not a setup link."; return; }
+    note.textContent = (await connectSync(input.value, go)) || "";
+  };
+  go.addEventListener("click", connect);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); connect(); } });
+  return el("section", { class: "settings-section" },
+    el("h2", { class: "overline" }, "Make a safer token"),
+    el("p", { class: "section-lead" }, "This device's token can change every repo on your GitHub. If it ever got out, all of them would be open. A token for waypage-data alone can't touch anything else."),
+    el("div", { class: "group" },
+      outRow(C.sync.KEY_URL, "1", "Make a token for waypage-data only", "Under Repository access pick Only select repositories, then waypage-data. Generate token, and copy it."),
+      el("div", { class: "row sync-step sync-paste" },
+        el("span", { class: "step-num", "aria-hidden": "true" }, "2"),
+        el("div", { class: "choice-text" },
+          el("span", { class: "choice-label" }, "Paste it here"),
+          input, go, note)),
+      outRow("https://github.com/settings/personal-access-tokens", "3", "Delete the old token", "On GitHub, in Fine-grained tokens. Your other devices ask for the new one, or scan this one's setup code.")));
 }
 function syncJoin() {
   const scan = C.platform.canScan ? el("button", { class: "row", type: "button", onclick: scanSync },

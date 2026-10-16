@@ -18,6 +18,17 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Old sync tokens (1.30.1).** GitHub doesn't say what a token can
+  reach, so a config without `scoped` (set by connect from 1.30.1) counts
+  as made under the old All-repositories steps. The swap reuses connect,
+  which keeps Links only and starts the next sync from a full merge.
+- **Pictures on tap (1.30.1).** The reader's CSP still allows https:
+  so a tapped picture loads in place; with the switch on, reader.js's
+  srcdoc moves each https `src` to `data-full` with `co-missing`, so
+  nothing in the clip points at the web until a placeholder is tapped
+  (`loadHeld`). Previews still go to the viewer at full size on a tap.
+  Off by default: full pictures online is the saving design.
+
 - **Notifications setting (1.30.0).** Daniel asked for a way to turn
   notifications off and for feed posts to come one by one, showing what's
   in the feed, with the one grouped notification kept as an option. The

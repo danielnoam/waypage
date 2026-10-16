@@ -5,10 +5,6 @@ CHANGELOG.md; the rules every release keeps are at the top of NOTES.md.
 
 ## Next
 
-- **Older sync tokens.** Anyone who set up sync before 1.29.1 still has
-  an All-repositories token. Waypage can't see a token's reach; a
-  one-time nudge in the Sync screen to remake it would cover them.
-
 - **Chapter-at-a-time books.** After 1.29.0 what's left of a big book's
   open is parsing its one 3 MB page (about 2 s at 6x). Readium and
   epub.js keep each chapter its own document; doing that here means a
