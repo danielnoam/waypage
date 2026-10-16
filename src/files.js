@@ -580,60 +580,109 @@
 
   // ---- Reading a clip that lives in its file ----
 
-  let lastUrls = [];
-  // The clip's page with its pictures filled in from the file it reads
-  // from. Throws FileError when the file has moved or been deleted.
+  // The clip's page, ready to read from the file it lives in. Throws
+  // FileError when the file has moved or been deleted.
   // A PDF with words read from where it is opens as its printed pages
   // (1.1.3), drawn as they're reached like a scan's: its layout, figures
   // and code are the book. Its words stay in the clip for search, and
   // Show as text (`view: "text"`) sets them in Waypage's own type.
+  // A book's or comic's pictures stay in their slots (1.29.0) and are
+  // read from the file as the reader comes near them (fillNear), as a
+  // PDF's pages are drawn: before, every picture was read and decoded
+  // before the first page showed, and a 400 MB comic sat whole in memory.
   const printed = (meta) => !!(meta && meta.link && meta.file && meta.file.kind === "pdf" && !meta.comic && meta.view !== "text");
   async function openLinked(meta) {
     closeHeld();
     const html = await S().readPage(meta.id);
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    const into = printed(meta) ? doc.querySelector(".co-body") : null;
-    const slots = [...doc.querySelectorAll("img[data-in]")];
+    const isPdf = meta.file.kind === "pdf";
+    const slotted = /\sdata-in="/.test(html);
     // A book added before 1.27.2 gets its own contents from the file.
-    const body = doc.querySelector(".co-body");
-    const unmarked = meta.file.kind === "epub" && body && !body.querySelector("[data-toc]") && !unmarkable.has(meta.id);
-    if (!slots.length && !into) {
-      if (!unmarked) return html;
-      // Only for the contents: a file out of reach still opens.
-      try {
-        const blob = await C.platform.files.blob(meta.link, meta.file.size);
-        await epubMarks(blob, await B().zipEntries(blob), body);
-      } catch (e) { /* as it was */ }
-      if (!body.querySelector("[data-toc]")) { unmarkable.add(meta.id); return html; }
-      return "<!doctype html>\n" + doc.documentElement.outerHTML;
-    }
+    const unmarked = meta.file.kind === "epub" && !/\sdata-toc="/.test(html) && !unmarkable.has(meta.id);
+    if (!slotted && !printed(meta) && !unmarked) return html;
     let blob;
     try {
       blob = await C.platform.files.blob(meta.link, meta.file.size);
     } catch (e) {
+      // Only for the contents: a file out of reach still opens.
+      if (!slotted && !printed(meta)) return html;
       throw new FileError("Waypage can't find " + meta.file.name + " any more. It may have been moved or deleted.");
     }
-    for (const url of lastUrls) URL.revokeObjectURL(url);
-    lastUrls = [];
-    if (meta.file.kind === "pdf") return fillPdf(doc, slots, blob, meta, into);
+    if (isPdf) {
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      return fillPdf(doc, [...doc.querySelectorAll("img[data-in]")], blob, meta, printed(meta) ? doc.querySelector(".co-body") : null);
+    }
     const entries = await B().zipEntries(blob).catch(() => null);
-    if (!entries) throw new FileError("Waypage can't read " + meta.file.name + " any more.");
-    if (unmarked) {
-      await epubMarks(blob, entries, body).catch(() => {});
-      if (!body.querySelector("[data-toc]")) unmarkable.add(meta.id);
+    if (!entries) {
+      if (!slotted) return html;
+      throw new FileError("Waypage can't read " + meta.file.name + " any more.");
     }
-    for (const img of slots) {
-      const e = entries.get(img.getAttribute("data-in"));
-      if (!e) { img.className = "co-missing"; continue; }
-      try {
-        const bytes = await B().zipRead(blob, e);
-        const url = URL.createObjectURL(new Blob([bytes], { type: B().imageType(bytes) || "image/jpeg" }));
-        lastUrls.push(url);
-        img.setAttribute("src", url);
-        img.removeAttribute("data-in");
-      } catch (err) { img.className = "co-missing"; }
-    }
+    if (slotted) held = { zip: { blob, entries }, urls: new Map(), busy: false, frame: null };
+    if (!unmarked) return html;
+    // The whole page is parsed only for that: it's a 3 MB book.
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const body = doc.querySelector(".co-body");
+    if (body) await epubMarks(blob, entries, body).catch(() => {});
+    if (!body || !body.querySelector("[data-toc]")) { unmarkable.add(meta.id); return html; }
     return "<!doctype html>\n" + doc.documentElement.outerHTML;
+  }
+
+  // Fills the picture slots within a screen and a half of what the reader
+  // shows from the book's or comic's file, nearest first, and lets go of
+  // those more than six screens away (their slot comes back). A slot
+  // whose picture the file hasn't is marked missing.
+  async function fillNear(frame, onFirst) {
+    const h = held;
+    const win = frame && frame.contentWindow;
+    if (!h || !h.zip || !win || !win.document) { if (onFirst) onFirst(); return; }
+    h.frame = frame;
+    if (h.busy) { if (onFirst) onFirst(); return; }
+    h.busy = true;
+    try {
+      for (;;) {
+        if (held !== h) return;
+        const tall = win.innerHeight || 800;
+        let next = null, best = Infinity;
+        for (const img of win.document.querySelectorAll("img[data-in], img[data-at]")) {
+          // Measuring a slot in a chapter the reader skips (reader.js,
+          // chunkUp) lays that chapter out: the chapter's own box says
+          // how far it is, and only one within reach is measured itself.
+          const chunk = img.closest(".co-lazy");
+          let r = (chunk || img).getBoundingClientRect();
+          let away = r.bottom < 0 ? -r.bottom : r.top > tall ? r.top - tall : 0;
+          if (chunk && away <= tall * 6) {
+            r = img.getBoundingClientRect();
+            away = r.bottom < 0 ? -r.bottom : r.top > tall ? r.top - tall : 0;
+          }
+          const at = img.getAttribute("data-at");
+          if (at != null) {
+            if (away > tall * 6) {
+              const u = h.urls.get(at);
+              if (u) { URL.revokeObjectURL(u); h.urls.delete(at); }
+              img.removeAttribute("src");
+              img.setAttribute("data-in", at);
+              img.removeAttribute("data-at");
+            }
+          } else if (away <= tall * 1.5 && away < best) { next = img; best = away; }
+        }
+        if (!next) return;
+        const at = next.getAttribute("data-in");
+        const e = h.zip.entries.get(at);
+        let url = null;
+        try {
+          if (e) {
+            const bytes = await B().zipRead(h.zip.blob, e);
+            url = URL.createObjectURL(new Blob([bytes], { type: B().imageType(bytes) || "image/jpeg" }));
+          }
+        } catch (err) { url = null; }
+        if (held !== h) { if (url) URL.revokeObjectURL(url); return; }
+        next.removeAttribute("data-in");
+        if (!url) { next.className = "co-missing"; continue; }
+        h.urls.set(at, url);
+        next.setAttribute("data-at", at);
+        next.setAttribute("src", url);
+        if (onFirst) { onFirst(); onFirst = null; }
+      }
+    } finally { h.busy = false; if (onFirst) onFirst(); }
   }
 
   // A scan read from its PDF (1.1.0): the PDF is kept open and each page
@@ -728,21 +777,24 @@
   let onCover = null;
   function closeHeld() {
     if (!held) return;
-    held.pdf.close();
-    for (const u of held.urls.values()) URL.revokeObjectURL(u.url);
+    if (held.pdf) held.pdf.close();
+    for (const u of held.urls.values()) URL.revokeObjectURL(u.url || u);
     for (const u of (held.thumbs || new Map()).values()) u.then((x) => x && URL.revokeObjectURL(x));
     held = null;
   }
   // Draws the pages within a screen and a half of what the reader `frame`
   // shows, nearest first, and lets go of those more than six screens away.
   // A page is drawn at the width it is shown (a zoomed one wider, 1.2.2)
-  // and drawn again when that changes by a quarter or more.
-  async function drawNear(frame) {
+  // and drawn again when that changes by a quarter or more. `onFirst` is
+  // told when the first page is on screen (1.29.0): opening waits for
+  // that, not for the screen and a half.
+  async function drawNear(frame, onFirst) {
     const h = held;
+    if (h && h.zip) return fillNear(frame, onFirst);
     const win = frame && frame.contentWindow;
-    if (!h || !win || !win.document) return;
+    if (!h || !win || !win.document) { if (onFirst) onFirst(); return; }
     h.frame = frame;
-    if (h.busy) return;
+    if (h.busy) { if (onFirst) onFirst(); return; }
     h.busy = true;
     try {
       for (;;) {
@@ -773,8 +825,9 @@
         const url = URL.createObjectURL(new Blob([bytes], { type: "image/jpeg" }));
         h.urls.set(n, { url, width });
         next.setAttribute("src", url);
+        if (onFirst) { onFirst(); onFirst = null; }
       }
-    } finally { h.busy = false; }
+    } finally { h.busy = false; if (onFirst) onFirst(); }
   }
 
   // A page drawn small for the rail beside a PDF (1.5.1), kept while the
@@ -812,6 +865,11 @@
       if (link && at) {
         img.removeAttribute("src");
         img.setAttribute("data-in", at);
+        // Its size from the file's header (1.29.0), so the slot takes the
+        // picture's room before it's read, and a comic's pages don't all
+        // sit at one spot waiting to be filled at once.
+        const size = imageSize(b);
+        if (size && !img.hasAttribute("width")) { img.setAttribute("width", size[0]); img.setAttribute("height", size[1]); }
         if (first) res.thumb = await thumbnail(id, b, type);
         return;
       }
@@ -829,6 +887,23 @@
       }
     };
     return res;
+  }
+
+  // A picture's width and height from its first bytes: PNG, GIF, and a
+  // JPEG's frame header; null for WebP and anything else.
+  function imageSize(b) {
+    if (b[0] === 0x89 && b[1] === 0x50 && b.length > 24) return [(b[16] << 24 | b[17] << 16 | b[18] << 8 | b[19]) >>> 0, (b[20] << 24 | b[21] << 16 | b[22] << 8 | b[23]) >>> 0];
+    if (b[0] === 0x47 && b[1] === 0x49 && b.length > 10) return [b[6] | b[7] << 8, b[8] | b[9] << 8];
+    if (b[0] === 0xff && b[1] === 0xd8) {
+      let i = 2;
+      while (i + 9 < b.length && b[i] === 0xff) {
+        const m = b[i + 1];
+        if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return [b[i + 7] << 8 | b[i + 8], b[i + 5] << 8 | b[i + 6]];
+        if (m === 0xd8 || (m >= 0xd0 && m <= 0xd7) || m === 0x01) { i += 2; continue; }
+        i += 2 + (b[i + 2] << 8 | b[i + 3]);
+      }
+    }
+    return null;
   }
 
   // The card's picture for a clip that keeps none: the first picture,

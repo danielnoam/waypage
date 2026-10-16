@@ -5,7 +5,16 @@ CHANGELOG.md; the rules every release keeps are at the top of NOTES.md.
 
 ## Next
 
-Nothing queued.
+- **Chapter-at-a-time books.** After 1.29.0 what's left of a big book's
+  open is parsing its one 3 MB page (about 2 s at 6x). Readium and
+  epub.js keep each chapter its own document; doing that here means a
+  book stored as chapters with the reader loading the one you're in
+  and its neighbours, and search, highlights, read aloud and the place
+  working across them. Also what would make Pages layout fast for big
+  books, which 1.29.0 doesn't touch.
+- **Linked PDFs without the whole file in memory.** pdf.js can read by
+  ranges (`PDFDataRangeTransport`); a 400 MB PDF is still copied whole
+  into the sandbox today.
 
 ## iOS release (later, Daniel 11 Oct 2026)
 

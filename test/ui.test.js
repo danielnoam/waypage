@@ -104,21 +104,39 @@ function pdfBytes() {
 
 // A small EPUB, stored (not deflated): chapter titles are plain styled
 // paragraphs, as many books have them, and the book's nav lists them.
-function epubBytes() {
-  const crcTable = [...Array(256)].map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
-  const crc = (b) => { let c = 0xffffffff; for (const x of b) c = crcTable[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
-  const files = [
+function epubBytes() { return zipOf(EPUB_FILES); }
+// A long linked book for the lazy reader (1.29.0): 200 chapters of 1600
+// characters and a picture each, over the LONG line in reader.js.
+function longEpubBytes() {
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+  const files = [EPUB_FILES[0], EPUB_FILES[1]];
+  const items = [], spine = [];
+  for (let i = 0; i < 200; i++) {
+    const pic = '<p><img src="../pic.png" alt=""/></p>';
+    files.push(["OEBPS/text/c" + i + ".xhtml", '<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body><h2>Chapter ' + (i + 1) + "</h2>" + pic + "<p>" + ("Words of chapter " + (i + 1) + ". ").repeat(80) + "</p></body></html>"]);
+    items.push('<item id="c' + i + '" href="text/c' + i + '.xhtml" media-type="application/xhtml+xml"/>');
+    spine.push('<itemref idref="c' + i + '"/>');
+  }
+  files.push(["OEBPS/pic.png", png]);
+  files.push(["OEBPS/book.opf", '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Long Book</dc:title><dc:language>en</dc:language></metadata><manifest><item id="pic" href="pic.png" media-type="image/png"/>' + items.join("") + "</manifest><spine>" + spine.join("") + "</spine></package>"]);
+  return zipOf(files);
+}
+const EPUB_FILES = [
     ["mimetype", "application/epub+zip"],
     ["META-INF/container.xml", '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/book.opf" media-type="application/oebps-package+xml"/></rootfiles></container>'],
     ["OEBPS/book.opf", '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Plain Chapters</dc:title><dc:language>en</dc:language></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="a" href="text/a.xhtml" media-type="application/xhtml+xml"/><item id="b" href="text/b.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="a"/><itemref idref="b"/></spine></package>'],
     ["OEBPS/nav.xhtml", '<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><body><nav epub:type="toc"><ol><li><a href="text/a.xhtml">The First Part</a><ol><li><a href="text/a.xhtml#later">A Later Scene</a></li></ol></li><li><a href="text/b.xhtml">The Second Part</a></li></ol></nav></body></html>'],
     ["OEBPS/text/a.xhtml", '<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body><p class="ct">ONE</p><p>' + "Words of the first part. ".repeat(40) + '</p><p id="later">' + "A later scene begins. ".repeat(40) + "</p></body></html>"],
     ["OEBPS/text/b.xhtml", '<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body><p class="ct">TWO</p><p>' + "Words of the second part. ".repeat(40) + "</p></body></html>"],
-  ];
+];
+// A stored zip of [name, text or Buffer] pairs.
+function zipOf(files) {
+  const crcTable = [...Array(256)].map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = (b) => { let c = 0xffffffff; for (const x of b) c = crcTable[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
   const parts = [], central = [];
   let at = 0;
   for (const [name, text] of files) {
-    const n = Buffer.from(name), d = Buffer.from(text), c = crc(d);
+    const n = Buffer.from(name), d = Buffer.isBuffer(text) ? text : Buffer.from(text), c = crc(d);
     const h = Buffer.alloc(30); h.writeUInt32LE(0x04034b50, 0); h.writeUInt16LE(20, 4); h.writeUInt32LE(c, 14); h.writeUInt32LE(d.length, 18); h.writeUInt32LE(d.length, 22); h.writeUInt16LE(n.length, 26);
     const e = Buffer.alloc(46); e.writeUInt32LE(0x02014b50, 0); e.writeUInt16LE(20, 4); e.writeUInt16LE(20, 6); e.writeUInt32LE(c, 16); e.writeUInt32LE(d.length, 20); e.writeUInt32LE(d.length, 24); e.writeUInt16LE(n.length, 28); e.writeUInt32LE(at, 42);
     parts.push(h, n, d); central.push(e, n);
@@ -1199,6 +1217,60 @@ function epubBytes() {
       const heads = await q.evaluate(() => window.Waypage.reader.headings());
       assert.deepStrictEqual(heads.map((h) => h.text), ["The First Part", "A Later Scene", "The Second Part"]);
       assert.deepStrictEqual(heads.map((h) => h.level), [2, 3, 2]);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a long book lays out as it's read, fills its pictures near the screen, and opens at its place (1.29.0)", async () => {
+      const q = await page(browser, 390);
+      const bytes = [...longEpubBytes()];
+      const id = await q.evaluate(async (b) => {
+        const book = new File([new Uint8Array(b)], "long.epub", { type: "application/epub+zip" });
+        window.Waypage.platform.files.blob = async () => book;
+        const meta = await window.Waypage.files.bring(book, "epub", { has: () => false, link: "content://books/long.epub" });
+        const html = await window.Waypage.store.readPage(meta.id);
+        const slots = [...new DOMParser().parseFromString(html, "text/html").querySelectorAll("img[data-in]")];
+        if (slots.length !== 200 || !slots.every((s) => s.getAttribute("width") === "1")) throw new Error("slots " + slots.length + " sized " + slots.map((s) => s.getAttribute("width")));
+        await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
+        return meta.id;
+      }, bytes);
+      const reopen = async () => {
+        await q.reload();
+        await q.evaluate(async (b) => {
+          const book = new File([new Uint8Array(b)], "long.epub");
+          window.Waypage.platform.files.blob = async () => book;
+        }, bytes);
+        await q.evaluate((id) => openPage(id), id);
+        await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+        await q.evaluate(() => window.Waypage.reader.placed());
+      };
+      await reopen();
+      const look = () => q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument;
+        return { lazy: d.querySelectorAll(".co-lazy").length, filled: d.querySelectorAll("img[data-at]").length, waiting: d.querySelectorAll("img[data-in]").length,
+          guessed: [...d.querySelectorAll(".co-lazy")].filter((c) => /auto \d+px/.test(c.style.containIntrinsicBlockSize)).length, y: d.defaultView.scrollY, spot: window.Waypage.reader.spot() };
+      });
+      let got = await look();
+      assert.strictEqual(got.lazy, 200, "chunks " + got.lazy);
+      assert.strictEqual(got.guessed, 200, "guessed " + got.guessed);
+      assert.ok(got.filled >= 1 && got.waiting >= 150, "filled " + got.filled + ", waiting " + got.waiting);
+      // Pages needs the whole book laid out.
+      await q.evaluate(() => window.Waypage.reader.setPaged(true));
+      assert.strictEqual((await look()).lazy, 0);
+      await q.evaluate(() => window.Waypage.reader.setPaged(false));
+      assert.strictEqual((await look()).lazy, 200);
+      // Left at 60%: reopened there, by its spot, with the chapters before
+      // it still at their guessed heights.
+      await q.evaluate(() => window.Waypage.reader.jump(0.6, ""));
+      await q.waitForTimeout(400);
+      const left = await look();
+      assert.ok(left.y > 1000 && /^\d+\/\d+$/.test(left.spot), "left at " + left.y + " " + left.spot);
+      await q.evaluate((s) => { state.pages[0].at = 0.6; state.pages[0].spot = s; return window.Waypage.store.writeIndex(state.pages); }, left.spot);
+      await reopen();
+      got = await look();
+      assert.ok(Math.abs(Number(got.spot.split("/")[0]) - Number(left.spot.split("/")[0])) <= 1, "back at " + got.spot + ", left at " + left.spot);
+      // The scroll back to the place has the pictures there read.
+      await until(q, () => { const d = document.getElementById("readerFrame").contentDocument; return [...d.querySelectorAll("img[data-at]")].some((i) => { const r = i.getBoundingClientRect(); return r.bottom > -innerHeight && r.top < innerHeight * 2; }); });
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });
