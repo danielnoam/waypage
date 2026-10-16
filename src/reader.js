@@ -35,6 +35,14 @@
 
   const appUrl = (rel) => new URL(rel + "?v=" + C.version, location.href).href;
 
+  // Pictures on tap (1.29.2): nothing in the clip loads from the web by
+  // itself, so a site doesn't learn when its page is read. A picture's
+  // link goes to data-full and it waits behind its placeholder; the
+  // viewer loads a preview's full size when it's tapped, as always.
+  let onTapOnly = false;
+  const holdPictures = (html) => html.replace(/<img\b([^>]*?)\ssrc="(https:[^"]*)"/gi, '<img$1 data-full="$2" class="co-missing"');
+  const boxes = new WeakMap();
+
   // `lazyPictures` has a long clip's pictures fetched as they're reached
   // (1.29.0): a book's hundred pictures were all read from its file and
   // decoded as the page parsed. Not in Pages, whose columns would move as
@@ -44,6 +52,7 @@
       (base ? '<base href="' + base + '">' : "") +
       '<link rel="stylesheet" href="' + appUrl("src/fonts.css") + '">' +
       '<link rel="stylesheet" href="' + appUrl("src/reader.css") + '">';
+    if (onTapOnly) html = holdPictures(html);
     if (lazyPictures) html = html.replace(/<img(?=[\s>])(?![^>]*\sloading=)/gi, '<img loading="lazy"');
     return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + head) : head + html;
   }
@@ -72,15 +81,16 @@
       box.append(a);
     }
     const note = doc.createElement("span");
-    note.textContent = "Image loads when you're online";
+    note.className = "co-placeholder-note";
     box.append(note);
+    boxes.set(box, img);
     return box;
   }
 
   // The full image replaces the preview once it's near the screen and has
   // loaded, so a slow connection never blanks what's already there.
   function swapNearImages() {
-    if (!doc || !navigator.onLine) return;
+    if (!doc || !navigator.onLine || onTapOnly) return;
     const h = frame.contentWindow.innerHeight;
     for (const img of doc.querySelectorAll("img[data-full]:not([data-swapped])")) {
       const full = img.getAttribute("data-full");
@@ -114,6 +124,8 @@
         (img.closest("a") || img).before(box);
         placeholders.set(img, box);
       }
+      const note = placeholders.get(img).querySelector(".co-placeholder-note");
+      if (note) note.textContent = online && onTapOnly ? "Tap to load the image" : "Image loads when you're online";
       img.hidden = true;
     }
     for (const cap of doc.querySelectorAll("figure:not(.co-video) > figcaption")) {
@@ -161,7 +173,21 @@
   // In an image chapter a tap shows or hides the bar, as text does, and a
   // double tap zooms in on that spot, or back out (1.2.2).
   let tapTimer = 0;
+  function loadHeld(img) {
+    const full = img.getAttribute("data-full");
+    if (!full || img.hasAttribute("data-swapped")) return;
+    img.setAttribute("data-swapped", "");
+    img.onload = () => {
+      img.hidden = false;
+      const box = placeholders.get(img);
+      if (box) { box.remove(); placeholders.delete(img); }
+    };
+    img.onerror = () => img.removeAttribute("data-swapped");
+    img.src = full;
+  }
   function onClick(e) {
+    const held = onTapOnly && navigator.onLine && e.target.closest && e.target.closest(".co-placeholder");
+    if (held && boxes.has(held)) { e.preventDefault(); loadHeld(boxes.get(held)); return; }
     const img = e.target.closest && e.target.closest("img");
     if (img && img.closest(".co-comic")) {
       if (tapTimer) {
@@ -1283,5 +1309,5 @@
   addEventListener("resize", applyTop);
   addEventListener("offline", applyConnection);
 
-  C.reader = { open, placed: () => placed, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, headings, section, jumpTo, readable, readableIn, firstShown, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
+  C.reader = { set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, headings, section, jumpTo, readable, readableIn, firstShown, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
 })();

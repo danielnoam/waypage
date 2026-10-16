@@ -9,6 +9,10 @@ All notable changes to Carry-on. Newest first.
   token" at the top of Settings › GitHub sync: make a token for
   waypage-data only, paste it in, and delete the old one, without
   turning sync off.
+- Settings › Saving › Load pictures only when tapped. Full-size and
+  linked pictures come from their sites, which can see when you read a
+  clip; with this on, a clip opened online loads nothing from the web
+  until you tap a picture. Previews saved on the phone always show.
 
 ## [1.29.1] - 2026-10-16
 
