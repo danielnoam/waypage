@@ -117,7 +117,11 @@ figure .co-placeholder { border-width: 0 0 1.5px; border-radius: 0; }
 /* An image chapter (0.22.0): the panels edge to edge at phone width, one
    under the next with no gaps, no rounding. */
 .co-comic { margin: 0 -20px; touch-action: pan-x pan-y; }
+/* A long clip's chapters lay out as they're reached (reader.js, chunkUp). */
+.co-lazy { content-visibility: auto; }
 .co-comic img { display: block; width: 100%; height: auto; margin: 0; border-radius: 0; background: var(--preview); cursor: default; }
+/* A comic page still in its file, from before 1.29.0 wrote sizes: a page's room until it's read. */
+.co-comic img[data-in]:not([width]) { aspect-ratio: 2 / 3; }
 .co-comic .co-placeholder { margin: 0; border-radius: 0; }
 /* A PDF's printed pages (1.1.3): a gap shows where one page ends. */
 .co-printed img + img { margin-top: var(--s-2); }

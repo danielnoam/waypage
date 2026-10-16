@@ -259,8 +259,18 @@
     return bytesOf(html);
   }
 
+  // The page's text comes from the WebView's own file server when it can
+  // (1.29.0), like the index since 1.28.3: a 3 MB book over the bridge
+  // is a 3 MB string through it. Always fresh: Edit clips rewrites pages.
   async function readPage(id) {
     if (FS()) {
+      const dir = pageDirUrl(id);
+      if (dir) {
+        try {
+          const res = await fetch(dir + "page.html", { cache: "no-store" });
+          if (res.ok) return await res.text();
+        } catch (e) { /* the bridge below */ }
+      }
       return (await B()).read("pages/" + id + "/page.html");
     }
     return idbDo("readonly", (s) => s.get(id));

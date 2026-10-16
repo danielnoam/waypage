@@ -223,7 +223,7 @@ async function openPage(id, fromHistory) {
     const d = $("readerFrame").contentDocument;
     await Promise.race([Promise.all([
       d && d.fonts ? d.fonts.ready : null,
-      p.link ? C.files.drawNear($("readerFrame")) : null,
+      p.link ? new Promise((first) => C.files.drawNear($("readerFrame"), first)) : null,
     ]), new Promise((r) => setTimeout(r, 4000))]);
     // The place it was left is set the frame after the fonts are in.
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));

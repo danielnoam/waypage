@@ -35,11 +35,16 @@
 
   const appUrl = (rel) => new URL(rel + "?v=" + C.version, location.href).href;
 
-  function srcdoc(html, base) {
+  // `lazyPictures` has a long clip's pictures fetched as they're reached
+  // (1.29.0): a book's hundred pictures were all read from its file and
+  // decoded as the page parsed. Not in Pages, whose columns would move as
+  // each arrived.
+  function srcdoc(html, base, lazyPictures) {
     const head = '<meta http-equiv="Content-Security-Policy" content="' + CSP + '">' +
       (base ? '<base href="' + base + '">' : "") +
       '<link rel="stylesheet" href="' + appUrl("src/fonts.css") + '">' +
       '<link rel="stylesheet" href="' + appUrl("src/reader.css") + '">';
+    if (lazyPictures) html = html.replace(/<img(?=[\s>])(?![^>]*\sloading=)/gi, '<img loading="lazy"');
     return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + head) : head + html;
   }
 
@@ -54,6 +59,7 @@
     else doc.documentElement.removeAttribute("data-co-align");
     // A new text size or margin moves the columns: back to the same place.
     if (isPaged()) requestAnimationFrame(() => { if (isPaged()) relayout(at); });
+    else if (chunks.length) requestAnimationFrame(guessHeights);
   }
 
   function placeholder(img) {
@@ -319,8 +325,18 @@
       const i = anchors.findIndex((el) => pageOf(el) === p);
       return i < 0 ? "" : i + "/0";
     }
-    for (const [i, el] of anchors.entries()) {
-      const rct = el.getBoundingClientRect();
+    // Measuring every block up to the one on screen would lay out every
+    // chunk before it (chunkUp): the anchors are in reading order, so the
+    // first past the top edge is found by halving.
+    let lo = 0, hi = anchors.length - 1;
+    if (chunks.length) {
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (anchors[mid].getBoundingClientRect().bottom <= edge) lo = mid + 1; else hi = mid;
+      }
+    }
+    for (let i = lo; i < anchors.length; i++) {
+      const rct = anchors[i].getBoundingClientRect();
       if (rct.bottom <= edge || !rct.height) continue;
       return i + "/" + Math.max(0, Math.min(99, Math.round((edge - rct.top) / rct.height * 100)));
     }
@@ -420,6 +436,68 @@
     return c.textContent.replace(/\s+/g, " ").trim();
   }
   const SKIP = ".co-meta, .co-licence, .co-next, .co-video, nav, aside";
+
+  // ---- Long clips lay out as they're reached (1.29.0) ----
+  // A book is one document of hundreds of chapters, and laying all of it
+  // out before the first page showed took a 400-chapter EPUB 12 to 20 s
+  // on a slow phone, twice (once more when its font arrived). Past LONG
+  // characters each chapter (or, in a flat clip such as a PDF's words,
+  // each run of PIECE blocks) gets content-visibility: auto, so the
+  // browser lays out only what's on or near the screen and keeps the
+  // rest at a guessed height: the chunk's characters at the rate the
+  // chunk on screen takes, and a screen's width per picture. Chrome
+  // moves the scroll to keep what's read in place as guesses are
+  // corrected. Pages mode needs the whole book laid out for its columns,
+  // so there the guesses are taken off.
+  const LONG = 150000, PIECE = 24;
+  let chunks = [];
+  function chunkUp() {
+    chunks = [];
+    if (!doc || comic) return;
+    const body = doc.querySelector(".co-body") || doc.body;
+    if (body.textContent.length < LONG) return;
+    let parts = [...body.children].filter((el) => el.localName === "section");
+    if (parts.length < 4) {
+      parts = [];
+      let run = [];
+      const close = () => {
+        if (!run.length) return;
+        const d = doc.createElement("div");
+        d.className = "co-chunk";
+        run[0].before(d);
+        d.append(...run);
+        parts.push(d);
+        run = [];
+      };
+      for (const n of [...body.childNodes]) { run.push(n); if (run.length >= PIECE && n.nodeType === 1) close(); }
+      close();
+    }
+    chunks = parts.map((el) => ({ el, chars: el.textContent.length, imgs: el.querySelectorAll("img").length }));
+    lazy(!isPaged());
+  }
+  function lazy(on) {
+    const w = (frame && frame.contentWindow && frame.contentWindow.innerWidth) || 390;
+    // About 35 characters a line and a 30 px line until a chunk's measured.
+    let perChar = 0.85;
+    for (const c of chunks) {
+      c.el.classList.toggle("co-lazy", on);
+      c.el.style.containIntrinsicBlockSize = on ? "auto " + Math.round(c.chars * perChar + c.imgs * w * 0.75) + "px" : "";
+    }
+    if (on) requestAnimationFrame(guessHeights);
+  }
+  // The chunk on screen is laid out for real: its height per character
+  // becomes every unseen chunk's guess.
+  function guessHeights() {
+    if (!doc || !chunks.length || isPaged()) return;
+    const w = frame.contentWindow.innerWidth || 390;
+    const tall = frame.contentWindow.innerHeight || 800;
+    const shown = chunks.find((c) => { const r = c.el.getBoundingClientRect(); return r.bottom > 0 && r.top < tall && c.chars > 2000; });
+    if (!shown) return;
+    const perChar = (shown.el.offsetHeight - shown.imgs * w * 0.75) / shown.chars;
+    if (!(perChar > 0.2 && perChar < 5)) return;
+    for (const c of chunks) c.el.style.containIntrinsicBlockSize = "auto " + Math.round(c.chars * perChar + c.imgs * w * 0.75) + "px";
+  }
+
   const BREAKS = new Set(("BR HR P DIV SECTION ARTICLE HEADER FOOTER MAIN FIGURE TABLE UL OL DL LI BLOCKQUOTE PRE " +
     "H1 H2 H3 H4 H5 H6 DETAILS SUMMARY FIGCAPTION DT DD").split(" "));
   // Text that sits straight in a div between <br>s (Blogger posts, old
@@ -1040,6 +1118,7 @@
     paged = !!on;
     if (!doc || comic) return;
     doc.documentElement.classList.toggle("co-paged", paged);
+    lazy(!paged);
     if (paged) relayout(at);
     else {
       const w = frame.contentWindow;
@@ -1119,6 +1198,7 @@
         wrapLoose();
         comic = !!doc.querySelector(".co-comic");
         if (isPaged()) doc.documentElement.classList.add("co-paged");
+        chunkUp();
         pagedInput();
         zoomInput();
         edgeInput();
@@ -1170,7 +1250,7 @@
       // Kept out of sight until it's themed and back at its place
       // (1.26.4): before, its first frame showed unstyled, on white.
       iframe.classList.add("unready");
-      iframe.srcdoc = srcdoc(html, C.store.pageDirUrl(meta.id));
+      iframe.srcdoc = srcdoc(html, C.store.pageDirUrl(meta.id), !paged && html.length > LONG);
     });
   }
 

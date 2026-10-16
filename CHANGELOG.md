@@ -2,6 +2,27 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.29.0] - 2026-10-16
+
+### Changed
+- Long books and PDFs open in a fraction of the time. A clip past about
+  150,000 characters lays out only the chapters on or near the screen
+  and keeps the rest at a guessed height until you reach them, so a
+  400-chapter book that took 13 to 23 seconds to show its text on a
+  slow phone now takes about 3. Pages layout still lays out the whole
+  book, as its columns need it.
+- A book or comic read from its file no longer reads every picture out
+  of the file before it opens: pictures are read as you come near them
+  and let go again far behind you, so a big comic no longer sits whole
+  in memory. Their slots take the picture's size from the file when
+  it's added, so the page doesn't jump as they arrive.
+- A PDF read from its file shows as soon as its first page is drawn,
+  not after a screen and a half of pages.
+- The clip's text is read through the app's own file server, like the
+  library since 1.28.3, instead of a 3 MB string over the bridge.
+- A long clip's pictures load as they're reached (loading="lazy"),
+  except in Pages.
+
 ## [1.28.4] - 2026-10-15
 
 ### Fixed

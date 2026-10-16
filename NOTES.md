@@ -18,6 +18,53 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Long clips lay out as they're reached (1.29.0).** Daniel asked how
+  EPUBs and PDFs could open much faster. Measured (Playwright, 390px,
+  6x throttling; a generator for a 400-chapter EPUB, an 800-page text
+  PDF and a 200-page scan, with the perf script, in the session's
+  scratch folder, not the repo): the text-only big EPUB took 12.8 to
+  22.7 s to its place, nearly all of it layout of the whole 3 MB page,
+  twice (parse, then `fonts.ready` with Source Serif in), the same book
+  with 120 pictures read from its file 17.7 to 33.1 s, the 800-page PDF
+  as text 7 s. Every other reader (Readium, epub.js, KOReader, Apple
+  Books) shows one chapter at a time and takes its position from byte
+  counts; Waypage renders the whole book as one document, which is what
+  makes search, highlights and read aloud simple. The fix keeps the one
+  document: `chunkUp` in reader.js gives each chapter `<section>` (or
+  each run of 24 blocks in a flat clip such as a PDF's words)
+  `content-visibility: auto` with `contain-intrinsic-block-size: auto
+  <guess>`, past LONG = 150,000 characters. The guess is the chunk's
+  characters at the rate the chunk on screen takes (`guessHeights`,
+  redone on applyTheme) plus a screen's width per picture; Chrome's
+  scroll anchoring keeps the place as guesses correct themselves, and
+  the spot (anchor index) is what the place is kept by anyway. Pages
+  mode turns it off (`lazy(false)`): columns need the whole book. After:
+  3.0 to 3.6 s for the text-only book, 3.2 s with pictures, 2.4 s the
+  PDF; what's left is parsing the 3 MB (2 s at 6x).
+  - Measuring any element inside a skipped chunk lays that chunk out,
+    so `spot()` halves its way to the first anchor past the top instead
+    of walking from the start (which laid out every chapter before the
+    place), and `fillNear` measures the chunk, not the slot, unless the
+    chunk is within reach. A loop over `getBoundingClientRect` of
+    everything in a book undoes the whole gain: it took the linked book
+    back to 8 s before this.
+  - `loading="lazy"` on a long clip's pictures did nothing for blob:
+    pictures already in the page (Chrome fetched and decoded all 120),
+    so linked books keep their slots and `fillNear` reads each from the
+    zip as it comes within a screen and a half, letting go six screens
+    away, the way `drawNear` draws PDF pages. Slots get width/height
+    from the file's header (`imageSize`) at import so a comic's pages
+    don't all sit at one spot; older comics' unsized slots get a 2:3
+    aspect in reader.css. The lazy attribute stays for copied clips,
+    where the pictures are files on disk.
+  - pdf.js itself is quick (getDocument 80 ms at 1x for 800 pages); the
+    1 to 2 s in `pdf.open` at 6x is the sandbox booting, which `warm()`
+    does at launch when the library has a PDF. Opening now waits for the
+    first drawn page (`drawNear(frame, onFirst)`), not the screen and a
+    half: 1.5 s less spinner on a printed PDF.
+  - `readPage` fetches page.html from the WebView's file server when the
+    data URL is known (`cache: "no-store"`, since Edit clips rewrites
+    pages), with the bridge as the fallback, like `readIndex`.
 - **Every screen measured with 3000 clips (1.28.4).** Daniel asked for
   the app.js split first; that was done in 1.14.0 (seven app-*.js
   files), so this went to measuring instead (/tmp/claude-0/sp/perf.js,
