@@ -972,7 +972,7 @@
     share, clean, same, urlKey, sameUrl, peek, poll,
     get on() { return !!cfg; },
     // Connected before 1.29.1's steps, so with a token for All
-    // repositories (1.29.2). Gone once a new token is connected.
+    // repositories (1.30.1). Gone once a new token is connected.
     get oldToken() { return !!cfg && !cfg.scoped; },
     get account() { return cfg ? cfg.owner + "/" + cfg.repo : ""; },
     get running() { return !!running; },

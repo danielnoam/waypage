@@ -191,7 +191,7 @@ function syncSteps() {
     el("p", { class: "footnote" }, "The token stays on this device and goes only to GitHub. Made for waypage-data only, it can't touch anything else on your account. Sync stops if that repo is ever made public."));
 }
 // A token made under the old steps reaches every repo on the account
-// (1.29.2): swapped here for one made for waypage-data alone, without
+// (1.30.1): swapped here for one made for waypage-data alone, without
 // leaving sync. Another device using the old token asks again once the
 // old one is deleted.
 function syncNewToken() {
@@ -1149,13 +1149,32 @@ function syncedFeeds(list) {
   paintFeeds();
   if (fresh.length) setTimeout(() => checkFeeds(false), 0);
 }
+// Notifications (1.30.0), this phone's own: off, or new posts each on
+// their own (title and summary, grouped by feed, with Save) or all in one,
+// and feeds kept quiet.
+const NOTES_KEY = "waypage.notes";
+function notesPrefs() {
+  const n = load(NOTES_KEY, {}) || {};
+  return { on: n.on !== false, posts: n.posts === "together" ? "together" : "each", quiet: Array.isArray(n.quiet) ? n.quiet : [] };
+}
+function setNotes(change) {
+  store(NOTES_KEY, { ...notesPrefs(), ...change });
+  watchFeeds();
+}
+const feedQuiet = (f) => notesPrefs().quiet.includes(f.url);
+function setFeedQuiet(f, quiet) {
+  const q = notesPrefs().quiet.filter((u) => u !== f.url && feeds.some((x) => x.url === u));
+  if (quiet) q.push(f.url);
+  setNotes({ quiet: q });
+}
 // What the closed app's checks compare with: every post each feed has.
 let watchTimer = null, askToNotify = false;
 function watchFeeds() {
   clearTimeout(watchTimer);
   watchTimer = setTimeout(() => {
     const list = feeds.map((f) => ({ url: f.url, title: f.title, known: [...new Set(f.items.flatMap((it) => [it.id, it.url]).filter(Boolean))] }));
-    C.platform.feedChecks.watch(list, askToNotify && list.length > 0);
+    const n = notesPrefs();
+    C.platform.feedChecks.watch(list, n.on && askToNotify && list.length > 0, { style: n.on ? n.posts : "off", quiet: n.quiet });
     askToNotify = false;
   }, 1000);
 }
@@ -1349,7 +1368,15 @@ async function takeFeedNews() {
   const news = await C.platform.feedChecks.news();
   if (news.open) {
     await toLibrary();
-    if (state.place !== "feeds" || state.feed) await goPlace("feeds");
+    const to = news.feed && feeds.some((f) => f.url === news.feed) ? news.feed : null;
+    if (state.place !== "feeds" || state.feed !== to) await goPlace("feeds", to);
+  }
+  // A post's Save, from its notification.
+  if (news.save && /^https?:/.test(news.save)) {
+    const f = feeds.find((x) => x.url === news.feed);
+    const it = f && f.items.find((x) => sameUrl(x.url, news.save));
+    if (f) saveFeedPosts([{ f, it: it || { url: news.save, foundAt: Date.now() } }]);
+    else savePage(news.save);
   }
   let due = false;
   for (const url of news.feeds) {

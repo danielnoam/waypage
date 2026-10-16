@@ -76,7 +76,7 @@ function compressGroup() {
     el("p", { class: "footnote" }, "For clips already saved, Storage has Make pictures smaller."));
 }
 
-// Pictures on tap (1.29.2): a clip opened online loads nothing from the
+// Pictures on tap (1.30.1): a clip opened online loads nothing from the
 // web until a picture is tapped. Off by default, as full pictures online
 // is how saving works (CLAUDE.md).
 const TAP_PICTURES_KEY = "waypage.tapPictures";
@@ -162,6 +162,52 @@ function editNavGroup() {
           el("span", { class: "choice-note" }, "Find and replace words across many clips at once")),
         el("span", { class: "row-chev", "aria-hidden": "true" }, "›"))));
 }
+
+// Notifications (1.30.0): the app's only ones that alert are new feed
+// posts, checked with the app closed. Off, each post on its own (its
+// title and the start of what it says, grouped by feed, with Save) or
+// all in one, as before; and feeds kept quiet one by one.
+function notesSections() {
+  const n = notesPrefs();
+  const sw = (label, note, on, set) => el("label", { class: "row" },
+    el("span", { class: "choice-text" },
+      el("span", { class: "choice-label", dir: "auto" }, label),
+      note ? el("span", { class: "choice-note" }, note) : null),
+    el("input", { class: "switch", type: "checkbox", role: "switch", checked: on, onchange: (e) => set(e.target.checked) }));
+  const phone = el("p", { class: "footnote warn", hidden: true }, "Your phone has Waypage's notifications turned off. Turn them on in its settings.");
+  C.platform.feedChecks.allowed().then((ok) => { if (ok === false && notesPrefs().on) phone.hidden = false; });
+  const out = [el("section", { class: "settings-section" },
+    el("div", { class: "group" },
+      sw("Notifications", "New posts from the feeds you follow, found with the app closed", n.on, (on) => {
+        if (on) askToNotify = true;
+        setNotes({ on });
+        renderSection();
+      })),
+    phone)];
+  if (!n.on) return out;
+  out.push(choiceGroup({ key: NOTES_KEY, label: "New posts", get: () => notesPrefs().posts, set: (v) => setNotes({ posts: v }),
+    options: [
+      { value: "each", label: "Each post on its own", note: "Its title and the start of what it says, grouped by feed, with Save" },
+      { value: "together", label: "All together", note: "One notification saying how many new posts, and from which feeds" },
+    ] }));
+  if (feeds.length) {
+    out.push(el("section", { class: "settings-section" },
+      el("h2", { class: "overline" }, "Feeds"),
+      el("div", { class: "group" }, ...[...feeds].sort((a, b) => a.title.localeCompare(b.title)).map((f) =>
+        sw(f.title, null, !feedQuiet(f), (on) => setFeedQuiet(f, !on)))),
+      el("p", { class: "footnote" }, "A feed turned off here is still checked; its posts wait in Feeds.")));
+  }
+  out.push(el("section", { class: "settings-section" },
+    el("div", { class: "group" },
+      el("button", { class: "row nav-row", type: "button", onclick: () => C.platform.feedChecks.settings() },
+        el("span", { class: "choice-text" },
+          el("span", { class: "choice-label" }, "Sound and more"),
+          el("span", { class: "choice-note" }, "In your phone's settings for Waypage")),
+        el("span", { class: "row-chev", "aria-hidden": "true" }, "›"))),
+    C.platform.os === "android" ? el("p", { class: "footnote" }, "Saving, sync and Read aloud show a quiet notification while they run, which Android needs to keep them going with the app put away. Those aren't alerts and can't be turned off here.") : null));
+  return out;
+}
+const notesValue = () => { const n = notesPrefs(); return n.on ? (n.posts === "each" ? "Each post" : "All together") : "Off"; };
 
 function libraryGroup() {
   const input = el("input", { class: "switch", type: "checkbox", role: "switch", checked: load(CONTINUE_KEY, true),
@@ -773,6 +819,7 @@ const SECTIONS = {
     value: () => SETTINGS[1].options.find((o) => o.value === SETTINGS[1].get()).label },
   sync: { title: "GitHub sync", build: syncSections, value: () => (C.sync.on ? (C.sync.last.error ? "Stopped" : "On") : "Off") },
   drive: { title: "Google Drive", build: driveSections, value: driveValue },
+  notifications: { title: "Notifications", build: notesSections, value: notesValue },
   edit: { title: "Edit clips", build: editGroup, value: () => "", parent: "library" },
   storage: { title: "Storage", build: () => [storageGroup(), ...roomGroup(), placeGroup(), backupGroup(), browserStorageGroup()], value: () => formatSize(totalBytes()) },
   updates: { title: "About", build: () => [updatesGroup(), aboutGroup()], value: () => (updateOut() ? upd.latest + " is out" : APP_VERSION) },
@@ -796,7 +843,7 @@ function renderSettings() {
         el("div", { class: "row update-row out" },
           el("span", { class: "row-label accent" }, "Waypage " + upd.latest + " is out"),
           el("button", { class: "btn-small", type: "button", onclick: () => openSection("updates") }, "View"))) : null,
-      el("div", { class: "group" }, row("appearance"), row("reading"), row("library")),
+      el("div", { class: "group" }, row("appearance"), row("reading"), row("library"), C.platform.native ? row("notifications") : null),
       el("div", { class: "group" }, row("saving"), row("sync"), C.drive.available ? row("drive") : null, row("storage")),
       el("div", { class: "group" }, row("updates"), row("report"))));
 }

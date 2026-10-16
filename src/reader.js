@@ -35,7 +35,7 @@
 
   const appUrl = (rel) => new URL(rel + "?v=" + C.version, location.href).href;
 
-  // Pictures on tap (1.29.2): nothing in the clip loads from the web by
+  // Pictures on tap (1.30.1): nothing in the clip loads from the web by
   // itself, so a site doesn't learn when its page is read. A picture's
   // link goes to data-full and it waits behind its placeholder; the
   // viewer loads a preview's full size when it's tapped, as always.

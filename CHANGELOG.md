@@ -2,7 +2,8 @@
 
 All notable changes to Carry-on. Newest first.
 
-## [1.29.2] - 2026-10-16
+<<<<<<< HEAD
+## [1.30.1] - 2026-10-16
 
 ### Added
 - A device that set up GitHub sync before 1.29.1 shows "Make a safer
@@ -13,6 +14,18 @@ All notable changes to Carry-on. Newest first.
   linked pictures come from their sites, which can see when you read a
   clip; with this on, a clip opened online loads nothing from the web
   until you tap a picture. Previews saved on the phone always show.
+=======
+## [1.30.0] - 2026-10-16
+
+### Added
+- Settings › Notifications. Turn notifications off altogether, or pick
+  how new feed posts arrive: each post on its own, showing its title and
+  the start of what it says, grouped by feed and with a Save button; or
+  all together in one notification, as before. Each feed can be kept
+  quiet, there or in the feed's own menu, and Sound and more opens the
+  phone's own settings for Waypage.
+- Tapping a feed's notification opens that feed in Feeds.
+>>>>>>> origin/main
 
 ## [1.29.1] - 2026-10-16
 
