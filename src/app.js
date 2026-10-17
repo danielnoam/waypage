@@ -9,7 +9,7 @@
 // only use what an earlier part, or its own, has declared. A part's
 // functions can call into any part, since nothing is tapped until all of
 // them have loaded. app-start.js runs last and starts things up.
-const APP_VERSION = "1.32.0";
+const APP_VERSION = "1.33.0";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
@@ -213,6 +213,51 @@ const FONTS = [
   { value: "dyslexic", label: "OpenDyslexic", family: '"OpenDyslexic"', kind: "sans" },
   { value: "system", label: "System", family: 'system-ui, -apple-system, "Segoe UI", Roboto', kind: "system" },
 ];
+// Your own fonts (1.33.0): files in the library's fonts folder, or added
+// in Settings › Reading. Their names are kept here so a font you picked
+// is known at once; the files load a moment later (loadUserFonts), into
+// the app for the Font menu and into each clip's frame.
+const USER_FONTS_KEY = "waypage.userFonts";
+const FONT_EXT = /\.(ttf|otf|woff2?)$/i;
+const userFamily = (name) => "Waypage " + name.replace(FONT_EXT, "").replace(/["\\]/g, "");
+function setUserFonts(names) {
+  for (let i = FONTS.length - 1; i >= 0; i--) if (FONTS[i].user) FONTS.splice(i, 1);
+  const at = FONTS.findIndex((f) => f.value === "system");
+  FONTS.splice(at, 0, ...names.map((name) => ({ value: "user:" + name, label: name.replace(FONT_EXT, ""), family: '"' + userFamily(name) + '"', kind: "serif", user: name })));
+}
+setUserFonts(load(USER_FONTS_KEY, []));
+const fontBytes = new Map();
+async function loadUserFonts() {
+  const names = await C.store.listFonts();
+  store(USER_FONTS_KEY, names);
+  setUserFonts(names);
+  for (const n of [...fontBytes.keys()]) if (!names.includes(n)) fontBytes.delete(n);
+  for (const name of names) {
+    if (fontBytes.has(name)) continue;
+    try {
+      const bytes = await C.store.readFont(name);
+      const face = new FontFace(userFamily(name), bytes);
+      await face.load();
+      document.fonts.add(face);
+      fontBytes.set(name, bytes);
+    } catch (e) { console.warn("font " + name + " didn't load", e); }
+  }
+  paintReading();
+  document.querySelectorAll(".reading-controls").forEach(syncReadingControls);
+}
+// Into a clip's frame, which runs no scripts: the faces are made from the
+// bytes, so the frame's CSP (fonts from the app only) doesn't come into it.
+const framed = new WeakMap();
+function fontsInto(doc) {
+  if (!doc || !doc.fonts || !doc.defaultView || !doc.defaultView.FontFace) return;
+  const had = framed.get(doc) || new Set();
+  for (const [name, bytes] of fontBytes) {
+    if (had.has(name)) continue;
+    try { doc.fonts.add(new doc.defaultView.FontFace(userFamily(name), bytes)); had.add(name); } catch (e) { /* that frame won't take it */ }
+  }
+  framed.set(doc, had);
+}
+window.Waypage.fontsInto = fontsInto;
 const HEBREW = [
   { value: "auto", label: "Auto" },
   { value: "frank", label: "Frank Ruhl", family: '"Frank Ruhl Libre"' },

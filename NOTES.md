@@ -18,6 +18,20 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Your own fonts and speech engines (1.33.0).** A font is kept as a
+  file in the library's `fonts/` (IndexedDB in a browser), checked for a
+  font's first four bytes and a FontFace load before it's kept, and
+  never synced or backed up (licences, and it's per device). The reader
+  frame runs no scripts and its CSP allows fonts only from the app, so
+  the app makes each face from the bytes with the frame's own FontFace
+  (`fontsInto`, from applyTheme): nothing is fetched and the CSP stays
+  as it was. Font names are cached in `waypage.userFonts` so a picked
+  font isn't reset before the files load. Speech engines: SpeechPlugin
+  lists `getEngines()`, voices and SpeechService start the picked engine
+  (`new TextToSpeech(ctx, l, engine)`), and an engine that won't start
+  falls back to the default. Voices are kept per engine and language
+  (`engine|lang` in waypage.aloudVoice).
+
 - **Sleep timer, volume buttons, dim pictures, Before you go offline,
   OPML (1.32.0).** The sleep timer pauses rather than stops, so Play goes
   on where you dozed off. On Android SpeechService keeps the time

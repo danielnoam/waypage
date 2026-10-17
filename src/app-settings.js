@@ -215,6 +215,55 @@ function readingGroup() {
     el("p", { class: "footnote" }, "The same as the reader's settings, behind the gear while you read."));
 }
 
+// Your own fonts (1.33.0): add a font file, or take one away. A .ttf,
+// .otf, .woff or .woff2 up to 10 MB, checked to be a font before it's kept.
+const FONT_MAX = 10 * 1024 * 1024;
+const fontMagic = (b) => {
+  const s = String.fromCharCode(b[0], b[1], b[2], b[3]);
+  return s === "\0\x01\0\0" || s === "true" || s === "OTTO" || s === "wOFF" || s === "wOF2";
+};
+async function addFontFile(file) {
+  if (!file) return;
+  const name = String(file.name || "font").replace(/[^\w .()+-]/g, "").trim();
+  if (!FONT_EXT.test(name)) { toast("That isn't a font file. Pick a .ttf, .otf, .woff or .woff2."); return; }
+  if (file.size > FONT_MAX) { toast("That font is over 10 MB."); return; }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes.length < 4 || !fontMagic(bytes)) { toast("That file isn't a font Waypage can read."); return; }
+  try { await new FontFace("Waypage check", bytes).load(); } catch (e) { toast("That font didn't load. Try another file."); return; }
+  try { await C.store.addFont(name, bytes); } catch (e) { toast("Couldn't keep the font. Try again."); return; }
+  await loadUserFonts();
+  setReading({ font: "user:" + name });
+  if (state.section === "reading") renderSection();
+  toast("Added " + name.replace(FONT_EXT, "") + ". It's your reading font now.");
+}
+async function removeFontFile(name) {
+  if (!confirm("Remove the font " + name.replace(FONT_EXT, "") + "?")) return;
+  try { await C.store.removeFont(name); } catch (e) { toast("Couldn't remove it. Try again."); return; }
+  if (readingPrefs().font === "user:" + name) setReading({ font: READING_DEFAULT.font });
+  await loadUserFonts();
+  if (state.section === "reading") renderSection();
+}
+function fontsGroup() {
+  const mine = FONTS.filter((f) => f.user);
+  // Phones label font files oddly, so the app's picker shows every file.
+  const input = el("input", { type: "file", class: "visually-hidden", tabindex: "-1", "aria-hidden": "true" });
+  if (!C.platform.native) input.accept = ".ttf,.otf,.woff,.woff2";
+  input.addEventListener("change", () => { const f = input.files[0]; input.value = ""; addFontFile(f); });
+  const place = C.store.place.kind;
+  const where = place === "documents" ? "Or put font files in Documents/Waypage/fonts on the phone. "
+    : place === "folder" ? "Or put font files in a fonts folder inside " + C.store.placeName(C.store.place) + ". " : "";
+  return el("section", { class: "settings-section" },
+    el("h2", { class: "overline" }, "Your fonts"),
+    el("div", { class: "group" },
+      ...mine.map((f) => el("div", { class: "row" },
+        el("span", { class: "choice-text" }, el("span", { class: "choice-label", style: "font-family: " + f.family + ", var(--sans)" }, f.label)),
+        el("button", { class: "btn-text warn", type: "button", onclick: () => removeFontFile(f.user) }, "Remove"))),
+      el("button", { class: "row", type: "button", onclick: () => input.click() },
+        el("span", { class: "row-label accent" }, "Add a font")),
+      input),
+    el("p", { class: "footnote" }, where + "A font you add stays on this device and shows under Font with the others. Hebrew still uses the Hebrew font."));
+}
+
 // Edit clips, inside Library since 1.27.1 (it was its own menu entry).
 function editNavGroup() {
   return el("section", { class: "settings-section" },
@@ -872,7 +921,7 @@ const updateOut = () => UPD_OUT.includes(upd.phase) && upd.latest;
 const SECTIONS = {
   appearance: { title: "Appearance", build: () => [choiceGroup(SETTINGS[0]), autoGroup(), dimGroup(), motionGroup()],
     value: () => themeName(state.theme) },
-  reading: { title: "Reading", build: () => [readingGroup(), aloudGroup()],
+  reading: { title: "Reading", build: () => [readingGroup(), fontsGroup(), aloudGroup()],
     value: () => { const r = readingPrefs(); return (FONTS.find((f) => f.value === r.font) || FONTS[0]).label + " · " + r.size + " px"; } },
   library: { title: "Library", build: () => [
     choiceGroup({ key: LAYOUT_KEY, label: "Layout", get: layout, set: (v) => { store(LAYOUT_KEY, v); renderLibrary(); }, options: LAYOUTS }),

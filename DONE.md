@@ -42,6 +42,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 
 - Themes: Paper, Sepia, Night plus six more, Auto (0.1.0, 0.24.0)
 - Fonts: ten reading fonts and four Hebrew ones; size, spacing, margins, alignment; pinch for size (0.24.0, 1.16.0, 1.19.0)
+- Your own fonts, added in Settings or from the library's fonts folder (1.33.0)
 - Scroll or Pages, two pages side by side on wide screens (0.29.0, 1.5.0)
 - Place kept and synced as a paragraph on the middle line (0.5.0, 1.3.0, 1.31.0)
 - Contents, progress line, tap to hide the bar (0.13.0, 0.19.0)
@@ -63,6 +64,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Keeps reading across screens, Read next / go on to the next clip, also put away on Android (1.4.0, 1.6.0, 1.23.0)
 - Keep the screen on; picture in picture; Bluetooth previous/next (1.24.0, 1.25.0, 1.26.0)
 - Sleep timer: minutes or end of clip (1.32.0)
+- Speech engine picker and Get more voices on Android (1.33.0)
 
 ## Feeds
 

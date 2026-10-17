@@ -45,7 +45,7 @@ public class SpeechService extends Service {
     static class Job {
         String[] items;
         int start;
-        String lang, voice, title, subtitle, key, album;
+        String lang, voice, engine, title, subtitle, key, album;
         int[] blocks;
         int track, tracks;
         float rate = 1f;
@@ -69,6 +69,8 @@ public class SpeechService extends Service {
     private final Runnable sleeper = this::pause;
     private TextToSpeech tts;
     private boolean ready;
+    private String engine = "";
+    private int ttsGen;
     private Job job;
     private int index;
     private int generation;
@@ -111,8 +113,22 @@ public class SpeechService extends Service {
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
         wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "waypage:aloud");
         wake.setReferenceCounted(false);
-        tts = new TextToSpeech(this, (status) -> main.post(() -> {
+        makeTts(pending != null ? pending.engine : "");
+    }
+
+    // The speech engine picked in the app (1.33.0), or the phone's default
+    // when none is; one that won't start falls back to the default.
+    private void makeTts(String want) {
+        final String e = want == null ? "" : want;
+        if (tts != null && e.equals(engine)) return;
+        if (tts != null) tts.shutdown();
+        engine = e;
+        ready = false;
+        final int gen = ++ttsGen;
+        TextToSpeech.OnInitListener done = (status) -> main.post(() -> {
+            if (gen != ttsGen) return;
             if (status != TextToSpeech.SUCCESS) {
+                if (!e.isEmpty()) { if (tts != null) tts.shutdown(); tts = null; makeTts(""); return; }
                 tts = null;
                 finish("error");
                 return;
@@ -125,7 +141,8 @@ public class SpeechService extends Service {
                 @Override public void onError(String id) { main.post(() -> said(id)); }
             });
             if (job != null && "playing".equals(state)) speakCurrent();
-        }));
+        });
+        tts = e.isEmpty() ? new TextToSpeech(this, done) : new TextToSpeech(this, done, e);
     }
 
     private static AudioAttributes attributes() {
@@ -151,6 +168,7 @@ public class SpeechService extends Service {
             index = Math.max(0, Math.min(job.start, job.items.length - 1));
             state = "playing";
             foreground();
+            makeTts(job.engine);
             play();
         } else if (PAUSE.equals(action)) pause();
         else if (RESUME.equals(action)) resume();

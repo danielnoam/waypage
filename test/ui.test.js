@@ -819,6 +819,39 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a font added in Settings becomes the reading font, in the frame too, and goes again (1.33.0)", async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "waypage-"));
+      const file = path.join(dir, "My Font.woff2");
+      fs.copyFileSync(path.join(__dirname, "..", "src", "fonts", "Lora.woff2"), file);
+      const bad = path.join(dir, "fake.ttf");
+      fs.writeFileSync(bad, "not a font at all");
+      const q = await page(browser, 390);
+      await q.evaluate(async (html) => {
+        await window.Waypage.store.writeIndex([{ id: "ft1", url: "https://example.com/ft", title: "Fonts", site: "example.com", savedAt: 1000, minutes: 1, mode: "links", at: 0 }]);
+        await window.Waypage.store.writePage("ft1", html, { id: "ft1" });
+      }, "<!doctype html><html><body><h1>Fonts</h1><p>Some words to read.</p></body></html>");
+      await q.reload();
+      await q.evaluate(() => openSettings(false, "reading"));
+      const input = q.locator("#sectionView input[type=file]");
+      await input.setInputFiles(bad);
+      await until(q, () => /isn't a font/.test(document.body.innerText));
+      await input.setInputFiles(file);
+      await until(q, () => readingPrefs().font === "user:My Font.woff2");
+      assert.ok(await q.evaluate(() => FONTS.some((f) => f.label === "My Font")));
+      assert.ok(await q.evaluate(() => [...document.fonts].some((f) => f.family.replace(/"/g, "") === "Waypage My Font" && f.status === "loaded")));
+      await q.evaluate(() => { closeSettings && closeSettings(); });
+      await q.evaluate(() => openPage("ft1"));
+      await until(q, () => { const d = document.getElementById("readerFrame").contentDocument; return d && [...d.fonts].some((f) => f.family.replace(/"/g, "") === "Waypage My Font"); });
+      await q.reload();
+      assert.strictEqual(await q.evaluate(() => readingPrefs().font), "user:My Font.woff2", "kept after a reload");
+      await q.evaluate(() => { window.confirm = () => true; return removeFontFile("My Font.woff2"); });
+      assert.strictEqual(await q.evaluate(() => readingPrefs().font), "serif");
+      assert.deepStrictEqual(await q.evaluate(() => window.Waypage.store.listFonts()), []);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
     await test("Storage offers to make room from finished clips with pictures", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async (url) => {

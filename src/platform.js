@@ -289,9 +289,10 @@
       if (S && !hooked) { hooked = true; S.addListener("progress", tell); }
       return () => heard.delete(f);
     },
-    async voices() {
+    // `engine` (1.33.0, Android): another installed speech engine's voices.
+    async voices(engine) {
       const S = plugin("Speech");
-      if (S) { try { return (await S.voices()).voices || []; } catch (e) { return []; } }
+      if (S) { try { return (await S.voices(os === "android" && engine ? { engine } : {})).voices || []; } catch (e) { return []; } }
       if (!synth) return [];
       let list = synth.getVoices();
       if (!list.length) {
@@ -300,7 +301,20 @@
       }
       return list.map((v) => ({ id: v.voiceURI, name: v.name, lang: v.lang, online: !v.localService }));
     },
-    // { items, start, lang, voice, rate, title, subtitle, key }
+    // The phone's speech engines (1.33.0, Android): { engines: [{ name,
+    // label }], default }; none elsewhere.
+    async engines() {
+      const S = plugin("Speech");
+      if (!S || os !== "android") return { engines: [], default: "" };
+      try { const r = await S.engines(); return { engines: r.engines || [], default: r.default || "" }; } catch (e) { return { engines: [], default: "" }; }
+    },
+    // The engine's own page for adding voices.
+    async moreVoices(engine) {
+      const S = plugin("Speech");
+      if (!S || os !== "android") return false;
+      try { await S.moreVoices(engine ? { engine } : {}); return true; } catch (e) { return false; }
+    },
+    // { items, start, lang, voice, engine, rate, title, subtitle, key }
     async play(o) {
       const S = plugin("Speech");
       if (S) return S.play(o);

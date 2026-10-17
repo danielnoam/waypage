@@ -295,6 +295,7 @@ Promise.all([C.platform.ready, firstIndex]).then(([, [pages]]) => {
   noteVersion();
   if (C.store.problem) setTimeout(() => toast(C.store.problem), 800);
   tidyOldFiles();
+  loadUserFonts().catch(() => {});
   const share = C.platform.plugin("ShareTarget");
   if (share && share.addListener) share.addListener("shared", saveShared);
   saveShared();

@@ -1019,7 +1019,12 @@ function pieces(parts) {
 
 const langOf = (p) => ((p && p.lang) || navigator.language || "en").toLowerCase().replace(/^iw\b/, "he");
 const primary = (lang) => String(lang || "").toLowerCase().split(/[-_]/)[0].replace(/^iw$/, "he");
-const voiceFor = (p) => load(VOICE_KEY, {})[primary(langOf(p))] || "";
+// The speech engine (1.33.0, Android): "" for the phone's default. Each
+// engine keeps its own voice for each language.
+const ENGINE_KEY = "waypage.aloudEngine";
+const engineOf = () => String(load(ENGINE_KEY, "") || "");
+const voiceKey = (lang) => (engineOf() ? engineOf() + "|" : "") + lang;
+const voiceFor = (p) => load(VOICE_KEY, {})[voiceKey(primary(langOf(p)))] || "";
 
 // From a block, or from a word in it (`spot` from a selection).
 async function startAloud(from, spot) {
@@ -1041,7 +1046,7 @@ async function startAloud(from, spot) {
   setAloud("playing", start);
   queued = null;
   try {
-    await speech.play({ items, start, lang: p.lang || "", voice: voiceFor(p), rate: load(RATE_KEY, 1),
+    await speech.play({ items, start, lang: p.lang || "", voice: voiceFor(p), engine: engineOf(), rate: load(RATE_KEY, 1),
       key: p.id, blocks: map, ...mediaInfo(p) });
     queueNext();
   } catch (e) {
@@ -1083,7 +1088,7 @@ async function queueNext() {
   if (!texts.length) return;
   const { items, map } = pieces(texts.map((text, block) => ({ text, block })));
   queued = { key: next.id, after: p.id, map };
-  const ok = await speech.queue({ after: p.id, items, start: 0, lang: next.lang || "", voice: voiceFor(next),
+  const ok = await speech.queue({ after: p.id, items, start: 0, lang: next.lang || "", voice: voiceFor(next), engine: engineOf(),
     key: next.id, blocks: map, ...mediaInfo(next) });
   if (!ok) queued = null;
 }
@@ -1659,11 +1664,36 @@ function aloudControls() {
   const voiceRow = el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Voice"), el("span", { class: "meta" }, "Looking…"));
   const note = el("p", { class: "footnote aloud-note" }, speech.background ? "Keeps reading with the screen off. Pause it from the lock screen." : p ? "Reads while this clip is open." : "");
   note.hidden = !note.textContent;
-  speech.voices().then((all) => {
+  const restart = () => { if (aloud.state !== "stopped" && state.open && aloud.key === state.open.id) startAloud(blockAt(aloud.index)); };
+  // Another speech engine (1.33.0, Android), when the phone has more than
+  // one, and the engine's own page for adding voices.
+  // Kept out until the phone says it has engines: a row's own display
+  // would show it through `hidden`.
+  const engineSlot = el("span", { hidden: true }), moreSlot = el("span", { hidden: true });
+  const engineRow = el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Speech engine"));
+  const more = el("button", { class: "btn-quiet aloud-more", type: "button", onclick: () => speech.moreVoices(engineOf()) }, "Get more voices");
+  speech.engines().then(({ engines, default: def }) => {
+    if (!engines.length) return;
+    moreSlot.replaceWith(more);
+    if (engines.length < 2) return;
+    const dflt = engines.find((e) => e.name === def);
+    const options = [{ value: "", label: "Phone's default" + (dflt ? " (" + dflt.label + ")" : "") }, ...engines.map((e) => ({ value: e.name, label: e.label }))];
+    const picked = engineOf();
+    engineRow.append(dropdown({ label: "Speech engine", cls: "field-pick font-pick", options,
+      value: options.some((o) => o.value === picked) ? picked : "",
+      onpick: (v) => {
+        store(ENGINE_KEY, v);
+        const box = engineRow.closest(".aloud-controls");
+        if (box) box.replaceWith(aloudControls());
+        restart();
+      } }));
+    engineSlot.replaceWith(engineRow);
+  });
+  speech.voices(engineOf()).then((all) => {
     const mine = all.filter((v) => primary(v.lang) === lang);
     if (!mine.length) {
       voiceRow.lastChild.replaceWith(el("span", { class: "meta" }, "Phone's default"));
-      note.textContent = "No " + name + " voice on this phone. Add one in its text-to-speech settings, then come back.";
+      note.textContent = "No " + name + " voice " + (engineOf() ? "in this engine" : "on this phone") + ". " + (speech.background ? "Get more voices adds one" : "Add one in the text-to-speech settings") + ", then come back.";
       note.hidden = false;
       return;
     }
@@ -1673,9 +1703,9 @@ function aloudControls() {
       value: options.some((o) => o.value === saved) ? saved : "",
       onpick: (v) => {
         const all = load(VOICE_KEY, {});
-        if (v) all[lang] = v; else delete all[lang];
+        if (v) all[voiceKey(lang)] = v; else delete all[voiceKey(lang)];
         store(VOICE_KEY, all);
-        if (aloud.state !== "stopped" && state.open && aloud.key === state.open.id) startAloud(blockAt(aloud.index));
+        restart();
       } }));
   });
   const rate = clamp(Number(load(RATE_KEY, 1)) || 1, RATE_MIN, RATE_MAX);
@@ -1705,7 +1735,9 @@ function aloudControls() {
       onpick: (v) => { setSleep(v); sleepText.textContent = sleepNote(); } })) : null;
   return el("div", { class: "aloud-controls" },
     sleepRow,
+    engineSlot,
     voiceRow,
+    moreSlot,
     el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Speed", shown),
       el("div", { class: "stepper" }, speed)),
     check(FOOTNOTES_KEY, "Read footnotes", "The notes at the end, as part of the clip."),

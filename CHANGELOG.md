@@ -2,6 +2,21 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.33.0] - 2026-10-17
+
+### Added
+- Your own fonts: Settings › Reading › Your fonts › Add a font takes a
+  .ttf, .otf, .woff or .woff2 file, and it shows under Font with the
+  others (it becomes your reading font when you add it). With the
+  library in Documents/Waypage or a folder you picked, font files put
+  in its fonts folder show up too. A font stays on the device it was
+  added on.
+- More read-aloud voices on Android: when the phone has more than one
+  speech engine (Google's, Samsung's, RHVoice, Piper voices through
+  Sherpa…), Read aloud has a Speech engine menu above Voice, each engine
+  keeping its own voice for each language. "Get more voices" opens the
+  engine's own page for downloading voices.
+
 ## [1.32.0] - 2026-10-17
 
 ### Added
