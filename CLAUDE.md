@@ -12,8 +12,11 @@ borrows its stack, build workflows and native-fetch trick from.
 - `git pull --ff-only` first.
 - Read **docs/PROPOSAL.md** before changing architecture: it records why
   there is no server, how a page is captured and stored, and the legal and
-  store rules the design keeps to. **TODO.md** is the work, **NOTES.md**
-  why things are the way they are, **DROPPED.md** what was decided against.
+  store rules the design keeps to. **TODO.md** is the work, **DONE.md**
+  what the app already does, **NOTES.md** why things are the way they
+  are, **DROPPED.md** what was decided against.
+- Read **Working with Daniel** below; it's what he'd otherwise have to
+  repeat.
 
 ## Decisions already made (2026-10-02)
 
@@ -59,3 +62,43 @@ borrows its stack, build workflows and native-fetch trick from.
   phone and desktop width, then commit and push straight to `main`.
 - `main` is production. A push deploys the web copy, and a new
   `APP_VERSION` publishes the APK and IPA. Check the runs went green.
+
+## Working with Daniel (his standing rules, 17 Oct 2026)
+
+Keeping the notes files right:
+
+- **TODO.md holds only what's left.** Whenever something ships, or Daniel
+  says he doesn't want it, take it out in the same change: shipped work
+  becomes a line in DONE.md (and the CHANGELOG entry), a no becomes a line
+  in DROPPED.md with his reason. Also remove anything stale or already
+  covered. Never leave done work in TODO.md.
+- **DONE.md is one line per feature, by area, with its version.** Add to
+  it with every release that adds something.
+- **The shared project folder's waypage/TODO.md and DONE.md are copies.**
+  After changing either in the repo, copy it over the shared one so both
+  match.
+- **Before suggesting ideas,** check DONE.md, TODO.md and DROPPED.md so
+  nothing shipped, planned or turned down is suggested again.
+
+How he likes the work done:
+
+- **Merge to main without asking** once the checks are green. Don't ask
+  "shall I merge".
+- **When he says "don't build yet" or "fixes only",** commit locally and
+  don't push (a branch push builds too) until he says build.
+- **"Add to TODO" means plan it, not build it.** Small asks he lists
+  without that, build now.
+- **Several asks go out as one release,** or two at most when grouped;
+  don't split them into many.
+- **For a new look, a reworked screen or a big change, show or explain it
+  first** and wait for his OK before building.
+- **Speed matters.** Measure with a big library (3,000 clips) on a slowed
+  CPU before and after anything that touches lists or opening.
+- **Motion has no fades.** Things move or zoom; see DESIGN.md.
+- **App stores aren't a priority.** Don't bring up store prep.
+- **UI words:** Library, Clips, Files, Collections, Feeds, Tags,
+  Highlights. "Pages" is only the reader's layout.
+- **After shipping,** say in a line or two what to try on the phone,
+  above all anything native that couldn't be tested here.
+- **Be direct.** Push back when an idea or plan is weak, and say what
+  was checked and what is a guess.
