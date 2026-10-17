@@ -2,6 +2,14 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.35.0] - 2026-10-17
+
+### Changed
+- Big PDFs read from where they are (over 32 MB) open without the whole
+  file being loaded into memory: Waypage reads only the parts of the
+  file the pages on screen need. A 100 MB PDF opened in about a quarter
+  of a second, reading 1.5 MB of it.
+
 ## [1.34.0] - 2026-10-17
 
 ### Added

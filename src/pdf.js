@@ -30,9 +30,18 @@ let busy = false;
 // rest follow in batches ("more"), for the reader to fix its slots.
 let held = null, queue = Promise.resolve(), opened = 0;
 const FIRST = 16, BATCH = 16;
+// A big linked PDF is read by ranges (1.35.0): pdf.js asks for the
+// stretches it needs, the app reads them from the file and sends them
+// back, so the whole file is never in memory. Not queued, since the open
+// that's waiting on them is.
+let ranges = null;
 addEventListener("message", async (e) => {
   const job = e.data;
   if (!job) return;
+  if (job.kind === "range") {
+    if (ranges && ranges.tid === job.tid) ranges.transport.onDataRange(job.begin, new Uint8Array(job.bytes));
+    return;
+  }
   if (job.kind === "open" || job.kind === "draw" || job.kind === "close" || job.kind === "outline") {
     queue = queue.then(async () => {
       try {
@@ -89,8 +98,15 @@ async function load(job) {
   }
   const lib = await libOnce;
   if (!libWorker || libWorker.destroyed) libWorker = new lib.PDFWorker();
+  let range = null;
+  if (job.length) {
+    const transport = new lib.PDFDataRangeTransport(job.length, new Uint8Array(job.first));
+    transport.requestDataRange = (begin, end) => post({ range: true, tid: job.tid, begin, end });
+    ranges = { tid: job.tid, transport };
+    range = { range: transport, rangeChunkSize: 1 << 19, disableStream: true };
+  } else ranges = null;
   return lib.getDocument({
-    data: job.bytes,
+    ...(range || { data: job.bytes }),
     worker: libWorker,
     isEvalSupported: false,
     disableAutoFetch: true,
@@ -340,11 +356,12 @@ post({ ready: true });
     const waiting = new Map();
     let ids = 0, ready;
     const isReady = new Promise((go) => { ready = go; });
-    const b = { frame, waiting, isReady, ask: null, drop: null };
+    const b = { frame, waiting, isReady, ask: null, drop: null, onRange: null };
     function onMessage(e) {
       if (e.source !== frame.contentWindow) return;
       const m = e.data || {};
       if (m.ready) { ready(); return; }
+      if (m.range) { if (b.onRange) b.onRange(m); return; }
       const w = waiting.get(m.id);
       if (!w) return;
       if (m.more) { if (w.more) w.more(m); return; }
@@ -370,12 +387,21 @@ post({ ready: true });
     box = b;
     return b;
   }
+  const frameOf = (b) => b.frame.contentWindow;
   async function warm() {
     try { await sources(); await sandbox().isReady; } catch (e) { /* later */ }
   }
-  async function open(bytes) {
+  // `file` is the PDF's bytes, or a Blob (or platform.files' stand-in for
+  // one); one past RANGE_FROM is read by ranges, its first stretch sent
+  // with the open.
+  let RANGE_FROM = 32 << 20;
+  let FIRST_BYTES = 1 << 20;
+  let tids = 0;
+  async function open(file) {
     const { lib, worker } = await sources();
     const b = sandbox();
+    const ranged = !(file instanceof Uint8Array) && file.size > RANGE_FROM;
+    const tid = ++tids;
     let closed = false;
     const handle = { pages: 0, sizes: [], onSizes: null, draw: null, close: null };
     const close = () => {
@@ -385,8 +411,21 @@ post({ ready: true });
     };
     try {
       await b.isReady;
-      const copy = bytes.slice(0);
-      const got = await b.ask({ kind: "open", lib, worker, bytes: copy.buffer }, [copy.buffer], (m) => {
+      let job;
+      if (ranged) {
+        const first = await file.slice(0, FIRST_BYTES).arrayBuffer();
+        b.onRange = async (m) => {
+          if (m.tid !== tid || closed) return;
+          let bytes;
+          try { bytes = await file.slice(m.begin, m.end).arrayBuffer(); } catch (e) { return; }
+          if (!closed && box === b) frameOf(b).postMessage({ kind: "range", tid, begin: m.begin, bytes }, "*", [bytes]);
+        };
+        job = [{ kind: "open", lib, worker, length: file.size, first, tid }, [first]];
+      } else {
+        const copy = file instanceof Uint8Array ? file.slice(0) : new Uint8Array(await file.arrayBuffer());
+        job = [{ kind: "open", lib, worker, bytes: copy.buffer }, [copy.buffer]];
+      }
+      const got = await b.ask(job[0], job[1], (m) => {
         if (closed) return;
         for (const [i, s] of m.more.entries()) handle.sizes[m.from + i] = s;
         if (handle.onSizes) handle.onSizes(m.from, m.more.length);
@@ -410,5 +449,7 @@ post({ ready: true });
     }
   }
 
-  C.pdf = { read, open, warm, BOOT, CSP };
+  C.pdf = { read, open, warm, BOOT, CSP,
+    // For tests: how big a file is before it's read by ranges, and its first stretch.
+    set rangeFrom(v) { RANGE_FROM = v; }, set rangeFirst(v) { FIRST_BYTES = v; } };
 })();
