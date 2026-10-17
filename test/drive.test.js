@@ -162,7 +162,7 @@ async function connect(p) {
       assert.strictEqual(backups.length, 1);
       assert.strictEqual(backups[0].bytes.slice(0, 2).toString(), "PK", "not a zip");
       assert.strictEqual(backups[0].appProperties.clips, "1");
-      await p.locator(".row", { hasText: "Restore" }).filter({ hasText: "1 clip" }).waitFor();
+      await p.locator(".drive-pick", { hasText: "Restore" }).filter({ hasText: "1 clip" }).waitFor();
     });
 
     await test("Drive keeps the last three backups", async () => {
@@ -222,11 +222,27 @@ async function connect(p) {
       assert.strictEqual(await p.locator("#sectionBody button[disabled]").count(), 0, "it went again within the week");
     });
 
+    await test("a backup can be deleted from the list (1.31.0)", async () => {
+      const count = () => [...drive.files.values()].filter((f) => f.appProperties && f.appProperties.waypage === "backup").length;
+      const had = count();
+      await p.locator(".drive-row").first().waitFor();
+      const rows = await p.locator(".drive-row").count();
+      p.once("dialog", (d) => d.dismiss());
+      await p.locator(".drive-delete").first().click();
+      await p.waitForTimeout(300);
+      assert.strictEqual(count(), had, "deleted without asking");
+      p.once("dialog", (d) => d.accept());
+      await p.locator(".drive-delete").first().click();
+      await p.locator("text=Backup deleted").waitFor();
+      assert.strictEqual(count(), had - 1);
+      assert.strictEqual(await p.locator(".drive-row").count(), rows - 1);
+    });
+
     await test("a new browser restores the library from Drive", async () => {
       const q = await page(browser);
       assert.strictEqual(await q.locator(".page-card").count(), 0);
       await connect(q);
-      await q.locator(".row", { hasText: "Restore" }).filter({ hasText: "1 clip" }).first().click();
+      await q.locator(".drive-pick", { hasText: "Restore" }).filter({ hasText: "1 clip" }).first().click();
       await q.locator("text=Restored 1 clip").waitFor({ timeout: 15000 });
       const got = await q.evaluate(async () => (await window.Waypage.store.readIndex()).map((x) => x.url));
       assert.deepStrictEqual(got, [ARTICLE]);

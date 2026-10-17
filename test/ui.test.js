@@ -1301,13 +1301,64 @@ function zipOf(files) {
       await q.evaluate(() => window.Waypage.reader.jump(0.6, ""));
       await q.waitForTimeout(400);
       const left = await look();
-      assert.ok(left.y > 1000 && /^\d+\/\d+$/.test(left.spot), "left at " + left.y + " " + left.spot);
+      assert.ok(left.y > 1000 && /^\d+\/\d+c$/.test(left.spot), "left at " + left.y + " " + left.spot);
       await q.evaluate((s) => { state.pages[0].at = 0.6; state.pages[0].spot = s; return window.Waypage.store.writeIndex(state.pages); }, left.spot);
       await reopen();
       got = await look();
       assert.ok(Math.abs(Number(got.spot.split("/")[0]) - Number(left.spot.split("/")[0])) <= 1, "back at " + got.spot + ", left at " + left.spot);
       // The scroll back to the place has the pictures there read.
       await until(q, () => { const d = document.getElementById("readerFrame").contentDocument; return [...d.querySelectorAll("img[data-at]")].some((i) => { const r = i.getBoundingClientRect(); return r.bottom > -innerHeight && r.top < innerHeight * 2; }); });
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("the place is the line across the middle, and leaving right after a scroll keeps it (1.30.2)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        let body = "";
+        for (let i = 0; i < 120; i++) body += "<p>P" + i + " " + "word ".repeat(20 + (i * 37) % 90) + "</p>";
+        const meta = { id: "mid1", url: "https://example.com/mid1", title: "Middle", site: "example.com", savedAt: 100, minutes: 30, mode: "links", at: 0 };
+        await window.Waypage.store.writeIndex([meta]);
+        await window.Waypage.store.writePage("mid1", "<!doctype html><html><body>" + body + "</body></html>", meta);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const open = async () => {
+        await q.evaluate(() => openPage("mid1"));
+        await until(q, () => state.open);
+        await q.evaluate(() => window.Waypage.reader.placed());
+        await q.waitForTimeout(500);
+      };
+      // The block on the middle line, and its spot.
+      const mid = () => q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument, w = d.defaultView;
+        const bar = document.querySelector("#readerView .reader-bar").offsetHeight, foot = document.getElementById("readFoot").offsetHeight;
+        const y = bar + (w.innerHeight - bar - foot) / 2;
+        return [...d.querySelectorAll("p")].find((p) => p.getBoundingClientRect().bottom > y).textContent.split(" ")[0];
+      });
+      await open();
+      await q.evaluate(() => document.getElementById("readerFrame").contentWindow.scrollTo(0, 5000));
+      await q.waitForTimeout(600);
+      const spot = await q.evaluate(() => state.open.spot);
+      assert.ok(/c$/.test(spot), "spot " + spot);
+      assert.strictEqual("P" + spot.split("/")[0], await mid());
+      // Scrolled, then straight out through the widget, before the place
+      // was noted: back at the new place.
+      await q.evaluate(() => document.getElementById("readerFrame").contentWindow.scrollBy(0, 3000));
+      await q.waitForTimeout(20);
+      const was = await mid();
+      await q.evaluate(() => toLibrary());
+      await open();
+      assert.strictEqual(await mid(), was);
+      // A spot from before the reading line still goes back to the top edge.
+      await q.evaluate(() => { const p = state.pages[0]; p.spot = "40/0"; return toLibrary(); });
+      await open();
+      const top = await q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument;
+        const edge = document.querySelector("#readerView .reader-bar").offsetHeight + 8;
+        return [...d.querySelectorAll("p")].find((p) => p.getBoundingClientRect().bottom > edge).textContent.split(" ")[0];
+      });
+      assert.strictEqual(top, "P40");
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

@@ -11,7 +11,7 @@
 const PICTURES_KEY = "waypage.syncPictures";
 let syncTimer = null, syncQueue = load(PICTURES_KEY, null) || [], fetchingPictures = false;
 const keepQueue = () => store(PICTURES_KEY, syncQueue.length ? [...new Set(syncQueue)] : null);
-const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "at", "finished", "readAt", "readOn", "spot", "marks"];
+const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks"];
 // While a run of saves is on, sync waits longer (1.2.0): each sync is a
 // merge of the whole library, and one after every page landing was a
 // stutter every few seconds.
@@ -45,12 +45,19 @@ async function syncNow(quiet = true) {
       // an open menu and the position timer hold on to them.
       setPages: async (list) => {
         const live = new Map(state.pages.map((p) => [p.id, p]));
+        const open = state.open, was = open && open.at + " " + open.spot;
         state.pages = list.map((n) => {
           const o = live.get(n.id);
           if (!o || o === n) return n;
           for (const k of Object.keys(o)) if (!(k in n)) delete o[k];
           return Object.assign(o, n);
         }).concat(state.pages.filter((p) => p.link)).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+        // A place read further on another device since the open clip
+        // opened is followed, while it hasn't been moved here (1.30.2):
+        // a clip opened from a widget before sync came in stayed behind.
+        if (open && !movedHere && open.at + " " + open.spot !== was) {
+          C.reader.placed().then(() => { if (state.open === open && !movedHere) C.reader.jump(open.at || 0, open.spot || ""); });
+        }
         await C.store.writeIndexOnly(state.pages);
         texts.clear();
         await loadThumbs();
@@ -1319,6 +1326,13 @@ const readCount = (list) => { const done = list.filter((x) => x.finished).length
 async function takeWidget() {
   const got = await C.platform.widgets.take();
   if (!got || !got.kind) return;
+  // The clip already open stays as it is (1.30.2), not closed and opened
+  // again: that went back to the place last written, not the one read.
+  const id = got.kind === "reading" ? (keepReading() || {}).id : got.kind === "page" && !got.aloud ? got.id : null;
+  if (id && state.open && state.open.id === id && !$("readerView").hidden) {
+    if (state.sheet) history.back();
+    return;
+  }
   await toLibrary();
   if (got.kind === "reading") {
     const p = keepReading();
@@ -1767,11 +1781,16 @@ function driveSections() {
     el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!what[key], ...driveBusy(),
       onchange: (e) => { C.drive.setWhat(key, e.target.checked); renderSection(); } }));
   if (!driveFiles && !driveListError && !driveRun) driveRefresh();
-  const list = driveFiles ? driveFiles.map((f) => el("button", { class: "row", type: "button", ...driveBusy(), onclick: () => driveRestore(f) },
-    el("span", { class: "choice-text" },
-      el("span", { class: "choice-label" }, driveWhen(f.at)),
-      el("span", { class: "choice-note" }, [formatSize(f.size), f.clips ? countLine(f.clips) : "", f.from ? "from " + f.from : ""].filter(Boolean).join(" · "))),
-    el("span", { class: "row-value accent" }, "Restore"))) : [];
+  // Each with its own delete (1.31.0).
+  const list = driveFiles ? driveFiles.map((f) => el("div", { class: "row drive-row" },
+    el("button", { class: "row drive-pick", type: "button", ...driveBusy(), onclick: () => driveRestore(f) },
+      el("span", { class: "choice-text" },
+        el("span", { class: "choice-label" }, driveWhen(f.at)),
+        el("span", { class: "choice-note" }, [formatSize(f.size), f.clips ? countLine(f.clips) : "", f.from ? "from " + f.from : ""].filter(Boolean).join(" · "))),
+      el("span", { class: "row-value accent" }, "Restore")),
+    el("button", { class: "row-x drive-delete", type: "button", ...driveBusy(), "aria-label": "Delete the backup of " + driveWhen(f.at), title: "Delete", onclick: () => driveDelete(f) },
+      el("span", { class: "visually-hidden" }, "Delete"),
+      svgBin()))) : [];
   return [
     el("section", { class: "settings-section" },
       el("div", { class: "group" },
@@ -1799,7 +1818,7 @@ function driveSections() {
       el("div", { class: "group" }, ...(list.length ? list
         : driveListError === DRIVE_SIGN_IN ? [el("button", { class: "row", type: "button", onclick: driveSignIn }, el("span", { class: "row-label accent" }, "Sign in to Google to see them"))]
         : [el("div", { class: "row" }, el("span", { class: "row-label" + (driveListError ? " warn" : "") }, driveListError || (driveFiles ? "No backups in Drive yet" : "Looking in Drive…")))])),
-      el("p", { class: "footnote" }, "Restoring adds what isn't here and keeps whichever copy of a clip was saved last. Nothing here is deleted.")),
+      el("p", { class: "footnote" }, "Restoring adds what isn't here and keeps whichever copy of a clip was saved last. Nothing here is deleted. The bin deletes a backup from Drive for good.")),
     el("section", { class: "settings-section" },
       el("div", { class: "group" },
         el("button", { class: "row", type: "button", ...driveBusy(), onclick: driveDisconnect },
@@ -1898,6 +1917,19 @@ async function driveBackUp(auto) {
   if (out && out.uri) C.platform.plugin("Filesystem").deleteFile({ path: out.name, directory: "CACHE" }).catch(() => {});
   driveRun = null;
   drivePaint();
+}
+
+async function driveDelete(f) {
+  if (driveRun || !confirm("Delete the backup of " + driveWhen(f.at) + " from Google Drive? It can't be brought back.")) return;
+  try {
+    await C.drive.remove(f.id);
+  } catch (e) {
+    // Already gone counts as deleted.
+    if (!(e instanceof C.drive.DriveError && e.code === "gone")) { toast((e && e.message) || "Couldn't delete it. Try again."); return; }
+  }
+  if (driveFiles) driveFiles = driveFiles.filter((x) => x.id !== f.id);
+  drivePaint();
+  toast("Backup deleted");
 }
 
 async function driveRestore(f) {

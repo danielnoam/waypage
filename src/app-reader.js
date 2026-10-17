@@ -244,7 +244,10 @@ async function openPage(id, fromHistory) {
 // The furthest-read check (1.3.0): a look at the library on GitHub as a
 // clip opens, and when another device read it further and later, a
 // toast offers to go there. The open never waits for it.
-let openedReadAt = 0;
+let openedPlaceAt = 0;
+// When the place itself last moved (1.30.2): placeAt, or readAt from
+// before there was one.
+const placeTime = (p) => p.placeAt || p.readAt || 0;
 // Each device names itself for that toast (1.4.2): what you typed in
 // Settings, Sync, the name Android knows it by, or what kind of device
 // it is. A guessed name reads
@@ -271,7 +274,7 @@ async function furtherRead(p) {
   try { got = await C.sync.peek(); } catch (e) { got = null; }
   if (!got || state.open !== p) return;
   const other = got.pages.find((x) => x && x.id === p.id) || got.pages.find((x) => x && sameUrl(x.url, p.url));
-  if (!other || !(other.readAt > openedReadAt) || typeof other.at !== "number") return;
+  if (!other || !(placeTime(other) > openedPlaceAt) || typeof other.at !== "number") return;
   if (Math.abs(other.at - (p.at || 0)) < 0.01 && (!other.spot || other.spot === p.spot)) return;
   const pct = Math.round(other.at * 100);
   const where = onDevice(typeof other.readOn === "string" ? other.readOn : "");
@@ -280,7 +283,7 @@ async function furtherRead(p) {
     p.at = other.at;
     if (other.spot) p.spot = other.spot;
     if (other.finished) p.finished = true;
-    p.readAt = Math.max(other.readAt, Date.now());
+    p.readAt = p.placeAt = Math.max(placeTime(other), Date.now());
     p.readOn = deviceName();
     C.reader.jump(other.at, other.spot || "");
     savePositions();
@@ -315,14 +318,16 @@ function show(p, html) {
   state.open = p;
   $("aloudPlay").style.visibility = "";
   // Opening counts as reading for the order of things (sort by read, the
-  // sidebar, Continue reading); the merge is safe because the place
-  // itself only changes when you move (notePosition, reader.js's
-  // restore doesn't count), and furtherRead compares with the time
-  // from before this open.
+  // sidebar, Continue reading). The place has a time of its own,
+  // placeAt (1.30.2), set only when you move (notePosition), and sync
+  // goes by that: a device that opened a clip at an older place stamped
+  // readAt and sent the older place everywhere. furtherRead compares
+  // with the time from before this open.
   // Only once it's been open a few seconds (1.21.0): a clip that flashed
   // up on the way somewhere else (Back through history, a wrong tap)
   // became Continue reading.
-  openedReadAt = p.readAt || 0;
+  openedPlaceAt = placeTime(p);
+  movedHere = false;
   clearTimeout(openStamp);
   openStamp = setTimeout(() => {
     if (state.open !== p) return;
@@ -810,6 +815,7 @@ async function goTo(p, turn) {
     return;
   }
   if (state.sheet) await new Promise((resolve) => { addEventListener("popstate", () => resolve(), { once: true }); history.back(); });
+  C.reader.settle();
   if (positionTimer) savePositions();
   history.replaceState(readerState(p), "");
   const frame = $("readerFrame");
@@ -827,6 +833,9 @@ async function goTo(p, turn) {
 // stops, and when the page is closed.
 let positionTimer = null;
 let openStamp = null;
+// Whether the open clip was moved on this device since it opened: until
+// it is, a newer place that sync brings is followed (setPages).
+let movedHere = false;
 const OPEN_COUNTS = 3000;
 function notePosition(p, f, s) {
   const at = Math.round(f * 1000) / 1000;
@@ -834,13 +843,15 @@ function notePosition(p, f, s) {
   // coming in or the text laid out again shift the fraction a little
   // with no reading, and that made another clip Continue reading (on
   // this device, or on another one through sync).
-  const moved = s && p.spot ? s !== p.spot : Math.abs(at - (p.at || 0)) >= 0.01;
+  // A spot from before the reading line (1.30.2) names another block for
+  // the same place, so the fraction decides between the two.
+  const moved = s && p.spot && /c$/.test(s) === /c$/.test(p.spot) ? s !== p.spot : Math.abs(at - (p.at || 0)) >= 0.01;
   p.at = at;
   // An empty spot (Pages, with no block starting on this page) clears
   // the old one, so the fraction decides the place.
   if (s) p.spot = s; else delete p.spot;
   if (f >= 0.97) p.finished = true;
-  if (moved) { p.readAt = Date.now(); p.readOn = deviceName(); }
+  if (moved) { p.readAt = p.placeAt = Date.now(); p.readOn = deviceName(); if (p === state.open) movedHere = true; }
   clearTimeout(positionTimer);
   positionTimer = setTimeout(savePositions, 1500);
 }
@@ -855,6 +866,7 @@ function closeReader() {
   if (waiting && !state.open) { stopWaiting(); C.reader.close(); C.files.closeHeld(); popScreen($("readerView")); return; }
   stopWaiting();
   if (!state.open) return;
+  C.reader.settle();
   if (positionTimer) savePositions();
   // Where you got to goes to GitHub now, not in four seconds (1.3.0).
   if (C.sync.on && navigator.onLine) syncNow();

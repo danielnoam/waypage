@@ -2,7 +2,34 @@
 
 All notable changes to Carry-on. Newest first.
 
-<<<<<<< HEAD
+## [1.31.0] - 2026-10-17
+
+### Added
+- Delete a Google Drive backup: each backup in the Restore list has a
+  bin beside it. It asks first, and the backup is gone from Drive for
+  good.
+
+### Changed
+- Where you are in a clip is now the paragraph on a line across the
+  middle of the screen, where you're reading, not the top edge. Places
+  kept from before still open where they were.
+
+### Fixed
+- Leaving a clip right after scrolling (Back, the home button, a widget,
+  Read next) could keep the place from before that scroll.
+- Tapping a widget for the clip already open closed it and opened it
+  again at an older place. It now stays where you are.
+- Sync could send an older place over a newer one: just opening a clip
+  on one device counted as reading it there, so its old place beat the
+  place you'd read to on another. The place now has a time of its own,
+  set only when you scroll.
+- A clip opened before sync brought a newer place from another device
+  now moves there, as long as you haven't scrolled yet.
+- A long book left past 97% opened at the start again; now only one left
+  on its last screen does. The place in a long book is also checked once
+  more after it opens, as the text around it settles.
+- This changelog had a merge left in it under 1.30.1.
+
 ## [1.30.1] - 2026-10-16
 
 ### Added
@@ -14,7 +41,7 @@ All notable changes to Carry-on. Newest first.
   linked pictures come from their sites, which can see when you read a
   clip; with this on, a clip opened online loads nothing from the web
   until you tap a picture. Previews saved on the phone always show.
-=======
+
 ## [1.30.0] - 2026-10-16
 
 ### Added
@@ -25,7 +52,6 @@ All notable changes to Carry-on. Newest first.
   quiet, there or in the feed's own menu, and Sound and more opens the
   phone's own settings for Waypage.
 - Tapping a feed's notification opens that feed in Feeds.
->>>>>>> origin/main
 
 ## [1.29.1] - 2026-10-16
 

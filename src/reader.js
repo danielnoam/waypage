@@ -332,28 +332,36 @@
   }
 
   // Where the reader is, as text (1.3.0): the block (paragraph, heading,
-  // list item, panel) at the top edge and how far into it, "12/37" for
-  // block 12, 37% in. A fraction of the scroll height (position) is not
-  // the same place at another width or type size; this is.
+  // list item, panel) on the reading line and how far into it, "12/37c"
+  // for block 12, 37% in. A fraction of the scroll height (position) is
+  // not the same place at another width or type size; this is.
+  // The reading line runs across the middle of the text on screen
+  // (1.30.2, the "c"), where the eye is; before, it was the top edge
+  // under the bar, and those spots ("12/37") still go back there.
   let anchors = [];
   function findAnchors() {
     anchors = doc ? [...doc.body.querySelectorAll(BLOCKS + ", .co-comic img")].filter((el) => !el.closest(SKIP) && !el.querySelector(BLOCKS)) : [];
   }
-  let restoredAt = 0;
+  let restoredAt = 0, tell = null;
   // Settles once the page is back where it was left (1.26.1): reading
   // aloud from there waits for it, or it starts from the top.
   let placed = Promise.resolve();
+  const topEdge = () => (topSpace ? topSpace() : 0) + 8;
+  function midLine() {
+    const top = topSpace ? topSpace() : 0, bottom = bottomSpace ? bottomSpace() : 0;
+    return top + Math.max(0, frame.contentWindow.innerHeight - top - bottom) / 2;
+  }
   function spot() {
     if (!doc || !anchors.length) return "";
-    const edge = (topSpace ? topSpace() : 0) + 8;
     if (isPaged()) {
       const p = page();
       const i = anchors.findIndex((el) => pageOf(el) === p);
       return i < 0 ? "" : i + "/0";
     }
+    const edge = midLine();
     // Measuring every block up to the one on screen would lay out every
     // chunk before it (chunkUp): the anchors are in reading order, so the
-    // first past the top edge is found by halving.
+    // first past the line is found by halving.
     let lo = 0, hi = anchors.length - 1;
     if (chunks.length) {
       while (lo < hi) {
@@ -364,18 +372,18 @@
     for (let i = lo; i < anchors.length; i++) {
       const rct = anchors[i].getBoundingClientRect();
       if (rct.bottom <= edge || !rct.height) continue;
-      return i + "/" + Math.max(0, Math.min(99, Math.round((edge - rct.top) / rct.height * 100)));
+      return i + "/" + Math.max(0, Math.min(99, Math.round((edge - rct.top) / rct.height * 100))) + "c";
     }
     return "";
   }
   // Scrolls (or turns) to a spot; false when it names nothing here.
   function toSpot(s) {
-    const m = /^(\d+)\/(\d+)$/.exec(s || "");
+    const m = /^(\d+)\/(\d+)(c?)$/.exec(s || "");
     const el = m && anchors[Number(m[1])];
     if (!el || !doc) return false;
     const w = frame.contentWindow;
     if (isPaged()) { goPage(pageOf(el), true); return true; }
-    const edge = (topSpace ? topSpace() : 0) + 8;
+    const edge = m[3] ? midLine() : topEdge();
     const rct = el.getBoundingClientRect();
     w.scrollTo(0, Math.max(0, w.scrollY + rct.top + rct.height * Number(m[2]) / 100 - edge));
     return true;
@@ -1159,6 +1167,9 @@
   // `top` () gives the height the bar covers; onImage(info) opens a tapped
   // image.
   function open(iframe, html, meta, { at = 0, spot: spotAt = "", onPosition, onScroll, next, prev, top, onImage: image, onTap: tap, onMark: mark, onSelect, pages: asPages, bottom, onKey, onEdge: edge, onPinch: pinchTo, onLink: link, onNote: note, onJump: jumped } = {}) {
+    // The clip before tells where it was left before this one comes in.
+    settle();
+    tell = onPosition ? () => onPosition(position(), spot()) : null;
     frame = iframe;
     turning = null;
     paged = !!asPages;
@@ -1248,9 +1259,10 @@
           }
           clearTimeout(scrollTimer);
           scrollTimer = setTimeout(() => {
+            scrollTimer = null;
             swapNearImages();
             // The scroll that put the page back where it was isn't a move.
-            if (onPosition && performance.now() - restoredAt > 400) onPosition(position(), spot());
+            if (tell && performance.now() - restoredAt > 400) tell();
           }, 150);
         }, { passive: true });
         // Back to where the page was left, once the fonts have set the
@@ -1259,15 +1271,31 @@
         placed = ready.then(() => {
           if (!doc) return;
           const w = iframe.contentWindow;
-          const back = at > 0.01 && at < 0.97 ? at : 0;
           findAnchors();
+          // A finished clip starts again from the top, but only when it was
+          // left at the very end (1.30.2): 97% of a long book is still many
+          // screens from it, and 1% of one is a chapter in.
+          if (isPaged()) relayout(at);
+          const left = isPaged() ? (1 - at) * (pages() - 1) : (1 - at) * (doc.documentElement.scrollHeight - w.innerHeight) / w.innerHeight;
+          const back = at > 0 && !(at >= 0.97 && left < 1) ? at : 0;
           // By the text's spot where there is one (1.3.0), else by the
           // fraction, as before. Pages lays the columns out first, so the
           // spot's page is measured on the real layout.
-          if (isPaged()) relayout(back);
-          if (back && toSpot(spotAt)) { /* there */ }
-          else if (back && !isPaged()) w.scrollTo(0, back * (doc.documentElement.scrollHeight - w.innerHeight));
+          if (isPaged() && !back) relayout(0);
+          const there = back && toSpot(spotAt);
+          if (!there && back && !isPaged()) w.scrollTo(0, back * (doc.documentElement.scrollHeight - w.innerHeight));
           restoredAt = performance.now();
+          // A long page's chunks around the spot lay out for real once
+          // they're on screen, which moves the text a little: once more,
+          // two frames on, puts the line back on it.
+          if (there && chunks.length && !isPaged()) {
+            return new Promise((r) => w.requestAnimationFrame(() => w.requestAnimationFrame(r))).then(() => {
+              if (!doc || frame !== iframe) return;
+              toSpot(spotAt);
+              restoredAt = performance.now();
+              if (onScroll) onScroll(position(), w.scrollY);
+            });
+          }
           if (!back && onPosition && position() === 1) onPosition(1, spot());
           if (onScroll) onScroll(position(), isPaged() ? 0 : w.scrollY);
         }).finally(() => iframe.classList.remove("unready"));
@@ -1280,7 +1308,19 @@
     });
   }
 
+  // A move not yet told (the scroll stopped under 150 ms ago) is told
+  // now, before the reader closes or the app goes away (1.30.2): a Back,
+  // a widget or the home button right after a scroll lost it.
+  function settle() {
+    if (!scrollTimer) return;
+    clearTimeout(scrollTimer);
+    scrollTimer = null;
+    if (doc && tell && performance.now() - restoredAt > 400) tell();
+  }
+
   function close() {
+    settle();
+    tell = null;
     if (frame) { frame.onload = null; frame.srcdoc = ""; }
     frame = null;
     doc = null;
@@ -1309,5 +1349,5 @@
   addEventListener("resize", applyTop);
   addEventListener("offline", applyConnection);
 
-  C.reader = { set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, headings, section, jumpTo, readable, readableIn, firstShown, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
+  C.reader = { set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, headings, section, jumpTo, readable, readableIn, firstShown, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
 })();

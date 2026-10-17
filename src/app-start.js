@@ -326,6 +326,7 @@ Promise.all([C.platform.ready, firstIndex]).then(([, [pages]]) => {
     // disk. Before, it went only if a sync was already waiting, and a
     // place read just now usually wasn't one yet.
     if (document.hidden) {
+      if (state.open) C.reader.settle();
       const writes = [flushIndex()];
       if (positionTimer) writes.push(savePositions());
       updateWidgets();

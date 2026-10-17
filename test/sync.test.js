@@ -177,6 +177,20 @@ test("a library that went back on disk doesn't send the old place everywhere (1.
   assert.strictEqual(S.merge(base, unread, remote, NOW).pages[0].at, 0);
 });
 
+test("opening a clip at an older place doesn't beat a place read further elsewhere (placeAt, 1.30.2)", () => {
+  const base = lib([page("a1b2", { at: 0.2, spot: "3/10c", readAt: 100, placeAt: 100 })]);
+  // Read on to 0.6 on the other device at 200; opened here at 300, not moved.
+  const remote = lib([page("a1b2", { at: 0.6, spot: "9/40c", readAt: 200, placeAt: 200, readOn: "Tablet" })]);
+  const local = lib([page("a1b2", { at: 0.2, spot: "3/10c", readAt: 300, placeAt: 100, readOn: "Phone" })]);
+  const m = S.merge(base, local, remote, NOW).pages[0];
+  assert.deepStrictEqual([m.at, m.spot, m.placeAt], [0.6, "9/40c", 200]);
+  // The open still counts for Continue reading.
+  assert.deepStrictEqual([m.readAt, m.readOn], [300, "Phone"]);
+  // An entry from before placeAt goes by its readAt.
+  const old = lib([page("a1b2", { at: 0.4, spot: "6/0", readAt: 250 })]);
+  assert.strictEqual(S.merge(base, local, old, NOW).pages[0].at, 0.4);
+});
+
 test("a clip's text edited in Edit clips goes like a save, the later of the two winning (1.22.0)", () => {
   const base = lib([page("a1b2", { minutes: 4 })]);
   const edited = lib([page("a1b2", { minutes: 3, editedAt: 300 })]);
