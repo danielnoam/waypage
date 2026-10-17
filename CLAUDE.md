@@ -92,6 +92,15 @@ How he likes the work done:
   don't split them into many.
 - **For a new look, a reworked screen or a big change, show or explain it
   first** and wait for his OK before building.
+- **Secure and private as far as it can go.** Every change asks what it
+  sends, to whom, and what a page, file or other site could do with it:
+  the least access (narrow tokens and scopes), nothing leaves the device
+  unless the user turned it on, saved content stays sandboxed, and any
+  trade-off is said plainly and written in NOTES.md.
+- **Everything works on Android and on a computer (the web copy),** and
+  on iOS later. A feature that can't work somewhere gets that platform's
+  nearest equivalent (keys on a computer for the volume buttons, say);
+  iOS-only native work goes on TODO.md's iOS release list.
 - **Speed matters.** Measure with a big library (3,000 clips) on a slowed
   CPU before and after anything that touches lists or opening.
 - **Motion has no fades.** Things move or zoom; see DESIGN.md.
