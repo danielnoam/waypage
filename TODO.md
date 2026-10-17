@@ -15,15 +15,6 @@ CHANGELOG.md; the rules every release keeps are at the top of NOTES.md.
 - **Linked PDFs without the whole file in memory.** pdf.js can read by
   ranges (`PDFDataRangeTransport`); a 400 MB PDF is still copied whole
   into the sandbox today.
-- **Save from a computer's browser, no server (Daniel, 17 Oct 2026).**
-  A "Send to Waypage" bookmarklet takes the page as the browser shows
-  it (signed in, scripts run) and hands it to the web copy in a window
-  it opens, by `postMessage`; the web copy saves it through the same
-  untrusted-HTML path and syncs it to the phone. No CORS, since the HTML
-  is read in the page itself, and no fetch worker. Pictures are fetched
-  by the page's own origin where it can, otherwise kept as links. Open:
-  sites whose CSP blocks bookmarklets (Firefox mostly), and checking the
-  message comes from the bookmarklet's window.
 
 ## iOS release (later, Daniel 11 Oct 2026)
 

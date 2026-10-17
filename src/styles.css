@@ -310,6 +310,7 @@ html.native .top-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top));
   font-weight: 600; cursor: pointer;
 }
 .btn-small:disabled { opacity: 0.7; cursor: default; }
+a.btn-small { text-decoration: none; white-space: nowrap; display: inline-flex; align-items: center; cursor: grab; }
 .save-form { display: flex; gap: var(--s-2); }
 .save-link-icon { display: none; }
 .save-form input {

@@ -410,6 +410,65 @@ async function takeSetupLink() {
   toast(err || "Sync is on. Your library is on its way.");
 }
 
+// Send to Waypage (1.34.0): a bookmark in a computer's browser opens the
+// web copy at #send and hands it the page it's on by postMessage. Only
+// the window that opened this one is heard, the page must come from the
+// address it says it's from, and nothing is saved until Save is pressed
+// here, so another site opening Waypage can't slip a clip in.
+const SEND_MAX = 20 * 1024 * 1024;
+let sent = null;
+function takeSend() {
+  if (C.platform.native || location.hash !== "#send") return;
+  history.replaceState(history.state, "", location.pathname + location.search);
+  const from = window.opener;
+  if (!from) { toast("Nothing came through: this site keeps other windows out. Save it on your phone instead."); return; }
+  const hear = (e) => {
+    const d = e.data;
+    if (e.source !== from || !d || d.waypage !== "page" || typeof d.url !== "string" || typeof d.html !== "string") return;
+    removeEventListener("message", hear);
+    clearTimeout(late);
+    let url = null;
+    try { url = new URL(d.url); } catch (x) { /* not an address */ }
+    if (!url || !/^https?:$/.test(url.protocol) || url.origin !== e.origin) { toast("That page couldn't be sent."); return; }
+    if (d.html.length > SEND_MAX) { toast("That page is too big to send."); return; }
+    sent = { url: url.href, html: d.html, title: String(d.title || "").replace(/\s+/g, " ").trim().slice(0, 300) };
+    if (state.menu) back().then(() => openMenu("send")); else openMenu("send");
+  };
+  addEventListener("message", hear);
+  const late = setTimeout(() => removeEventListener("message", hear), 30000);
+  from.postMessage({ waypage: "ready" }, "*");
+}
+function sendSheet() {
+  const s = sent;
+  if (!s) return el("div");
+  const answer = (yes) => {
+    sent = null;
+    back();
+    if (yes) savePage(s.url, undefined, { given: { url: s.url, html: s.html } });
+  };
+  return el("div", { class: "page-controls" },
+    el("div", { class: "menu-head" },
+      el("p", { class: "menu-title", dir: "auto" }, s.title || C.save.siteName(s.url)),
+      el("p", { class: "meta" }, C.save.siteName(s.url) + " · " + formatSize(s.html.length))),
+    el("div", { class: "group" },
+      el("button", { class: "row", type: "button", onclick: () => answer(true) },
+        el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, "Save this page"),
+          el("span", { class: "choice-note" }, "As your browser shows it, signed in too. Its pictures stay links on this computer."))),
+      el("button", { class: "row", type: "button", onclick: () => answer(false) },
+        el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, "Don't save")))));
+}
+// The bookmark itself: it waits for this copy to say it's ready, and
+// sends only to this copy's own address.
+function bookmarklet() {
+  const home = location.origin + location.pathname.replace(/[^/]*$/, "");
+  const code = "(()=>{const H=" + JSON.stringify(home) + ",O=new URL(H).origin,w=window.open(H+'#send');"
+    + "if(!w)return alert('Waypage: allow pop-ups for this site, then try again.');"
+    + "const f=e=>{if(e.source!==w||e.origin!==O||!e.data||e.data.waypage!=='ready')return;removeEventListener('message',f);"
+    + "w.postMessage({waypage:'page',url:location.href,title:document.title,html:'<!doctype html>'+document.documentElement.outerHTML},O)};"
+    + "addEventListener('message',f);setTimeout(()=>removeEventListener('message',f),60000)})()";
+  return "javascript:" + encodeURIComponent(code);
+}
+
 // How a page keeps its pictures, switched from its sheet (0.30.2), in
 // place of 0.17.0's "Save full images".
 const PICTURE_MODES = [{ value: "previews", label: "Previews" }, { value: "full", label: "Full size" }, { value: "links", label: "Links" }];

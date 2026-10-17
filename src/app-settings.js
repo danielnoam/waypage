@@ -115,6 +115,23 @@ function readyGroup() {
           + (busy ? " Some are still saving, in Downloads." : "")) : null);
 }
 
+// Send to Waypage (1.34.0), on a computer: the bookmark to drag to the
+// bookmarks bar. A click here only says what to do with it.
+function sendGroup() {
+  if (C.platform.native) return null;
+  const link = el("a", { class: "btn-small", href: bookmarklet(), draggable: "true",
+    onclick: (e) => { e.preventDefault(); toast("Drag it to your bookmarks bar."); } }, "Send to Waypage");
+  return el("section", { class: "settings-section", id: "sendSection" },
+    el("h2", { class: "overline" }, "Save from your browser"),
+    el("div", { class: "group" },
+      el("div", { class: "row" },
+        el("span", { class: "choice-text" },
+          el("span", { class: "choice-label" }, "A bookmark for any page"),
+          el("span", { class: "choice-note" }, "Drag the button to your bookmarks bar. On any page, click it to save the page as your browser shows it, signed in too")),
+        link)),
+    el("p", { class: "footnote" }, "The page goes straight from that tab to this one, with no server in between, and you press Save before anything is kept. Some sites keep other windows out; save those on your phone."));
+}
+
 function compressGroup() {
   return el("section", { class: "settings-section" },
     el("h2", { class: "overline" }, "Big pictures"),
@@ -927,7 +944,7 @@ const SECTIONS = {
     choiceGroup({ key: LAYOUT_KEY, label: "Layout", get: layout, set: (v) => { store(LAYOUT_KEY, v); renderLibrary(); }, options: LAYOUTS }),
     libraryGroup(), watchGroup(), editNavGroup()],
     value: () => (LAYOUTS.find((l) => l.value === layout()) || LAYOUTS[0]).label },
-  saving: { title: "Saving", build: () => [readyGroup(), choiceGroup(SETTINGS[1]), compressGroup(), tapPicturesGroup(), dataGroup(DATA_SAVE_KEY, "Save", "Pages and pictures come down on any connection.", "Saves wait in Downloads until you're on Wi-Fi; feeds, new chapters and missing pictures check then too."), signedGroup(), importGroup()],
+  saving: { title: "Saving", build: () => [readyGroup(), choiceGroup(SETTINGS[1]), compressGroup(), tapPicturesGroup(), dataGroup(DATA_SAVE_KEY, "Save", "Pages and pictures come down on any connection.", "Saves wait in Downloads until you're on Wi-Fi; feeds, new chapters and missing pictures check then too."), signedGroup(), sendGroup(), importGroup()],
     value: () => SETTINGS[1].options.find((o) => o.value === SETTINGS[1].get()).label },
   sync: { title: "GitHub sync", build: syncSections, value: () => (C.sync.on ? (C.sync.last.error ? "Stopped" : "On") : "Off") },
   drive: { title: "Google Drive", build: driveSections, value: driveValue },
