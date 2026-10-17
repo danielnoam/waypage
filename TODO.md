@@ -15,25 +15,6 @@ CHANGELOG.md; the rules every release keeps are at the top of NOTES.md.
 - **Linked PDFs without the whole file in memory.** pdf.js can read by
   ranges (`PDFDataRangeTransport`); a 400 MB PDF is still copied whole
   into the sandbox today.
-- **Your own fonts (Daniel, 17 Oct 2026).** Two ways in: drop a .ttf,
-  .otf or .woff2 into a Fonts folder beside the library (Android and
-  the Documents/picked-folder storage), or pick one in Settings ›
-  Reading › Font › Add a font. Each becomes a `FontFace` in the app and
-  an `@font-face` in the reader frame (a data or app-local URL the
-  frame's CSP allows), listed after the bundled ones. Open: whether
-  added fonts sync and go in backups (a few hundred KB each), and
-  telling the user when a font has no Hebrew letters.
-- **More read-aloud voices (Daniel, 17 Oct 2026).** Android only lists
-  the default speech engine's voices: SpeechPlugin and SpeechService
-  open `new TextToSpeech(context, ...)` with no engine, so voices from
-  other installed engines (Samsung, RHVoice, Sherpa/Piper neural
-  voices, Acapela) never show. List `getEngines()`, offer an engine
-  picker above the voices, and pass the engine to both. iOS: show
-  Enhanced and Premium voices first with a hint that more download in
-  Settings › Accessibility › Spoken Content, and offer Personal Voice
-  (`requestPersonalVoiceAuthorization`, iOS 17). Look into whether
-  voices that download (Google's network voices) can be fetched for
-  offline from inside the app or only from the engine's settings.
 - **Save from a computer's browser, no server (Daniel, 17 Oct 2026).**
   A "Send to Waypage" bookmarklet takes the page as the browser shows
   it (signed in, scripts run) and hands it to the web copy in a window
@@ -53,6 +34,11 @@ Everything iOS-only, kept for one iOS release.
   GoogleSignIn pod in native/share for the token, and a Drive plugin
   with the same `authorize`, `upload` and `download` as Android's
   DrivePlugin.java.
+- **More voices on iOS.** Android picks its speech engine and opens the
+  engine's page for more voices since 1.33.0. On iOS: list Enhanced and
+  Premium voices first with a line on downloading more (Settings ›
+  Accessibility › Spoken Content), and Personal Voice through
+  `AVSpeechSynthesizer.requestPersonalVoiceAuthorization` (iOS 17).
 - **The sleep timer, put away, on iOS.** Android's speech service keeps
   the time since 1.32.0; on iOS the page does, so with the app put away
   it waits until the app is back. A timer in the Speech plugin would do it.

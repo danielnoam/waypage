@@ -455,6 +455,44 @@
     return dataUrl ? dataUrl + "pages/" + id + "/" : null;
   }
 
+  // ---- Your own fonts (1.33.0) ----
+  // In the app, a fonts folder in the library, so a font put there by
+  // hand (in Documents/Waypage/fonts, or a picked folder's fonts) is
+  // found too; read through the WebView's file server like a picture.
+  // In a browser, the database. Not synced: a font is per device.
+  const FONT_FILE = /\.(ttf|otf|woff2?)$/i;
+  const IDB_FONT = "__font:";
+  async function listFonts() {
+    if (FS()) {
+      let files;
+      try { files = await (await B()).list("fonts"); } catch (e) { return []; }
+      return files.map((f) => (typeof f === "string" ? f : f.name)).filter((n) => FONT_FILE.test(n)).sort();
+    }
+    try {
+      const keys = await idbDo("readonly", (s) => s.getAllKeys());
+      return (keys || []).map(String).filter((k) => k.startsWith(IDB_FONT)).map((k) => k.slice(IDB_FONT.length)).sort();
+    } catch (e) { return []; }
+  }
+  async function readFont(name) {
+    if (FS()) {
+      await B();
+      const r = await fetch(dataUrl + "fonts/" + encodeURIComponent(name));
+      if (!r.ok) throw new Error("missing font " + name);
+      return r.arrayBuffer();
+    }
+    const blob = await idbDo("readonly", (s) => s.get(IDB_FONT + name));
+    if (!blob) throw new Error("missing font " + name);
+    return blob.arrayBuffer();
+  }
+  async function addFont(name, bytes) {
+    if (FS()) await (await B()).write("fonts/" + name, toBase64(bytes));
+    else await idbDo("readwrite", (s) => s.put(new Blob([bytes]), IDB_FONT + name));
+  }
+  async function removeFont(name) {
+    if (FS()) await (await B()).remove("fonts/" + name);
+    else await idbDo("readwrite", (s) => s.delete(IDB_FONT + name));
+  }
+
   // ---- Moving the library (0.33.0) ----
 
   // Every file under `path` in a place, as paths inside the library.
@@ -506,7 +544,7 @@
       const mine = JSON.parse(await from.read("library.json").catch(() => "[]"));
       let there = [];
       try { there = JSON.parse(await to.read("library.json")); } catch (e) { there = []; }
-      const files = await walkAll(from, "pages");
+      const files = [...await walkAll(from, "pages"), ...await walkAll(from, "fonts")];
       if (onProgress) onProgress(0, files.length);
       if (P.android && files.length) await copyNative(from, to, files, onProgress);
       else {
@@ -527,6 +565,7 @@
       await use(next);
       problem = null;
       try { await from.rmdir("pages"); } catch (e) { /* left behind */ }
+      try { await from.rmdir("fonts"); } catch (e) { /* none, or left behind */ }
       try { await from.remove("library.json"); } catch (e) { /* left behind */ }
       if (old.kind === "folder" && old.tree !== (next.tree || "")) P.files.release(old.tree);
       return joined;
@@ -537,5 +576,5 @@
 
   window.Waypage.store = { ready,
     get place() { return cur ? cur.place : savedPlace(); }, placeName, get problem() { return problem; }, moveTo, readIndex, writeIndex, writeIndexOnly, set onIndex(f) { onIndex = f; }, writeThumb, readThumbs, storageInfo, keepStored, writePage, readPage, removePage, writeText, readText, download, removeFile, sizeOf, shrink, squeeze, pageDirUrl, bytesOf,
-    listFiles, listSized, readBytes, writeBytes, cacheFile, toBase64 };
+    listFiles, listSized, readBytes, writeBytes, cacheFile, toBase64, listFonts, readFont, addFont, removeFont };
 })();

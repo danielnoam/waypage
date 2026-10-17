@@ -27,8 +27,11 @@ import org.json.JSONArray;
  * Read aloud (src/aloud.js, 0.27.0) with the phone's own voices, offline.
  * The reading itself is SpeechService, which goes on with the screen off:
  *
- *   voices()                     { voices: [{ id, name, lang, online, quality }] }
- *   play({ items, start, lang, voice, rate, title, subtitle, key, blocks, album, track, tracks })
+ *   voices({ engine })           { voices: [{ id, name, lang, online, quality }] },
+ *                                the engine's, or the phone's default
+ *   engines()                    { engines: [{ name, label }], default } (1.33.0)
+ *   moreVoices({ engine })       opens the engine's own page for adding voices
+ *   play({ items, start, lang, voice, engine, rate, title, subtitle, key, blocks, album, track, tracks })
  *   pause() resume() stop() seek({ index }) skip({ by }) rate({ rate })
  *   state()                      { key, index, state }
  *   queue({ after, items, start, lang, voice, title, subtitle, key })
@@ -47,6 +50,8 @@ public class SpeechPlugin extends Plugin {
 
     private TextToSpeech lister;
     private boolean listerReady;
+    private String listerEngine = "";
+    private int listerGen;
     private final List<PluginCall> waiting = new ArrayList<>();
     private final Handler main = new Handler(Looper.getMainLooper());
 
@@ -63,17 +68,76 @@ public class SpeechPlugin extends Plugin {
 
     @PluginMethod
     public void voices(PluginCall call) {
+        String engine = call.getString("engine", "");
+        if (engine == null) engine = "";
+        // Another engine's voices (1.33.0): that engine is started instead.
+        if (lister != null && !engine.equals(listerEngine)) {
+            lister.shutdown();
+            lister = null;
+            listerReady = false;
+        }
+        listerEngine = engine;
         if (listerReady) {
             resolveVoices(call);
             return;
         }
         waiting.add(call);
         if (lister != null) return;
-        lister = new TextToSpeech(getContext(), (status) -> main.post(() -> {
+        final int gen = ++listerGen;
+        TextToSpeech.OnInitListener done = (status) -> main.post(() -> {
+            if (gen != listerGen) return;
             listerReady = status == TextToSpeech.SUCCESS;
             for (PluginCall c : waiting) resolveVoices(c);
             waiting.clear();
-        }));
+        });
+        lister = engine.isEmpty() ? new TextToSpeech(getContext(), done) : new TextToSpeech(getContext(), done, engine);
+    }
+
+    // The speech engines on the phone (1.33.0): Google's, Samsung's, and
+    // any other installed, like RHVoice or a Piper voice through Sherpa.
+    @PluginMethod
+    public void engines(PluginCall call) {
+        TextToSpeech t = lister != null ? lister : new TextToSpeech(getContext(), (status) -> {});
+        JSArray list = new JSArray();
+        String def = "";
+        try {
+            for (TextToSpeech.EngineInfo e : t.getEngines()) {
+                JSObject o = new JSObject();
+                o.put("name", e.name);
+                o.put("label", e.label);
+                list.put(o);
+            }
+            def = t.getDefaultEngine();
+        } catch (Exception e) {
+            // No engines to list.
+        }
+        if (t != lister) t.shutdown();
+        JSObject out = new JSObject();
+        out.put("engines", list);
+        out.put("default", def == null ? "" : def);
+        call.resolve(out);
+    }
+
+    // The engine's own screen for adding voices, else the phone's
+    // text-to-speech settings.
+    @PluginMethod
+    public void moreVoices(PluginCall call) {
+        String engine = call.getString("engine", "");
+        Intent i = new Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if (engine != null && !engine.isEmpty()) i.setPackage(engine);
+        try {
+            getContext().startActivity(i);
+            call.resolve();
+            return;
+        } catch (Exception e) {
+            // That engine has no such screen.
+        }
+        try {
+            getContext().startActivity(new Intent("com.android.settings.TTS_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Couldn't open the voice settings", e);
+        }
     }
 
     private void resolveVoices(PluginCall call) {
@@ -132,6 +196,7 @@ public class SpeechPlugin extends Plugin {
         job.start = call.getInt("start", 0);
         job.lang = call.getString("lang", "");
         job.voice = call.getString("voice", "");
+        job.engine = call.getString("engine", "");
         job.title = call.getString("title", "Read aloud");
         job.subtitle = call.getString("subtitle", "");
         job.album = call.getString("album", "");
