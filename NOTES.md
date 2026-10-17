@@ -18,6 +18,22 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Send to Waypage (1.34.0).** A bookmarklet in a computer's browser
+  opens the web copy at `#send`, waits for it to post `{waypage:"ready"}`
+  back, then sends `{url, title, html}` (the live DOM's outerHTML) to the
+  web copy's origin only. The web copy hears only `window.opener`,
+  requires the page's claimed address to have the sender's origin (so a
+  site can't pose as another), caps it at 20 MB, and keeps nothing until
+  Save is pressed: any site could open Waypage at `#send`, so the press
+  is the user's consent. The HTML goes through the same untrusted path
+  as a fetched page (readArticle, rebuild, sandboxed frame), saved as
+  that one page (no contents-page split, since a computer can't fetch
+  the chapters). Wikipedia still goes through its REST API (CORS allows
+  it). Pictures stay links, as for any clip saved on a computer. Left
+  open: sites with `Cross-Origin-Opener-Policy` cut the window off from
+  its opener, so nothing arrives; the web copy says so. The `ready` reply
+  goes to `*`, but it carries nothing.
+
 - **Your own fonts and speech engines (1.33.0).** A font is kept as a
   file in the library's `fonts/` (IndexedDB in a browser), checked for a
   font's first four bytes and a FontFace load before it's kept, and

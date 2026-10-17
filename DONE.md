@@ -22,6 +22,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Drop a link or press Ctrl V to save (1.5.0)
 - Load pictures only when tapped (1.30.1)
 - Before you go offline: save what's missing, then list what isn't ready (1.32.0)
+- Send to Waypage: a bookmark that saves the page a computer's browser has open (1.34.0)
 
 ## Library
 

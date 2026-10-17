@@ -1118,15 +1118,22 @@
     return t.length < 2500 && ASKS.test(t.slice(-300));
   }
 
-  async function fromAnyPage(url, onDrawing, comic, asPage) {
+  // `given` (1.34.0) is a page a computer's browser already has open,
+  // { url, html }, sent by the Send to Waypage bookmark: read as it is,
+  // with nothing fetched, and saved as that one page.
+  async function fromAnyPage(url, onDrawing, comic, asPage, given) {
     const site = siteRule(url);
-    const res = await get(site && site.fetch ? site.fetch(url) : url, site && site.headers);
+    if (given) asPage = true;
+    const res = given ? { status: 200, url: given.url, text: given.html }
+      : await get(site && site.fetch ? site.fetch(url) : url, site && site.headers);
     let finalUrl = res.url || url;
     if (site && site.clean) finalUrl = site.clean(finalUrl);
     if (isArchive(finalUrl)) res.text = unWayback(res.text);
     // Some sites keep comics and novels at the same addresses (Tapas).
     if (!comic && site && site.comic && site.comic(finalUrl, res.text)) comic = true;
-    if (site && site.prepare && !comic) res.text = await site.prepare(res.text, finalUrl);
+    if (site && site.prepare && !comic) {
+      try { res.text = await site.prepare(res.text, finalUrl); } catch (e) { if (!given) throw e; }
+    }
     if (site && site.contents && !comic && !asPage) {
       const own = await site.contents(parse(res.text, finalUrl), finalUrl, res.text);
       if (own && own.links.length) throw new ContentsPage(own);
@@ -1643,14 +1650,14 @@
   // of reading an article out of it; it is chosen, never guessed.
   // `archived` ({ url, at }, from findArchived): the page is read from
   // the Wayback Machine's copy, and keeps its own address.
-  async function save(url, { mode = "previews", kind = "article", asPage = false, onProgress, id: keepId, archived } = {}) {
+  async function save(url, { mode = "previews", kind = "article", asPage = false, onProgress, id: keepId, archived, given } = {}) {
     // A site's comic pages are saved as comics, with their full pictures,
     // whatever was picked.
     const rule = siteRule(url);
     if (kind !== "comic" && rule && rule.comic && rule.comic(url)) { kind = "comic"; mode = "full"; }
     const wiki = kind !== "comic" && !archived && wikipediaPage(url);
     if (onProgress) onProgress({ stage: "text" });
-    const got = wiki ? await fromWikipedia(wiki) : await fromAnyPage(archived ? archived.url : url, () => onProgress && onProgress({ stage: "drawing" }), kind === "comic", asPage);
+    const got = wiki ? await fromWikipedia(wiki) : await fromAnyPage(archived ? archived.url : url, () => onProgress && onProgress({ stage: "drawing" }), kind === "comic", asPage, archived ? null : given);
     if (archived) {
       if (!got.site || got.site === "web.archive.org") got.site = siteName(url);
       got.url = url;

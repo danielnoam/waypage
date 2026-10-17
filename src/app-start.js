@@ -313,6 +313,7 @@ Promise.all([C.platform.ready, firstIndex]).then(([, [pages]]) => {
   updateWidgets();
   C.store.onIndex = () => { unsynced = true; syncSoon(); };
   takeSetupLink();
+  takeSend();
   setTimeout(healPictures, 4000);
   addEventListener("hashchange", takeSetupLink);
   setTimeout(() => syncNow(), 2000);

@@ -1071,6 +1071,7 @@ const MENUS = {
   export: { label: "Export", build: () => exportControls(state.menu.page, () => history.back()) },
   keys: { label: "Keyboard shortcuts", build: () => keysSheet() },
   importList: { label: "Import", build: () => importSheet() },
+  send: { label: "Saving a page", build: () => sendSheet() },
 };
 let menuUnder = [];
 let menuFrom = null;

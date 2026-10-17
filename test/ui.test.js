@@ -1440,6 +1440,44 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("Send to Waypage saves the page as the browser shows it, after Save is pressed (1.34.0)", async () => {
+      const q = await page(browser, 390);
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Saving" }).click();
+      const href = await q.locator("#sendSection a").getAttribute("href");
+      assert.ok(/^javascript:/.test(href));
+      const src = await q.context().newPage();
+      await src.goto(ARTICLE);
+      await src.evaluate(() => {
+        const p = document.createElement("p");
+        p.textContent = "Only the open tab has this paragraph, written after the page loaded.";
+        document.querySelector("article, main, body").append(p);
+      });
+      const [win] = await Promise.all([q.context().waitForEvent("page"), src.evaluate(decodeURIComponent(href.slice("javascript:".length)))]);
+      win.errors = [];
+      win.on("pageerror", (e) => win.errors.push(e.message));
+      const save = win.locator("#menuSheet button", { hasText: "Save this page" });
+      await save.waitFor({ timeout: 15000 });
+      assert.strictEqual(await win.evaluate(() => state.pages.length), 0, "nothing is kept before Save");
+      await save.click();
+      await until(win, () => state.pages.length === 1, null, 15000);
+      const html = await win.evaluate(() => window.Waypage.store.readPage(state.pages[0].id));
+      assert.ok(/Only the open tab has this paragraph/.test(html));
+      assert.strictEqual(await win.evaluate(() => state.pages[0].url), ARTICLE);
+      assert.strictEqual(await win.evaluate(() => location.hash), "");
+      // A page claiming to be another site's is turned away.
+      const [forged] = await Promise.all([q.context().waitForEvent("page"), src.evaluate((home) => {
+        const w = window.open(home + "#send");
+        addEventListener("message", (e) => {
+          if (e.source === w && e.data && e.data.waypage === "ready") w.postMessage({ waypage: "page", url: "https://example.com/news", title: "Not you", html: "<p>forged</p>" }, "*");
+        });
+      }, ROOT)]);
+      await forged.locator("#toast", { hasText: "couldn't be sent" }).waitFor({ timeout: 15000 });
+      assert.strictEqual(await forged.locator("#menuSheet button", { hasText: "Save this page" }).count(), 0);
+      assert.deepStrictEqual(win.errors, [], win.errors.join(" | "));
+      await q.context().close();
+    });
+
     for (const width of [390, 1280]) {
       for (const theme of THEMES) {
         await test("opens at " + width + " px in " + theme + " with no errors", async () => {

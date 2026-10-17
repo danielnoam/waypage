@@ -2,6 +2,17 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.34.0] - 2026-10-17
+
+### Added
+- Send to Waypage, for a computer: Settings › Saving › Save from your
+  browser has a button to drag to the bookmarks bar. On any page, click
+  it: the web copy opens, shows the page's title, and saves it as your
+  browser shows it (signed in, after its scripts ran) when you press
+  Save this page. It then syncs to the phone like any clip. Nothing goes
+  through a server. A few sites keep other windows out; Waypage says so,
+  and those save on the phone.
+
 ## [1.33.0] - 2026-10-17
 
 ### Added

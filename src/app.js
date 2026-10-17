@@ -9,7 +9,7 @@
 // only use what an earlier part, or its own, has declared. A part's
 // functions can call into any part, since nothing is tapped until all of
 // them have loaded. app-start.js runs last and starts things up.
-const APP_VERSION = "1.33.0";
+const APP_VERSION = "1.34.0";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
@@ -1839,6 +1839,7 @@ async function runJob(job) {
       asPage: !!job.asPage,
       id: job.synced ? job.synced.id : undefined,
       archived: job.archived,
+      given: job.given,
       onProgress: (p) => {
         if (p.stage === "drawing") job.drawing = true;
         if (p.stage === "images") { job.done = p.done; job.total = p.total; }
