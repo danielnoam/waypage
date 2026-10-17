@@ -9,7 +9,7 @@
 // only use what an earlier part, or its own, has declared. A part's
 // functions can call into any part, since nothing is tapped until all of
 // them have loaded. app-start.js runs last and starts things up.
-const APP_VERSION = "1.30.1";
+const APP_VERSION = "1.31.0";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
@@ -1798,7 +1798,7 @@ async function runJob(job) {
     if (old) {
       // Saved again: the new copy takes the old one's place, keeping its
       // collection, tags and read position.
-      for (const k of ["requested", "folder", "folderAt", "folderFav", "folderFavAt", "source", "tags", "at", "finished", "readAt", "readOn", "fav", "favAt", "marks"]) if (old[k] !== undefined) meta[k] = old[k];
+      for (const k of ["requested", "folder", "folderAt", "folderFav", "folderFavAt", "source", "tags", "at", "finished", "readAt", "readOn", "placeAt", "fav", "favAt", "marks"]) if (old[k] !== undefined) meta[k] = old[k];
       const i = state.pages.indexOf(old);
       if (i < 0) await C.store.removePage(meta.id);
       else {

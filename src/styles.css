@@ -512,6 +512,10 @@ html.native .screen-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
 .row-refresh.looking .row-x-icon { display: inline-flex; animation: spin 0.8s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .row-refresh.looking .row-x-icon { animation: none; opacity: 0.5; } }
 .watch-row .row-x + .row-x { margin-inline-start: 0; }
+.drive-row { padding: 0; padding-inline-end: var(--s-1); gap: 0; cursor: default; }
+.drive-row:active { background-image: none; }
+.drive-pick { flex: 1; min-width: 0; padding-inline-end: var(--s-2); }
+.drive-delete:hover { color: var(--warn); }
 /* Under a watched folder, the collection its new files go into (1.28.0). */
 .watch-into { gap: var(--s-3); }
 .watch-into .row-label { flex: none; color: var(--muted); font-size: var(--fs-label); }

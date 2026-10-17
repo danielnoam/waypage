@@ -34,9 +34,13 @@
   // Every field an index entry can carry through a backup or sync
   // (backup.cleanMeta); anything else on a page stays on its device.
   const SYNCED = new Set(["id", "url", "title", "site", "byline", "licence", "savedAt", "minutes", "lang", "dir", "mode", "images",
-    "at", "finished", "readAt", "readOn", "spot", "comic", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "file", "marks", "cut", "archived", "editedAt"]);
-  // Where the reader is, which goes with whichever device read last.
-  const READING = ["at", "finished", "readAt", "readOn", "spot"];
+    "at", "finished", "readAt", "readOn", "placeAt", "spot", "comic", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "file", "marks", "cut", "archived", "editedAt"]);
+  // Where the reader is, which goes with whichever device moved it last:
+  // placeAt (1.30.2), or readAt on entries from before it. Opening a clip
+  // stamps readAt alone, so a device that opened one at an older place
+  // no longer sends that place everywhere.
+  const PLACE = ["at", "finished", "placeAt", "spot"];
+  const placeTime = (p) => p.placeAt || p.readAt || 0;
   // Which copy of a page's text this is: when it was saved, or edited
   // since in Edit clips (1.22.0), so an edit goes up like a save again.
   const ver = (p) => Math.max(p.savedAt || 0, p.editedAt || 0);
@@ -145,15 +149,16 @@
     const pick = (k) => (same(l[k], r[k]) || !same(l[k], b[k]) ? l[k] : r[k]);
     const contentFrom = ver(r) > ver(l) ? r : l;
     const readFrom = (r.readAt || 0) > (l.readAt || 0) ? r : l;
+    const placeFrom = placeTime(r) > placeTime(l) ? r : l;
     for (const k of keys) {
       if (CONTENT.includes(k)) out[k] = ver(l) !== ver(r) ? contentFrom[k] : pick(k);
-      else if (k === "readOn") out[k] = readFrom[k];
+      else if (k === "readOn" || k === "readAt") out[k] = readFrom[k];
       // Where you are goes with the side read last (1.21.0). Three ways
       // only when both were read at the same time: a library that went
       // back (an older copy on disk) read as a change made here, and sent
       // the old place everywhere.
-      else if (READING.includes(k)) out[k] = (l.readAt || 0) !== (r.readAt || 0) ? readFrom[k]
-        : same(l[k], r[k]) ? l[k] : same(l[k], b[k]) ? r[k] : same(r[k], b[k]) ? l[k] : readFrom[k];
+      else if (PLACE.includes(k)) out[k] = placeTime(l) !== placeTime(r) ? placeFrom[k]
+        : same(l[k], r[k]) ? l[k] : same(l[k], b[k]) ? r[k] : same(r[k], b[k]) ? l[k] : placeFrom[k];
       else if (k === "tags") out[k] = mergeTags(b.tags, l.tags, r.tags);
       else if (k === "marks") out[k] = mergeMarks(b.marks, l.marks, r.marks);
       else out[k] = pick(k);
@@ -184,7 +189,9 @@
       const marks = mergeMarks([], win.marks, lose.marks);
       if (marks.length) win.marks = marks;
       if (lose.fav && !win.fav) { win.fav = true; win.favAt = lose.favAt; }
-      if ((lose.readAt || 0) > (win.readAt || 0)) for (const k of READING) { if (lose[k] === undefined) delete win[k]; else win[k] = lose[k]; }
+      const moveOver = (ks) => { for (const k of ks) { if (lose[k] === undefined) delete win[k]; else win[k] = lose[k]; } };
+      if (placeTime(lose) > placeTime(win)) moveOver(PLACE);
+      if ((lose.readAt || 0) > (win.readAt || 0)) moveOver(["readAt", "readOn"]);
       if (!win.folder && lose.folder) {
         win.folder = lose.folder; win.folderAt = lose.folderAt;
         if (lose.folderFav) { win.folderFav = true; win.folderFavAt = lose.folderFavAt; }

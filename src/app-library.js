@@ -1951,6 +1951,7 @@ function watchIntoPick(w) {
     } });
 }
 const svgRefresh = () => { const s = el("span", { class: "row-x-icon", "aria-hidden": "true" }); s.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v5h-5"></path></svg>'; return s; };
+const svgBin = () => { const s = el("span", { class: "row-x-icon", "aria-hidden": "true" }); s.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS.remove + "</svg>"; return s; };
 const svgX = () => { const s = el("span", { class: "row-x-icon", "aria-hidden": "true" }); s.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>'; return s; };
 async function pickWatched() {
   let got = null;

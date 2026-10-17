@@ -18,6 +18,20 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **The reading line and placeAt (1.31.0).** Daniel asked for the place to
+  be the line across the middle of the reader. A spot is "block/pct" on
+  that line with a `c` after it; spots without the `c` are from the top
+  edge (bar + 8 px) and toSpot still restores them there. Pages keeps
+  "block/0", the first block on the page. `placeAt` is when the place
+  last moved (notePosition only); sync merges at/spot/finished/placeAt by
+  it (`placeAt || readAt`) and readAt/readOn by readAt, because the 3 s
+  open stamp on readAt let a device that opened a clip at an old place
+  send that place everywhere. A newer place sync brings for the open
+  clip is jumped to only until the clip is moved here (`movedHere`).
+  `reader.settle()` tells a scroll that stopped under 150 ms ago, before
+  a close, Read next, the app hiding, or the next open; without it the
+  place written was the one before that scroll.
+
 - **Old sync tokens (1.30.1).** GitHub doesn't say what a token can
   reach, so a config without `scoped` (set by connect from 1.30.1) counts
   as made under the old All-repositories steps. The swap reuses connect,

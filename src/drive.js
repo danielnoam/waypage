@@ -247,6 +247,13 @@
     for (const f of all.slice(KEEP)) await api("/files/" + f.id, { method: "DELETE" }).catch(() => {});
   }
 
+  // One backup deleted, by hand from the Sync screen (1.31.0). Into
+  // Drive's bin first would leave it counting against the space it was
+  // deleted to free, so it goes for good, as prune does.
+  async function remove(id) {
+    await api("/files/" + id, { method: "DELETE" }, true);
+  }
+
   // A backup as something restoreLibrary reads: a Blob in a browser, the
   // app's stand-in for a file in its cache in the app.
   async function download(id, onProgress, ctl = {}) {
@@ -306,7 +313,7 @@
   }
 
   C.drive = {
-    DriveError, KEEP, WEEK, connect, disconnect, list, upload, download, getToken,
+    DriveError, KEEP, WEEK, connect, disconnect, list, upload, download, remove, getToken,
     // There's a way in: the plugin in the app, a client ID in a browser.
     get available() { return C.platform.native ? !!P() : !!WEB_CLIENT && (location.protocol === "https:" || location.hostname === "localhost"); },
     get on() { return !!cfg; },
