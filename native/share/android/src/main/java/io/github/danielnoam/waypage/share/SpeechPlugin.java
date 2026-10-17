@@ -230,6 +230,9 @@ public class SpeechPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void sleep(PluginCall call) { send(call, SpeechService.SLEEP, call.getInt("seconds", 0), null); }
+
+    @PluginMethod
     public void rate(PluginCall call) { send(call, SpeechService.RATE, null, call.getFloat("rate", 1f)); }
 
     @PluginMethod

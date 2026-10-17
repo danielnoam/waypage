@@ -1439,6 +1439,27 @@ async function backUp(btn) {
 
 // Every highlight as one Markdown file (1.14.0), clip by clip, the clip
 // highlighted last first, as the Highlights place's Copy all writes them.
+// The feeds you follow as OPML (1.32.0), for another RSS reader.
+async function saveOpml(btn) {
+  if (!feeds.length) return;
+  const name = "Waypage feeds " + new Date().toISOString().slice(0, 10) + ".opml";
+  const text = C.imports.writeOpml(feeds);
+  btn.disabled = true;
+  try {
+    const uri = await C.platform.writeCache(name, text);
+    if (!uri) C.platform.download(name, new Blob([text], { type: "text/x-opml" }));
+    else {
+      const saved = await C.platform.saveFile(uri, name, "text/x-opml");
+      if (saved === null) await C.platform.shareFile(uri, name);
+      else if (saved) toast("Saved " + name);
+    }
+  } catch (e) {
+    console.error(e);
+    toast("Couldn't make the file. Try again.");
+  }
+  btn.disabled = false;
+}
+
 async function saveHighlights(btn) {
   const clips = state.pages.filter((p) => (p.marks || []).length)
     .map((p) => ({ p, last: Math.max(...p.marks.map((m) => m.at || 0)) })).sort((a, b) => b.last - a.last);
@@ -1466,7 +1487,7 @@ async function saveHighlights(btn) {
 // (0.31.0): a backup is restored, a clip sent as a file comes back, and
 // a book, a note, a page or a comic becomes a clip of its own. `open`
 // opens it once it's in.
-const FILE_ACCEPT = ".epub,.md,.markdown,.txt,.html,.htm,.eml,.cbz,.pdf,.csv,.json,.zip,application/epub+zip,application/pdf,text/markdown,text/plain,text/html,message/rfc822,text/csv,application/json,application/zip";
+const FILE_ACCEPT = ".epub,.md,.markdown,.txt,.html,.htm,.eml,.cbz,.pdf,.csv,.json,.zip,.opml,.xml,application/epub+zip,application/pdf,text/markdown,text/plain,text/html,message/rfc822,text/csv,application/json,application/zip";
 // The system's picker where there is one (it also grants a lasting
 // permission, for a clip that reads from the file); the browser's own
 // otherwise.
@@ -1598,6 +1619,14 @@ async function openFile(file, btn, open, ref) {
   if (btn) btn.disabled = true;
   say("Opening…");
   try {
+    // Feeds from another RSS reader, as OPML (1.32.0): followed here.
+    const feedList = await C.imports.readOpml(file).catch(() => null);
+    if (feedList) {
+      if (ref) C.platform.files.release(ref);
+      if (btn) { btn.disabled = false; say("Restore or open a file"); }
+      followFeeds(feedList);
+      return;
+    }
     // Another read-later app's export (1.9.0): its links, to save.
     const exported = await C.imports.read(file).catch(() => null);
     if (exported) {
@@ -1996,6 +2025,8 @@ function backupGroup() {
         el("span", { class: "row-label accent" }, "Back up the library")),
       state.pages.some((p) => (p.marks || []).length) ? el("button", { class: "row", type: "button", onclick: (e) => saveHighlights(e.currentTarget) },
         el("span", { class: "row-label accent" }, "Save all highlights")) : null,
+      feeds.length ? el("button", { class: "row", type: "button", onclick: (e) => saveOpml(e.currentTarget) },
+        el("span", { class: "row-label accent" }, "Save the feeds you follow (OPML)")) : null,
       open, input),
     el("p", { class: "footnote" }, "One file with every clip, its pictures, tags, collections and where you were, and the feeds you follow. " + (C.platform.native ? "Keep it off the phone" : "Keep it somewhere other than this browser") + ". Restoring keeps whichever copy of a clip was saved last. A clip sent as a file opens here too." + (state.pages.some((p) => (p.marks || []).length) ? " Highlights save as one Markdown file, with their notes and links." : "")));
 }
@@ -2005,7 +2036,7 @@ function importGroup() {
   const open = el("button", { class: "row", type: "button", onclick: () => (C.platform.files.canLink ? pickFile() : input.click()) },
         el("span", { class: "choice-text" },
           el("span", { class: "choice-label accent" }, "Import from Pocket, Instapaper or Omnivore"),
-          el("span", { class: "choice-note" }, "Pick the file the app exported: a CSV, an HTML page, or Omnivore's zip. Raindrop's CSV and a browser's bookmarks work too.")));
+          el("span", { class: "choice-note" }, "Pick the file the app exported: a CSV, an HTML page, or Omnivore's zip. Raindrop's CSV, a browser's bookmarks and another RSS reader's OPML (its feeds) work too.")));
   input.addEventListener("change", () => { const f = input.files[0]; input.value = ""; openFile(f, open); });
   return el("section", { class: "settings-section", id: "importSection" },
     el("h2", { class: "overline" }, "Import"),

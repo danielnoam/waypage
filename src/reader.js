@@ -63,6 +63,7 @@
     const css = getComputedStyle(document.documentElement);
     for (const t of TOKENS) doc.documentElement.style.setProperty("--" + t, css.getPropertyValue("--" + t).trim());
     doc.documentElement.style.colorScheme = css.colorScheme;
+    doc.documentElement.toggleAttribute("data-co-dim", document.documentElement.hasAttribute("data-dim-pictures"));
     const align = document.documentElement.dataset.readAlign;
     if (align && align !== "auto") doc.documentElement.setAttribute("data-co-align", align);
     else doc.documentElement.removeAttribute("data-co-align");

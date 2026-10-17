@@ -337,6 +337,14 @@
       web.opts = { ...web.opts, rate };
       if (web.state === "playing") webSpeak();
     },
+    // The sleep timer (1.32.0): pause after `seconds`, 0 to cancel. The
+    // Android service keeps the time itself, put away; elsewhere the page
+    // does. Resolves whether the phone took it.
+    async sleep(seconds) {
+      const S = plugin("Speech");
+      if (!S || os !== "android") return false;
+      try { await S.sleep({ seconds: Math.max(0, Math.round(seconds)) }); return true; } catch (e) { return false; }
+    },
     async stop() {
       const S = plugin("Speech");
       if (S) { try { await S.stop(); } catch (e) { /* nothing was reading */ } return; }
@@ -948,6 +956,13 @@
       get available() { return !!plugin("Brightness"); },
       get: () => plugin("Brightness").get(),
       set: (level) => plugin("Brightness").set(level == null ? {} : { level }),
+    },
+    // Volume buttons turn pages (1.32.0), native/share's VolumeKeys
+    // plugin on Android; `f` hears "up" or "down".
+    volumeKeys: {
+      get available() { return os === "android" && !!plugin("VolumeKeys"); },
+      watch(on) { const V = plugin("VolumeKeys"); if (V) V.watch({ on: !!on }).catch(() => {}); },
+      onKey(f) { const V = plugin("VolumeKeys"); if (V) V.addListener("key", (e) => f(e.key)); },
     },
     get knowsConnection() { return os === "ios" ? !!plugin("Connection") : os === "android" && !!navigator.connection; },
     onConnection(f) {

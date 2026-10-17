@@ -38,7 +38,7 @@ import java.util.Locale;
  */
 public class SpeechService extends Service {
 
-    static final String PLAY = "play", PAUSE = "pause", RESUME = "resume", NEXT = "next", PREV = "prev", STOP = "stop", SEEK = "seek", RATE = "rate";
+    static final String PLAY = "play", PAUSE = "pause", RESUME = "resume", NEXT = "next", PREV = "prev", STOP = "stop", SEEK = "seek", RATE = "rate", SLEEP = "sleep";
     private static final String CHANNEL = "waypage-aloud";
     private static final int NOTE = 27;
 
@@ -65,6 +65,8 @@ public class SpeechService extends Service {
     static SpeechService running;
 
     private final Handler main = new Handler(Looper.getMainLooper());
+    // The sleep timer (1.32.0): pauses where it got to, so it can go on.
+    private final Runnable sleeper = this::pause;
     private TextToSpeech tts;
     private boolean ready;
     private Job job;
@@ -158,6 +160,10 @@ public class SpeechService extends Service {
         else if (RATE.equals(action) && intent != null && job != null) {
             job.rate = intent.getFloatExtra("rate", job.rate);
             if ("playing".equals(state)) play();
+        } else if (SLEEP.equals(action) && intent != null) {
+            main.removeCallbacks(sleeper);
+            int seconds = intent.getIntExtra("value", 0);
+            if (seconds > 0) main.postDelayed(sleeper, seconds * 1000L);
         } else if (STOP.equals(action)) finish("stopped");
         return START_NOT_STICKY;
     }
@@ -261,6 +267,7 @@ public class SpeechService extends Service {
     }
 
     private void finish(String how) {
+        main.removeCallbacks(sleeper);
         state = how;
         generation++;
         if (tts != null) tts.stop();

@@ -1249,6 +1249,25 @@ function mergeFeed(f, got) {
   if (got.link) f.link = got.link;
 }
 
+// Feeds from another reader's OPML (1.32.0): each one not followed yet
+// is followed, its posts shown in Feeds rather than saved, into a
+// collection named after its group there or itself.
+function followFeeds(list) {
+  let added = 0;
+  for (const o of list) {
+    if (feeds.some((h) => sameUrl(h.url, o.url))) continue;
+    const title = cleanTag(o.title) || C.feeds.siteOf(o.url);
+    feeds.push({ url: o.url, title, link: "", icon: "", mode: "show", images: load(IMAGES_KEY, "previews"),
+      folder: cleanTag(o.folder) || title, days: 7, addedAt: Date.now(), checkedAt: 0, error: "", items: [] });
+    added++;
+  }
+  if (!added) { toast(list.length ? "You follow all of those feeds already." : "No feeds in that file."); return; }
+  saveFeeds();
+  paintFeeds();
+  toast("Following " + added + (added === 1 ? " feed" : " feeds") + ". Their posts are in Feeds.");
+  setTimeout(() => checkFeeds(true), 0);
+}
+
 // Feeds from a backup: one not followed here is followed again, with its
 // posts; one followed already keeps its settings here. Returns how
 // many were added.

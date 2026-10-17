@@ -43,29 +43,6 @@ CHANGELOG.md; the rules every release keeps are at the top of NOTES.md.
   by the page's own origin where it can, otherwise kept as links. Open:
   sites whose CSP blocks bookmarklets (Firefox mostly), and checking the
   message comes from the bookmarklet's window.
-- **A sleep timer for Read aloud (Daniel, 17 Oct 2026).** Stop after 15,
-  30 or 60 minutes, or at the end of this clip, from the player. It ends
-  in the speech service too, so it works put away and over Bluetooth;
-  the place stays where it stopped.
-- **Volume buttons turn pages (Daniel, 17 Oct 2026).** In the Pages
-  layout, volume down for next and up for back, a switch in Settings ›
-  Reading, off while reading aloud. Android only: the activity's
-  `dispatchKeyEvent` passes the keys to the app while the reader is
-  open. iOS has no clean way to take the volume buttons.
-- **Feeds in and out as OPML (Daniel, 17 Oct 2026).** Import the OPML
-  file any RSS reader exports into Feeds, folders becoming collections
-  where it fits, and export the feeds you follow the same way.
-- **Dim pictures in dark themes (Daniel, 17 Oct 2026).** A switch in
-  Settings › Appearance under the themes, on by default: in Night,
-  Black, Dusk and Solarized Dark the reader's pictures are toned down a
-  little (a CSS filter in reader.css, keyed on the theme), and a tap
-  opens one at full brightness in the picture viewer. Comics and PDF
-  pages stay as they are, since the picture is the page there.
-- **Before you go offline (Daniel, 17 Oct 2026, name still open).** In
-  Settings › Saving, at the top: one button that retries pictures that
-  didn't save, saves new chapters of followed collections and new posts
-  of auto-saving feeds, then lists the clips that still aren't fully
-  offline, each with Retry. Also reachable from Downloads.
 
 ## iOS release (later, Daniel 11 Oct 2026)
 
@@ -76,6 +53,9 @@ Everything iOS-only, kept for one iOS release.
   GoogleSignIn pod in native/share for the token, and a Drive plugin
   with the same `authorize`, `upload` and `download` as Android's
   DrivePlugin.java.
+- **The sleep timer, put away, on iOS.** Android's speech service keeps
+  the time since 1.32.0; on iOS the page does, so with the app put away
+  it waits until the app is back. A timer in the Speech plugin would do it.
 - **Read aloud going on to the next clip, put away, on iOS.** Android's
   speech service takes the next clip from the app since 1.23.0 and goes
   straight on; iOS's Speech plugin has no queue yet, so there the app

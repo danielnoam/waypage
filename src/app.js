@@ -9,7 +9,7 @@
 // only use what an earlier part, or its own, has declared. A part's
 // functions can call into any part, since nothing is tapped until all of
 // them have loaded. app-start.js runs last and starts things up.
-const APP_VERSION = "1.31.0";
+const APP_VERSION = "1.32.0";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
@@ -124,8 +124,13 @@ function setAutoTheme(change) {
 }
 const autoSwatch = () => { const a = autoThemes(); return [a.light, a.dark]; };
 
+// Pictures toned down in the dark themes (1.32.0), a switch in
+// Appearance, on by default; the picture viewer shows them in full.
+const DIM_KEY = "waypage.dimPictures";
 function paintTheme(choice) {
-  document.documentElement.dataset.theme = resolveTheme(choice);
+  const theme = resolveTheme(choice);
+  document.documentElement.dataset.theme = theme;
+  document.documentElement.toggleAttribute("data-dim-pictures", !!(themeOf(theme) || {}).dark && load(DIM_KEY, true) !== false);
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
   if (C.reader) C.reader.applyTheme();
@@ -272,7 +277,7 @@ function setReading(change) {
   const was = readingPrefs().layout;
   store(READING_KEY, { ...readingPrefs(), ...change });
   paintReading();
-  if (C.reader && readingPrefs().layout !== was) C.reader.setPaged(readingPrefs().layout === "pages");
+  if (C.reader && readingPrefs().layout !== was) { C.reader.setPaged(readingPrefs().layout === "pages"); volumeWatch(); }
   if (C.reader && "spread" in change) C.reader.setSpread(readingPrefs().spread);
   if ("rail" in change) fitRail();
   document.querySelectorAll(".reading-controls").forEach(syncReadingControls);
@@ -663,7 +668,8 @@ function renderDownloads() {
   if (!nodes.length) {
     keep("empty", () => el("div", { class: "empty wide" },
       el("h2", { class: "empty-title" }, "Nothing downloading"),
-      el("p", { class: "empty-text" }, "Clips you save show their progress here, and stay here once they're done until you close the app.")));
+      el("p", { class: "empty-text" }, "Clips you save show their progress here, and stay here once they're done until you close the app."),
+      el("button", { class: "btn-quiet", type: "button", onclick: () => toSettings("saving") }, "Before you go offline")));
   }
   root.replaceChildren(...nodes);
   if (app) paintUpdateCard();

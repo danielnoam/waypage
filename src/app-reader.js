@@ -178,7 +178,7 @@ let waiting = null;
 function readerWait(p, fromHistory) {
   waiting = p.id;
   const swap = state.open && $("readerView").dataset.pane && !$("readerView").dataset.leaving;
-  if (state.open) { closeSheet(true); hideReadHere(); brightClose(); closeFind(true); state.open = null; }
+  if (state.open) { closeSheet(true); hideReadHere(); brightClose(); closeFind(true); state.open = null; volumeWatch(); }
   C.reader.close();
   C.files.closeHeld();
   $("readerView").classList.add("waiting");
@@ -371,6 +371,7 @@ function show(p, html) {
   }).then(() => {
     lostMarks = new Set();
     brightOpen();
+    volumeWatch();
     paintMarks(p);
     $("readerContents").hidden = C.reader.headings().length < 2;
     fitRail();
@@ -586,6 +587,34 @@ const textPinch = {
   size: () => readingPrefs().size,
   set: (px) => { pinchedAt = performance.now(); px = clamp(px, SIZE_MIN, SIZE_MAX); if (px !== readingPrefs().size) setReading({ size: px }); },
 };
+// Volume buttons turn pages (1.32.0, Android): down for the next page,
+// up for the one before, while the reader shows Pages and nothing is
+// read aloud. Off by default, as the buttons are the volume.
+const VOLUME_KEY = "waypage.volumePages";
+const volumeOn = () => !!load(VOLUME_KEY, false);
+let volumeTaken = null;
+function volumeWatch() {
+  const keys = C.platform.volumeKeys;
+  if (!keys.available) return;
+  const want = volumeOn() && !!state.open && !!C.reader && C.reader.paged && !aloudOn();
+  if (want === volumeTaken) return;
+  volumeTaken = want;
+  keys.watch(want);
+}
+if (C.platform.volumeKeys.available) C.platform.volumeKeys.onKey((k) => { if (volumeTaken && state.open && !state.sheet) C.reader.turn(k === "down" ? 1 : -1); });
+function volumeSwitch() {
+  if (!C.platform.volumeKeys.available) return null;
+  return el("label", { class: "rc-row switch-row" },
+    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Volume buttons turn pages"),
+      el("span", { class: "choice-note" }, "In Pages: down for next, up for back. Not while reading aloud.")),
+    el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "volumePages", checked: volumeOn(),
+      onchange: (e) => {
+        store(VOLUME_KEY, e.target.checked);
+        document.querySelectorAll('input[data-pref="volumePages"]').forEach((i) => { i.checked = e.target.checked; });
+        volumeWatch();
+      } }));
+}
+
 function pinchSwitch() {
   return el("label", { class: "rc-row switch-row" },
     el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Pinch for text size"),
@@ -885,6 +914,7 @@ function closeReader() {
   const from = aloudHere() && !$("aloudPlayer").hidden ? player.getBoundingClientRect() : null;
   if (from) player.style.visibility = "hidden";
   state.open = null;
+  volumeWatch();
   showAloudBar(from);
   // The library redraws (where you got to) before the reader shrinks
   // into its card (1.11.1), so the card it lands on is already the new
@@ -933,6 +963,29 @@ const PIP_KEY = "waypage.aloudPip";
 const KEEP_KEY = "waypage.aloudKeepGoing";
 let wentOnFrom = "";
 const PIECE = 600;
+
+// The sleep timer (1.32.0): pause after a while, or stop at the end of
+// this clip. For this reading only, not kept; a pause, so Play goes on.
+const SLEEPS = [{ value: "", label: "Off" }, { value: "15", label: "15 minutes" }, { value: "30", label: "30 minutes" },
+  { value: "45", label: "45 minutes" }, { value: "60", label: "1 hour" }, { value: "end", label: "End of this clip" }];
+const sleep = { pick: "", at: 0, timer: 0 };
+const sleepEnd = () => sleep.pick === "end";
+function setSleep(v) {
+  clearTimeout(sleep.timer);
+  sleep.pick = v;
+  sleep.at = v && v !== "end" ? Date.now() + Number(v) * 60000 : 0;
+  const at = sleep.at;
+  speech.sleep(at ? (at - Date.now()) / 1000 : 0).then((phone) => {
+    if (phone || !at || sleep.at !== at) return;
+    sleep.timer = setTimeout(() => { if (aloud.state === "playing") { speech.pause(); setAloud("paused", aloud.index); } }, at - Date.now());
+  });
+  queueNext();
+}
+function sleepNote() {
+  if (sleepEnd()) return "Stops at the end of this clip.";
+  if (sleep.at > Date.now()) return "Pauses at " + new Date(sleep.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + ".";
+  return "Pauses the reading after a while.";
+}
 
 // `parts` is [{ text, block }]; a block can be in two parts when the
 // reading starts partway through it.
@@ -1016,7 +1069,7 @@ function mediaInfo(p) {
 let queued = null, openOnReturn = "";
 async function queueNext() {
   const p = aloudPage();
-  let next = p && aloudOn() && load(GO_ON_KEY, false) ? neighbour(p, 1) || (p.next ? savedAs(p.next) : null) : null;
+  let next = p && aloudOn() && load(GO_ON_KEY, false) && !sleepEnd() ? neighbour(p, 1) || (p.next ? savedAs(p.next) : null) : null;
   if (next && (next.file || next.link || next.preview)) next = null;
   if (!next) {
     if (queued) { queued = null; speech.queue({ after: "", items: [] }); }
@@ -1375,13 +1428,16 @@ function setAloud(st, index) {
   $("aloudNext").disabled = !on || b >= (aloud.map[aloud.map.length - 1] ?? 0);
   if (state.open && state.open.id === aloud.key) C.reader.light(on ? b : -1);
   if (st === "playing") wentOnFrom = "";
-  if (ended && st === "ended" && load(GO_ON_KEY, false) && wentOnFrom !== aloud.key) {
+  if (ended && st === "ended" && load(GO_ON_KEY, false) && !sleepEnd() && wentOnFrom !== aloud.key) {
     wentOnFrom = aloud.key;
     setTimeout(() => { if (aloud.state === "ended" && aloud.key === wentOnFrom) readNext(); }, 800);
   }
   if (!on && !ended) aloud.key = "";
+  if (st !== "playing" && st !== "paused" && sleep.pick) setSleep("");
+  else if (sleep.at && Date.now() >= sleep.at - 1000) { sleep.pick = ""; sleep.at = 0; }
   keepAwake();
   floatOut();
+  volumeWatch();
   showAloudBar();
   if (st === "error") toast("The phone's voice stopped. Try again, or pick another voice in Aa.");
 }
@@ -1642,7 +1698,13 @@ function aloudControls() {
     return el("label", { class: "rc-row switch-row" },
       el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, text), el("span", { class: "choice-note" }, note)), input);
   };
+  const sleepText = el("span", { class: "choice-note" }, sleepNote());
+  const sleepRow = aloudOn() ? el("div", { class: "rc-row" },
+    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Sleep timer"), sleepText),
+    dropdown({ label: "Sleep timer", cls: "field-pick", options: SLEEPS, value: sleep.at > Date.now() || sleepEnd() ? sleep.pick : "",
+      onpick: (v) => { setSleep(v); sleepText.textContent = sleepNote(); } })) : null;
   return el("div", { class: "aloud-controls" },
+    sleepRow,
     voiceRow,
     el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Speed", shown),
       el("div", { class: "stepper" }, speed)),
@@ -1696,6 +1758,7 @@ function readingControls(withTheme) {
     row("Show as", seg(id + "-layout", "Show as", [
       { value: "scroll", label: "Scroll" }, { value: "pages", label: "Pages" },
     ], r.layout, (v) => setReading({ layout: v }))),
+    volumeSwitch(),
     row("Margins", seg(id + "-margins", "Margins", [
       { value: "narrow", label: "Narrow" }, { value: "normal", label: "Normal" }, { value: "wide", label: "Wide" },
     ], r.margins, (v) => setReading({ margins: v }))),

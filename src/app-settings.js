@@ -63,6 +63,58 @@ function choiceGroup(g) {
 // than 1600 px, saved again in a smaller format. On unless turned off.
 const COMPRESS_KEY = "waypage.compress";
 C.save.compress = load(COMPRESS_KEY, true);
+// Before you go offline (1.32.0): one press before a flight saves what's
+// missing (pictures, failed saves, new chapters of followed collections,
+// new posts of feeds that save themselves), then lists what still won't
+// read in full offline.
+const ready = { running: false, ran: false };
+const notReady = () => state.pages.filter((p) => !p.preview && ((p.missing && p.mode !== "links") || p.cut));
+async function getReady() {
+  if (ready.running) return;
+  if (!navigator.onLine) { ready.ran = true; renderReady(); toast("You're offline. Here's what isn't ready."); return; }
+  ready.running = true;
+  renderReady();
+  try {
+    const gaps = state.pages.filter((p) => p.missing && p.mode !== "links" && !syncQueue.includes(p.id));
+    if (gaps.length) { syncQueue.push(...gaps.map((p) => p.id)); keepQueue(); }
+    const pictures = fetchPictures();
+    const failed = retryAll(state.saving.filter((s) => s.error));
+    await dailyCheck(true);
+    for (const name of allFolders()) if (freshCount(name) && !runFor(name)) saveNewChapters(name);
+    await Promise.all([checkFeeds(true), pictures, failed]);
+  } finally {
+    ready.running = false;
+    ready.ran = true;
+    renderReady();
+  }
+}
+function renderReady() {
+  if (state.section === "saving") renderSection();
+}
+function readyGroup() {
+  const left = ready.ran ? notReady() : [];
+  const busy = ready.running || state.saving.some((s) => !s.error);
+  const go = el("button", { class: "btn-small", type: "button", onclick: getReady }, ready.running ? "Working…" : "Get ready");
+  go.disabled = ready.running;
+  return el("section", { class: "settings-section" },
+    el("h2", { class: "overline" }, "Before you go offline"),
+    el("div", { class: "group" },
+      el("div", { class: "row" },
+        el("span", { class: "choice-text" },
+          el("span", { class: "choice-label" }, ready.running ? "Getting everything ready…" : "Get everything ready"),
+          el("span", { class: "choice-note" }, "Saves missing pictures, failed saves, new chapters and feed posts, then lists what still isn't ready")),
+        go),
+      ...left.slice(0, 20).map((p) => el("button", { class: "row nav-row", type: "button", onclick: () => toLibrary().then(() => openPage(p.id)) },
+        el("span", { class: "choice-text" },
+          el("span", { class: "choice-label", dir: "auto" }, p.title),
+          el("span", { class: "choice-note warn" }, p.cut ? "Only the start" : p.missing + (p.missing === 1 ? " preview" : " previews") + " missing")),
+        el("span", { class: "row-chev", "aria-hidden": "true" }, "›")))),
+    ready.ran && !ready.running ? el("p", { class: "footnote" },
+      !left.length ? (busy ? "Everything else is ready. The rest is still saving, in Downloads." : "Everything is ready to read offline.")
+        : left.length + (left.length === 1 ? " clip isn't" : " clips aren't") + " fully ready" + (left.length > 20 ? "; the first 20 are above." : ".")
+          + (busy ? " Some are still saving, in Downloads." : "")) : null);
+}
+
 function compressGroup() {
   return el("section", { class: "settings-section" },
     el("h2", { class: "overline" }, "Big pictures"),
@@ -122,6 +174,17 @@ function autoGroup() {
 
 // Animations (1.12.0): off, nothing moves at all, for a slow phone or
 // for anyone who'd rather things just change.
+function dimGroup() {
+  return el("section", { class: "settings-section" },
+    el("div", { class: "group" },
+      el("label", { class: "row" },
+        el("span", { class: "choice-text" },
+          el("span", { class: "choice-label" }, "Dim pictures in dark themes"),
+          el("span", { class: "choice-note" }, "In Night, Black, Dusk and Solarized Dark. Tap a picture to see it in full.")),
+        el("input", { class: "switch", type: "checkbox", role: "switch", checked: load(DIM_KEY, true) !== false,
+          onchange: (e) => { store(DIM_KEY, e.target.checked); paintTheme(state.theme); } }))));
+}
+
 function motionGroup() {
   return el("section", { class: "settings-section" },
     el("h2", { class: "overline" }, "Motion"),
@@ -807,7 +870,7 @@ const updateOut = () => UPD_OUT.includes(upd.phase) && upd.latest;
 // Settings sorted by what you came to change (1.12.0): how it looks,
 // how you read, the library; then saving, sync and storage; then About.
 const SECTIONS = {
-  appearance: { title: "Appearance", build: () => [choiceGroup(SETTINGS[0]), autoGroup(), motionGroup()],
+  appearance: { title: "Appearance", build: () => [choiceGroup(SETTINGS[0]), autoGroup(), dimGroup(), motionGroup()],
     value: () => themeName(state.theme) },
   reading: { title: "Reading", build: () => [readingGroup(), aloudGroup()],
     value: () => { const r = readingPrefs(); return (FONTS.find((f) => f.value === r.font) || FONTS[0]).label + " · " + r.size + " px"; } },
@@ -815,7 +878,7 @@ const SECTIONS = {
     choiceGroup({ key: LAYOUT_KEY, label: "Layout", get: layout, set: (v) => { store(LAYOUT_KEY, v); renderLibrary(); }, options: LAYOUTS }),
     libraryGroup(), watchGroup(), editNavGroup()],
     value: () => (LAYOUTS.find((l) => l.value === layout()) || LAYOUTS[0]).label },
-  saving: { title: "Saving", build: () => [choiceGroup(SETTINGS[1]), compressGroup(), tapPicturesGroup(), dataGroup(DATA_SAVE_KEY, "Save", "Pages and pictures come down on any connection.", "Saves wait in Downloads until you're on Wi-Fi; feeds, new chapters and missing pictures check then too."), signedGroup(), importGroup()],
+  saving: { title: "Saving", build: () => [readyGroup(), choiceGroup(SETTINGS[1]), compressGroup(), tapPicturesGroup(), dataGroup(DATA_SAVE_KEY, "Save", "Pages and pictures come down on any connection.", "Saves wait in Downloads until you're on Wi-Fi; feeds, new chapters and missing pictures check then too."), signedGroup(), importGroup()],
     value: () => SETTINGS[1].options.find((o) => o.value === SETTINGS[1].get()).label },
   sync: { title: "GitHub sync", build: syncSections, value: () => (C.sync.on ? (C.sync.last.error ? "Stopped" : "On") : "Off") },
   drive: { title: "Google Drive", build: driveSections, value: driveValue },
