@@ -730,18 +730,18 @@
     // run cut off part way keeps them (1.13.0).
     const settleSome = async (some, final) => {
       const live = getPages();
-      const out = [];
+      const out = [], took = new Set();
       for (const p of live) {
         const d = some.get(p.id);
         if (!snapshot.has(p.id) || !some.has(p.id)) out.push(p);
         else if (snapshot.get(p.id) !== JSON.stringify(p)) {
           if (d && ver(d) !== ver(p)) { const both = { ...p }; for (const k of CONTENT.concat(DEVICE)) { if (d[k] === undefined) delete both[k]; else both[k] = d[k]; } out.push(both); }
           else out.push(p);
-        } else if (d) out.push(d);
+        } else if (d) { out.push(d); took.add(p.id); }
       }
-      for (const [id, d] of some) if (d && !live.some((p) => p.id === id)) out.push(d);
+      for (const [id, d] of some) if (d && !live.some((p) => p.id === id)) { out.push(d); took.add(id); }
       out.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
-      if (!final) { await setPages(out); return []; }
+      if (!final) { await setPages(out); return took; }
       const kept = new Set(out.map((p) => p.id));
       const gone = [...some].filter(([id, d]) => d === null && !kept.has(id)).map(([id]) => id);
       return { out, gone };
@@ -761,8 +761,11 @@
         if (JSON.stringify(next) !== JSON.stringify(have)) early.set(m.id, next);
       }
       if (!early.size) return;
-      await settleSome(early, false);
-      for (const p of getPages()) if (early.has(p.id)) snapshot.set(p.id, JSON.stringify(p));
+      // Only the clips that took the early place count as seen: one read
+      // on meanwhile keeps its change, which the last settle would
+      // otherwise have put back to where this sync started (1.36.1).
+      const took = await settleSome(early, false);
+      for (const p of getPages()) if (took.has(p.id)) snapshot.set(p.id, JSON.stringify(p));
     };
     let up = 0;
     let merged, remote;

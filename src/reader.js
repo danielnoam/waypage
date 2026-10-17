@@ -344,7 +344,7 @@
   function findAnchors() {
     anchors = doc ? [...doc.body.querySelectorAll(BLOCKS + ", .co-comic img")].filter((el) => !el.closest(SKIP) && !el.querySelector(BLOCKS)) : [];
   }
-  let restoredAt = 0, tell = null;
+  let restoredAt = 0, tell = null, touched = false;
   // Settles once the page is back where it was left (1.26.1): reading
   // aloud from there waits for it, or it starts from the top.
   let placed = Promise.resolve();
@@ -1172,6 +1172,7 @@
     // The clip before tells where it was left before this one comes in.
     settle();
     tell = onPosition ? () => onPosition(position(), spot()) : null;
+    touched = false;
     frame = iframe;
     turning = null;
     paged = !!asPages;
@@ -1259,6 +1260,8 @@
               if (doc) onScroll(position(), isPaged() ? Math.abs(iframe.contentWindow.scrollX) : iframe.contentWindow.scrollY);
             });
           }
+          // Scrolled by hand, or by anything but putting the page back.
+          if (performance.now() - restoredAt > 400) touched = true;
           clearTimeout(scrollTimer);
           scrollTimer = setTimeout(() => {
             scrollTimer = null;
@@ -1351,5 +1354,5 @@
   addEventListener("resize", applyTop);
   addEventListener("offline", applyConnection);
 
-  C.reader = { set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, headings, section, jumpTo, readable, readableIn, firstShown, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
+  C.reader = { set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, headings, section, jumpTo, readable, readableIn, firstShown, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
 })();

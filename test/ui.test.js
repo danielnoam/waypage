@@ -1034,6 +1034,41 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("reading on while a sync runs keeps the new place, not the one the sync started with (1.36.1)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t" }));
+        const c = { id: "had1", url: "https://example.com/had1", title: "Clip", site: "example.com", savedAt: 100, minutes: 1, mode: "links", at: 0 };
+        await window.Waypage.store.writeIndex([c]);
+        await window.Waypage.store.writePage("had1", "<!doctype html><html><body><p>Had.</p></body></html>", c);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const remote = { format: 1, deleted: {}, files: { had1: { at: 100, sha: "s1" } },
+          pages: [{ id: "had1", url: "https://example.com/had1", title: "Clip", site: "example.com", savedAt: 100, minutes: 1, mode: "links", at: 0.7, spot: "7/0c", readAt: 5000, placeAt: 5000, readOn: "Tablet" }] };
+        const b64 = (t) => btoa(unescape(encodeURIComponent(t)));
+        const here = () => state.pages.find((p) => p.id === "had1");
+        let sent = null;
+        window.fetch = async (url, opts = {}) => {
+          const method = opts.method || "GET";
+          const ok = (j) => new Response(JSON.stringify(j), { status: 200 });
+          if (/\/repos\/me\/waypage-data$/.test(url)) return ok({ name: "waypage-data" });
+          if (/contents\/library\.json/.test(url) && method === "GET") {
+            // Read on here while library.json comes down.
+            Object.assign(here(), { at: 0.9, spot: "9/50c", readAt: Date.now(), placeAt: Date.now() });
+            return ok({ sha: "lib1", content: b64(JSON.stringify(remote)) });
+          }
+          if (/contents\/library\.json/.test(url) && method === "PUT") { sent = JSON.parse(decodeURIComponent(escape(atob(JSON.parse(opts.body).content)))); return ok({ content: { sha: "lib2" } }); }
+          return new Response("{}", { status: 404 });
+        };
+        await syncNow(true);
+        return { at: here().at, spot: here().spot };
+      });
+      assert.deepStrictEqual(got, { at: 0.9, spot: "9/50c" });
+      await q.context().close();
+    });
+
     await test("the collection widget's read aloud, Keep reading when you leave, and the small window (1.25.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

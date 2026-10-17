@@ -93,6 +93,13 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
   open stamp on readAt let a device that opened a clip at an old place
   send that place everywhere. A newer place sync brings for the open
   clip is jumped to only until the clip is moved here (`movedHere`).
+  1.36.1, after Daniel saw the text pulled back up as a sync finished
+  while he read on: `placesFirst` marked every clip it settled as seen,
+  even one whose place changed here since the sync's `before`, so the
+  final settle put the merged (start-of-sync) place over it. Now only the
+  clips that took the early place are marked seen. The follow is also
+  narrowed: within FOLLOW_MS (15 s) of opening, before any scroll past
+  the restore (`reader.touched()`), and only when sync raised placeTime.
   `reader.settle()` tells a scroll that stopped under 150 ms ago, before
   a close, Read next, the app hiding, or the next open; without it the
   place written was the one before that scroll.
