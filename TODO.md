@@ -34,6 +34,27 @@ CHANGELOG.md; the rules every release keeps are at the top of NOTES.md.
   (`requestPersonalVoiceAuthorization`, iOS 17). Look into whether
   voices that download (Google's network voices) can be fetched for
   offline from inside the app or only from the engine's settings.
+- **Save from a computer's browser, no server (Daniel, 17 Oct 2026).**
+  A "Send to Waypage" bookmarklet takes the page as the browser shows
+  it (signed in, scripts run) and hands it to the web copy in a window
+  it opens, by `postMessage`; the web copy saves it through the same
+  untrusted-HTML path and syncs it to the phone. No CORS, since the HTML
+  is read in the page itself, and no fetch worker. Pictures are fetched
+  by the page's own origin where it can, otherwise kept as links. Open:
+  sites whose CSP blocks bookmarklets (Firefox mostly), and checking the
+  message comes from the bookmarklet's window.
+- **A sleep timer for Read aloud (Daniel, 17 Oct 2026).** Stop after 15,
+  30 or 60 minutes, or at the end of this clip, from the player. It ends
+  in the speech service too, so it works put away and over Bluetooth;
+  the place stays where it stopped.
+- **Volume buttons turn pages (Daniel, 17 Oct 2026).** In the Pages
+  layout, volume down for next and up for back, a switch in Settings ›
+  Reading, off while reading aloud. Android only: the activity's
+  `dispatchKeyEvent` passes the keys to the app while the reader is
+  open. iOS has no clean way to take the volume buttons.
+- **Feeds in and out as OPML (Daniel, 17 Oct 2026).** Import the OPML
+  file any RSS reader exports into Feeds, folders becoming collections
+  where it fits, and export the feeds you follow the same way.
 
 ## iOS release (later, Daniel 11 Oct 2026)
 
