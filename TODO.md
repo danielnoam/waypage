@@ -15,6 +15,25 @@ CHANGELOG.md; the rules every release keeps are at the top of NOTES.md.
 - **Linked PDFs without the whole file in memory.** pdf.js can read by
   ranges (`PDFDataRangeTransport`); a 400 MB PDF is still copied whole
   into the sandbox today.
+- **Your own fonts (Daniel, 17 Oct 2026).** Two ways in: drop a .ttf,
+  .otf or .woff2 into a Fonts folder beside the library (Android and
+  the Documents/picked-folder storage), or pick one in Settings ›
+  Reading › Font › Add a font. Each becomes a `FontFace` in the app and
+  an `@font-face` in the reader frame (a data or app-local URL the
+  frame's CSP allows), listed after the bundled ones. Open: whether
+  added fonts sync and go in backups (a few hundred KB each), and
+  telling the user when a font has no Hebrew letters.
+- **More read-aloud voices (Daniel, 17 Oct 2026).** Android only lists
+  the default speech engine's voices: SpeechPlugin and SpeechService
+  open `new TextToSpeech(context, ...)` with no engine, so voices from
+  other installed engines (Samsung, RHVoice, Sherpa/Piper neural
+  voices, Acapela) never show. List `getEngines()`, offer an engine
+  picker above the voices, and pass the engine to both. iOS: show
+  Enhanced and Premium voices first with a hint that more download in
+  Settings › Accessibility › Spoken Content, and offer Personal Voice
+  (`requestPersonalVoiceAuthorization`, iOS 17). Look into whether
+  voices that download (Google's network voices) can be fetched for
+  offline from inside the app or only from the engine's settings.
 
 ## iOS release (later, Daniel 11 Oct 2026)
 
