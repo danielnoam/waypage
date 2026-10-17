@@ -65,7 +65,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Voice per language, speed 0.5x to 3x, read footnotes switch (0.27.0, 0.34.0)
 - Keeps reading across screens, Read next / go on to the next clip, also put away on Android (1.4.0, 1.6.0, 1.23.0)
 - Keep the screen on; picture in picture; Bluetooth previous/next (1.24.0, 1.25.0, 1.26.0)
-- Sleep timer: minutes or end of clip (1.32.0)
+- Sleep timer: minutes or end of clip, a moon on the player, Sleep 15 min on the lock screen (1.32.0, 1.36.0)
 - Speech engine picker and Get more voices on Android (1.33.0)
 
 ## Feeds

@@ -2,6 +2,16 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.36.0] - 2026-10-17
+
+### Changed
+- The sleep timer moved out of Aa onto the read-aloud player, as a moon
+  next to the next-paragraph button. Each tap is the next choice (15,
+  30, 45 minutes, an hour, end of this clip, off), and it shows the
+  minutes left.
+- On Android, the read-aloud notification and lock screen have Sleep
+  15 min: 15 minutes from now, or 15 more on a timer already running.
+
 ## [1.35.1] - 2026-10-17
 
 ### Changed

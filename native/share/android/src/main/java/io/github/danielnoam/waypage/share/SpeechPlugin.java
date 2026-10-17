@@ -41,7 +41,8 @@ import org.json.JSONArray;
  *                                small window with the reading's buttons
  *   pipState()                   { on } whether it is in that window now
  *
- * and a "progress" event { key, index, state } as each paragraph starts and
+ * a "sleep" event { at } when the sleep timer is set from the lock screen
+ * or runs out (1.36.0), and a "progress" event { key, index, state } as each paragraph starts and
  * when the reading pauses, ends or stops ("playing", "paused", "ended",
  * "stopped", "error").
  */
@@ -63,6 +64,11 @@ public class SpeechPlugin extends Plugin {
             o.put("index", index);
             o.put("state", state);
             notifyListeners("progress", o);
+        };
+        SpeechService.sleepListener = (at) -> {
+            JSObject o = new JSObject();
+            o.put("at", at);
+            notifyListeners("sleep", o);
         };
     }
 

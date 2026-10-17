@@ -359,6 +359,12 @@
       if (!S || os !== "android") return false;
       try { await S.sleep({ seconds: Math.max(0, Math.round(seconds)) }); return true; } catch (e) { return false; }
     },
+    // Told { at } when Android's lock-screen Sleep 15 min sets the timer
+    // or it runs out (1.36.0).
+    onSleep(fn) {
+      const S = plugin("Speech");
+      if (S && os === "android" && S.addListener) S.addListener("sleep", (e) => fn(Number((e && e.at) || 0)));
+    },
     async stop() {
       const S = plugin("Speech");
       if (S) { try { await S.stop(); } catch (e) { /* nothing was reading */ } return; }

@@ -1084,6 +1084,35 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("the moon on the player steps the sleep timer and shows what's left (1.36.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = { id: "s1", url: "https://example.com/s1", title: "Sleepy", site: "example.com", savedAt: 1001, minutes: 1, mode: "links", at: 0 };
+        await S.writeIndex([c]);
+        await S.writePage("s1", "<!doctype html><html><body><h1>Sleepy</h1>" + "<p>Some words to read.</p>".repeat(5) + "</body></html>", c);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const sp = window.Waypage.platform.speech;
+        sp.play = () => Promise.resolve();
+        sp.stop = () => Promise.resolve();
+        const wait = (f) => new Promise((ok) => { const t = setInterval(() => { if (f()) { clearInterval(t); ok(); } }, 50); });
+        window.Waypage.platform.widgets.take = () => Promise.resolve({ kind: "page", id: "s1", aloud: true });
+        await takeWidget();
+        await wait(() => aloud.state === "playing" && !document.getElementById("aloudPlayer").hidden);
+        const btn = document.getElementById("aloudSleep");
+        const seen = [];
+        for (let i = 0; i < 6; i++) { btn.click(); await new Promise((r) => setTimeout(r, 30)); seen.push(document.getElementById("aloudSleepLeft").textContent + "|" + btn.classList.contains("on")); }
+        return { seen, visible: btn.getBoundingClientRect().width > 0 };
+      });
+      assert.ok(got.visible, "the moon shows on the player");
+      assert.deepStrictEqual(got.seen, ["15m|true", "30m|true", "45m|true", "60m|true", "End|true", "|false"]);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("the widget's read aloud starts where the clip was left, and the bar comes out of the player (1.26.1)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

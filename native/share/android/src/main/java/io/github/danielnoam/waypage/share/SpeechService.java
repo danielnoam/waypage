@@ -38,7 +38,7 @@ import java.util.Locale;
  */
 public class SpeechService extends Service {
 
-    static final String PLAY = "play", PAUSE = "pause", RESUME = "resume", NEXT = "next", PREV = "prev", STOP = "stop", SEEK = "seek", RATE = "rate", SLEEP = "sleep";
+    static final String PLAY = "play", PAUSE = "pause", RESUME = "resume", NEXT = "next", PREV = "prev", STOP = "stop", SEEK = "seek", RATE = "rate", SLEEP = "sleep", SLEEP_MORE = "sleepmore";
     private static final String CHANNEL = "waypage-aloud";
     private static final int NOTE = 27;
 
@@ -54,6 +54,13 @@ public class SpeechService extends Service {
     interface Listener {
         void onProgress(String key, int index, String state);
     }
+    // The sleep timer's end (ms since 1970, 0 for off), told to the app
+    // when it's set from the lock screen or runs out (1.36.0).
+    interface SleepListener {
+        void onSleep(long at);
+    }
+    static SleepListener sleepListener;
+    static long sleepAt;
 
     static Job pending;
     // The clip to read when this one ends (1.23.0), queued by the app
@@ -66,7 +73,7 @@ public class SpeechService extends Service {
 
     private final Handler main = new Handler(Looper.getMainLooper());
     // The sleep timer (1.32.0): pauses where it got to, so it can go on.
-    private final Runnable sleeper = this::pause;
+    private final Runnable sleeper = () -> { setSleep(0); pause(); };
     private TextToSpeech tts;
     private boolean ready;
     private String engine = "";
@@ -109,6 +116,7 @@ public class SpeechService extends Service {
             @Override public void onSkipToNext() { step(1); }
             @Override public void onSkipToPrevious() { step(-1); }
             @Override public void onStop() { finish("stopped"); }
+            @Override public void onCustomAction(String action, android.os.Bundle extras) { if (SLEEP_MORE.equals(action)) sleepMore(); }
         });
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
         wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "waypage:aloud");
@@ -179,11 +187,25 @@ public class SpeechService extends Service {
             job.rate = intent.getFloatExtra("rate", job.rate);
             if ("playing".equals(state)) play();
         } else if (SLEEP.equals(action) && intent != null) {
-            main.removeCallbacks(sleeper);
             int seconds = intent.getIntExtra("value", 0);
-            if (seconds > 0) main.postDelayed(sleeper, seconds * 1000L);
-        } else if (STOP.equals(action)) finish("stopped");
+            setSleep(seconds > 0 ? System.currentTimeMillis() + seconds * 1000L : 0);
+        } else if (SLEEP_MORE.equals(action)) sleepMore(); else if (STOP.equals(action)) finish("stopped");
         return START_NOT_STICKY;
+    }
+
+    private void setSleep(long at) {
+        main.removeCallbacks(sleeper);
+        sleepAt = at;
+        if (at > 0) main.postDelayed(sleeper, Math.max(0, at - System.currentTimeMillis()));
+        if (sleepListener != null) sleepListener.onSleep(at);
+    }
+    // Sleep 15 min from the notification or lock screen: 15 minutes from
+    // now, or 15 more on a timer already running.
+    private void sleepMore() {
+        long now = System.currentTimeMillis();
+        setSleep(Math.max(now, sleepAt) + 15 * 60000L);
+        if ("paused".equals(state)) resume();
+        else report();
     }
 
     private void play() {
@@ -286,6 +308,7 @@ public class SpeechService extends Service {
 
     private void finish(String how) {
         main.removeCallbacks(sleeper);
+        if (sleepAt != 0) { sleepAt = 0; if (sleepListener != null) sleepListener.onSleep(0); }
         state = how;
         generation++;
         if (tts != null) tts.stop();
@@ -380,6 +403,7 @@ public class SpeechService extends Service {
             .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE
                 | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_STOP)
             .setState(playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, PlaybackState.PLAYBACK_POSITION_UNKNOWN, playing ? 1f : 0f)
+            .addCustomAction(new PlaybackState.CustomAction.Builder(SLEEP_MORE, sleepLabel(), R.drawable.waypage_sleep).build())
             .build());
         session.setActive(true);
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
@@ -390,6 +414,11 @@ public class SpeechService extends Service {
         Notification n = notification();
         if (Build.VERSION.SDK_INT >= 29) startForeground(NOTE, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
         else startForeground(NOTE, n);
+    }
+
+    private String sleepLabel() {
+        long left = sleepAt - System.currentTimeMillis();
+        return left > 0 ? "+15 min (" + Math.max(1, Math.round(left / 60000.0)) + " left)" : "Sleep 15 min";
     }
 
     private PendingIntent action(String name, int code) {
@@ -428,6 +457,7 @@ public class SpeechService extends Service {
             .addAction(new Notification.Action.Builder(playing ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play,
                 playing ? "Pause" : "Play", action(playing ? PAUSE : RESUME, 2)).build())
             .addAction(new Notification.Action.Builder(android.R.drawable.ic_media_next, "Next paragraph", action(NEXT, 3)).build())
+            .addAction(new Notification.Action.Builder(R.drawable.waypage_sleep, sleepLabel(), action(SLEEP_MORE, 6)).build())
             .addAction(new Notification.Action.Builder(android.R.drawable.ic_menu_close_clear_cancel, "Stop", action(STOP, 4)).build())
             .setStyle(new Notification.MediaStyle().setMediaSession(session.getSessionToken()).setShowActionsInCompactView(0, 1, 2))
             .build();

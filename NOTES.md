@@ -18,6 +18,15 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Sleep timer on the player (1.36.0).** Daniel found the Aa dropdown
+  cut off and too many taps away. The moon on the player steps through
+  the choices; SpeechService now keeps `sleepAt` and tells the app by a
+  "sleep" event when the lock screen's Sleep 15 min sets it or it runs
+  out, so the moon stays right. Sleep 15 min is both a notification
+  action (older Android) and a PlaybackState custom action, which is
+  what Android 13+ shows on its media controls. It resumes a paused
+  reading, since that's when it's pressed half asleep.
+
 - **Big PDFs by range (1.35.0).** A linked PDF over 32 MB is opened in
   the pdf.js sandbox with a `PDFDataRangeTransport`: the first 1 MB goes
   with the open, and pdf.js asks for 512 KB stretches by message

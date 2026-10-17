@@ -23,7 +23,8 @@ Everything iOS-only, kept for one iOS release.
   `AVSpeechSynthesizer.requestPersonalVoiceAuthorization` (iOS 17).
 - **The sleep timer, put away, on iOS.** Android's speech service keeps
   the time since 1.32.0; on iOS the page does, so with the app put away
-  it waits until the app is back. A timer in the Speech plugin would do it.
+  it waits until the app is back. A timer in the Speech plugin would do it,
+  plus Sleep 15 min on the lock screen (Android has it since 1.36.0).
 - **Read aloud going on to the next clip, put away, on iOS.** Android's
   speech service takes the next clip from the app since 1.23.0 and goes
   straight on; iOS's Speech plugin has no queue yet, so there the app
