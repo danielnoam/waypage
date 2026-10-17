@@ -18,6 +18,21 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Sleep timer, volume buttons, dim pictures, Before you go offline,
+  OPML (1.32.0).** The sleep timer pauses rather than stops, so Play goes
+  on where you dozed off. On Android SpeechService keeps the time
+  (`sleep` posts a pause on its own handler) because a WebView put away
+  runs timers late; elsewhere the page keeps it, and it isn't stored.
+  "End of this clip" just turns Go on off for this reading (no queue).
+  Volume buttons wrap the activity window's `Window.Callback` in a
+  `Proxy` from VolumeKeysPlugin, so MainActivity (generated in CI)
+  needs nothing; the keys are only taken while the reader shows Pages,
+  the switch is on and nothing reads aloud, so the volume works the rest
+  of the time. Pictures dim with `filter: brightness(0.8) contrast(1.05)`
+  in the frame, keyed on `data-co-dim`; comics and PDF pages are the
+  page, so stay full. OPML feeds come in as "show", never "save", so an
+  import never starts dozens of downloads; feed URLs must be http(s).
+
 - **The reading line and placeAt (1.31.0).** Daniel asked for the place to
   be the line across the middle of the reader. A spot is "block/pct" on
   that line with a `c` after it; spots without the `c` are from the top

@@ -27,8 +27,9 @@ if (!pw) {
 let passed = 0;
 const fails = [];
 async function test(name, fn) {
+  if (process.env.ONLY && !name.includes(process.env.ONLY)) return;
   try { await fn(); passed++; console.log("  ok - " + name); }
-  catch (e) { fails.push(name); console.error("  FAIL - " + name); console.error("    " + String(e.message).split("\n")[0]); process.exitCode = 1; }
+  catch (e) { fails.push(name); console.error("  FAIL - " + name); console.error("    " + (process.env.ONLY ? String(e.message) : String(e.message).split("\n")[0])); process.exitCode = 1; }
 }
 
 const PORT = 5300 + Math.floor(Math.random() * 500);
@@ -773,6 +774,49 @@ function zipOf(files) {
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
       fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    await test("an OPML file follows its feeds, shown not saved, and saves back out (1.32.0)", async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "waypage-"));
+      const file = path.join(dir, "subscriptions.opml");
+      fs.writeFileSync(file, '<?xml version="1.0"?><opml version="1.0"><body><outline text="Travel"><outline type="rss" text="Sky &amp; Sea" xmlUrl="https://a.example/feed.xml"/></outline><outline type="rss" text="B" xmlUrl="https://b.example/rss"/><outline type="rss" text="Bad" xmlUrl="javascript:alert(1)"/></body></opml>');
+      const q = await page(browser, 390);
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Storage" }).click();
+      await q.locator("#backupSection input[type=file]").setInputFiles(file);
+      await until(q, () => JSON.parse(localStorage.getItem("waypage.feeds") || "[]").length === 2);
+      const got = await q.evaluate(() => JSON.parse(localStorage.getItem("waypage.feeds")).map((f) => [f.url, f.title, f.folder, f.mode]));
+      assert.deepStrictEqual(got, [["https://a.example/feed.xml", "Sky & Sea", "Travel", "show"], ["https://b.example/rss", "B", "B", "show"]]);
+      const out = await q.evaluate(() => window.Waypage.imports.opml(window.Waypage.imports.writeOpml(JSON.parse(localStorage.getItem("waypage.feeds")))));
+      assert.deepStrictEqual(out.map((f) => f.url), ["https://a.example/feed.xml", "https://b.example/rss"]);
+      const errs = q.errors.filter((e) => !/a\.example|b\.example/.test(e));
+      assert.deepStrictEqual(errs, [], errs.join(" | "));
+      await q.context().close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    await test("Before you go offline lists clips that aren't ready; dark themes dim pictures (1.32.0)", async () => {
+      const q = await page(browser, 390, "night");
+      await q.evaluate(async (url) => {
+        await window.Waypage.store.writeIndex([
+          { id: "rd1", url, title: "Clouds From Above", site: "localhost", savedAt: 1000, minutes: 1, mode: "previews", images: 2, missing: 2, bytes: 3000 },
+          { id: "rd2", url: url + "?b", title: "Paywalled", site: "localhost", savedAt: 1001, minutes: 1, mode: "previews", cut: true, bytes: 3000 },
+          { id: "rd3", url: url + "?c", title: "Fine", site: "localhost", savedAt: 1002, minutes: 1, mode: "previews", bytes: 3000 }]);
+      }, PICTURES);
+      await q.reload();
+      assert.ok(await q.evaluate(() => document.documentElement.hasAttribute("data-dim-pictures")), "Night dims pictures");
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Saving" }).click();
+      await q.locator("button", { hasText: "Get ready" }).click();
+      await until(q, () => /aren't fully ready/.test(document.body.innerText), null, 20000);
+      const rows = await q.locator(".settings-section .nav-row .choice-label").allInnerTexts();
+      assert.ok(rows.includes("Clouds From Above") && rows.includes("Paywalled") && !rows.includes("Fine"), rows.join(", "));
+      await q.locator(".nav-row", { hasText: "Appearance" }).click().catch(() => {});
+      await q.evaluate(() => { localStorage.setItem("waypage.dimPictures", "false"); paintTheme(state.theme); });
+      assert.ok(!(await q.evaluate(() => document.documentElement.hasAttribute("data-dim-pictures"))), "the switch turns it off");
+      const errs = q.errors.filter((e) => !/localhost.*\?[bc]|offline/i.test(e));
+      assert.deepStrictEqual(errs, [], errs.join(" | "));
+      await q.context().close();
     });
 
     await test("Storage offers to make room from finished clips with pictures", async () => {

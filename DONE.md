@@ -21,6 +21,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Save from email: shared text and .eml files (1.10.0)
 - Drop a link or press Ctrl V to save (1.5.0)
 - Load pictures only when tapped (1.30.1)
+- Before you go offline: save what's missing, then list what isn't ready (1.32.0)
 
 ## Library
 
@@ -52,6 +53,8 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Brightness swipe with Auto, movable to the right (1.10.0, 1.14.0, 1.16.0)
 - Previous/Next and a collection list in the reader (1.23.0)
 - Big-screen layouts and keyboard shortcuts (1.5.0)
+- Dim pictures in dark themes (1.32.0)
+- Volume buttons turn pages on Android (1.32.0)
 
 ## Read aloud
 
@@ -59,12 +62,14 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Voice per language, speed 0.5x to 3x, read footnotes switch (0.27.0, 0.34.0)
 - Keeps reading across screens, Read next / go on to the next clip, also put away on Android (1.4.0, 1.6.0, 1.23.0)
 - Keep the screen on; picture in picture; Bluetooth previous/next (1.24.0, 1.25.0, 1.26.0)
+- Sleep timer: minutes or end of clip (1.32.0)
 
 ## Feeds
 
 - Follow feeds, one list by day, auto-save posts, checked with the app closed (0.28.0, 0.28.4, 1.6.0)
 - Notifications per post or grouped, quiet feeds, off switch (1.30.0)
 - Select several posts (1.20.0, 1.21.1)
+- Feeds in and out as OPML (1.32.0)
 
 ## Sync and backup
 

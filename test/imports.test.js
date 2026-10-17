@@ -59,4 +59,17 @@ test("a file that isn't an export is left alone", () => {
   assert.strictEqual(I.parse("notes.md", "https://a.example"), null);
 });
 
+test("OPML out: feeds escaped, read back by the same parser in a browser", () => {
+  const text = I.writeOpml([{ url: "https://a.example/feed?x=1&y=2", title: 'Tom & "Jerry"', link: "https://a.example" }]);
+  assert.ok(text.startsWith('<?xml version="1.0"'));
+  assert.ok(text.includes('xmlUrl="https://a.example/feed?x=1&amp;y=2"'));
+  assert.ok(text.includes('title="Tom &amp; &quot;Jerry&quot;"'));
+  assert.ok(text.includes('htmlUrl="https://a.example"'));
+});
+
+test("a file that isn't OPML isn't read as feeds", () => {
+  assert.strictEqual(I.opml("<rss><channel></channel></rss>"), null);
+  assert.strictEqual(I.opml(""), null);
+});
+
 console.log("\n" + passed + " passed");

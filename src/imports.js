@@ -167,6 +167,40 @@
     return parse(name, text);
   }
 
+  // Feeds as OPML (1.32.0), the file every RSS reader imports and
+  // exports. Only parsed as XML, never shown; an outline inside another
+  // takes that one's title as its collection.
+  //   opml(text)   null when it isn't one, else [{ url, title, folder }]
+  //   readOpml(file)   the same from a file
+  //   writeOpml(feeds)   the text of one, from [{ url, title, link, folder }]
+  function opml(text) {
+    if (!/<opml[\s>]/i.test(String(text || "").slice(0, 4000))) return null;
+    let doc;
+    try { doc = new DOMParser().parseFromString(text, "application/xml"); } catch (e) { return null; }
+    if (doc.getElementsByTagName("parsererror").length) return null;
+    const out = [], seen = new Set();
+    for (const o of doc.getElementsByTagName("outline")) {
+      const url = String(o.getAttribute("xmlUrl") || "").trim();
+      if (!isWeb(url) || seen.has(url)) continue;
+      seen.add(url);
+      const up = o.parentNode && o.parentNode.nodeName === "outline" ? o.parentNode : null;
+      out.push({ url, title: String(o.getAttribute("title") || o.getAttribute("text") || "").trim(),
+        folder: up ? String(up.getAttribute("title") || up.getAttribute("text") || "").trim() : "" });
+    }
+    return out;
+  }
+  async function readOpml(file) {
+    if (!file || file.size > MAX_BYTES || !/\.(opml|xml)$/i.test(String(file.name || ""))) return null;
+    try { return opml(await file.text()); } catch (e) { return null; }
+  }
+  const attr = (s) => String(s || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  function writeOpml(list) {
+    const line = (f) => '    <outline type="rss" text="' + attr(f.title) + '" title="' + attr(f.title) + '" xmlUrl="' + attr(f.url) + '"'
+      + (f.link ? ' htmlUrl="' + attr(f.link) + '"' : "") + "/>";
+    return '<?xml version="1.0" encoding="UTF-8"?>\n<opml version="2.0">\n  <head><title>Waypage feeds</title></head>\n  <body>\n'
+      + list.map(line).join("\n") + "\n  </body>\n</opml>\n";
+  }
+
   window.Waypage = window.Waypage || {};
-  window.Waypage.imports = { read, parse, csvRows };
+  window.Waypage.imports = { read, parse, csvRows, opml, readOpml, writeOpml };
 })();

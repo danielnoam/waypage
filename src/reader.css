@@ -114,6 +114,11 @@ figure .co-placeholder { border-width: 0 0 1.5px; border-radius: 0; }
 .co-next.co-before { margin-top: 0; margin-bottom: var(--s-5); }
 .co-next-over { font: 600 var(--fs-meta)/var(--lh-meta) var(--sans); color: var(--muted); }
 .co-next-title { font: 600 var(--fs-label)/var(--lh-label) var(--serif); color: var(--accent); }
+/* Pictures toned down in the dark themes (1.32.0), so a white diagram
+   doesn't glare; comics and a PDF's pages are the page, so stay as they are. */
+html[data-co-dim] img { filter: brightness(0.8) contrast(1.05); }
+html[data-co-dim] .co-comic img, html[data-co-dim] .co-printed img { filter: none; }
+
 /* An image chapter (0.22.0): the panels edge to edge at phone width, one
    under the next with no gaps, no rounding. */
 .co-comic { margin: 0 -20px; touch-action: pan-x pan-y; }

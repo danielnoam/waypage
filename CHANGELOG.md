@@ -2,6 +2,31 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.32.0] - 2026-10-17
+
+### Added
+- A sleep timer for Read aloud, in Aa while it reads: pause after 15,
+  30 or 45 minutes or an hour, or stop at the end of this clip. On
+  Android it keeps time with the app put away or the screen locked; Play
+  goes on from where it paused.
+- Volume buttons turn pages (Android): in Aa, Layout, with Pages on,
+  volume down turns to the next page and volume up goes back. Off by
+  default, and the buttons are the volume again while reading aloud.
+  On a computer the arrow keys, Page Up and Page Down already do this.
+- Dim pictures in dark themes, in Settings › Appearance and on by
+  default: in Night, Black, Dusk and Solarized Dark a clip's pictures
+  are toned down so a white diagram doesn't glare. Tap one to see it in
+  full. Comics and PDF pages stay as they are.
+- Before you go offline, at the top of Settings › Saving (and from an
+  empty Downloads): Get ready saves missing pictures, saves that failed,
+  new chapters of the collections that follow a series and new posts of
+  feeds that save themselves, then lists the clips that still aren't
+  fully ready, each a tap away.
+- Feeds in and out as OPML, the file every RSS reader uses: open one
+  from Settings › Saving › Import (or Storage) to follow its feeds, their posts
+  shown in Feeds rather than saved; Storage › Backup has "Save the feeds
+  you follow (OPML)".
+
 ## [1.31.0] - 2026-10-17
 
 ### Added
