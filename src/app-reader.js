@@ -980,15 +980,51 @@ function setSleep(v) {
   const at = sleep.at;
   speech.sleep(at ? (at - Date.now()) / 1000 : 0).then((phone) => {
     if (phone || !at || sleep.at !== at) return;
-    sleep.timer = setTimeout(() => { if (aloud.state === "playing") { speech.pause(); setAloud("paused", aloud.index); } }, at - Date.now());
+    sleep.timer = setTimeout(() => {
+      sleep.pick = ""; sleep.at = 0;
+      if (aloud.state === "playing") { speech.pause(); setAloud("paused", aloud.index); }
+      paintSleep();
+    }, at - Date.now());
   });
   queueNext();
+  paintSleep();
 }
-function sleepNote() {
-  if (sleepEnd()) return "Stops at the end of this clip.";
-  if (sleep.at > Date.now()) return "Pauses at " + new Date(sleep.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + ".";
-  return "Pauses the reading after a while.";
+// The moon on the player (1.36.0): each tap is the next choice, off at
+// the end, and it shows the minutes left. A timer set from the lock
+// screen goes on from the nearest choice above what's left.
+const SLEEP_STEPS = ["15", "30", "45", "60", "end", ""];
+let sleepTick = 0;
+function nextSleep() {
+  if (sleepEnd()) return "";
+  if (!(sleep.at > Date.now())) return "15";
+  const i = SLEEP_STEPS.indexOf(sleep.pick);
+  if (i >= 0) return SLEEP_STEPS[i + 1];
+  const left = (sleep.at - Date.now()) / 60000;
+  return SLEEP_STEPS.find((v) => Number(v) > left + 1) || "end";
 }
+function tapSleep() {
+  setSleep(nextSleep());
+  toast(sleepEnd() ? "Stops at the end of this clip." : sleep.at ? "Pauses in " + SLEEPS.find((o) => o.value === sleep.pick).label + "." : "Sleep timer off.");
+}
+function paintSleep() {
+  const btn = $("aloudSleep");
+  const left = sleep.at - Date.now();
+  const on = sleepEnd() || left > 0;
+  btn.classList.toggle("on", on);
+  $("aloudSleepLeft").textContent = sleepEnd() ? "End" : left > 0 ? Math.max(1, Math.ceil(left / 60000)) + "m" : "";
+  btn.setAttribute("aria-label", "Sleep timer: " + (sleepEnd() ? "end of this clip" : left > 0 ? Math.ceil(left / 60000) + " minutes left" : "off"));
+  clearInterval(sleepTick);
+  if (left > 0) sleepTick = setInterval(paintSleep, 20000);
+}
+$("aloudSleep").addEventListener("click", tapSleep);
+speech.onSleep((at) => {
+  if (at > Date.now()) {
+    clearTimeout(sleep.timer);
+    if (sleep.at !== at) sleep.pick = SLEEP_STEPS.includes(String(Math.round((at - Date.now()) / 60000))) ? String(Math.round((at - Date.now()) / 60000)) : "lock";
+    sleep.at = at;
+  } else if (!sleepEnd()) { sleep.pick = ""; sleep.at = 0; }
+  paintSleep();
+});
 
 // `parts` is [{ text, block }]; a block can be in two parts when the
 // reading starts partway through it.
@@ -1442,7 +1478,7 @@ function setAloud(st, index) {
   }
   if (!on && !ended) aloud.key = "";
   if (st !== "playing" && st !== "paused" && sleep.pick) setSleep("");
-  else if (sleep.at && Date.now() >= sleep.at - 1000) { sleep.pick = ""; sleep.at = 0; }
+  else if (sleep.at && Date.now() >= sleep.at - 1000) { sleep.pick = ""; sleep.at = 0; paintSleep(); }
   keepAwake();
   floatOut();
   volumeWatch();
@@ -1731,13 +1767,7 @@ function aloudControls() {
     return el("label", { class: "rc-row switch-row" },
       el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, text), el("span", { class: "choice-note" }, note)), input);
   };
-  const sleepText = el("span", { class: "choice-note" }, sleepNote());
-  const sleepRow = aloudOn() ? el("div", { class: "rc-row" },
-    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Sleep timer"), sleepText),
-    dropdown({ label: "Sleep timer", cls: "field-pick", options: SLEEPS, value: sleep.at > Date.now() || sleepEnd() ? sleep.pick : "",
-      onpick: (v) => { setSleep(v); sleepText.textContent = sleepNote(); } })) : null;
   return el("div", { class: "aloud-controls" },
-    sleepRow,
     engineSlot,
     voiceRow,
     moreSlot,
