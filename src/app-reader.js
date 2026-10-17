@@ -328,6 +328,7 @@ function show(p, html) {
   // became Continue reading.
   openedPlaceAt = placeTime(p);
   movedHere = false;
+  openedAt = Date.now();
   clearTimeout(openStamp);
   openStamp = setTimeout(() => {
     if (state.open !== p) return;
@@ -868,6 +869,10 @@ let openStamp = null;
 // Whether the open clip was moved on this device since it opened: until
 // it is, a newer place that sync brings is followed (setPages).
 let movedHere = false;
+// When the open clip opened, and how long after it a place sync brings
+// is still followed.
+let openedAt = 0;
+const FOLLOW_MS = 15000;
 const OPEN_COUNTS = 3000;
 function notePosition(p, f, s) {
   const at = Math.round(f * 1000) / 1000;
@@ -883,7 +888,8 @@ function notePosition(p, f, s) {
   // the old one, so the fraction decides the place.
   if (s) p.spot = s; else delete p.spot;
   if (f >= 0.97) p.finished = true;
-  if (moved) { p.readAt = p.placeAt = Date.now(); p.readOn = deviceName(); if (p === state.open) movedHere = true; }
+  if (p === state.open) movedHere = true;
+  if (moved) { p.readAt = p.placeAt = Date.now(); p.readOn = deviceName(); }
   clearTimeout(positionTimer);
   positionTimer = setTimeout(savePositions, 1500);
 }

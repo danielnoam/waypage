@@ -45,19 +45,21 @@ async function syncNow(quiet = true) {
       // an open menu and the position timer hold on to them.
       setPages: async (list) => {
         const live = new Map(state.pages.map((p) => [p.id, p]));
-        const open = state.open, was = open && open.at + " " + open.spot;
+        const open = state.open, was = open && placeTime(open);
         state.pages = list.map((n) => {
           const o = live.get(n.id);
           if (!o || o === n) return n;
           for (const k of Object.keys(o)) if (!(k in n)) delete o[k];
           return Object.assign(o, n);
         }).concat(state.pages.filter((p) => p.link)).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
-        // A place read further on another device since the open clip
-        // opened is followed, while it hasn't been moved here (1.30.2):
-        // a clip opened from a widget before sync came in stayed behind.
-        if (open && !movedHere && open.at + " " + open.spot !== was) {
-          C.reader.placed().then(() => { if (state.open === open && !movedHere) C.reader.jump(open.at || 0, open.spot || ""); });
-        }
+        // A place read further on another device is followed when it
+        // comes in just after the clip opened, before it was scrolled here
+        // at all (1.31.0): a clip opened from a widget before sync came in
+        // stayed behind. Only a place moved later counts, never the same
+        // place written another way, and never mid-reading (1.31.1): that
+        // pulled the text back up under the finger.
+        const follow = () => state.open === open && !movedHere && !C.reader.touched() && Date.now() - openedAt < FOLLOW_MS;
+        if (open && placeTime(open) > was && follow()) C.reader.placed().then(() => { if (follow()) C.reader.jump(open.at || 0, open.spot || ""); });
         await C.store.writeIndexOnly(state.pages);
         texts.clear();
         await loadThumbs();

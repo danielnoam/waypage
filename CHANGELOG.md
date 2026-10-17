@@ -2,6 +2,16 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.36.1] - 2026-10-17
+
+### Fixed
+- Reading on while a sync ran could pull the text back up when the sync
+  finished: it put the clip back to the place it had when the sync
+  started. Now a place you read on to while syncing is kept, and sent
+  next time.
+- An open clip moves to a place another device brought in only just
+  after you open it, before you've scrolled, never while you're reading.
+
 ## [1.36.0] - 2026-10-17
 
 ### Changed
