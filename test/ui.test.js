@@ -1266,6 +1266,40 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a big PDF read from where it is is read by ranges, never whole (1.35.0)", async () => {
+      const q = await page(browser, 390);
+      const bytes = [...pdfBytes()];
+      const got = await q.evaluate(async (b) => {
+        const P = window.Waypage.pdf;
+        P.rangeFrom = 100;
+        P.rangeFirst = 256;
+        const whole = new Blob([new Uint8Array(b)]);
+        const asked = [];
+        const part = (from, to) => ({
+          size: to - from,
+          slice: (a, z) => part(from + a, from + z),
+          arrayBuffer: () => { asked.push([from, to]); return whole.slice(from, to).arrayBuffer(); },
+        });
+        const pdf = await P.open(part(0, whole.size));
+        const drawn = await pdf.draw(3, 400);
+        const outline = await pdf.outline();
+        pdf.close();
+        P.rangeFrom = 32 << 20;
+        P.rangeFirst = 1 << 20;
+        return { pages: pdf.pages, jpeg: drawn[0] === 0xff && drawn[1] === 0xd8, outline: outline.length, size: whole.size,
+          first: asked[0][1] - asked[0][0], reads: asked.length };
+      }, bytes);
+      assert.strictEqual(got.pages, 3);
+      assert.ok(got.jpeg, "page 3 drew");
+      assert.strictEqual(got.outline, 2);
+      assert.ok(got.reads > 1, "asked for ranges: " + JSON.stringify(got));
+      // Only the first stretch goes with the open; the rest is asked for.
+      assert.strictEqual(got.first, 256);
+      const errors = q.errors.filter((e) => !/serviceWorker/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a watched folder's files go into the collection picked for it (1.28.0, 1.28.1)", async () => {
       const q = await page(browser, 390);
       const bytes = [...epubBytes()];

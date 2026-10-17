@@ -708,7 +708,7 @@
     closeHeld();
     let pdf;
     try {
-      pdf = await C.pdf.open(new Uint8Array(await blob.arrayBuffer()));
+      pdf = await C.pdf.open(blob);
     } catch (e) {
       throw new FileError("Waypage can't read " + meta.file.name + " any more.");
     }

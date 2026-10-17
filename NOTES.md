@@ -18,6 +18,17 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Big PDFs by range (1.35.0).** A linked PDF over 32 MB is opened in
+  the pdf.js sandbox with a `PDFDataRangeTransport`: the first 1 MB goes
+  with the open, and pdf.js asks for 512 KB stretches by message
+  (`range`, tagged with the open's `tid` so a late answer for the PDF
+  before is ignored); the app reads them with `blob.slice` (a File on a
+  computer, FilesPlugin `read` by offset on Android). Smaller PDFs are
+  still sent whole, which is faster. On Android a file of 32 to 64 MB is
+  still read whole by platform.files' cache (KEEP), so the saving there
+  is the sandbox's copy only. Adding a linked PDF still reads it whole
+  once, for its words.
+
 - **Send to Waypage (1.34.0).** A bookmarklet in a computer's browser
   opens the web copy at `#send`, waits for it to post `{waypage:"ready"}`
   back, then sends `{url, title, html}` (the live DOM's outerHTML) to the

@@ -3,6 +3,11 @@
 Decided against, with the reason, so an idea can come back if the reason
 stops being true.
 
+- **Chapter-at-a-time books (Daniel, 17 Oct 2026).** Storing a book as
+  chapters means search, highlights, read aloud, the reading place, sync
+  and export all change, since each expects one page per clip. After
+  1.29.0 a big book opens in about 3 s on a 6x-slowed CPU, so the gain
+  doesn't pay for the risk. Comes back if big books feel slow on the phone.
 - **A server that scrapes and stores pages.** Datacenter IPs get blocked
   by the sites people most want to save, it can't see pages behind the
   reader's login, it makes the operator the one copying and hosting the
