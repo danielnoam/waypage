@@ -36,3 +36,5 @@ stops being true.
 - **"Sign in with Google" in the sign-in browser.** Google refuses sign-in
   in embedded browsers; the way around is against Google's terms. Email
   and password sign-ins work.
+- **An "I have 15 minutes" filter (Daniel, 17 Oct 2026).** Showing only
+  clips you can finish in the time you have. Not needed.

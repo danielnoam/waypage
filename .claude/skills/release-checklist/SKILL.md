@@ -30,6 +30,10 @@ workflow copies this entry into the GitHub release notes.
 ## 3. Notes files (one home per entry)
 
 - **TODO.md**: remove what this change completes, add follow-ups.
+- **DONE.md**: one line for each feature this release adds, under its
+  area, with the version.
+- Copy TODO.md and DONE.md over the shared project folder's
+  waypage/TODO.md and waypage/DONE.md.
 - **NOTES.md**: why something is the way it is, newest first, each entry a
   bold title with its version.
 - **DROPPED.md**: what was decided against, with the reason.

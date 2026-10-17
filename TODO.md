@@ -55,6 +55,17 @@ CHANGELOG.md; the rules every release keeps are at the top of NOTES.md.
 - **Feeds in and out as OPML (Daniel, 17 Oct 2026).** Import the OPML
   file any RSS reader exports into Feeds, folders becoming collections
   where it fits, and export the feeds you follow the same way.
+- **Dim pictures in dark themes (Daniel, 17 Oct 2026).** A switch in
+  Settings › Appearance under the themes, on by default: in Night,
+  Black, Dusk and Solarized Dark the reader's pictures are toned down a
+  little (a CSS filter in reader.css, keyed on the theme), and a tap
+  opens one at full brightness in the picture viewer. Comics and PDF
+  pages stay as they are, since the picture is the page there.
+- **Before you go offline (Daniel, 17 Oct 2026, name still open).** In
+  Settings › Saving, at the top: one button that retries pictures that
+  didn't save, saves new chapters of followed collections and new posts
+  of auto-saving feeds, then lists the clips that still aren't fully
+  offline, each with Retry. Also reachable from Downloads.
 
 ## iOS release (later, Daniel 11 Oct 2026)
 
