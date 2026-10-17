@@ -602,17 +602,20 @@ function volumeWatch() {
   keys.watch(want);
 }
 if (C.platform.volumeKeys.available) C.platform.volumeKeys.onKey((k) => { if (volumeTaken && state.open && !state.sheet) C.reader.turn(k === "down" ? 1 : -1); });
+// Shown only with Pages picked (1.35.1): in Scroll there's nothing to turn.
 function volumeSwitch() {
   if (!C.platform.volumeKeys.available) return null;
-  return el("label", { class: "rc-row switch-row" },
+  const row = el("label", { class: "rc-row switch-row volume-row" },
     el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Volume buttons turn pages"),
-      el("span", { class: "choice-note" }, "In Pages: down for next, up for back. Not while reading aloud.")),
+      el("span", { class: "choice-note" }, "Down for next, up for back. Not while reading aloud.")),
     el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "volumePages", checked: volumeOn(),
       onchange: (e) => {
         store(VOLUME_KEY, e.target.checked);
         document.querySelectorAll('input[data-pref="volumePages"]').forEach((i) => { i.checked = e.target.checked; });
         volumeWatch();
       } }));
+  row.style.display = readingPrefs().layout === "pages" ? "" : "none";
+  return row;
 }
 
 function pinchSwitch() {
@@ -1842,6 +1845,7 @@ function showPicked(row) {
 
 function syncReadingControls(box) {
   const r = readingPrefs();
+  box.querySelectorAll(".volume-row").forEach((n) => { n.style.display = r.layout === "pages" ? "" : "none"; });
   const shown = {
     size: r.size + " px", spacing: r.spacing.toFixed(2),
     letters: r.letters ? (r.letters > 0 ? "+" : "") + r.letters.toFixed(2) + " em" : "Normal",

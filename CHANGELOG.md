@@ -2,6 +2,12 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.35.1] - 2026-10-17
+
+### Changed
+- "Volume buttons turn pages" shows in Aa › Layout only when Show as is
+  Pages, since in Scroll there are no pages to turn.
+
 ## [1.35.0] - 2026-10-17
 
 ### Changed
