@@ -185,6 +185,8 @@ function readerWait(p, fromHistory) {
   $("readerView").classList.remove("bar-away");
   $("bright").hidden = true;
   $("readerContents").hidden = true;
+  $("readerNow").textContent = "Contents";
+  $("readerContents").setAttribute("aria-label", "Contents");
   fill($("readerName"), p.site ? el("span", { class: "reader-site" }, p.site) : null, el("span", { class: "reader-title" }, p.title));
   if (!fromHistory) swap ? history.replaceState(readerState(p), "") : history.pushState(readerState(p), "");
   pushScreen($("readerView"));
@@ -340,6 +342,8 @@ function show(p, html) {
   showOffline();
   $("readProgress").dir = p.dir || "ltr";
   $("readerContents").hidden = true;
+  $("readerNow").textContent = "Contents";
+  $("readerContents").setAttribute("aria-label", "Contents");
   $("readerFolder").hidden = !(p.folder && !p.preview && folderPages(p.folder).length > 1);
   $("readerView").classList.remove("bar-away");
   jumpFrom = null;
@@ -375,6 +379,7 @@ function show(p, html) {
     volumeWatch();
     paintMarks(p);
     $("readerContents").hidden = C.reader.headings().length < 2;
+    showSection();
     fitRail();
     // Reading aloud carries on across clips (1.4.0): its light and
     // player show again when its clip is the one open.
@@ -639,15 +644,28 @@ function toggleBar() {
   if (!away) readerFoot(C.reader.position());
 }
 
-// Under the bar's line along the bottom: the section being read and the
-// minutes left, shown with the bar.
+// Under the bar's line along the bottom, shown with the bar: the minutes
+// left (in Pages under the page, 4/20) and how far through, in percent.
 function readerFoot(at) {
   const p = state.open;
   if (!p) return;
-  $("readLeft").textContent = at >= 0.995 ? "End" : Math.max(1, Math.ceil((p.minutes || 1) * (1 - at))) + " min left";
+  const left = at >= 0.995 ? "End" : Math.max(1, Math.ceil((p.minutes || 1) * (1 - at))) + " min left";
   const pg = C.reader.pageInfo();
+  $("readLeft").textContent = Math.round(Math.min(1, Math.max(0, at)) * 100) + "%";
+  const foot = (pg ? pg.page + "/" + pg.pages : "") + "|" + left;
+  if ($("readSection").dataset.at !== foot) {
+    $("readSection").dataset.at = foot;
+    fill($("readSection"), pg ? el("span", { class: "read-page" }, pg.page + "/" + pg.pages) : null, el("span", null, left));
+  }
+  showSection();
+}
+// The section being read names the Contents button (1.37.0), "Contents"
+// above the first heading.
+function showSection() {
   const section = C.reader.section();
-  $("readSection").textContent = pg ? "Page " + pg.page + " of " + pg.pages + (section ? " · " + section : "") : section;
+  if ($("readerNow").textContent === (section || "Contents")) return;
+  $("readerNow").textContent = section || "Contents";
+  $("readerContents").setAttribute("aria-label", section ? "Contents, now " + section : "Contents");
 }
 
 // The bar along the bottom fills as the page is read. The top bar slides

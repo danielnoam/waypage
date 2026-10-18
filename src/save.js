@@ -1540,7 +1540,7 @@
     head.className = "co-head";
     const line = out.createElement("p");
     line.className = "co-meta";
-    line.textContent = [meta.site, (meta.file ? "added " : "saved ") + formatDate(meta.savedAt), meta.minutes + " min"].join(" · ");
+    line.textContent = [meta.site, (meta.file ? "added " : "saved ") + formatDate(meta.savedAt)].join(" · ");
     const h1 = out.createElement("h1");
     h1.textContent = meta.title;
     head.append(line, h1);
