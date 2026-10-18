@@ -12,6 +12,13 @@ All notable changes to Carry-on. Newest first.
 - An open clip moves to a place another device brought in only just
   after you open it, before you've scrolled, never while you're reading.
 
+## [1.36.1] - 2026-10-18
+
+### Fixed
+- The moon no longer pushes back, play and next off centre: it sits to
+  their right. On a phone the "min left" line makes room for it while
+  reading aloud.
+
 ## [1.36.0] - 2026-10-17
 
 ### Changed
