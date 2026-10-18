@@ -1411,6 +1411,43 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("the section being read names the Contents button; the bottom shows minutes left, the page in Pages, and the percent (1.37.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        let body = "<header class='co-head'><p class='co-meta'>example.com · saved 1 Jan 2026 · 20 min</p><h1>Clip</h1></header><p>Before any section.</p>";
+        for (const s of ["First part", "Second part", "Third part"]) body += "<h2>" + s + "</h2>" + "<p>Words of this part, enough of them to fill a screen and then some more.</p>".repeat(30);
+        const meta = { id: "secs01", url: "https://example.com/secs", title: "Clip", site: "example.com", savedAt: 100, minutes: 20, mode: "links", at: 0 };
+        await window.Waypage.store.writeIndex([meta]);
+        await window.Waypage.store.writePage("secs01", "<!doctype html><html><head></head><body>" + body + "</body></html>", meta);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => openPage("secs01"));
+      await until(q, () => !document.getElementById("readerContents").hidden);
+      const top = await q.evaluate(() => document.getElementById("readerNow").textContent);
+      // The line over the title drops the length an older save wrote.
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelector(".co-meta").textContent), "example.com · saved 1 Jan 2026");
+      await q.evaluate(() => { const w = document.getElementById("readerFrame").contentWindow; w.scrollTo(0, w.document.querySelectorAll("h2")[1].offsetTop + 400); });
+      await until(q, () => document.getElementById("readerNow").textContent === "Second part");
+      const scroll = await q.evaluate(() => ({ label: document.getElementById("readerContents").getAttribute("aria-label"), left: document.getElementById("readSection").innerText, pct: document.getElementById("readLeft").textContent }));
+      assert.strictEqual(top, "Contents");
+      assert.strictEqual(scroll.label, "Contents, now Second part");
+      assert.match(scroll.left, /^\d+ min left$/);
+      assert.match(scroll.pct, /^\d+%$/);
+      await q.evaluate(() => document.getElementById("readerView").classList.remove("bar-away"));
+      await q.click("#readerContents");
+      await q.locator("#readingSheet:not([hidden])").waitFor();
+      assert.strictEqual(await q.locator(".contents-row[aria-current]").innerText(), "Second part");
+      await q.evaluate(() => history.back());
+      await q.evaluate(() => setReading({ layout: "pages" }));
+      await until(q, () => !!document.querySelector("#readSection .read-page"));
+      const paged = await q.evaluate(() => document.getElementById("readSection").innerText.split("\n"));
+      assert.match(paged[0], /^\d+\/\d+$/);
+      assert.match(paged[1], /^\d+ min left$/);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a book's own contents are listed when its chapter titles aren't headings (1.27.2)", async () => {
       const q = await page(browser, 390);
       const bytes = [...epubBytes()];

@@ -2,6 +2,17 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.37.0] - 2026-10-18
+
+### Changed
+- The top bar names the section you're reading, and tapping it opens
+  Contents. It takes the place of the Contents button.
+- The line along the bottom shows the minutes left on the left, with the
+  page (4/20) above them in Pages, and how far through as a percent on
+  the right.
+- The line over a clip's title says where it's from and when it was
+  saved, no longer how long it is: the bottom line says that.
+
 ## [1.36.2] - 2026-10-18
 
 ### Fixed

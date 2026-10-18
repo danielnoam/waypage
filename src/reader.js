@@ -1233,6 +1233,11 @@
         const marked = [...doc.body.querySelectorAll("[data-toc]")].filter((h) => clean(h));
         heads = marked.length > 1 ? marked : [...doc.body.querySelectorAll("h2, h3")].filter((h) => clean(h));
         doc.addEventListener("click", onClick);
+        // The line over the title is where it's from and when it was
+        // saved; clips saved before 1.37.0 also carry "· 18 min", which
+        // the bottom line says better.
+        const metaLine = doc.querySelector(".co-head > .co-meta");
+        if (metaLine) metaLine.textContent = metaLine.textContent.replace(/ · \d+ min$/, "");
         // Loose text is wrapped now, not on the first selection (1.11.1):
         // wrapping the words being selected dropped that selection.
         wrapLoose();

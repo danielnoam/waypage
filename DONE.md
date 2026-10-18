@@ -48,6 +48,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Scroll or Pages, two pages side by side on wide screens (0.29.0, 1.5.0)
 - Place kept and synced as a paragraph on the middle line (0.5.0, 1.3.0, 1.31.0)
 - Contents, progress line, tap to hide the bar (0.13.0, 0.19.0)
+- Section being read in the top bar opens Contents; page, minutes left and percent along the bottom (1.37.0)
 - Picture viewer with zoom and swipe (0.14.0, 1.5.0)
 - Footnotes in a sheet, Back to where you were after an in-page link (1.14.0)
 - Find in this clip (1.14.0)
