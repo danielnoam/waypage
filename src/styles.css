@@ -556,7 +556,7 @@ html.native .reader-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
 .aloud-player .aloud-play { background: var(--accent); color: var(--accent-ink); }
 .aloud-player { position: relative; }
 /* Off to the side of the three (1.36.2), so they stay centred. */
-.aloud-player .aloud-sleep { position: absolute; inset-inline-start: calc(100% + var(--s-1)); top: 0; width: auto; min-width: var(--tap); padding: 0 var(--s-2); gap: 2px; color: var(--ink); }
+.aloud-player .aloud-sleep { position: absolute; inset-inline-start: 100%; top: 0; width: auto; min-width: var(--tap); padding: 0 var(--s-1); gap: 2px; color: var(--ink); }
 .aloud-player .aloud-sleep.on { color: var(--accent); }
 .aloud-player .aloud-sleep.on svg { fill: currentColor; }
 .aloud-sleep-left { font-size: var(--fs-meta); font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -568,8 +568,10 @@ html.native .reader-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
 .reader.aloud .read-left { align-items: center; padding-top: var(--s-2); padding-bottom: calc(var(--s-2) + env(safe-area-inset-bottom)); }
 .reader.aloud .read-section, .reader.aloud .read-time { flex: 1 1 0; }
 .reader.aloud .read-time { text-align: end; white-space: nowrap; }
-/* On a phone the moon takes that side while reading aloud (1.36.2). */
-@media (max-width: 519px) { .reader.aloud .read-time { visibility: hidden; } }
+/* Room for the moon and the percent side by side on a phone (1.37.1). */
+@media (max-width: 519px) { .reader.aloud .read-left { gap: var(--s-1); padding-inline: var(--gutter); } }
+/* Narrower than any current phone: the timer's minutes win over the percent. */
+@media (max-width: 359px) { .reader.aloud:has(.aloud-sleep.on) .read-time { visibility: hidden; } }
 .reader.aloud.bar-away .read-left { transform: none; opacity: 1; }
 /* Read next (1.4.0): at the end of a clip read aloud, in place of the
    player, and on the bar along the bottom. */
