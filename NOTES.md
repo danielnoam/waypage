@@ -18,6 +18,13 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Moon and percent on a phone (1.37.1).** While reading aloud the
+  player stays centred and the moon hangs off its right, so the moon
+  shares the right half with the percent. Under 520 px the bar's gap and
+  side padding shrink to fit "30m" beside "100%" at 360 px (5 px spare).
+  Below 360 px, narrower than current phones, the percent hides while the
+  timer runs.
+
 - **Sleep timer on the player (1.36.0).** Daniel found the Aa dropdown
   cut off and too many taps away. The moon on the player steps through
   the choices; SpeechService now keeps `sleepAt` and tells the app by a

@@ -2,6 +2,13 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.37.1] - 2026-10-18
+
+### Fixed
+- The percent stays on the right while reading aloud; the moon no longer
+  hides it on a phone. The bar's sides are a little tighter there to fit
+  both.
+
 ## [1.37.0] - 2026-10-18
 
 ### Changed
