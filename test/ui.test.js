@@ -1066,6 +1066,50 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("on mobile data with places only, places and finished come and go but clips wait (1.40.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t" }));
+        localStorage.setItem("waypage.syncOnData", JSON.stringify("places"));
+        const c = (id, more) => ({ id, url: "https://example.com/" + id, title: "Clip " + id, site: "example.com", savedAt: 100, minutes: 1, mode: "links", ...more });
+        await window.Waypage.store.writeIndex([c("had1", { at: 0.2, readAt: 1000, placeAt: 1000 }), c("had2", { at: 0.8, spot: "8/10c", readAt: 9000, placeAt: 9000, finished: true }), c("mine1", { savedAt: 200 })]);
+        for (const id of ["had1", "had2", "mine1"]) await window.Waypage.store.writePage(id, "<!doctype html><html><body><p>Text of " + id + ".</p></body></html>", c(id));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        Object.defineProperty(window.Waypage.platform, "metered", { get: () => true, configurable: true });
+        const c = (id, more) => ({ id, url: "https://example.com/" + id, title: "Clip " + id, site: "example.com", savedAt: 100, minutes: 1, mode: "links", ...more });
+        const remote = { format: 1, deleted: {}, files: { had1: { at: 100, sha: "s1" }, had2: { at: 100, sha: "s2" }, new1: { at: 100, sha: "s3" } },
+          pages: [c("had1", { at: 0.7, spot: "7/0c", readAt: 5000, placeAt: 5000, readOn: "Tablet", tags: ["far"] }), c("had2", { at: 0.1, readAt: 100, placeAt: 100 }), c("new1")] };
+        const b64 = (t) => btoa(unescape(encodeURIComponent(t)));
+        const puts = [], reads = [];
+        window.fetch = async (url, opts = {}) => {
+          const method = opts.method || "GET";
+          const ok = (j) => new Response(JSON.stringify(j), { status: 200 });
+          if (/\/repos\/me\/waypage-data$/.test(url)) return ok({ name: "waypage-data" });
+          if (/contents\/library\.json/.test(url) && method === "GET") return ok({ sha: "lib1", content: b64(JSON.stringify(remote)) });
+          if (method === "PUT") { const path = url.split("/contents/")[1].split("?")[0]; puts.push(path); if (path === "library.json") window.sentLib = JSON.parse(decodeURIComponent(escape(atob(JSON.parse(opts.body).content)))); return ok({ content: { sha: "x" } }); }
+          if (method === "GET") reads.push(url.split("/contents/")[1] || url);
+          return new Response("{}", { status: 404 });
+        };
+        await syncNow(true);
+        const p = (id) => state.pages.find((x) => x.id === id);
+        const sent = window.sentLib, s = (id) => sent.pages.find((x) => x.id === id);
+        return {
+          had1: [p("had1").at, p("had1").spot, (p("had1").tags || []).length],
+          new1: !!p("new1"),
+          puts: puts.sort(),
+          readPages: reads.filter((r) => r.startsWith("pages/")).length,
+          up: [s("had1").at, s("had2").at, s("had2").finished, s("had2").spot, !!s("mine1"), Object.keys(sent.files).sort().join()],
+          base: localStorage.getItem("waypage.syncBase"),
+        };
+      });
+      assert.deepStrictEqual(got, { had1: [0.7, "7/0c", 0], new1: false, puts: ["library.json", "stats/" + got.puts[1].slice(6)], readPages: 0,
+        up: [0.7, 0.8, true, "8/10c", false, "had1,had2,new1"], base: null }, JSON.stringify(got));
+      await q.context().close();
+    });
+
     await test("reading on while a sync runs keeps the new place, not the one the sync started with (1.36.1)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

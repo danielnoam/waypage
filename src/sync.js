@@ -50,10 +50,11 @@
   // The spot names a paragraph of the other version's text, so a place
   // that came over goes by its fraction.
   const READING = ["at", "finished", "readAt", "readOn", "placeAt"];
-  function placeOnly(have, m) {
+  function placeOnly(have, m, sameText) {
     const next = { ...have };
     for (const k of READING) { if (m[k] === undefined) delete next[k]; else next[k] = m[k]; }
-    if (placeTime(m) !== placeTime(have)) delete next.spot;
+    if (sameText) { if (m.spot === undefined) delete next.spot; else next.spot = m.spot; }
+    else if (placeTime(m) !== placeTime(have)) delete next.spot;
     return READING.some((k) => next[k] !== have[k]) || next.spot !== have.spot ? next : null;
   }
 
@@ -699,15 +700,16 @@
     return false;
   }
 
-  function run({ getPages, setPages, getFeeds, setFeeds, getSeen, setSeen, sameUrl, urlKey, onProgress }) {
+  function run({ getPages, setPages, getFeeds, setFeeds, getSeen, setSeen, sameUrl, urlKey, onProgress, light }) {
     if (!cfg || cfg.paused) return Promise.resolve(null);
     if (running) return running;
     const told = (p) => { progress = p; if (onProgress) onProgress(p); };
     running = (async () => {
       try {
         if (await settle().catch(() => false)) throw new SyncError(PUBLIC_REPO);
-        const res = await once(getPages, setPages, sameUrl || ((a, b) => a === b), told, getFeeds, setFeeds, getSeen, setSeen, urlKey);
+        const res = await once(getPages, setPages, sameUrl || ((a, b) => a === b), told, getFeeds, setFeeds, getSeen, setSeen, urlKey, !!light);
         last = { at: Date.now(), error: "" };
+        if (light) last.light = true;
         cfg.at = last.at;
         keep(CFG_KEY, cfg);
         return res;
@@ -722,7 +724,7 @@
     return running;
   }
 
-  async function once(getPages, setPages, sameUrl, onProgress, getFeeds, setFeeds, getSeen, setSeen, urlKey) {
+  async function once(getPages, setPages, sameUrl, onProgress, getFeeds, setFeeds, getSeen, setSeen, urlKey, light) {
     // A library Waypage can't reach reads as empty; sent as it is, that
     // would look like every clip deleted (0.33.0).
     if (C.store.problem) throw new Error(C.store.problem);
@@ -791,7 +793,31 @@
       const got = await mergeOff(before, load(BASE_KEY, null), remote ? remote.data : null, waiting, feedsBefore, getSeen ? getSeen() : 0, Date.now(), sameUrl, urlKey);
       merged = got.merged;
       const remoteDoc = got.remoteDoc;
-      if (tries === 0 && remote) await placesFirst(merged);
+      if (tries === 0 && remote && !light) await placesFirst(merged);
+      // Places and stats only (1.40.0), on mobile data: where you got to
+      // comes over onto every clip here and goes up onto every clip GitHub
+      // has, and nothing else moves. New clips, their text, deletions,
+      // tags and collections wait for the full sync on Wi-Fi, so the base
+      // and the waiting lists stay as they were.
+      if (light) {
+        if (tries === 0) {
+          const early = new Map();
+          for (const m of merged.pages) {
+            const have = byId.get(m.id);
+            const next = have && placeOnly(have, m, ver(have) === ver(m));
+            if (next) early.set(m.id, next);
+          }
+          if (early.size) await settleSome(early, false);
+        }
+        if (!remote) break;
+        const doc = placesOnto(remoteDoc, merged);
+        if (await sameOff(doc, remoteDoc)) break;
+        halt();
+        try { await write("library.json", JSON.stringify(doc), remote.sha, "Places: " + merged.pages.length + " pages"); break; } catch (e) {
+          if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e;
+        }
+        continue;
+      }
       for (const [id, f] of Object.entries(uploaded)) if (merged.pages.some((p) => p.id === id && ver(p) === f.at)) merged.files[id] = f;
       // Text this device has and GitHub doesn't: every page saved here, or
       // saved again since.
@@ -865,6 +891,10 @@
         // Another device wrote first: merge with what it wrote, and again.
         if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e;
       }
+    }
+    if (light) {
+      try { await syncStats(); } catch (e) { if (e instanceof Paused) throw e; }
+      return { up: 0, down: 0, removed: 0, downloads: [], fromLinks: [], light: true };
     }
     // This device catches up: new pages' text comes down; deleted ones go.
     // `decided` is what each page becomes (null: removed).
@@ -974,6 +1004,12 @@
     // Reading stats last (1.39.0), and never the reason a sync failed.
     try { await syncStats(); } catch (e) { if (e instanceof Paused) throw e; }
     return { up, down, removed: gone.length, downloads, fromLinks };
+  }
+
+  // GitHub's library with this sync's places on the clips it has.
+  function placesOnto(doc, merged) {
+    const by = new Map(merged.pages.map((p) => [p.id, p]));
+    return { ...doc, pages: doc.pages.map((r) => { const m = by.get(r.id); return (m && placeOnly(r, m, ver(r) === ver(m))) || r; }) };
   }
 
   // Reading stats (1.39.0): stats/<device>.json, one file a device, each

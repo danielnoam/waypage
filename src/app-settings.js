@@ -166,11 +166,11 @@ function tapPicturesGroup() {
 // On mobile data (1.4.1): save or sync as always, or wait for Wi-Fi.
 // Only the app can tell the two apart (on iOS since 1.6.0); in a browser
 // the group stays out.
-function dataGroup(key, verb, anyNote, wifiNote) {
+function dataGroup(key, verb, anyNote, wifiNote, middle) {
   if (!C.platform.knowsConnection) return null;
   return choiceGroup({ key, label: "On mobile data", get: () => load(key, "any"),
-    set: (v) => { store(key, v); if (v === "any") { while (wifiWaiters.length) wifiWaiters.shift()(); if (key === DATA_SYNC_KEY) syncSoon(1000); else fetchPictures(); } if (state.section) renderSection(); },
-    options: [{ value: "any", label: verb, note: anyNote }, { value: "wifi", label: "Wait for Wi-Fi", note: wifiNote }] });
+    set: (v) => { store(key, v); if (v !== "wifi") { while (wifiWaiters.length) wifiWaiters.shift()(); if (key === DATA_SYNC_KEY) syncSoon(1000); else fetchPictures(); } if (state.section) renderSection(); },
+    options: [{ value: "any", label: verb, note: anyNote }, middle, { value: "wifi", label: "Wait for Wi-Fi", note: wifiNote }].filter(Boolean) });
 }
 
 // Which light and which dark theme Auto switches between.

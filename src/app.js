@@ -9,7 +9,7 @@
 // only use what an earlier part, or its own, has declared. A part's
 // functions can call into any part, since nothing is tapped until all of
 // them have loaded. app-start.js runs last and starts things up.
-const APP_VERSION = "1.39.1";
+const APP_VERSION = "1.40.0";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
@@ -1726,6 +1726,8 @@ function contentsFound(job) {
 // on when the connection changes; the quiet fetches (pictures, feeds,
 // new chapters) skip their turn instead.
 const waitsForWifi = (key) => load(key, "any") === "wifi" && C.platform.metered;
+// Places and stats only on mobile data (1.40.0): clips wait for Wi-Fi.
+const syncsPlacesOnly = () => load(DATA_SYNC_KEY, "any") === "places" && C.platform.metered;
 const wifiWaiters = [];
 async function wifiGate(job) {
   while (waitsForWifi(DATA_SAVE_KEY)) {
