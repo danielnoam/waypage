@@ -18,6 +18,60 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **App lock (1.38.0).** Daniel's design: a passcode first, fingerprint
+  or face only on top of it; a forgotten passcode resets everything,
+  sync brings it back; the lock is per device. The passcode is kept as
+  PBKDF2-SHA256 (210,000 rounds, its own 16-byte salt) in localStorage
+  `waypage.lock`, with its length so the keypad checks as soon as it's
+  typed; it never syncs or goes in a backup. Fingerprint or face is
+  Android's BiometricPrompt with BIOMETRIC_WEAK (most face unlock is
+  "weak"), through native/share's AppLock plugin; iOS's Face ID is on
+  the iOS list. Trade-off, said plainly in Settings: it is a gate, not
+  encryption. The clips are in the app's private storage (or the folder
+  picked), so it keeps out someone holding the unlocked phone, not
+  someone with the files, root, or the browser's developer tools on the
+  web copy. Encrypting the library would mean every read and write,
+  pictures served from disk, search and sync going through a key: not
+  done. `html.locked` (platform.js, the first script) hides the page
+  before the library draws; a capture-phase keydown keeps shortcuts from
+  reaching the app under the keypad. Erasing removes the clip copies,
+  fonts, the index, every `waypage.*` key (only those: the web copy
+  shares danielnoam.github.io's storage) and the browser's IndexedDB,
+  tells the native feed checks there's nothing to watch, and reloads.
+  Android 13+ `setRecentsScreenshotEnabled(false)` hides the recent
+  apps card without blocking screenshots; FLAG_SECURE would block both,
+  so older Android shows the card.
+
+- **Reading stats (1.38.0).** Collected now, shown later (Daniel). In
+  localStorage `waypage.stats`, by day (local date) and by clip id:
+  readMs, words, aloudMs, opened, finished, saved; a clip also keeps
+  `far` (furthest place) and `last`. Reading counts while the clip is
+  on screen, up to 2 minutes after the last scroll, turn or tap. Words
+  are the furthest place's advance times the clip's length (its minutes
+  times 230); a move of more than 1,500 words is a jump and doesn't
+  count. Read aloud counts while playing, but only up to 3 minutes past
+  the last paragraph the app heard, so a pause that reaches a sleeping
+  phone late doesn't count the night. Saved again or updated, a clip's
+  numbers move to its new id (`stats.moved`). Not synced, not in
+  backups yet: per device until there's something to show.
+
+- **Update from the site (1.38.0).** Uses the Save again path (a new id
+  in the old one's place, keeping tags, collection, place and
+  highlights). New: the reading spot's paragraph is read from the old
+  copy as words (`reader.spotWords`) and kept on the clip as
+  `spotWords`; the next open finds that paragraph in the new copy
+  (`respot`, nearest match to the old index) before going to the spot,
+  else the fraction decides. Highlights already find their words again
+  when blocks move (1.7.0); ones whose words are gone stay listed under
+  Highlights, and the toast says how many. "Nothing changed" compares
+  the text outside the clip's header and licence line.
+
+- **Linked pages (1.38.0).** `reader.links(own)`: every http(s) link in
+  the clip once, without its #part, leaving out the clip itself, its
+  next and previous links, links within it and a wiki's own pages
+  (Special:, File:, Talk: and the like). Saving goes through saveAll
+  with "skip saved", like a pasted list; offline they wait in Downloads.
+
 - **Moon and percent on a phone (1.37.1).** While reading aloud the
   player stays centred and the moon hangs off its right, so the moon
   shares the right half with the percent. Under 520 px the bar's gap and

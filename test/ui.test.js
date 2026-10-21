@@ -1613,6 +1613,91 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a clip's linked pages can be picked and saved (1.38.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async ([a, n]) => {
+        const S = window.Waypage.store;
+        const c = { id: "links1", url: "https://example.com/start", title: "Start", site: "example.com", savedAt: 1, minutes: 1, mode: "links", at: 0 };
+        await S.writeIndex([c]);
+        await S.writePage("links1", "<!doctype html><html><body><h1>Start</h1><p>Read <a href=\"" + a + "\">the article</a>, <a href=\"" + n + "\">the notes</a>, <a href=\"" + a + "#x\">the article again</a> and <a href=\"#top\">the top</a>.</p></body></html>", c);
+      }, [ARTICLE, NOTES]);
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => openPage("links1"));
+      await until(q, () => !!(state.open && window.Waypage.reader.links(state.open.url).length));
+      await q.evaluate(() => openSheet("links"));
+      assert.strictEqual(await q.locator(".links-list .choice").count(), 2, "each page once, no jumps within the clip: " + JSON.stringify(await q.evaluate(() => window.Waypage.reader.links(state.open.url))));
+      await q.click(".links-bar .btn-small");
+      assert.strictEqual(await q.textContent(".links-go"), "Save 2 clips");
+      await q.click(".links-go");
+      await until(q, () => state.pages.length === 3, null, 20000);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("update from the site keeps the clip in its place (1.38.0)", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ARTICLE);
+      await q.press("#saveUrl", "Enter");
+      await until(q, () => state.pages.length === 1, null, 15000);
+      const id = await q.evaluate(() => { const p = state.pages[0]; p.tags = ["kept"]; p.at = 0.4; return p.id; });
+      await q.evaluate(() => updateClip(state.pages[0]));
+      await until(q, () => state.pages.length === 1 && !state.saving.length && /up to date/.test(document.getElementById("toast").textContent), null, 15000);
+      const now = await q.evaluate(() => ({ id: state.pages[0].id, tags: state.pages[0].tags, at: state.pages[0].at }));
+      assert.notStrictEqual(now.id, id, "the new copy took the old one's place");
+      assert.deepStrictEqual(now.tags, ["kept"]);
+      assert.strictEqual(now.at, 0.4);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("reading stats count time, words and saves (1.38.0)", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ARTICLE);
+      await q.press("#saveUrl", "Enter");
+      await until(q, () => state.pages.length === 1, null, 15000);
+      await q.evaluate(() => openPage(state.pages[0].id));
+      await q.waitForTimeout(1200);
+      await q.evaluate(() => { window.Waypage.stats.position(state.open.id, 0.5, 400); window.Waypage.stats.closed(); });
+      const day = await q.evaluate(() => Object.values(window.Waypage.stats.all().days)[0]);
+      assert.strictEqual(day.saved, 1);
+      assert.strictEqual(day.opened, 1);
+      assert.ok(day.readMs > 0, "reading time counted");
+      assert.strictEqual(day.words, 200);
+      await q.context().close();
+    });
+
+    await test("app lock: a passcode, a wait after wrong tries, and erasing (1.38.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(() => openSettings(false, "lock"));
+      await q.click("text=Turn on app lock");
+      await q.keyboard.type("2580");
+      await q.click("#lockNext");
+      await q.keyboard.type("2580");
+      await q.click("#lockNext");
+      await until(q, () => !lockUp() && !!localStorage.getItem("waypage.lock"));
+      assert.ok(!/2580/.test(await q.evaluate(() => localStorage.getItem("waypage.lock"))), "only a hash is kept");
+      await q.reload();
+      await until(q, () => typeof lockUp === "function" && lockUp());
+      assert.ok(await q.evaluate(() => getComputedStyle(document.getElementById("libraryView")).visibility === "hidden"), "the library is hidden");
+      for (let i = 0; i < 5; i++) { await q.keyboard.type("1111"); await q.waitForTimeout(500); }
+      assert.ok(/Too many wrong tries/.test(await q.textContent("#lockNote")));
+      await q.evaluate(() => localStorage.setItem("waypage.lockTries", JSON.stringify({ n: 5, until: 0 })));
+      await q.evaluate(() => lockPaint());
+      await q.keyboard.type("2580");
+      await until(q, () => !lockUp());
+      await q.evaluate(() => { localStorage.setItem("waypage.theme", JSON.stringify("night")); lockShow("unlock"); });
+      await q.click("#lockForgot");
+      await q.click("#lockEraseGo");
+      await q.waitForTimeout(1500);
+      await q.waitForSelector("#saveUrl");
+      assert.strictEqual(await q.evaluate(() => localStorage.getItem("waypage.lock")), null);
+      assert.strictEqual(await q.evaluate(() => localStorage.getItem("waypage.theme")), null, "settings went too");
+      assert.ok(!(await q.evaluate(() => lockUp())));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     for (const width of [390, 1280]) {
       for (const theme of THEMES) {
         await test("opens at " + width + " px in " + theme + " with no errors", async () => {

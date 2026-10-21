@@ -16,6 +16,9 @@
   const plugin = (name) => (native && cap.Plugins && cap.Plugins[name]) || null;
 
   if (native) document.documentElement.classList.add("native");
+  // App lock (1.38.0): hidden from the first paint, before the library
+  // draws, when a passcode is set (app-lock.js shows the keypad).
+  try { if (localStorage.getItem("waypage.lock")) document.documentElement.classList.add("locked"); } catch (e) { /* no storage */ }
 
   // Carry-on became Waypage (1.0.0). The web copy at /waypage/ shares its
   // origin, and so its storage, with the old /carry-on/: its settings are
@@ -976,6 +979,22 @@
       get available() { return !!plugin("Brightness"); },
       get: () => plugin("Brightness").get(),
       set: (level) => plugin("Brightness").set(level == null ? {} : { level }),
+    },
+    // App lock (1.38.0): the phone's fingerprint or face, native/share's
+    // AppLock plugin on Android (iOS on TODO.md's iOS list); the passcode
+    // itself is checked in app-lock.js.
+    lock: {
+      async biometric() {
+        const L = os === "android" && plugin("AppLock");
+        if (!L) return false;
+        try { return !!(await L.available()).ok; } catch (e) { return false; }
+      },
+      async verify(title) {
+        const L = os === "android" && plugin("AppLock");
+        if (!L) return false;
+        try { return !!(await L.verify({ title })).ok; } catch (e) { return false; }
+      },
+      hideRecents(on) { const L = os === "android" && plugin("AppLock"); if (L) L.hideRecents({ on: !!on }).catch(() => {}); },
     },
     // Volume buttons turn pages (1.32.0), native/share's VolumeKeys
     // plugin on Android; `f` hears "up" or "down".

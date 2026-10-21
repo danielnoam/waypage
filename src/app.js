@@ -9,7 +9,7 @@
 // only use what an earlier part, or its own, has declared. A part's
 // functions can call into any part, since nothing is tapped until all of
 // them have loaded. app-start.js runs last and starts things up.
-const APP_VERSION = "1.37.1";
+const APP_VERSION = "1.38.0";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
@@ -621,6 +621,35 @@ async function saveClipAgain(p, archived) {
     const html = await C.store.readPage(meta.id).catch(() => null);
     if (html && state.open === p) { history.replaceState(readerState(meta), ""); show(meta, html); }
   }
+}
+
+// Update from the site (1.38.0): the page fetched again for what's
+// changed since it was saved (a living article, docs, a post that was
+// edited), in the old copy's place. Highlights stay wherever their words
+// are still in the text, and the reading place stays on its paragraph
+// when that's still there, else at the same distance through.
+const pageWords = (html) => {
+  const d = new DOMParser().parseFromString(html || "", "text/html");
+  d.querySelectorAll(".co-meta, .co-licence, .co-next, script, style").forEach((n) => n.remove());
+  return (d.body ? d.body.textContent : "").replace(/\s+/g, " ").trim();
+};
+async function updateClip(p) {
+  if (!navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
+  if (state.saving.some((s) => s.again === p)) return;
+  const before = await C.store.readPage(p.id).catch(() => null);
+  const keep = p.spot ? { spot: p.spot, spotWords: C.reader.spotWords(before, p.spot) } : null;
+  const job = { ...newJob(p.url, p.folder), key: "again:" + p.id, again: p, mode: p.mode, kind: p.comic ? "comic" : "article", keep };
+  state.saving.unshift(job);
+  renderLibrary();
+  toast("Checking the site for changes…");
+  const meta = await runJob(job);
+  if (!meta) { toast("Couldn't update it. It's in Downloads to try once more."); return; }
+  const after = await C.store.readPage(meta.id).catch(() => null);
+  const was = pageWords(before), now = pageWords(after);
+  const lost = (meta.marks || []).filter((m) => m.text && !now.includes(m.text)).length;
+  if (was && was === now) toast("Already up to date. Nothing on the page has changed.");
+  else toast("Updated from the site." + (lost ? " " + lost + (lost === 1 ? " highlight's words aren't" : " highlights' words aren't") + " in it any more; " + (lost === 1 ? "it stays" : "they stay") + " under Highlights." : ""));
+  if (state.open === p && after) { history.replaceState(readerState(meta), ""); show(meta, after); }
 }
 
 // The Wayback Machine (1.15.0): a page that's gone saved from the
@@ -1851,6 +1880,8 @@ async function runJob(job) {
       // Saved again: the new copy takes the old one's place, keeping its
       // collection, tags and read position.
       for (const k of ["requested", "folder", "folderAt", "folderFav", "folderFavAt", "source", "tags", "at", "finished", "readAt", "readOn", "placeAt", "fav", "favAt", "marks"]) if (old[k] !== undefined) meta[k] = old[k];
+      if (job.keep) Object.assign(meta, job.keep);
+      C.stats.moved(old.id, meta.id);
       const i = state.pages.indexOf(old);
       if (i < 0) await C.store.removePage(meta.id);
       else {
@@ -1871,6 +1902,7 @@ async function runJob(job) {
       if (job.tags && job.tags.length) meta.tags = withTags([], job.tags);
       if (job.finished) meta.finished = true;
       state.pages.unshift(meta);
+      C.stats.saved();
       await indexSoon();
     }
     state.saving = state.saving.filter((s) => s !== job);

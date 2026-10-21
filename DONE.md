@@ -23,6 +23,8 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Load pictures only when tapped (1.30.1)
 - Before you go offline: save what's missing, then list what isn't ready (1.32.0)
 - Send to Waypage: a bookmark that saves the page a computer's browser has open (1.34.0)
+- Save linked pages: pick from the pages a clip links to (1.38.0)
+- Update from the site, keeping highlights and the place's paragraph (1.38.0)
 
 ## Library
 
@@ -86,6 +88,8 @@ release ships a feature, it gets a line here and leaves TODO.md.
 
 ## App
 
+- App lock: passcode, fingerprint or face on Android, lock after a time away, erase when forgotten (1.38.0)
+- Reading stats collected on the device: time, words, read aloud, opened, finished, saved (1.38.0; not shown yet)
 - Widgets: Keep reading, Feeds, Favourites, Collection, Highlight (0.29.0, 0.29.2, 0.35.0, 1.9.0; iOS 1.6.0)
 - App icon shortcuts (1.14.0)
 - Self-updating Android app, What's new (0.2.0, 0.11.0, 1.23.0)

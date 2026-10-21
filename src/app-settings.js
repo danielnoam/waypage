@@ -972,7 +972,7 @@ function renderSettings() {
         el("div", { class: "row update-row out" },
           el("span", { class: "row-label accent" }, "Waypage " + upd.latest + " is out"),
           el("button", { class: "btn-small", type: "button", onclick: () => openSection("updates") }, "View"))) : null,
-      el("div", { class: "group" }, row("appearance"), row("reading"), row("library"), C.platform.native ? row("notifications") : null),
+      el("div", { class: "group" }, row("appearance"), row("reading"), row("library"), C.platform.native ? row("notifications") : null, row("lock")),
       el("div", { class: "group" }, row("saving"), row("sync"), C.drive.available ? row("drive") : null, row("storage")),
       el("div", { class: "group" }, row("updates"), row("report"))));
 }

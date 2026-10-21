@@ -5,7 +5,8 @@ CHANGELOG.md; the rules every release keeps are at the top of NOTES.md.
 
 ## Next
 
-Nothing planned right now; new ideas go here.
+- **Show the reading stats.** Collected since 1.38.0 (NOTES.md); what
+  to show and where is still Daniel's call.
 
 ## iOS release (later, Daniel 11 Oct 2026)
 
@@ -51,6 +52,11 @@ Everything iOS-only, kept for one iOS release.
   site whose article only appears after its scripts run still saves as
   the start there. Copying the site's cookies into that store before the
   page loads would fix it. Android's already shares them.
+- **Face ID and Touch ID for the app lock on iOS.** Android has
+  fingerprint or face since 1.38.0; iOS has the passcode only. An
+  AppLock plugin in Swift with LAContext's `evaluatePolicy`, and
+  NSFaceIDUsageDescription in the app's Info.plist. Also hiding the app
+  switcher's picture while locked (a cover view on resign active).
 - **Downloads in the background on iOS.** Still the half minute iOS
   gives the app. Going further means saving in Swift around background
   `URLSession` downloads, a second copy of the saving code: only if the
