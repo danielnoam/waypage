@@ -1034,6 +1034,38 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a chapter finished on the other device comes over finished, even when its copy here is another version (1.39.1)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t" }));
+        const c = (id, more) => ({ id, url: "https://example.com/" + id, title: "Chapter " + id, site: "example.com", savedAt: 100, minutes: 1, mode: "links", at: 0.1, readAt: 1000, placeAt: 1000, folder: "Saga", folderAt: 1, ...more });
+        await window.Waypage.store.writeIndex([c("chap1"), c("chap2", { at: 0, readAt: 0, placeAt: 0 })]);
+        for (const id of ["chap1", "chap2"]) await window.Waypage.store.writePage(id, "<!doctype html><html><body><p>Text of " + id + ".</p></body></html>", c(id));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const c = (id, more) => ({ id, url: "https://example.com/" + id, title: "Chapter " + id, site: "example.com", savedAt: 100, minutes: 1, mode: "links", folder: "Saga", folderAt: 1, ...more });
+        // Edited on the phone (Edit clips), which syncs links only: no text.
+        const remote = { format: 1, deleted: {}, files: {},
+          pages: [c("chap1", { editedAt: 500, at: 1, finished: true, spot: "9/100c", readAt: 5000, placeAt: 5000, readOn: "Phone" }), c("chap2", { editedAt: 500, at: 0.4, readAt: 6000, placeAt: 6000, readOn: "Phone" })] };
+        const b64 = (t) => btoa(unescape(encodeURIComponent(t)));
+        window.fetch = async (url, opts = {}) => {
+          const method = opts.method || "GET";
+          const ok = (j) => new Response(JSON.stringify(j), { status: 200 });
+          if (/\/repos\/me\/waypage-data$/.test(url)) return ok({ name: "waypage-data" });
+          if (/contents\/library\.json/.test(url) && method === "GET") return ok({ sha: "lib1", content: b64(JSON.stringify(remote)) });
+          if (/contents\/.*/.test(url) && method === "PUT") return ok({ content: { sha: "x" } });
+          return new Response("{}", { status: 404 });
+        };
+        await syncNow(true);
+        const p = (id) => state.pages.find((x) => x.id === id);
+        return { ch1: [p("chap1").finished, p("chap1").at, p("chap1").spot || ""], ch2: p("chap2").at, next: continuePage() && continuePage().id, text: (await window.Waypage.store.readPage("chap1")).includes("Text of chap1") };
+      });
+      assert.deepStrictEqual(got, { ch1: [true, 1, ""], ch2: 0.4, next: "chap2", text: true }, JSON.stringify(got));
+      await q.context().close();
+    });
+
     await test("reading on while a sync runs keeps the new place, not the one the sync started with (1.36.1)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

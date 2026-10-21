@@ -2,6 +2,19 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.39.1] - 2026-10-21
+
+### Fixed
+- Where you got to in a clip, and whether it's finished, now comes over
+  in sync even when the other device has a different version of it (saved
+  again or changed in Edit clips there, with its text not on GitHub, or
+  its text not coming down this time). Before, such a clip kept its old
+  place here, so Continue reading and a collection's chapters fell
+  behind on the web copy.
+
+### Changed
+- The Highlights row in the sidebar no longer shows a count.
+
 ## [1.39.0] - 2026-10-21
 
 ### Added

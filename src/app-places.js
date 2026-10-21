@@ -485,7 +485,6 @@ function renderSide() {
   const fresh = freshPosts();
   const inFeeds = state.place === "feeds";
   const inMarks = state.place === "highlights";
-  const marked = state.pages.reduce((n, p) => n + (p.marks || []).length, 0);
   const latest = (f) => Math.max(0, ...f.items.map(postAt));
   const big = wide.matches;
   const inLib = !inFeeds && !inMarks && state.place !== "reading";
@@ -520,7 +519,7 @@ function renderSide() {
       withFeed(item(feedMark(f, true), f.title, inFeeds && state.feed === f.url, null, () => goPlace("feeds", f.url), "side-sub"), f)),
     // Every highlight in the library (1.8.0), a place of its own.
     el("hr", { class: "side-line" }),
-    item(sideSvg("marks"), "Highlights", inMarks, count(marked, "side-count"), () => goPlace("highlights")),
+    item(sideSvg("marks"), "Highlights", inMarks, null, () => goPlace("highlights")),
     item(sideSvg("reading"), "Reading", state.place === "reading", null, () => goPlace("reading")),
     // On a big screen the sidebar carries the rest (1.5.0): Add a feed,
     // the tags, and Settings at its foot.

@@ -70,6 +70,16 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
   Privacy: the stats say when and how long you read each clip. They
   stay on the device unless GitHub sync or a backup is on, and then go
   only to your own private repo or your own Drive, like the library.
+- **A place comes over onto another version (1.39.1).** Sync takes a
+  clip's whole entry from GitHub only when this device has the same
+  version (`ver`, savedAt or editedAt) or brings the text down. A clip
+  saved again or edited on one device, with that text not on GitHub (a
+  links-only device, a send still to come, a download that failed), was
+  left alone here, place and all: Daniel saw Continue reading and his
+  collection's finished chapters behind on the web copy. Now
+  `placeOnly` moves at, finished, readAt, readOn and placeAt over onto
+  this copy; the spot is dropped when the place changed, since it names
+  a paragraph of the other text.
 - **The Reading place and widgets (1.39.0).** A week starts on the day
   `Intl.Locale` says (Sunday in Israel), Monday when it can't tell. A
   day counts towards days in a row with a minute read or heard. The
