@@ -1069,6 +1069,84 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("reading stats go up as this device's own file, and other devices' come down (1.39.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(() => localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t" })));
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const S = window.Waypage.stats, today = S.dayKey(Date.now());
+        S.saved();
+        const theirs = { since: 1, days: { [today]: { readMs: 600000, aloudMs: 120000, words: 900, clips: { abcd1: 720000 } } }, clips: { abcd1: { readMs: 600000, finished: Date.now() } } };
+        const b64 = (t) => btoa(unescape(encodeURIComponent(t)));
+        const puts = [];
+        let reads = 0;
+        window.fetch = async (url, opts = {}) => {
+          const method = opts.method || "GET";
+          const ok = (j) => new Response(JSON.stringify(j), { status: 200 });
+          if (/\/repos\/me\/waypage-data$/.test(url)) return ok({ name: "waypage-data" });
+          if (/contents\/library\.json/.test(url) && method === "GET") return new Response("{}", { status: 404 });
+          if (/contents\/library\.json/.test(url) && method === "PUT") return ok({ content: { sha: "lib1" } });
+          if (/contents\/stats\?/.test(url)) return ok([{ name: "otherdevice2.json", sha: "o1" }, { name: "README.md", sha: "r" }].concat(puts.length ? [{ name: S.device + ".json", sha: "m1" }] : []));
+          if (/contents\/stats\/otherdevice2\.json/.test(url)) { reads++; return ok({ sha: "o1", content: b64(JSON.stringify(theirs)) }); }
+          if (/contents\/stats\//.test(url) && method === "PUT") { puts.push({ url, body: JSON.parse(decodeURIComponent(escape(atob(JSON.parse(opts.body).content)))) }); return ok({ content: { sha: "m1" } }); }
+          return new Response("{}", { status: 404 });
+        };
+        await syncNow(true);
+        const first = { puts: puts.length, reads, mine: puts[0] && puts[0].url.includes("/stats/" + S.device + ".json"), saved: puts[0] && puts[0].body.days[today].saved };
+        await syncNow(true);
+        const d = S.day(today);
+        return { first, again: { puts: puts.length, reads }, read: d.readMs, aloud: d.aloudMs, finished: S.finishedIn(today, today), mineAlone: S.mine().days[today].readMs || 0 };
+      });
+      assert.deepStrictEqual(got.first, { puts: 1, reads: 1, mine: true, saved: 1 }, JSON.stringify(got));
+      assert.deepStrictEqual(got.again, { puts: 1, reads: 1 }, "nothing changed, so nothing goes up or comes down again");
+      assert.ok(got.read >= 600000 && got.aloud === 120000, "the other device's time adds in");
+      assert.strictEqual(got.finished, 1);
+      assert.ok(got.mineAlone < 600000, "this device's own count stays its own");
+      await q.context().close();
+    });
+
+    await test("the Reading place adds up the week, steps back, and opens a clip; the end of a clip says your time (1.39.0)", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ARTICLE);
+      await q.press("#saveUrl", "Enter");
+      await until(q, () => state.pages.length === 1, null, 15000);
+      await q.evaluate(() => {
+        const S = window.Waypage.stats, id = state.pages[0].id, now = Date.now(), days = {};
+        for (let i = 0; i < 10; i++) days[S.dayKey(now - i * 864e5)] = { readMs: 20 * 60000, aloudMs: i === 0 ? 5 * 60000 : 0, words: 3000, opened: 1, clips: { [id]: 20 * 60000 } };
+        S.take("otherdevice3", { since: now - 30 * 864e5, days, clips: { [id]: { readMs: 62 * 60000, aloudMs: 15 * 60000, words: 9400, opened: 3, finished: now } } });
+      });
+      await q.evaluate(() => goPlace("reading"));
+      await q.waitForSelector(".rs-total");
+      assert.strictEqual(await q.textContent("#placeTitle"), "Reading");
+      const week = await q.evaluate(() => ({ total: document.querySelector(".rs-total").textContent, cols: document.querySelectorAll(".rs-col").length, top: document.querySelectorAll(".rs-clip").length, streak: document.querySelector(".rs-streak-n").textContent }));
+      assert.strictEqual(week.cols, 7);
+      assert.strictEqual(week.top, 1);
+      assert.ok(/^\d+ days in a row$/.test(week.streak), week.streak);
+      await q.click(".rs-tab >> text=Month");
+      assert.ok(await q.evaluate(() => document.querySelectorAll(".rs-col").length >= 28));
+      await q.click(".rs-tab >> text=Year");
+      assert.strictEqual(await q.evaluate(() => document.querySelectorAll(".rs-col").length), 12);
+      await q.click(".rs-tab >> text=Week");
+      await q.click(".rs-range button[aria-label=Before]");
+      assert.notStrictEqual(await q.textContent(".rs-total"), week.total, "last week is its own total");
+      await q.click(".rs-range button[aria-label=After]");
+      assert.strictEqual(await q.textContent(".rs-total"), week.total);
+      const w = await q.evaluate(() => statsWidget());
+      assert.strictEqual(w.bars.length, 7);
+      assert.ok(w.today.endsWith("min") && w.readToday, JSON.stringify(w));
+      await q.click(".rs-clip");
+      await until(q, () => !!state.open);
+      await q.waitForTimeout(800);
+      const end = await frameText(q).locator(".co-spent").textContent();
+      assert.ok(/here/.test(end) && /read aloud/.test(end) && /finished/.test(end), end);
+      assert.ok(!(await q.evaluate(() => C.reader.readable().some((t) => /read aloud/.test(t)))), "it isn't read aloud");
+      await q.evaluate(() => { store(SPENT_KEY, false); C.reader.setEnd(spentLines(state.open)); });
+      assert.strictEqual(await frameText(q).locator(".co-spent").count(), 0);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("the collection widget's read aloud, Keep reading when you leave, and the small window (1.25.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

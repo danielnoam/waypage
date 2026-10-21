@@ -229,6 +229,8 @@
     await zip.add("waypage.json", utf8(JSON.stringify({ format: 1, app: C.version, made: Date.now(), pages: pages.length, feeds: (feeds || []).length })));
     await zip.add("library.json", utf8(JSON.stringify(pages)));
     if (feeds && feeds.length) await zip.add("feeds.json", utf8(JSON.stringify(feeds)));
+    // Reading stats (1.39.0): this device's and the others it knows.
+    if (C.stats) await zip.add("stats.json", utf8(JSON.stringify(C.stats.backup())));
     let done = 0;
     for (const p of pages) {
       if (native) {
@@ -289,6 +291,10 @@
     if (feedsEntry) {
       try { feeds = JSON.parse(new TextDecoder().decode(await zipRead(blob, feedsEntry))); } catch (e) { feeds = []; }
       feeds = Array.isArray(feeds) ? feeds.map(cleanFeed).filter(Boolean) : [];
+    }
+    const statsEntry = entries.get("stats.json");
+    if (statsEntry && C.stats) {
+      try { C.stats.restore(JSON.parse(new TextDecoder().decode(await zipRead(blob, statsEntry)))); } catch (e) { /* the clips matter more */ }
     }
     return { pages, added, replaced, kept, feeds };
   }

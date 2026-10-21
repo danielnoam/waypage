@@ -358,7 +358,7 @@ function show(p, html) {
   readerScrolled(p.at || 0, 0);
   if (!p.preview) C.stats.opened(p.id);
   return C.reader.open($("readerFrame"), html, p, {
-    at: p.at || 0, spot: p.spot || "", spotWords: p.spotWords || "", next: endLink(p), prev: startLink(p),
+    at: p.at || 0, spot: p.spot || "", spotWords: p.spotWords || "", next: endLink(p), prev: startLink(p), end: spentLines(p),
     onPosition: (f, s) => notePosition(p, f, s),
     onScroll: readerScrolled,
     onImage: openImage,
@@ -609,6 +609,40 @@ function volumeWatch() {
   keys.watch(want);
 }
 if (C.platform.volumeKeys.available) C.platform.volumeKeys.onKey((k) => { if (volumeTaken && state.open && !state.sheet) C.reader.turn(k === "down" ? 1 : -1); });
+// Your time in a clip at its very end (1.39.0), from the reading stats:
+// every device's added up. Nothing before a minute, and nothing with the
+// switch off.
+const SPENT_KEY = "waypage.spentLine";
+const spentOn = () => load(SPENT_KEY, true) !== false;
+let spentAt = 0;
+function spentLines(p) {
+  if (!spentOn() || !p || p.preview) return null;
+  const c = C.stats.clip(p.id);
+  if (!c || c.readMs + c.aloudMs < C.stats.READ_DAY) return null;
+  const first = [c.readMs >= 60000 ? spanText(c.readMs) + " here" : null, c.aloudMs >= 60000 ? spanText(c.aloudMs) + " read aloud" : null].filter(Boolean).join(" · ");
+  const words = c.words >= 1000 ? "About " + (Math.round(c.words / 100) * 100).toLocaleString() + " words" : c.words >= 50 ? "About " + (Math.round(c.words / 10) * 10) + " words" : null;
+  const opened = c.opened > 1 ? "opened " + c.opened + " times" : null;
+  const done = c.finished ? "finished " + new Date(c.finished).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : null;
+  const second = [words, opened, done].filter(Boolean).join(" · ");
+  return [first || "Under a minute here", second ? second.replace(/^./, (x) => x.toUpperCase()) : null].filter(Boolean);
+}
+// "4 h 12 min", "38 min".
+function spanText(ms) {
+  const m = Math.round(ms / 60000);
+  return m < 60 ? m + " min" : Math.floor(m / 60) + " h" + (m % 60 ? " " + (m % 60) + " min" : "");
+}
+function spentSwitch() {
+  return el("label", { class: "rc-row switch-row" },
+    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Time at the end of a clip"),
+      el("span", { class: "choice-note" }, "How long you've spent on it, under its last line")),
+    el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "spentLine", checked: spentOn(),
+      onchange: (e) => {
+        store(SPENT_KEY, e.target.checked);
+        document.querySelectorAll('input[data-pref="spentLine"]').forEach((i) => { i.checked = e.target.checked; });
+        if (state.open && C.reader) C.reader.setEnd(spentLines(state.open));
+      } }));
+}
+
 // Shown only with Pages picked (1.35.1): in Scroll there's nothing to turn.
 function volumeSwitch() {
   if (!C.platform.volumeKeys.available) return null;
@@ -714,7 +748,7 @@ function fitRail() {
 }
 function paintRail() {
   const p = state.open;
-  $("railBackLabel").textContent = state.folder || (state.place === "feeds" ? "Feeds" : state.place === "highlights" ? "Highlights" : "Library");
+  $("railBackLabel").textContent = state.folder || (state.place === "feeds" ? "Feeds" : state.place === "highlights" ? "Highlights" : state.place === "reading" ? "Reading" : "Library");
   const pages = railPages();
   $("readerRail").classList.toggle("paged", pages.length > 0);
   $("readerRail").setAttribute("aria-label", pages.length ? "Pages" : "Contents");
@@ -913,6 +947,8 @@ function notePosition(p, f, s) {
   if (moved) delete p.spotWords;
   if (!p.preview) C.stats.position(p.id, at, clipWords(p));
   if (f >= 0.97 && !p.finished && !p.preview) C.stats.finished(p.id);
+  // The time at the end keeps up while it's near (1.39.0).
+  if (f >= 0.8 && Date.now() - spentAt > 10000) { spentAt = Date.now(); C.reader.setEnd(spentLines(p)); }
   if (f >= 0.97) p.finished = true;
   if (p === state.open) movedHere = true;
   if (moved) { p.readAt = p.placeAt = Date.now(); p.readOn = deviceName(); }
@@ -1886,6 +1922,7 @@ function readingControls(withTheme) {
       slider("Text size", SIZE_MIN, SIZE_MAX, 1, (v) => setReading({ size: v }), "size"),
       el("button", { class: "step-btn large", type: "button", "data-step": "1", "aria-label": "Larger text", onclick: () => nudge(1) }, "A")), "size"),
     pinchSwitch(),
+    spentSwitch(),
     row("Alignment", fontPick("align", "Alignment", ALIGNS)),
     // Spacing (1.19.0), headed on its own so the labels stay one word.
     el("h2", { class: "overline rc-sub" }, "Spacing"),

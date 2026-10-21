@@ -17,7 +17,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  *   update({ reading: { id, title, meta, at } | null,
  *            feeds: { following, fresh, posts: [{ title, site, url }] } })
  *   renamed({ from, to })   a collection widget follows a renamed collection
- *   take()    { kind: "page" | "mark" | "post" | "feeds" | "library" | "favourites" | "collection", id, mark, url, name, aloud } once,
+ *   take()    { kind: "page" | "mark" | "post" | "feeds" | "library" | "favourites" | "collection" | "reading", id, mark, url, name, aloud } once,
  *             what a widget's tap asked to open, or {}; the app icon's
  *             shortcuts (1.14.0) add "reading", "search" and "paste"
  *   copied()  { text }, what's on the clipboard, for Save the copied link

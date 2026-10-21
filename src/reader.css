@@ -135,6 +135,17 @@ html.co-spread body:has(.co-printed) { max-width: 76rem; }
 html.co-spread .co-printed { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); margin: 0; }
 html.co-spread .co-printed img + img { margin-top: 0; }
 
+/* Your time in the clip (1.39.0), under its very last thing. */
+.co-spent {
+  margin: var(--s-6) 0 var(--s-2); padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+  font: 400 var(--fs-meta)/var(--lh-meta) var(--sans); color: var(--muted);
+  font-variant-numeric: tabular-nums; break-inside: avoid;
+  -webkit-user-select: none; user-select: none;
+}
+.co-spent p { margin: 0; }
+.co-spent-time { font: 600 var(--fs-label)/var(--lh-label) var(--sans); color: var(--ink); }
+.co-spent-more { margin-top: 2px !important; }
 .co-licence {
   margin-top: var(--s-6); padding-top: var(--s-2);
   border-top: 1px solid var(--line);

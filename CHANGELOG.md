@@ -2,6 +2,22 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.39.0] - 2026-10-21
+
+### Added
+- Reading, a place in the sidebar under Highlights: this week, month or
+  year as a bar a day (a month in a year), reading and read aloud in two
+  shades, with the time, words, clips finished, opened and saved under
+  it, days in a row, and the clips you spent most time on. The arrows
+  step back to earlier weeks.
+- Your time at the very end of each clip: how long you've spent on it,
+  how long it was read aloud, about how many words, and when you
+  finished it. Off in Settings › Reading or the reader's settings.
+- Three Android widgets: Reading this week with its bars, Reading today
+  and Days in a row. A tap opens Reading.
+- Reading stats sync: each device keeps its own count and GitHub sync
+  adds them up, and backups carry them.
+
 ## [1.38.0] - 2026-10-21
 
 ### Added

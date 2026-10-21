@@ -20,6 +20,7 @@
   const SENT_KEY = "waypage.syncSent";   // pages sent before library.json was (1.13.0)
   const REPO = "waypage-data";
   const OLD_REPO = "carryon-data"; // Carry-on's name for it, before 1.0.0
+  const STATS_KEY = "waypage.syncStats"; // { device: sha of its stats file as last read, _sent: what this device last wrote }
   const DAY = 24 * 3600 * 1000;
   const LOCAL = /^images\//;
   const KEEP_DELETED = 90 * 24 * 3600 * 1000;
@@ -537,6 +538,7 @@
     keep(BASE_KEY, null);
     keep(WAIT_KEY, null);
     keep(SENT_KEY, null);
+    keep(STATS_KEY, null);
   }
 
   // ---- A page's text going up and coming down ----
@@ -947,7 +949,41 @@
     if (setSeen && merged.feedsSeen && merged.feedsSeen > (getSeen() || 0)) setSeen(merged.feedsSeen);
     await setPages(out);
     for (const id of gone) await C.store.removePage(id);
+    // Reading stats last (1.39.0), and never the reason a sync failed.
+    try { await syncStats(); } catch (e) { if (e instanceof Paused) throw e; }
     return { up, down, removed: gone.length, downloads, fromLinks };
+  }
+
+  // Reading stats (1.39.0): stats/<device>.json, one file a device, each
+  // written only by the device it's named for, so there is nothing to
+  // merge; the others' come down when GitHub says they changed.
+  const hashOf = (t) => { let h = 2166136261; for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619); return t.length + ":" + (h >>> 0).toString(36); };
+  async function syncStats() {
+    if (!C.stats) return;
+    const dev = C.stats.device;
+    const r = await call(contents("stats") + "?ref=" + encodeURIComponent(cfg.branch), { headers: headers() });
+    if (!r.ok && r.status !== 404) throw await fail(r);
+    const list = r.ok ? await r.json() : [];
+    const known = load(STATS_KEY, {}) || {};
+    let mineSha = null;
+    for (const f of Array.isArray(list) ? list : []) {
+      const m = /^([a-z0-9]{12})\.json$/.exec(f && f.name || "");
+      if (!m) continue;
+      if (m[1] === dev) { mineSha = f.sha; continue; }
+      if (known[m[1]] === f.sha) continue;
+      halt();
+      const got = await readJson("stats/" + f.name);
+      if (got) { C.stats.take(m[1], got.data); known[m[1]] = f.sha; }
+    }
+    C.stats.flush();
+    const text = JSON.stringify(C.stats.mine());
+    const sent = hashOf(text);
+    if (!mineSha || known._sent !== sent) {
+      halt();
+      await put("stats/" + dev + ".json", text, mineSha, "Reading stats");
+      known._sent = sent;
+    }
+    keep(STATS_KEY, known);
   }
 
   // A library file from GitHub, down to what Waypage writes.

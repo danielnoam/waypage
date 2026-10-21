@@ -280,7 +280,7 @@
     const nodes = [];
     let text = "";
     const walk = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT,
-      { acceptNode: (t) => (t.parentElement.closest("script, style, noscript, .co-next, " + ADDED) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
+      { acceptNode: (t) => (t.parentElement.closest("script, style, noscript, .co-next, .co-placeholder, .co-full, .co-spent") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
     for (let t = walk.nextNode(); t; t = walk.nextNode()) { nodes.push([t, text.length]); text += t.data; }
     // Lower case, any run of white space read as one space; map[i] is
     // where the i-th letter of that sits in the text.
@@ -491,7 +491,7 @@
     for (const x of c.querySelectorAll("style, script, button, .co-placeholder")) x.remove();
     return c.textContent.replace(/\s+/g, " ").trim();
   }
-  const SKIP = ".co-meta, .co-licence, .co-next, .co-video, nav, aside";
+  const SKIP = ".co-meta, .co-licence, .co-next, .co-spent, .co-video, nav, aside";
 
   // ---- Long clips lay out as they're reached (1.29.0) ----
   // A book is one document of hundreds of chapters, and laying all of it
@@ -714,7 +714,7 @@
   // by its words instead. A block's text leaves out what this file adds
   // (the "Image loads when you're online" placeholders), so it's the same
   // online and off.
-  const ADDED = ".co-placeholder, .co-full";
+  const ADDED = ".co-placeholder, .co-full, .co-spent";
   function textNodes(el) {
     const out = [];
     const walk = doc.createTreeWalker(el, NodeFilter.SHOW_TEXT);
@@ -1210,7 +1210,7 @@
   // `next` ({ over, title, go }) adds a link to the next page at the end;
   // `top` () gives the height the bar covers; onImage(info) opens a tapped
   // image.
-  function open(iframe, html, meta, { at = 0, spot: spotAt = "", onPosition, onScroll, next, prev, top, onImage: image, onTap: tap, onMark: mark, onSelect, pages: asPages, bottom, onKey, onEdge: edge, onPinch: pinchTo, onLink: link, onNote: note, onJump: jumped, spotWords: wordsAt } = {}) {
+  function open(iframe, html, meta, { at = 0, spot: spotAt = "", onPosition, onScroll, next, prev, top, onImage: image, onTap: tap, onMark: mark, onSelect, pages: asPages, bottom, onKey, onEdge: edge, onPinch: pinchTo, onLink: link, onNote: note, onJump: jumped, spotWords: wordsAt, end } = {}) {
     // The clip before tells where it was left before this one comes in.
     settle();
     tell = onPosition ? () => onPosition(position(), spot()) : null;
@@ -1269,6 +1269,8 @@
           return a;
         };
         if (next) doc.body.append(nextLink = stepLink(next, "co-after"));
+        spentEl = null;
+        if (end) setEnd(end);
         if (prev) doc.body.prepend(prevLink = stepLink(prev, "co-before"));
         // A book's own table of contents when it came with one (1.27.2),
         // else the page's h2 and h3 headings.
@@ -1402,5 +1404,26 @@
   addEventListener("resize", applyTop);
   addEventListener("offline", applyConnection);
 
-  C.reader = { set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, headings, section, jumpTo, readable, readableIn, firstShown, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
+  // Your time in this clip at its very end (1.39.0), from the app; null
+  // takes it away. Not part of the clip: never read aloud, found or kept.
+  let spentEl = null;
+  function setEnd(lines) {
+    if (!doc) return;
+    if (!lines || !lines.length) { if (spentEl) spentEl.remove(); spentEl = null; return; }
+    if (!spentEl || !spentEl.isConnected) {
+      spentEl = doc.createElement("div");
+      spentEl.className = "co-spent";
+      doc.body.append(spentEl);
+    }
+    const text = lines.join("\n");
+    if (spentEl.dataset.text === text) return;
+    spentEl.dataset.text = text;
+    spentEl.replaceChildren(...lines.map((t, i) => {
+      const line = doc.createElement("p");
+      line.className = i ? "co-spent-more" : "co-spent-time";
+      line.textContent = t;
+      return line;
+    }));
+  }
+  C.reader = { setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, headings, section, jumpTo, readable, readableIn, firstShown, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
 })();

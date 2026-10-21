@@ -1183,7 +1183,7 @@ const feedIcon = (name, size = 20) => {
 
 let feeds = load(FEEDS_KEY, []);
 if (!Array.isArray(feeds)) feeds = [];
-state.place = ["feeds", "highlights"].includes(load(PLACE_KEY, "library")) ? load(PLACE_KEY, "library") : "library";
+state.place = ["feeds", "highlights", "reading"].includes(load(PLACE_KEY, "library")) ? load(PLACE_KEY, "library") : "library";
 // The feed picked in the river (its url), or null for all of them.
 state.feed = null;
 state.side = false;
@@ -1393,6 +1393,7 @@ function updateWidgets() {
         return { name, meta: readCount(list), next: next ? next.id : "", button: !next ? "" : i < 0 ? "Read again" : started ? "Continue" : "Start",
           clips: list.slice(from, from + 4).map((x) => ({ id: x.id, title: x.title, meta: readingLine(x) })) };
       }),
+      stats: statsWidget(),
     });
   }, 800);
 }
@@ -1437,7 +1438,7 @@ async function takeWidget() {
     else if (f) previewPost(f, f.items.find((it) => it.url === got.url));
     return;
   }
-  if (got.kind === "feeds" || got.kind === "library") await goPlace(got.kind);
+  if (got.kind === "feeds" || got.kind === "library" || got.kind === "reading") await goPlace(got.kind);
   if (got.kind === "favourites") { await goPlace("library"); setFilter("favourites"); }
   if (got.kind === "collection" && got.name) {
     await goPlace("library");
@@ -1552,20 +1553,23 @@ function paintFeeds() {
 function paintPlace() {
   const feedsOn = state.place === "feeds";
   const marksOn = state.place === "highlights";
-  $("placeTitle").textContent = feedsOn ? "Feeds" : marksOn ? "Highlights" : "Library";
+  const readOn = state.place === "reading";
+  $("placeTitle").textContent = feedsOn ? "Feeds" : marksOn ? "Highlights" : readOn ? "Reading" : "Library";
   $("libraryView").dataset.place = state.place;
-  $("library").hidden = feedsOn || marksOn;
+  $("library").hidden = feedsOn || marksOn || readOn;
   $("feeds").hidden = !feedsOn;
   $("highlights").hidden = !marksOn;
-  $("paneNote").textContent = marksOn ? "Pick a highlight to read it here" : "Pick a post to read it here";
+  $("reading").hidden = !readOn;
+  $("paneNote").textContent = marksOn ? "Pick a highlight to read it here" : readOn ? "Pick a clip to read it here" : "Pick a post to read it here";
   // The bottom field follows a feed in Feeds, and saves a link elsewhere.
   $("saveUrl").placeholder = feedsOn ? "Paste a site or feed to follow" : "Paste a link to save";
   document.querySelector('label[for="saveUrl"]').textContent = feedsOn ? "Site or feed" : "Page link";
   $("saveForm").querySelector(".btn-primary").textContent = feedsOn ? "Follow" : "Save";
   $("severalBtn").hidden = feedsOn;
-  if (feedsOn || marksOn) { if (state.query) clearSearch(); }
+  if (feedsOn || marksOn || readOn) { if (state.query) clearSearch(); }
   if (feedsOn) renderFeeds();
   else if (marksOn) renderHighlights();
+  else if (readOn) renderReading();
   else renderLibrary();
 }
 

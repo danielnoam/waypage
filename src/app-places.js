@@ -78,6 +78,185 @@ function renderHighlights() {
   }
 }
 
+// ---- Reading (1.39.0) ----
+// The reading stats as a place: a week, month or year of time read and
+// heard, a bar a day (a month in a year), the totals under them, days in
+// a row, and the clips you spent most time on. Every device's counts
+// added up (stats.js).
+const SPAN_KEY = "waypage.readingSpan";
+let readSpan = ["week", "month", "year"].includes(load(SPAN_KEY, "week")) ? load(SPAN_KEY, "week") : "week";
+let readBack = 0; // how many weeks, months or years before this one
+const dayAt = (k) => new Date(k + "T12:00:00");
+const keyOf = (d) => C.stats.dayKey(d.getTime());
+// The first day of the week where you are (Sunday in Israel, Monday in
+// most of Europe), from the browser when it says.
+function weekStart() {
+  try {
+    const l = new Intl.Locale(navigator.language);
+    const w = l.getWeekInfo ? l.getWeekInfo() : l.weekInfo;
+    if (w && w.firstDay) return w.firstDay % 7;
+  } catch (e) { /* Monday */ }
+  return 1;
+}
+function readRange(span = readSpan, back = readBack) {
+  const now = new Date();
+  now.setHours(12, 0, 0, 0);
+  if (span === "week") {
+    const a = new Date(now);
+    a.setDate(a.getDate() - ((a.getDay() - weekStart() + 7) % 7) - 7 * back);
+    const b = new Date(a);
+    b.setDate(b.getDate() + 6);
+    const opts = { day: "numeric", month: a.getMonth() === b.getMonth() ? "long" : "short" };
+    if (b.getFullYear() !== now.getFullYear()) opts.year = "numeric";
+    const f = new Intl.DateTimeFormat(undefined, opts);
+    const title = f.formatRange ? f.formatRange(a, b) : f.format(a) + " – " + f.format(b);
+    return { from: keyOf(a), to: keyOf(b), title, now: back === 0 ? "This week" : back === 1 ? "Last week" : null };
+  }
+  if (span === "month") {
+    const a = new Date(now.getFullYear(), now.getMonth() - back, 1, 12);
+    const b = new Date(a.getFullYear(), a.getMonth() + 1, 0, 12);
+    return { from: keyOf(a), to: keyOf(b), title: a.toLocaleDateString(undefined, { month: "long", year: "numeric" }), now: back === 0 ? "This month" : null };
+  }
+  const y = now.getFullYear() - back;
+  return { from: y + "-01-01", to: y + "-12-31", title: String(y), now: back === 0 ? "This year" : null };
+}
+// The bars: a day each, or in a year a month each.
+function readBars(range) {
+  const days = C.stats.days(range.from, range.to);
+  const today = C.stats.dayKey(Date.now());
+  if (readSpan !== "year") {
+    return days.map((d, i) => {
+      const t = dayAt(d.key);
+      const label = readSpan === "week" ? t.toLocaleDateString(undefined, { weekday: "narrow" })
+        : (i % 7 === 0 ? String(t.getDate()) : "");
+      return { read: d.readMs, aloud: d.aloudMs, label, today: d.key === today, future: d.key > today,
+        name: t.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }) };
+    });
+  }
+  const months = [];
+  for (let m = 0; m < 12; m++) months.push({ read: 0, aloud: 0, label: new Date(2000, m, 1).toLocaleDateString(undefined, { month: "narrow" }),
+    name: new Date(2000, m, 1).toLocaleDateString(undefined, { month: "long" }), today: false, future: false });
+  const thisMonth = today.slice(0, 7);
+  for (const d of days) { const m = Number(d.key.slice(5, 7)) - 1; months[m].read += d.readMs; months[m].aloud += d.aloudMs; }
+  months.forEach((m, i) => { const k = range.from.slice(0, 4) + "-" + String(i + 1).padStart(2, "0"); m.today = k === thisMonth; m.future = k > thisMonth; });
+  return months;
+}
+// A top worth drawing a line at: 15, 30 or 60 minutes, then whole hours.
+function niceMax(ms) {
+  const m = Math.max(1, ms / 60000);
+  for (const s of [15, 30, 60, 90, 120]) if (m <= s) return s * 60000;
+  return Math.ceil(m / 60) * 3600000;
+}
+function readChart(bars) {
+  const top = niceMax(Math.max(...bars.map((b) => b.read + b.aloud)));
+  const col = (b) => {
+    const h = (v) => (v > 0 ? Math.max(2, (v / top) * 100) : 0);
+    const c = el("div", { class: "rs-col" + (b.today ? " today" : "") + (b.future ? " future" : "") },
+      el("div", { class: "rs-stack" },
+        b.aloud ? el("span", { class: "rs-aloud", style: "height:" + h(b.aloud) + "%" }) : null,
+        b.read ? el("span", { class: "rs-read", style: "height:" + h(b.read) + "%" }) : null,
+        !b.read && !b.aloud && !b.future ? el("span", { class: "rs-none" }) : null),
+      el("span", { class: "rs-day", "aria-hidden": "true" }, b.label));
+    c.title = b.name + ": " + (b.read + b.aloud >= 60000 ? spanText(b.read + b.aloud) : "nothing");
+    return c;
+  };
+  const said = bars.filter((b) => b.read + b.aloud >= 60000).map((b) => b.name + " " + spanText(b.read + b.aloud)).join(", ");
+  return el("div", { class: "rs-chart rs-" + readSpan, role: "img", "aria-label": said ? "Time a " + (readSpan === "year" ? "month" : "day") + ": " + said : "No reading in this " + readSpan },
+    el("span", { class: "rs-top meta" }, spanText(top)),
+    el("div", { class: "rs-cols" }, ...bars.map(col)));
+}
+function readFigure(n, label) {
+  return el("div", { class: "rs-fig" }, el("b", null, n.toLocaleString()), el("span", null, label));
+}
+function readStreak() {
+  const s = C.stats.streak();
+  const today = Date.now();
+  const dots = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = C.stats.day(C.stats.dayKey(today - i * 864e5));
+    dots.push(el("i", { class: d.readMs + d.aloudMs >= C.stats.READ_DAY ? "on" : "" }));
+  }
+  const best = s.best > s.now && s.bestEnd
+    ? "Longest: " + s.best + " days, in " + dayAt(s.bestEnd).toLocaleDateString(undefined, { month: "long" }) : s.now ? "Your longest yet" : "A minute a day keeps a run going";
+  return el("div", { class: "rs-streak" },
+    el("div", { class: "rs-dots", "aria-hidden": "true" }, ...dots),
+    el("div", null,
+      el("p", { class: "rs-streak-n" }, s.now === 1 ? "1 day in a row" : s.now ? s.now + " days in a row" : "No run of days yet"),
+      el("p", { class: "meta" }, best)));
+}
+// What the Reading widgets show (1.39.0), worked out here for the day
+// it's handed over; the widgets know to say nothing yet on a later day.
+function statsWidget() {
+  const S = C.stats;
+  const week = readRange("week", 0);
+  const days = S.days(week.from, week.to);
+  const today = S.dayKey(Date.now());
+  const t = S.day(today), run = S.streak();
+  const ms = days.reduce((n, d) => n + d.readMs + d.aloudMs, 0);
+  const finished = S.finishedIn(week.from, week.to);
+  return {
+    day: today, weekTo: week.to,
+    week: spanText(ms),
+    weekMeta: [run.now ? (run.now === 1 ? "1 day in a row" : run.now + " days in a row") : null, finished ? finished + " finished" : null].filter(Boolean).join(" · ") || week.title,
+    bars: days.map((d) => ({ day: d.key, r: Math.round(d.readMs / 6000) / 10, a: Math.round(d.aloudMs / 6000) / 10,
+      label: dayAt(d.key).toLocaleDateString(undefined, { weekday: "narrow" }) })),
+    today: spanText(t.readMs + t.aloudMs),
+    todayMeta: t.readMs + t.aloudMs < 60000 ? "Nothing yet today" : t.aloudMs >= 60000 ? spanText(t.readMs) + " reading, " + spanText(t.aloudMs) + " aloud" : t.words >= 50 ? "About " + (Math.round(t.words / 10) * 10).toLocaleString() + " words" : "Reading",
+    readToday: t.readMs + t.aloudMs >= S.READ_DAY,
+    run: run.now === 1 ? "1 day" : run.now + " days",
+    runMeta: run.best > run.now ? "Longest " + run.best : run.now ? "Your longest yet" : "Read a minute today to start",
+  };
+}
+function renderReading() {
+  const root = $("reading");
+  const range = readRange();
+  const days = C.stats.days(range.from, range.to);
+  const read = days.reduce((n, d) => n + d.readMs, 0), aloud = days.reduce((n, d) => n + d.aloudMs, 0);
+  const since = C.stats.dayKey(C.stats.since());
+  const older = range.from <= since;
+  const step = (n) => () => { readBack = Math.max(0, readBack + n); renderReading(); };
+  const seg = el("div", { class: "rs-seg", role: "tablist", "aria-label": "Show" }, ...["week", "month", "year"].map((s) => {
+    const b = el("button", { class: "rs-tab", type: "button", role: "tab", "aria-selected": String(s === readSpan),
+      onclick: () => { readSpan = s; readBack = 0; store(SPAN_KEY, s); renderReading(); } }, s[0].toUpperCase() + s.slice(1));
+    return b;
+  }));
+  const back = el("button", { class: "icon-btn", type: "button", "aria-label": "Before", onclick: step(1) });
+  back.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
+  back.disabled = older;
+  const on = el("button", { class: "icon-btn", type: "button", "aria-label": "After", onclick: step(-1) });
+  on.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
+  on.disabled = readBack === 0;
+  const tops = C.stats.top(range.from, range.to, 12).map((t) => ({ ...t, p: state.pages.find((p) => p.id === t.id) }))
+    .filter((t) => t.p && t.ms >= 60000).slice(0, 5);
+  const opened = days.reduce((n, d) => n + d.opened, 0), saved = days.reduce((n, d) => n + d.saved, 0);
+  const words = days.reduce((n, d) => n + d.words, 0);
+  fill(root,
+    seg,
+    el("div", { class: "rs-range" }, back, el("p", { class: "rs-title", "aria-live": "polite" }, range.title), on),
+    el("p", { class: "rs-total" }, read + aloud >= 60000 ? spanText(read + aloud) : "0 min"),
+    el("p", { class: "meta rs-split" }, spanText(read) + " reading · " + spanText(aloud) + " read aloud"),
+    readChart(readBars(range)),
+    el("div", { class: "rs-legend meta", "aria-hidden": "true" }, el("span", null, el("i", { class: "rs-key-read" }), "Reading"), el("span", null, el("i", { class: "rs-key-aloud" }), "Read aloud")),
+    older ? el("p", { class: "meta rs-since" }, "Counting since " + dayAt(since).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })) : null,
+    el("div", { class: "rs-figs" },
+      readFigure(Math.round(words / 100) * 100 || words, "words"),
+      readFigure(C.stats.finishedIn(range.from, range.to), "clips finished"),
+      readFigure(opened, "clips opened"),
+      readFigure(saved, "clips saved")),
+    readStreak(),
+    tops.length ? el("h2", { class: "overline rs-over" }, "Most time " + (range.now ? range.now.toLowerCase() : "then")) : null,
+    tops.length ? el("ul", { class: "rs-top-list" }, ...tops.map((t) => el("li", null,
+      el("button", { class: "rs-clip", type: "button", onclick: () => openPage(t.p.id) },
+        clipCover(t.p),
+        el("span", { class: "rs-clip-text" },
+          el("span", { class: "rs-clip-title", dir: "auto" }, t.p.title),
+          el("span", { class: "meta" }, [t.p.link ? "Files" : t.p.site, (C.stats.clip(t.p.id) || {}).finished ? "finished" : null].filter(Boolean).join(" · "))),
+        el("span", { class: "rs-clip-time" }, spanText(t.ms)))))) : null,
+    el("p", { class: "footnote rs-note" }, C.sync.on
+      ? "Each of your devices counts its own, and GitHub sync adds them up. A clip's time counts while it's on screen, up to two minutes after your last scroll, turn or tap."
+      : "Counted on this device. A clip's time counts while it's on screen, up to two minutes after your last scroll, turn or tap. With GitHub sync on, your other devices' time adds in here."));
+}
+
 async function checkNow(f) {
   if (!navigator.onLine) { toast("You're offline. Check again when you're back online."); return; }
   if (f) { feedsChecking = true; paintFeeds(); try { await checkFeed(f); } finally { feedsChecking = false; paintFeeds(); } }
@@ -309,14 +488,14 @@ function renderSide() {
   const marked = state.pages.reduce((n, p) => n + (p.marks || []).length, 0);
   const latest = (f) => Math.max(0, ...f.items.map(postAt));
   const big = wide.matches;
-  const inLib = !inFeeds && !inMarks;
+  const inLib = !inFeeds && !inMarks && state.place !== "reading";
   const inLibrary = inLib && !state.part && !state.folder && state.filter !== "favourites";
   const favs = sideFavourites();
   const hasFolders = allFolders().length > 0;
   fill($("sidebar"),
     el("div", { class: "side-head" },
       el("p", { class: "side-title" }, "Waypage"),
-      big && !inFeeds && !inMarks ? el("button", { class: "icon-btn side-search", type: "button", "aria-label": "Search", title: "Search (/)",
+      big && inLib ? el("button", { class: "icon-btn side-search", type: "button", "aria-label": "Search", title: "Search (/)",
         onclick: () => (pinned.matches ? toLibrary() : back()).then(() => { if (state.place !== "library") goPlace("library"); openSearch(); }) }, sideSvg("search")) : null),
     // From inside Collections, Clips, a collection or the favourites
     // (1.20.0), Library steps all the way back to the library itself.
@@ -342,6 +521,7 @@ function renderSide() {
     // Every highlight in the library (1.8.0), a place of its own.
     el("hr", { class: "side-line" }),
     item(sideSvg("marks"), "Highlights", inMarks, count(marked, "side-count"), () => goPlace("highlights")),
+    item(sideSvg("reading"), "Reading", state.place === "reading", null, () => goPlace("reading")),
     // On a big screen the sidebar carries the rest (1.5.0): Add a feed,
     // the tags, and Settings at its foot.
     ...(big ? sideMore() : []));
@@ -369,6 +549,7 @@ function sideMore() {
 const SIDE_SVG = {
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
   marks: ICONS.mark,
+  reading: '<path d="M5 20V12M10 20V6M15 20v-9M20 20V9"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
 };
 function sideSvg(name) {
@@ -466,7 +647,7 @@ function fitWidth() {
 // the reader's page come here through reader.js.
 const KEYS = [
   ["Anywhere", [["/", "Search the library"], [(/Mac/.test(navigator.platform) && navigator.maxTouchPoints < 2 ? "⌘" : "Ctrl") + " V", "Save a copied link"], ["G then L", "Go to the library"],
-    ["G then F", "Go to Feeds"], ["D", "Downloads"], [",", "Settings"], ["?", "These shortcuts"]]],
+    ["G then F", "Go to Feeds"], ["G then H", "Go to Highlights"], ["G then R", "Go to Reading"], ["D", "Downloads"], [",", "Settings"], ["?", "These shortcuts"]]],
   ["In the library", [["↑ ↓", "Move between clips"], ["Enter", "Open"], ["X", "Pick, to act on several"], ["Shift-click", "Pick a run"],
     ["F", "Favourite"], ["E", "Export"], ["Del", "Delete"]]],
   ["Reading", [["Space  ← →", "Next or previous page"], ["J  K", "Next or previous section"], ["T", "Contents beside the text"],
@@ -484,7 +665,7 @@ function keysSheet() {
 
 const typingIn = (t) => !!(t && t.closest && t.closest("input, textarea, select, [contenteditable]"));
 // The card or collection with focus, in the list on screen.
-const listNow = () => (state.folder ? $("folderBody") : state.place === "feeds" ? $("feeds") : state.place === "highlights" ? $("highlights") : $("library"));
+const listNow = () => (state.folder ? $("folderBody") : state.place === "feeds" ? $("feeds") : state.place === "highlights" ? $("highlights") : state.place === "reading" ? $("reading") : $("library"));
 const focusedNode = () => { const a = document.activeElement; return a && a.closest && listNow().contains(a) ? a.closest("[data-ids]") : null; };
 const focusedPage = () => {
   const n = focusedNode();
@@ -558,7 +739,7 @@ function onKeys(e) {
   }
   if (Date.now() - gAt < 1200) {
     gAt = 0;
-    const to = { l: "library", f: "feeds" }[k.toLowerCase()];
+    const to = { l: "library", f: "feeds", h: "highlights", r: "reading" }[k.toLowerCase()];
     if (to) go(() => goPlace(to));
     return;
   }
@@ -567,7 +748,7 @@ function onKeys(e) {
     g: () => { gAt = Date.now(); },
     "/": () => (state.folder ? toLibrary() : Promise.resolve()).then(() => {
       if (state.place === "highlights") { $("highlights").querySelector(".hl-search input").focus(); return; }
-      return (state.place === "feeds" ? goPlace("library") : Promise.resolve()).then(openSearch);
+      return (["feeds", "reading"].includes(state.place) ? goPlace("library") : Promise.resolve()).then(openSearch);
     }),
     d: () => openDownloads(),
     ",": () => openSettings(),

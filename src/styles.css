@@ -1714,8 +1714,8 @@ html { -webkit-tap-highlight-color: transparent; }
 .install-hint { margin-top: var(--s-3); }
 
 /* ---- 0.28.0: the sidebar and Feeds ---- */
-.library[hidden], .feeds[hidden], .highlights[hidden] { display: none; }
-:is([data-place="feeds"], [data-place="highlights"]) :is(.top, #searchBtn) { display: none; }
+.library[hidden], .feeds[hidden], .highlights[hidden], .reading[hidden] { display: none; }
+:is([data-place="feeds"], [data-place="highlights"], [data-place="reading"]) :is(.top, #searchBtn) { display: none; }
 
 .side-catch { z-index: 17; }
 .sidebar {
@@ -1791,6 +1791,81 @@ html { -webkit-tap-highlight-color: transparent; }
 .hl-title .meta { margin: 0; }
 .hl-title:active .hl-name { color: var(--muted); }
 .hl-none { margin: var(--s-6) auto 0; text-align: center; }
+
+/* Reading (1.39.0): a week, month or year of reading stats. */
+.reading {
+  flex: 1; padding: var(--s-1) var(--gutter) var(--s-5);
+  display: flex; flex-direction: column;
+}
+.reading > * { width: 100%; max-width: 40rem; margin-inline: auto; }
+[data-place="reading"] .save-form { display: none; }
+[data-place="reading"] .save-bar:not(:has(.update-bar:not([hidden]))) { display: none; }
+.rs-seg { display: flex; gap: 2px; padding: 3px; border-radius: var(--r-md); background: var(--bar); }
+.rs-tab {
+  flex: 1; min-height: 38px; border: 0; border-radius: 9px; background: transparent;
+  color: var(--muted); font: 600 var(--fs-meta)/var(--lh-meta) var(--sans); cursor: pointer;
+}
+.rs-tab[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px color-mix(in srgb, var(--muted) 30%, var(--line)); }
+.rs-tab:active { background: var(--press); }
+.rs-range { display: flex; align-items: center; justify-content: space-between; margin-top: var(--s-2); }
+.rs-range .icon-btn { color: var(--muted); }
+.rs-range .icon-btn:disabled { visibility: hidden; }
+.rs-title { margin-block: 0; font: 600 var(--fs-label)/var(--lh-label) var(--sans); text-align: center; }
+.rs-total { margin-block: var(--s-3) 0; font: 700 var(--fs-title)/var(--lh-title) var(--serif); font-variant-numeric: tabular-nums; }
+.rs-split { margin-block: 2px 0; font-variant-numeric: tabular-nums; }
+.rs-chart { position: relative; margin-top: var(--s-4); padding-top: var(--s-5); }
+.rs-top { position: absolute; top: 0; inset-inline-end: 0; margin: 0; }
+.rs-cols {
+  display: flex; align-items: stretch; gap: var(--s-2); height: 160px;
+  border-top: 1px solid var(--line); background: linear-gradient(var(--line), var(--line)) 0 69px / 100% 1px no-repeat;
+}
+.rs-month .rs-cols { gap: 2px; }
+.rs-year .rs-cols { gap: var(--s-1); }
+.rs-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.rs-stack { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; }
+.rs-stack span { display: block; border-radius: 3px; }
+.rs-month .rs-stack span { border-radius: 2px; }
+.rs-read { background: var(--accent); }
+.rs-aloud { background: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.rs-none { height: 2px; background: var(--line); }
+.rs-day { height: 22px; padding-top: var(--s-1); text-align: center; overflow: visible; white-space: nowrap; font: 400 12px/18px var(--sans); color: var(--muted); }
+.rs-month .rs-day { text-align: start; }
+.rs-col.today .rs-day { color: var(--ink); font-weight: 700; }
+.rs-legend { display: flex; gap: var(--s-4); margin-top: var(--s-2); }
+.rs-legend i { display: inline-block; width: 8px; height: 8px; margin-inline-end: 6px; border-radius: 2px; vertical-align: 1px; }
+.rs-key-read { background: var(--accent); }
+.rs-key-aloud { background: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.rs-since { margin-block: var(--s-2) 0; }
+.rs-figs {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-top: var(--s-5); overflow: hidden;
+  border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--line);
+}
+.rs-fig { display: flex; flex-direction: column; padding: var(--s-3) var(--s-4); background: var(--surface); }
+.rs-fig b { font: 600 var(--fs-heading)/var(--lh-heading) var(--serif); font-variant-numeric: tabular-nums; }
+.rs-fig span { font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--muted); }
+.rs-streak {
+  display: flex; align-items: center; gap: var(--s-3); margin-top: var(--s-3); padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface);
+}
+.rs-dots { display: flex; gap: var(--s-1); flex-shrink: 0; }
+.rs-dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+.rs-dots i.on { background: var(--ok); }
+.rs-streak p { margin: 0; }
+.rs-streak-n { font-weight: 600; }
+.rs-over { margin: var(--s-5) auto var(--s-1); }
+.rs-top-list { list-style: none; margin: 0 auto; padding: 0; }
+.rs-top-list li + li { border-top: 1px solid var(--line); }
+.rs-clip {
+  display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 56px; padding: var(--s-2) 0;
+  border: 0; background: none; color: var(--ink); font: inherit; text-align: start; cursor: pointer;
+}
+.rs-clip:active .rs-clip-title { color: var(--muted); }
+.rs-clip .side-cover, .rs-clip .side-icon { width: var(--s-7); height: var(--s-7); }
+.rs-clip .side-icon { justify-content: center; align-items: center; border-radius: var(--r-sm); background: var(--preview); color: var(--muted); }
+.rs-clip-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.rs-clip-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 var(--fs-label)/var(--lh-label) var(--serif); }
+.rs-clip-time { flex-shrink: 0; font: 600 var(--fs-meta)/var(--lh-meta) var(--sans); font-variant-numeric: tabular-nums; }
+.rs-note { margin-top: var(--s-5); }
 
 /* The river: chips per feed, then the posts by day. */
 .feeds {
@@ -1921,7 +1996,7 @@ html { -webkit-tap-highlight-color: transparent; }
   /* Everything in the library lines up on one column, as wide as the
      window allows. */
   :root { --lib-left: 0px; --lib-pad: max(var(--gutter), calc((100vw - var(--lib-left) - var(--content-max)) / 2)); }
-  #libraryView > :is(.top-bar, .top, .library, .feeds, .highlights, .save-bar) {
+  #libraryView > :is(.top-bar, .top, .library, .feeds, .highlights, .reading, .save-bar) {
     padding-inline: max(var(--gutter), calc((100% - var(--content-max)) / 2));
   }
   .top-bar { padding-block: var(--s-4) var(--s-3); gap: var(--s-3); }
