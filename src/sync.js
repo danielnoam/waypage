@@ -45,6 +45,17 @@
   // Which copy of a page's text this is: when it was saved, or edited
   // since in Edit clips (1.22.0), so an edit goes up like a save again.
   const ver = (p) => Math.max(p.savedAt || 0, p.editedAt || 0);
+  // Where you got to in a clip, from the library entry another device
+  // wrote, onto this device's own copy of a different version (1.39.1).
+  // The spot names a paragraph of the other version's text, so a place
+  // that came over goes by its fraction.
+  const READING = ["at", "finished", "readAt", "readOn", "placeAt"];
+  function placeOnly(have, m) {
+    const next = { ...have };
+    for (const k of READING) { if (m[k] === undefined) delete next[k]; else next[k] = m[k]; }
+    if (placeTime(m) !== placeTime(have)) delete next.spot;
+    return READING.some((k) => next[k] !== have[k]) || next.spot !== have.spot ? next : null;
+  }
 
   const load = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } };
   const keep = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* not kept */ } };
@@ -870,7 +881,14 @@
         for (const k of Object.keys(have)) if (DEVICE.includes(k) || !SYNCED.has(k)) next[k] = have[k];
         decided.set(m.id, next);
       } else if (!links && merged.files[m.id] && merged.files[m.id].at === ver(m)) want.push({ m, have });
-      else if (!have) {
+      else if (have) {
+        // Saved again or edited elsewhere, its text not on GitHub (that
+        // device syncs links only, or hasn't sent it yet): the copy here
+        // stays, but where you got to still comes over (1.39.1). Until
+        // then a chapter finished on the phone stayed unread here.
+        const next = placeOnly(have, m);
+        if (next) decided.set(m.id, next);
+      } else {
         stillWaiting.push(m.id);
         // No text on GitHub (its device syncs links only) or not wanted.
         if (links || !merged.files[m.id]) fromLinks.push(m);
@@ -910,7 +928,11 @@
       for (let k = i; k < i + AHEAD; k++) textOf(k);
       const html = await textOf(i);
       asked.delete(i);
-      if (!html) { if (!have) stillWaiting.push(m.id); continue; }
+      if (!html) {
+        if (!have) stillWaiting.push(m.id);
+        else { const next = placeOnly(have, m); if (next) decided.set(m.id, next); }
+        continue;
+      }
       if (have) await C.store.removePage(m.id);
       const got = await incoming(html, m);
       const meta = { ...m, missing: got.missing };
