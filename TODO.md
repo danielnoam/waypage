@@ -5,13 +5,16 @@ CHANGELOG.md; the rules every release keeps are at the top of NOTES.md.
 
 ## Next
 
-- **Show the reading stats.** Collected since 1.38.0 (NOTES.md); what
-  to show and where is still Daniel's call.
+Nothing waiting. Ask Daniel what's next.
 
 ## iOS release (later, Daniel 11 Oct 2026)
 
 Everything iOS-only, kept for one iOS release.
 
+- **Reading widgets on iOS.** Android has Reading this week, Reading
+  today and Days in a row since 1.39.0 (Widgets.java, statsWeek and the
+  rest), drawn from the `stats` the app hands over in widgets.update.
+  The iOS widget extension needs the same three, reading that `stats`.
 - **Google Drive backups on iOS.** Android and the web copy have them
   since 1.27.0. iOS needs an iOS client in the Google Cloud project, the
   GoogleSignIn pod in native/share for the token, and a Drive plugin

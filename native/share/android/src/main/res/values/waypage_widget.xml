@@ -20,6 +20,13 @@
     <string name="waypage_w_collection_about">One collection\'s next clips to read, and a button to its next one.</string>
     <string name="waypage_w_highlight">A highlight</string>
     <string name="waypage_w_highlight_about">One of your highlights, a different one each day.</string>
+    <string name="waypage_w_week">Reading this week</string>
+    <string name="waypage_w_week_eg">4 h 12 min</string>
+    <string name="waypage_w_week_about">This week\'s reading time, a bar a day.</string>
+    <string name="waypage_w_today">Reading today</string>
+    <string name="waypage_w_today_about">How long you\'ve read and listened today.</string>
+    <string name="waypage_w_run">Days in a row</string>
+    <string name="waypage_w_run_about">How many days in a row you\'ve read.</string>
     <string name="waypage_w_start">Start</string>
     <string name="waypage_w_aloud">Continue, reading aloud</string>
     <string name="waypage_w_collection_eg1">Chapter one</string>

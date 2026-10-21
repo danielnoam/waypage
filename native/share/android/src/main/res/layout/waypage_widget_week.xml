@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Reading this week (1.39.0): the time, a bar a day, days in a row. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/waypage_widget_bg"
+    android:orientation="vertical"
+    android:padding="@dimen/waypage_w_pad">
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/waypage_w_week"
+        android:textColor="@color/waypage_w_muted"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+    <TextView
+        android:id="@+id/w_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:fontFamily="serif"
+        android:maxLines="1"
+        android:text="@string/waypage_w_week_eg"
+        android:textColor="@color/waypage_w_ink"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+    <ImageView
+        android:id="@+id/w_bars"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="6dp"
+        android:contentDescription="@string/waypage_w_week"
+        android:scaleType="fitXY" />
+    <TextView
+        android:id="@+id/w_meta"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/waypage_w_muted"
+        android:textSize="12sp" />
+</LinearLayout>

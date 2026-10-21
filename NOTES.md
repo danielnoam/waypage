@@ -52,8 +52,32 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
   count. Read aloud counts while playing, but only up to 3 minutes past
   the last paragraph the app heard, so a pause that reaches a sleeping
   phone late doesn't count the night. Saved again or updated, a clip's
-  numbers move to its new id (`stats.moved`). Not synced, not in
-  backups yet: per device until there's something to show.
+  numbers move to its new id (`stats.moved`, kept as `moved` so other
+  devices' counts under the old id follow).
+
+- **Reading stats shown and synced (1.39.0).** Each device has a random
+  id (`waypage.statsDevice`) and only ever writes its own count, to
+  `stats/<id>.json` in the waypage-data repo, at the end of a sync and
+  only when it changed; the others' files come down when their sha
+  changed (`waypage.syncStats`) and sit in `waypage.statsOthers`. The
+  totals add them up, so there's no merge and nothing counts twice;
+  clips finished are counted from each clip's earliest `finished`, once
+  however many devices finished it. A Drive or file backup carries
+  `stats.json`, this device's and the others it knows; restoring takes
+  them as other devices (an erased device gets a new id), never this
+  device's own. A stats failure never fails a sync. Days also keep
+  time by clip (`days[k].clips`) for "Most time", from 1.39.0 on.
+  Privacy: the stats say when and how long you read each clip. They
+  stay on the device unless GitHub sync or a backup is on, and then go
+  only to your own private repo or your own Drive, like the library.
+- **The Reading place and widgets (1.39.0).** A week starts on the day
+  `Intl.Locale` says (Sunday in Israel), Monday when it can't tell. A
+  day counts towards days in a row with a minute read or heard. The
+  widgets get the lines worked out by the app for the day it handed
+  them over; drawn on a later day with the app closed, Today says
+  nothing yet and Days in a row holds only if yesterday was read. The
+  week's bars are a bitmap drawn in Widgets.bars, sized from the
+  widget's width.
 
 - **Update from the site (1.38.0).** Uses the Save again path (a new id
   in the old one's place, keeping tags, collection, place and

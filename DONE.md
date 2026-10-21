@@ -62,6 +62,8 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Dim pictures in dark themes (1.32.0)
 - Volume buttons turn pages on Android (1.32.0)
 
+- Your time in a clip at its very end, with a switch in Settings › Reading (1.39.0)
+
 ## Read aloud
 
 - Phone's own voices, offline, screen off, lock-screen controls; Read from here (0.27.0, 0.27.1)
@@ -89,7 +91,9 @@ release ships a feature, it gets a line here and leaves TODO.md.
 ## App
 
 - App lock: passcode, fingerprint or face on Android, lock after a time away, erase when forgotten (1.38.0)
-- Reading stats collected on the device: time, words, read aloud, opened, finished, saved (1.38.0; not shown yet)
+- Reading stats: time, words, read aloud, opened, finished, saved, kept per device and added up through GitHub sync and backups (1.38.0, 1.39.0)
+- Reading place in the sidebar: week, month or year of bars, totals, days in a row, most time (1.39.0)
+- Reading widgets on Android: this week's bars, today, days in a row (1.39.0; iOS on TODO)
 - Widgets: Keep reading, Feeds, Favourites, Collection, Highlight (0.29.0, 0.29.2, 0.35.0, 1.9.0; iOS 1.6.0)
 - App icon shortcuts (1.14.0)
 - Self-updating Android app, What's new (0.2.0, 0.11.0, 1.23.0)

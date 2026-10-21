@@ -77,6 +77,40 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/waypage_widget_highlight_info" />
         </receiver>
+        <!-- Reading stats (1.39.0): this week, today, days in a row. -->
+        <receiver
+            android:name="io.github.danielnoam.waypage.share.StatsWeekWidget"
+            android:exported="false"
+            android:label="@string/waypage_w_week">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/waypage_widget_week_info" />
+        </receiver>
+        <receiver
+            android:name="io.github.danielnoam.waypage.share.StatsTodayWidget"
+            android:exported="false"
+            android:label="@string/waypage_w_today">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/waypage_widget_today_info" />
+        </receiver>
+        <receiver
+            android:name="io.github.danielnoam.waypage.share.StatsRunWidget"
+            android:exported="false"
+            android:label="@string/waypage_w_run">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/waypage_widget_run_info" />
+        </receiver>
         <!-- One collection (0.35.0), picked when the widget is placed. -->
         <receiver
             android:name="io.github.danielnoam.waypage.share.CollectionWidget"

@@ -6,13 +6,22 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.RectF;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.SizeF;
 import android.view.View;
 import android.widget.RemoteViews;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Iterator;
 import java.util.Map;
 import org.json.JSONArray;
@@ -59,6 +68,9 @@ final class Widgets {
         for (int id : m.getAppWidgetIds(new ComponentName(ctx, CollectionWidget.class))) m.updateAppWidget(id, collection(ctx, id));
         int[] marks = m.getAppWidgetIds(new ComponentName(ctx, HighlightWidget.class));
         if (marks.length > 0) m.updateAppWidget(marks, highlight(ctx));
+        for (int id : m.getAppWidgetIds(new ComponentName(ctx, StatsWeekWidget.class))) m.updateAppWidget(id, statsWeek(ctx, m, id));
+        for (int id : m.getAppWidgetIds(new ComponentName(ctx, StatsTodayWidget.class))) m.updateAppWidget(id, statsToday(ctx, m, id));
+        for (int id : m.getAppWidgetIds(new ComponentName(ctx, StatsRunWidget.class))) m.updateAppWidget(id, statsRun(ctx, m, id));
     }
 
     // `what` goes in the intent's address so each tap is its own
@@ -274,6 +286,109 @@ final class Widgets {
             v.setOnClickPendingIntent(FAVS[i], open(ctx, 100000 + id * 4 + i, Uri.parse("waypage-widget://page/" + Uri.encode(p.optString("id", "")))));
         }
         return v;
+    }
+
+    // ---- Reading stats (1.39.0) ----
+    // The app hands over this week's minutes a day and the lines to show,
+    // for the day it wrote them; a widget drawn on a later day (the app
+    // closed since) says nothing yet today, and past the week, nothing.
+
+    private static String dayKey(long t) {
+        return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(t));
+    }
+
+    private static String yesterday() {
+        Calendar c = Calendar.getInstance();
+        c.add(Calendar.DAY_OF_YEAR, -1);
+        return dayKey(c.getTimeInMillis());
+    }
+
+    private static PendingIntent toReading(Context ctx, int code) {
+        return open(ctx, code, Uri.parse("waypage-widget://reading"));
+    }
+
+    static RemoteViews statsWeek(Context ctx, AppWidgetManager m, int id) {
+        RemoteViews v = new RemoteViews(ctx.getPackageName(), R.layout.waypage_widget_week);
+        v.setOnClickPendingIntent(R.id.w_root, toReading(ctx, 50));
+        JSONObject s = data(ctx).optJSONObject("stats");
+        String today = dayKey(System.currentTimeMillis());
+        JSONArray bars = s == null ? null : s.optJSONArray("bars");
+        boolean fresh = s != null && today.compareTo(s.optString("weekTo", "")) <= 0;
+        v.setTextViewText(R.id.w_title, fresh ? s.optString("week", "0 min") : "0 min");
+        v.setTextViewText(R.id.w_meta, fresh ? s.optString("weekMeta", "") : "Open a clip, and your reading shows here.");
+        Bundle o = m.getAppWidgetOptions(id);
+        int wDp = o == null ? 0 : o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0);
+        float d = ctx.getResources().getDisplayMetrics().density;
+        int w = Math.max(200, Math.min(1200, (int) ((wDp > 0 ? wDp - 32 : 220) * d)));
+        int h = (int) (64 * d);
+        v.setImageViewBitmap(R.id.w_bars, bars(ctx, fresh ? bars : null, w, h, d, today));
+        return v;
+    }
+
+    // A bar a day, reading under read aloud, and the day's letter under it.
+    private static Bitmap bars(Context ctx, JSONArray bars, int w, int h, float d, String today) {
+        Bitmap b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(b);
+        int accent = ctx.getColor(R.color.waypage_w_accent), line = ctx.getColor(R.color.waypage_w_line);
+        int muted = ctx.getColor(R.color.waypage_w_muted), ink = ctx.getColor(R.color.waypage_w_ink);
+        int aloud = Color.rgb((Color.red(accent) * 4 + Color.red(line) * 6) / 10, (Color.green(accent) * 4 + Color.green(line) * 6) / 10, (Color.blue(accent) * 4 + Color.blue(line) * 6) / 10);
+        Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+        Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
+        text.setTextSize(11 * d);
+        text.setTextAlign(Paint.Align.CENTER);
+        int n = bars == null || bars.length() == 0 ? 7 : bars.length();
+        float labelH = 16 * d, gap = 6 * d, top = 2 * d;
+        float bw = (w - gap * (n - 1)) / n, room = h - labelH - top;
+        double max = 1;
+        for (int i = 0; bars != null && i < bars.length(); i++) {
+            JSONObject x = bars.optJSONObject(i);
+            if (x != null) max = Math.max(max, x.optDouble("r", 0) + x.optDouble("a", 0));
+        }
+        float r = 3 * d;
+        for (int i = 0; i < n; i++) {
+            JSONObject x = bars == null ? null : bars.optJSONObject(i);
+            float left = i * (bw + gap), base = top + room;
+            double read = x == null ? 0 : x.optDouble("r", 0), heard = x == null ? 0 : x.optDouble("a", 0);
+            float hr = read > 0 ? Math.max(2 * d, (float) (read / max * room)) : 0;
+            float ha = heard > 0 ? Math.max(2 * d, (float) (heard / max * room)) : 0;
+            if (hr + ha == 0) {
+                fill.setColor(line);
+                c.drawRoundRect(new RectF(left, base - 2 * d, left + bw, base), d, d, fill);
+            }
+            if (hr > 0) { fill.setColor(accent); c.drawRoundRect(new RectF(left, base - hr, left + bw, base), r, r, fill); }
+            if (ha > 0) { fill.setColor(aloud); c.drawRoundRect(new RectF(left, base - hr - ha - (hr > 0 ? 2 * d : 0), left + bw, base - hr - (hr > 0 ? 2 * d : 0)), r, r, fill); }
+            String label = x == null ? "" : x.optString("label", "");
+            boolean now = x != null && today.equals(x.optString("day", ""));
+            text.setColor(now ? ink : muted);
+            text.setFakeBoldText(now);
+            c.drawText(label, left + bw / 2, h - 3 * d, text);
+        }
+        return b;
+    }
+
+    private static RemoteViews figure(Context ctx, int code, String head, String title, String meta) {
+        RemoteViews v = new RemoteViews(ctx.getPackageName(), R.layout.waypage_widget_figure);
+        v.setTextViewText(R.id.w_head, head);
+        v.setTextViewText(R.id.w_title, title);
+        v.setTextViewText(R.id.w_meta, meta);
+        v.setOnClickPendingIntent(R.id.w_root, toReading(ctx, code));
+        return v;
+    }
+
+    static RemoteViews statsToday(Context ctx, AppWidgetManager m, int id) {
+        JSONObject s = data(ctx).optJSONObject("stats");
+        boolean fresh = s != null && dayKey(System.currentTimeMillis()).equals(s.optString("day", ""));
+        return figure(ctx, 51, "Today", fresh ? s.optString("today", "0 min") : "0 min", fresh ? s.optString("todayMeta", "") : "Nothing yet today");
+    }
+
+    static RemoteViews statsRun(Context ctx, AppWidgetManager m, int id) {
+        JSONObject s = data(ctx).optJSONObject("stats");
+        String day = s == null ? "" : s.optString("day", "");
+        boolean today = dayKey(System.currentTimeMillis()).equals(day);
+        // Written yesterday: the run still stands until today is over,
+        // as long as yesterday was read.
+        boolean fresh = s != null && (today || (yesterday().equals(day) && s.optBoolean("readToday", false)));
+        return figure(ctx, 52, "In a row", fresh ? s.optString("run", "0 days") : "0 days", fresh ? s.optString("runMeta", "") : "Read a minute today to start");
     }
 
     // New posts the closed app's checks found (FeedCheckJob), not yet read.
