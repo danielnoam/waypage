@@ -73,6 +73,7 @@ async function syncNow(quiet = true) {
       setSeen: (at) => { store(FEEDS_SEEN_KEY, at); if (sideShown()) renderSide(); },
       sameUrl,
       onProgress: () => { if (state.section === "sync") renderSection(); paintDownloads(); },
+      light: syncsPlacesOnly(),
     });
   } catch (e) {
     if (!joined) unsynced = unsynced || sending;
@@ -83,6 +84,7 @@ async function syncNow(quiet = true) {
   paintDownloads();
   if (res && res.downloads.length) { syncQueue.push(...res.downloads.map((p) => p.id)); keepQueue(); fetchPictures(); }
   if (res && res.fromLinks.length) saveFromLinks(res.fromLinks);
+  if (res && res.light) { if (!quiet) toast("Places and reading time synced. Clips wait for Wi-Fi."); return res; }
   if (res && !quiet && !C.sync.paused) toast(res.up + res.down + res.removed ? "Synced: " + [res.up ? res.up + " sent" : "", res.down ? res.down + " came in" : "", res.removed ? res.removed + " removed" : ""].filter(Boolean).join(", ") + "." : "Already in step.");
   return res;
 }
@@ -159,7 +161,8 @@ async function fetchPictures() {
 // off, the three steps to a first device and a way in for the next one;
 // on, the state and a code that sets up another device.
 function syncSections() {
-  return C.sync.on ? [C.sync.oldToken ? syncNewToken() : null, syncState(), syncWhat(), dataGroup(DATA_SYNC_KEY, "Sync", "Syncs on any connection.", "Syncs when you're on Wi-Fi. Changes wait until then."), syncShare(), syncLeave()] : [syncSteps(), syncJoin()];
+  return C.sync.on ? [C.sync.oldToken ? syncNewToken() : null, syncState(), syncWhat(), dataGroup(DATA_SYNC_KEY, "Sync", "Syncs on any connection.", "Syncs when you're on Wi-Fi. Changes wait until then.",
+      { value: "places", label: "Places and reading time only", note: "Where you are in each clip, what you finished and your reading time sync on any connection. New clips, tags and collections wait for Wi-Fi." }), syncShare(), syncLeave()] : [syncSteps(), syncJoin()];
 }
 async function connectSync(text, btn) {
   if (btn) { btn.disabled = true; btn.textContent = "Connecting…"; }
@@ -281,7 +284,7 @@ function paintSync() {
     : backing ? "Sync: backing up to Google Drive"
     : !on ? "Sync"
     : C.sync.paused ? "Sync: paused" : held ? "Sync: waiting for Wi-Fi"
-    : failed ? "Sync: " + C.sync.last.error : C.sync.last.at ? "Sync: synced " + whenText(C.sync.last.at) : "Sync: not synced yet";
+    : failed ? "Sync: " + C.sync.last.error : syncsPlacesOnly() ? "Sync: places only, clips wait for Wi-Fi" : C.sync.last.at ? "Sync: synced " + whenText(C.sync.last.at) : "Sync: not synced yet";
   const busy = running || backing;
   const said = [on, C.drive.on, busy, part, held, failed, label].join("|");
   if (said !== syncPainted) {
@@ -300,7 +303,7 @@ function paintSync() {
 }
 function syncPageSig() {
   const l = C.drive.last, r = driveRun;
-  return [syncLabel, C.sync.paused, C.sync.last.at, C.sync.last.error, syncAfter(), C.drive.on, l.at, l.error,
+  return [syncLabel, syncsPlacesOnly(), C.sync.paused, C.sync.last.at, C.sync.last.error, syncAfter(), C.drive.on, l.at, l.error,
     r ? [r.restore, r.paused, r.stopped, !!r.merging].join() : ""].join("|");
 }
 
@@ -318,7 +321,8 @@ function syncState() {
   const paused = C.sync.paused;
   const status = C.sync.running ? now.text : paused ? "Paused" + (last.at ? ". Last synced " + whenText(last.at) : "")
     : waitsForWifi(DATA_SYNC_KEY) ? "Waiting for Wi-Fi" + (last.at ? ". Last synced " + whenText(last.at) : "")
-    : last.error ? last.error : last.at ? "Synced " + whenText(last.at) : "Not synced yet";
+    : last.error ? last.error : syncsPlacesOnly() ? (last.light ? "Places synced " + whenText(last.at) : "On mobile data") + ". Clips wait for Wi-Fi"
+    : last.at ? "Synced " + whenText(last.at) : "Not synced yet";
   const after = C.sync.running ? "" : syncAfter();
   return el("section", { class: "settings-section" },
     el("h2", { class: "overline" }, "Sync with GitHub"),
@@ -1787,7 +1791,8 @@ function githubCard() {
   const last = C.sync.last, now = syncProgress(), paused = C.sync.paused, running = C.sync.running;
   const status = running ? now.text : paused ? "Paused" + (last.at ? ". Last synced " + whenText(last.at) : "")
     : waitsForWifi(DATA_SYNC_KEY) ? "Waiting for Wi-Fi" + (last.at ? ". Last synced " + whenText(last.at) : "")
-    : last.error ? last.error : last.at ? "Synced " + whenText(last.at) : "Not synced yet";
+    : last.error ? last.error : syncsPlacesOnly() ? (last.light ? "Places synced " + whenText(last.at) : "On mobile data") + ". Clips wait for Wi-Fi"
+    : last.at ? "Synced " + whenText(last.at) : "Not synced yet";
   const after = running ? "" : syncAfter();
   return el("div", { class: "card saving sync-run wide", role: "group", "aria-label": "GitHub sync" },
     el("span", { class: "card-body" },

@@ -70,6 +70,17 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
   Privacy: the stats say when and how long you read each clip. They
   stay on the device unless GitHub sync or a backup is on, and then go
   only to your own private repo or your own Drive, like the library.
+- **Places and reading time only on mobile data (1.40.0).** A light
+  run of `once()`: library.json is read and merged as usual, then only
+  the reading fields (`placeOnly`, with the spot when both have the same
+  version) come onto the clips here and go onto the clips GitHub has;
+  the written library.json is GitHub's own with those fields changed, so
+  a clip saved here never shows up elsewhere without its text (the other
+  device would save it again from its link). Then the stats files. The
+  base, the sent list and the waiting list are not touched, so the next
+  full sync on Wi-Fi merges as if the light ones never ran. Costs: one
+  library.json read and write (a few hundred KB on a big library), not
+  free on data, but far less than clip texts.
 - **A place comes over onto another version (1.39.1).** Sync takes a
   clip's whole entry from GitHub only when this device has the same
   version (`ver`, savedAt or editedAt) or brings the text down. A clip

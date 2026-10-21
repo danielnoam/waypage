@@ -2,6 +2,15 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.40.0] - 2026-10-21
+
+### Added
+- Settings › Sync › On mobile data has a third choice, "Places and
+  reading time only". On mobile data, where you are in each clip, what
+  you finished and your reading time keep syncing; new clips, their text,
+  deletions, tags and collections wait for Wi-Fi, and go in the full sync
+  as soon as you're on it.
+
 ## [1.39.1] - 2026-10-21
 
 ### Fixed

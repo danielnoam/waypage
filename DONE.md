@@ -84,6 +84,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 
 - GitHub sync of clips, places, highlights and feeds; setup code; links only; batched (0.30.0, 0.30.1, 0.30.3, 1.15.0)
 - Sync screen, resume after close, safer token (1.13.0, 1.28.0, 1.29.1, 1.30.1)
+- On mobile data, sync places and reading time only, clips on Wi-Fi (1.40.0)
 - Google Drive backups, weekly, pause/resume, delete (1.27.0, 1.27.1, 1.31.0; iOS on TODO)
 - Back up and restore to one file; export clips and collections as EPUB, HTML, PDF, Markdown (0.18.0, 0.25.2, 0.26.0)
 - Make room, Make pictures smaller, storage by collection (0.23.0, 1.9.0, 1.18.0)
