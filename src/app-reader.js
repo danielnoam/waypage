@@ -356,8 +356,9 @@ function show(p, html) {
   fill($("railList"));
   fill($("readerName"), p.site ? el("span", { class: "reader-site" }, p.site) : null, el("span", { class: "reader-title" }, p.title));
   readerScrolled(p.at || 0, 0);
+  if (!p.preview) C.stats.opened(p.id);
   return C.reader.open($("readerFrame"), html, p, {
-    at: p.at || 0, spot: p.spot || "", next: endLink(p), prev: startLink(p),
+    at: p.at || 0, spot: p.spot || "", spotWords: p.spotWords || "", next: endLink(p), prev: startLink(p),
     onPosition: (f, s) => notePosition(p, f, s),
     onScroll: readerScrolled,
     onImage: openImage,
@@ -675,6 +676,7 @@ function showSection() {
 let lastY = 0, readerY = 0;
 function readerScrolled(at, y) {
   readerY = y;
+  C.stats.active();
   if (state.open && state.open.link) C.files.drawNear($("readerFrame"));
   if (readHere && !readHere.hidden) showReadHere();
   $("readProgress").firstElementChild.style.transform = "scaleX(" + at + ")";
@@ -892,6 +894,9 @@ let movedHere = false;
 let openedAt = 0;
 const FOLLOW_MS = 15000;
 const OPEN_COUNTS = 3000;
+// About how many words a clip has, for the stats (1.38.0): its reading
+// time was counted from them when it was saved.
+const clipWords = (p) => (p.comic ? 0 : (p.minutes || 0) * C.save.WORDS_PER_MINUTE);
 function notePosition(p, f, s) {
   const at = Math.round(f * 1000) / 1000;
   // Read just now only when the place really moved (1.10.1): pictures
@@ -905,6 +910,9 @@ function notePosition(p, f, s) {
   // An empty spot (Pages, with no block starting on this page) clears
   // the old one, so the fraction decides the place.
   if (s) p.spot = s; else delete p.spot;
+  if (moved) delete p.spotWords;
+  if (!p.preview) C.stats.position(p.id, at, clipWords(p));
+  if (f >= 0.97 && !p.finished && !p.preview) C.stats.finished(p.id);
   if (f >= 0.97) p.finished = true;
   if (p === state.open) movedHere = true;
   if (moved) { p.readAt = p.placeAt = Date.now(); p.readOn = deviceName(); }
@@ -923,6 +931,7 @@ function closeReader() {
   stopWaiting();
   if (!state.open) return;
   C.reader.settle();
+  C.stats.closed();
   if (positionTimer) savePositions();
   // Where you got to goes to GitHub now, not in four seconds (1.3.0).
   if (C.sync.on && navigator.onLine) syncNow();
@@ -1480,6 +1489,7 @@ function setAloud(st, index) {
   const ended = st === "ended" && !!(p && endLink(p));
   aloud.state = on ? st : ended ? "ended" : "stopped";
   if (index >= 0 || !on) aloud.index = index;
+  C.stats.aloud(st === "playing", aloud.key);
   const here = aloudHere();
   const btn = $("readerAloud");
   btn.setAttribute("aria-pressed", String(on && here));
@@ -1969,6 +1979,8 @@ const SHEETS = {
   // From the text itself (1.14.0), with no button of their own.
   note: { label: "Note", build: () => noteSheet(noteNow) },
   link: { label: "Link", build: () => linkSheet(linkNow) },
+  // From This clip's More (1.38.0).
+  links: { label: "Linked pages", build: () => linksSheet(state.open) },
 };
 
 function openSheet(kind, fromHistory) {
@@ -2059,6 +2071,123 @@ function linkSheet(l) {
       menuRow("Open in the browser", go(() => C.platform.openOutside(l.href))),
       menuRow("Copy the link", go(() => copyText(l.href, "Link copied")))));
 }
+// ---- Linked pages (1.38.0) ----
+// The pages a clip links to, to save as clips of their own: a Wikipedia
+// article's links, a story's other parts, a post's sources. Ticked ones
+// save one at a time like a pasted list; ones already saved show as
+// saved. Optionally into a collection: the clip's own, or one named
+// after it.
+const LINKS_FILTER_AT = 12;
+function linksSheet(p) {
+  const all = p ? C.reader.links(p.url) : [];
+  if (!all.length) return el("div", { class: "page-controls" },
+    el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, "Linked pages")),
+    el("p", { class: "meta" }, "This clip doesn't link to any other pages."));
+  const home = hostOf(p.url || "");
+  const picked = new Set();
+  let which = "all", words = "";
+  const into = p.folder || folderName(p.title);
+  const intoSwitch = el("input", { class: "switch", type: "checkbox", role: "switch", "aria-label": "Into a collection" });
+  const go = el("button", { class: "btn-primary links-go", type: "button" });
+  const list = el("div", { class: "group links-list", role: "group", "aria-label": "Linked pages" });
+  const count = el("p", { class: "meta", role: "status" });
+  const shown = () => all.filter((l) => (which === "all" || (which === "here") === (hostOf(l.href) === home))
+    && (!words || (l.text + " " + l.href).toLowerCase().includes(words)));
+  const paint = () => {
+    const n = picked.size;
+    go.textContent = n ? "Save " + countLine(n) : "Pick pages to save";
+    go.disabled = !n;
+  };
+  const draw = () => {
+    const rows = shown();
+    const fresh = rows.filter((l) => !savedAs(l.href));
+    count.textContent = rows.length + (rows.length === 1 ? " page" : " pages") + (rows.length - fresh.length ? ", " + (rows.length - fresh.length) + " saved already" : "");
+    allBtn.textContent = fresh.length && fresh.every((l) => picked.has(l.href)) ? "Clear" : "Pick all";
+    allBtn.disabled = !fresh.length;
+    fill(list, ...rows.map((l) => {
+      const saved = savedAs(l.href);
+      const check = el("span", { class: "choice-check", "aria-hidden": "true" });
+      check.innerHTML = CHECK;
+      const box = el("input", { class: "visually-hidden", type: "checkbox", checked: picked.has(l.href) || !!saved, disabled: !!saved,
+        onchange: (e) => { if (e.target.checked) picked.add(l.href); else picked.delete(l.href); allBtnText(); paint(); } });
+      return el("label", { class: "choice" + (saved ? " done" : "") },
+        box,
+        el("span", { class: "choice-text" },
+          el("span", { class: "choice-label", dir: "auto" }, l.text && l.text.length > 1 ? l.text : hostOf(l.href)),
+          noteFor(l, saved)),
+        check);
+    }));
+  };
+  const allBtnText = () => {
+    const fresh = shown().filter((l) => !savedAs(l.href));
+    allBtn.textContent = fresh.length && fresh.every((l) => picked.has(l.href)) ? "Clear" : "Pick all";
+  };
+  const allBtn = el("button", { class: "btn-small", type: "button", onclick: () => {
+    const fresh = shown().filter((l) => !savedAs(l.href));
+    const clear = fresh.every((l) => picked.has(l.href));
+    for (const l of fresh) { if (clear) picked.delete(l.href); else picked.add(l.href); }
+    draw();
+    paint();
+  } });
+  const others = all.some((l) => hostOf(l.href) !== home) && all.some((l) => hostOf(l.href) === home);
+  const chips = others ? el("div", { class: "chips" }, ...[["all", "All"], ["here", "On " + home], ["away", "Other sites"]].map(([v, label]) =>
+    el("button", { class: "chip" + (v === which ? " on" : ""), type: "button", "aria-pressed": String(v === which), onclick: (e) => {
+      which = v;
+      for (const c of e.target.parentNode.children) { c.classList.toggle("on", c === e.currentTarget); c.setAttribute("aria-pressed", String(c === e.currentTarget)); }
+      draw();
+    } }, label))) : null;
+  const filter = all.length > LINKS_FILTER_AT ? el("input", { class: "tag-input links-filter", type: "search", placeholder: "Find a page", "aria-label": "Find a page",
+    autocomplete: "off", spellcheck: "false", oninput: (e) => { words = e.target.value.trim().toLowerCase(); draw(); } }) : null;
+  go.addEventListener("click", () => {
+    const urls = all.map((l) => l.href).filter((u) => picked.has(u));
+    if (!urls.length) return;
+    const folder = intoSwitch.checked ? into : null;
+    if (urls.length > LONG_LIST && !confirm("Save " + urls.length + " clips? They save one at a time, so a list this long takes a while. Pause and Stop are on its card.")) return;
+    back().then(() => saveLinked(urls, folder));
+  });
+  draw();
+  paint();
+  return el("div", { class: "page-controls links-sheet" },
+    el("div", { class: "menu-head" },
+      el("p", { class: "menu-title" }, "Linked pages"),
+      el("p", { class: "meta" }, "Pick the pages this clip links to, to read them offline too.")),
+    chips, filter,
+    el("div", { class: "links-bar" }, count, allBtn),
+    list,
+    el("div", { class: "group" }, el("label", { class: "row" },
+      el("span", { class: "choice-text" },
+        el("span", { class: "choice-label" }, "Into a collection"),
+        el("span", { class: "choice-note", dir: "auto" }, into)),
+      intoSwitch)),
+    el("div", { class: "links-foot" }, go));
+}
+// Under a link's words: Saved, the other site's name, or on the clip's
+// own site the end of the address when the words don't already say it.
+function noteFor(l, saved) {
+  const home = state.open ? hostOf(state.open.url || "") : "";
+  const host = hostOf(l.href);
+  const tail = host === home ? decodeTail(l.href) : host;
+  const same = tail.toLowerCase() === (l.text || "").toLowerCase();
+  return saved ? el("span", { class: "choice-note" }, "Saved") : same ? null : el("span", { class: "choice-note", dir: "auto" }, tail);
+}
+function decodeTail(href) {
+  try {
+    const u = new URL(href);
+    const tail = decodeURIComponent(u.pathname.replace(/\/$/, "").split("/").pop() || u.hostname);
+    return tail.replace(/_/g, " ");
+  } catch (e) { return href; }
+}
+// Saves the picked pages; offline, they wait in Downloads until the
+// connection is back, like Save for later.
+function saveLinked(urls, folder) {
+  if (navigator.onLine) { saveAll(urls, folder, [], undefined, true); return; }
+  const list = load(LATER_KEY, []);
+  for (const url of urls) if (!savedAs(url) && !list.some((x) => sameUrl(x.url, url))) list.push({ url, folder: folder || null });
+  store(LATER_KEY, list);
+  showWaiting();
+  toast("They save when you're back online. They're in Downloads.");
+}
+
 function jumped(spot) {
   if (!jumpFrom) jumpFrom = { spot, at: C.reader.position() };
   $("jumpBack").hidden = false;

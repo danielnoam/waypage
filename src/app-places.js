@@ -682,6 +682,7 @@ function holdFeeds(root) {
 // steps back through history as before.
 let sideByBack = false;
 const backOpens = C.platform.onBack(({ canGoBack }) => {
+  if (lockUp()) { lockBack(); return; }
   if (state.side && sideByBack) { C.platform.exitApp(); return; }
   if (canGoBack && history.state && history.state.view) { history.back(); return; }
   if (!state.side && !pinned.matches) { openSide(); sideByBack = true; return; }

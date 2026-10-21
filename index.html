@@ -8,8 +8,8 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="src/fonts.css?v=1.37.1">
-  <link rel="stylesheet" href="src/styles.css?v=1.37.1">
+  <link rel="stylesheet" href="src/fonts.css?v=1.38.0">
+  <link rel="stylesheet" href="src/styles.css?v=1.38.0">
 </head>
 <body>
   <div class="app" id="libraryView">
@@ -324,28 +324,52 @@
     </div>
   </div>
   <div class="toast" id="toast" role="status" hidden></div>
+  <section class="lock-view" id="lockView" role="dialog" aria-modal="true" aria-labelledby="lockTitle" tabindex="-1" hidden>
+    <div class="lock-box">
+      <img class="lock-icon" src="icon.svg" alt="" width="56" height="56">
+      <h1 class="lock-title" id="lockTitle">Enter your passcode</h1>
+      <div id="lockPad">
+        <div class="lock-dots" id="lockDots" role="status"></div>
+        <p class="lock-note" id="lockNote" aria-live="polite"></p>
+        <div class="lock-keys" id="lockKeys"></div>
+        <button class="btn-primary lock-next" id="lockNext" type="button" hidden>Next</button>
+        <div class="lock-foot">
+          <button class="btn-quiet" id="lockForgot" type="button">Forgot passcode?</button>
+          <button class="btn-quiet" id="lockCancel" type="button" hidden>Cancel</button>
+        </div>
+      </div>
+      <div class="lock-erase" id="lockErase" hidden>
+        <p class="lock-note">A passcode can't be recovered. Erasing removes every clip, highlight, feed and setting Waypage keeps on this device, and the lock with them. Files read from where they are stay there.</p>
+        <p class="lock-note">If you use GitHub sync or Google Drive backups, connect again afterwards to bring your clips back.</p>
+        <button class="btn-primary lock-erase-go" id="lockEraseGo" type="button">Erase everything</button>
+        <button class="btn-quiet" id="lockEraseNo" type="button">Cancel</button>
+      </div>
+    </div>
+  </section>
 
-  <script src="src/platform.js?v=1.37.1"></script>
-  <script src="src/motion.js?v=1.37.1"></script>
-  <script src="src/vendor/Readability.js?v=1.37.1"></script>
-  <script src="src/store.js?v=1.37.1"></script>
-  <script src="src/save.js?v=1.37.1"></script>
-  <script src="src/feeds.js?v=1.37.1"></script>
-  <script src="src/backup.js?v=1.37.1"></script>
-  <script src="src/imports.js?v=1.37.1"></script>
-  <script src="src/sync.js?v=1.37.1"></script>
-  <script src="src/drive.js?v=1.37.1"></script>
-  <script src="src/qr.js?v=1.37.1"></script>
-  <script src="src/epub.js?v=1.37.1"></script>
-  <script src="src/files.js?v=1.37.1"></script>
-  <script src="src/pdf.js?v=1.37.1"></script>
-  <script src="src/reader.js?v=1.37.1"></script>
-  <script src="src/app.js?v=1.37.1"></script>
-  <script src="src/app-reader.js?v=1.37.1"></script>
-  <script src="src/app-library.js?v=1.37.1"></script>
-  <script src="src/app-saving.js?v=1.37.1"></script>
-  <script src="src/app-places.js?v=1.37.1"></script>
-  <script src="src/app-settings.js?v=1.37.1"></script>
-  <script src="src/app-start.js?v=1.37.1"></script>
+  <script src="src/platform.js?v=1.38.0"></script>
+  <script src="src/motion.js?v=1.38.0"></script>
+  <script src="src/vendor/Readability.js?v=1.38.0"></script>
+  <script src="src/store.js?v=1.38.0"></script>
+  <script src="src/save.js?v=1.38.0"></script>
+  <script src="src/feeds.js?v=1.38.0"></script>
+  <script src="src/backup.js?v=1.38.0"></script>
+  <script src="src/imports.js?v=1.38.0"></script>
+  <script src="src/sync.js?v=1.38.0"></script>
+  <script src="src/drive.js?v=1.38.0"></script>
+  <script src="src/qr.js?v=1.38.0"></script>
+  <script src="src/stats.js?v=1.38.0"></script>
+  <script src="src/epub.js?v=1.38.0"></script>
+  <script src="src/files.js?v=1.38.0"></script>
+  <script src="src/pdf.js?v=1.38.0"></script>
+  <script src="src/reader.js?v=1.38.0"></script>
+  <script src="src/app.js?v=1.38.0"></script>
+  <script src="src/app-reader.js?v=1.38.0"></script>
+  <script src="src/app-library.js?v=1.38.0"></script>
+  <script src="src/app-saving.js?v=1.38.0"></script>
+  <script src="src/app-places.js?v=1.38.0"></script>
+  <script src="src/app-settings.js?v=1.38.0"></script>
+  <script src="src/app-lock.js?v=1.38.0"></script>
+  <script src="src/app-start.js?v=1.38.0"></script>
 </body>
 </html>

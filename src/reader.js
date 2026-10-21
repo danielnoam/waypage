@@ -344,6 +344,26 @@
   function findAnchors() {
     anchors = doc ? [...doc.body.querySelectorAll(BLOCKS + ", .co-comic img")].filter((el) => !el.closest(SKIP) && !el.querySelector(BLOCKS)) : [];
   }
+  // A spot's block as words (1.38.0), read from a clip's saved HTML, and
+  // the same block found again in a new copy of it: Update from the site
+  // keeps the place wherever that paragraph still is.
+  const anchorsIn = (d) => [...d.body.querySelectorAll(BLOCKS + ", .co-comic img")].filter((el) => !el.closest(SKIP) && !el.querySelector(BLOCKS));
+  const blockWords = (el) => el.textContent.replace(/\s+/g, " ").trim().slice(0, 160);
+  function spotWords(html, s) {
+    const m = /^(\d+)\//.exec(s || "");
+    if (!m || !html) return "";
+    const el = anchorsIn(new DOMParser().parseFromString(html, "text/html"))[Number(m[1])];
+    return el ? blockWords(el) : "";
+  }
+  function respot(s, words) {
+    const m = /^(\d+)(\/.*)$/.exec(s || "");
+    if (!m || !words) return s;
+    const i = Number(m[1]);
+    if (anchors[i] && blockWords(anchors[i]) === words) return s;
+    let best = -1;
+    anchors.forEach((el, j) => { if (blockWords(el) === words && (best < 0 || Math.abs(j - i) < Math.abs(best - i))) best = j; });
+    return best < 0 ? "" : best + m[2];
+  }
   let restoredAt = 0, tell = null, touched = false;
   // Settles once the page is back where it was left (1.26.1): reading
   // aloud from there waits for it, or it starts from the top.
@@ -843,6 +863,28 @@
     }
     return found;
   }
+  // The other pages this clip links to (1.38.0), once each, in the
+  // order they come: for saving them too. Its own address, links within
+  // it and its next and previous links are left out, and so are a
+  // wiki's pages about the wiki (Special:, Help:, a picture's page).
+  const WIKI_META = /\/wiki\/(Special|Help|Talk|User|User_talk|File|Template|Template_talk|Category|Portal|Wikipedia|Draft|Module|MediaWiki):/i;
+  function links(own) {
+    if (!doc) return [];
+    const seen = new Set(), out = [];
+    const key = (u) => u.replace(/#.*$/, "").replace(/\/$/, "");
+    if (own) seen.add(key(own));
+    for (const a of doc.body.querySelectorAll("a[href]")) {
+      if (a === nextLink || a === prevLink || a.closest(ADDED) || a.getAttribute("href").startsWith("#")) continue;
+      const href = a.href;
+      if (!/^https?:/.test(href) || WIKI_META.test(href)) continue;
+      const k = key(href);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({ href: href.replace(/#.*$/, ""), text: a.textContent.replace(/\s+/g, " ").trim() });
+    }
+    return out;
+  }
+
   // Scrolls (or turns) to a highlight; false when it isn't in the page.
   function toMark(id) {
     const mk = marked().find((x) => x.dataset.mark === id);
@@ -1168,7 +1210,7 @@
   // `next` ({ over, title, go }) adds a link to the next page at the end;
   // `top` () gives the height the bar covers; onImage(info) opens a tapped
   // image.
-  function open(iframe, html, meta, { at = 0, spot: spotAt = "", onPosition, onScroll, next, prev, top, onImage: image, onTap: tap, onMark: mark, onSelect, pages: asPages, bottom, onKey, onEdge: edge, onPinch: pinchTo, onLink: link, onNote: note, onJump: jumped } = {}) {
+  function open(iframe, html, meta, { at = 0, spot: spotAt = "", onPosition, onScroll, next, prev, top, onImage: image, onTap: tap, onMark: mark, onSelect, pages: asPages, bottom, onKey, onEdge: edge, onPinch: pinchTo, onLink: link, onNote: note, onJump: jumped, spotWords: wordsAt } = {}) {
     // The clip before tells where it was left before this one comes in.
     settle();
     tell = onPosition ? () => onPosition(position(), spot()) : null;
@@ -1282,6 +1324,7 @@
           if (!doc) return;
           const w = iframe.contentWindow;
           findAnchors();
+          if (wordsAt) spotAt = respot(spotAt, wordsAt);
           // A finished clip starts again from the top, but only when it was
           // left at the very end (1.30.2): 97% of a long book is still many
           // screens from it, and 1% of one is a chapter in.
@@ -1359,5 +1402,5 @@
   addEventListener("resize", applyTop);
   addEventListener("offline", applyConnection);
 
-  C.reader = { set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, headings, section, jumpTo, readable, readableIn, firstShown, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
+  C.reader = { set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, headings, section, jumpTo, readable, readableIn, firstShown, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
 })();

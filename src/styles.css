@@ -2257,3 +2257,62 @@ kbd {
 .edit-text ins { color: var(--accent); text-decoration: none; font-weight: 600; }
 .edit-result .row:disabled .choice-label { color: var(--muted); }
 .drive-actions { display: flex; gap: var(--s-2); align-items: center; }
+
+/* Linked pages (1.38.0): a list of the clip's links to tick, with the
+   Save button kept in reach at the bottom of the sheet. */
+.links-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.links-bar .meta { margin: 0; }
+.links-list .choice { min-height: 52px; }
+.links-list .choice-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.links-list .choice-note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.links-list .choice.done { cursor: default; }
+.links-list .choice.done .choice-label { color: var(--muted); }
+.links-list .choice.done .choice-check { color: var(--muted); }
+.links-filter { width: 100%; }
+.links-foot { position: sticky; bottom: calc(-1 * var(--s-1)); margin: 0 calc(-1 * var(--s-4)); padding: var(--s-2) var(--s-4) var(--s-3); background: var(--surface); border-top: 1px solid var(--line); }
+.links-foot .btn-primary { width: 100%; }
+
+/* App lock (1.38.0): one screen over everything, the library hidden
+   from the first paint while it's up. */
+html.locked body > :not(.lock-view):not(script) { visibility: hidden !important; }
+.lock-view {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  padding: calc(var(--s-5) + env(safe-area-inset-top)) var(--gutter) calc(var(--s-5) + env(safe-area-inset-bottom));
+  background: var(--bg); color: var(--ink); overflow-y: auto;
+}
+.lock-view[hidden] { display: none; }
+.lock-box { display: flex; flex-direction: column; align-items: center; gap: var(--s-3); width: 100%; max-width: 20rem; text-align: center; }
+.lock-box > div { display: flex; flex-direction: column; align-items: center; gap: var(--s-3); width: 100%; }
+.lock-box > div[hidden] { display: none; }
+.lock-icon { width: 56px; height: 56px; border-radius: var(--r-md); }
+.lock-title { margin: 0; font: 700 var(--fs-heading)/var(--lh-heading) var(--serif); }
+.lock-note { min-height: var(--lh-meta); margin: 0; color: var(--muted); font-size: var(--fs-meta); line-height: var(--lh-meta); }
+.lock-note.warn { color: var(--warn); }
+.lock-erase .lock-note { text-align: start; font-size: var(--fs-label); line-height: var(--lh-label); color: var(--ink); }
+.lock-dots { display: flex; justify-content: center; gap: var(--s-3); min-height: 14px; margin-top: var(--s-2); }
+.lock-dot { width: 14px; height: 14px; border-radius: var(--r-full); border: 1.5px solid var(--ink); transition: transform var(--spring-control-ms, 300ms) var(--spring-control, ease-out); }
+.lock-dot.on { background: var(--ink); transform: scale(1.1); }
+.lock-dots.shake { animation: lock-shake 360ms ease-out; }
+@keyframes lock-shake { 0%, 100% { transform: none; } 20% { transform: translateX(-10px); } 40% { transform: translateX(8px); } 60% { transform: translateX(-6px); } 80% { transform: translateX(3px); } }
+.lock-keys { display: grid; grid-template-columns: repeat(3, 72px); gap: var(--s-4) var(--s-5); justify-content: center; margin-top: var(--s-3); }
+.lock-key {
+  width: 72px; height: 72px; border-radius: var(--r-full);
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  font: 500 28px/1 var(--sans); font-variant-numeric: tabular-nums; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: transform var(--spring-control-ms, 300ms) var(--spring-control, ease-out);
+}
+.lock-key:active { background-image: linear-gradient(var(--press), var(--press)); transform: scale(0.94); }
+.lock-key:disabled { color: var(--muted); cursor: default; }
+.lock-key-icon { border-color: transparent; background: transparent; }
+.lock-key-icon[hidden] { display: none; }
+.lock-key-gap { display: inline-flex; width: 72px; height: 72px; }
+.lock-next, .lock-erase-go { width: 100%; }
+.lock-foot { display: flex; justify-content: center; gap: var(--s-2); flex-wrap: wrap; }
+.lock-foot .btn-quiet, .lock-erase .btn-quiet { border-color: transparent; color: var(--accent); }
+.lock-erase-go { background: var(--warn); border-color: var(--warn); color: var(--accent-ink); }
+@media (max-height: 640px) { .lock-keys { grid-template-columns: repeat(3, 60px); gap: var(--s-3) var(--s-4); } .lock-key, .lock-key-gap { width: 60px; height: 60px; } .lock-icon { display: none; } }
+@media (prefers-reduced-motion: reduce) { .lock-dots.shake { animation: none; } .lock-key, .lock-dot { transition: none; } }
+.lock-view:focus { outline: none; }
+.lock-next:disabled { background: var(--line); color: var(--muted); cursor: default; }

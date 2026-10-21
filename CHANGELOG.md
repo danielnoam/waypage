@@ -2,6 +2,27 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.38.0] - 2026-10-21
+
+### Added
+- Save linked pages, in a clip's ⋯ menu: the pages it links to, each
+  once, to pick and save for reading offline too. Filter by words, or
+  by the clip's own site and other sites; already saved ones show as
+  saved. They can go into a collection named after the clip.
+- Update from the site, in a clip's ⋯ menu: the page fetched again
+  for whatever changed, in the old copy's place. Tags, collection and
+  highlights stay, and the reading place stays on its paragraph when
+  it's still there. It says when nothing changed.
+- App lock, in Settings: a passcode to open Waypage, and on Android
+  fingerprint or face on top of it. Locks right away or after 1, 5 or
+  15 minutes away. Five wrong tries make it wait, longer each time. A
+  forgotten passcode can only be erased with everything else on this
+  device; GitHub sync or a Drive backup brings the clips back. On
+  Android 13 and later the recent apps show a blank card while it's on.
+- Reading stats are kept from now on, on this device only and not shown
+  yet: time reading, words read, time read aloud, and clips opened,
+  finished and saved, by day and by clip.
+
 ## [1.37.1] - 2026-10-18
 
 ### Fixed

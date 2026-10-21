@@ -840,7 +840,11 @@ function pageSheet(p, where) {
         p.link && p.file && p.file.kind === "pdf" && !p.comic
           ? menuRow(p.view === "text" ? "Show as printed pages" : "Show as text", () => switchView(p, where)) : null,
         inReader && !C.files.printed(p) ? menuRow("Find in this clip", () => back().then(openFind)) : null,
+        inReader && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow("Save linked pages", () => back().then(() => openSheet("links"))) : null,
         menuRow(p.finished ? "Mark as unread" : "Mark as read", () => markRead([p], !p.finished).then(draw)),
+        // The page changed since (1.38.0): fetched again in its place.
+        p.file || p.preview || !/^https?:/.test(p.url || "") ? null
+          : menuRow("Update from the site", () => back().then(() => updateClip(p))),
         // The original gone or changed (1.15.0): the Wayback Machine's copy.
         p.file || p.preview || p.comic || !/^https?:/.test(p.url || "") ? null
           : menuRow(p.archived ? "Find a newer archived copy" : "Use the archived copy", () => back().then(() => archiveClip(p))),
