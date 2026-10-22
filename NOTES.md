@@ -70,6 +70,21 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
   Privacy: the stats say when and how long you read each clip. They
   stay on the device unless GitHub sync or a backup is on, and then go
   only to your own private repo or your own Drive, like the library.
+- **Where read aloud starts (1.40.1).** A selection is kept as its text
+  node and offset (`selectionSpot`), and `spotIn` finds its block in the
+  list `readable()` makes when reading starts: the list depends on Read
+  footnotes and Skip headers, so a block number from an older list named
+  another paragraph. Offsets are counted on the spoken text
+  (`spokenOffset`, the same cleaning as `speechText`). The play button
+  starts at the sentence on `midLine()` (caretRangeFromPoint), block 0
+  at the top, the page's first block in Pages, after `placed()`.
+- **Continue reading is one rule (1.40.1).** `keepReading()` (the Keep
+  reading widget, the app icon's shortcut) is `continuePage()` first; it
+  was the newest unfinished clip read, which skipped the chapter after
+  one just finished. Widget taps are worked out when tapped: the Keep
+  reading widget sends `reading`, a collection's Continue sends
+  `next=1`, so a widget drawn before the app was put away can't send you
+  to an older clip. Needs the new APK for the widget part.
 - **Places and reading time only on mobile data (1.40.0).** A light
   run of `once()`: library.json is read and merged as usual, then only
   the reading fields (`placeOnly`, with the spot when both have the same

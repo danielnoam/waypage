@@ -1273,6 +1273,91 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("Read from here starts at the picked word, and the play button at the middle of the screen (1.40.1)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = { id: "rh01", url: "https://example.com/rh01", title: "Here", site: "example.com", savedAt: 1001, minutes: 3, mode: "links", at: 0 };
+        await S.writeIndex([c]);
+        let body = "<h1>Here</h1><figure><figcaption>A caption that is skipped.</figcaption></figure>";
+        for (let i = 0; i < 40; i++) body += "<p>Paragraph " + i + " has words<sup>[" + i + "]</sup> and more words. Second sentence " + i + " goes on. Third sentence " + i + " ends it.</p>";
+        await S.writePage("rh01", "<!doctype html><html><body>" + body + "</body></html>", c);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        localStorage.setItem("waypage.aloudSkipEdges", "true");
+        const sp = window.Waypage.platform.speech;
+        sp.play = (o) => { window.played = o; return Promise.resolve(); };
+        sp.stop = () => Promise.resolve();
+        const wait = (f) => new Promise((ok) => { const t = setInterval(() => { if (f()) { clearInterval(t); ok(); } }, 50); });
+        openPage("rh01");
+        await wait(() => state.open && C.reader.readable().length > 40);
+        await C.reader.placed();
+        const d = document.getElementById("readerFrame").contentDocument, w = d.defaultView;
+        // Picks "Third" in paragraph 12: after a citation mark, and with
+        // the title and caption left out of what's read.
+        const para = d.querySelectorAll("p")[12], text = [...para.childNodes].find((n) => n.nodeType === 3 && n.data.includes("Third"));
+        const r = d.createRange();
+        r.setStart(text, text.data.indexOf("Third"));
+        r.setEnd(text, text.data.indexOf("Third") + 5);
+        w.getSelection().removeAllRanges();
+        w.getSelection().addRange(r);
+        await startAloud(null, C.reader.selectionSpot());
+        const first = (o) => o.items[o.items.length ? Math.max(0, o.start) : 0];
+        const picked = first(window.played);
+        await stopAloud();
+        // Scrolled to paragraph 20 on the middle line: the play button reads from there.
+        const p20 = d.querySelectorAll("p")[20];
+        w.scrollTo(0, p20.getBoundingClientRect().top + w.scrollY - w.innerHeight / 2 + 4);
+        await new Promise((ok) => setTimeout(ok, 100));
+        await startAloud();
+        const middle = first(window.played);
+        await stopAloud();
+        w.scrollTo(0, 0);
+        await new Promise((ok) => setTimeout(ok, 100));
+        await startAloud();
+        const top = first(window.played);
+        await stopAloud();
+        return { picked, middle, top };
+      });
+      assert.ok(got.picked.startsWith("Third sentence 12"), got.picked);
+      assert.ok(/^Paragraph 20 has words/.test(got.middle), got.middle);
+      assert.strictEqual(got.top, "Here");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Continue reading goes to the next chapter once one is finished, and a widget's Continue to the collection's next as it is now (1.40.1)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (i, more) => ({ id: "kr0" + i, url: "https://example.com/kr" + i, title: "Chapter " + i, site: "example.com", savedAt: 1000 + i, minutes: 1, mode: "links", folder: "Saga", folderAt: 1000 + i, ...more });
+        const pages = [c(1, { at: 0.5, readAt: 5000 }), c(2, { at: 1, finished: true, readAt: 9000 }), c(3, { at: 0 })];
+        await S.writeIndex(pages);
+        for (const p of pages) await S.writePage(p.id, "<!doctype html><html><body><p>Words of " + p.title + ".</p></body></html>", p);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const wait = (f) => new Promise((ok) => { const t = setInterval(() => { if (f()) { clearInterval(t); ok(); } }, 50); });
+        const keep = keepReading().id;
+        // The widget was drawn when chapter 2 was next.
+        window.Waypage.platform.widgets.take = () => Promise.resolve({ kind: "page", id: "kr02", next: true });
+        await takeWidget();
+        await wait(() => state.open);
+        const opened = state.open.id;
+        // Continue reading with a clip open stays in it.
+        window.Waypage.platform.widgets.take = () => Promise.resolve({ kind: "reading" });
+        state.pages.find((p) => p.id === "kr01").readAt = Date.now() + 1000;
+        await takeWidget();
+        await new Promise((ok) => setTimeout(ok, 200));
+        return { keep, opened, stayed: state.open && state.open.id };
+      });
+      assert.deepStrictEqual(got, { keep: "kr03", opened: "kr03", stayed: "kr03" });
+      await q.context().close();
+    });
+
     await test("the moon on the player steps the sleep timer and shows what's left (1.36.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

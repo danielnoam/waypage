@@ -113,7 +113,8 @@ final class Widgets {
         v.setTextViewText(R.id.w_meta, r.optString("meta", ""));
         v.setViewVisibility(R.id.w_progress, View.VISIBLE);
         v.setProgressBar(R.id.w_progress, 1000, (int) Math.round(r.optDouble("at", 0) * 1000), false);
-        v.setOnClickPendingIntent(R.id.w_root, open(ctx, 11, Uri.parse("waypage-widget://page/" + Uri.encode(r.optString("id", "")))));
+        // What to keep reading is worked out when it's tapped (1.40.1).
+        v.setOnClickPendingIntent(R.id.w_root, toReading(ctx, 11));
         return v;
     }
 
@@ -265,7 +266,7 @@ final class Widgets {
         String next = c.optString("next", "");
         String button = c.optString("button", "");
         if (!next.isEmpty() && !button.isEmpty()) {
-            Uri page = Uri.parse("waypage-widget://page/" + Uri.encode(next));
+            Uri page = Uri.parse("waypage-widget://page/" + Uri.encode(next)).buildUpon().appendQueryParameter("next", "1").build();
             v.setViewVisibility(R.id.w_goRow, View.VISIBLE);
             v.setTextViewText(R.id.w_go, button);
             v.setOnClickPendingIntent(R.id.w_go, open(ctx, 200000 + id, page));
