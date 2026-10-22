@@ -93,6 +93,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 
 - App lock: passcode, fingerprint or face on Android, lock after a time away, erase when forgotten (1.38.0)
 - Reading stats: time, words, read aloud, opened, finished, saved, kept per device and added up through GitHub sync and backups (1.38.0, 1.39.0)
+- Minutes by your own reading pace; time stops counting a screen's reading time after the last scroll (1.41.0)
 - Reading place in the sidebar: week, month or year of bars, totals, days in a row, most time (1.39.0)
 - Reading widgets on Android: this week's bars, today, days in a row (1.39.0; iOS on TODO)
 - Widgets: Keep reading, Feeds, Favourites, Collection, Highlight (0.29.0, 0.29.2, 0.35.0, 1.9.0; iOS 1.6.0)

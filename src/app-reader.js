@@ -684,7 +684,7 @@ function toggleBar() {
 function readerFoot(at) {
   const p = state.open;
   if (!p) return;
-  const left = at >= 0.995 ? "End" : Math.max(1, Math.ceil((p.minutes || 1) * (1 - at))) + " min left";
+  const left = at >= 0.995 ? "End" : clipLeft(p, at) + " min left";
   const pg = C.reader.pageInfo();
   $("readLeft").textContent = Math.round(Math.min(1, Math.max(0, at)) * 100) + "%";
   const foot = (pg ? pg.page + "/" + pg.pages : "") + "|" + left;
@@ -945,7 +945,7 @@ function notePosition(p, f, s) {
   // the old one, so the fraction decides the place.
   if (s) p.spot = s; else delete p.spot;
   if (moved) delete p.spotWords;
-  if (!p.preview) C.stats.position(p.id, at, clipWords(p));
+  if (!p.preview) { C.stats.position(p.id, at, clipWords(p)); C.stats.screen(clipWords(p) * C.reader.screenShare()); }
   if (f >= 0.97 && !p.finished && !p.preview) C.stats.finished(p.id);
   // The time at the end keeps up while it's near (1.39.0).
   if (f >= 0.8 && Date.now() - spentAt > 10000) { spentAt = Date.now(); C.reader.setEnd(spentLines(p)); }

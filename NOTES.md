@@ -70,6 +70,17 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
   Privacy: the stats say when and how long you read each clip. They
   stay on the device unless GitHub sync or a backup is on, and then go
   only to your own private repo or your own Drive, like the library.
+- **Your pace and the idle cutoff (1.41.0).** Days now keep `paceWords`
+  and `paceMs`: words and time read with Read aloud not playing (its own
+  scrolling moves the place too, at the voice's speed). `pace()` is
+  their ratio over 30 days from every device's days (not `sum()`, which
+  the library would rebuild as it draws), 80 to 800, or 230 until 2,000
+  words and 5 minutes. `minutes` stays saved at 230 (sort by length and
+  older APKs read it); `clipMinutes()` scales it on show. The idle cutoff
+  is `screen(words)`: the words on one screen (clip words times
+  `screenShare()`) at that pace, times 1.5, 20 s to 90 s; 60 s before
+  the first scroll. Old days have no pace fields, so the pace starts
+  from new reading.
 - **Where read aloud starts (1.40.1).** A selection is kept as its text
   node and offset (`selectionSpot`), and `spotIn` finds its block in the
   list `readable()` makes when reading starts: the list depends on Read

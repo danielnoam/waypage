@@ -9,9 +9,10 @@
 // totals shown add them up, so two devices never merge into one file and
 // nothing is counted twice.
 //
-// Reading counts while a clip is open on screen, up to two minutes after
-// the last scroll, turn or tap, so a phone left open on the table doesn't
-// read on. Words count as the furthest place in a clip moves on, from
+// Reading counts while a clip is open on screen, up to a screen's reading
+// time after the last scroll, turn or tap (1.41.0: half again the time
+// the words on screen take at your pace, 20 s to 90 s; it was a flat two
+// minutes), so a phone left open on the table doesn't read on. Words count as the furthest place in a clip moves on, from
 // its length; a jump (Contents, a link inside the clip) moves the place
 // without counting. Read aloud counts while it plays, screen on or off.
 //
@@ -25,7 +26,7 @@
   const KEY = "waypage.stats";
   const DEVICE_KEY = "waypage.statsDevice";
   const OTHERS_KEY = "waypage.statsOthers"; // { device: data } from sync or a backup
-  const IDLE_MS = 2 * 60 * 1000;
+  const IDLE_MIN = 20000, IDLE_MAX = 90000, IDLE_DEFAULT = 60000;
   const TICK_MS = 15000;
   // More words than this in one move is a jump, not reading.
   const JUMP_WORDS = 1500;
@@ -70,12 +71,14 @@
   function count() {
     if (!open) return;
     const now = Date.now();
-    const till = Math.min(now, open.seen + IDLE_MS);
+    const till = Math.min(now, open.seen + (open.idle || IDLE_DEFAULT));
     if (!document.hidden && till > open.at) {
       const ms = till - open.at;
       add(day(open.at), "readMs", ms);
       add(clip(open.id), "readMs", ms);
       dayClip(open.at, open.id, ms);
+      // Reading by eye, for your pace: not while it's read aloud.
+      if (!playing) add(day(open.at), "paceMs", ms);
       changed();
     }
     open.at = now;
@@ -113,9 +116,35 @@
     if (f <= far) return;
     c.far = Math.round(f * 1000) / 1000;
     const n = words > 0 ? (f - far) * words : 0;
-    if (n > 0 && n <= JUMP_WORDS) { add(day(), "words", n); add(c, "words", n); }
+    if (n > 0 && n <= JUMP_WORDS) { add(day(), "words", n); add(c, "words", n); if (!playing) add(day(), "paceWords", n); }
     changed();
   }
+  // The words one screen shows: how long it should take to read.
+  function screen(words) {
+    if (!open || !(words >= 0)) return 0;
+    return (open.idle = Math.max(IDLE_MIN, Math.min(IDLE_MAX, Math.round(words / pace() * 60000 * 1.5))));
+  }
+
+  // Your reading pace (1.41.0), in words a minute: the words read by eye
+  // over the last 30 days against the time they took, from every device.
+  // Until there's enough to go by (2,000 words), the usual 230.
+  const PACE = 230, PACE_DAYS = 30;
+  let paceAt = 0, paceNow = PACE, paceKnownNow = false;
+  function pace() {
+    if (Date.now() - paceAt < 60000) return paceNow;
+    paceAt = Date.now();
+    const from = dayKey(Date.now() - PACE_DAYS * 864e5);
+    let w = 0, ms = 0;
+    // Straight from each device's days, not the whole sum: the library
+    // asks for it as it draws.
+    for (const dev of [mine(), ...Object.values(othersNow())]) {
+      for (const [k, d] of Object.entries(dev.days || {})) if (k >= from) { w += d.paceWords || 0; ms += d.paceMs || 0; }
+    }
+    paceKnownNow = w >= 2000 && ms >= 300000;
+    paceNow = paceKnownNow ? Math.max(80, Math.min(800, Math.round(w / (ms / 60000)))) : PACE;
+    return paceNow;
+  }
+  const paceKnown = () => { pace(); return paceKnownNow; };
   function finished(id) {
     const c = clip(id);
     if (c.finished) return;
@@ -205,7 +234,7 @@
     for (const [k, d] of Object.entries(raw.days || {})) {
       if (!DAY.test(k) || !d || typeof d !== "object") continue;
       const o = {};
-      for (const f of ["readMs", "words", "aloudMs", "opened", "finished", "saved"]) if (num(d[f])) o[f] = num(d[f]);
+      for (const f of ["readMs", "words", "aloudMs", "opened", "finished", "saved", "paceWords", "paceMs"]) if (num(d[f])) o[f] = num(d[f]);
       if (d.clips && typeof d.clips === "object") {
         o.clips = {};
         for (const [id, ms] of Object.entries(d.clips)) if (ID.test(id) && num(ms)) o.clips[id] = num(ms);
@@ -250,8 +279,8 @@
     for (const d of all_) {
       if (d.since) since = Math.min(since, d.since);
       for (const [k, x] of Object.entries(d.days || {})) {
-        const o = days[k] || (days[k] = { readMs: 0, words: 0, aloudMs: 0, opened: 0, finished: 0, saved: 0, clips: {} });
-        for (const f of ["readMs", "words", "aloudMs", "opened", "finished", "saved"]) o[f] += x[f] || 0;
+        const o = days[k] || (days[k] = { readMs: 0, words: 0, aloudMs: 0, opened: 0, finished: 0, saved: 0, paceWords: 0, paceMs: 0, clips: {} });
+        for (const f of ["readMs", "words", "aloudMs", "opened", "finished", "saved", "paceWords", "paceMs"]) o[f] += x[f] || 0;
         for (const [id, ms] of Object.entries(x.clips || {})) { const t = to(id); o.clips[t] = (o.clips[t] || 0) + ms; }
       }
       for (const [id0, x] of Object.entries(d.clips || {})) {
@@ -334,7 +363,7 @@
   }
   const onChange = (fn) => heard.push(fn);
 
-  window.Waypage.stats = { opened, closed, active, position, finished, saved, moved, aloud, all, flush,
+  window.Waypage.stats = { opened, closed, active, position, screen, pace, paceKnown, finished, saved, moved, aloud, all, flush,
     get device() { return device(); }, mine, take, backup, restore, clean,
     day: dayOf, days, clip: clipOf, top, finishedIn, streak, since: () => sum().since, dayKey, onChange, READ_DAY };
 })();

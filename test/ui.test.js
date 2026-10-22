@@ -1906,6 +1906,41 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("minutes go by your own pace, and reading stops counting a screen's time after the last scroll (1.41.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const c = { id: "pace01", url: "https://example.com/pace01", title: "Pace", site: "example.com", savedAt: 1001, minutes: 10, mode: "links", at: 0 };
+        await window.Waypage.store.writeIndex([c]);
+        await window.Waypage.store.writePage("pace01", "<!doctype html><html><body><p>Words.</p></body></html>", c);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        await new Promise((ok) => { const t = setInterval(() => { if (state.pages.length) { clearInterval(t); ok(); } }, 50); });
+        const S = window.Waypage.stats, p = state.pages[0];
+        const before = [S.pace(), S.paceKnown(), readingLine(p)];
+        // Another device read 4,600 words by eye in 10 minutes: 460 a minute.
+        S.take("otherdevice4", { since: 1, days: { [S.dayKey(Date.now())]: { readMs: 600000, words: 4600, paceWords: 4600, paceMs: 600000 } } });
+        await new Promise((ok) => setTimeout(ok, 0));
+        const after = [S.pace() === 230 ? "cached" : S.pace()];
+        return { before, after };
+      });
+      assert.deepStrictEqual(got.before, [230, false, "10 min"]);
+      // The pace is worked out once a minute; a fresh page sees the other device's at once.
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const now = await q.evaluate(async () => {
+        await new Promise((ok) => { const t = setInterval(() => { if (state.pages.length) { clearInterval(t); ok(); } }, 50); });
+        const S = window.Waypage.stats, p = state.pages[0];
+        const line = readingLine(p);
+        openPage(p.id);
+        await new Promise((ok) => { const t = setInterval(() => { if (state.open) { clearInterval(t); ok(); } }, 50); });
+        return { pace: S.pace(), known: S.paceKnown(), line, few: S.screen(30), screenful: S.screen(230), lots: S.screen(10000) };
+      });
+      assert.deepStrictEqual(now, { pace: 460, known: true, line: "5 min", few: 20000, screenful: 45000, lots: 90000 });
+      await q.context().close();
+    });
+
     await test("app lock: a passcode, a wait after wrong tries, and erasing (1.38.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(() => openSettings(false, "lock"));

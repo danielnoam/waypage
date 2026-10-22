@@ -9,7 +9,7 @@
 // only use what an earlier part, or its own, has declared. A part's
 // functions can call into any part, since nothing is tapped until all of
 // them have loaded. app-start.js runs last and starts things up.
-const APP_VERSION = "1.40.1";
+const APP_VERSION = "1.41.0";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
@@ -932,11 +932,19 @@ function updateSavingCard(s) {
 // The seconds on a slow save tick on their own.
 setInterval(() => { for (const s of state.saving) if (!s.error && !s.waiting) updateSavingCard(s); }, 1000);
 
+// A clip's minutes at your own pace (1.41.0): saved at the usual 230
+// words a minute, read at what Reading stats measured. Comics go by
+// their pictures.
+function clipMinutes(p) {
+  const m = p.minutes || 1;
+  return p.comic ? m : Math.max(1, Math.round(m * C.save.WORDS_PER_MINUTE / C.stats.pace()));
+}
+const clipLeft = (p, at) => Math.max(1, Math.ceil(clipMinutes(p) * (1 - at)));
 // "Finished" once read to the end, "6 min left" part way, else the length.
 function readingLine(p) {
   if (p.finished) return "Finished";
-  if (p.at > 0.02) return Math.max(1, Math.ceil(p.minutes * (1 - p.at))) + " min left";
-  return p.minutes + " min";
+  if (p.at > 0.02) return clipLeft(p, p.at) + " min left";
+  return clipMinutes(p) + " min";
 }
 
 // Only what needs a look gets a word: missing previews, or images that
