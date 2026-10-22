@@ -254,7 +254,7 @@ function paintFolderTitle() {
 
 const minutesText = (m) => (m >= 60 ? Math.floor(m / 60) + " h" + (m % 60 ? " " + (m % 60) + " min" : "") : m + " min");
 const minutesLeft = (list) => list.filter((p) => !p.finished)
-  .reduce((sum, p) => sum + Math.max(1, Math.ceil((p.minutes || 1) * (1 - (p.at > 0.02 ? p.at : 0)))), 0);
+  .reduce((sum, p) => sum + clipLeft(p, p.at > 0.02 ? p.at : 0), 0);
 const chapterWord = (list, n) => (isSeries(list) ? (n === 1 ? "chapter" : "chapters") : (n === 1 ? "clip" : "clips"));
 
 function bookCover(list) {

@@ -2,6 +2,20 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.41.0] - 2026-10-22
+
+### Added
+- Clips' minutes and minutes left go by your own reading pace. Waypage
+  measures the words you read by eye (not read aloud) against the time
+  they take, over the last 30 days and across your synced devices, and
+  shows it at the bottom of the Reading place. Until it has seen about
+  2,000 words, it uses the usual 230 words a minute.
+
+### Changed
+- Time read stops counting sooner when you stop scrolling: after half
+  again the time the words on screen should take you, between 20 s and
+  90 s, instead of a flat two minutes.
+
 ## [1.40.1] - 2026-10-22
 
 ### Fixed

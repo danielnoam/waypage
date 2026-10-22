@@ -1227,6 +1227,14 @@
 
   // Which page of how many, in pages mode; null when scrolling.
   const pageInfo = () => (doc && isPaged() ? { page: page() + 1, pages: pages() } : null);
+  // How much of the clip one screen (or page) shows (1.41.0), for how
+  // long reading it should take.
+  function screenShare() {
+    if (!doc) return 0;
+    if (isPaged()) return 1 / Math.max(1, pages());
+    const w = frame.contentWindow;
+    return Math.min(1, w.innerHeight / Math.max(1, doc.documentElement.scrollHeight));
+  }
 
   // Scroll or pages, kept where the reader was.
   function setPaged(on) {
@@ -1463,5 +1471,5 @@
       return line;
     }));
   }
-  C.reader = { setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, headings, section, jumpTo, readable, readableIn, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
+  C.reader = { setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, jumpTo, readable, readableIn, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
 })();

@@ -1378,7 +1378,7 @@ function updateWidgets(now) {
       .map(({ f, it }) => ({ title: it.title, site: f.title, url: it.url, feed: f.url }));
     C.platform.widgets.update({
       reading: p ? { id: p.id, title: p.title, at: p.at || 0,
-        meta: [p.site, (p.at || 0) >= 0.995 ? "Finished" : Math.max(1, Math.ceil((p.minutes || 1) * (1 - (p.at || 0)))) + " min left"].filter(Boolean).join(" · ") } : null,
+        meta: [p.site, (p.at || 0) >= 0.995 ? "Finished" : clipLeft(p, p.at || 0) + " min left"].filter(Boolean).join(" · ") } : null,
       feeds: { following: feeds.length > 0, fresh: freshPosts(), posts },
       favourites: [
         ...allFolders().filter(folderFav).map((name) => ({ name, at: Math.max(...folderPages(name).map((x) => x.folderFavAt || 0)) }))

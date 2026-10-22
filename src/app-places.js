@@ -252,9 +252,12 @@ function renderReading() {
           el("span", { class: "rs-clip-title", dir: "auto" }, t.p.title),
           el("span", { class: "meta" }, [t.p.link ? "Files" : t.p.site, (C.stats.clip(t.p.id) || {}).finished ? "finished" : null].filter(Boolean).join(" · "))),
         el("span", { class: "rs-clip-time" }, spanText(t.ms)))))) : null,
-    el("p", { class: "footnote rs-note" }, C.sync.on
-      ? "Each of your devices counts its own, and GitHub sync adds them up. A clip's time counts while it's on screen, up to two minutes after your last scroll, turn or tap."
-      : "Counted on this device. A clip's time counts while it's on screen, up to two minutes after your last scroll, turn or tap. With GitHub sync on, your other devices' time adds in here."));
+    el("p", { class: "footnote rs-note" }, (C.sync.on
+      ? "Each of your devices counts its own, and GitHub sync adds them up. "
+      : "Counted on this device; with GitHub sync on, your other devices' time adds in here. ")
+      + "A clip's time counts while it's on screen, until a little after the words on screen should have taken you. "
+      + (C.stats.paceKnown() ? "Your pace is about " + C.stats.pace() + " words a minute, from the last 30 days; clips' minutes go by it."
+        : "Clips' minutes go by 230 words a minute until Waypage has seen enough of your reading to know your pace.")));
 }
 
 async function checkNow(f) {
@@ -402,7 +405,7 @@ function previewSheet(p) {
   return el("div", { class: "page-controls" },
     el("div", { class: "menu-head" },
       el("p", { class: "menu-title", dir: "auto" }, p.title),
-      el("p", { class: "meta" }, [p.site, p.minutes + " min", "Not saved"].join(" · "))),
+      el("p", { class: "meta" }, [p.site, clipMinutes(p) + " min", "Not saved"].join(" · "))),
     el("div", { class: "tile-row" },
       tileButton("add", saved ? "Saved" : "Save", saved ? () => {} : () => {
         if (f) saveFeedPosts([{ f, it: { url: p.post, date: Date.now() } }]);
