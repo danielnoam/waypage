@@ -1138,13 +1138,17 @@ const voiceFor = (p) => load(VOICE_KEY, {})[voiceKey(primary(langOf(p)))] || "";
 async function startAloud(from, spot) {
   const p = state.open;
   if (!p) return;
+  // Pressed just after opening: from the place, once the clip is back at it.
+  if (from == null && !spot) { await C.reader.placed(); if (state.open !== p) return; }
   const texts = C.reader.readable({ footnotes: !!load(FOOTNOTES_KEY, false), edges: !!load(EDGES_KEY, false) });
   if (!texts.length) { toast(C.files.printed(p) ? "Switch this PDF to Show as text, in ⋯, to read it aloud." : "There's no text in this clip to read aloud."); return; }
-  const block = spot ? spot.block : from == null ? C.reader.firstShown() : from;
+  // From the selected word, or the sentence on the reading line.
+  const at = spot ? C.reader.spotIn(spot) : from == null ? C.reader.firstShown() : { index: from, offset: 0 };
+  const block = at.index;
   const parts = [];
   texts.forEach((text, b) => {
     if (b !== block) { parts.push({ text, block: b }); return; }
-    let cut = spot ? wordAt(text, spot) : 0;
+    let cut = !at.offset ? 0 : at.sentence ? sentenceAt(text, at.offset) : wordAt(text, { offset: at.offset, word: spot.word });
     if (cut > 0) parts.push({ text: text.slice(0, cut), block: b });
     parts.push({ text: text.slice(cut), block: b, from: true });
   });
@@ -1218,6 +1222,13 @@ function wentOn(key) {
   return true;
 }
 
+// Where the sentence holding a point in a block's spoken text starts.
+function sentenceAt(text, offset) {
+  const end = /[.!?。！？]["'”’)\]]*\s+/g;
+  let start = 0;
+  for (let m = end.exec(text); m && m.index + m[0].length <= offset; m = end.exec(text)) start = m.index + m[0].length;
+  return start;
+}
 // Where the selected word starts in the block's spoken text: the copy of
 // the word nearest the selection's offset, else the word at the offset.
 function wordAt(text, spot) {

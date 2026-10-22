@@ -331,7 +331,7 @@ Promise.all([C.platform.ready, firstIndex]).then(([, [pages]]) => {
       if (state.open) C.reader.settle();
       const writes = [flushIndex()];
       if (positionTimer) writes.push(savePositions());
-      updateWidgets();
+      updateWidgets(true);
       Promise.all(writes).then(() => { if (unsynced || syncTimer) syncNow(); });
       return;
     }

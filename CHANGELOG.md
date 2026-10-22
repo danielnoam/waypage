@@ -2,6 +2,28 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.40.1] - 2026-10-22
+
+### Fixed
+- Read from here starts at the word you picked. Before, it could start a
+  few paragraphs further on (with Skip headers and footers on, the
+  paragraph was counted against a list that still had the title and
+  captions in it), and on a Wikipedia paragraph a few words off (the
+  citation marks were counted).
+- The play button reads from the sentence on the middle of the screen,
+  where your place is kept, or from the top when you're at the top. It
+  used to start at the paragraph under the top edge, often well above
+  where you were, and pressed just after opening, before the clip was
+  back at its place, from the start.
+- Continue reading from the widget or the app icon's shortcut goes where
+  the library's Continue reading goes: with a chapter just finished, the
+  next one, not an older clip you hadn't finished. With a clip open, it
+  stays in that clip.
+- A collection widget's Continue (and its read aloud) opens the
+  collection's next clip as it is when tapped, not as it was when the
+  widget was last drawn; widgets are also redrawn at once when you leave
+  the app.
+
 ## [1.40.0] - 2026-10-21
 
 ### Added

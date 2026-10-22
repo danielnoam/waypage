@@ -1359,11 +1359,17 @@ function restoreFeeds(list) {
 // its collection's next clips to read. Handed over whenever the app
 // goes to the background, and after changes.
 let widgetTimer = null;
+// The same clip as the library's Continue reading (1.40.1): in a
+// collection, the chapter after one just finished. The newest unfinished
+// clip read sent the widget and the Continue reading shortcut back to an
+// older clip once the one you were in was finished.
 function keepReading() {
+  const go = continuePage();
+  if (go) return go;
   const read = state.pages.filter((p) => p.readAt).sort((a, b) => b.readAt - a.readAt);
   return read.find((x) => !x.finished) || read[0];
 }
-function updateWidgets() {
+function updateWidgets(now) {
   clearTimeout(widgetTimer);
   widgetTimer = setTimeout(() => {
     const p = keepReading();
@@ -1399,7 +1405,7 @@ function updateWidgets() {
       }),
       stats: statsWidget(),
     });
-  }, 800);
+  }, now ? 0 : 800);
 }
 
 const clipMeta = (x) => [x.site, readingLine(x)].filter(Boolean).join(" · ");
@@ -1411,9 +1417,18 @@ const readCount = (list) => { const done = list.filter((x) => x.finished).length
 async function takeWidget() {
   const got = await C.platform.widgets.take();
   if (!got || !got.kind) return;
+  // A collection's Continue (1.40.1) opens its next clip as it is now,
+  // not as it was when the widget was last drawn: the app put away just
+  // after a chapter ended could leave the widget a chapter behind.
+  if (got.kind === "page" && got.next) {
+    const p = state.pages.find((x) => x.id === got.id);
+    const q = p && p.folder ? folderNext(folderPages(p.folder)) : null;
+    if (q) got.id = q.id;
+  }
   // The clip already open stays as it is (1.30.2), not closed and opened
   // again: that went back to the place last written, not the one read.
-  const id = got.kind === "reading" ? (keepReading() || {}).id : got.kind === "page" && !got.aloud ? got.id : null;
+  // Continue reading with a clip open is that clip (1.40.1).
+  const id = got.kind === "reading" ? (state.open || keepReading() || {}).id : got.kind === "page" && !got.aloud ? got.id : null;
   if (id && state.open && state.open.id === id && !$("readerView").hidden) {
     if (state.sheet) history.back();
     return;

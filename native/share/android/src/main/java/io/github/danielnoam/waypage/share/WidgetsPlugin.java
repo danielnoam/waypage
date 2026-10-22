@@ -49,6 +49,7 @@ public class WidgetsPlugin extends Plugin {
         if ((kind.equals("page") || kind.equals("mark")) && u.getLastPathSegment() != null) out.put("id", u.getLastPathSegment());
         if (kind.equals("mark")) out.put("mark", u.getQueryParameter("mark"));
         if (kind.equals("page") && "1".equals(u.getQueryParameter("aloud"))) out.put("aloud", true);
+        if (kind.equals("page") && "1".equals(u.getQueryParameter("next"))) out.put("next", true);
         if (kind.equals("post")) out.put("url", u.getQueryParameter("url"));
         if (kind.equals("collection")) out.put("name", u.getQueryParameter("name"));
         pending = out;

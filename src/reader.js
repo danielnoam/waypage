@@ -485,11 +485,23 @@
   // the one being read lit up and kept in view.
   const BLOCKS = "h1, h2, h3, h4, h5, h6, p, li, blockquote, pre, figcaption, dt, dd, td, th";
   let blocks = [], lit = null, followUntil = 0;
-  function speechText(el) {
-    const c = el.cloneNode(true);
+  // What is read of a block: no citation marks, buttons or placeholders.
+  function spoken(c) {
     for (const x of c.querySelectorAll("sup")) if (/^\s*\[[^\]]*\]\s*$/.test(x.textContent)) x.remove();
     for (const x of c.querySelectorAll("style, script, button, .co-placeholder")) x.remove();
-    return c.textContent.replace(/\s+/g, " ").trim();
+    return c.textContent.replace(/\s+/g, " ");
+  }
+  const speechText = (el) => spoken(el.cloneNode(true)).trim();
+  // How far into a block's spoken text a point in it is (1.40.1): counted
+  // on the text as read, so the citation marks before it in a Wikipedia
+  // paragraph no longer push the start a few words on.
+  function spokenOffset(el, node, off) {
+    const r = doc.createRange();
+    r.setStart(el, 0);
+    r.setEnd(node, off);
+    const box = doc.createElement("div");
+    box.append(r.cloneContents());
+    return spoken(box).replace(/^ /, "").length;
   }
   const SKIP = ".co-meta, .co-licence, .co-next, .co-spent, .co-video, nav, aside";
 
@@ -653,12 +665,41 @@
       blocks = was.blocks;
     }
   }
-  // The first block not yet scrolled past, where reading starts.
+  // Where the play button starts reading (1.40.1): the sentence on the
+  // reading line across the middle of the screen, where the place is kept,
+  // or the top of the clip when it's scrolled to the top. Before, it was
+  // the first block not yet scrolled past the top edge, a long paragraph
+  // or more above where you were reading.
   function firstShown() {
-    const edge = (topSpace ? topSpace() : 0) + 8;
-    const p = isPaged() ? page() : 0;
-    const i = blocks.findIndex((b) => (isPaged() ? pageOf(b.el) >= p : b.el.getBoundingClientRect().bottom > edge));
-    return Math.max(0, i);
+    if (!blocks.length) return { index: 0, offset: 0 };
+    if (isPaged()) {
+      const p = page();
+      return { index: Math.max(0, blocks.findIndex((b) => pageOf(b.el) >= p)), offset: 0 };
+    }
+    const w = frame.contentWindow;
+    if (w.scrollY < 4) return { index: 0, offset: 0 };
+    const line = midLine();
+    let lo = 0, hi = blocks.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (blocks[mid].el.getBoundingClientRect().bottom <= line) lo = mid + 1; else hi = mid;
+    }
+    const b = blocks[lo], r = b.el.getBoundingClientRect();
+    if (r.top >= line) return { index: lo, offset: 0 };
+    const at = doc.caretRangeFromPoint ? doc.caretRangeFromPoint(Math.min(w.innerWidth - 1, Math.max(0, r.left + r.width / 2)), line) : null;
+    const offset = at && b.el.contains(at.startContainer) ? spokenOffset(b.el, at.startContainer, at.startOffset) : 0;
+    return { index: lo, offset, sentence: true };
+  }
+  // Where a selection starts, found in the blocks read aloud now
+  // (1.40.1): the list is made afresh when reading starts (with or
+  // without notes and headers), so a block number taken earlier could
+  // name another paragraph. Its text node is kept instead. One left out,
+  // a title under Skip headers say, starts at the next block.
+  function spotIn(s) {
+    const i = blocks.findIndex((b) => b.el.contains(s.node));
+    if (i >= 0) return { index: i, offset: spokenOffset(blocks[i].el, s.node, s.nodeOffset) };
+    const after = blocks.findIndex((b) => s.node.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING);
+    return { index: after < 0 ? Math.max(0, blocks.length - 1) : after, offset: 0 };
   }
   function light(i) {
     // Opened again while it's read aloud (1.4.1): the blocks are found
@@ -687,16 +728,13 @@
   function selectionSpot() {
     const sel = doc && doc.getSelection();
     if (!sel || sel.isCollapsed || !sel.rangeCount || !sel.toString().trim()) return null;
-    if (!blocks.length) readable();
     const r = sel.getRangeAt(0);
     const at = r.startContainer.nodeType === 1 ? r.startContainer : r.startContainer.parentElement;
-    const i = blocks.findIndex((b) => b.el.contains(at));
-    if (i < 0) return null;
-    const pre = doc.createRange();
-    pre.setStart(blocks[i].el, 0);
-    pre.setEnd(r.startContainer, r.startOffset);
+    if (!at || at.closest(SKIP)) return null;
     const box = r.getBoundingClientRect();
-    return { block: i, offset: pre.toString().replace(/\s+/g, " ").replace(/^ /, "").length,
+    // Started at an element's edge: the child it starts before.
+    const inside = r.startContainer.nodeType === 1 && r.startContainer.childNodes[r.startOffset];
+    return { node: inside || r.startContainer, nodeOffset: inside ? 0 : r.startOffset,
       word: sel.toString().trim().split(/\s+/)[0], top: box.top, bottom: box.bottom, left: box.left, right: box.right };
   }
   // Android's WebView can leave its Copy and Share bar up after a script
@@ -1425,5 +1463,5 @@
       return line;
     }));
   }
-  C.reader = { setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, headings, section, jumpTo, readable, readableIn, firstShown, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
+  C.reader = { setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, headings, section, jumpTo, readable, readableIn, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
 })();
