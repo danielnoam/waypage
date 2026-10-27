@@ -1,5 +1,6 @@
-// Waypage: your own files (0.31.0, rebuilt in 0.32.0). An EPUB, a
-// Markdown or text file, an HTML page, a CBZ comic or a PDF opened from
+// Waypage: your own files (0.31.0, rebuilt in 0.32.0). An EPUB, a Kindle
+// book or an FB2 (1.42.0), a Markdown or text file, an HTML page, a CBZ
+// comic or a PDF opened from
 // the phone becomes a clip: its words rebuilt through save.cleanSaved's
 // allowlist (a file is as untrusted as a web page) and read in the same
 // sandboxed reader.
@@ -17,12 +18,12 @@
   const S = () => C.store;
   const B = () => C.backup;
 
-  const KINDS = { epub: "EPUB", md: "Markdown", txt: "Text", html: "HTML", cbz: "Comic", pdf: "PDF", eml: "Email" };
+  const KINDS = { epub: "EPUB", mobi: "MOBI", azw3: "AZW3", fb2: "FB2", md: "Markdown", txt: "Text", html: "HTML", cbz: "Comic", pdf: "PDF", eml: "Email" };
   // Kinds whose pictures can be left in the file and read as they're needed.
   const LINKABLE = new Set(["epub", "cbz", "pdf"]);
   // Kinds that can be a clip reading from its file: all of them.
   const canLink = (kind) => !!KINDS[kind];
-  const EXTS = { epub: "epub", md: "md", markdown: "md", txt: "txt", text: "txt", html: "html", htm: "html", xhtml: "html", cbz: "cbz", eml: "eml" };
+  const EXTS = { epub: "epub", mobi: "mobi", azw: "mobi", prc: "mobi", azw3: "azw3", fb2: "fb2", md: "md", markdown: "md", txt: "txt", text: "txt", html: "html", htm: "html", xhtml: "html", cbz: "cbz", eml: "eml" };
   const PICTURE = /\.(jpe?g|png|gif|webp)$/i;
   const MIME_EXT = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp" };
 
@@ -61,14 +62,17 @@
     const head = new Uint8Array(await file.slice(0, 1024).arrayBuffer());
     const ext = EXTS[extOf(file.name)] || extOf(file.name);
     if (head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46) return "pdf";
+    if (String.fromCharCode(...head.subarray(60, 68)) === "BOOKMOBI") return ext === "azw3" ? "azw3" : "mobi";
     if (head[0] === 0x50 && head[1] === 0x4b) {
       let entries;
       try { entries = await B().zipEntries(file); } catch (e) { return "zip"; }
       if (entries.has("library.json")) return "backup";
       if (entries.has("META-INF/container.xml")) return "epub";
       if ([...entries.keys()].some((n) => PICTURE.test(n))) return "cbz";
+      if ([...entries.keys()].some((n) => /\.fb2$/i.test(n))) return "fb2";
       return "zip";
     }
+    if (ext === "fb2" || /<FictionBook[\s>]/.test(latin1(head))) return "fb2";
     if (ext === "eml" || file.type === "message/rfc822" || (!ext && looksLikeMail(decode(head)))) return "eml";
     if (ext === "html" || /^\s*<(!doctype|html|head|body|meta)/i.test(decode(head))) {
       const text = await file.text();
@@ -262,6 +266,249 @@
       at.setAttribute("data-toc", String(Math.min(3, e.depth)));
       at.setAttribute("data-toc-t", e.title.slice(0, 200));
     }
+  }
+
+  // ---- MOBI, AZW and AZW3 (1.42.0) ----
+  // Kindle books without DRM, read by foliate-js's mobi.js (src/vendor,
+  // MIT): each part it rebuilds is taken like an EPUB chapter, its links
+  // and contents pointed at the parts they land in. It only parses: what
+  // it gives back goes through cleanSaved like any page. A book with DRM
+  // can't be read and says so.
+  let mobiLib = null;
+  const loadMobi = () => mobiLib || (mobiLib = import(new URL("src/vendor/foliate-mobi.js", document.baseURI).href)
+    .catch((e) => { mobiLib = null; throw e; }));
+  async function mobiLocked(file) {
+    const at = new DataView(await file.slice(78, 82).arrayBuffer()).getUint32(0);
+    const rec = await file.slice(at, at + 14).arrayBuffer();
+    return rec.byteLength === 14 && new DataView(rec).getUint16(12) !== 0;
+  }
+  async function fromMobi(file, out) {
+    if (await mobiLocked(file)) throw new FileError("This book is locked to Kindle (DRM). Waypage opens Kindle books without DRM.");
+    const { MOBI } = await loadMobi();
+    const book = await new MOBI({ unzlib: async () => { throw new Error("fonts aren't kept"); } }).open(file);
+    try {
+      const pics = pictures();
+      const picAt = new Map();
+      // Its pictures come as blob: addresses of its own, read back as bytes.
+      const picture = async (src) => {
+        if (!/^blob:/.test(src)) return null;
+        if (!picAt.has(src)) {
+          let token = null;
+          try { token = pics.add(new Uint8Array(await (await fetch(src)).arrayBuffer()), null); } catch (e) { token = null; }
+          picAt.set(src, token);
+        }
+        return picAt.get(src);
+      };
+      const docs = new Map();
+      for (const [i, part] of book.sections.entries()) {
+        if (!part.load) continue;
+        const text = await (await fetch(await part.load())).text();
+        let doc = new DOMParser().parseFromString(text, "application/xhtml+xml");
+        if (doc.getElementsByTagName("parsererror").length || !doc.body) doc = new DOMParser().parseFromString(text, "text/html");
+        if (doc.body) docs.set(i, doc);
+      }
+      if (!docs.size) throw new FileError("This book has no text Waypage can read.");
+      // Where a link or a contents entry lands: "c<part>-<id>", the id
+      // made up when the place has none.
+      let made = 0;
+      const landing = async (href) => {
+        let to = null;
+        try { to = await book.resolveHref(href); } catch (e) { to = null; }
+        if (!to || !docs.has(to.index)) return null;
+        let at = null;
+        try { at = to.anchor(docs.get(to.index)); } catch (e) { at = null; }
+        if (!at || at === docs.get(to.index).body) return "c" + to.index;
+        if (!at.getAttribute("id")) at.setAttribute("id", "wp" + made++);
+        return "c" + to.index + "-" + at.getAttribute("id");
+      };
+      const inside = (h) => /^(filepos|kindle):/i.test(h);
+      for (const doc of docs.values()) {
+        for (const a of [...doc.body.getElementsByTagNameNS("*", "a")]) {
+          const h = a.getAttribute("href") || "";
+          if (!inside(h)) continue;
+          const to = await landing(h);
+          if (to) a.setAttribute("data-to", to); else a.removeAttribute("href");
+        }
+      }
+      const toc = [];
+      const walkToc = async (items, depth) => {
+        for (const it of items || []) {
+          const to = it.href ? await landing(it.href) : null;
+          if (to && it.label) toc.push({ to, title: it.label.replace(/\s+/g, " ").trim(), depth });
+          await walkToc(it.subitems, depth + 1);
+        }
+      };
+      await walkToc(book.toc, 1);
+      const body = out.createElement("div");
+      for (const [i, doc] of docs) {
+        const root = doc.body;
+        for (const svg of [...root.getElementsByTagNameNS("*", "svg")]) {
+          const image = svg.getElementsByTagNameNS("*", "image")[0];
+          const href = image && (image.getAttribute("href") || image.getAttributeNS("http://www.w3.org/1999/xlink", "href"));
+          if (!href) continue;
+          const img = doc.createElementNS(root.namespaceURI || "http://www.w3.org/1999/xhtml", "img");
+          img.setAttribute("src", href);
+          img.setAttribute("alt", "");
+          svg.replaceWith(img);
+        }
+        for (const img of [...root.getElementsByTagNameNS("*", "img")]) {
+          const token = await picture(img.getAttribute("src") || "");
+          if (token) img.setAttribute("src", token); else img.remove();
+        }
+        for (const n of [...root.querySelectorAll("[id]")]) n.setAttribute("id", "c" + i + "-" + n.getAttribute("id"));
+        for (const a of [...root.getElementsByTagNameNS("*", "a")]) {
+          if (a.hasAttribute("data-to")) { a.setAttribute("href", "#" + a.getAttribute("data-to")); a.removeAttribute("data-to"); }
+          else if (!/^(https?|mailto):/i.test(a.getAttribute("href") || "")) a.removeAttribute("href");
+        }
+        const section = out.createElement("section");
+        section.id = "c" + i;
+        const { root: clean, images } = C.save.cleanSaved(root, out);
+        for (const im of images) im.el.setAttribute("src", im.data);
+        section.append(...clean.childNodes);
+        if (section.textContent.trim() || section.querySelector("img")) body.append(section);
+      }
+      tocMarks(body, toc);
+      let cover = null;
+      try {
+        const blob = await book.getCover();
+        if (blob) cover = pics.add(new Uint8Array(await blob.arrayBuffer()), null);
+      } catch (e) { cover = null; }
+      const meta = book.metadata || {};
+      const authors = [].concat(meta.author || []).map((a) => String(typeof a === "string" ? a : (a && a.name) || "").trim()).filter(Boolean);
+      return { body, pics, cover, title: String(meta.title || "").trim(), byline: authors.join(", "),
+        lang: String([].concat(meta.language || [])[0] || ""), dir: book.dir === "rtl" ? "rtl" : "" };
+    } finally {
+      try { book.destroy(); } catch (e) { /* gone */ }
+    }
+  }
+  // The contents as data-toc marks, as markContents does for an EPUB.
+  function tocMarks(body, toc) {
+    const marks = [];
+    for (const e of toc) {
+      const at = body.querySelector('[id="' + e.to.replace(/["\\]/g, "\\$&") + '"]');
+      if (!at || marks.some(([m]) => m === at)) continue;
+      marks.push([at, e]);
+    }
+    if (marks.length < 2) return;
+    for (const [at, e] of marks) {
+      at.setAttribute("data-toc", String(Math.min(3, e.depth)));
+      at.setAttribute("data-toc-t", e.title.slice(0, 200));
+    }
+  }
+
+  // ---- FB2 (1.42.0) ----
+  // FictionBook, the XML book many Russian and Eastern European libraries
+  // give out, often zipped (.fb2.zip). Its tags become HTML's, its
+  // pictures are its base64 <binary> parts, and its notes come last.
+  async function fb2Bytes(file) {
+    const head = new Uint8Array(await file.slice(0, 2).arrayBuffer());
+    if (head[0] !== 0x50 || head[1] !== 0x4b) return new Uint8Array(await file.arrayBuffer());
+    const entries = await B().zipEntries(file);
+    const name = [...entries.keys()].find((n) => /\.fb2$/i.test(n));
+    if (!name) throw new FileError("There's no FB2 book in this zip.");
+    return B().zipRead(file, entries.get(name));
+  }
+  // An XML file in the encoding its first line names (windows-1251 is common).
+  function xmlText(bytes) {
+    const enc = (latin1(bytes.subarray(0, 200)).match(/encoding=["']([\w.:-]+)["']/i) || [])[1];
+    if (bytes[0] === 0xef || bytes[0] === 0xfe || bytes[0] === 0xff || !enc) return decode(bytes);
+    try { return new TextDecoder(enc).decode(bytes); } catch (e) { return decode(bytes); }
+  }
+  const FB2_TAGS = { p: "p", emphasis: "em", strong: "strong", strikethrough: "del", sub: "sub", sup: "sup", code: "code",
+    epigraph: "blockquote", cite: "blockquote", poem: "div", stanza: "p", "text-author": "p", subtitle: "h4",
+    table: "table", tr: "tr", td: "td", th: "th" };
+  function fromFb2(bytes, out) {
+    const doc = new DOMParser().parseFromString(xmlText(bytes), "application/xml");
+    const book = doc.documentElement;
+    if (doc.getElementsByTagName("parsererror").length || !book || book.localName !== "FictionBook") throw new FileError("This FB2 book is damaged.");
+    const kids = (n, name) => (n ? [...n.children].filter((c) => c.localName === name) : []);
+    const one = (n, ...path) => path.reduce((at, name) => kids(at, name)[0], n);
+    const words = (n) => (n ? n.textContent.replace(/\s+/g, " ").trim() : "");
+    const hrefOf = (n) => n.getAttributeNS("http://www.w3.org/1999/xlink", "href") || n.getAttribute("l:href") || n.getAttribute("href") || "";
+    const pics = pictures();
+    const bin = new Map();
+    for (const b of kids(book, "binary")) {
+      const id = b.getAttribute("id");
+      if (!id || bin.has(id)) continue;
+      let token = null;
+      try { token = pics.add(Uint8Array.from(atob(b.textContent.replace(/\s+/g, "")), (c) => c.charCodeAt(0)), null); } catch (e) { token = null; }
+      bin.set(id, token);
+    }
+    const picture = (n) => {
+      const token = bin.get(hrefOf(n).replace(/^#/, ""));
+      if (!token) return null;
+      const img = out.createElement("img");
+      img.setAttribute("src", token);
+      img.setAttribute("alt", n.getAttribute("alt") || "");
+      return img;
+    };
+    const toc = [];
+    function walk(from, to, depth) {
+      for (const n of [...from.childNodes]) {
+        if (n.nodeType === 3) { to.append(out.createTextNode(n.data)); continue; }
+        if (n.nodeType !== 1) continue;
+        const tag = n.localName;
+        let el = null;
+        if (tag === "section") {
+          el = out.createElement("section");
+          walk(n, el, depth + 1);
+          const title = words(one(n, "title"));
+          if (title && n.getAttribute("id") == null) el.setAttribute("id", "s" + toc.length);
+          if (title) toc.push({ el, title, depth: depth + 1 });
+        } else if (tag === "title") {
+          el = out.createElement("h" + Math.min(6, Math.max(2, depth + 1)));
+          kids(n, "p").forEach((p, i) => { if (i) el.append(out.createElement("br")); walk(p, el, depth); });
+        } else if (tag === "image") {
+          el = picture(n);
+        } else if (tag === "empty-line") {
+          el = out.createElement("br");
+        } else if (tag === "v") {
+          walk(n, to, depth);
+          to.append(out.createElement("br"));
+          continue;
+        } else if (tag === "a") {
+          el = out.createElement("a");
+          const h = hrefOf(n);
+          if (h.startsWith("#")) el.setAttribute("href", "#f-" + h.slice(1));
+          else if (/^(https?|mailto):/i.test(h)) el.setAttribute("href", h);
+          walk(n, el, depth);
+        } else if (FB2_TAGS[tag]) {
+          el = out.createElement(FB2_TAGS[tag]);
+          if (tag === "text-author") { const em = out.createElement("em"); walk(n, em, depth); el.append(em); }
+          else walk(n, el, depth);
+          for (const a of ["colspan", "rowspan"]) if (n.getAttribute(a)) el.setAttribute(a, n.getAttribute(a));
+        } else {
+          walk(n, to, depth);
+          continue;
+        }
+        if (!el) continue;
+        if (n.getAttribute("id")) el.setAttribute("id", "f-" + n.getAttribute("id"));
+        to.append(el);
+      }
+    }
+    const body = out.createElement("div");
+    const bodies = kids(book, "body");
+    for (const [i, b] of bodies.entries()) {
+      const part = out.createElement("section");
+      if (i && b.getAttribute("name") === "notes" && !one(b, "title")) {
+        const h = out.createElement("h2");
+        h.textContent = "Notes";
+        part.append(h);
+      }
+      walk(b, part, i ? 1 : 0);
+      body.append(part);
+    }
+    if (toc.length >= 2) {
+      for (const { el, title, depth } of toc) {
+        el.setAttribute("data-toc", String(Math.min(3, Math.max(1, depth))));
+        el.setAttribute("data-toc-t", title.slice(0, 200));
+      }
+    }
+    const info = one(book, "description", "title-info");
+    const authors = kids(info, "author").map((a) => ["first-name", "middle-name", "last-name"].map((k) => words(one(a, k))).filter(Boolean).join(" ") || words(one(a, "nickname"))).filter(Boolean);
+    const coverImg = one(info, "coverpage", "image");
+    const cover = coverImg ? bin.get(hrefOf(coverImg).replace(/^#/, "")) || null : null;
+    return { body, pics, cover, title: words(one(info, "book-title")), byline: authors.join(", "), lang: words(one(info, "lang")) };
   }
 
   // ---- Markdown and text ----
@@ -965,6 +1212,8 @@
     let got;
     if (kind === "pdf") return fromPdf(file, out, onProgress, pics);
     if (kind === "epub") got = await fromEpub(file, out);
+    else if (kind === "mobi" || kind === "azw3") got = await fromMobi(file, out);
+    else if (kind === "fb2") got = fromFb2(await fb2Bytes(file), out);
     else {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const text = kind === "eml" ? "" : decode(bytes);

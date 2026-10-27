@@ -4,14 +4,15 @@
 // ---- Every highlight in one place (1.8.0) ----
 // A place beside Library and Feeds: each clip's highlights under its
 // title, the clip highlighted in last first, with a search over the
-// words, the notes and the titles. A tap opens the clip at the highlight.
-let marksQuery = "";
+// words, the notes and the titles, and chips by colour (1.42.0). A tap
+// opens the clip at the highlight.
+let marksQuery = "", marksColor = "";
 let marksHead = null;
 // Highlights come a screen's worth of clips at a time, the rest as the
 // end nears (1.28.4): two thousand at once took the phone two seconds.
 const MARKS_FIRST = 25, MARKS_MORE = 40;
 let marksUpTo = MARKS_FIRST, marksList = "", marksSeen = null;
-const marksMatch = (p, m, q) => !q || [m.text, m.note || "", p.title].some((t) => t.toLowerCase().includes(q));
+const marksMatch = (p, m, q) => (!marksColor || colorOf(m) === marksColor) && (!q || [m.text, m.note || "", p.title].some((t) => t.toLowerCase().includes(q)));
 function marksShown() {
   const q = marksQuery.trim().toLowerCase();
   return state.pages.filter((p) => (p.marks || []).length)
@@ -39,14 +40,19 @@ function renderHighlights() {
         el("button", { class: "btn-text hl-copy", type: "button", onclick: () => {
           const text = marksShown().map((c) => C.backup.marksMarkdown({ ...c.p, marks: c.list })).join("\n");
           copyText(text, "Highlights copied");
-        } }, "Copy all")));
+        } }, "Copy all")),
+      el("div", { class: "hl-colors" }));
   }
+  const everyMark = state.pages.flatMap((p) => p.marks || []);
+  if (marksColor && !everyMark.some((m) => colorOf(m) === marksColor)) marksColor = "";
+  const chips = colorChips(everyMark, marksColor, (c) => { marksColor = c; marksUpTo = MARKS_FIRST; renderHighlights(); });
+  fill(marksHead.querySelector(".hl-colors"), chips);
   const clips = marksShown();
   const shown = clips.reduce((n, c) => n + c.list.length, 0);
   if (marksQuery !== marksList) { marksList = marksQuery; marksUpTo = MARKS_FIRST; }
   const more = clips.length > marksUpTo;
   marksHead.hidden = !total;
-  marksHead.querySelector(".hl-count").textContent = marksQuery.trim()
+  marksHead.querySelector(".hl-count").textContent = marksQuery.trim() || marksColor
     ? (shown === 1 ? "1 highlight" : shown + " highlights") + " found"
     : (total === 1 ? "1 highlight" : total + " highlights") + " in " + (clips.length === 1 ? "1 clip" : clips.length + " clips");
   marksHead.querySelector(".hl-copy").hidden = !shown;
@@ -56,7 +62,7 @@ function renderHighlights() {
       el("span", { class: "meta" }, p.site || "")),
     el("ol", { class: "group marks-rows" }, ...list.map((m) => el("li", { class: "mark-item" },
       el("button", { class: "row mark-row", type: "button", "aria-label": m.text.slice(0, 120) + ", in " + p.title, onclick: () => goToMark(p, m.id) },
-        el("span", { class: "mark-quote", dir: "auto" }, m.text),
+        el("span", { class: "mark-quote", "data-c": colorOf(m), dir: "auto" }, m.text),
         m.note ? el("span", { class: "mark-note", dir: "auto" }, m.note) : null))))));
   if (!total) {
     nodes.push(el("div", { class: "empty" },
@@ -234,9 +240,9 @@ function renderReading() {
     seg,
     el("div", { class: "rs-range" }, back, el("p", { class: "rs-title", "aria-live": "polite" }, range.title), on),
     el("p", { class: "rs-total" }, read + aloud >= 60000 ? spanText(read + aloud) : "0 min"),
-    el("p", { class: "meta rs-split" }, spanText(read) + " reading · " + spanText(aloud) + " read aloud"),
+    el("p", { class: "meta rs-split" }, spanText(read) + " reading · " + spanText(aloud) + " narrated"),
     readChart(readBars(range)),
-    el("div", { class: "rs-legend meta", "aria-hidden": "true" }, el("span", null, el("i", { class: "rs-key-read" }), "Reading"), el("span", null, el("i", { class: "rs-key-aloud" }), "Read aloud")),
+    el("div", { class: "rs-legend meta", "aria-hidden": "true" }, el("span", null, el("i", { class: "rs-key-read" }), "Reading"), el("span", null, el("i", { class: "rs-key-aloud" }), "Narrated")),
     older ? el("p", { class: "meta rs-since" }, "Counting since " + dayAt(since).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })) : null,
     el("div", { class: "rs-figs" },
       readFigure(Math.round(words / 100) * 100 || words, "words"),
@@ -653,7 +659,7 @@ const KEYS = [
   ["In the library", [["↑ ↓", "Move between clips"], ["Enter", "Open"], ["X", "Pick, to act on several"], ["Shift-click", "Pick a run"],
     ["F", "Favourite"], ["E", "Export"], ["Del", "Delete"]]],
   ["Reading", [["Space  ← →", "Next or previous page"], ["J  K", "Next or previous section"], ["T", "Contents beside the text"],
-    ["S", "Read aloud"], ["A", "Reader settings"], ["H", "Highlights"], ["/", "Find in this clip"], ["+  −", "Text size"], ["O", "Open the original"], ["Esc", "Back"]]],
+    ["S", "Narrate"], ["A", "Reader settings"], ["H", "Highlights"], ["/", "Find in this clip"], ["+  −", "Text size"], ["O", "Open the original"], ["Esc", "Back"]]],
 ];
 function keysSheet() {
   return el("div", { class: "keys-sheet" },

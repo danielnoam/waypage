@@ -44,12 +44,14 @@ for (const name of ["paper", "sepia", "night", "slate", "solarized", "contrast",
       assert.ok(r >= 4.5, r.toFixed(2) + ":1");
     });
   }
-  // Highlights (1.7.0) sit on --mark.
-  for (const fg of ["ink", "accent"]) {
-    test(name + ": --" + fg + " on --mark", () => {
-      const r = ratio(t[fg], t.mark);
-      assert.ok(r >= 4.5, r.toFixed(2) + ":1");
-    });
+  // Highlights (1.7.0) sit on --mark, or on their colour (1.42.0).
+  for (const mark of ["mark", "mark-green", "mark-blue", "mark-pink", "mark-purple"]) {
+    for (const fg of ["ink", "accent"]) {
+      test(name + ": --" + fg + " on --" + mark, () => {
+        const r = ratio(t[fg], t[mark]);
+        assert.ok(r >= 4.5, r.toFixed(2) + ":1");
+      });
+    }
   }
   // The bars, the reader's top and bottom among them.
   for (const fg of ["ink", "muted", "accent"]) {

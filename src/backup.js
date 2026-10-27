@@ -65,8 +65,10 @@
     return out;
   }
 
-  // Highlights (1.7.0): where each is in the clip's text blocks, its words
-  // and its note.
+  // Highlights (1.7.0): where each is in the clip's text blocks, its words,
+  // its note and its colour.
+  // Colours other than yellow (1.42.0); yellow has none.
+  const MARK_COLORS = ["green", "blue", "pink", "purple"];
   function cleanMarks(list) {
     if (!Array.isArray(list)) return [];
     const ids = new Set();
@@ -79,6 +81,7 @@
       ids.add(id);
       const o = { id, block, start: Math.max(0, Math.floor(num(m.start))), endBlock, end: Math.max(0, Math.floor(num(m.end))), text: words, at: num(m.at) || Date.now() };
       if (text(m.note, 4000).trim()) o.note = text(m.note, 4000).trim();
+      if (MARK_COLORS.includes(m.color)) o.color = m.color;
       out.push(o);
     }
     return out;

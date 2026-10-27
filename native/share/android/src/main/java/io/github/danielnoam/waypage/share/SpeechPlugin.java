@@ -183,7 +183,7 @@ public class SpeechPlugin extends Plugin {
             SpeechService.send(getContext(), SpeechService.PLAY, null, null);
             call.resolve();
         } catch (Exception e) {
-            call.reject("Couldn't start reading aloud", e);
+            call.reject("Couldn't start narrating", e);
         }
     }
 
@@ -203,12 +203,13 @@ public class SpeechPlugin extends Plugin {
         job.lang = call.getString("lang", "");
         job.voice = call.getString("voice", "");
         job.engine = call.getString("engine", "");
-        job.title = call.getString("title", "Read aloud");
+        job.title = call.getString("title", "Narrate");
         job.subtitle = call.getString("subtitle", "");
         job.album = call.getString("album", "");
         job.track = call.getInt("track", 0);
         job.tracks = call.getInt("tracks", 0);
         job.key = call.getString("key", "");
+        job.mix = Boolean.TRUE.equals(call.getBoolean("mix", false));
         return job;
     }
 

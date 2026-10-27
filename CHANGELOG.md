@@ -2,6 +2,31 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.42.0] - 2026-10-27
+
+### Added
+- Highlights in five colours: yellow, green, blue, pink and purple. The
+  dot beside Highlight on the selection bar opens them; a new highlight
+  takes the colour you used last. A highlight's colour changes in its
+  sheet, and Highlights and a clip's list show one colour at a time
+  when you use more than one.
+- Kindle books without DRM (MOBI, AZW and AZW3) and FB2 books (also
+  zipped, .fb2.zip) open like EPUBs, with their contents, links,
+  pictures and cover. A Kindle book with DRM says it can't be opened.
+- Translate this clip, in a clip's ⋯: the whole clip in another
+  language, each paragraph's translation under it. It's done on the
+  device, so the words aren't sent anywhere: in the Android app by
+  Google's ML Kit (it downloads a language once, about 30 MB), and in
+  Chrome on a computer by the browser's own translator. A long book
+  can be stopped and finished later. The translation stays on this
+  device and isn't narrated.
+- Allow mixing, in Narrate's settings: music or a podcast in another
+  app keeps playing under the voice instead of pausing.
+
+### Changed
+- Read aloud is now called Narrate.
+- Highlights in lists show in their own colour, as they do in the text.
+
 ## [1.41.0] - 2026-10-22
 
 ### Added

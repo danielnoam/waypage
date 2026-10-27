@@ -52,7 +52,7 @@ public class FilesPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDelegate 
     @objc func pick(_ call: CAPPluginCall) {
         let mimes = call.getArray("mimes", String.self) ?? []
         var types = mimes.compactMap { UTType(mimeType: $0) }
-        for ext in ["epub", "md", "markdown", "cbz", "pdf", "txt", "html"] {
+        for ext in ["epub", "mobi", "azw", "azw3", "prc", "fb2", "md", "markdown", "cbz", "pdf", "txt", "html"] {
             if let t = UTType(filenameExtension: ext), !types.contains(t) { types.append(t) }
         }
         present(call, UIDocumentPickerViewController(forOpeningContentTypes: types.isEmpty ? [.item] : types, asCopy: false), folder: false)

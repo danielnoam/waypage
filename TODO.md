@@ -60,10 +60,32 @@ Everything iOS-only, kept for one iOS release.
   AppLock plugin in Swift with LAContext's `evaluatePolicy`, and
   NSFaceIDUsageDescription in the app's Info.plist. Also hiding the app
   switcher's picture while locked (a cover view on resign active).
+- **Translate this clip on iOS.** Android translates with ML Kit and the
+  web copy with Chrome's Translator since 1.42.0. iOS 18's Translation
+  framework (`TranslationSession`, on-device, downloads a language once)
+  would do it in a Translate plugin with the same `detect`, `ready`,
+  `prepare` and `clip` as Android's TranslatePlugin.java. It needs a
+  SwiftUI host for `translationTask`, and iOS 18.
 - **Downloads in the background on iOS.** Still the half minute iOS
   gives the app. Going further means saving in Swift around background
   `URLSession` downloads, a second copy of the saving code: only if the
   half minute turns out not to be enough.
+
+## Ideas to learn about (Daniel, 27 Oct 2026)
+
+Not planned: things to understand before deciding.
+
+- **WebDAV sync, as Anx Reader has it.** WebDAV is a plain HTTP standard
+  for files on a server: Nextcloud, ownCloud, a Synology or QNAP box,
+  Koofr, Box, many NAS drives. Anx syncs its books, notes and places
+  through it. For Waypage it would be a third way beside GitHub sync and
+  Drive backups, for people who'd rather not hand over a GitHub token or
+  who own their server. To find out: whether sync.js's merge (base, ours,
+  theirs) can sit on WebDAV's ETags the way it sits on GitHub's SHAs;
+  how the password is kept (an app password, HTTPS only, never synced);
+  CORS on the web copy (most servers don't send it, so it may be
+  app-only through CapacitorHttp); and whether clip files go up too or
+  only the library and places.
 
 ## Parked: the stores (Daniel, 10 Oct 2026: "we don't care for stores for now")
 
