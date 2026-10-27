@@ -18,6 +18,53 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Translate this clip (1.42.0).** Daniel picked on-device only. Android
+  uses ML Kit (com.google.mlkit:translate and language-id, through
+  TranslatePlugin.java), the web copy Chrome's built-in `Translator` and
+  `LanguageDetector`; other browsers and iOS don't offer it yet (iOS 18's
+  Translation framework is on the iOS list). What leaves the device: the
+  language models are downloaded from Google once per language (ML Kit,
+  about 30 MB each; Chrome's own), which tells Google which languages you
+  use, never the words. The Google Translate endpoint that would send
+  the clip's text was turned down. Translations are kept per clip in
+  `translation.json` (IndexedDB `<id>:translation` on the web), this
+  device only, never synced or backed up: they can be made again. Each
+  is [{ i, print, text }] against reader.js's highlight blocks, `print`
+  being the block's length and first 40 characters, so a clip updated
+  from the site only shows the paragraphs that still match. In the
+  frame the translation is a `.co-tr` span at the end of its block,
+  in ADDED (left out of highlights and places), removed before Narrate
+  reads, and not selectable, so a highlight is always in the original.
+
+- **Kindle books and FB2 (1.42.0).** MOBI, AZW and AZW3 are read by
+  foliate-js's mobi.js (MIT, vendored unchanged as src/vendor/foliate-mobi.js,
+  imported only when such a book is opened). It runs in the app's page,
+  like the EPUB reader: it only parses bytes and hands back documents,
+  which go through cleanSaved like any page, never into the app's DOM
+  as they are. Its parts come back as blob: addresses, fetched as text
+  and parsed with DOMParser, never navigated to; book.destroy() revokes
+  them. Links (filepos: and kindle:pos:) and the contents are resolved
+  with its resolveHref to "c<part>-<id>". DRM is checked first (the
+  PalmDOC header's encryption field) and refused with a clear line.
+  FB2 is converted here (files.js fromFb2): its encoding from the XML
+  line (windows-1251 is common), pictures from its base64 `binary` parts,
+  the notes body last. The Android picker now offers
+  application/octet-stream too, since many phones call an AZW3 just data.
+
+- **Allow mixing (1.42.0).** Off by default. On Android it doesn't ask
+  for audio focus, so music keeps playing and a call or another player
+  doesn't pause the narration. On iOS it sets the session's
+  `.mixWithOthers`; iOS then shows no lock-screen controls for Waypage,
+  which is the trade. The browser already mixes, so the web copy has no
+  switch.
+
+- **Highlight colours (1.42.0).** Yellow is a highlight with no `color`
+  (so older copies of the app read everything as yellow); the others
+  are green, blue, pink, purple, each a token per theme
+  (--mark-green and so on), all checked for AA under ink and accent in
+  test/contrast.test.js. Light themes take them a little stronger than
+  the yellow so pink and purple don't wash out.
+
 - **App lock (1.38.0).** Daniel's design: a passcode first, fingerprint
   or face only on top of it; a forgotten passcode resets everything,
   sync brings it back; the lock is per device. The passcode is kept as

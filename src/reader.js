@@ -8,7 +8,7 @@
   const C = window.Waypage;
 
   const CSP = "default-src 'none'; img-src 'self' https: data: blob:; style-src 'self'; font-src 'self'; base-uri 'self'; form-action 'none'";
-  const TOKENS = ["bg", "surface", "ink", "muted", "accent", "line", "preview", "mark", "video", "on-video", "scrim",
+  const TOKENS = ["bg", "surface", "ink", "muted", "accent", "line", "preview", "mark", "mark-green", "mark-blue", "mark-pink", "mark-purple", "video", "on-video", "scrim",
     "serif", "sans", "measure", "s-1", "s-2", "s-3", "s-4", "s-5", "s-6", "s-7", "r-sm", "r-md", "r-full",
     "fs-title", "lh-title", "fs-heading", "lh-heading", "fs-body", "lh-body", "fs-label", "lh-label", "fs-meta", "lh-meta",
     "reader-fs", "reader-lh", "reader-font", "reader-pad", "reader-measure",
@@ -488,7 +488,7 @@
   // What is read of a block: no citation marks, buttons or placeholders.
   function spoken(c) {
     for (const x of c.querySelectorAll("sup")) if (/^\s*\[[^\]]*\]\s*$/.test(x.textContent)) x.remove();
-    for (const x of c.querySelectorAll("style, script, button, .co-placeholder")) x.remove();
+    for (const x of c.querySelectorAll("style, script, button, .co-placeholder, .co-tr")) x.remove();
     return c.textContent.replace(/\s+/g, " ");
   }
   const speechText = (el) => spoken(el.cloneNode(true)).trim();
@@ -752,7 +752,7 @@
   // by its words instead. A block's text leaves out what this file adds
   // (the "Image loads when you're online" placeholders), so it's the same
   // online and off.
-  const ADDED = ".co-placeholder, .co-full, .co-spent";
+  const ADDED = ".co-placeholder, .co-full, .co-spent, .co-tr";
   function textNodes(el) {
     const out = [];
     const walk = doc.createTreeWalker(el, NodeFilter.SHOW_TEXT);
@@ -892,7 +892,7 @@
           if (a > 0) piece = piece.splitText(a);
           if (b - a < piece.length) piece.splitText(b - a);
           const mk = doc.createElement("mark");
-          mk.className = "co-mark" + (m.note ? " co-noted" : "");
+          mk.className = "co-mark" + (m.color ? " co-c-" + m.color : "") + (m.note ? " co-noted" : "");
           mk.dataset.mark = m.id;
           piece.before(mk);
           mk.append(piece);
@@ -921,6 +921,42 @@
       out.push({ href: href.replace(/#.*$/, ""), text: a.textContent.replace(/\s+/g, " ").trim() });
     }
     return out;
+  }
+
+  // A clip's translation (1.42.0): the text blocks highlights use, each
+  // with a short print of its words, so a translation made for another
+  // copy of the clip only lands where the words are the same.
+  const print = (text) => text.length + ":" + text.slice(0, 40);
+  function translatable() {
+    if (!doc) return [];
+    return markBlocks().map((el, i) => {
+      const text = words(blockText(el));
+      return { i, text, print: print(text) };
+    }).filter((b) => /[\p{L}]/u.test(b.text));
+  }
+  // Each translated block gets its translation under its own words, left
+  // out of highlights, places and Narrate like the other added parts.
+  // `list` is [{ i, print, text }], or null to take them away.
+  function paintTranslation(list, lang) {
+    if (!doc) return 0;
+    const at = isPaged() ? position() : null;
+    for (const n of [...doc.querySelectorAll(".co-tr")]) n.remove();
+    const all = markBlocks();
+    let n = 0;
+    for (const t of list || []) {
+      const el = all[t.i];
+      if (!el || !t.text || print(words(blockText(el))) !== t.print) continue;
+      const tr = doc.createElement("span");
+      tr.className = "co-tr";
+      tr.setAttribute("dir", "auto");
+      if (lang) tr.setAttribute("lang", lang);
+      tr.textContent = t.text;
+      el.append(tr);
+      n++;
+    }
+    if (isPaged()) requestAnimationFrame(() => { if (isPaged()) relayout(at); });
+    else if (chunks.length) requestAnimationFrame(guessHeights);
+    return n;
   }
 
   // Scrolls (or turns) to a highlight; false when it isn't in the page.
@@ -1471,5 +1507,5 @@
       return line;
     }));
   }
-  C.reader = { setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, jumpTo, readable, readableIn, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
+  C.reader = { setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, jumpTo, readable, readableIn, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
 })();

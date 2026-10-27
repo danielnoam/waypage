@@ -106,7 +106,8 @@ How he likes the work done:
 - **Motion has no fades.** Things move or zoom; see DESIGN.md.
 - **App stores aren't a priority.** Don't bring up store prep.
 - **UI words:** Library, Clips, Files, Collections, Feeds, Tags,
-  Highlights. "Pages" is only the reader's layout.
+  Highlights, Narrate (not "Read aloud", since 1.42.0). "Pages" is only
+  the reader's layout.
 - **After shipping,** say in a line or two what to try on the phone,
   above all anything native that couldn't be tested here.
 - **Be direct.** Push back when an idea or plan is weak, and say what

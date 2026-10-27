@@ -130,6 +130,53 @@ const EPUB_FILES = [
     ["OEBPS/text/a.xhtml", '<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body><p class="ct">ONE</p><p>' + "Words of the first part. ".repeat(40) + '</p><p id="later">' + "A later scene begins. ".repeat(40) + "</p></body></html>"],
     ["OEBPS/text/b.xhtml", '<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body><p class="ct">TWO</p><p>' + "Words of the second part. ".repeat(40) + "</p></body></html>"],
 ];
+// A small MOBI (1.42.0), the old Mobipocket kind: uncompressed text in
+// 4 KB records, a contents page found through the guide, a link by
+// filepos, a picture by recindex and the same picture as the cover.
+function mobiBytes(locked) {
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+  const pos = (n) => String(n).padStart(10, "0");
+  let html = '<html><head><guide><reference type="toc" title="Contents" filepos=TOC /></guide></head><body>'
+    + '<p>Contents</p><p><a filepos=ONE >The Opening</a></p><p><a filepos=TWO >The Crossing</a></p><mbp:pagebreak/>'
+    + '<h2>The Opening</h2><p>' + "Words of the opening. ".repeat(30) + '</p><p><img recindex="00001"></p><p><a filepos=TWO >Go to the crossing</a></p><mbp:pagebreak/>'
+    + '<h2>The Crossing</h2><p>' + "Words of the crossing. ".repeat(30) + "</p></body></html>";
+  const marks = { TOC: "<p>Contents", ONE: "<h2>The Opening", TWO: "<h2>The Crossing" };
+  // Each stand-in is as long as the number it becomes, so no offset moves.
+  for (const [k, at] of Object.entries(marks)) html = html.split("filepos=" + k + " ").join("filepos=" + k.padEnd(10, "_") + " ");
+  for (const [k, at] of Object.entries(marks)) html = html.split(k.padEnd(10, "_")).join(pos(Buffer.from(html.slice(0, html.indexOf(at))).length));
+  const text = Buffer.from(html);
+  const texts = [];
+  for (let i = 0; i < text.length; i += 4096) texts.push(text.subarray(i, i + 4096));
+  const exth = [[100, Buffer.from("Ada Writer")], [503, Buffer.from("A Kindle Book")], [201, (() => { const b = Buffer.alloc(4); b.writeUInt32BE(0); return b; })()]];
+  const exthBody = Buffer.concat(exth.map(([t, d]) => { const h = Buffer.alloc(8); h.writeUInt32BE(t, 0); h.writeUInt32BE(d.length + 8, 4); return Buffer.concat([h, d]); }));
+  const exthHead = Buffer.alloc(12); exthHead.write("EXTH", 0); exthHead.writeUInt32BE(12 + exthBody.length, 4); exthHead.writeUInt32BE(exth.length, 8);
+  const title = Buffer.from("A Kindle Book");
+  const rec0 = Buffer.alloc(248);
+  rec0.writeUInt16BE(1, 0); rec0.writeUInt32BE(text.length, 4); rec0.writeUInt16BE(texts.length, 8); rec0.writeUInt16BE(4096, 10); rec0.writeUInt16BE(locked ? 2 : 0, 12);
+  rec0.write("MOBI", 16); rec0.writeUInt32BE(232, 20); rec0.writeUInt32BE(2, 24); rec0.writeUInt32BE(65001, 28); rec0.writeUInt32BE(1234, 32); rec0.writeUInt32BE(6, 36);
+  const exthAll = Buffer.concat([exthHead, exthBody]);
+  rec0.writeUInt32BE(248 + exthAll.length, 84); rec0.writeUInt32BE(title.length, 88); rec0.writeUInt8(9, 95);
+  rec0.writeUInt32BE(1 + texts.length, 108); rec0.writeUInt32BE(0x40, 128); rec0.writeUInt32BE(0, 240); rec0.writeUInt32BE(0xffffffff, 244);
+  const records = [Buffer.concat([rec0, exthAll, title, Buffer.alloc(4)]), ...texts, png];
+  const head = Buffer.alloc(78 + records.length * 8 + 2);
+  head.write("A_Kindle_Book", 0); head.write("BOOK", 60); head.write("MOBI", 64); head.writeUInt16BE(records.length, 76);
+  let at = head.length;
+  records.forEach((r, i) => { head.writeUInt32BE(at, 78 + i * 8); head.writeUInt32BE(i * 2, 82 + i * 8); at += r.length; });
+  return Buffer.concat([head, ...records]);
+}
+// A small FB2 (1.42.0) in windows-1251, with a cover, two sections, a
+// note and a poem.
+function fb2Bytes() {
+  const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+  const xml = '<?xml version="1.0" encoding="windows-1251"?><FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0" xmlns:l="http://www.w3.org/1999/xlink">'
+    + '<description><title-info><author><first-name>Иван</first-name><last-name>Петров</last-name></author><book-title>Зимняя книга</book-title><lang>ru</lang><coverpage><image l:href="#cover.png"/></coverpage></title-info></description>'
+    + '<body><section><title><p>Первая глава</p></title><p>' + "Слова первой главы. ".repeat(30) + '<a l:href="#n1" type="note">1</a></p><poem><stanza><v>Строка одна</v><v>Строка две</v></stanza></poem></section>'
+    + '<section><title><p>Вторая глава</p></title><p><emphasis>' + "Слова второй главы. ".repeat(30) + "</emphasis></p></section></body>"
+    + '<body name="notes"><section id="n1"><title><p>1</p></title><p>Примечание.</p></section></body>'
+    + '<binary id="cover.png" content-type="image/png">' + png + "</binary></FictionBook>";
+  const cp = "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя";
+  return Buffer.from([...xml].map((c) => (cp.includes(c) ? 0xc0 + cp.indexOf(c) : c.charCodeAt(0))));
+}
 // A stored zip of [name, text or Buffer] pairs.
 function zipOf(files) {
   const crcTable = [...Array(256)].map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
@@ -255,6 +302,90 @@ function zipOf(files) {
       assert.strictEqual(await p.locator(".read-here .sel-look").count(), 0);
       await p.goBack();
       await p.locator("#readerView").waitFor({ state: "hidden" });
+    });
+
+    await test("a highlight takes the colour picked on the bar, changes in its sheet, and Highlights shows a colour at a time (1.42.0)", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ARTICLE);
+      await q.press("#saveUrl", "Enter");
+      await q.locator(".page-card", { hasText: "The Long Haul Flight" }).first().click();
+      await frameText(q).getByText("oceanic track").waitFor();
+      const pick = (words) => q.frameLocator("#readerFrame").locator("p", { hasText: words }).first().evaluate((el, w) => {
+        const t = [...el.childNodes].find((n) => n.nodeType === 3 && n.data.includes(w));
+        const r = el.ownerDocument.createRange();
+        r.setStart(t, t.data.indexOf(w));
+        r.setEnd(t, t.data.indexOf(w) + w.length);
+        const sel = el.ownerDocument.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+      }, words);
+      await pick("oceanic track");
+      await q.locator(".read-here .sel-color:not([hidden])").click();
+      await q.locator('.read-here.picking .sel-swatch[aria-label="Green"]').click();
+      await q.frameLocator("#readerFrame").locator("mark.co-mark.co-c-green").first().waitFor();
+      await q.waitForTimeout(700);
+      await pick("marmalade sky");
+      // The next one takes the colour picked last.
+      await q.locator(".read-here .sel-mark:not([hidden])").click();
+      await until(q, () => document.getElementById("readerFrame").contentDocument.querySelectorAll("mark.co-c-green").length >= 2);
+      await q.frameLocator("#readerFrame").locator("mark.co-mark", { hasText: "marmalade" }).first().click();
+      await q.locator('#readingSheet:not([hidden]) .mark-swatch[aria-label="Blue"]').click();
+      await q.frameLocator("#readerFrame").locator("mark.co-mark.co-c-blue", { hasText: "marmalade" }).first().waitFor();
+      await q.locator('#readingSheet .mark-swatch[aria-label="Blue"][aria-checked="true"]').waitFor();
+      const kept = await q.evaluate(async () => (await window.Waypage.store.readIndex()).flatMap((p) => p.marks || []).map((m) => m.color).sort());
+      assert.deepStrictEqual(kept, ["blue", "green"]);
+      await q.goBack();
+      await q.goBack();
+      await q.click("#sideBtn");
+      await q.locator("#sidebar .side-item", { hasText: "Highlights" }).click();
+      await q.locator("#highlights .mark-filters .chip", { hasText: "Blue" }).click();
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 1);
+      assert.ok(/marmalade/.test(await q.locator("#highlights .mark-row").first().textContent()));
+      await q.locator("#highlights .mark-filters .chip", { hasText: "All" }).click();
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 2);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a clip translates on the device, shows under its words, isn't narrated, and keeps after a restart (1.42.0)", async () => {
+      const q = await page(browser, 390);
+      const fake = () => {
+        const T = window.Waypage.platform.translator;
+        window.__sent = 0;
+        Object.defineProperty(T, "available", { get: () => true, configurable: true });
+        T.detect = async () => "en";
+        T.ready = async () => "downloadable";
+        T.prepare = async (from, to, on) => { if (on) on(1); };
+        T.translate = async (texts) => { window.__sent += texts.length; return texts.map((t) => "[he] " + t.slice(0, 30)); };
+      };
+      await q.evaluate(fake);
+      await q.fill("#saveUrl", ARTICLE);
+      await q.press("#saveUrl", "Enter");
+      await q.locator(".page-card", { hasText: "The Long Haul Flight" }).first().click();
+      await frameText(q).getByText("oceanic track").waitFor();
+      await q.click("#readerMore");
+      await q.locator("#readingSheet .row", { hasText: "Translate this clip" }).click();
+      await q.locator("#readingSheet:not([hidden]) .tr-into .dropdown-btn").click();
+      await q.getByRole("option", { name: "Hebrew" }).click();
+      await q.locator("#readingSheet .btn-primary", { hasText: "Translate" }).click();
+      const tr = q.frameLocator("#readerFrame").locator(".co-tr");
+      await tr.first().waitFor();
+      const n = await tr.count();
+      assert.ok(n > 3, "only " + n + " translated");
+      assert.ok(await q.evaluate(() => window.Waypage.reader.readable().every((t) => !t.includes("[he]"))), "the translation was narrated");
+      await q.reload();
+      await q.evaluate(fake);
+      await q.locator(".page-card", { hasText: "The Long Haul Flight" }).first().click();
+      await tr.first().waitFor();
+      assert.strictEqual(await tr.count(), n);
+      await q.click("#readerMore");
+      await q.locator("#readingSheet .row", { hasText: "Translation" }).click();
+      await q.locator("#readingSheet:not([hidden]) .row", { hasText: "Show it under the text" }).click();
+      await until(q, () => !document.getElementById("readerFrame").contentDocument.querySelector(".co-tr"));
+      await q.locator("#readingSheet .row", { hasText: "Remove the translation" }).click();
+      await until(q, async () => !(await window.Waypage.store.readTranslation((await window.Waypage.store.readIndex())[0].id)));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
     });
 
     await test("the Highlights button lists them, and words already highlighted can be unhighlighted", async () => {
@@ -1215,8 +1346,8 @@ function zipOf(files) {
       await until(q, () => !!state.open);
       await q.waitForTimeout(800);
       const end = await frameText(q).locator(".co-spent").textContent();
-      assert.ok(/here/.test(end) && /read aloud/.test(end) && /finished/.test(end), end);
-      assert.ok(!(await q.evaluate(() => C.reader.readable().some((t) => /read aloud/.test(t)))), "it isn't read aloud");
+      assert.ok(/here/.test(end) && /narrated/.test(end) && /finished/.test(end), end);
+      assert.ok(!(await q.evaluate(() => C.reader.readable().some((t) => /narrated/.test(t)))), "it isn't narrated");
       await q.evaluate(() => { store(SPENT_KEY, false); C.reader.setEnd(spentLines(state.open)); });
       assert.strictEqual(await frameText(q).locator(".co-spent").count(), 0);
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
@@ -1705,6 +1836,65 @@ function zipOf(files) {
       const heads = await q.evaluate(() => window.Waypage.reader.headings());
       assert.deepStrictEqual(heads.map((h) => h.text), ["The First Part", "A Later Scene", "The Second Part"]);
       assert.deepStrictEqual(heads.map((h) => h.level), [2, 3, 2]);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a Kindle book (MOBI) opens with its contents, link, picture and cover; a locked one says so (1.42.0)", async () => {
+      const q = await page(browser, 390);
+      const got = await q.evaluate(async ([b, locked]) => {
+        const F = window.Waypage.files;
+        const file = new File([new Uint8Array(b)], "kindle.mobi");
+        const kind = await F.kindOf(file);
+        const meta = await F.bring(file, kind, { has: () => false });
+        const list = await window.Waypage.store.readIndex();
+        await window.Waypage.store.writeIndex([meta, ...list]);
+        let refused = "";
+        try { await F.bring(new File([new Uint8Array(locked)], "locked.azw3"), "azw3", { has: () => false }); } catch (e) { refused = e.message; }
+        return { kind, title: meta.title, byline: meta.byline, site: meta.site, images: meta.images, thumb: !!meta.thumb, refused, lockedKind: await F.kindOf(new File([new Uint8Array(locked)], "locked.azw3")) };
+      }, [[...mobiBytes(false)], [...mobiBytes(true)]]);
+      assert.strictEqual(got.kind, "mobi");
+      assert.strictEqual(got.lockedKind, "azw3");
+      assert.strictEqual(got.title, "A Kindle Book");
+      assert.strictEqual(got.byline, "Ada Writer");
+      assert.strictEqual(got.site, "MOBI");
+      assert.ok(got.images >= 1, "no picture");
+      assert.ok(/DRM/.test(got.refused), got.refused);
+      await q.reload();
+      await q.locator(".page-card", { hasText: "A Kindle Book" }).first().click();
+      await q.locator("#readerView:not([hidden])").waitFor();
+      await frameText(q).getByText("Words of the opening").first().waitFor();
+      const heads = await q.evaluate(() => window.Waypage.reader.headings().map((h) => h.text));
+      assert.ok(heads.includes("The Opening") && heads.includes("The Crossing"), heads.join(", "));
+      const link = await q.frameLocator("#readerFrame").locator("a", { hasText: "Go to the crossing" }).getAttribute("href");
+      assert.ok(/^#c\d+-/.test(link || ""), link);
+      const id = link.slice(1);
+      assert.ok(await q.frameLocator("#readerFrame").locator('[id="' + id + '"]').count(), "the link lands nowhere");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("an FB2 book in windows-1251 opens with its author, chapters, poem and notes (1.42.0)", async () => {
+      const q = await page(browser, 390);
+      const got = await q.evaluate(async (b) => {
+        const F = window.Waypage.files;
+        const file = new File([new Uint8Array(b)], "winter.fb2");
+        const kind = await F.kindOf(file);
+        const meta = await F.bring(file, kind, { has: () => false });
+        const list = await window.Waypage.store.readIndex();
+        await window.Waypage.store.writeIndex([meta, ...list]);
+        return { kind, title: meta.title, byline: meta.byline, lang: meta.lang, thumb: !!meta.thumb };
+      }, [...fb2Bytes()]);
+      assert.deepStrictEqual(got, { kind: "fb2", title: "Зимняя книга", byline: "Иван Петров", lang: "ru", thumb: true });
+      await q.reload();
+      await q.locator(".page-card", { hasText: "Зимняя книга" }).first().click();
+      await q.locator("#readerView:not([hidden])").waitFor();
+      await frameText(q).getByText("Слова первой главы").first().waitFor();
+      const heads = await q.evaluate(() => window.Waypage.reader.headings().map((h) => h.text));
+      assert.ok(heads.includes("Первая глава") && heads.includes("Вторая глава"), heads.join(", "));
+      assert.ok(await frameText(q).getByText("Строка две").count());
+      assert.strictEqual(await q.frameLocator("#readerFrame").locator('a[href="#f-n1"]').count(), 1);
+      assert.strictEqual(await q.frameLocator("#readerFrame").locator('[id="f-n1"]').count(), 1);
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

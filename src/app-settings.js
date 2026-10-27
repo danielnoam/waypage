@@ -220,7 +220,7 @@ function motionGroup() {
 function aloudGroup() {
   if (!speech.available) return null;
   return el("section", { class: "settings-section" },
-    el("h2", { class: "overline" }, "Read aloud"),
+    el("h2", { class: "overline" }, "Narrate"),
     el("div", { class: "group" }, el("div", { class: "rc-list" }, aloudControls())));
 }
 
@@ -333,7 +333,7 @@ function notesSections() {
           el("span", { class: "choice-label" }, "Sound and more"),
           el("span", { class: "choice-note" }, "In your phone's settings for Waypage")),
         el("span", { class: "row-chev", "aria-hidden": "true" }, "›"))),
-    C.platform.os === "android" ? el("p", { class: "footnote" }, "Saving, sync and Read aloud show a quiet notification while they run, which Android needs to keep them going with the app put away. Those aren't alerts and can't be turned off here.") : null));
+    C.platform.os === "android" ? el("p", { class: "footnote" }, "Saving, sync and Narrate show a quiet notification while they run, which Android needs to keep them going with the app put away. Those aren't alerts and can't be turned off here.") : null));
   return out;
 }
 const notesValue = () => { const n = notesPrefs(); return n.on ? (n.posts === "each" ? "Each post" : "All together") : "Off"; };

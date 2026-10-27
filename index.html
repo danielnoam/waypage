@@ -8,8 +8,8 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="src/fonts.css?v=1.41.0">
-  <link rel="stylesheet" href="src/styles.css?v=1.41.0">
+  <link rel="stylesheet" href="src/fonts.css?v=1.42.0">
+  <link rel="stylesheet" href="src/styles.css?v=1.42.0">
 </head>
 <body>
   <div class="app" id="libraryView">
@@ -103,7 +103,7 @@
         <span class="pill" id="offlinePill" hidden>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12h20M12 2l3 10-3 10"></path></svg>Offline
         </span>
-        <button class="icon-btn aloud-btn" id="readerAloud" type="button" aria-label="Read aloud" title="Read aloud (S)" aria-pressed="false" hidden>
+        <button class="icon-btn aloud-btn" id="readerAloud" type="button" aria-label="Narrate" title="Narrate (S)" aria-pressed="false" hidden>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"></path></svg>
         </button>
         <button class="icon-btn" id="readerMarks" type="button" aria-label="Highlights" title="Highlights (H)" aria-expanded="false" aria-controls="readingSheet">
@@ -143,7 +143,7 @@
     <div class="read-foot" id="readFoot">
       <div class="read-left">
         <span class="read-section" id="readSection" dir="auto" aria-hidden="true"></span>
-        <div class="aloud-player" id="aloudPlayer" role="group" aria-label="Reading aloud" hidden>
+        <div class="aloud-player" id="aloudPlayer" role="group" aria-label="Narrating" hidden>
           <button class="icon-btn" id="aloudPrev" type="button" aria-label="Previous paragraph">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h2v14H6zM20 5v14L9.5 12z"></path></svg>
           </button>
@@ -304,7 +304,7 @@
     <p class="pip-text" id="pipText" dir="auto"></p>
     <p class="pip-state" id="pipState"></p>
   </div>
-  <div class="aloud-bar" id="aloudBar" role="region" aria-label="Reading aloud" hidden>
+  <div class="aloud-bar" id="aloudBar" role="region" aria-label="Narrating" hidden>
     <button class="icon-btn aloud-play" id="aloudBarPlay" type="button" aria-label="Pause">
       <svg class="aloud-pause-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"></path></svg>
       <svg class="aloud-play-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg>
@@ -313,7 +313,7 @@
       <span class="aloud-bar-title" id="aloudBarTitle" dir="auto"></span>
     </button>
     <button class="aloud-read-next" id="aloudBarNext" type="button" hidden>Read next</button>
-    <button class="icon-btn" id="aloudBarStop" type="button" aria-label="Stop reading aloud">
+    <button class="icon-btn" id="aloudBarStop" type="button" aria-label="Stop narrating">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
     </button>
   </div>
@@ -348,29 +348,29 @@
     </div>
   </section>
 
-  <script src="src/platform.js?v=1.41.0"></script>
-  <script src="src/motion.js?v=1.41.0"></script>
-  <script src="src/vendor/Readability.js?v=1.41.0"></script>
-  <script src="src/store.js?v=1.41.0"></script>
-  <script src="src/save.js?v=1.41.0"></script>
-  <script src="src/feeds.js?v=1.41.0"></script>
-  <script src="src/backup.js?v=1.41.0"></script>
-  <script src="src/imports.js?v=1.41.0"></script>
-  <script src="src/sync.js?v=1.41.0"></script>
-  <script src="src/drive.js?v=1.41.0"></script>
-  <script src="src/qr.js?v=1.41.0"></script>
-  <script src="src/stats.js?v=1.41.0"></script>
-  <script src="src/epub.js?v=1.41.0"></script>
-  <script src="src/files.js?v=1.41.0"></script>
-  <script src="src/pdf.js?v=1.41.0"></script>
-  <script src="src/reader.js?v=1.41.0"></script>
-  <script src="src/app.js?v=1.41.0"></script>
-  <script src="src/app-reader.js?v=1.41.0"></script>
-  <script src="src/app-library.js?v=1.41.0"></script>
-  <script src="src/app-saving.js?v=1.41.0"></script>
-  <script src="src/app-places.js?v=1.41.0"></script>
-  <script src="src/app-settings.js?v=1.41.0"></script>
-  <script src="src/app-lock.js?v=1.41.0"></script>
-  <script src="src/app-start.js?v=1.41.0"></script>
+  <script src="src/platform.js?v=1.42.0"></script>
+  <script src="src/motion.js?v=1.42.0"></script>
+  <script src="src/vendor/Readability.js?v=1.42.0"></script>
+  <script src="src/store.js?v=1.42.0"></script>
+  <script src="src/save.js?v=1.42.0"></script>
+  <script src="src/feeds.js?v=1.42.0"></script>
+  <script src="src/backup.js?v=1.42.0"></script>
+  <script src="src/imports.js?v=1.42.0"></script>
+  <script src="src/sync.js?v=1.42.0"></script>
+  <script src="src/drive.js?v=1.42.0"></script>
+  <script src="src/qr.js?v=1.42.0"></script>
+  <script src="src/stats.js?v=1.42.0"></script>
+  <script src="src/epub.js?v=1.42.0"></script>
+  <script src="src/files.js?v=1.42.0"></script>
+  <script src="src/pdf.js?v=1.42.0"></script>
+  <script src="src/reader.js?v=1.42.0"></script>
+  <script src="src/app.js?v=1.42.0"></script>
+  <script src="src/app-reader.js?v=1.42.0"></script>
+  <script src="src/app-library.js?v=1.42.0"></script>
+  <script src="src/app-saving.js?v=1.42.0"></script>
+  <script src="src/app-places.js?v=1.42.0"></script>
+  <script src="src/app-settings.js?v=1.42.0"></script>
+  <script src="src/app-lock.js?v=1.42.0"></script>
+  <script src="src/app-start.js?v=1.42.0"></script>
 </body>
 </html>

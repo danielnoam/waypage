@@ -19,9 +19,10 @@
 // CURRENT_PROJECT_VERSION = the same number Android's versionCode is.
 //
 // 1.6.0 adds what iOS needed to catch up with Android:
-// - CFBundleDocumentTypes, with UTImportedTypeDeclarations for the two
-//   kinds iOS doesn't know (Markdown, comic book zips), so a book, PDF or
-//   note opens in Waypage from Files, Mail or another app ("Open in"); it
+// - CFBundleDocumentTypes, with UTImportedTypeDeclarations for the kinds
+//   iOS doesn't know (Markdown, comic book zips; Kindle books and FB2 since
+//   1.42.0), so a book, PDF or note opens in Waypage from Files, Mail or
+//   another app ("Open in"); it
 //   arrives as an open-URL event (ShareTargetPlugin).
 // - CFBundleURLTypes for waypage:// (the share extension handing over a
 //   link) and waypage-widget:// (a widget's tap).
@@ -53,6 +54,8 @@ const DOCS = [
   ["Book", ["org.idpf.epub-container"], "Alternate"],
   ["PDF", ["com.adobe.pdf"], "Alternate"],
   ["Comic", ["io.github.danielnoam.waypage.cbz"], "Owner"],
+  ["Kindle book", ["io.github.danielnoam.waypage.mobi"], "Alternate"],
+  ["FB2 book", ["io.github.danielnoam.waypage.fb2"], "Owner"],
   ["Note", ["net.daringfireball.markdown", "public.plain-text", "public.html"], "Alternate"],
   ["Email", ["com.apple.mail.email"], "Alternate"],
 ];
@@ -85,6 +88,8 @@ const PLIST = [
   ["UTImportedTypeDeclarations", arr([
     imported("io.github.danielnoam.waypage.cbz", "Comic book", ["public.zip-archive", "public.data"], ["cbz"], ["application/vnd.comicbook+zip", "application/x-cbz"]),
     imported("net.daringfireball.markdown", "Markdown", ["public.plain-text"], ["md", "markdown"], ["text/markdown", "text/x-markdown"]),
+    imported("io.github.danielnoam.waypage.mobi", "Kindle book", ["public.data"], ["mobi", "azw", "azw3", "prc"], ["application/x-mobipocket-ebook", "application/vnd.amazon.ebook"]),
+    imported("io.github.danielnoam.waypage.fb2", "FB2 book", ["public.xml"], ["fb2"], ["application/x-fictionbook+xml"]),
   ])],
   ["CFBundleURLTypes", arr([scheme("waypage"), scheme("waypage-widget")])],
   ["ALTAppGroups", arr([str(GROUP)])],

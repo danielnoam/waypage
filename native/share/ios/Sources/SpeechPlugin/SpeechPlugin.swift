@@ -43,6 +43,9 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
     private var rate: Float = 1
     private var title = ""
     private var subtitle = ""
+    // Allow mixing (1.42.0): other apps' sound goes on under the voice.
+    // iOS shows no lock-screen controls for a mixing app.
+    private var mix = false
     private var commandsSet = false
 
     override public func load() {
@@ -71,7 +74,8 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
             self.lang = call.getString("lang") ?? ""
             self.voice = call.getString("voice") ?? ""
             self.rate = Float(call.getDouble("rate") ?? 1)
-            self.title = call.getString("title") ?? "Read aloud"
+            self.title = call.getString("title") ?? "Narrate"
+            self.mix = call.getBool("mix") ?? false
             self.subtitle = call.getString("subtitle") ?? ""
             self.index = max(0, min(call.getInt("start") ?? 0, list.count - 1))
             self.setUpCommands()
@@ -180,7 +184,7 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
 
     private func startSession() {
         // Plays with the silent switch on and the screen locked, as spoken audio.
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [])
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: mix ? [.mixWithOthers] : [])
         try? AVAudioSession.sharedInstance().setActive(true)
     }
 

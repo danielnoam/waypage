@@ -12,6 +12,10 @@
   --line: #E4DED3;
   --preview: #D9E2EA;
   --mark: #F6E3A1;
+  --mark-green: #97F0AD;
+  --mark-blue: #C8DFF7;
+  --mark-pink: #F9D3E0;
+  --mark-purple: #E8D7F9;
   --bar: #EDE8DF;
   --ok: #1F6F5C;
   --warn: #8A4B22;
@@ -33,6 +37,10 @@
   --line: #E0D2B8;
   --preview: #E3D5BC;
   --mark: #EBD594;
+  --mark-green: #87EEA1;
+  --mark-blue: #C1DCF6;
+  --mark-pink: #F8CEDC;
+  --mark-purple: #E4D1F8;
   --bar: #E7DAC0;
   --ok: #3F6B2E;
   --warn: #8A4B22;
@@ -54,6 +62,10 @@
   --line: #252B33;
   --preview: #232A33;
   --mark: #3D3420;
+  --mark-green: #173D20;
+  --mark-blue: #1E364F;
+  --mark-pink: #592234;
+  --mark-purple: #452663;
   --bar: #181C22;
   --ok: #7CC4A8;
   --warn: #E0A46E;
@@ -75,6 +87,10 @@
   --line: #D9DDE3;
   --preview: #D6DEE6;
   --mark: #F3E3A6;
+  --mark-green: #8FEFA7;
+  --mark-blue: #C5DEF7;
+  --mark-pink: #F8D0DE;
+  --mark-purple: #E6D4F9;
   --bar: #E3E6EB;
   --ok: #1F6F5C;
   --warn: #8A4B22;
@@ -96,6 +112,10 @@
   --line: #EEE8D5;
   --preview: #EBE5D3;
   --mark: #F4E3A5;
+  --mark-green: #C4F7D0;
+  --mark-blue: #DDECFA;
+  --mark-pink: #FBE5EC;
+  --mark-purple: #F1E6FB;
   --bar: #F3EBD6;
   --ok: #5C6A00;
   --warn: #A4331A;
@@ -117,6 +137,10 @@
   --line: #8A8A8A;
   --preview: #DADADA;
   --mark: #FFE97A;
+  --mark-green: #66E987;
+  --mark-blue: #AED1F3;
+  --mark-pink: #F6BED1;
+  --mark-purple: #DDC3F6;
   --bar: #EBEBEB;
   --ok: #0B5B3A;
   --warn: #8A2F00;
@@ -138,6 +162,10 @@
   --line: #24272C;
   --preview: #1C1F24;
   --mark: #3A3115;
+  --mark-green: #15391E;
+  --mark-blue: #1C334B;
+  --mark-pink: #542032;
+  --mark-purple: #41245E;
   --bar: #0A0A0B;
   --ok: #7CC4A8;
   --warn: #E0A46E;
@@ -159,6 +187,10 @@
   --line: #3A332D;
   --preview: #332C26;
   --mark: #4A3A22;
+  --mark-green: #1A4425;
+  --mark-blue: #223E5B;
+  --mark-pink: #66273C;
+  --mark-purple: #4E2B72;
   --bar: #241F1B;
   --ok: #A3C78F;
   --warn: #EE9F7E;
@@ -180,6 +212,10 @@
   --line: #0E4552;
   --preview: #0A3D4A;
   --mark: #3A3A1A;
+  --mark-green: #184022;
+  --mark-blue: #203A55;
+  --mark-pink: #602438;
+  --mark-purple: #49286B;
   --bar: #04313D;
   --ok: #A5B53A;
   --warn: #F08060;
@@ -641,6 +677,32 @@ body.aloud-bar-up .library, body.aloud-bar-up .screen-body { padding-bottom: cal
 .read-here button:active { background-image: linear-gradient(var(--press), var(--press)); }
 .read-here .sel-icon, .read-here.tight .sel-aloud, .read-here.tighter button { width: var(--tap); padding: 0; justify-content: center; }
 .read-here.tight .sel-aloud .sel-label, .read-here.tighter .sel-label { display: none; }
+/* Highlight colours (1.42.0): a dot for each, ringed so it shows on any
+   ground. On the selection bar the dot opens the five in its place. */
+.swatch-dot {
+  display: block; width: 22px; height: 22px; flex-shrink: 0; border-radius: var(--r-full);
+  background: var(--mark); box-shadow: 0 0 0 1px var(--line);
+}
+.swatch-dot[data-c="green"] { background: var(--mark-green); }
+.swatch-dot[data-c="blue"] { background: var(--mark-blue); }
+.swatch-dot[data-c="pink"] { background: var(--mark-pink); }
+.swatch-dot[data-c="purple"] { background: var(--mark-purple); }
+.read-here .swatch-dot { box-shadow: 0 0 0 2px var(--accent-ink); }
+.sel-colors { display: none; }
+.read-here.picking > button { display: none; }
+.read-here.picking .sel-colors { display: flex; }
+.read-here .sel-swatch { width: var(--tap); padding: 0; justify-content: center; }
+.read-here .sel-colors .sel-swatch + .sel-swatch { border-inline-start: 0; }
+.chip .swatch-dot { width: 14px; height: 14px; }
+.mark-filters { margin-top: var(--s-2); }
+.mark-colors { display: flex; gap: var(--s-1); margin: 0 0 var(--s-3); }
+.mark-swatch {
+  width: var(--tap); height: var(--tap); padding: 0; border: 0; border-radius: var(--r-full);
+  display: inline-flex; align-items: center; justify-content: center; background: none; cursor: pointer;
+}
+.mark-swatch .swatch-dot { width: 28px; height: 28px; }
+.mark-swatch[aria-checked="true"] .swatch-dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+.mark-swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
 .aloud-controls { display: flex; flex-direction: column; gap: var(--s-3); }
 .aloud-controls > .overline { margin: var(--s-2) 0 calc(-1 * var(--s-1)) var(--s-1); }
 .aloud-controls .footnote { margin: 0 var(--s-1); }
@@ -1338,11 +1400,15 @@ html { -webkit-tap-highlight-color: transparent; }
 .mark-row { flex: 1; min-width: 0; flex-direction: column; align-items: stretch; gap: var(--s-1); padding-block: var(--s-3); text-align: start; }
 .mark-quote {
   font: 400 var(--fs-label)/1.45 var(--serif); color: var(--ink);
-  padding-inline-start: var(--s-3); box-shadow: inset 3px 0 0 var(--accent);
+  padding: 2px var(--s-2); border-radius: var(--r-sm); background: var(--mark);
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
-.mark-quote:dir(rtl) { box-shadow: inset -3px 0 0 var(--accent); }
-.mark-quote.big { display: block; margin: var(--s-2) 0 var(--s-4); font-size: var(--fs-body); line-height: var(--lh-body); overflow: visible; }
+/* In its own colour (1.42.0), as it is in the text. */
+.mark-quote[data-c="green"] { background: var(--mark-green); }
+.mark-quote[data-c="blue"] { background: var(--mark-blue); }
+.mark-quote[data-c="pink"] { background: var(--mark-pink); }
+.mark-quote[data-c="purple"] { background: var(--mark-purple); }
+.mark-quote.big { display: block; margin: var(--s-2) 0 var(--s-3); padding: var(--s-2) var(--s-3); font-size: var(--fs-body); line-height: var(--lh-body); overflow: visible; }
 .mark-note { color: var(--muted); font-size: var(--fs-meta); line-height: var(--lh-meta); white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .mark-edit { flex-shrink: 0; color: var(--muted); }
 .marks-copy { flex-shrink: 0; }

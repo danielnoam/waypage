@@ -168,6 +168,15 @@ html.co-spread .co-printed img + img { margin-top: 0; }
 }
 .co-cut a { display: block; margin-top: var(--s-2); color: var(--accent); font-weight: 600; }
 
+/* A clip's translation (1.42.0): under each block's own words, quieter,
+   and not selectable, so a highlight is always made in the original. */
+.co-tr {
+  display: block; margin-top: 0.3em;
+  color: var(--muted); font-size: 0.94em; font-style: normal; font-weight: 400;
+  user-select: none; -webkit-user-select: none;
+}
+:is(h1, h2, h3, h4, h5, h6) > .co-tr { font-size: 0.8em; }
+
 /* Highlights (1.7.0): marked words, and a dotted underline on those
    with a note. A tap on one opens it in the clip's sheet. */
 mark.co-mark {
@@ -176,6 +185,11 @@ mark.co-mark {
   -webkit-box-decoration-break: clone; box-decoration-break: clone;
   cursor: pointer;
 }
+/* Highlight colours (1.42.0); yellow is --mark itself. */
+mark.co-mark.co-c-green { background: var(--mark-green); }
+mark.co-mark.co-c-blue { background: var(--mark-blue); }
+mark.co-mark.co-c-pink { background: var(--mark-pink); }
+mark.co-mark.co-c-purple { background: var(--mark-purple); }
 mark.co-mark.co-noted { text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
 
 /* Find in this clip (1.14.0): every match underlined, the one being

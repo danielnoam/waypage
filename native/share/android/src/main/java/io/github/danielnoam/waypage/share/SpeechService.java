@@ -49,6 +49,8 @@ public class SpeechService extends Service {
         int[] blocks;
         int track, tracks;
         float rate = 1f;
+        // Allow mixing (1.42.0): no audio focus, so other apps play on.
+        boolean mix;
     }
 
     interface Listener {
@@ -210,7 +212,8 @@ public class SpeechService extends Service {
 
     private void play() {
         state = "playing";
-        if (!takeFocus()) {
+        if (job != null && job.mix) dropFocus();
+        else if (!takeFocus()) {
             state = "paused";
             report();
             return;
@@ -432,7 +435,7 @@ public class SpeechService extends Service {
         Notification.Builder b;
         if (Build.VERSION.SDK_INT >= 26) {
             if (nm.getNotificationChannel(CHANNEL) == null) {
-                NotificationChannel ch = new NotificationChannel(CHANNEL, "Read aloud", NotificationManager.IMPORTANCE_LOW);
+                NotificationChannel ch = new NotificationChannel(CHANNEL, "Narrate", NotificationManager.IMPORTANCE_LOW);
                 ch.setShowBadge(false);
                 nm.createNotificationChannel(ch);
             }
@@ -444,7 +447,7 @@ public class SpeechService extends Service {
             open.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
             b.setContentIntent(PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
         }
-        String title = job == null ? "Read aloud" : job.title;
+        String title = job == null ? "Narrate" : job.title;
         String text = job == null ? "" : job.subtitle;
         return b.setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle(title)

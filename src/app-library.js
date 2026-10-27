@@ -841,6 +841,9 @@ function pageSheet(p, where) {
           ? menuRow(p.view === "text" ? "Show as printed pages" : "Show as text", () => switchView(p, where)) : null,
         inReader && !C.files.printed(p) ? menuRow("Find in this clip", () => back().then(openFind)) : null,
         inReader && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow("Save linked pages", () => back().then(() => openSheet("links"))) : null,
+        // The whole clip in another language, on this device (1.42.0).
+        inReader && !C.files.printed(p) && !p.comic && (C.platform.translator.available || translationOf(p))
+          ? menuRow(translationOf(p) ? "Translation" : "Translate this clip", () => back().then(() => openSheet("translate"))) : null,
         menuRow(p.finished ? "Mark as unread" : "Mark as read", () => markRead([p], !p.finished).then(draw)),
         // The page changed since (1.38.0): fetched again in its place.
         p.file || p.preview || !/^https?:/.test(p.url || "") ? null
@@ -1492,7 +1495,7 @@ async function saveHighlights(btn) {
 // (0.31.0): a backup is restored, a clip sent as a file comes back, and
 // a book, a note, a page or a comic becomes a clip of its own. `open`
 // opens it once it's in.
-const FILE_ACCEPT = ".epub,.md,.markdown,.txt,.html,.htm,.eml,.cbz,.pdf,.csv,.json,.zip,.opml,.xml,application/epub+zip,application/pdf,text/markdown,text/plain,text/html,message/rfc822,text/csv,application/json,application/zip";
+const FILE_ACCEPT = ".epub,.mobi,.azw,.azw3,.prc,.fb2,.md,.markdown,.txt,.html,.htm,.eml,.cbz,.pdf,.csv,.json,.zip,.opml,.xml,application/epub+zip,application/pdf,text/markdown,text/plain,text/html,message/rfc822,text/csv,application/json,application/zip";
 // The system's picker where there is one (it also grants a lasting
 // permission, for a clip that reads from the file); the browser's own
 // otherwise.
@@ -1730,7 +1733,7 @@ async function restoreBackup(file, say) {
 // folder from before moves into it.
 const WATCH_KEY = "waypage.watch";
 const WATCHES_KEY = "waypage.watches";
-const WATCH_EXTS = /\.(epub|pdf|cbz|md|markdown|txt|html?|xhtml|eml)$/i;
+const WATCH_EXTS = /\.(epub|mobi|azw3?|prc|fb2|pdf|cbz|md|markdown|txt|html?|xhtml|eml)$/i;
 let watching = null;
 function watches() {
   let list = load(WATCHES_KEY, null);

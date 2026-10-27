@@ -379,6 +379,7 @@ function show(p, html) {
     brightOpen();
     volumeWatch();
     paintMarks(p);
+    loadTranslation(p);
     $("readerContents").hidden = C.reader.headings().length < 2;
     showSection();
     fitRail();
@@ -619,7 +620,7 @@ function spentLines(p) {
   if (!spentOn() || !p || p.preview) return null;
   const c = C.stats.clip(p.id);
   if (!c || c.readMs + c.aloudMs < C.stats.READ_DAY) return null;
-  const first = [c.readMs >= 60000 ? spanText(c.readMs) + " here" : null, c.aloudMs >= 60000 ? spanText(c.aloudMs) + " read aloud" : null].filter(Boolean).join(" · ");
+  const first = [c.readMs >= 60000 ? spanText(c.readMs) + " here" : null, c.aloudMs >= 60000 ? spanText(c.aloudMs) + " narrated" : null].filter(Boolean).join(" · ");
   const words = c.words >= 1000 ? "About " + (Math.round(c.words / 100) * 100).toLocaleString() + " words" : c.words >= 50 ? "About " + (Math.round(c.words / 10) * 10) + " words" : null;
   const opened = c.opened > 1 ? "opened " + c.opened + " times" : null;
   const done = c.finished ? "finished " + new Date(c.finished).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : null;
@@ -648,7 +649,7 @@ function volumeSwitch() {
   if (!C.platform.volumeKeys.available) return null;
   const row = el("label", { class: "rc-row switch-row volume-row" },
     el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Volume buttons turn pages"),
-      el("span", { class: "choice-note" }, "Down for next, up for back. Not while reading aloud.")),
+      el("span", { class: "choice-note" }, "Down for next, up for back. Not while narrating.")),
     el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "volumePages", checked: volumeOn(),
       onchange: (e) => {
         store(VOLUME_KEY, e.target.checked);
@@ -1033,6 +1034,8 @@ const GO_ON_KEY = "waypage.aloudGoOn";
 const AWAKE_KEY = "waypage.aloudScreenOn";
 const PIP_KEY = "waypage.aloudPip";
 const KEEP_KEY = "waypage.aloudKeepGoing";
+// Allow mixing (1.42.0): other apps' sound goes on under the voice.
+const MIX_KEY = "waypage.aloudMix";
 let wentOnFrom = "";
 const PIECE = 600;
 
@@ -1141,7 +1144,7 @@ async function startAloud(from, spot) {
   // Pressed just after opening: from the place, once the clip is back at it.
   if (from == null && !spot) { await C.reader.placed(); if (state.open !== p) return; }
   const texts = C.reader.readable({ footnotes: !!load(FOOTNOTES_KEY, false), edges: !!load(EDGES_KEY, false) });
-  if (!texts.length) { toast(C.files.printed(p) ? "Switch this PDF to Show as text, in ⋯, to read it aloud." : "There's no text in this clip to read aloud."); return; }
+  if (!texts.length) { toast(C.files.printed(p) ? "Switch this PDF to Show as text, in ⋯, to narrate it." : "There's no text in this clip to narrate."); return; }
   // From the selected word, or the sentence on the reading line.
   const at = spot ? C.reader.spotIn(spot) : from == null ? C.reader.firstShown() : { index: from, offset: 0 };
   const block = at.index;
@@ -1158,12 +1161,12 @@ async function startAloud(from, spot) {
   setAloud("playing", start);
   queued = null;
   try {
-    await speech.play({ items, start, lang: p.lang || "", voice: voiceFor(p), engine: engineOf(), rate: load(RATE_KEY, 1),
+    await speech.play({ items, start, lang: p.lang || "", voice: voiceFor(p), engine: engineOf(), rate: load(RATE_KEY, 1), mix: !!load(MIX_KEY, false),
       key: p.id, blocks: map, ...mediaInfo(p) });
     queueNext();
   } catch (e) {
     setAloud("stopped", -1);
-    toast("Couldn't read aloud. Check the phone's text-to-speech settings.");
+    toast("Couldn't narrate. Check the phone's text-to-speech settings.");
   }
 }
 
@@ -1200,7 +1203,7 @@ async function queueNext() {
   if (!texts.length) return;
   const { items, map } = pieces(texts.map((text, block) => ({ text, block })));
   queued = { key: next.id, after: p.id, map };
-  const ok = await speech.queue({ after: p.id, items, start: 0, lang: next.lang || "", voice: voiceFor(next), engine: engineOf(),
+  const ok = await speech.queue({ after: p.id, items, start: 0, lang: next.lang || "", voice: voiceFor(next), engine: engineOf(), mix: !!load(MIX_KEY, false),
     key: next.id, blocks: map, ...mediaInfo(next) });
   if (!ok) queued = null;
 }
@@ -1264,17 +1267,23 @@ function showReadHere() {
   const box = (mark && mark.box) || spot || (picked && picked.box);
   if (!box) { hideReadHere(); return; }
   if (!readHere) {
-    const aloudBtn = el("button", { class: "sel-aloud", type: "button", "aria-label": "Read from here", onclick: () => {
+    const aloudBtn = el("button", { class: "sel-aloud", type: "button", "aria-label": "Narrate from here", onclick: () => {
       const s = C.reader.selectionSpot();
       hideReadHere();
       C.reader.clearSelection();
       if (s) startAloud(null, s);
     } });
     aloudBtn.innerHTML = $("readerAloud").innerHTML;
-    aloudBtn.append(el("span", { class: "sel-label" }, "Read from here"));
+    aloudBtn.append(el("span", { class: "sel-label" }, "Narrate from here"));
     const markBtn = el("button", { class: "sel-mark", type: "button", onclick: () => (markBtn.dataset.remove ? removeMarks(markBtn.dataset.remove.split(",")) : addMark()) });
     markBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS.mark + "</svg>";
     markBtn.append(el("span", { class: "sel-label sel-mark-label" }, "Highlight"));
+    // The colour the next highlight takes (1.42.0): its dot opens the five.
+    const colorBtn = el("button", { class: "sel-color sel-icon", type: "button", "aria-label": "Highlight colour", title: "Highlight colour",
+      onclick: () => { readHere.classList.add("picking"); showReadHere(); } }, swatchDot(markColor()));
+    const colors = el("div", { class: "sel-colors", role: "group", "aria-label": "Highlight colours" },
+      ...MARK_COLORS.map((c) => el("button", { class: "sel-swatch", type: "button", "aria-label": MARK_NAMES[c], title: MARK_NAMES[c],
+        onclick: () => pickMarkColor(c) }, swatchDot(c))));
     const outBtn = (cls, label, icon, act) => {
       const b = el("button", { class: cls + " sel-icon", type: "button", "aria-label": label, title: label, onclick: () => {
         const s = C.reader.selectionText();
@@ -1283,12 +1292,15 @@ function showReadHere() {
       b.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + icon + "</svg>";
       return b;
     };
-    readHere = el("div", { class: "read-here", role: "toolbar", "aria-label": "Selection" }, markBtn, aloudBtn,
+    readHere = el("div", { class: "read-here", role: "toolbar", "aria-label": "Selection" }, markBtn, colorBtn, colors, aloudBtn,
       outBtn("sel-translate", "Translate", ICONS.translate, translate));
     $("readerView").append(readHere);
   }
   const markBtn = readHere.querySelector(".sel-mark");
   markBtn.hidden = !mark;
+  readHere.querySelector(".sel-color").hidden = !mark;
+  readHere.querySelector(".sel-color").replaceChildren(swatchDot(markColor()));
+  if (!mark) readHere.classList.remove("picking");
   // Words already highlighted (1.7.1): the button takes the highlight off.
   const on = mark ? C.reader.selectionMarks() : { all: false };
   if (on.all) markBtn.dataset.remove = on.ids.join(","); else delete markBtn.dataset.remove;
@@ -1320,9 +1332,29 @@ function showReadHere() {
   const off = readHere.getBoundingClientRect().top - top;
   if (Math.abs(off) > 1) readHere.style.top = top - off + "px";
 }
-function hideReadHere() { if (readHere) readHere.hidden = true; }
+function hideReadHere() { if (readHere) { readHere.hidden = true; readHere.classList.remove("picking"); } }
 
 // ---- Highlights (1.7.0) ----
+// Colours (1.42.0): yellow is a highlight with no `color`.
+const MARK_COLORS = ["yellow", "green", "blue", "pink", "purple"];
+const MARK_NAMES = { yellow: "Yellow", green: "Green", blue: "Blue", pink: "Pink", purple: "Purple" };
+const MARK_COLOR_KEY = "waypage.markColor";
+const markColor = () => { const c = load(MARK_COLOR_KEY, "yellow"); return MARK_COLORS.includes(c) ? c : "yellow"; };
+const colorOf = (m) => (MARK_COLORS.includes(m.color) ? m.color : "yellow");
+const swatchDot = (c) => el("span", { class: "swatch-dot", "data-c": c, "aria-hidden": "true" });
+function setMarkColor(m, c) {
+  if (c === "yellow") delete m.color; else m.color = c;
+  m.at = Date.now();
+}
+// "All" and a chip for each colour in use, when more than one is.
+function colorChips(list, current, onpick) {
+  const used = MARK_COLORS.filter((c) => list.some((m) => colorOf(m) === c));
+  if (used.length < 2) return null;
+  const chip = (c, label) => el("button", { class: "chip" + (current === c ? " on" : ""), type: "button", "aria-pressed": String(current === c),
+    onclick: () => onpick(c && current === c ? "" : c) }, c ? swatchDot(c) : null, label);
+  return el("div", { class: "chips mark-filters", role: "group", "aria-label": "Show highlights by colour" },
+    chip("", "All"), ...used.map((c) => chip(c, MARK_NAMES[c])));
+}
 // Kept on the clip's index entry as `marks`, so they sync, back up and
 // export with it: [{ id, block, start, endBlock, end, text, note, at }].
 // reader.js finds and paints them; a tap on one opens it here.
@@ -1341,7 +1373,7 @@ async function saveMarks(p) {
   renderLibrary();
   updateWidgets();
 }
-async function addMark() {
+async function addMark(color = markColor()) {
   const p = state.open;
   const m = C.reader.selectionMark();
   hideReadHere();
@@ -1353,6 +1385,7 @@ async function addMark() {
   const over = (p.marks || []).filter((x) => !(x.endBlock < m.block || (x.endBlock === m.block && x.end <= m.start)
     || x.block > m.endBlock || (x.block === m.endBlock && x.start >= m.end)));
   const keep = { id: C.save.newId(), block: m.block, start: m.start, endBlock: m.endBlock, end: m.end, text: m.text.slice(0, 4000), at: Date.now() };
+  if (color !== "yellow") keep.color = color;
   const notes = over.map((x) => x.note).filter(Boolean);
   if (notes.length) keep.note = notes.join("\n\n");
   p.marks = [...(p.marks || []).filter((x) => !over.includes(x)), keep].sort(byPlace);
@@ -1369,6 +1402,20 @@ async function removeMarks(ids) {
   await saveMarks(p);
   toast(ids.length === 1 ? "Highlight removed" : ids.length + " highlights removed");
 }
+// A colour picked on the selection bar: words already highlighted take it,
+// others are highlighted in it, and it stays the colour for the next.
+async function pickMarkColor(c) {
+  store(MARK_COLOR_KEY, c);
+  const remove = readHere && readHere.querySelector(".sel-mark").dataset.remove;
+  if (!remove) { addMark(c); return; }
+  const p = state.open, ids = remove.split(",");
+  hideReadHere();
+  C.reader.clearSelection();
+  quietUntil = Date.now() + 600;
+  if (!p) return;
+  for (const m of p.marks || []) if (ids.includes(m.id)) setMarkColor(m, c);
+  await saveMarks(p);
+}
 // A tap on a highlight in the text.
 let markFocus = null;
 function openMark(id) {
@@ -1377,6 +1424,8 @@ function openMark(id) {
   if (state.sheet === "marks") { $("readingBody").replaceChildren(SHEETS.marks.build()); return; }
   openSheet("marks");
 }
+// The colour the clip's list shows, "" for all (1.42.0).
+let sheetColor = "";
 // After opening a clip from its highlights in the library, go to one.
 let markAfterOpen = null;
 
@@ -1391,7 +1440,9 @@ function marksView(p, back) {
     fill(box, one ? markOne(p, one, draw) : markList(p, back, draw));
   };
   const markList = (p, back, draw) => {
-    const list = p.marks || [];
+    const all = p.marks || [];
+    if (sheetColor && !all.some((m) => colorOf(m) === sheetColor)) sheetColor = "";
+    const list = sheetColor ? all.filter((m) => colorOf(m) === sheetColor) : all;
     const rows = list.map((m) => {
       const lost = inReader && lostMarks.has(m.id);
       const go = () => {
@@ -1402,7 +1453,7 @@ function marksView(p, back) {
       };
       return el("li", { class: "mark-item" },
         el("button", { class: "row mark-row", type: "button", onclick: go },
-          el("span", { class: "mark-quote", dir: "auto" }, m.text),
+          el("span", { class: "mark-quote", "data-c": colorOf(m), dir: "auto" }, m.text),
           m.note ? el("span", { class: "mark-note", dir: "auto" }, m.note) : null,
           lost ? el("span", { class: "meta" }, "Not found in this copy of the clip") : null),
         el("button", { class: "icon-btn mark-edit", type: "button", "aria-label": "Note and more", onclick: () => { markFocus = m.id; draw(); } },
@@ -1412,7 +1463,8 @@ function marksView(p, back) {
       el("div", { class: "export-top" },
         back ? el("button", { class: "btn-quiet export-back", type: "button", onclick: () => back() }, "Back") : null,
         el("p", { class: "menu-title" }, list.length === 1 ? "1 highlight" : list.length + " highlights"),
-        list.length ? el("button", { class: "btn-quiet marks-copy", type: "button", onclick: () => copyText(C.backup.marksMarkdown(p), "Highlights copied") }, "Copy all") : null),
+        list.length ? el("button", { class: "btn-quiet marks-copy", type: "button", onclick: () => copyText(C.backup.marksMarkdown({ ...p, marks: list }), "Highlights copied") }, "Copy all") : null),
+      colorChips(all, sheetColor, (c) => { sheetColor = c; draw(); }),
       list.length ? el("ol", { class: "group marks-rows" }, ...rows)
         : el("p", { class: "footnote" }, "Select words in the text and tap Highlight. Highlights go with the clip to your other devices, and into its Markdown export."));
   };
@@ -1433,7 +1485,16 @@ function marksView(p, back) {
     return el("div", { class: "mark-one" },
       el("div", { class: "export-top" },
         el("button", { class: "btn-quiet export-back", type: "button", onclick: () => { keepNote(); markFocus = null; draw(); } }, "All highlights")),
-      el("blockquote", { class: "mark-quote big", dir: "auto" }, m.text),
+      el("blockquote", { class: "mark-quote big", "data-c": colorOf(m), dir: "auto" }, m.text),
+      el("div", { class: "mark-colors", role: "radiogroup", "aria-label": "Colour" },
+        ...MARK_COLORS.map((c) => el("button", { class: "mark-swatch", type: "button", role: "radio", "aria-checked": String(colorOf(m) === c),
+          "aria-label": MARK_NAMES[c], title: MARK_NAMES[c], onclick: () => {
+            if (colorOf(m) === c) return;
+            keepNote();
+            setMarkColor(m, c);
+            store(MARK_COLOR_KEY, c);
+            saveMarks(p).then(draw);
+          } }, swatchDot(c)))),
       note,
       el("div", { class: "group" },
         inReader && !lostMarks.has(m.id) ? menuRow("Go to it", () => { keepNote(); markFocus = null; history.back(); setTimeout(() => C.reader.toMark(m.id), 0); }) : null,
@@ -1540,7 +1601,7 @@ function setAloud(st, index) {
   const here = aloudHere();
   const btn = $("readerAloud");
   btn.setAttribute("aria-pressed", String(on && here));
-  btn.setAttribute("aria-label", on && here ? "Stop reading aloud" : "Read aloud");
+  btn.setAttribute("aria-label", on && here ? "Stop narrating" : "Narrate");
   $("aloudPlayer").hidden = !(on && here);
   $("aloudReadNext").hidden = !(ended && here);
   $("readerView").classList.toggle("aloud", here);
@@ -1597,7 +1658,7 @@ function showAloudBar(from) {
   }
   const ended = aloud.state === "ended";
   $("aloudBarTitle").textContent = p.title;
-  bar.setAttribute("aria-label", (ended ? "Read to the end: " : aloud.state === "paused" ? "Paused: " : "Reading aloud: ") + p.title);
+  bar.setAttribute("aria-label", (ended ? "Read to the end: " : aloud.state === "paused" ? "Paused: " : "Narrating: ") + p.title);
   $("aloudBarPlay").hidden = ended;
   $("aloudBarPlay").classList.toggle("paused", aloud.state === "paused");
   $("aloudBarPlay").setAttribute("aria-label", aloud.state === "paused" ? "Play" : "Pause");
@@ -1857,8 +1918,9 @@ function aloudControls() {
     check(FOOTNOTES_KEY, "Read footnotes", "The notes at the end, as part of the clip."),
     check(EDGES_KEY, "Skip headers and footers", "Just the body: no title, captions or page heads."),
     check(GO_ON_KEY, "Go on to the next clip", "At the end, the next chapter or the page it links to starts by itself.", false),
-    check(AWAKE_KEY, "Keep the screen on", "While reading aloud, so you can follow along.", false),
+    check(AWAKE_KEY, "Keep the screen on", "While narrating, so you can follow along.", false),
     check(KEEP_KEY, "Keep reading when you leave the clip", "Off: it stops when you go back or open another clip.", false, true),
+    speech.background ? check(MIX_KEY, "Allow mixing", "Music or a podcast in another app keeps playing under the voice. Off: they pause while it narrates.") : null,
     speech.background ? check(PIP_KEY, "Small window outside the app", "Going home, the reading stays in a window you can move. Off: only in the app.", false, true) : null,
     note);
 }
@@ -1997,11 +2059,11 @@ function readerSettings() {
     const a = aloudControls();
     a.classList.add("rc-part");
     a.dataset.part = "aloud";
-    a.prepend(el("h2", { class: "overline" }, "Read aloud"));
+    a.prepend(el("h2", { class: "overline" }, "Narrate"));
     box.append(a);
     parts.push(a);
   }
-  const names = { layout: "Layout", text: "Text", aloud: "Read aloud" };
+  const names = { layout: "Layout", text: "Text", aloud: "Narrate" };
   let tab = load(SHEET_TAB_KEY, "text");
   if (!parts.some((x) => x.dataset.part === tab)) tab = "text";
   const show = (v) => {
@@ -2028,7 +2090,9 @@ const SHEETS = {
   note: { label: "Note", build: () => noteSheet(noteNow) },
   link: { label: "Link", build: () => linkSheet(linkNow) },
   // From This clip's More (1.38.0).
-  links: { label: "Linked pages", build: () => linksSheet(state.open) },
+  // Under ⋯, which they're opened from, on a big screen (1.42.0).
+  links: { button: "readerMore", label: "Linked pages", build: () => linksSheet(state.open) },
+  translate: { button: "readerMore", label: "Translation", build: () => translateSheet(state.open) },
 };
 
 function openSheet(kind, fromHistory) {
@@ -2126,6 +2190,114 @@ function linkSheet(l) {
 // saved. Optionally into a collection: the clip's own, or one named
 // after it.
 const LINKS_FILTER_AT = 12;
+// ---- Translating a clip (1.42.0) ----
+// The whole clip, a block at a time, on this device only (platform.js's
+// translator: ML Kit on Android, the browser's own in Chrome). Kept beside
+// the clip on this device and shown under each block's own words; never
+// synced. A stop keeps what's done, and translating again goes on from it.
+const TR_LANGS = ("af ar be bg bn ca cs cy da de el en eo es et fa fi fr ga gl gu he hi hr ht hu id is it ja ka kn ko lt lv mk mr ms mt "
+  + "nl no pl pt ro ru sk sl sq sv sw ta te th tl tr uk ur vi zh").split(" ");
+const TR_KEY = "waypage.translateTo";
+const TR_BATCH = 20;
+const langName = (code) => { try { return new Intl.DisplayNames([navigator.language || "en"], { type: "language" }).of(code) || code; } catch (e) { return code; } };
+let trans = { id: null, data: null };
+let translating = null; // { id, from, to, line, stop }
+async function loadTranslation(p) {
+  const data = await C.store.readTranslation(p.id);
+  if (state.open !== p) return;
+  trans = { id: p.id, data };
+  if (data && data.show) C.reader.paintTranslation(data.blocks, data.to);
+}
+const translationOf = (p) => (p && trans.id === p.id ? trans.data : null);
+async function keepTranslation(p, data) {
+  await C.store.writeTranslation(p.id, data);
+  trans = { id: p.id, data };
+  if (state.open === p) C.reader.paintTranslation(data && data.show ? data.blocks : null, data && data.to);
+}
+async function startTranslate(p, to, redraw) {
+  const T = C.platform.translator;
+  if (state.open !== p || translating) return;
+  const blocks = C.reader.translatable();
+  if (!blocks.length) { toast("There's no text in this clip to translate."); return; }
+  const job = translating = { id: p.id, to, from: primary(p.lang), stop: false, line: "Getting ready…" };
+  redraw();
+  try {
+    if (!job.from) job.from = primary(await T.detect(blocks.slice(0, 30).map((b) => b.text).join(" ")));
+    if (!job.from) { toast("Couldn't tell what language this clip is in."); return; }
+    if (job.from === to) { toast("This clip is in " + langName(to) + " already."); return; }
+    const can = await T.ready(job.from, to);
+    if (can === "unavailable") { toast("Translating " + langName(job.from) + " into " + langName(to) + " isn't possible here."); return; }
+    if (can === "downloadable") {
+      if (!navigator.onLine) { toast("Connect once to download " + langName(job.from) + " and " + langName(to) + ". After that it works offline."); return; }
+      job.line = "Downloading the languages, once…";
+      redraw();
+    }
+    await T.prepare(job.from, to, (f) => { job.line = "Downloading the languages, once… " + Math.round(f * 100) + "%"; redraw(); });
+    const was = translationOf(p);
+    const same = was && was.from === job.from && was.to === to ? was.blocks : [];
+    const done = new Map(same.map((b) => [b.i + "|" + b.print, b]));
+    const kept = blocks.filter((b) => done.has(b.i + "|" + b.print)).map((b) => done.get(b.i + "|" + b.print));
+    const todo = blocks.filter((b) => !done.has(b.i + "|" + b.print));
+    const data = { from: job.from, to, at: Date.now(), show: true, blocks: kept };
+    for (let k = 0; k < todo.length && !job.stop; k += TR_BATCH) {
+      const part = todo.slice(k, k + TR_BATCH);
+      const got = await T.translate(part.map((b) => b.text.slice(0, 5000)), job.from, to);
+      part.forEach((b, j) => { if (got[j]) data.blocks.push({ i: b.i, print: b.print, text: String(got[j]).slice(0, 20000) }); });
+      job.line = "Translated " + Math.round(100 * (kept.length + k + part.length) / blocks.length) + "%";
+      redraw();
+      // Kept as it goes, so a long book shows what's done.
+      if ((k / TR_BATCH) % 5 === 4) { data.blocks.sort((a, b) => a.i - b.i); await keepTranslation(p, data); }
+    }
+    data.blocks.sort((a, b) => a.i - b.i);
+    await keepTranslation(p, data);
+    toast(job.stop ? "Stopped. What's translated is kept." : "Translated into " + langName(to));
+  } catch (e) {
+    toast("Couldn't translate this clip" + (e && e.message ? ": " + String(e.message).slice(0, 80) : "."));
+  } finally {
+    if (translating === job) translating = null;
+    redraw();
+  }
+}
+function translateSheet(p) {
+  const box = el("div", { class: "page-controls" });
+  const T = C.platform.translator;
+  const draw = () => {
+    if (!box.isConnected && box.childNodes.length) return;
+    const tr = translationOf(p);
+    if (translating && translating.id === p.id) {
+      fill(box,
+        el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, "Translating into " + langName(translating.to))),
+        el("p", { class: "meta", role: "status" }, translating.line),
+        el("div", { class: "group" }, menuRow("Stop", () => { translating.stop = true; translating.line = "Stopping…"; draw(); })));
+      return;
+    }
+    let to = TR_LANGS.includes(load(TR_KEY, "")) ? load(TR_KEY, "") : TR_LANGS.includes(myLang()) ? myLang() : "en";
+    if (tr && to === tr.from) to = tr.to;
+    const options = TR_LANGS.map((c) => ({ value: c, label: langName(c) })).sort((a, b) => a.label.localeCompare(b.label));
+    const pick = dropdown({ label: "Into", cls: "field-pick", options, value: to, onpick: (v) => { store(TR_KEY, v); draw(); } });
+    const show = el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!(tr && tr.show),
+      onchange: (e) => keepTranslation(p, { ...tr, show: e.target.checked }) });
+    fill(box,
+      el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, "Translation"),
+        tr ? el("p", { class: "meta" }, langName(tr.from) + " into " + langName(tr.to) + ", " + tr.blocks.length + " of " + C.reader.translatable().length + " paragraphs") : null),
+      tr ? el("div", { class: "group" },
+        el("label", { class: "row" }, el("span", { class: "row-label" }, "Show it under the text"), show)) : null,
+      T.available ? el("h3", { class: "overline" }, tr ? "Translate again" : "Translate this clip") : null,
+      T.available ? el("div", { class: "group" }, el("div", { class: "row tr-into" }, el("span", { class: "row-label" }, "Into"), pick)) : null,
+      T.available && !(tr && tr.to === to && tr.blocks.length >= C.reader.translatable().length)
+        ? el("button", { class: "btn-primary", type: "button", onclick: () => startTranslate(p, to, draw) },
+          tr && tr.to === to ? "Translate the rest" : "Translate") : null,
+      el("p", { class: "footnote" }, T.available
+        ? (T.onPhone ? "Translated on this phone; the words aren't sent anywhere. The first time for a language, the phone downloads it from Google (about 30 MB)."
+          : "Translated by this browser on this computer; the words aren't sent anywhere. The first time for a language, the browser downloads it.")
+          + " The translation stays on this device."
+        : "Translating a clip works in the Android app and in Chrome on a computer."),
+      tr ? el("div", { class: "group" }, menuRow("Remove the translation", () => keepTranslation(p, null).then(draw), "warn")) : null);
+  };
+  draw();
+  return box;
+}
+
 function linksSheet(p) {
   const all = p ? C.reader.links(p.url) : [];
   if (!all.length) return el("div", { class: "page-controls" },

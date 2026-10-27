@@ -216,6 +216,57 @@
     try { const r = await T.translate({ text: String(text).slice(0, 5000) }); return !!(r && r.done); } catch (e) { return false; }
   }
 
+  // A whole clip translated on this device (1.42.0): ML Kit through the
+  // Translate plugin on Android, the browser's own Translator elsewhere
+  // (Chrome on a computer). Neither sends the words anywhere; each
+  // downloads a language once. Not on iOS yet, or in other browsers.
+  const held = { translator: null, pair: "" };
+  const translator = {
+    get available() {
+      if (os === "android") return !!plugin("Translate");
+      return !native && typeof self.Translator === "function";
+    },
+    get onPhone() { return os === "android"; },
+    // The language of a clip whose page didn't say: "" when it can't tell.
+    async detect(text) {
+      const T = plugin("Translate");
+      try {
+        if (os === "android" && T) return (await T.detect({ text: text.slice(0, 2000) })).lang || "";
+        if (typeof self.LanguageDetector !== "function") return "";
+        const d = await self.LanguageDetector.create();
+        const [best] = await d.detect(text.slice(0, 2000));
+        return best && best.confidence > 0.5 && best.detectedLanguage !== "und" ? best.detectedLanguage : "";
+      } catch (e) { return ""; }
+    },
+    // "available", "downloadable" or "unavailable".
+    async ready(from, to) {
+      const T = plugin("Translate");
+      try {
+        if (os === "android" && T) return (await T.ready({ from, to })).state;
+        const s = await self.Translator.availability({ sourceLanguage: from, targetLanguage: to });
+        return s === "unavailable" ? "unavailable" : s === "available" ? "available" : "downloadable";
+      } catch (e) { return "unavailable"; }
+    },
+    // Gets the pair ready, downloading what's missing. In a browser it has
+    // to start from a tap, so it is the first thing a tap on Translate does.
+    async prepare(from, to, onProgress) {
+      const T = plugin("Translate");
+      if (os === "android" && T) { await T.prepare({ from, to }); return; }
+      held.translator = null;
+      held.translator = await self.Translator.create({ sourceLanguage: from, targetLanguage: to,
+        monitor: (m) => m.addEventListener("downloadprogress", (e) => { if (onProgress) onProgress(e.loaded); }) });
+      held.pair = from + ">" + to;
+    },
+    async translate(texts, from, to) {
+      const T = plugin("Translate");
+      if (os === "android" && T) return (await T.clip({ from, to, texts })).texts || [];
+      if (!held.translator || held.pair !== from + ">" + to) throw new Error("Not ready to translate");
+      const out = [];
+      for (const t of texts) out.push(await held.translator.translate(t));
+      return out;
+    },
+  };
+
   // A page that builds itself with JavaScript, drawn in a hidden WebView by
   // native/share's PageRender plugin: { text, url } of the HTML it ended up
   // with. null where there's no such plugin (iOS for now, a browser) or the
@@ -745,8 +796,11 @@
   const FILE_MIMES = ["application/epub+zip", "text/markdown", "text/x-markdown", "text/plain", "text/html", "message/rfc822",
     "application/pdf", "application/vnd.comicbook+zip", "application/x-cbz", "application/zip",
     // Another app's export to import (1.9.0).
-    "text/csv", "text/comma-separated-values", "application/json"];
-  const FILE_EXTS = [".epub", ".md", ".markdown", ".txt", ".html", ".htm", ".eml", ".pdf", ".cbz", ".csv", ".json", ".zip"];
+    "text/csv", "text/comma-separated-values", "application/json",
+    // Kindle books and FB2 (1.42.0). Many phones call an AZW3 just data.
+    "application/x-mobipocket-ebook", "application/vnd.amazon.ebook", "application/x-mobi8-ebook", "application/x-fictionbook+xml",
+    "application/x-fictionbook", "text/xml", "application/xml", "application/octet-stream"];
+  const FILE_EXTS = [".epub", ".mobi", ".azw", ".azw3", ".prc", ".fb2", ".md", ".markdown", ".txt", ".html", ".htm", ".eml", ".pdf", ".cbz", ".csv", ".json", ".zip"];
   const PIECE = 4 << 20;
   const KEEP = 64 << 20;
 
@@ -1012,6 +1066,7 @@
     fetchText,
     signIn,
     translateText,
+    translator,
     render,
     get canRender() { return !!plugin("PageRender"); },
     downloadTo,

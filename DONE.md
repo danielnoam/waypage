@@ -35,6 +35,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Collections linked to a story page, new chapters, "+N" badge to save them (0.26.0, 1.8.0)
 - Files: EPUB, PDF, CBZ, Markdown, text and HTML, copied in or read from where they are (0.31.0, 0.32.0)
 - Books' own contents (EPUB nav, PDF bookmarks) (1.27.2)
+- Kindle books without DRM (MOBI, AZW, AZW3) and FB2, also zipped (1.42.0)
 - Big PDFs read from where they are, a piece at a time, never whole in memory (1.35.0)
 - Watched folders, each into a chosen collection (1.1.0, 1.4.0, 1.28.0)
 - Library storage: app storage, Documents or any folder, moved natively on Android (0.33.0, 1.19.0)
@@ -55,6 +56,8 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Footnotes in a sheet, Back to where you were after an in-page link (1.14.0)
 - Find in this clip (1.14.0)
 - Highlights and notes, Highlights screen, Save all highlights as Markdown (1.7.0, 1.8.0, 1.14.0)
+- Highlight colours (five), picked on the selection bar, shown a colour at a time (1.42.0)
+- Translate this clip on the device: ML Kit on Android, Chrome's own translator on a computer (1.42.0; iOS on TODO)
 - Translate on selected words (1.8.0; Look up removed 1.11.1)
 - Brightness swipe with Auto, movable to the right (1.10.0, 1.14.0, 1.16.0)
 - Previous/Next and a collection list in the reader (1.23.0)
@@ -64,7 +67,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 
 - Your time in a clip at its very end, with a switch in Settings › Reading (1.39.0)
 
-## Read aloud
+## Narrate (was Read aloud until 1.42.0)
 
 - Phone's own voices, offline, screen off, lock-screen controls; Read from here (0.27.0, 0.27.1)
 - Voice per language, speed 0.5x to 3x, read footnotes switch (0.27.0, 0.34.0)
@@ -72,6 +75,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Keep the screen on; picture in picture; Bluetooth previous/next (1.24.0, 1.25.0, 1.26.0)
 - Sleep timer: minutes or end of clip, a moon on the player, Sleep 15 min on the lock screen (1.32.0, 1.36.0)
 - Speech engine picker and Get more voices on Android (1.33.0)
+- Allow mixing: other apps' sound plays on under the voice (1.42.0)
 
 ## Feeds
 

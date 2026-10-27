@@ -281,7 +281,7 @@
       try { await (await B()).rmdir("pages/" + id); } catch (e) { /* already gone */ }
       return;
     }
-    try { await idbDo("readwrite", (s) => { s.delete(id + ":text"); s.delete(id + ":thumb"); return s.delete(id); }); } catch (e) { /* already gone */ }
+    try { await idbDo("readwrite", (s) => { s.delete(id + ":text"); s.delete(id + ":thumb"); s.delete(id + ":translation"); return s.delete(id); }); } catch (e) { /* already gone */ }
   }
 
   // The page's words as plain text (text.txt), for searching the library.
@@ -298,6 +298,24 @@
       if (FS()) return await (await B()).read("pages/" + id + "/text.txt");
       const t = await idbDo("readonly", (s) => s.get(id + ":text"));
       return typeof t === "string" ? t : null;
+    } catch (e) { return null; }
+  }
+
+  // A clip's translation (1.42.0), as JSON beside it; this device's own,
+  // never synced or backed up. null when there's none.
+  async function writeTranslation(id, data) {
+    const text = data ? JSON.stringify(data) : "";
+    if (FS()) {
+      if (text) await (await B()).write("pages/" + id + "/translation.json", text, true);
+      else try { await (await B()).remove("pages/" + id + "/translation.json"); } catch (e) { /* none */ }
+    } else {
+      await idbDo("readwrite", (s) => (text ? s.put(text, id + ":translation") : s.delete(id + ":translation")));
+    }
+  }
+  async function readTranslation(id) {
+    try {
+      const t = FS() ? await (await B()).read("pages/" + id + "/translation.json") : await idbDo("readonly", (s) => s.get(id + ":translation"));
+      return typeof t === "string" && t ? JSON.parse(t) : null;
     } catch (e) { return null; }
   }
 
@@ -575,6 +593,6 @@
   }
 
   window.Waypage.store = { ready,
-    get place() { return cur ? cur.place : savedPlace(); }, placeName, get problem() { return problem; }, moveTo, readIndex, writeIndex, writeIndexOnly, set onIndex(f) { onIndex = f; }, writeThumb, readThumbs, storageInfo, keepStored, writePage, readPage, removePage, writeText, readText, download, removeFile, sizeOf, shrink, squeeze, pageDirUrl, bytesOf,
+    get place() { return cur ? cur.place : savedPlace(); }, placeName, get problem() { return problem; }, moveTo, readIndex, writeIndex, writeIndexOnly, set onIndex(f) { onIndex = f; }, writeThumb, readThumbs, storageInfo, keepStored, writePage, readPage, removePage, writeText, readText, writeTranslation, readTranslation, download, removeFile, sizeOf, shrink, squeeze, pageDirUrl, bytesOf,
     listFiles, listSized, readBytes, writeBytes, cacheFile, toBase64, listFonts, readFont, addFont, removeFont };
 })();
