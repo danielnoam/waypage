@@ -1058,18 +1058,20 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 .reader-start, .reader-actions { display: flex; align-items: center; gap: var(--s-1); }
 .reader-start { flex: 1; min-width: 0; }
 .reader-actions { flex: none; }
-/* The section being read is the Contents button (1.37.0): it names where
-   you are and opens the contents, in the room the list icon took. */
+/* The Contents button: a list icon on a phone (1.42.1, the name got cut
+   off there); on a computer it names the section being read (1.37.0). */
 .section-btn {
-  display: inline-flex; align-items: center; gap: 2px; flex: 0 1 auto; min-width: 0;
-  min-height: var(--tap); padding: 0 var(--s-2);
+  display: inline-flex; align-items: center; justify-content: center; gap: 2px; flex: none; min-width: var(--tap);
+  min-height: var(--tap); padding: 0;
   border: 0; border-radius: var(--r-md); background: transparent; color: var(--ink);
   font: 600 var(--fs-meta)/var(--lh-meta) var(--sans); cursor: pointer;
 }
 .section-btn[hidden] { display: none; }
 .section-btn[aria-expanded="true"] { background: var(--line); }
 .section-now { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.section-btn svg { flex: none; color: var(--muted); }
+.section-btn svg { flex: none; }
+.section-btn .section-more { color: var(--muted); }
+.section-btn .section-now, .section-btn .section-more { display: none; }
 .pill {
   height: 28px; padding: 0 10px;
   display: inline-flex; align-items: center; gap: 6px;
@@ -2206,7 +2208,9 @@ kbd {
   .reader-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
   /* Beside the clip's name, after it. */
   .reader-name { order: 1; flex: 0 1 auto; }
-  .section-btn { order: 2; max-width: 40%; margin-inline-start: var(--s-1); }
+  .section-btn { order: 2; flex: 0 1 auto; max-width: 40%; min-width: 0; padding: 0 var(--s-2); margin-inline-start: var(--s-1); }
+  .section-btn .section-icon { display: none; }
+  .section-btn .section-now, .section-btn .section-more { display: revert; }
 
   /* Save with options: a dialog. Downloads: a panel under its button. */
   .screen[data-dialog] { z-index: 13; box-shadow: 0 24px 64px var(--shadow); border: 1px solid var(--line); border-radius: var(--r-lg); }

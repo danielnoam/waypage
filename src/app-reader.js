@@ -185,6 +185,7 @@ function readerWait(p, fromHistory) {
   $("readerView").classList.remove("bar-away");
   $("bright").hidden = true;
   $("readerContents").hidden = true;
+  $("readerTranslate").hidden = true;
   $("readerNow").textContent = "Contents";
   $("readerContents").setAttribute("aria-label", "Contents");
   fill($("readerName"), p.site ? el("span", { class: "reader-site" }, p.site) : null, el("span", { class: "reader-title" }, p.title));
@@ -342,6 +343,7 @@ function show(p, html) {
   showOffline();
   $("readProgress").dir = p.dir || "ltr";
   $("readerContents").hidden = true;
+  $("readerTranslate").hidden = true;
   $("readerNow").textContent = "Contents";
   $("readerContents").setAttribute("aria-label", "Contents");
   $("readerFolder").hidden = !(p.folder && !p.preview && folderPages(p.folder).length > 1);
@@ -2092,7 +2094,7 @@ const SHEETS = {
   // From This clip's More (1.38.0).
   // Under ⋯, which they're opened from, on a big screen (1.42.0).
   links: { button: "readerMore", label: "Linked pages", build: () => linksSheet(state.open) },
-  translate: { button: "readerMore", label: "Translation", build: () => translateSheet(state.open) },
+  translate: { button: "readerTranslate", label: "Translation", build: () => translateSheet(state.open) },
 };
 
 function openSheet(kind, fromHistory) {
@@ -2206,13 +2208,27 @@ async function loadTranslation(p) {
   const data = await C.store.readTranslation(p.id);
   if (state.open !== p) return;
   trans = { id: p.id, data };
-  if (data && data.show) C.reader.paintTranslation(data.blocks, data.to);
+  translateButton(p);
+  if (trMode(data) !== "off") C.reader.paintTranslation(data.blocks, data.to, trMode(data));
+}
+// Off, under each block's own words, or in their place (1.42.1); 1.42.0
+// kept a show switch.
+const trMode = (data) => !data ? "off" : data.mode || (data.show === false ? "off" : "under");
+// Its own button beside Highlights (1.42.1), where the clip has text to
+// translate and this device can, or a translation is already kept.
+function translateButton(p) {
+  const b = $("readerTranslate");
+  b.hidden = !(p && !C.files.printed(p) && !p.comic && (C.platform.translator.available || translationOf(p)));
+  const label = translationOf(p) ? "Translation" : "Translate this clip";
+  b.setAttribute("aria-label", label);
+  b.title = label + " (L)";
 }
 const translationOf = (p) => (p && trans.id === p.id ? trans.data : null);
 async function keepTranslation(p, data) {
   await C.store.writeTranslation(p.id, data);
   trans = { id: p.id, data };
-  if (state.open === p) C.reader.paintTranslation(data && data.show ? data.blocks : null, data && data.to);
+  if (state.open === p) translateButton(p);
+  if (state.open === p) C.reader.paintTranslation(trMode(data) !== "off" ? data.blocks : null, data && data.to, trMode(data));
 }
 async function startTranslate(p, to, redraw) {
   const T = C.platform.translator;
@@ -2238,7 +2254,7 @@ async function startTranslate(p, to, redraw) {
     const done = new Map(same.map((b) => [b.i + "|" + b.print, b]));
     const kept = blocks.filter((b) => done.has(b.i + "|" + b.print)).map((b) => done.get(b.i + "|" + b.print));
     const todo = blocks.filter((b) => !done.has(b.i + "|" + b.print));
-    const data = { from: job.from, to, at: Date.now(), show: true, blocks: kept };
+    const data = { from: job.from, to, at: Date.now(), mode: trMode(was) === "replace" ? "replace" : "under", blocks: kept };
     for (let k = 0; k < todo.length && !job.stop; k += TR_BATCH) {
       const part = todo.slice(k, k + TR_BATCH);
       const got = await T.translate(part.map((b) => b.text.slice(0, 5000)), job.from, to);
@@ -2275,13 +2291,14 @@ function translateSheet(p) {
     if (tr && to === tr.from) to = tr.to;
     const options = TR_LANGS.map((c) => ({ value: c, label: langName(c) })).sort((a, b) => a.label.localeCompare(b.label));
     const pick = dropdown({ label: "Into", cls: "field-pick", options, value: to, onpick: (v) => { store(TR_KEY, v); draw(); } });
-    const show = el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!(tr && tr.show),
-      onchange: (e) => keepTranslation(p, { ...tr, show: e.target.checked }) });
+    const show = tr ? dropdown({ label: "Show", value: trMode(tr),
+      options: [{ value: "off", label: "Off" }, { value: "under", label: "Under the text" }, { value: "replace", label: "Instead of the text" }],
+      onpick: (v) => { const { show: _, ...rest } = tr; keepTranslation(p, { ...rest, mode: v }); } }) : null;
     fill(box,
       el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, "Translation"),
         tr ? el("p", { class: "meta" }, langName(tr.from) + " into " + langName(tr.to) + ", " + tr.blocks.length + " of " + C.reader.translatable().length + " paragraphs") : null),
       tr ? el("div", { class: "group" },
-        el("label", { class: "row" }, el("span", { class: "row-label" }, "Show it under the text"), show)) : null,
+        el("div", { class: "row tr-show" }, el("span", { class: "row-label" }, "Show"), show)) : null,
       T.available ? el("h3", { class: "overline" }, tr ? "Translate again" : "Translate this clip") : null,
       T.available ? el("div", { class: "group" }, el("div", { class: "row tr-into" }, el("span", { class: "row-label" }, "Into"), pick)) : null,
       T.available && !(tr && tr.to === to && tr.blocks.length >= C.reader.translatable().length)

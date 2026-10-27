@@ -937,10 +937,13 @@
   // Each translated block gets its translation under its own words, left
   // out of highlights, places and Narrate like the other added parts.
   // `list` is [{ i, print, text }], or null to take them away.
-  function paintTranslation(list, lang) {
+  // mode "replace" hides each translated block's own words (1.42.1).
+  function paintTranslation(list, lang, mode) {
     if (!doc) return 0;
     const at = isPaged() ? position() : null;
     for (const n of [...doc.querySelectorAll(".co-tr")]) n.remove();
+    for (const n of [...doc.querySelectorAll(".co-trd")]) n.classList.remove("co-trd");
+    doc.documentElement.classList.toggle("co-replace", mode === "replace" && !!(list && list.length));
     const all = markBlocks();
     let n = 0;
     for (const t of list || []) {
@@ -952,6 +955,7 @@
       if (lang) tr.setAttribute("lang", lang);
       tr.textContent = t.text;
       el.append(tr);
+      el.classList.add("co-trd");
       n++;
     }
     if (isPaged()) requestAnimationFrame(() => { if (isPaged()) relayout(at); });

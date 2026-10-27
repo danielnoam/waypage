@@ -18,6 +18,13 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Translation shown instead of the text (1.42.1).** Daniel's ask: Show
+  is Off, Under the text or Instead of the text (`mode` in
+  translation.json; 1.42.0's `show` is read as under/off). Instead keeps
+  the original words in the page at font-size 0 (`.co-replace .co-trd`)
+  rather than removing them, so highlights, places, Find and Narrate keep
+  their text offsets. The trade-off: Narrate still reads the original
+  language, and words can't be highlighted in the translation.
 - **Translate this clip (1.42.0).** Daniel picked on-device only. Android
   uses ML Kit (com.google.mlkit:translate and language-id, through
   TranslatePlugin.java), the web copy Chrome's built-in `Translator` and
