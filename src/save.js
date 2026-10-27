@@ -1658,6 +1658,9 @@
     const wiki = kind !== "comic" && !archived && wikipediaPage(url);
     if (onProgress) onProgress({ stage: "text" });
     const got = wiki ? await fromWikipedia(wiki) : await fromAnyPage(archived ? archived.url : url, () => onProgress && onProgress({ stage: "drawing" }), kind === "comic", asPage, archived ? null : given);
+    // A newsletter's email (1.43.0) is named by its subject and sender.
+    if (given && given.title) got.title = given.title;
+    if (given && given.site) got.site = given.site;
     if (archived) {
       if (!got.site || got.site === "web.archive.org") got.site = siteName(url);
       got.url = url;

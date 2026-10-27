@@ -309,6 +309,7 @@ function postRow(f, it, withFeed) {
 // entry, so Back leaves it.
 
 function feedPostsShown() {
+  const feeds = siteFeeds();
   const picked = state.feed && feeds.find((f) => f.url === state.feed);
   return (picked ? [picked] : feeds).flatMap((f) => feedPosts(f).map((it) => ({ f, it, key: f.url + " " + postKey(it) })));
 }
@@ -421,6 +422,275 @@ function previewSheet(p) {
       tileButton("original", "Browser", () => C.platform.openOutside(p.url))));
 }
 
+// ---- Newsletters (1.43.0) ----
+// An inbox, not a river: each address's emails by day, unread ones
+// marked, a confirm email as a Confirm button, and the address itself on
+// top to copy. Kill the Newsletter keeps an email a month, so a new one
+// is saved as a clip when it arrives (the address's "Save them", on by
+// default), and that clip is what sync carries to a computer, which
+// can't read the address itself.
+
+// The emails' HTML from the last check, for saving without asking again.
+const mailBodies = new Map();
+const CONFIRM_LINK = /confirm|verify|activate|validate|opt[- ]?in|\byes\b|subscribe/i;
+function keepMails(got) {
+  for (const it of got.items) {
+    if (!it.body) continue;
+    if (isConfirm(it)) it.act = confirmLink(it.body);
+    mailBodies.set(it.url, it.body);
+  }
+  while (mailBodies.size > 60) mailBodies.delete(mailBodies.keys().next().value);
+}
+// The email's own confirm link: the first whose words, or else whose
+// address, say so. Parsed, never run (DOMParser's documents run nothing).
+function confirmLink(html) {
+  const doc = new DOMParser().parseFromString("<body>" + html, "text/html");
+  const links = [...doc.querySelectorAll("a[href]")].map((a) => ({ a, href: a.getAttribute("href").trim() }))
+    .filter((x) => /^https?:\/\//i.test(x.href) && !/unsub/i.test(x.href + x.a.textContent) && !x.href.includes(KTN));
+  const hit = links.find((x) => CONFIRM_LINK.test(x.a.textContent)) || links.find((x) => CONFIRM_LINK.test(x.href));
+  return hit ? hit.href : "";
+}
+// Kill the Newsletter has the address mail bounces to, not the sender's
+// name, and the big mailing services share theirs; so the sender is a
+// guess from its domain, or the address's own name.
+const MAILERS = /(^|\.)(mcsv\.net|mcdlv\.net|rsgsv\.net|mailchimpapp\.net|mandrillapp\.com|sendgrid\.net|amazonses\.com|mailgun\.(org|net)|sparkpostmail\.com|mtasv\.net|mailjet\.com|sendinblue\.com|brevo\.com|klaviyomail\.com|createsend\d*\.com|cmail\d+\.com|exacttarget\.com|hubspotemail\.net|hs-email\.net|mktomail\.com|ccsend\.com|substack\.com|beehiiv\.com|ghost\.io|buttondown\.email|convertkit-mail\d*\.com|ckespa\.com)$/i;
+function senderOf(f, it) {
+  const host = String((it && it.from) || "").split("@")[1] || "";
+  if (!host || MAILERS.test(host)) return f.title;
+  const parts = host.toLowerCase().split(".");
+  const name = parts[parts.length - (parts.length > 2 && /^(co|com|org|net|ac)$/.test(parts[parts.length - 2]) ? 3 : 2)] || "";
+  return name ? name.charAt(0).toUpperCase() + name.slice(1) : f.title;
+}
+// The email as a page to save: titled by its subject, named by its
+// sender, without Kill the Newsletter's settings link at its foot.
+function mailPage(f, it, html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  for (const a of doc.querySelectorAll('a[href*="' + KTN + '/feeds/"]')) {
+    if (/\/entries\//.test(a.getAttribute("href"))) continue;
+    const p = a.closest("p") || a;
+    const hr = p.previousElementSibling;
+    if (hr && hr.localName === "hr") hr.remove();
+    p.remove();
+  }
+  return { url: it.url, html: "<!doctype html>\n" + doc.documentElement.outerHTML, title: it.title, site: senderOf(f, it) };
+}
+async function saveMail(f, it) {
+  const full = f.items.find((x) => sameUrl(x.url, it.url)) || it;
+  let html = mailBodies.get(full.url);
+  if (!html) {
+    try {
+      const res = await C.platform.fetchText(full.url);
+      if (res.status >= 400) throw new Error(String(res.status));
+      html = res.text;
+    } catch (e) { toast("Couldn't reach that email. Kill the Newsletter keeps them a month."); return; }
+  }
+  const folder = f.folder ? folderName(f.folder) : undefined;
+  await savePage(full.url, folder, { mode: C.platform.native ? f.images || load(IMAGES_KEY, "previews") : undefined, given: mailPage(f, full, html) });
+}
+
+// Every address's emails: the ones its feed has, and on a computer (or
+// once the feed has let them go) the ones saved, from the library.
+const MAIL_ENTRY = "https://" + KTN + "/feeds/";
+function mailList(boxes) {
+  const out = [], had = new Set(), by = new Map();
+  for (const f of boxes) {
+    by.set(f.url.slice(MAIL_ENTRY.length, -4), f);
+    for (const it of feedPosts(f)) { out.push({ f, it }); had.add(it.url); }
+  }
+  // One look through the library for them all (3,000 clips at 6x CPU).
+  for (const p of state.pages) {
+    if (!p.url || !p.url.startsWith(MAIL_ENTRY) || had.has(p.url)) continue;
+    const f = by.get(p.url.slice(MAIL_ENTRY.length).split("/")[0]);
+    if (f) out.push({ f, it: { url: p.url, title: p.title, date: p.savedAt, foundAt: p.savedAt, opened: !!p.readAt } });
+  }
+  return out.sort((a, b) => postAt(b.it) - postAt(a.it));
+}
+const mailUnread = (it) => { const saved = savedAs(it.url); return !it.opened && !(saved && (saved.readAt || saved.finished)); };
+const unreadMail = () => mailList(mailBoxes()).filter((x) => mailUnread(x.it)).length;
+
+function openMail(f, it) {
+  const saved = savedAs(it.url);
+  if (!it.opened && f.items.includes(it)) { it.opened = true; store(FEEDS_KEY, feeds); }
+  if (saved) openPage(saved.id);
+  else previewPost(f, it);
+  paintFeeds();
+}
+
+function mailRow(f, it, withBox) {
+  const saved = savedAs(it.url);
+  const busy = !saved && savingUrl(it.url);
+  const confirm = !saved && isConfirm(it);
+  const when = whenText(postAt(it));
+  const open = el("button", { class: "post-open", type: "button", "aria-label": (saved ? "Read " : "Open ") + it.title, onclick: () => openMail(f, it) });
+  let right;
+  if (saved) right = el("span", { class: "post-saved" }, "Saved");
+  else if (confirm) {
+    right = el("button", { class: "btn-small nl-confirm", type: "button", "aria-label": "Confirm the subscription in the browser",
+      onclick: () => { if (it.act) { it.opened = true; store(FEEDS_KEY, feeds); C.platform.openOutside(it.act); paintFeeds(); } else openMail(f, it); } }, "Confirm");
+  } else {
+    right = el("button", { class: "post-act post-save", type: "button", "aria-label": busy ? "Saving " + it.title : "Save " + it.title,
+      onclick: () => saveFeedPosts([{ f, it }]) });
+    if (busy) { right.disabled = true; right.append(el("span", { class: "spinner", "aria-hidden": "true" })); }
+    else right.append(feedIcon("add", 18));
+  }
+  const unread = mailUnread(it);
+  return el("div", { class: "post" + (unread ? " nl-unread" : ""), "data-key": "mail:" + it.url },
+    open,
+    el("span", { class: "post-body" },
+      el("span", { class: "post-feed", dir: "auto" }, withBox && senderOf(f, it) !== f.title ? senderOf(f, it) + " · " + f.title : senderOf(f, it)),
+      el("span", { class: "post-title", dir: "auto" }, (unread ? el("span", { class: "visually-hidden" }, "Unread: ") : null), it.title),
+      el("span", { class: "post-meta" }, saved ? readingLine(saved) + " · " + when : when)),
+    right);
+}
+
+function pickBox(url) {
+  state.feed = url;
+  renderNewsletters();
+}
+
+function renderNewsletters() {
+  const root = $("newsletters");
+  const boxes = mailBoxes();
+  const picked = state.feed && boxes.find((f) => f.url === state.feed);
+  if (state.feed && !picked) state.feed = null;
+  const nodes = [];
+  if (!boxes.length) {
+    nodes.push(el("div", { class: "empty" },
+      el("h2", { class: "empty-title" }, "Read newsletters here"),
+      el("p", { class: "empty-text" }, "Make an email address for newsletters and sign up with it. Each email arrives here, and is saved for reading offline."),
+      el("button", { class: "btn-primary", type: "button", onclick: () => openMenu("newMail") }, "Make an address")));
+    root.replaceChildren(...nodes);
+    return;
+  }
+  // The address to sign up with: the one picked, or the newest.
+  const shown = picked || boxes[boxes.length - 1];
+  nodes.push(el("div", { class: "group nl-card" },
+    el("div", { class: "nl-addr" },
+      el("span", { class: "post-body" },
+        el("span", { class: "post-feed", dir: "auto" }, "Your address · " + shown.title),
+        el("span", { class: "nl-mail" }, mailAddress(shown))),
+      el("button", { class: "btn-small", type: "button", "data-key": "copy", onclick: () => copyText(mailAddress(shown), "Address copied. Sign up with it.") }, "Copy"))));
+  const all = mailList(boxes);
+  const list = picked ? all.filter((x) => x.f === picked) : all;
+  if (boxes.length > 1) {
+    const chip = (label, n, on, onclick, key, url) => {
+      const b = el("button", { class: "chip" + (on ? " on" : ""), type: "button", "aria-pressed": String(on), "data-key": key, onclick },
+        el("span", { class: "chip-label", dir: "auto" }, label), n ? " · " + n : null);
+      if (url) b.dataset.feed = url;
+      return b;
+    };
+    const unread = new Map();
+    for (const x of all) if (mailUnread(x.it)) unread.set(x.f, (unread.get(x.f) || 0) + 1);
+    nodes.push(el("div", { class: "chips filters feed-chips", role: "group", "aria-label": "Addresses" },
+      chip("All", [...unread.values()].reduce((n, k) => n + k, 0), !picked, () => pickBox(null), "chip:all"),
+      ...boxes.map((f) => chip(f.title, unread.get(f) || 0, picked === f, () => pickBox(f.url), "chip:" + f.url, f.url))));
+  }
+  const checked = Math.max(0, ...(picked ? [picked] : boxes).map((f) => f.checkedAt || 0));
+  const line = !C.platform.canFetchPages ? "Your phone collects these. Saved ones come here through sync."
+    : feedsChecking ? "Checking…" : picked && picked.error ? picked.error : checked ? "Checked " + whenText(checked) : "Not checked yet";
+  nodes.push(el("div", { class: "feed-head" },
+    el("p", { class: "meta" + (picked && picked.error && !feedsChecking ? " warn" : "") }, line),
+    el("span", { class: "feed-head-acts" },
+      picked || boxes.length === 1 ? el("button", { class: "btn-text", type: "button", "data-key": "settings", onclick: () => openMenu("feed", shown) }, "Settings") : null,
+      el("button", { class: "btn-text", type: "button", "data-key": "new", onclick: () => openMenu("newMail") }, "New address"))));
+  let day = null, group = null;
+  for (const x of list) {
+    const d = dayName(postAt(x.it));
+    if (d !== day) {
+      day = d;
+      const open = list.filter((y) => dayName(postAt(y.it)) === d && !savedAs(y.it.url) && !savingUrl(y.it.url) && !isConfirm(y.it) && y.f.items.includes(y.it));
+      nodes.push(sectionHead(d, open.length > 1
+        ? el("button", { class: "btn-text", type: "button", "data-key": "all:" + d, onclick: () => saveFeedPosts(open) }, "Save all " + open.length) : null));
+      group = el("div", { class: "group feed-group" });
+      nodes.push(group);
+    }
+    group.append(mailRow(x.f, x.it, !picked && boxes.length > 1));
+  }
+  if (!list.length) {
+    nodes.push(el("div", { class: "empty" },
+      el("p", { class: "empty-text" }, (picked && picked.error) || "No emails yet. Copy the address above and sign up to a newsletter with it.")));
+  }
+  root.replaceChildren(...nodes);
+  const chips = root.querySelector(".feed-chips");
+  if (chips && picked) { const on = chips.querySelector(".chip.on"); if (on) on.scrollIntoView({ block: "nearest", inline: "nearest" }); }
+}
+
+// Making an address: the app asks Kill the Newsletter for one, named as
+// you like. A browser can't (no CORS), so there you make it on their page
+// and paste its feed link back.
+function newMailSheet() {
+  const name = el("input", { class: "feed-input", type: "text", placeholder: "Newsletters", "aria-label": "Name", maxlength: "32",
+    autocomplete: "off", autocapitalize: "sentences", enterkeyhint: C.platform.canFetchPages ? "go" : "next" });
+  const link = C.platform.canFetchPages ? null : el("input", { class: "feed-input", type: "url", inputmode: "url", placeholder: "https://kill-the-newsletter.com/feeds/….xml",
+    "aria-label": "Its feed link", autocomplete: "off", autocapitalize: "off", spellcheck: "false", enterkeyhint: "go" });
+  const help = el("p", { class: "footnote" }, C.platform.canFetchPages
+    ? "Named for you only. Its emails save themselves into a collection with this name."
+    : "Make it in Waypage on your phone, or make one on Kill the Newsletter's page and paste its feed link here.");
+  const go = el("button", { class: "btn-primary", type: "button" }, C.platform.canFetchPages ? "Make the address" : "Add it");
+  const warn = (text) => { help.className = "footnote warn"; help.textContent = text; };
+  const add = async (url, title) => {
+    if (feeds.some((f) => sameUrl(f.url, url))) { warn("That address is here already."); return; }
+    const f = { url, title, link: "", icon: "", mode: "save", images: load(IMAGES_KEY, "previews"), folder: title, days: MAIL_DAYS,
+      addedAt: Date.now(), checkedAt: 0, error: "", items: [] };
+    feeds.push(f);
+    askToNotify = true;
+    saveFeeds();
+    await back();
+    await goPlace("newsletters", f.url);
+    toast("Your address is ready. Copy it and sign up with it.");
+  };
+  go.addEventListener("click", async () => {
+    const title = cleanTag(name.value) || "Newsletters";
+    if (link) {
+      const url = link.value.trim();
+      if (!MAIL_FEED.test(url)) { warn("That isn't a Kill the Newsletter feed link. It ends in .xml."); link.focus(); return; }
+      add(url, title);
+      return;
+    }
+    if (!navigator.onLine) { warn("You're offline. Make it when you're back online."); return; }
+    go.disabled = true;
+    go.textContent = "Making it…";
+    try {
+      const res = await C.platform.postForm("https://" + KTN + "/feeds", { title }, { headers: { "CSRF-Protection": "true" } });
+      const got = res.status < 400 ? JSON.parse(res.text) : null;
+      if (!got || !MAIL_FEED.test(got.feed)) throw new Error(String(res.status));
+      await add(got.feed, title);
+    } catch (e) {
+      warn("Kill the Newsletter didn't make one just now. Try again in a while.");
+      go.disabled = false;
+      go.textContent = "Make the address";
+    }
+  });
+  for (const input of [name, link].filter(Boolean)) input.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    if (input === name && link) link.focus(); else go.click();
+  });
+  setTimeout(() => name.focus({ preventScroll: true }), 50);
+  return el("div", { class: "page-controls add-feed" },
+    el("h2", { class: "menu-title" }, "New newsletter address"),
+    el("div", { class: "feed-field" }, name, link, help),
+    link ? el("button", { class: "sheet-row", type: "button", onclick: () => C.platform.openOutside("https://" + KTN + "/") }, "Open Kill the Newsletter") : null,
+    go,
+    el("p", { class: "footnote" }, "Kill the Newsletter, a free service, receives the emails, so it can read them. Anyone with the address can send to it. Waypage keeps it on this device and in your sync."));
+}
+
+// Deleting an address there too, so mail sent to it bounces. The app
+// only; a computer just stops showing it.
+async function removeMailBox(f) {
+  if (C.platform.canFetchPages && navigator.onLine) {
+    const id = (f.url.match(MAIL_FEED) || [])[1];
+    try { await C.platform.postForm("https://" + KTN + "/feeds/" + id, {}, { method: "DELETE", headers: { "CSRF-Protection": "true" } }); }
+    catch (e) { /* it ends with Kill the Newsletter's month */ }
+  }
+  feeds = feeds.filter((x) => x !== f);
+  saveFeeds();
+  if (state.feed === f.url) state.feed = null;
+  await back();
+  paintFeeds();
+  toast((C.platform.canFetchPages ? "Deleted " : "Removed ") + f.title + ". The emails you saved stay.");
+}
+
 // ---- The sidebar ----
 // Library with its favourites and parts under it, then Feeds with its
 // feeds, from the bar's menu button, over a dimmed screen in its own
@@ -492,11 +762,12 @@ function renderSide() {
   };
   const count = (n, cls) => (n ? el("span", { class: cls || "side-n" }, String(n)) : null);
   const fresh = freshPosts();
+  const freshMail = unreadMail();
   const inFeeds = state.place === "feeds";
   const inMarks = state.place === "highlights";
   const latest = (f) => Math.max(0, ...f.items.map(postAt));
   const big = wide.matches;
-  const inLib = !inFeeds && !inMarks && state.place !== "reading";
+  const inLib = !inFeeds && !inMarks && state.place !== "reading" && state.place !== "newsletters";
   const inLibrary = inLib && !state.part && !state.folder && state.filter !== "favourites";
   const favs = sideFavourites();
   const hasFolders = allFolders().length > 0;
@@ -524,8 +795,11 @@ function renderSide() {
     el("hr", { class: "side-line" }),
     item(feedIcon("feeds"), "Feeds", inFeeds && !state.feed, fresh ? el("span", { class: "side-pill" }, fresh + " new") : null,
       () => goPlace("feeds")),
-    ...[...feeds].sort((a, b) => latest(b) - latest(a)).slice(0, SIDE_MAX).map((f) =>
+    ...siteFeeds().sort((a, b) => latest(b) - latest(a)).slice(0, SIDE_MAX).map((f) =>
       withFeed(item(feedMark(f, true), f.title, inFeeds && state.feed === f.url, null, () => goPlace("feeds", f.url), "side-sub"), f)),
+    // Newsletters (1.43.0): their own place, under Feeds.
+    item(sideSvg("mail"), "Newsletters", state.place === "newsletters", freshMail ? el("span", { class: "side-pill" }, freshMail + " new") : null,
+      () => goPlace("newsletters")),
     // Every highlight in the library (1.8.0), a place of its own.
     el("hr", { class: "side-line" }),
     item(sideSvg("marks"), "Highlights", inMarks, null, () => goPlace("highlights")),
@@ -558,6 +832,7 @@ const SIDE_SVG = {
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
   marks: ICONS.mark,
   reading: '<path d="M5 20V12M10 20V6M15 20v-9M20 20V9"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
 };
 function sideSvg(name) {
@@ -655,7 +930,7 @@ function fitWidth() {
 // the reader's page come here through reader.js.
 const KEYS = [
   ["Anywhere", [["/", "Search the library"], [(/Mac/.test(navigator.platform) && navigator.maxTouchPoints < 2 ? "⌘" : "Ctrl") + " V", "Save a copied link"], ["G then L", "Go to the library"],
-    ["G then F", "Go to Feeds"], ["G then H", "Go to Highlights"], ["G then R", "Go to Reading"], ["D", "Downloads"], [",", "Settings"], ["?", "These shortcuts"]]],
+    ["G then F", "Go to Feeds"], ["G then N", "Go to Newsletters"], ["G then H", "Go to Highlights"], ["G then R", "Go to Reading"], ["D", "Downloads"], [",", "Settings"], ["?", "These shortcuts"]]],
   ["In the library", [["↑ ↓", "Move between clips"], ["Enter", "Open"], ["X", "Pick, to act on several"], ["Shift-click", "Pick a run"],
     ["F", "Favourite"], ["E", "Export"], ["Del", "Delete"]]],
   ["Reading", [["Space  ← →", "Next or previous page"], ["J  K", "Next or previous section"], ["T", "Contents beside the text"],
@@ -673,7 +948,7 @@ function keysSheet() {
 
 const typingIn = (t) => !!(t && t.closest && t.closest("input, textarea, select, [contenteditable]"));
 // The card or collection with focus, in the list on screen.
-const listNow = () => (state.folder ? $("folderBody") : state.place === "feeds" ? $("feeds") : state.place === "highlights" ? $("highlights") : state.place === "reading" ? $("reading") : $("library"));
+const listNow = () => (state.folder ? $("folderBody") : state.place === "feeds" ? $("feeds") : state.place === "newsletters" ? $("newsletters") : state.place === "highlights" ? $("highlights") : state.place === "reading" ? $("reading") : $("library"));
 const focusedNode = () => { const a = document.activeElement; return a && a.closest && listNow().contains(a) ? a.closest("[data-ids]") : null; };
 const focusedPage = () => {
   const n = focusedNode();
@@ -748,7 +1023,7 @@ function onKeys(e) {
   }
   if (Date.now() - gAt < 1200) {
     gAt = 0;
-    const to = { l: "library", f: "feeds", h: "highlights", r: "reading" }[k.toLowerCase()];
+    const to = { l: "library", f: "feeds", n: "newsletters", h: "highlights", r: "reading" }[k.toLowerCase()];
     if (to) go(() => goPlace(to));
     return;
   }
@@ -987,7 +1262,7 @@ function pullToCheck(root) {
     const done = () => { hint.classList.remove("busy"); set(0, true); };
     // A pull also looks for a newer Waypage (0.34.0); the bar says so.
     const app = checkForNewerApp().catch(() => {});
-    if (state.place === "feeds") { Promise.all([checkNow(picked || null), app]).finally(done); return; }
+    if (state.place === "feeds" || state.place === "newsletters") { Promise.all([checkNow(picked || null), app]).finally(done); return; }
     // And in the library, in the watched folder (1.1.0).
     Promise.all([pullChapters(app), lookInFolder(false)]).finally(done);
   }, { passive: true });
@@ -1076,12 +1351,15 @@ function addFeedSheet() {
     const f = { url: got.url, title: cleanTag(got.feed.title) || C.feeds.siteOf(got.url), link: got.feed.link, icon: got.feed.icon,
       mode, images: load(IMAGES_KEY, "previews"), folder: cleanTag(got.feed.title) || C.feeds.siteOf(got.url), days: 7,
       addedAt: Date.now(), checkedAt: Date.now(), error: "", items: [] };
+    // A newsletter address pasted here (1.43.0) goes to Newsletters.
+    const mail = isMail(f);
+    if (mail) Object.assign(f, { folder: f.title, days: MAIL_DAYS });
     mergeFeed(f, got.feed);
     feeds.push(f);
     askToNotify = true;
     saveFeeds();
     await back();
-    await goPlace("feeds", f.url);
+    await goPlace(mail ? "newsletters" : "feeds", f.url);
     toast("Following " + f.title);
     if (mode === "save") autoSave(f);
   };
@@ -1099,35 +1377,39 @@ function addFeedSheet() {
 
 function feedSheet() {
   const f = state.menu.page;
-  const set = (change) => { Object.assign(f, change); saveFeeds(); if (state.place === "feeds") renderFeeds(); };
+  const mail = isMail(f);
+  const set = (change) => { Object.assign(f, change); saveFeeds(); paintFeeds(); };
   const row = (label, control) => el("div", { class: "rc-row stack" }, el("span", { class: "rc-label" }, label), control);
   const into = el("input", { class: "tag-input", type: "text", value: f.folder || "", placeholder: "No collection", "aria-label": "Save into",
     maxlength: "32", enterkeyhint: "done", autocapitalize: "sentences" });
   into.addEventListener("change", () => set({ folder: cleanTag(into.value) }));
   into.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); into.blur(); } });
-  const shortUrl = f.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
+  const shortUrl = mail ? mailAddress(f) : f.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
   return el("div", { class: "page-controls feed-sheet" },
     el("div", { class: "menu-head" },
       el("p", { class: "menu-title", dir: "auto" }, f.title),
       el("p", { class: "meta" }, shortUrl)),
     el("div", { class: "rc-list" },
-      row("New posts", seg("feed-mode", "New posts", [{ value: "show", label: "Show them" }, { value: "save", label: "Save them" }], f.mode,
+      row(mail ? "New emails" : "New posts", seg("feed-mode", mail ? "New emails" : "New posts", [{ value: "show", label: "Show them" }, { value: "save", label: "Save them" }], f.mode,
         (v) => { set({ mode: v }); if (v === "save") autoSave(f); })),
       C.platform.native ? row("Pictures", seg("feed-images", "Pictures", [
         { value: "previews", label: "Previews" }, { value: "full", label: "Full" }, { value: "links", label: "Links" },
       ], f.images || load(IMAGES_KEY, "previews"), (v) => set({ images: v }))) : null,
       row("Save into", into),
-      row("Skip posts older than", seg("feed-days", "Skip posts older than", FEED_DAYS, String(f.days || 7), (v) => set({ days: Number(v) }))),
+      row(mail ? "Skip emails older than" : "Skip posts older than", seg("feed-days", mail ? "Skip emails older than" : "Skip posts older than", FEED_DAYS, String(f.days || 7), (v) => set({ days: Number(v) }))),
       C.platform.native && notesPrefs().on ? row("Notifications", seg("feed-notes", "Notifications", [{ value: "on", label: "On" }, { value: "off", label: "Off" }],
         feedQuiet(f) ? "off" : "on", (v) => setFeedQuiet(f, v === "off"))) : null),
-    el("p", { class: "footnote" + (f.error ? " warn" : "") }, f.error || (f.checkedAt ? "Checked " + whenText(f.checkedAt) + ". " : "") + rateLine(f.items) + "."),
-    el("button", { class: "sheet-row", type: "button", onclick: (e) => {
+    el("p", { class: "footnote" + (f.error ? " warn" : "") }, f.error || (f.checkedAt ? "Checked " + whenText(f.checkedAt) + ". " : "") + (mail ? rateLine(f.items).replace(/post/g, "email") : rateLine(f.items)) + "."),
+    mail && !C.platform.canFetchPages ? null : el("button", { class: "sheet-row", type: "button", onclick: (e) => {
       e.currentTarget.disabled = true;
       e.currentTarget.textContent = "Checking…";
       checkNow(f).then(redrawMenu);
     } }, "Check now"),
-    el("button", { class: "sheet-row danger", type: "button", onclick: () => unfollow(f) }, "Unfollow"),
-    el("p", { class: "footnote" }, "Unfollowing keeps the posts you saved."));
+    mail ? el("button", { class: "sheet-row", type: "button", onclick: () => copyText(mailAddress(f), "Address copied.") }, "Copy address") : null,
+    mail ? el("button", { class: "sheet-row danger", type: "button", onclick: () => removeMailBox(f) }, C.platform.canFetchPages ? "Delete the address" : "Remove the address")
+      : el("button", { class: "sheet-row danger", type: "button", onclick: () => unfollow(f) }, "Unfollow"),
+    el("p", { class: "footnote" }, !mail ? "Unfollowing keeps the posts you saved." : C.platform.canFetchPages
+      ? "Deleting it makes its emails bounce. The ones you saved stay." : "Removed here, it still takes emails. Delete it in Waypage on your phone to stop them."));
 }
 
 async function unfollow(f) {

@@ -1072,6 +1072,7 @@ const MENUS = {
   remove: { label: "Remove collection", build: removeSheet },
   addFeed: { label: "Add a feed", build: () => addFeedSheet() },
   feed: { label: "Feed", build: () => feedSheet() },
+  newMail: { label: "New newsletter address", build: () => newMailSheet() },
   export: { label: "Export", build: () => exportControls(state.menu.page, () => history.back()) },
   keys: { label: "Keyboard shortcuts", build: () => keysSheet() },
   importList: { label: "Import", build: () => importSheet() },
@@ -1448,7 +1449,8 @@ async function backUp(btn) {
 async function saveOpml(btn) {
   if (!feeds.length) return;
   const name = "Waypage feeds " + new Date().toISOString().slice(0, 10) + ".opml";
-  const text = C.imports.writeOpml(feeds);
+  // Not the newsletter addresses (1.43.0): their links are their keys.
+  const text = C.imports.writeOpml(siteFeeds());
   btn.disabled = true;
   try {
     const uri = await C.platform.writeCache(name, text);
@@ -2030,7 +2032,7 @@ function backupGroup() {
         el("span", { class: "row-label accent" }, "Back up the library")),
       state.pages.some((p) => (p.marks || []).length) ? el("button", { class: "row", type: "button", onclick: (e) => saveHighlights(e.currentTarget) },
         el("span", { class: "row-label accent" }, "Save all highlights")) : null,
-      feeds.length ? el("button", { class: "row", type: "button", onclick: (e) => saveOpml(e.currentTarget) },
+      siteFeeds().length ? el("button", { class: "row", type: "button", onclick: (e) => saveOpml(e.currentTarget) },
         el("span", { class: "row-label accent" }, "Save the feeds you follow (OPML)")) : null,
       open, input),
     el("p", { class: "footnote" }, "One file with every clip, its pictures, tags, collections and where you were, and the feeds you follow. " + (C.platform.native ? "Keep it off the phone" : "Keep it somewhere other than this browser") + ". Restoring keeps whichever copy of a clip was saved last. A clip sent as a file opens here too." + (state.pages.some((p) => (p.marks || []).length) ? " Highlights save as one Markdown file, with their notes and links." : "")));

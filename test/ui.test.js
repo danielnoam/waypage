@@ -2175,6 +2175,56 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    // Newsletters (1.43.0): a Kill the Newsletter feed, its sender and
+    // confirm link read, the footer link gone from the saved clip, and the
+    // email kept out of Feeds.
+    await test("newsletters: an address's emails, confirm link, saved as a clip", async () => {
+      const q = await page(browser, 390);
+      const feed = "https://kill-the-newsletter.com/feeds/testbox1.xml";
+      const entry = "https://kill-the-newsletter.com/feeds/testbox1/entries/m1.html";
+      const xml = '<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Morning</title>'
+        + '<entry><id>urn:kill-the-newsletter:c1</id><link rel="alternate" type="text/html" href="https://kill-the-newsletter.com/feeds/testbox1/entries/c1.html"/>'
+        + '<published>2026-10-27T08:00:00.000Z</published><author><name>x</name><email>bounce-mc.us5_1@mail1.mcsv.net</email></author><title>Please confirm your subscription</title>'
+        + '<content type="html">' + '<p><a href="https://list.example.com/unsubscribe">Unsubscribe</a> <a href="https://list.example.com/confirm?id=9">Yes, subscribe me</a></p>'.replace(/&/g, "&amp;").replace(/</g, "&lt;") + '</content></entry>'
+        + '<entry><id>urn:kill-the-newsletter:m1</id><link rel="alternate" type="text/html" href="' + entry + '"/>'
+        + '<published>2026-10-27T09:00:00.000Z</published><author><name>x</name><email>crew@morningbrew.com</email></author><title>Chip wars heat up</title>'
+        + '<content type="html">' + ('<h1>Morning Brew</h1>' + '<p>' + 'Chips are the new oil, and everyone wants a refinery. '.repeat(30) + '</p><hr/><p><small><a href="https://kill-the-newsletter.com/feeds/testbox1">Kill the Newsletter! feed settings</a></small></p>').replace(/&/g, "&amp;").replace(/</g, "&lt;") + '</content></entry></feed>';
+      const got = await q.evaluate(async ([xml, feed]) => {
+        const parsed = C.feeds.parseFeed(xml, feed);
+        keepMails(parsed);
+        const f = { url: feed, title: "Morning", link: "", icon: "", mode: "show", images: "previews", folder: "Morning", days: MAIL_DAYS, addedAt: Date.now(), checkedAt: Date.now(), error: "", items: [] };
+        mergeFeed(f, parsed);
+        feeds.push(f);
+        saveFeeds();
+        await goPlace("newsletters");
+        const confirm = f.items.find((it) => isConfirm(it));
+        const mail = f.items.find((it) => !isConfirm(it));
+        return { act: confirm.act, from: mail.from, sender: senderOf(f, mail), confirmSender: senderOf(f, confirm),
+          rows: [...document.querySelectorAll("#newsletters .post-title")].map((n) => n.textContent), button: !!document.querySelector("#newsletters .nl-confirm"),
+          address: document.querySelector("#newsletters .nl-mail").textContent, inFeeds: siteFeeds().length };
+      }, [xml, feed]);
+      assert.strictEqual(got.act, "https://list.example.com/confirm?id=9");
+      assert.strictEqual(got.from, "crew@morningbrew.com");
+      assert.strictEqual(got.sender, "Morningbrew");
+      assert.strictEqual(got.confirmSender, "Morning", "a mailing service's bounce address falls back to the address's name");
+      assert.deepStrictEqual(got.rows.map((t) => t.replace(/^Unread: /, "")), ["Chip wars heat up", "Please confirm your subscription"]);
+      assert.ok(got.button, "the confirm email has a Confirm button");
+      assert.strictEqual(got.address, "testbox1@kill-the-newsletter.com");
+      assert.strictEqual(got.inFeeds, 0, "the address isn't in Feeds");
+      await q.evaluate(() => { const f = mailBoxes()[0]; saveFeedPosts([{ f, it: f.items.find((it) => !isConfirm(it)) }]); });
+      await until(q, (u) => !!savedAs(u), entry, 15000);
+      const saved = await q.evaluate(async (u) => { const p = savedAs(u); return { title: p.title, site: p.site, folder: p.folder, html: await C.store.readPage(p.id) }; }, entry);
+      assert.strictEqual(saved.title, "Chip wars heat up");
+      assert.strictEqual(saved.site, "Morningbrew");
+      assert.strictEqual(saved.folder, "Morning");
+      assert.ok(/Chips are the new oil/.test(saved.html));
+      assert.ok(!/feed settings/.test(saved.html), "Kill the Newsletter's settings link is gone");
+      await q.evaluate(() => renderNewsletters());
+      assert.ok(await q.evaluate(() => /Saved/.test(document.querySelector("#newsletters .feed-group").textContent)));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     for (const width of [390, 1280]) {
       for (const theme of THEMES) {
         await test("opens at " + width + " px in " + theme + " with no errors", async () => {

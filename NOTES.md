@@ -18,6 +18,38 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Newsletters (1.43.0).** Daniel wanted an app email address to sign
+  up to newsletters with, in a place of its own ("it's not the same
+  posts, it works differently"). There's no server, so the address is
+  Kill the Newsletter's (kill-the-newsletter.com, open source,
+  leafac/kill-the-newsletter): `POST /feeds` with a `title` and the
+  `CSRF-Protection: true` header answers `{ feedId, email, feed }`, and
+  every email to `<id>@kill-the-newsletter.com` becomes an entry in the
+  Atom feed `/feeds/<id>.xml`. Underneath, an address is a feed in
+  `feeds` (`isMail` = that URL shape), so checking with the app closed,
+  notifications, sync and Settings come with it; Feeds, its widget and
+  OPML leave them out. What's read from the feed: the subject, the
+  envelope sender (`<author><email>`, the address mail bounces to, so
+  the big mailing services share one and the sender shown is a guess
+  from its domain or the address's name), and the HTML (held only until
+  the save, `mailBodies`). An email is saved through `given`, like a
+  page sent from a computer, titled by its subject, with Kill the
+  Newsletter's settings link taken off its foot. A new address saves its
+  emails by default because Kill the Newsletter deletes entries after a
+  month (and trims big feeds); the clip is the kept copy and what sync
+  carries to a computer, which can't read the feed (no CORS) and so
+  shows the saved ones from the library by their entry URL. A "please
+  confirm" email (subject says confirm, verify, activate, validate or
+  opt-in) is never saved; its Confirm opens the email's first confirm
+  link (not an unsubscribe one) in the browser. Deleting an address
+  sends `DELETE /feeds/<id>` from the app. Trade-offs, said to Daniel:
+  Kill the Newsletter receives and can read the emails; the feed link
+  and address are keys (anyone with them can send to it or unsubscribe
+  you), kept on the device and in the private sync repo only; replies
+  from the address aren't possible, and some publishers block it.
+  Speed at 3,000 clips, 6x CPU: Newsletters with 450 emails draws in
+  about 370 ms (Feeds with as many posts, 320 ms); the sidebar's count
+  takes about 58 ms, one pass over the library.
 - **Translation shown instead of the text (1.42.1).** Daniel's ask: Show
   is Off, Under the text or Instead of the text (`mode` in
   translation.json; 1.42.0's `show` is read as under/off). Instead keeps

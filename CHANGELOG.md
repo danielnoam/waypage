@@ -2,6 +2,28 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.43.0] - 2026-10-27
+
+### Added
+- Newsletters, a place of its own under Feeds in the sidebar. Make an
+  email address for newsletters in it (from Kill the Newsletter, a free
+  service), copy it, and sign up to newsletters with it. Each email
+  arrives in Newsletters and is saved as a clip into a collection named
+  after the address, titled by its subject, so it reads offline and
+  syncs. Unread emails have a dot; a "please confirm" email has a
+  Confirm button that opens its link in the browser and is never saved.
+- Several addresses, one per newsletter or per group, each a chip.
+  An address's Settings has Copy address, whether new emails save
+  themselves, and Delete the address, which makes its emails bounce.
+- On a computer the browser can't reach the addresses: Newsletters shows
+  the emails your phone saved, through sync, and a new address can be
+  made on Kill the Newsletter's page and its feed link pasted in.
+- G then N goes to Newsletters.
+
+### Changed
+- Newsletter addresses aren't in Feeds, the Feeds widget or the OPML
+  export (their links are their keys).
+
 ## [1.42.1] - 2026-10-27
 
 ### Changed

@@ -84,6 +84,10 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Select several posts (1.20.0, 1.21.1)
 - Feeds in and out as OPML (1.32.0)
 
+## Newsletters
+
+- Newsletter addresses (Kill the Newsletter), emails saved as clips, unread dots, Confirm, several addresses (1.43.0)
+
 ## Sync and backup
 
 - GitHub sync of clips, places, highlights and feeds; setup code; links only; batched (0.30.0, 0.30.1, 0.30.3, 1.15.0)

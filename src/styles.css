@@ -1783,7 +1783,7 @@ html { -webkit-tap-highlight-color: transparent; }
 
 /* ---- 0.28.0: the sidebar and Feeds ---- */
 .library[hidden], .feeds[hidden], .highlights[hidden], .reading[hidden] { display: none; }
-:is([data-place="feeds"], [data-place="highlights"], [data-place="reading"]) :is(.top, #searchBtn) { display: none; }
+:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"], [data-place="reading"]) :is(.top, #searchBtn) { display: none; }
 
 .side-catch { z-index: 17; }
 .sidebar {
@@ -1843,8 +1843,8 @@ html { -webkit-tap-highlight-color: transparent; }
   flex: 1; padding: 0 var(--gutter) var(--s-5);
   display: flex; flex-direction: column; gap: var(--s-3);
 }
-[data-place="highlights"] .save-form { display: none; }
-[data-place="highlights"] .save-bar:not(:has(.update-bar:not([hidden]))) { display: none; }
+:is([data-place="highlights"], [data-place="newsletters"]) .save-form { display: none; }
+:is([data-place="highlights"], [data-place="newsletters"]) .save-bar:not(:has(.update-bar:not([hidden]))) { display: none; }
 .hl-head[hidden] { display: none; }
 .hl-search { margin-top: var(--s-1); }
 .hl-line { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin-top: var(--s-1); }
@@ -2002,6 +2002,18 @@ html { -webkit-tap-highlight-color: transparent; }
 .post-save .side-icon { color: inherit; }
 .post-saved { flex-shrink: 0; padding: 0 var(--s-2); font-size: var(--fs-meta); font-weight: 600; color: var(--ok); }
 
+/* Newsletters (1.43.0): the address on top, unread emails with a dot. */
+.nl-card { margin-top: var(--s-2); }
+.nl-addr { display: flex; align-items: center; gap: var(--s-3); min-height: var(--tap); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); }
+.nl-mail { font-size: var(--fs-label); line-height: var(--lh-label); color: var(--ink); overflow-wrap: anywhere; }
+.nl-addr .btn-small { flex-shrink: 0; }
+.nl-unread .post-title { font-weight: 700; }
+.nl-unread::before {
+  content: ""; position: absolute; inset-inline-start: 6px; top: 50%;
+  width: 6px; height: 6px; margin-top: -3px; border-radius: var(--r-full); background: var(--accent);
+}
+.post > .nl-confirm { pointer-events: auto; min-width: 0; padding: 0 var(--s-3); margin-inline-end: var(--s-2); }
+
 /* Add a feed, and a feed's settings, in the library's sheet. */
 .feed-field { display: flex; flex-direction: column; }
 .feed-input {
@@ -2084,8 +2096,8 @@ html { -webkit-tap-highlight-color: transparent; }
   .lib-head .meta { margin: 0; flex: 1; min-width: 0; }
   .lib-head .lib-tools { margin: 0 calc(-1 * var(--s-2)) 0 0; align-self: center; gap: var(--s-4); }
   .top { padding-bottom: var(--s-3); }
-  :is([data-place="feeds"], [data-place="highlights"]) .top { display: block; }
-  :is([data-place="feeds"], [data-place="highlights"]) :is(.top > :not(.lib-head), .lib-head > :not(.screen-title)) { display: none; }
+  :is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"]) .top { display: block; }
+  :is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"]) :is(.top > :not(.lib-head), .lib-head > :not(.screen-title)) { display: none; }
 
   /* Two columns of clips; Continue reading, collections and section
      heads take the whole width. */
@@ -2348,9 +2360,9 @@ kbd {
   .reader.aloud .read-keys { display: none; }
 }
 @media (min-width: 1280px) {
-  body.pinned #libraryView:is([data-place="feeds"], [data-place="highlights"]) { width: 500px; border-inline-end: 1px solid var(--line); }
-  body.pinned #libraryView:is([data-place="feeds"], [data-place="highlights"]) > * { padding-inline: var(--s-5); }
-  body.pinned:has(#libraryView:is([data-place="feeds"], [data-place="highlights"])):has(#readerView[hidden]) .pane-note {
+  body.pinned #libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"]) { width: 500px; border-inline-end: 1px solid var(--line); }
+  body.pinned #libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"]) > * { padding-inline: var(--s-5); }
+  body.pinned:has(#libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"])):has(#readerView[hidden]) .pane-note {
     display: flex; position: fixed; inset: 0 0 0 calc(var(--side-w) + 500px); align-items: center; justify-content: center; margin: 0;
     color: var(--muted);
   }
