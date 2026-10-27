@@ -841,9 +841,6 @@ function pageSheet(p, where) {
           ? menuRow(p.view === "text" ? "Show as printed pages" : "Show as text", () => switchView(p, where)) : null,
         inReader && !C.files.printed(p) ? menuRow("Find in this clip", () => back().then(openFind)) : null,
         inReader && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow("Save linked pages", () => back().then(() => openSheet("links"))) : null,
-        // The whole clip in another language, on this device (1.42.0).
-        inReader && !C.files.printed(p) && !p.comic && (C.platform.translator.available || translationOf(p))
-          ? menuRow(translationOf(p) ? "Translation" : "Translate this clip", () => back().then(() => openSheet("translate"))) : null,
         menuRow(p.finished ? "Mark as unread" : "Mark as read", () => markRead([p], !p.finished).then(draw)),
         // The page changed since (1.38.0): fetched again in its place.
         p.file || p.preview || !/^https?:/.test(p.url || "") ? null

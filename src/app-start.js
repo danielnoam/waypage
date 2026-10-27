@@ -171,6 +171,7 @@ function toggleSheet(kind) {
 $("readerMore").addEventListener("click", () => toggleSheet("page"));
 $("readerAa").addEventListener("click", () => toggleSheet("reading"));
 $("readerMarks").addEventListener("click", () => { if (state.sheet !== "marks") markFocus = null; toggleSheet("marks"); });
+$("readerTranslate").addEventListener("click", () => toggleSheet("translate"));
 $("readerContents").addEventListener("click", () => toggleSheet("contents"));
 $("readerFolder").addEventListener("click", () => toggleSheet("folder"));
 $("sheetCatch").addEventListener("click", () => history.back());

@@ -8,8 +8,8 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="src/fonts.css?v=1.42.0">
-  <link rel="stylesheet" href="src/styles.css?v=1.42.0">
+  <link rel="stylesheet" href="src/fonts.css?v=1.42.1">
+  <link rel="stylesheet" href="src/styles.css?v=1.42.1">
 </head>
 <body>
   <div class="app" id="libraryView">
@@ -91,8 +91,9 @@
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"></path></svg>
         </button>
         <button class="section-btn" id="readerContents" type="button" aria-label="Contents" aria-expanded="false" aria-controls="readingSheet" hidden>
+          <svg class="section-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M13 18h7M4.5 6h.01M4.5 12h.01M8.5 18h.01"></path></svg>
           <span class="section-now" id="readerNow" dir="auto">Contents</span>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+          <svg class="section-more" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
         </button>
         <button class="icon-btn" id="readerFolder" type="button" aria-label="Clips in this collection" aria-expanded="false" aria-controls="readingSheet" hidden>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
@@ -108,6 +109,9 @@
         </button>
         <button class="icon-btn" id="readerMarks" type="button" aria-label="Highlights" title="Highlights (H)" aria-expanded="false" aria-controls="readingSheet">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4.5l5 5L11 18H6v-5z"></path><path d="M4 21h16"></path></svg>
+        </button>
+        <button class="icon-btn" id="readerTranslate" type="button" aria-label="Translate this clip" title="Translate this clip (L)" aria-expanded="false" aria-controls="readingSheet" hidden>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h9M8.5 3v2M11 5c-1 4-3.5 7-7 8.5M6.5 8.5c1.2 2 3 3.5 5 4.5"></path><path d="M13 21l4-9 4 9M14.5 18h5"></path></svg>
         </button>
         <button class="icon-btn" id="readerAa" type="button" aria-label="Reader settings" title="Reader settings (A)" aria-expanded="false" aria-controls="readingSheet">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -348,29 +352,29 @@
     </div>
   </section>
 
-  <script src="src/platform.js?v=1.42.0"></script>
-  <script src="src/motion.js?v=1.42.0"></script>
-  <script src="src/vendor/Readability.js?v=1.42.0"></script>
-  <script src="src/store.js?v=1.42.0"></script>
-  <script src="src/save.js?v=1.42.0"></script>
-  <script src="src/feeds.js?v=1.42.0"></script>
-  <script src="src/backup.js?v=1.42.0"></script>
-  <script src="src/imports.js?v=1.42.0"></script>
-  <script src="src/sync.js?v=1.42.0"></script>
-  <script src="src/drive.js?v=1.42.0"></script>
-  <script src="src/qr.js?v=1.42.0"></script>
-  <script src="src/stats.js?v=1.42.0"></script>
-  <script src="src/epub.js?v=1.42.0"></script>
-  <script src="src/files.js?v=1.42.0"></script>
-  <script src="src/pdf.js?v=1.42.0"></script>
-  <script src="src/reader.js?v=1.42.0"></script>
-  <script src="src/app.js?v=1.42.0"></script>
-  <script src="src/app-reader.js?v=1.42.0"></script>
-  <script src="src/app-library.js?v=1.42.0"></script>
-  <script src="src/app-saving.js?v=1.42.0"></script>
-  <script src="src/app-places.js?v=1.42.0"></script>
-  <script src="src/app-settings.js?v=1.42.0"></script>
-  <script src="src/app-lock.js?v=1.42.0"></script>
-  <script src="src/app-start.js?v=1.42.0"></script>
+  <script src="src/platform.js?v=1.42.1"></script>
+  <script src="src/motion.js?v=1.42.1"></script>
+  <script src="src/vendor/Readability.js?v=1.42.1"></script>
+  <script src="src/store.js?v=1.42.1"></script>
+  <script src="src/save.js?v=1.42.1"></script>
+  <script src="src/feeds.js?v=1.42.1"></script>
+  <script src="src/backup.js?v=1.42.1"></script>
+  <script src="src/imports.js?v=1.42.1"></script>
+  <script src="src/sync.js?v=1.42.1"></script>
+  <script src="src/drive.js?v=1.42.1"></script>
+  <script src="src/qr.js?v=1.42.1"></script>
+  <script src="src/stats.js?v=1.42.1"></script>
+  <script src="src/epub.js?v=1.42.1"></script>
+  <script src="src/files.js?v=1.42.1"></script>
+  <script src="src/pdf.js?v=1.42.1"></script>
+  <script src="src/reader.js?v=1.42.1"></script>
+  <script src="src/app.js?v=1.42.1"></script>
+  <script src="src/app-reader.js?v=1.42.1"></script>
+  <script src="src/app-library.js?v=1.42.1"></script>
+  <script src="src/app-saving.js?v=1.42.1"></script>
+  <script src="src/app-places.js?v=1.42.1"></script>
+  <script src="src/app-settings.js?v=1.42.1"></script>
+  <script src="src/app-lock.js?v=1.42.1"></script>
+  <script src="src/app-start.js?v=1.42.1"></script>
 </body>
 </html>

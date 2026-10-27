@@ -363,8 +363,7 @@ function zipOf(files) {
       await q.press("#saveUrl", "Enter");
       await q.locator(".page-card", { hasText: "The Long Haul Flight" }).first().click();
       await frameText(q).getByText("oceanic track").waitFor();
-      await q.click("#readerMore");
-      await q.locator("#readingSheet .row", { hasText: "Translate this clip" }).click();
+      await q.click("#readerTranslate");
       await q.locator("#readingSheet:not([hidden]) .tr-into .dropdown-btn").click();
       await q.getByRole("option", { name: "Hebrew" }).click();
       await q.locator("#readingSheet .btn-primary", { hasText: "Translate" }).click();
@@ -378,10 +377,21 @@ function zipOf(files) {
       await q.locator(".page-card", { hasText: "The Long Haul Flight" }).first().click();
       await tr.first().waitFor();
       assert.strictEqual(await tr.count(), n);
-      await q.click("#readerMore");
-      await q.locator("#readingSheet .row", { hasText: "Translation" }).click();
-      await q.locator("#readingSheet:not([hidden]) .row", { hasText: "Show it under the text" }).click();
-      await until(q, () => !document.getElementById("readerFrame").contentDocument.querySelector(".co-tr"));
+      assert.strictEqual(await q.getAttribute("#readerTranslate", "aria-label"), "Translation");
+      await q.click("#readerTranslate");
+      // Instead of the text: the block's own words take no room, the translation reads at body size.
+      await q.locator("#readingSheet:not([hidden]) .tr-show .dropdown-btn").click();
+      await q.getByRole("option", { name: "Instead of the text" }).click();
+      await until(q, () => document.getElementById("readerFrame").contentDocument.documentElement.classList.contains("co-replace"));
+      const sizes = await q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument, b = d.querySelector("p.co-trd");
+        return { own: getComputedStyle(b).fontSize, tr: getComputedStyle(b.querySelector(".co-tr")).fontSize, body: getComputedStyle(d.body).fontSize };
+      });
+      assert.deepStrictEqual(sizes, { own: "0px", tr: sizes.body, body: sizes.body });
+      await until(q, () => !document.querySelector(".dropdown-menu"));
+      await q.locator("#readingSheet:not([hidden]) .tr-show .dropdown-btn").click();
+      await q.getByRole("option", { name: "Off", exact: true }).click();
+      await until(q, () => !document.getElementById("readerFrame").contentDocument.querySelector(".co-tr, .co-replace"));
       await q.locator("#readingSheet .row", { hasText: "Remove the translation" }).click();
       await until(q, async () => !(await window.Waypage.store.readTranslation((await window.Waypage.store.readIndex())[0].id)));
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
@@ -1802,6 +1812,9 @@ function zipOf(files) {
       const scroll = await q.evaluate(() => ({ label: document.getElementById("readerContents").getAttribute("aria-label"), left: document.getElementById("readSection").innerText, pct: document.getElementById("readLeft").textContent }));
       assert.strictEqual(top, "Contents");
       assert.strictEqual(scroll.label, "Contents, now Second part");
+      // A phone shows only the list icon; the name is for wider screens.
+      const shown = await q.evaluate(() => ({ now: getComputedStyle(document.getElementById("readerNow")).display, wide: innerWidth >= 700 }));
+      assert.strictEqual(shown.now === "none", !shown.wide, "section name display " + shown.now);
       assert.match(scroll.left, /^\d+ min left$/);
       assert.match(scroll.pct, /^\d+%$/);
       await q.evaluate(() => document.getElementById("readerView").classList.remove("bar-away"));

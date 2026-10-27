@@ -2,6 +2,16 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.42.1] - 2026-10-27
+
+### Changed
+- Translate this clip has its own button in the reader's top bar, beside
+  Highlights, instead of a row in ⋯. L opens it with a keyboard.
+- On a phone the Contents button is the list icon again; the name of the
+  section being read got cut off there. A computer still shows the name.
+- A translation's Show is a choice of Off, Under the text, or Instead of
+  the text, which shows only the translation where there is one.
+
 ## [1.42.0] - 2026-10-27
 
 ### Added

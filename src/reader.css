@@ -176,6 +176,18 @@ html.co-spread .co-printed img + img { margin-top: 0; }
   user-select: none; -webkit-user-select: none;
 }
 :is(h1, h2, h3, h4, h5, h6) > .co-tr { font-size: 0.8em; }
+/* Instead of the text (1.42.1): the block's own words shrink to nothing
+   (pictures in it stay) and the translation takes their size and colour.
+   The words stay in the page, for highlights, finding and narrating. */
+.co-replace .co-trd { font-size: 0; }
+.co-replace .co-trd > .co-tr {
+  margin-top: 0; color: inherit;
+  font-size: var(--reader-fs, var(--fs-body)); line-height: var(--reader-lh, var(--lh-body));
+}
+.co-replace h1.co-trd > .co-tr { font: 700 var(--fs-title)/var(--lh-title) var(--reader-font, var(--serif)); }
+.co-replace h2.co-trd > .co-tr { font: 600 var(--fs-heading)/var(--lh-heading) var(--reader-font, var(--serif)); }
+.co-replace :is(h3, h4, h5, h6).co-trd > .co-tr { font-weight: 600; }
+.co-replace li.co-trd::marker { font-size: var(--reader-fs, var(--fs-body)); }
 
 /* Highlights (1.7.0): marked words, and a dotted underline on those
    with a note. A tap on one opens it in the clip's sheet. */

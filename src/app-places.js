@@ -659,7 +659,7 @@ const KEYS = [
   ["In the library", [["↑ ↓", "Move between clips"], ["Enter", "Open"], ["X", "Pick, to act on several"], ["Shift-click", "Pick a run"],
     ["F", "Favourite"], ["E", "Export"], ["Del", "Delete"]]],
   ["Reading", [["Space  ← →", "Next or previous page"], ["J  K", "Next or previous section"], ["T", "Contents beside the text"],
-    ["S", "Narrate"], ["A", "Reader settings"], ["H", "Highlights"], ["/", "Find in this clip"], ["+  −", "Text size"], ["O", "Open the original"], ["Esc", "Back"]]],
+    ["S", "Narrate"], ["A", "Reader settings"], ["H", "Highlights"], ["L", "Translate this clip"], ["/", "Find in this clip"], ["+  −", "Text size"], ["O", "Open the original"], ["Esc", "Back"]]],
 ];
 function keysSheet() {
   return el("div", { class: "keys-sheet" },
@@ -731,6 +731,7 @@ function onKeys(e) {
       s: () => !$("readerAloud").hidden && $("readerAloud").click(),
       a: () => toggleSheet("reading"),
       h: () => !$("readerMarks").hidden && $("readerMarks").click(),
+      l: () => !$("readerTranslate").hidden && $("readerTranslate").click(),
       "+": () => size(1), "=": () => size(1), "-": () => size(-1), "−": () => size(-1),
       o: () => /^https?:/.test(p.url || "") && C.platform.openOutside(p.url),
       // In scroll, Space in the page scrolls it already.
