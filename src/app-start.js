@@ -69,6 +69,7 @@ fitWidth();
 wide.addEventListener("change", fitWidth);
 pinned.addEventListener("change", fitWidth);
 holdFeeds($("feeds"));
+holdFeeds($("newsletters"));
 holdFeeds($("sidebar"));
 swipeToSide($("libraryView"));
 dragSide();

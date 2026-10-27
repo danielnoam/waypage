@@ -164,6 +164,24 @@
     return { status: res.status, url: res.url || url, text: await res.text() };
   }
 
+  // A form sent to a site (1.43.0, making or deleting a newsletter
+  // address), as { status, text }. The app only: a browser's CORS keeps
+  // it from reading the answer.
+  async function postForm(url, fields, opts = {}) {
+    const http = plugin("CapacitorHttp");
+    if (!http) throw new TypeError("Failed to fetch (no native http)");
+    const data = new URLSearchParams(fields).toString();
+    let res;
+    try {
+      res = await deadline(http.request({ url, method: opts.method || "POST", data, responseType: "text",
+        headers: { "User-Agent": USER_AGENT, Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded", ...(opts.headers || {}) },
+        connectTimeout: PAGE_TIMEOUT / 2, readTimeout: PAGE_TIMEOUT }), PAGE_TIMEOUT + 5000);
+    } catch (e) {
+      throw new TypeError("Failed to fetch (" + ((e && e.message) || e) + ")");
+    }
+    return { status: res.status, text: typeof res.data === "string" ? res.data : JSON.stringify(res.data) };
+  }
+
   // Saving signed in (1.8.0): native/share's SignIn plugin opens a site in a
   // browser inside the app, and its cookies go with Waypage's own requests
   // to that site afterwards, so a subscriber's article saves whole. Only
@@ -1064,6 +1082,7 @@
       if (c && c.addEventListener) c.addEventListener("change", f);
     },
     fetchText,
+    postForm,
     signIn,
     translateText,
     translator,

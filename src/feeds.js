@@ -90,12 +90,16 @@
         const body = text(e, "content") || text(e, "summary");
         const media = kid(e, "thumbnail") || (kid(e, "group") && kid(kid(e, "group"), "thumbnail"));
         const url = alt(e);
+        // A newsletter's email (1.43.0) keeps its sender and its whole
+        // HTML for the save; neither is stored with the post.
         return item({
           id: clean(text(e, "id"), 500) || url,
           url, title: words(text(e, "title"), 300),
           date: when(text(e, "published") || text(e, "updated")),
           summary: words(text(e, "summary") || body, 240),
           image: (media && absolute(media.getAttribute("url"), link)) || firstImage(body, link),
+          from: clean(text(kid(e, "author"), "email"), 200),
+          body,
         });
       }).filter(Boolean),
     };

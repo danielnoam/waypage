@@ -1187,7 +1187,20 @@ const feedIcon = (name, size = 20) => {
 
 let feeds = load(FEEDS_KEY, []);
 if (!Array.isArray(feeds)) feeds = [];
-state.place = ["feeds", "highlights", "reading"].includes(load(PLACE_KEY, "library")) ? load(PLACE_KEY, "library") : "library";
+// Newsletters (1.43.0) are Kill the Newsletter addresses: each one an
+// email address and the Atom feed its emails arrive in, followed like
+// any feed but shown in Newsletters, never in Feeds.
+const KTN = "kill-the-newsletter.com";
+const MAIL_FEED = /^https:\/\/kill-the-newsletter\.com\/feeds\/([a-z0-9]+)\.xml$/i;
+const MAIL_DAYS = 30;
+const isMail = (f) => MAIL_FEED.test((f && f.url) || "");
+const mailBoxes = () => feeds.filter(isMail);
+const siteFeeds = () => feeds.filter((f) => !isMail(f));
+const mailAddress = (f) => (f.url.match(MAIL_FEED) || [])[1] + "@" + KTN;
+// "Please confirm your subscription": a Confirm button, not a clip.
+const CONFIRM = /\b(confirm|verify|activate|validate)|opt[- ]?in/i;
+const isConfirm = (it) => CONFIRM.test((it && it.title) || "");
+state.place = ["feeds", "newsletters", "highlights", "reading"].includes(load(PLACE_KEY, "library")) ? load(PLACE_KEY, "library") : "library";
 // The feed picked in the river (its url), or null for all of them.
 state.feed = null;
 state.side = false;
@@ -1259,7 +1272,7 @@ const waitingIn = (f) => feedPosts(f).filter((it) => !savedAs(it.url)).length;
 // New since Feeds was last looked at, for the sidebar's pill.
 const freshPosts = () => {
   const seen = load(FEEDS_SEEN_KEY, 0);
-  return feeds.reduce((n, f) => n + feedPosts(f).filter((it) => it.foundAt > seen && !savedAs(it.url)).length, 0);
+  return siteFeeds().reduce((n, f) => n + feedPosts(f).filter((it) => it.foundAt > seen && !savedAs(it.url)).length, 0);
 };
 
 // The feed's site icon, or its first letter, like a card with no picture.
@@ -1305,6 +1318,11 @@ function mergeFeed(f, got) {
     const old = had.get(postKey(it));
     const out = { id: it.id, url: it.url, title: it.title, date: it.date, foundAt: old ? old.foundAt : now };
     if (old && old.tried) out.tried = true;
+    // A newsletter's email (1.43.0): its sender, its confirm link, and
+    // whether it was opened.
+    if (it.from) out.from = it.from;
+    if (it.act) out.act = it.act;
+    if (old && old.opened) out.opened = true;
     return out;
   });
   const now_ = new Set(items.map(postKey));
@@ -1373,13 +1391,13 @@ function updateWidgets(now) {
   clearTimeout(widgetTimer);
   widgetTimer = setTimeout(() => {
     const p = keepReading();
-    const posts = feeds.flatMap((f) => feedPosts(f).filter((it) => !savedAs(it.url)).map((it) => ({ f, it })))
+    const posts = siteFeeds().flatMap((f) => feedPosts(f).filter((it) => !savedAs(it.url)).map((it) => ({ f, it })))
       .sort((a, b) => postAt(b.it) - postAt(a.it)).slice(0, 3)
       .map(({ f, it }) => ({ title: it.title, site: f.title, url: it.url, feed: f.url }));
     C.platform.widgets.update({
       reading: p ? { id: p.id, title: p.title, at: p.at || 0,
         meta: [p.site, (p.at || 0) >= 0.995 ? "Finished" : clipLeft(p, p.at || 0) + " min left"].filter(Boolean).join(" · ") } : null,
-      feeds: { following: feeds.length > 0, fresh: freshPosts(), posts },
+      feeds: { following: siteFeeds().length > 0, fresh: freshPosts(), posts },
       favourites: [
         ...allFolders().filter(folderFav).map((name) => ({ name, at: Math.max(...folderPages(name).map((x) => x.folderFavAt || 0)) }))
           .sort((a, b) => b.at - a.at).map(({ name }) => ({ kind: "collection", name, title: name, meta: "Collection · " + readCount(folderPages(name)) })),
@@ -1483,7 +1501,8 @@ async function takeFeedNews() {
   if (news.open) {
     await toLibrary();
     const to = news.feed && feeds.some((f) => f.url === news.feed) ? news.feed : null;
-    if (state.place !== "feeds" || state.feed !== to) await goPlace("feeds", to);
+    const place = to && isMail({ url: to }) ? "newsletters" : "feeds";
+    if (state.place !== place || state.feed !== to) await goPlace(place, to);
   }
   // A post's Save, from its notification.
   if (news.save && /^https?:/.test(news.save)) {
@@ -1506,6 +1525,7 @@ async function checkFeed(f) {
   try { got = await C.feeds.readFeed(f.url); }
   catch (e) { error = e instanceof C.feeds.FeedError ? e.message : "Couldn't check this feed. Try again later."; }
   if (!feeds.includes(f)) return;
+  if (got && isMail(f)) keepMails(got);
   if (got) mergeFeed(f, got);
   f.error = error;
   f.checkedAt = Date.now();
@@ -1523,6 +1543,8 @@ async function checkFeeds(force) {
   try {
     for (const f of [...feeds]) {
       if (!force && f.checkedAt && Date.now() - f.checkedAt < FEED_EVERY) continue;
+      // A browser can't read a newsletter address; the phone does.
+      if (isMail(f) && !C.platform.canFetchPages) continue;
       await checkFeed(f);
     }
   } finally {
@@ -1535,7 +1557,8 @@ async function checkFeeds(force) {
 // interleave their runs.
 let feedSaves = Promise.resolve();
 function autoSave(f) {
-  const todo = feedPosts(f).filter((it) => !it.tried && !savedAs(it.url) && !savingUrl(it.url));
+  // A newsletter's confirm email waits for its Confirm, never saved.
+  const todo = feedPosts(f).filter((it) => !it.tried && !savedAs(it.url) && !savingUrl(it.url) && !(isMail(f) && isConfirm(it)));
   if (!todo.length) return;
   todo.forEach((it) => { it.tried = true; });
   saveFeeds();
@@ -1549,6 +1572,7 @@ function saveFeedPosts(list) {
   const by = new Map();
   for (const x of [...list].sort((a, b) => postAt(a.it) - postAt(b.it))) {
     if (savedAs(x.it.url) || savingUrl(x.it.url)) continue;
+    if (isMail(x.f)) { feedSaves = feedSaves.then(() => saveMail(x.f, x.it)).then(paintFeeds, paintFeeds); continue; }
     if (!by.has(x.f)) by.set(x.f, []);
     by.get(x.f).push(x.it.url);
   }
@@ -1564,6 +1588,7 @@ function saveFeedPosts(list) {
 
 function paintFeeds() {
   if (state.place === "feeds") renderFeeds();
+  if (state.place === "newsletters") renderNewsletters();
   if (sideShown()) renderSide();
   if (state.menu && state.menu.kind === "feed") redrawMenu();
 }
@@ -1571,22 +1596,25 @@ function paintFeeds() {
 // Library, Feeds or Highlights under the same bar; only the title changes.
 function paintPlace() {
   const feedsOn = state.place === "feeds";
+  const mailOn = state.place === "newsletters";
   const marksOn = state.place === "highlights";
   const readOn = state.place === "reading";
-  $("placeTitle").textContent = feedsOn ? "Feeds" : marksOn ? "Highlights" : readOn ? "Reading" : "Library";
+  $("placeTitle").textContent = feedsOn ? "Feeds" : mailOn ? "Newsletters" : marksOn ? "Highlights" : readOn ? "Reading" : "Library";
   $("libraryView").dataset.place = state.place;
-  $("library").hidden = feedsOn || marksOn || readOn;
+  $("library").hidden = feedsOn || mailOn || marksOn || readOn;
   $("feeds").hidden = !feedsOn;
+  $("newsletters").hidden = !mailOn;
   $("highlights").hidden = !marksOn;
   $("reading").hidden = !readOn;
-  $("paneNote").textContent = marksOn ? "Pick a highlight to read it here" : readOn ? "Pick a clip to read it here" : "Pick a post to read it here";
+  $("paneNote").textContent = marksOn ? "Pick a highlight to read it here" : readOn ? "Pick a clip to read it here" : mailOn ? "Pick an email to read it here" : "Pick a post to read it here";
   // The bottom field follows a feed in Feeds, and saves a link elsewhere.
   $("saveUrl").placeholder = feedsOn ? "Paste a site or feed to follow" : "Paste a link to save";
   document.querySelector('label[for="saveUrl"]').textContent = feedsOn ? "Site or feed" : "Page link";
   $("saveForm").querySelector(".btn-primary").textContent = feedsOn ? "Follow" : "Save";
   $("severalBtn").hidden = feedsOn;
-  if (feedsOn || marksOn || readOn) { if (state.query) clearSearch(); }
+  if (feedsOn || mailOn || marksOn || readOn) { if (state.query) clearSearch(); }
   if (feedsOn) renderFeeds();
+  else if (mailOn) renderNewsletters();
   else if (marksOn) renderHighlights();
   else if (readOn) renderReading();
   else renderLibrary();
@@ -1612,6 +1640,8 @@ function pickFeed(url) {
 }
 
 function renderFeeds() {
+  // Newsletters (1.43.0) are feeds underneath, with a place of their own.
+  const feeds = siteFeeds();
   const root = $("feeds");
   const picked = state.feed && feeds.find((f) => f.url === state.feed);
   if (state.feed && !picked) state.feed = null;
