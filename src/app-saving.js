@@ -1607,11 +1607,15 @@ function paintPlace() {
   $("highlights").hidden = !marksOn;
   $("reading").hidden = !readOn;
   $("paneNote").textContent = marksOn ? "Pick a highlight to read it here" : readOn ? "Pick a clip to read it here" : mailOn ? "Pick an email to read it here" : "Pick a post to read it here";
-  // The bottom field follows a feed in Feeds, and saves a link elsewhere.
-  $("saveUrl").placeholder = feedsOn ? "Paste a site or feed to follow" : "Paste a link to save";
-  document.querySelector('label[for="saveUrl"]').textContent = feedsOn ? "Site or feed" : "Page link";
-  $("saveForm").querySelector(".btn-primary").textContent = feedsOn ? "Follow" : "Save";
-  $("severalBtn").hidden = feedsOn;
+  // The bottom field follows a feed in Feeds, makes a newsletter address
+  // in Newsletters (1.43.1), and saves a link elsewhere.
+  $("saveUrl").placeholder = feedsOn ? "Paste a site or feed to follow" : mailOn ? "Name a new address" : "Paste a link to save";
+  $("saveUrl").inputMode = mailOn ? "text" : "url";
+  $("saveUrl").autocapitalize = mailOn ? "sentences" : "off";
+  if (mailOn) $("saveUrl").maxLength = 32; else $("saveUrl").removeAttribute("maxlength");
+  document.querySelector('label[for="saveUrl"]').textContent = feedsOn ? "Site or feed" : mailOn ? "New address's name" : "Page link";
+  $("saveForm").querySelector(".btn-primary").textContent = feedsOn ? "Follow" : mailOn ? "Make" : "Save";
+  $("severalBtn").hidden = feedsOn || mailOn;
   if (feedsOn || mailOn || marksOn || readOn) { if (state.query) clearSearch(); }
   if (feedsOn) renderFeeds();
   else if (mailOn) renderNewsletters();

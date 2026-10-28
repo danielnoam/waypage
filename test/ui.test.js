@@ -2201,7 +2201,10 @@ function zipOf(files) {
         const mail = f.items.find((it) => !isConfirm(it));
         return { act: confirm.act, from: mail.from, sender: senderOf(f, mail), confirmSender: senderOf(f, confirm),
           rows: [...document.querySelectorAll("#newsletters .post-title")].map((n) => n.textContent), button: !!document.querySelector("#newsletters .nl-confirm"),
-          address: document.querySelector("#newsletters .nl-mail").textContent, inFeeds: siteFeeds().length };
+          address: document.querySelector("#newsletters .nl-mail").textContent, inFeeds: siteFeeds().length,
+          copy: document.querySelector('#newsletters [data-key="copy"]').textContent, settings: !!document.querySelector('#newsletters [data-key="settings"]'),
+          chips: [...document.querySelectorAll("#newsletters .chip[data-feed]")].length, make: document.querySelector("#saveForm .btn-primary").textContent,
+          field: getComputedStyle(document.getElementById("saveForm")).display };
       }, [xml, feed]);
       assert.strictEqual(got.act, "https://list.example.com/confirm?id=9");
       assert.strictEqual(got.from, "crew@morningbrew.com");
@@ -2211,6 +2214,11 @@ function zipOf(files) {
       assert.ok(got.button, "the confirm email has a Confirm button");
       assert.strictEqual(got.address, "testbox1@kill-the-newsletter.com");
       assert.strictEqual(got.inFeeds, 0, "the address isn't in Feeds");
+      assert.strictEqual(got.copy, "Copy address");
+      assert.ok(!got.settings, "settings come from holding the chip");
+      assert.strictEqual(got.chips, 1, "even one address has its chip, to hold");
+      assert.strictEqual(got.make, "Make");
+      assert.notStrictEqual(got.field, "none", "a new address is made from the bottom field");
       await q.evaluate(() => { const f = mailBoxes()[0]; saveFeedPosts([{ f, it: f.items.find((it) => !isConfirm(it)) }]); });
       await until(q, (u) => !!savedAs(u), entry, 15000);
       const saved = await q.evaluate(async (u) => { const p = savedAs(u); return { title: p.title, site: p.site, folder: p.folder, html: await C.store.readPage(p.id) }; }, entry);

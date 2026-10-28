@@ -18,6 +18,12 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Newsletters laid out like Feeds (1.43.1).** Daniel's ask: making an
+  address is the bottom field (`saveForm`, "Name a new address" / Make,
+  `makeMailBox`; a browser opens the paste-a-feed-link sheet), settings
+  are only by holding a chip, so the chips show even for one address,
+  and Copy address took New address's place. The address card is gone;
+  the address shows on the line over the emails when one is in view.
 - **Newsletters (1.43.0).** Daniel wanted an app email address to sign
   up to newsletters with, in a place of its own ("it's not the same
   posts, it works differently"). There's no server, so the address is

@@ -148,6 +148,12 @@ $("saveForm").addEventListener("submit", (e) => {
     openMenu("addFeed", { url: typed });
     return;
   }
+  if (state.place === "newsletters") {
+    const name = cleanTag($("saveUrl").value);
+    $("saveUrl").blur();
+    makeMailBox(name).then((made) => { if (made) $("saveUrl").value = ""; });
+    return;
+  }
   if (linksFrom($("saveUrl").value).length > 1) {
     openBatch($("saveUrl").value);
     $("saveUrl").value = "";

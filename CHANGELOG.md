@@ -2,6 +2,15 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.43.1] - 2026-10-28
+
+### Changed
+- Newsletters looks like Feeds and the library: a new address is named
+  and made from the field at the bottom, an address's settings open by
+  holding its chip (even when it's the only one), and Copy address sits
+  on the line over the emails, beside the address, in place of New
+  address and Settings.
+
 ## [1.43.0] - 2026-10-27
 
 ### Added
