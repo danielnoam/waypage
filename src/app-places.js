@@ -558,41 +558,34 @@ function renderNewsletters() {
     nodes.push(el("div", { class: "empty" },
       el("h2", { class: "empty-title" }, "Read newsletters here"),
       el("p", { class: "empty-text" }, "Make an email address for newsletters and sign up with it. Each email arrives here, and is saved for reading offline."),
-      el("button", { class: "btn-primary", type: "button", onclick: () => openMenu("newMail") }, "Make an address")));
+      el("button", { class: "btn-primary", type: "button", onclick: () => $("saveUrl").focus() }, "Make an address")));
     root.replaceChildren(...nodes);
     return;
   }
-  // The address to sign up with: the one picked, or the newest.
-  const shown = picked || boxes[boxes.length - 1];
-  nodes.push(el("div", { class: "group nl-card" },
-    el("div", { class: "nl-addr" },
-      el("span", { class: "post-body" },
-        el("span", { class: "post-feed", dir: "auto" }, "Your address · " + shown.title),
-        el("span", { class: "nl-mail" }, mailAddress(shown))),
-      el("button", { class: "btn-small", type: "button", "data-key": "copy", onclick: () => copyText(mailAddress(shown), "Address copied. Sign up with it.") }, "Copy"))));
+  // Laid out like Feeds (1.43.1): chips (hold one for its settings), a
+  // line with Copy address, and a new address from the bottom field.
+  const one = picked || (boxes.length === 1 ? boxes[0] : null);
   const all = mailList(boxes);
   const list = picked ? all.filter((x) => x.f === picked) : all;
-  if (boxes.length > 1) {
-    const chip = (label, n, on, onclick, key, url) => {
-      const b = el("button", { class: "chip" + (on ? " on" : ""), type: "button", "aria-pressed": String(on), "data-key": key, onclick },
-        el("span", { class: "chip-label", dir: "auto" }, label), n ? " · " + n : null);
-      if (url) b.dataset.feed = url;
-      return b;
-    };
-    const unread = new Map();
-    for (const x of all) if (mailUnread(x.it)) unread.set(x.f, (unread.get(x.f) || 0) + 1);
-    nodes.push(el("div", { class: "chips filters feed-chips", role: "group", "aria-label": "Addresses" },
-      chip("All", [...unread.values()].reduce((n, k) => n + k, 0), !picked, () => pickBox(null), "chip:all"),
-      ...boxes.map((f) => chip(f.title, unread.get(f) || 0, picked === f, () => pickBox(f.url), "chip:" + f.url, f.url))));
-  }
+  const chip = (label, n, on, onclick, key, url) => {
+    const b = el("button", { class: "chip" + (on ? " on" : ""), type: "button", "aria-pressed": String(on), "data-key": key, onclick },
+      el("span", { class: "chip-label", dir: "auto" }, label), n ? " · " + n : null);
+    if (url) b.dataset.feed = url;
+    return b;
+  };
+  const unread = new Map();
+  for (const x of all) if (mailUnread(x.it)) unread.set(x.f, (unread.get(x.f) || 0) + 1);
+  nodes.push(el("div", { class: "chips filters feed-chips", role: "group", "aria-label": "Addresses" },
+    chip("All", [...unread.values()].reduce((n, k) => n + k, 0), !picked, () => pickBox(null), "chip:all"),
+    ...boxes.map((f) => chip(f.title, unread.get(f) || 0, picked === f, () => pickBox(f.url), "chip:" + f.url, f.url))));
   const checked = Math.max(0, ...(picked ? [picked] : boxes).map((f) => f.checkedAt || 0));
   const line = !C.platform.canFetchPages ? "Your phone collects these. Saved ones come here through sync."
     : feedsChecking ? "Checking…" : picked && picked.error ? picked.error : checked ? "Checked " + whenText(checked) : "Not checked yet";
   nodes.push(el("div", { class: "feed-head" },
-    el("p", { class: "meta" + (picked && picked.error && !feedsChecking ? " warn" : "") }, line),
-    el("span", { class: "feed-head-acts" },
-      picked || boxes.length === 1 ? el("button", { class: "btn-text", type: "button", "data-key": "settings", onclick: () => openMenu("feed", shown) }, "Settings") : null,
-      el("button", { class: "btn-text", type: "button", "data-key": "new", onclick: () => openMenu("newMail") }, "New address"))));
+    el("p", { class: "meta" + (picked && picked.error && !feedsChecking ? " warn" : "") },
+      one ? el("span", { class: "nl-mail" }, mailAddress(one)) : null, one ? el("br") : null, line),
+    one ? el("span", { class: "feed-head-acts" },
+      el("button", { class: "btn-text", type: "button", "data-key": "copy", onclick: () => copyText(mailAddress(one), "Address copied. Sign up with it.") }, "Copy address")) : null));
   let day = null, group = null;
   for (const x of list) {
     const d = dayName(postAt(x.it));
@@ -608,7 +601,7 @@ function renderNewsletters() {
   }
   if (!list.length) {
     nodes.push(el("div", { class: "empty" },
-      el("p", { class: "empty-text" }, (picked && picked.error) || "No emails yet. Copy the address above and sign up to a newsletter with it.")));
+      el("p", { class: "empty-text" }, (picked && picked.error) || (one ? "No emails yet. Copy the address and sign up to a newsletter with it." : "No emails yet."))));
   }
   root.replaceChildren(...nodes);
   const chips = root.querySelector(".feed-chips");
@@ -616,61 +609,57 @@ function renderNewsletters() {
 }
 
 // Making an address: the app asks Kill the Newsletter for one, named as
-// you like. A browser can't (no CORS), so there you make it on their page
-// and paste its feed link back.
+// you like, from the bottom field (1.43.1). A browser can't (no CORS), so
+// there a sheet asks for the feed link of one made on their page.
+async function addMailBox(url, title) {
+  if (feeds.some((f) => sameUrl(f.url, url))) { toast("That address is here already."); return false; }
+  const f = { url, title, link: "", icon: "", mode: "save", images: load(IMAGES_KEY, "previews"), folder: title, days: MAIL_DAYS,
+    addedAt: Date.now(), checkedAt: 0, error: "", items: [] };
+  feeds.push(f);
+  askToNotify = true;
+  saveFeeds();
+  await goPlace("newsletters", f.url);
+  toast("Your address is ready. Copy it and sign up with it.");
+  return true;
+}
+let makingMail = false;
+async function makeMailBox(name) {
+  const title = name || "Newsletters";
+  if (!C.platform.canFetchPages) { openMenu("newMail", { name: title }); return false; }
+  if (!navigator.onLine) { toast("You're offline. Make it when you're back online."); return false; }
+  if (makingMail) return false;
+  makingMail = true;
+  toast("Making the address…");
+  try {
+    const res = await C.platform.postForm("https://" + KTN + "/feeds", { title }, { headers: { "CSRF-Protection": "true" } });
+    const got = res.status < 400 ? JSON.parse(res.text) : null;
+    if (!got || !MAIL_FEED.test(got.feed)) throw new Error(String(res.status));
+    return await addMailBox(got.feed, title);
+  } catch (e) {
+    toast("Kill the Newsletter didn't make one just now. Try again in a while.");
+    return false;
+  } finally { makingMail = false; }
+}
 function newMailSheet() {
   const name = el("input", { class: "feed-input", type: "text", placeholder: "Newsletters", "aria-label": "Name", maxlength: "32",
-    autocomplete: "off", autocapitalize: "sentences", enterkeyhint: C.platform.canFetchPages ? "go" : "next" });
-  const link = C.platform.canFetchPages ? null : el("input", { class: "feed-input", type: "url", inputmode: "url", placeholder: "https://kill-the-newsletter.com/feeds/….xml",
+    value: (state.menu && state.menu.page && state.menu.page.name) || "", autocomplete: "off", autocapitalize: "sentences", enterkeyhint: "next" });
+  const link = el("input", { class: "feed-input", type: "url", inputmode: "url", placeholder: "https://kill-the-newsletter.com/feeds/….xml",
     "aria-label": "Its feed link", autocomplete: "off", autocapitalize: "off", spellcheck: "false", enterkeyhint: "go" });
-  const help = el("p", { class: "footnote" }, C.platform.canFetchPages
-    ? "Named for you only. Its emails save themselves into a collection with this name."
-    : "Make it in Waypage on your phone, or make one on Kill the Newsletter's page and paste its feed link here.");
-  const go = el("button", { class: "btn-primary", type: "button" }, C.platform.canFetchPages ? "Make the address" : "Add it");
-  const warn = (text) => { help.className = "footnote warn"; help.textContent = text; };
-  const add = async (url, title) => {
-    if (feeds.some((f) => sameUrl(f.url, url))) { warn("That address is here already."); return; }
-    const f = { url, title, link: "", icon: "", mode: "save", images: load(IMAGES_KEY, "previews"), folder: title, days: MAIL_DAYS,
-      addedAt: Date.now(), checkedAt: 0, error: "", items: [] };
-    feeds.push(f);
-    askToNotify = true;
-    saveFeeds();
-    await back();
-    await goPlace("newsletters", f.url);
-    toast("Your address is ready. Copy it and sign up with it.");
-  };
+  const help = el("p", { class: "footnote" }, "Make it in Waypage on your phone, or make one on Kill the Newsletter's page and paste its feed link here.");
+  const go = el("button", { class: "btn-primary", type: "button" }, "Add it");
   go.addEventListener("click", async () => {
-    const title = cleanTag(name.value) || "Newsletters";
-    if (link) {
-      const url = link.value.trim();
-      if (!MAIL_FEED.test(url)) { warn("That isn't a Kill the Newsletter feed link. It ends in .xml."); link.focus(); return; }
-      add(url, title);
-      return;
-    }
-    if (!navigator.onLine) { warn("You're offline. Make it when you're back online."); return; }
-    go.disabled = true;
-    go.textContent = "Making it…";
-    try {
-      const res = await C.platform.postForm("https://" + KTN + "/feeds", { title }, { headers: { "CSRF-Protection": "true" } });
-      const got = res.status < 400 ? JSON.parse(res.text) : null;
-      if (!got || !MAIL_FEED.test(got.feed)) throw new Error(String(res.status));
-      await add(got.feed, title);
-    } catch (e) {
-      warn("Kill the Newsletter didn't make one just now. Try again in a while.");
-      go.disabled = false;
-      go.textContent = "Make the address";
-    }
+    const url = link.value.trim();
+    if (!MAIL_FEED.test(url)) { help.className = "footnote warn"; help.textContent = "That isn't a Kill the Newsletter feed link. It ends in .xml."; link.focus(); return; }
+    await back();
+    if (await addMailBox(url, cleanTag(name.value) || "Newsletters")) $("saveUrl").value = "";
   });
-  for (const input of [name, link].filter(Boolean)) input.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter") return;
-    e.preventDefault();
-    if (input === name && link) link.focus(); else go.click();
-  });
-  setTimeout(() => name.focus({ preventScroll: true }), 50);
+  name.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); link.focus(); } });
+  link.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); go.click(); } });
+  setTimeout(() => link.focus({ preventScroll: true }), 50);
   return el("div", { class: "page-controls add-feed" },
     el("h2", { class: "menu-title" }, "New newsletter address"),
     el("div", { class: "feed-field" }, name, link, help),
-    link ? el("button", { class: "sheet-row", type: "button", onclick: () => C.platform.openOutside("https://" + KTN + "/") }, "Open Kill the Newsletter") : null,
+    el("button", { class: "sheet-row", type: "button", onclick: () => C.platform.openOutside("https://" + KTN + "/") }, "Open Kill the Newsletter"),
     go,
     el("p", { class: "footnote" }, "Kill the Newsletter, a free service, receives the emails, so it can read them. Anyone with the address can send to it. Waypage keeps it on this device and in your sync."));
 }

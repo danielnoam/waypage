@@ -1825,7 +1825,7 @@ html { -webkit-tap-highlight-color: transparent; }
 .side-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .side-cover:not(:has(img)) { display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
 .save-form .icon-btn[hidden] { display: none; }
-[data-place="feeds"] .save-form .btn-primary { border-radius: var(--r-md); }
+:is([data-place="feeds"], [data-place="newsletters"]) .save-form .btn-primary { border-radius: var(--r-md); }
 
 /* A feed's mark: its site's icon, or first letter, on the preview tint. */
 .feed-mark {
@@ -1843,8 +1843,9 @@ html { -webkit-tap-highlight-color: transparent; }
   flex: 1; padding: 0 var(--gutter) var(--s-5);
   display: flex; flex-direction: column; gap: var(--s-3);
 }
-:is([data-place="highlights"], [data-place="newsletters"]) .save-form { display: none; }
-:is([data-place="highlights"], [data-place="newsletters"]) .save-bar:not(:has(.update-bar:not([hidden]))) { display: none; }
+[data-place="highlights"] .save-form { display: none; }
+[data-place="highlights"] .save-bar:not(:has(.update-bar:not([hidden]))) { display: none; }
+[data-place="newsletters"] .save-link-icon { display: none; }
 .hl-head[hidden] { display: none; }
 .hl-search { margin-top: var(--s-1); }
 .hl-line { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin-top: var(--s-1); }
@@ -2002,11 +2003,9 @@ html { -webkit-tap-highlight-color: transparent; }
 .post-save .side-icon { color: inherit; }
 .post-saved { flex-shrink: 0; padding: 0 var(--s-2); font-size: var(--fs-meta); font-weight: 600; color: var(--ok); }
 
-/* Newsletters (1.43.0): the address on top, unread emails with a dot. */
-.nl-card { margin-top: var(--s-2); }
-.nl-addr { display: flex; align-items: center; gap: var(--s-3); min-height: var(--tap); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); }
+/* Newsletters (1.43.0): the address in the line over the emails, and
+   unread emails with a dot. */
 .nl-mail { font-size: var(--fs-label); line-height: var(--lh-label); color: var(--ink); overflow-wrap: anywhere; }
-.nl-addr .btn-small { flex-shrink: 0; }
 .nl-unread .post-title { font-weight: 700; }
 .nl-unread::before {
   content: ""; position: absolute; inset-inline-start: 6px; top: 50%;
@@ -2085,6 +2084,7 @@ html { -webkit-tap-highlight-color: transparent; }
   .top-bar .menu-btn { margin-inline-start: calc(-1 * var(--s-2)); }
   .save-form input { padding-inline-start: calc(var(--s-4) + 20px + var(--s-3)); }
   .save-link-icon { display: flex; position: absolute; inset-inline-start: var(--s-4); top: 14px; color: var(--muted); pointer-events: none; }
+  [data-place="newsletters"] .save-form input { padding-inline-start: 14px; }
   .save-form { position: relative; }
   /* The bottom bar is left with the update notice alone. */
   .save-bar { border-top: 0; padding-block: 0 var(--s-3); }
