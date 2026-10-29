@@ -7,6 +7,14 @@ CHANGELOG.md; the rules every release keeps are at the top of NOTES.md.
 
 Nothing waiting. Ask Daniel what's next.
 
+## Later (Daniel, 29 Oct 2026)
+
+- **Settings per book, from KOReader.** A file (EPUB, PDF, comic)
+  remembers its own font, size, margins and Scroll or Pages, with "Use
+  everywhere" to make them the default. Kept to Files, not every web
+  clip, so the text settings don't need a "This clip / Everywhere"
+  choice on every control. Open question: whether they sync.
+
 ## iOS release (later, Daniel 11 Oct 2026)
 
 Everything iOS-only, kept for one iOS release.
@@ -74,6 +82,9 @@ Everything iOS-only, kept for one iOS release.
 ## Ideas to learn about (Daniel, 27 Oct 2026)
 
 Not planned: things to understand before deciding.
+
+- **A list of the words you looked up, to review**, as KOReader's
+  vocabulary builder does, now that Look up has dictionaries (1.45.0).
 
 - **WebDAV sync, as Anx Reader has it.** WebDAV is a plain HTTP standard
   for files on a server: Nextcloud, ownCloud, a Synology or QNAP box,

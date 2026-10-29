@@ -318,6 +318,7 @@ function show(p, html) {
   // Another clip opened by hand, not by reading aloud going on, stops it
   // when "Keep reading when you leave the clip" is off (1.25.0).
   if (aloud.key && aloud.key !== p.id && !aloudAuto && !load(KEEP_KEY, true)) stopAloud();
+  if (skim) { C.reader.settle(); skimDrop(); }
   state.open = p;
   $("aloudPlay").style.visibility = "";
   // Opening counts as reading for the order of things (sort by read, the
@@ -687,7 +688,8 @@ function toggleBar() {
 function readerFoot(at) {
   const p = state.open;
   if (!p) return;
-  const left = at >= 0.995 ? "End" : clipLeft(p, at) + " min left";
+  const left = at >= 0.995 ? "End" : partLeft(p, at) || clipLeft(p, at) + " min left";
+  paintTicks();
   const pg = C.reader.pageInfo();
   $("readLeft").textContent = Math.round(Math.min(1, Math.max(0, at)) * 100) + "%";
   const foot = (pg ? pg.page + "/" + pg.pages : "") + "|" + left;
@@ -716,9 +718,10 @@ function readerScrolled(at, y) {
   C.stats.active();
   if (state.open && state.open.link) C.files.drawNear($("readerFrame"));
   if (readHere && !readHere.hidden) showReadHere();
-  $("readProgress").firstElementChild.style.transform = "scaleX(" + at + ")";
+  if (!(skim && skim.dragging)) skimShow(at);
   railNow();
   if (!$("readerView").classList.contains("bar-away") || aloudHere()) readerFoot(at);
+  if (skim && skim.dragging) { lastY = y; return; }
   const bar = $("readerView").querySelector(".reader-bar").offsetHeight;
   let away = $("readerView").classList.contains("bar-away");
   if (y <= bar || at >= 0.999 || state.sheet) away = false;
@@ -935,6 +938,7 @@ const OPEN_COUNTS = 3000;
 // time was counted from them when it was saved.
 const clipWords = (p) => (p.comic ? 0 : (p.minutes || 0) * C.save.WORDS_PER_MINUTE);
 function notePosition(p, f, s) {
+  if (skimHolds(p, f, s)) return;
   const at = Math.round(f * 1000) / 1000;
   // Read just now only when the place really moved (1.10.1): pictures
   // coming in or the text laid out again shift the fraction a little
@@ -970,6 +974,7 @@ function closeReader() {
   stopWaiting();
   if (!state.open) return;
   C.reader.settle();
+  skimDrop();
   C.stats.closed();
   if (positionTimer) savePositions();
   // Where you got to goes to GitHub now, not in four seconds (1.3.0).
@@ -1248,7 +1253,8 @@ function wordAt(text, spot) {
 
 // Under a selection while one is up: Highlight (1.7.0), Read from here
 // when the phone can read aloud, and Translate (1.8.0). Look up, which
-// searched Wiktionary, went in 1.11.1: the phone's own menu has it.
+// searched Wiktionary, went in 1.11.1; it came back in 1.45.0 looking in
+// your own dictionaries on the device, shown only once there's one.
 let readHere = null, quietUntil = 0;
 const myLang = () => (navigator.language || "en").split("-")[0].toLowerCase().replace(/^iw$/, "he");
 // Translate hands the words to the phone's translate app where it can
@@ -1295,6 +1301,7 @@ function showReadHere() {
       return b;
     };
     readHere = el("div", { class: "read-here", role: "toolbar", "aria-label": "Selection" }, markBtn, colorBtn, colors, aloudBtn,
+      outBtn("sel-lookup", "Look up", ICONS.lookup, lookUp),
       outBtn("sel-translate", "Translate", ICONS.translate, translate));
     $("readerView").append(readHere);
   }
@@ -1310,6 +1317,7 @@ function showReadHere() {
   markBtn.setAttribute("aria-label", on.all ? "Remove highlight" : "Highlight");
   readHere.querySelector(".sel-aloud").hidden = !spot;
   readHere.querySelector(".sel-translate").hidden = !picked;
+  readHere.querySelector(".sel-lookup").hidden = !picked || !C.dict.any() || picked.text.trim().split(/\s+/).length > 4;
   const frame = $("readerFrame").getBoundingClientRect();
   const h = 44, room = frame.bottom - 72;
   const bar = $("readerView").classList.contains("bar-away") ? 0 : $("readerView").querySelector(".reader-bar").offsetHeight;
@@ -1449,7 +1457,7 @@ function marksView(p, back) {
       const lost = inReader && lostMarks.has(m.id);
       const go = () => {
         if (lost) { markFocus = m.id; draw(); return; }
-        if (inReader) { history.back(); setTimeout(() => C.reader.toMark(m.id), 0); return; }
+        if (inReader) { history.back(); setTimeout(() => C.reader.toMark(m.id, true), 0); return; }
         markAfterOpen = m.id;
         back(true);
       };
@@ -1499,7 +1507,7 @@ function marksView(p, back) {
           } }, swatchDot(c)))),
       note,
       el("div", { class: "group" },
-        inReader && !lostMarks.has(m.id) ? menuRow("Go to it", () => { keepNote(); markFocus = null; history.back(); setTimeout(() => C.reader.toMark(m.id), 0); }) : null,
+        inReader && !lostMarks.has(m.id) ? menuRow("Go to it", () => { keepNote(); markFocus = null; history.back(); setTimeout(() => C.reader.toMark(m.id, true), 0); }) : null,
         menuRow("Copy", () => copyText(m.text + (m.note ? "\n\n" + m.note : ""), "Copied")),
         menuRow("Remove highlight", () => {
           clearTimeout(timer);
@@ -1945,7 +1953,7 @@ function slider(label, min, max, step, onvalue, pref) {
     oninput: (e) => onvalue(Number(e.target.value)) });
 }
 
-const TEXT_PREFS = ["font", "hebrew", "size", "align", "spacing", "letters", "words", "paras"];
+const TEXT_PREFS = ["font", "hebrew", "size", "weight", "align", "hyphens", "spacing", "letters", "words", "paras"];
 const prefsOf = (o, keys) => Object.fromEntries(keys.map((k) => [k, o[k]]));
 
 let readingGroups = 0;
@@ -1996,9 +2004,18 @@ function readingControls(withTheme) {
       el("button", { class: "step-btn small", type: "button", "data-step": "-1", "aria-label": "Smaller text", onclick: () => nudge(-1) }, "A"),
       slider("Text size", SIZE_MIN, SIZE_MAX, 1, (v) => setReading({ size: v }), "size"),
       el("button", { class: "step-btn large", type: "button", "data-step": "1", "aria-label": "Larger text", onclick: () => nudge(1) }, "A")), "size"),
+    // Text weight (1.45.0), for thin fonts on a dark theme or a dim
+    // screen. Fonts made only as regular and bold go in one step.
+    row("Weight", el("div", { class: "stepper" },
+      slider("Text weight", SPACES.weight.min, SPACES.weight.max, SPACES.weight.step, (v) => setReading({ weight: v }), "weight")), "weight"),
     pinchSwitch(),
     spentSwitch(),
     row("Alignment", fontPick("align", "Alignment", ALIGNS)),
+    el("label", { class: "rc-row switch-row" },
+      el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Hyphenate"),
+        el("span", { class: "choice-note" }, "Breaks long words at the line's end, in the clip's language")),
+      el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "hyphens", checked: r.hyphens,
+        onchange: (e) => setReading({ hyphens: e.target.checked }) })),
     // Spacing (1.19.0), headed on its own so the labels stay one word.
     el("h2", { class: "overline rc-sub" }, "Spacing"),
     row("Lines", el("div", { class: "stepper" },
@@ -2027,6 +2044,7 @@ function syncReadingControls(box) {
     letters: r.letters ? (r.letters > 0 ? "+" : "") + r.letters.toFixed(2) + " em" : "Normal",
     words: r.words ? "+" + r.words.toFixed(2) + " em" : "Normal",
     paras: r.paras === 1 ? "Normal" : r.paras + "×",
+    weight: r.weight === 400 ? "Normal" : String(r.weight),
   };
   for (const [k, text] of Object.entries(shown)) {
     const range = box.querySelector('.range[data-pref="' + k + '"]');
@@ -2038,6 +2056,7 @@ function syncReadingControls(box) {
   box.querySelector('[data-step="1"]').disabled = r.size >= SIZE_MAX;
   const rail = box.querySelector('[data-pref="rail"]');
   if (rail) rail.checked = r.rail;
+  box.querySelector('[data-pref="hyphens"]').checked = r.hyphens;
   for (const k of ["layout", "margins", "spread"]) {
     box.querySelectorAll('input[name$="-' + k + '"]').forEach((i) => { i.checked = i.value === r[k]; });
   }
@@ -2090,6 +2109,7 @@ const SHEETS = {
   marks: { button: "readerMarks", label: "Highlights", build: () => marksView(state.open) },
   // From the text itself (1.14.0), with no button of their own.
   note: { label: "Note", build: () => noteSheet(noteNow) },
+  lookup: { label: "Look up", build: () => lookupSheet(lookNow) },
   link: { label: "Link", build: () => linkSheet(linkNow) },
   // From This clip's More (1.38.0).
   // Under ⋯, which they're opened from, on a big screen (1.42.0).
@@ -2161,6 +2181,41 @@ function noteSheet(n) {
         el("span", { class: "row-label accent", dir: "auto" }, l.text || hostOf(l.href)),
         el("span", { class: "choice-note" }, hostOf(l.href)))))) : null,
     el("div", { class: "group" }, menuRow("Go to the note", () => back().then(() => n.go()))));
+}
+// ---- Look up (1.45.0) ----
+// The selected words in your own dictionaries, in a sheet over the page
+// like a note. Nothing leaves the device; when none has the word,
+// Translate is offered, which may (it says so there).
+let lookNow = null;
+function lookUp(text) {
+  hideReadHere();
+  C.reader.clearSelection();
+  lookNow = { text: text.replace(/\s+/g, " ").trim(), found: null };
+  const me = lookNow;
+  C.dict.lookup(me.text).then((found) => { me.found = found; }, () => { me.found = []; }).then(() => {
+    if (lookNow === me && state.sheet === "lookup") $("readingBody").replaceChildren(SHEETS.lookup.build());
+  });
+  if (state.sheet === "lookup") { $("readingBody").replaceChildren(SHEETS.lookup.build()); return; }
+  openSheet("lookup");
+}
+function lookupSheet(l) {
+  if (!l) return el("p", { class: "meta" }, "Select a word to look it up.");
+  const head = el("div", { class: "menu-head" }, el("p", { class: "menu-title", dir: "auto" }, l.text));
+  if (!l.found) return el("div", { class: "page-controls" }, head, el("p", { class: "meta", role: "status" }, "Looking it up…"));
+  const offer = el("div", { class: "group" }, menuRow("Translate", () => back().then(() => translate(l.text))));
+  if (!l.found.length) {
+    return el("div", { class: "page-controls" }, head,
+      el("p", { class: "meta" }, C.dict.list().length > 1 ? "It isn't in your dictionaries." : "It isn't in " + C.dict.list()[0].name + "."), offer);
+  }
+  let last = "";
+  return el("div", { class: "page-controls" }, head,
+    el("div", { class: "dict-list" }, ...l.found.map((x) => {
+      const over = x.dict !== last ? el("h3", { class: "overline dict-from", dir: "auto" }, x.dict) : null;
+      last = x.dict;
+      return el("section", { class: "dict-entry" }, over,
+        x.word !== l.text ? el("p", { class: "dict-word", dir: "auto" }, x.word) : null,
+        ...x.parts.map((part) => { const n = C.dict.show(part); n.dir = "auto"; return n; }));
+    })), offer);
 }
 const hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch (e) { return url; } };
 function openLink(href, text) {
@@ -2431,10 +2486,201 @@ function jumped(spot) {
 }
 $("jumpBack").addEventListener("click", () => {
   const from = jumpFrom;
+  skimDrop();
   jumpFrom = null;
   $("jumpBack").hidden = true;
   if (from && state.open) C.reader.jump(from.at, from.spot);
 });
+
+// ---- Skim (1.45.0, from KOReader) ----
+// With the bar up, a finger dragged along the bottom row (or the line
+// under it) goes anywhere in the clip, the chapter it's in named over
+// the finger; the line carries a tick where each chapter starts. Back
+// to where you were comes up after. The place isn't kept or synced
+// while you look: it stays where it was until you read on from there
+// (a scroll or a turn), or after SKIM_HOLD, so a look at the last
+// chapter doesn't move your place on every device. While Narrate reads
+// this clip the row is its player, and the voice decides the place, so
+// there's no skim.
+const SKIM_HOLD = 60000;
+let skim = null;
+const skimOn = () => !!state.open && !aloudHere() && !state.sheet;
+function skimHolds(p, f, s) {
+  if (!skim || skim.p !== p) return false;
+  if (skim.dragging || performance.now() - (skim.end || 0) < 600 || skim.spot === undefined) return true;
+  if (s === skim.spot && Math.abs(f - skim.f) < 0.005) return true;
+  skimDrop();
+  return false;
+}
+function skimDrop() {
+  if (!skim) return;
+  clearTimeout(skim.timer);
+  skim = null;
+  $("readerView").classList.remove("skimming");
+  $("skimTip").hidden = true;
+}
+function skimStart() {
+  const p = state.open;
+  if (!skim || skim.p !== p) {
+    skimDrop();
+    skim = { p };
+    if (!jumpFrom) jumpFrom = { spot: C.reader.spot(), at: C.reader.position() };
+  }
+  clearTimeout(skim.timer);
+  skim.dragging = true;
+  movedHere = true;
+  $("readerView").classList.add("skimming");
+  $("readerView").classList.remove("bar-away");
+}
+function skimEnd() {
+  if (!skim) return;
+  const me = skim;
+  me.dragging = false;
+  me.end = performance.now();
+  $("readerView").classList.remove("skimming");
+  $("skimTip").hidden = true;
+  $("jumpBack").hidden = false;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (skim !== me) return;
+    me.spot = C.reader.spot();
+    me.f = C.reader.position();
+    skimShow(me.f);
+  }));
+  me.timer = setTimeout(() => {
+    if (skim !== me) return;
+    skimDrop();
+    if (state.open === me.p) notePosition(me.p, C.reader.position(), C.reader.spot());
+  }, SKIM_HOLD);
+}
+// The fill, the knob and the slider's value at `at`.
+function skimShow(at) {
+  const line = $("readProgress");
+  line.firstElementChild.style.transform = "scaleX(" + at + ")";
+  $("skimKnob").style.insetInlineStart = (at * 100).toFixed(2) + "%";
+  $("skimKnob").hidden = !skimOn();
+  line.setAttribute("aria-valuenow", String(Math.round(at * 100)));
+  line.setAttribute("aria-valuetext", skimText(at).join(", "));
+}
+// The chapter at `at` and where that is: page 12 of 340, or 42%.
+function skimText(at) {
+  const parts = C.reader.parts();
+  let part = null;
+  for (const x of parts) { if (x.at > at + 0.0005) break; part = x; }
+  const pg = C.reader.pageInfo();
+  const where = pg ? "Page " + (Math.round(at * (pg.pages - 1)) + 1) + " of " + pg.pages : Math.round(at * 100) + "%";
+  return part ? [part.text, where] : [where];
+}
+function skimAt(x) {
+  const r = $("readProgress").getBoundingClientRect();
+  const f = Math.min(1, Math.max(0, (x - r.left) / Math.max(1, r.width)));
+  return $("readProgress").dir === "rtl" ? 1 - f : f;
+}
+let skimFrame = 0, skimWant = 0;
+function skimMove(x) {
+  const f = skimWant = skimAt(x);
+  $("readProgress").firstElementChild.style.transform = "scaleX(" + f + ")";
+  $("skimKnob").style.insetInlineStart = (f * 100).toFixed(2) + "%";
+  const [a, b] = skimText(f);
+  const tip = $("skimTip");
+  $("skimPart").textContent = b ? a : "";
+  $("skimPart").hidden = !b;
+  $("skimWhere").textContent = b || a;
+  tip.hidden = false;
+  const half = tip.offsetWidth / 2, room = $("readFoot").getBoundingClientRect();
+  tip.style.left = (Math.min(room.right - half - 16, Math.max(room.left + half + 16, x)) - room.left) + "px";
+  if (!skimFrame) skimFrame = requestAnimationFrame(() => { skimFrame = 0; if (skim && skim.dragging) C.reader.skimTo(skimWant); });
+}
+{
+  let down = null;
+  const start = (e) => {
+    if (e.button > 0 || !skimOn() || e.target.closest("button, a, input") || $("readerView").classList.contains("bar-away")) return;
+    down = { id: e.pointerId, x: e.clientX, y: e.clientY, on: false, el: e.currentTarget };
+  };
+  const move = (e) => {
+    if (!down || e.pointerId !== down.id) return;
+    if (!down.on) {
+      const dx = Math.abs(e.clientX - down.x), dy = Math.abs(e.clientY - down.y);
+      if (dy > 12 && dy > dx) { down = null; return; }
+      if (dx < 8) return;
+      down.on = true;
+      try { down.el.setPointerCapture(e.pointerId); } catch (err) { /* gone */ }
+      skimStart();
+    }
+    e.preventDefault();
+    skimMove(e.clientX);
+  };
+  const end = (e) => {
+    if (!down || e.pointerId !== down.id) return;
+    const was = down;
+    down = null;
+    if (was.on) {
+      if (skimFrame) { cancelAnimationFrame(skimFrame); skimFrame = 0; }
+      C.reader.skimTo(skimWant);
+      skimEnd();
+    } else if (e.type === "pointerup") toggleLeft();
+  };
+  for (const n of [$("readFoot").querySelector(".read-left"), $("readProgress")]) {
+    n.addEventListener("pointerdown", start);
+    n.addEventListener("pointermove", move);
+    n.addEventListener("pointerup", end);
+    n.addEventListener("pointercancel", end);
+  }
+  // From the keyboard: arrows a page or a percent, Page Up and Down ten.
+  $("readProgress").addEventListener("keydown", (e) => {
+    if (!skimOn()) return;
+    const pg = C.reader.pageInfo(), one = pg ? 1 / Math.max(1, pg.pages - 1) : 0.01;
+    const back = $("readProgress").dir === "rtl" ? -1 : 1;
+    const by = { ArrowRight: one * back, ArrowLeft: -one * back, ArrowUp: one, ArrowDown: -one, PageUp: 0.1, PageDown: -0.1 }[e.key];
+    const now = C.reader.position();
+    const to = e.key === "Home" ? 0 : e.key === "End" ? 1 : by != null ? now + by : null;
+    if (to == null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    skimStart();
+    C.reader.skimTo(Math.min(1, Math.max(0, to)));
+    skimEnd();
+  });
+}
+
+// ---- Minutes left in this chapter (1.45.0, from KOReader) ----
+// A book's bottom line counts down to the end of the chapter being read,
+// at your own pace; a clip's to the end of the clip. A tap on the line
+// switches, kept for books and clips apart.
+const LEFT_KEY = "waypage.leftIn";
+const isBook = (p) => !!(p && p.file);
+function leftIn(p) {
+  const v = load(LEFT_KEY, {})[isBook(p) ? "book" : "clip"];
+  return v || (isBook(p) ? "part" : "clip");
+}
+function partLeft(p, at) {
+  if (leftIn(p) !== "part") return "";
+  const parts = C.reader.parts().filter((x) => x.level === 2);
+  if (parts.length < 2) return "";
+  const next = parts.find((x) => x.at > at + 0.001);
+  const mins = Math.max(1, Math.ceil(clipMinutes(p) * Math.max(0, (next ? next.at : 1) - at)));
+  return mins + " min left in " + (isBook(p) ? "chapter" : "section");
+}
+function toggleLeft() {
+  const p = state.open;
+  if (!p || C.reader.parts().filter((x) => x.level === 2).length < 2) return;
+  const all = load(LEFT_KEY, {});
+  const to = leftIn(p) === "part" ? "clip" : "part";
+  all[isBook(p) ? "book" : "clip"] = to;
+  store(LEFT_KEY, all);
+  $("readSection").dataset.at = "";
+  readerFoot(C.reader.position());
+  toast(to === "part" ? "Minutes left in this " + (isBook(p) ? "chapter" : "section") : "Minutes left in the whole " + (isBook(p) ? "book" : "clip"));
+}
+// A tick on the line where each chapter starts, while they fit apart.
+let ticksOf = null;
+function paintTicks() {
+  const parts = C.reader.parts();
+  if (parts === ticksOf) return;
+  ticksOf = parts;
+  const top = parts.filter((x) => x.level === 2);
+  const fit = top.length >= 2 && top.length <= $("readProgress").offsetWidth / 6;
+  fill($("readTicks"), ...(fit ? top.filter((x) => x.at > 0.002).map((x) => el("i", { style: "inset-inline-start: " + (x.at * 100).toFixed(2) + "%" })) : []));
+}
 
 // ---- Find in this clip (1.14.0) ----
 // A bar over the reader's own: every match marked, Enter or the arrows

@@ -628,6 +628,65 @@ function zipOf(files) {
     });
     await p.context().close();
 
+    await test("skim: dragging the bottom line goes there, the place waits until you read on, Back returns (1.45.0)", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ROOT + "test/fixtures/chapters.html");
+      await q.press("#saveUrl", "Enter");
+      await q.locator(".page-card", { hasText: "Night Crossing" }).first().click();
+      await q.locator("#readerView:not([hidden])").waitFor();
+      await until(q, () => document.querySelectorAll("#readTicks i").length >= 7);
+      assert.match(await q.locator("#readSection").innerText(), /min left/);
+      const row = await q.locator(".read-left").boundingBox();
+      const y = row.y + row.height / 2;
+      await q.mouse.move(row.x + 20, y);
+      await q.mouse.down();
+      for (let x = row.x + 20; x < row.x + row.width * 0.6; x += 15) await q.mouse.move(x, y);
+      assert.match(await q.locator("#skimPart").innerText(), /^Chapter 5/);
+      await q.mouse.up();
+      await q.waitForTimeout(1000);
+      const held = await q.evaluate(() => [state.open.at || 0, Waypage.reader.section(), !document.getElementById("jumpBack").hidden]);
+      assert.deepStrictEqual(held, [0, "Chapter 5: Dinner", true], "the place moved while skimming, or no way back");
+      await q.frameLocator("#readerFrame").locator("body").evaluate(() => window.scrollBy(0, 200));
+      await until(q, () => (state.open.at || 0) > 0.5);
+      await q.locator("#jumpBack").click();
+      await until(q, () => Waypage.reader.position() < 0.05);
+      // A tap on the line switches to minutes left in the section.
+      await q.locator("#readSection").click();
+      assert.match(await q.locator("#readSection").innerText(), /min left in section/);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Look up finds a selected word in a dictionary added in Settings, offline and safely (1.45.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(() => openSection("reading"));
+      const dir = path.join(__dirname, "fixtures", "dict");
+      await q.locator("#dictSection input[type=file]").setInputFiles(fs.readdirSync(dir).map((f) => path.join(dir, f)));
+      await q.locator("#dictSection .choice-label", { hasText: "Tiny English" }).waitFor();
+      const found = await q.evaluate(async () => (await Waypage.dict.lookup("children")).map((x) => x.word).concat((await Waypage.dict.lookup("Apple")).map((x) => x.word)));
+      assert.deepStrictEqual(found, ["child", "Apple", "apple"]);
+      const safe = await q.evaluate(async () => Waypage.dict.show((await Waypage.dict.lookup("book"))[0].parts[0]).innerHTML);
+      assert.strictEqual(safe, "<b>book</b><br>Printed pages bound together.");
+      await q.goto(ROOT);
+      await q.fill("#saveUrl", ROOT + "test/fixtures/chapters.html");
+      await q.press("#saveUrl", "Enter");
+      await q.locator(".page-card", { hasText: "Night Crossing" }).first().click();
+      await q.locator("#readerView:not([hidden])").waitFor();
+      await q.frameLocator("#readerFrame").locator("p", { hasText: "apple" }).first().evaluate((el) => {
+        const t = [...el.childNodes].find((n) => n.nodeType === 3 && n.data.includes("apple"));
+        const r = el.ownerDocument.createRange();
+        r.setStart(t, t.data.indexOf("apple"));
+        r.setEnd(t, t.data.indexOf("apple") + 5);
+        el.ownerDocument.getSelection().removeAllRanges();
+        el.ownerDocument.getSelection().addRange(r);
+      });
+      await q.locator(".read-here .sel-lookup:not([hidden])").click();
+      await q.locator(".dict-entry").first().waitFor();
+      assert.match(await q.locator("#readingBody").innerText(), /A round fruit/);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a library of 400 clips draws every card as it is scrolled", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
@@ -973,7 +1032,7 @@ function zipOf(files) {
       }, "<!doctype html><html><body><h1>Fonts</h1><p>Some words to read.</p></body></html>");
       await q.reload();
       await q.evaluate(() => openSettings(false, "reading"));
-      const input = q.locator("#sectionView input[type=file]");
+      const input = q.locator("#sectionView input[type=file]:not([multiple])");
       await input.setInputFiles(bad);
       await until(q, () => /isn't a font/.test(document.body.innerText));
       await input.setInputFiles(file);

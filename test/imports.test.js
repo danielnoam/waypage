@@ -28,6 +28,26 @@ test("Pocket's CSV: tags split on |, archived ones read, oldest first", () => {
   assert.strictEqual(r.items[0].at, 1700000100000);
 });
 
+test("Wallabag's JSON: archived read, tags as words or labels", () => {
+  const r = I.parse("wallabag-all.json", JSON.stringify([
+    { id: 2, title: "Two", url: "https://w.example/2", is_archived: 1, is_starred: 0, tags: [{ label: "news" }], created_at: "2024-03-02T10:00:00+0100", content: "<p>x</p>" },
+    { id: 1, title: "One", url: "https://w.example/1", is_archived: false, tags: ["long", "later"], created_at: "2024-03-01T10:00:00+0100" },
+  ]));
+  assert.strictEqual(r.source, "Wallabag");
+  assert.deepStrictEqual(r.items.map((x) => [x.title, x.read, x.tags]), [["One", false, ["long", "later"]], ["Two", true, ["news"]]]);
+});
+
+test("Wallabag's CSV: split by semicolons, day-first dates", () => {
+  const r = I.parse("wallabag.csv", [
+    '"Title";"URL";"Content";"Tags";"MIME Type";"Language";"Creation date"',
+    '"Late";"https://w.example/b";"<p>a; b, c</p>";"news, long";"text/html";"en";"05/03/2024 09:00:00"',
+    '"Early";"https://w.example/a";"";"";"text/html";"en";"21/02/2024 08:30:00"',
+  ].join("\n"));
+  assert.strictEqual(r.source, "Wallabag");
+  assert.deepStrictEqual(r.items.map((x) => [x.title, x.tags]), [["Early", []], ["Late", ["news", "long"]]]);
+  assert.strictEqual(r.items[0].at, new Date(2024, 1, 21, 8, 30, 0).getTime());
+});
+
 test("Instapaper's CSV: Archive is read, its own folders become tags", () => {
   const r = I.parse("instapaper-export.csv", [
     "URL,Title,Selection,Folder,Timestamp",

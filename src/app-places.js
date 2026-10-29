@@ -21,7 +21,7 @@ function marksShown() {
     .sort((a, b) => b.last - a.last);
 }
 function goToMark(p, id) {
-  if (state.open === p && !$("readerView").hidden) { C.reader.toMark(id); return; }
+  if (state.open === p && !$("readerView").hidden) { C.reader.toMark(id, true); return; }
   markAfterOpen = id;
   openPage(p.id);
 }

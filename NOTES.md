@@ -18,6 +18,61 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **KOReader ideas (1.45.0).** Daniel picked skim, minutes left in a
+  chapter, text weight, hyphenation, Wallabag import and offline
+  dictionaries from the comparison; settings per book went on TODO.md.
+  - *Skim* is the bottom row and the line under it, only while the bar
+    is up (pointer events there, so with the bar up a tap at the very
+    bottom no longer reaches the text). A sideways drag past 8 px skims,
+    a tap switches the minutes. Headings are placed along the line by
+    `reader.parts()`, in position()'s units and cached by the page's
+    size: a heading in a long clip's chunk (1.29.0) is put by its share
+    of the chunk's letters from the chunk's own box, so nothing is laid
+    out to draw the notches. At 120 chapters it's a guess near chapter
+    edges (off by one at most in the test); notches show only while
+    they're 6 px apart. While you skim and after, the place isn't
+    written (`skimHolds` in notePosition): only a move away from where
+    the skim landed (another paragraph on the middle line), Back, or a
+    minute there lets it through, so a peek at the end doesn't move the
+    place or sync it to other devices. `movedHere` is set so a sync
+    doesn't pull the view back meanwhile. No skim while Narrate reads
+    the open clip: the row is its player, and the voice keeps the place.
+  - *Minutes left in this chapter* is the next top-level heading's place
+    minus yours, times the clip's minutes at your pace (1.41.0). Books
+    (`p.file`) start on the chapter, clips on the whole clip; a tap
+    switches, kept for each kind in waypage.leftIn.
+  - *Text weight* is `--reader-wt` (300 to 600, 400 regular); headings
+    are their weight plus the same step. fonts.css now claims each
+    file's whole weight range (Source Serif 4 200-900, Inter 100-900,
+    Literata 400-900...), which was cut at 700; EB Garamond, Lora and
+    static fonts can't go lighter than they are.
+  - *Hyphenate* moved off Justified onto its own switch, on by default.
+    It needs the clip's `lang`, which saving keeps where the page has
+    one; without it nothing breaks.
+  - *Dictionaries* are StarDict, KOReader's format and the one free
+    dictionaries come in. They're kept in their own IndexedDB
+    (waypage-dict), in the app as in a browser, not in the library
+    folder: a Blob there is read a slice at a time, while the library's
+    files cross the bridge as base64, too slow for 100 MB. So they
+    aren't moved with the library, synced or backed up; they're added
+    again on a new device. Trade-off said plainly: on Android they sit
+    in the app's data, which Android's Auto Backup counts against its
+    25 MB, as the library already does. The index stays its bytes plus
+    a list of offsets; the .dict.dz is read by dictzip's chunk table
+    (RA field), inflating only the chunks a definition spans, with an
+    empty last block added since dictzip chunks have none and the
+    browser's inflater refuses them otherwise. A .dict.dz without the
+    table, and .idx.gz, are unpacked when added. A definition's HTML
+    is parsed in an inert document and copied as bare elements from a
+    short list, no attributes, so no link, picture, style or script
+    comes through; it shows in the app's sheet, not the clip's frame.
+    Nothing about a lookup leaves the device. Archives: .zip (backup.js's
+    reader) and .tar(.gz) read as they stream; .tar.bz2 and .tar.xz
+    aren't readable without a library, so the message says to unpack.
+  - *Wallabag*: its JSON (an array of entries with is_archived) and its
+    CSV, which is split by semicolons with day-first dates. Starred
+    isn't carried over, as with the others.
+
 - **Newsletters laid out like Feeds (1.43.1).** Daniel's ask: making an
   address is the bottom field (`saveForm`, "Name a new address" / Make,
   `makeMailBox`; a browser opens the paste-a-feed-link sheet), settings

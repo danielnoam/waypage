@@ -42,15 +42,19 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Edit clips: find and remove or replace words across many clips (1.22.0)
 - Sidebar with favourites, Collections, Clips, Files, Feeds, Highlights; their items indented and folding under an arrow; latest newsletter addresses with unread counts (0.28.0, 1.8.0, 1.14.0, 1.43.2, 1.44.0)
 - Import from Pocket, Instapaper, Omnivore, Raindrop (1.9.0)
+- Import from Wallabag, its JSON or CSV (1.45.0)
 
 ## Reading
 
 - Themes: Paper, Sepia, Night plus six more, Auto (0.1.0, 0.24.0)
 - Fonts: ten reading fonts and four Hebrew ones; size, spacing, margins, alignment; pinch for size (0.24.0, 1.16.0, 1.19.0)
 - Your own fonts, added in Settings or from the library's fonts folder (1.33.0)
+- Text weight, and Hyphenate in any alignment (1.45.0)
 - Scroll or Pages, two pages side by side on wide screens (0.29.0, 1.5.0)
 - Place kept and synced as a paragraph on the middle line (0.5.0, 1.3.0, 1.31.0)
 - Contents, progress line, tap to hide the bar (0.13.0, 0.19.0)
+- Skim along the bottom line, chapter notches, the place kept until you read on; Back to where you were after skimming, Contents or a highlight (1.45.0)
+- Minutes left in this chapter (or section), tap to switch to the whole clip (1.45.0)
 - Section being read in the top bar opens Contents on a computer, a list icon on a phone (1.37.0, 1.42.1); page, minutes left and percent along the bottom (1.37.0)
 - Picture viewer with zoom and swipe (0.14.0, 1.5.0)
 - Footnotes in a sheet, Back to where you were after an in-page link (1.14.0)
@@ -59,6 +63,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Highlight colours (five), picked on the selection bar, shown a colour at a time (1.42.0)
 - Translate this clip on the device, from its own button beside Highlights, under the text or instead of it: ML Kit on Android, Chrome's own translator on a computer (1.42.0, button 1.42.1; iOS on TODO)
 - Translate on selected words (1.8.0; Look up removed 1.11.1)
+- Look up in your own StarDict dictionaries, offline: added in Settings › Reading, with word endings, synonyms and Hebrew prefixes (1.45.0)
 - Brightness swipe with Auto, movable to the right (1.10.0, 1.14.0, 1.16.0)
 - Previous/Next and a collection list in the reader (1.23.0)
 - Big-screen layouts and keyboard shortcuts (1.5.0)
