@@ -2,6 +2,18 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.44.0] - 2026-10-29
+
+### Added
+- Newsletters in the sidebar folds like Library and Feeds, and lists the
+  three addresses with the latest emails, each with how many are unread.
+  Tap one to see only its emails.
+
+### Changed
+- The sidebar's places sit evenly, as close together as Feeds and
+  Newsletters, with no wider gaps between them. The indent and the fold
+  arrows show what belongs under Library and Feeds.
+
 ## [1.43.2] - 2026-10-29
 
 ### Changed

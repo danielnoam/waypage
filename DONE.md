@@ -40,7 +40,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Watched folders, each into a chosen collection (1.1.0, 1.4.0, 1.28.0)
 - Library storage: app storage, Documents or any folder, moved natively on Android (0.33.0, 1.19.0)
 - Edit clips: find and remove or replace words across many clips (1.22.0)
-- Sidebar with favourites, Collections, Clips, Files, Feeds, Highlights; sections set apart by space, their items indented and folding under an arrow (0.28.0, 1.8.0, 1.14.0, 1.43.2)
+- Sidebar with favourites, Collections, Clips, Files, Feeds, Highlights; their items indented and folding under an arrow; latest newsletter addresses with unread counts (0.28.0, 1.8.0, 1.14.0, 1.43.2, 1.44.0)
 - Import from Pocket, Instapaper, Omnivore, Raindrop (1.9.0)
 
 ## Reading
