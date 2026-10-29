@@ -742,6 +742,23 @@ function sideFavourites() {
 
 const withFeed = (node, f) => { node.dataset.feed = f.url; return node; };
 
+// The three addresses with the latest emails (1.44.0), each with its
+// unread count; addresses with none yet come after.
+function sideBoxes(mails) {
+  const by = new Map();
+  for (const { f, it } of mails) {
+    if (!by.has(f.url)) by.set(f.url, { f, fresh: 0 });
+    if (mailUnread(it)) by.get(f.url).fresh++;
+  }
+  for (const f of mailBoxes()) if (!by.has(f.url)) by.set(f.url, { f, fresh: 0 });
+  return [...by.values()].slice(0, SIDE_MAX);
+}
+const mailMark = (f) => {
+  const box = siteMark({ site: f.title });
+  box.className = "site-mark feed-mark small";
+  return box;
+};
+
 // Library and Feeds fold their items away under a small arrow (1.43.2),
 // remembered on this device. The rows slide shut on the control spring.
 const SIDE_FOLD_KEY = "waypage.sideFolded";
@@ -773,7 +790,8 @@ function renderSide() {
   };
   const count = (n, cls) => (n ? el("span", { class: cls || "side-n" }, String(n)) : null);
   const fresh = freshPosts();
-  const freshMail = unreadMail();
+  const mails = mailList(mailBoxes());
+  const freshMail = mails.filter((x) => mailUnread(x.it)).length;
   const inFeeds = state.place === "feeds";
   const inMarks = state.place === "highlights";
   const latest = (f) => Math.max(0, ...f.items.map(postAt));
@@ -803,18 +821,15 @@ function renderSide() {
     item(sideMark("open"), "Clips", inLib && state.part === "pages", null, () => partFromSide("pages"), "side-sub"),
     // Files of your own (0.31.0), their part of the library.
     state.pages.some((p) => p.link) ? item(fileMark(), "Files", inLib && state.part === "files", null, () => partFromSide("files"), "side-sub") : null]),
-    el("div", { class: "side-space", "aria-hidden": "true" }),
     ...sideFold("feeds", item(feedIcon("feeds"), "Feeds", inFeeds && !state.feed, fresh ? el("span", { class: "side-pill" }, fresh + " new") : null,
       () => goPlace("feeds")), siteFeeds().sort((a, b) => latest(b) - latest(a)).slice(0, SIDE_MAX).map((f) =>
       withFeed(item(feedMark(f, true), f.title, inFeeds && state.feed === f.url, null, () => goPlace("feeds", f.url), "side-sub"), f))),
     // Newsletters (1.43.0): their own place, under Feeds.
-    item(sideSvg("mail"), "Newsletters", state.place === "newsletters", freshMail ? el("span", { class: "side-pill" }, freshMail + " new") : null,
-      () => goPlace("newsletters")),
+    ...sideFold("newsletters", item(sideSvg("mail"), "Newsletters", state.place === "newsletters" && !state.feed, freshMail ? el("span", { class: "side-pill" }, freshMail + " new") : null,
+      () => goPlace("newsletters")), sideBoxes(mails).map(({ f, fresh: n }) =>
+      withFeed(item(mailMark(f), f.title, state.place === "newsletters" && state.feed === f.url, count(n), () => goPlace("newsletters", f.url), "side-sub"), f))),
     // Every highlight in the library (1.8.0), a place of its own.
-    el("div", { class: "side-space", "aria-hidden": "true" }),
     item(sideSvg("marks"), "Highlights", inMarks, null, () => goPlace("highlights")),
-    // Stats (1.39.0, named Reading until 1.43.2), a section of its own.
-    el("div", { class: "side-space", "aria-hidden": "true" }),
     item(sideSvg("reading"), "Stats", state.place === "reading", null, () => goPlace("reading")),
     // On a big screen the sidebar carries the rest (1.5.0): Add a feed,
     // the tags, and Settings at its foot.
