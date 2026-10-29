@@ -1815,9 +1815,23 @@ html { -webkit-tap-highlight-color: transparent; }
   background: var(--accent); color: var(--accent-ink);
   font: 600 var(--fs-meta)/var(--lh-meta) var(--sans);
 }
-.side-line { flex-shrink: 0; height: 1px; margin: var(--s-3) var(--s-5); border: 0; background: var(--line); }
-.side-sub { min-height: var(--tap); font-size: var(--fs-label); }
+.side-space { flex-shrink: 0; height: var(--s-5); }
+.side-sub { min-height: var(--tap); margin-inline-start: calc(var(--s-2) + var(--s-4)); font-size: var(--fs-label); }
 .side-sub .side-icon { color: var(--accent); }
+.side-row { display: flex; align-items: stretch; flex-shrink: 0; margin: 0 var(--s-2); }
+.side-row .side-item { flex: 1; min-width: 0; margin: 0; }
+.side-fold {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: var(--tap);
+  border: 0; border-radius: var(--r-md); background: transparent; color: var(--muted); cursor: pointer;
+}
+.side-fold:active { background: var(--press); }
+.side-fold svg { transition: transform var(--spring-control-ms, 300ms) var(--spring-control, ease-out); }
+.side-fold[aria-expanded="false"] svg { transform: rotate(-90deg); }
+.side-fold[aria-expanded="false"]:dir(rtl) svg { transform: rotate(90deg); }
+.side-group { display: grid; grid-template-rows: 1fr; flex-shrink: 0; transition: grid-template-rows var(--spring-control-ms, 300ms) var(--spring-control, ease-out); }
+.side-group.folded { grid-template-rows: 0fr; }
+.side-group-in { display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .side-group, .side-fold svg { transition: none; } }
 .side-cover {
   flex-shrink: 0; width: var(--s-5); height: var(--s-6); overflow: hidden;
   border-radius: var(--r-sm); background: var(--preview);
@@ -2118,7 +2132,8 @@ html { -webkit-tap-highlight-color: transparent; }
   .side-head .side-title { margin: 0; }
   .side-search { color: var(--muted); }
   .side-item { margin: 0; }
-  .side-line { margin: var(--s-3) var(--s-3); }
+  .side-row { margin: 0; }
+  .side-sub { margin-inline-start: var(--s-4); }
   .side-link {
     align-self: flex-start; min-height: var(--tap); margin-inline-start: calc(var(--s-3) + 20px + var(--s-3)); padding: 0;
     border: 0; background: none; color: var(--accent); font: 500 var(--fs-label)/var(--lh-label) var(--sans); cursor: pointer;

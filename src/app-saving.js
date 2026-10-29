@@ -1599,7 +1599,7 @@ function paintPlace() {
   const mailOn = state.place === "newsletters";
   const marksOn = state.place === "highlights";
   const readOn = state.place === "reading";
-  $("placeTitle").textContent = feedsOn ? "Feeds" : mailOn ? "Newsletters" : marksOn ? "Highlights" : readOn ? "Reading" : "Library";
+  $("placeTitle").textContent = feedsOn ? "Feeds" : mailOn ? "Newsletters" : marksOn ? "Highlights" : readOn ? "Stats" : "Library";
   $("libraryView").dataset.place = state.place;
   $("library").hidden = feedsOn || mailOn || marksOn || readOn;
   $("feeds").hidden = !feedsOn;

@@ -742,6 +742,28 @@ function sideFavourites() {
 
 const withFeed = (node, f) => { node.dataset.feed = f.url; return node; };
 
+// Library and Feeds fold their items away under a small arrow (1.43.2),
+// remembered on this device. The rows slide shut on the control spring.
+const SIDE_FOLD_KEY = "waypage.sideFolded";
+function sideFold(name, head, subs) {
+  subs = subs.filter(Boolean);
+  if (!subs.length) return [head];
+  const folded = !!load(SIDE_FOLD_KEY, {})[name];
+  const group = el("div", { class: "side-group" + (folded ? " folded" : ""), id: "sideGroup-" + name }, el("div", { class: "side-group-in" }, ...subs));
+  group.inert = folded;
+  const label = head.querySelector(".side-label").textContent;
+  const fold = el("button", { class: "side-fold", type: "button", "aria-expanded": String(!folded), "aria-controls": group.id, "aria-label": label + " items",
+    onclick: () => {
+      const shut = !group.classList.contains("folded");
+      group.classList.toggle("folded", shut);
+      group.inert = shut;
+      fold.setAttribute("aria-expanded", String(!shut));
+      store(SIDE_FOLD_KEY, { ...load(SIDE_FOLD_KEY, {}), [name]: shut });
+    } });
+  fold.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+  return [el("div", { class: "side-row" }, head, fold), group];
+}
+
 function renderSide() {
   const item = (icon, label, on, extra, onclick, cls) => {
     const b = el("button", { class: "side-item" + (cls ? " " + cls : ""), type: "button", onclick }, icon,
@@ -767,10 +789,10 @@ function renderSide() {
         onclick: () => (pinned.matches ? toLibrary() : back()).then(() => { if (state.place !== "library") goPlace("library"); openSearch(); }) }, sideSvg("search")) : null),
     // From inside Collections, Clips, a collection or the favourites
     // (1.20.0), Library steps all the way back to the library itself.
-    item(feedIcon("library"), "Library", inLibrary, count(state.pages.length, "side-count"), () =>
+    ...sideFold("library", item(feedIcon("library"), "Library", inLibrary, count(state.pages.length, "side-count"), () =>
       inLib && (state.part || state.folder || state.filter === "favourites")
         ? toLibrary().then(() => { if (state.filter === "favourites") setFilter("all"); return goPlace("library"); })
-        : goPlace("library")),
+        : goPlace("library")), [
     ...favs.slice(0, FAV_MAX).map((f) => f.folder
       ? item(sideCover(f.folder), f.folder, state.folder === f.folder, count(freshCount(f.folder)), () => openFromSide(f.folder), "side-sub")
       : item(clipCover(f.page), f.page.title, state.open === f.page, null, () => fromSide().then(() => openPage(f.page.id)), "side-sub")),
@@ -780,19 +802,20 @@ function renderSide() {
     hasFolders ? item(sideMark("folder"), "Collections", inLib && state.part === "collections", null, () => partFromSide("collections"), "side-sub") : null,
     item(sideMark("open"), "Clips", inLib && state.part === "pages", null, () => partFromSide("pages"), "side-sub"),
     // Files of your own (0.31.0), their part of the library.
-    state.pages.some((p) => p.link) ? item(fileMark(), "Files", inLib && state.part === "files", null, () => partFromSide("files"), "side-sub") : null,
-    el("hr", { class: "side-line" }),
-    item(feedIcon("feeds"), "Feeds", inFeeds && !state.feed, fresh ? el("span", { class: "side-pill" }, fresh + " new") : null,
-      () => goPlace("feeds")),
-    ...siteFeeds().sort((a, b) => latest(b) - latest(a)).slice(0, SIDE_MAX).map((f) =>
-      withFeed(item(feedMark(f, true), f.title, inFeeds && state.feed === f.url, null, () => goPlace("feeds", f.url), "side-sub"), f)),
+    state.pages.some((p) => p.link) ? item(fileMark(), "Files", inLib && state.part === "files", null, () => partFromSide("files"), "side-sub") : null]),
+    el("div", { class: "side-space", "aria-hidden": "true" }),
+    ...sideFold("feeds", item(feedIcon("feeds"), "Feeds", inFeeds && !state.feed, fresh ? el("span", { class: "side-pill" }, fresh + " new") : null,
+      () => goPlace("feeds")), siteFeeds().sort((a, b) => latest(b) - latest(a)).slice(0, SIDE_MAX).map((f) =>
+      withFeed(item(feedMark(f, true), f.title, inFeeds && state.feed === f.url, null, () => goPlace("feeds", f.url), "side-sub"), f))),
     // Newsletters (1.43.0): their own place, under Feeds.
     item(sideSvg("mail"), "Newsletters", state.place === "newsletters", freshMail ? el("span", { class: "side-pill" }, freshMail + " new") : null,
       () => goPlace("newsletters")),
     // Every highlight in the library (1.8.0), a place of its own.
-    el("hr", { class: "side-line" }),
+    el("div", { class: "side-space", "aria-hidden": "true" }),
     item(sideSvg("marks"), "Highlights", inMarks, null, () => goPlace("highlights")),
-    item(sideSvg("reading"), "Reading", state.place === "reading", null, () => goPlace("reading")),
+    // Stats (1.39.0, named Reading until 1.43.2), a section of its own.
+    el("div", { class: "side-space", "aria-hidden": "true" }),
+    item(sideSvg("reading"), "Stats", state.place === "reading", null, () => goPlace("reading")),
     // On a big screen the sidebar carries the rest (1.5.0): Add a feed,
     // the tags, and Settings at its foot.
     ...(big ? sideMore() : []));
@@ -803,7 +826,7 @@ function sideMore() {
   const leave = () => (state.side ? back() : Promise.resolve());
   return [
     el("button", { class: "side-link", type: "button", onclick: () => leave().then(() => openMenu("addFeed", { url: "" })) }, "Add a feed"),
-    tags.length ? el("hr", { class: "side-line" }) : null,
+    tags.length ? el("div", { class: "side-space", "aria-hidden": "true" }) : null,
     tags.length ? el("p", { class: "side-over" }, "Tags") : null,
     tags.length ? el("div", { class: "side-tags" }, ...tags.map((t) => {
       const on = state.place === "library" && state.filter === "#" + t;
@@ -919,7 +942,7 @@ function fitWidth() {
 // the reader's page come here through reader.js.
 const KEYS = [
   ["Anywhere", [["/", "Search the library"], [(/Mac/.test(navigator.platform) && navigator.maxTouchPoints < 2 ? "⌘" : "Ctrl") + " V", "Save a copied link"], ["G then L", "Go to the library"],
-    ["G then F", "Go to Feeds"], ["G then N", "Go to Newsletters"], ["G then H", "Go to Highlights"], ["G then R", "Go to Reading"], ["D", "Downloads"], [",", "Settings"], ["?", "These shortcuts"]]],
+    ["G then F", "Go to Feeds"], ["G then N", "Go to Newsletters"], ["G then H", "Go to Highlights"], ["G then S", "Go to Stats"], ["D", "Downloads"], [",", "Settings"], ["?", "These shortcuts"]]],
   ["In the library", [["↑ ↓", "Move between clips"], ["Enter", "Open"], ["X", "Pick, to act on several"], ["Shift-click", "Pick a run"],
     ["F", "Favourite"], ["E", "Export"], ["Del", "Delete"]]],
   ["Reading", [["Space  ← →", "Next or previous page"], ["J  K", "Next or previous section"], ["T", "Contents beside the text"],
@@ -1012,7 +1035,7 @@ function onKeys(e) {
   }
   if (Date.now() - gAt < 1200) {
     gAt = 0;
-    const to = { l: "library", f: "feeds", n: "newsletters", h: "highlights", r: "reading" }[k.toLowerCase()];
+    const to = { l: "library", f: "feeds", n: "newsletters", h: "highlights", s: "reading", r: "reading" }[k.toLowerCase()];
     if (to) go(() => goPlace(to));
     return;
   }
