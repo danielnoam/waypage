@@ -1,6 +1,7 @@
 // Waypage: reading another read-later app's export (1.9.0). Pocket (its
 // CSV, and the older ril_export.html), Instapaper (CSV or HTML), Omnivore
-// (a zip of metadata JSON) and Raindrop (CSV); any other CSV with a url
+// (a zip of metadata JSON), Raindrop (CSV) and Wallabag (its JSON or CSV,
+// 1.45.0); any other CSV with a url
 // column, and a browser's bookmarks file, as plain lists of links. Only
 // the list is read here: app.js saves each link like a pasted one.
 //
@@ -12,7 +13,7 @@
   const isWeb = (u) => /^https?:\/\//i.test(String(u || "").trim());
 
   // RFC 4180-ish: quoted fields, doubled quotes, newlines inside quotes.
-  function csvRows(text) {
+  function csvRows(text, sep = ",") {
     const rows = [];
     let row = [], field = "", quoted = false;
     const t = text.replace(/^﻿/, "");
@@ -22,7 +23,7 @@
         if (c === '"') { if (t[i + 1] === '"') { field += '"'; i++; } else quoted = false; }
         else field += c;
       } else if (c === '"' && field === "") quoted = true;
-      else if (c === ",") { row.push(field); field = ""; }
+      else if (c === sep) { row.push(field); field = ""; }
       else if (c === "\n" || c === "\r") {
         if (c === "\r" && t[i + 1] === "\n") i++;
         row.push(field); field = "";
@@ -40,13 +41,18 @@
     const s = String(v || "").trim();
     if (/^\d{9,11}$/.test(s)) return Number(s) * 1000;
     if (/^\d{12,14}$/.test(s)) return Number(s);
+    // Wallabag's CSV: 21/03/2024 10:15:00, day first.
+    const dmy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?: (\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(s);
+    if (dmy) return new Date(+dmy[3], dmy[2] - 1, +dmy[1], +(dmy[4] || 0), +(dmy[5] || 0), +(dmy[6] || 0)).getTime();
     const t = Date.parse(s);
     return Number.isFinite(t) ? t : 0;
   }
   const splitTags = (v, by) => String(v || "").split(by).map((x) => x.trim()).filter(Boolean);
 
   function fromCsv(text) {
-    const rows = csvRows(text);
+    // Wallabag's CSV is split by semicolons.
+    const first = text.slice(0, text.search(/\r?\n|$/));
+    const rows = csvRows(text, /^\W*title\W*;/i.test(first) && /;\W*url\W*;/i.test(first) ? ";" : ",");
     if (rows.length < 2) return null;
     const head = rows[0].map((h) => h.trim().toLowerCase());
     const col = (...names) => names.map((n) => head.indexOf(n)).find((i) => i >= 0);
@@ -58,10 +64,11 @@
     if (has("time_added") && has("status")) source = "Pocket";
     else if (has("selection") && has("folder")) source = "Instapaper";
     else if (has("excerpt") && has("cover")) source = "Raindrop";
+    else if (has("mime type") && has("creation date")) source = "Wallabag";
     const tagsAt = col("tags", "labels");
     const statusAt = col("status");
     const folderAt = col("folder");
-    const atAt = col("time_added", "timestamp", "created", "saved", "date");
+    const atAt = col("time_added", "timestamp", "created", "saved", "date", "creation date");
     const items = rows.slice(1).map((r) => {
       const folder = folderAt != null ? String(r[folderAt] || "").trim() : "";
       const tags = tagsAt == null ? [] : splitTags(r[tagsAt], source === "Pocket" ? /[|,]/ : /,/);
@@ -121,6 +128,24 @@
     return { source: "Omnivore", items };
   }
 
+  // Wallabag's JSON export: [{ url, title, tags, is_archived, created_at }],
+  // tags as words or { label }, archived as 1 or true.
+  const isWallabag = (list) => Array.isArray(list) && list.some((x) => x && typeof x === "object" && "is_archived" in x);
+  function fromWallabag(list) {
+    const items = [];
+    for (const x of list) {
+      if (!x || !x.url) continue;
+      items.push({
+        url: String(x.url).trim(),
+        title: String(x.title || "").trim(),
+        tags: (Array.isArray(x.tags) ? x.tags : []).map((t) => (typeof t === "string" ? t : t && (t.label || t.slug))).filter(Boolean),
+        read: x.is_archived === true || Number(x.is_archived) === 1,
+        at: when(x.created_at),
+      });
+    }
+    return { source: "Wallabag", items };
+  }
+
   // Duplicates and anything that isn't a web address go; oldest first, so
   // the newest lands at the top of the library.
   function tidy(found) {
@@ -141,7 +166,10 @@
     if (/\.csv$/.test(n)) return tidy(fromCsv(text));
     if (/\.html?$/.test(n)) return tidy(fromHtml(text));
     if (/\.json$/.test(n)) {
-      try { const v = JSON.parse(text); return tidy(fromOmnivore([Array.isArray(v) ? v : v.items || []])); } catch (e) { return null; }
+      let v;
+      try { v = JSON.parse(text); } catch (e) { return null; }
+      const list = Array.isArray(v) ? v : (v && v.items) || [];
+      return tidy(isWallabag(list) ? fromWallabag(list) : fromOmnivore([list]));
     }
     return null;
   }

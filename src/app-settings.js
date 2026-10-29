@@ -281,6 +281,46 @@ function fontsGroup() {
     el("p", { class: "footnote" }, where + "A font you add stays on this device and shows under Font with the others. Hebrew still uses the Hebrew font."));
 }
 
+// Dictionaries (1.45.0): StarDict files, for Look up on selected words.
+// Kept in this device's database; nothing about a lookup leaves it.
+async function addDictFiles(files, btn) {
+  if (!files.length) return;
+  const label = btn.querySelector(".row-label");
+  btn.disabled = true;
+  label.textContent = "Adding…";
+  try {
+    const d = await C.dict.add(files);
+    toast("Added " + d.name + ", " + d.words.toLocaleString() + " words. Select a word and tap Look up.");
+  } catch (e) {
+    toast(e && e.message && !/^(Failed|NetworkError|Quota)/.test(e.message) ? e.message : "Couldn't keep the dictionary. Is there room on the device?");
+  }
+  btn.disabled = false;
+  if (state.section === "reading") renderSection();
+}
+async function removeDict(d) {
+  if (!confirm("Remove the dictionary " + d.name + "?")) return;
+  try { await C.dict.remove(d.id); } catch (e) { toast("Couldn't remove it. Try again."); return; }
+  if (state.section === "reading") renderSection();
+}
+function dictsGroup() {
+  const input = el("input", { type: "file", class: "visually-hidden", tabindex: "-1", "aria-hidden": "true", multiple: true });
+  const add = el("button", { class: "row", type: "button", onclick: () => input.click() },
+    el("span", { class: "row-label accent" }, "Add a dictionary"));
+  input.addEventListener("change", () => { const f = [...input.files]; input.value = ""; addDictFiles(f, add); });
+  const more = el("a", { href: "https://github.com/koreader/koreader/wiki/Dictionary-support", onclick: (e) => { e.preventDefault(); C.platform.openOutside(e.currentTarget.href); } }, "where to find free ones");
+  return el("section", { class: "settings-section", id: "dictSection" },
+    el("h2", { class: "overline" }, "Dictionaries"),
+    el("div", { class: "group" },
+      ...C.dict.list().map((d) => el("div", { class: "row" },
+        el("span", { class: "choice-text" },
+          el("span", { class: "choice-label", dir: "auto" }, d.name),
+          el("span", { class: "choice-note" }, d.words.toLocaleString() + " words · " + formatSize(d.bytes))),
+        el("button", { class: "btn-text warn", type: "button", onclick: () => removeDict(d) }, "Remove"))),
+      add, input),
+    el("p", { class: "footnote" }, "StarDict dictionaries: pick the .ifo, .idx and .dict (or .dict.dz) files together, or a .zip or .tar.gz of them; see ",
+      more, ". Then select a word while reading and tap Look up. A dictionary stays on this device and works offline; looking a word up sends nothing anywhere."));
+}
+
 // Edit clips, inside Library since 1.27.1 (it was its own menu entry).
 function editNavGroup() {
   return el("section", { class: "settings-section" },
@@ -938,7 +978,7 @@ const updateOut = () => UPD_OUT.includes(upd.phase) && upd.latest;
 const SECTIONS = {
   appearance: { title: "Appearance", build: () => [choiceGroup(SETTINGS[0]), autoGroup(), dimGroup(), motionGroup()],
     value: () => themeName(state.theme) },
-  reading: { title: "Reading", build: () => [readingGroup(), fontsGroup(), aloudGroup()],
+  reading: { title: "Reading", build: () => [readingGroup(), fontsGroup(), dictsGroup(), aloudGroup()],
     value: () => { const r = readingPrefs(); return (FONTS.find((f) => f.value === r.font) || FONTS[0]).label + " · " + r.size + " px"; } },
   library: { title: "Library", build: () => [
     choiceGroup({ key: LAYOUT_KEY, label: "Layout", get: layout, set: (v) => { store(LAYOUT_KEY, v); renderLibrary(); }, options: LAYOUTS }),

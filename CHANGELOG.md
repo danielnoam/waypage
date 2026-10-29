@@ -2,6 +2,37 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.45.0] - 2026-10-29
+
+Ideas from KOReader.
+
+### Added
+- Skim: with the bars up, drag a finger along the bottom row (or the
+  line under it) to go anywhere in a clip or book. A label over your
+  finger names the chapter and the page or percent, and the line has a
+  notch where each chapter starts. Let go and "Back to where you were"
+  takes you back. Your reading place doesn't move, here or on your other
+  devices, until you read on from where you skimmed to.
+- Back to where you were also comes up after jumping from Contents or
+  to a highlight.
+- Minutes left in this chapter: a book's bottom line counts down to the
+  end of the chapter you're in, at your own reading pace. Tap the line
+  to switch between the chapter and the whole book (or, in a clip with
+  sections, the section and the whole clip).
+- Text weight in the text settings, for thin fonts on a dark theme or a
+  dim screen. Headings and bold move with it. Fonts that come only as
+  regular and bold go in one step.
+- Hyphenate, a switch in the text settings, on by default: long words
+  break at the end of a line in any alignment, not only Justified.
+- Dictionaries: add a StarDict dictionary in Settings › Reading (its
+  .ifo, .idx and .dict files, or a .zip or .tar.gz of them), then select
+  a word and tap Look up. It works offline and sends nothing anywhere.
+  It finds "children" under "child", "went" under "go", and Hebrew
+  words with a prefix like ו or ה. When none has the word, Translate is
+  one tap away.
+- Import from Wallabag: its JSON or CSV export, beside Pocket,
+  Instapaper, Omnivore and Raindrop.
+
 ## [1.44.0] - 2026-10-29
 
 ### Added

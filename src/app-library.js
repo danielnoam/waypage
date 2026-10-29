@@ -745,6 +745,7 @@ const ICONS = {
   star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.7l5.9-.9z"/>',
   mark: '<path d="M14.5 4.5l5 5L11 18H6v-5z"/><path d="M4 21h16"/>',
   translate: '<path d="M4 5h9M8.5 3v2M11 5c-1 4-3.5 7-7 8.5M6.5 8.5c1.2 2 3 3.5 5 4.5"/><path d="M13 21l4-9 4 9M14.5 18h5"/>',
+  lookup: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/><path d="M9 8h7M9 11.5h5"/>',
 };
 function svgIcon(name, size) {
   const box = el("span", { class: "svg-icon", "aria-hidden": "true" });
@@ -2042,8 +2043,8 @@ function importGroup() {
   const input = el("input", { type: "file", class: "visually-hidden", tabindex: "-1", "aria-hidden": "true" });
   const open = el("button", { class: "row", type: "button", onclick: () => (C.platform.files.canLink ? pickFile() : input.click()) },
         el("span", { class: "choice-text" },
-          el("span", { class: "choice-label accent" }, "Import from Pocket, Instapaper or Omnivore"),
-          el("span", { class: "choice-note" }, "Pick the file the app exported: a CSV, an HTML page, or Omnivore's zip. Raindrop's CSV, a browser's bookmarks and another RSS reader's OPML (its feeds) work too.")));
+          el("span", { class: "choice-label accent" }, "Import from Pocket, Instapaper, Omnivore or Wallabag"),
+          el("span", { class: "choice-note" }, "Pick the file the app exported: a CSV, an HTML page, Wallabag's JSON, or Omnivore's zip. Raindrop's CSV, a browser's bookmarks and another RSS reader's OPML (its feeds) work too.")));
   input.addEventListener("change", () => { const f = input.files[0]; input.value = ""; openFile(f, open); });
   return el("section", { class: "settings-section", id: "importSection" },
     el("h2", { class: "overline" }, "Import"),

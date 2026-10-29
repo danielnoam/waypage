@@ -8,8 +8,8 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="src/fonts.css?v=1.44.0">
-  <link rel="stylesheet" href="src/styles.css?v=1.44.0">
+  <link rel="stylesheet" href="src/fonts.css?v=1.45.0">
+  <link rel="stylesheet" href="src/styles.css?v=1.45.0">
 </head>
 <body>
   <div class="app" id="libraryView">
@@ -170,7 +170,8 @@
         <span class="read-time" id="readLeft" aria-hidden="true"></span>
         <button class="read-keys" id="readKeys" type="button"><kbd>?</kbd>Shortcuts</button>
       </div>
-      <div class="read-progress" id="readProgress" aria-hidden="true"><span></span></div>
+      <div class="read-progress" id="readProgress" role="slider" tabindex="0" aria-label="Skim" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span><span class="read-ticks" id="readTicks" aria-hidden="true"></span><span class="skim-knob" id="skimKnob" aria-hidden="true" hidden></span></div>
+      <div class="skim-tip" id="skimTip" aria-hidden="true" hidden><span class="skim-part" id="skimPart" dir="auto"></span><span class="skim-where" id="skimWhere"></span></div>
     </div>
     <div class="viewer" id="imageViewer" role="dialog" aria-modal="true" aria-label="Image" hidden>
       <div class="viewer-stage" id="viewerStage"><img class="viewer-img" id="viewerImg" alt=""></div>
@@ -353,29 +354,30 @@
     </div>
   </section>
 
-  <script src="src/platform.js?v=1.44.0"></script>
-  <script src="src/motion.js?v=1.44.0"></script>
-  <script src="src/vendor/Readability.js?v=1.44.0"></script>
-  <script src="src/store.js?v=1.44.0"></script>
-  <script src="src/save.js?v=1.44.0"></script>
-  <script src="src/feeds.js?v=1.44.0"></script>
-  <script src="src/backup.js?v=1.44.0"></script>
-  <script src="src/imports.js?v=1.44.0"></script>
-  <script src="src/sync.js?v=1.44.0"></script>
-  <script src="src/drive.js?v=1.44.0"></script>
-  <script src="src/qr.js?v=1.44.0"></script>
-  <script src="src/stats.js?v=1.44.0"></script>
-  <script src="src/epub.js?v=1.44.0"></script>
-  <script src="src/files.js?v=1.44.0"></script>
-  <script src="src/pdf.js?v=1.44.0"></script>
-  <script src="src/reader.js?v=1.44.0"></script>
-  <script src="src/app.js?v=1.44.0"></script>
-  <script src="src/app-reader.js?v=1.44.0"></script>
-  <script src="src/app-library.js?v=1.44.0"></script>
-  <script src="src/app-saving.js?v=1.44.0"></script>
-  <script src="src/app-places.js?v=1.44.0"></script>
-  <script src="src/app-settings.js?v=1.44.0"></script>
-  <script src="src/app-lock.js?v=1.44.0"></script>
-  <script src="src/app-start.js?v=1.44.0"></script>
+  <script src="src/platform.js?v=1.45.0"></script>
+  <script src="src/motion.js?v=1.45.0"></script>
+  <script src="src/vendor/Readability.js?v=1.45.0"></script>
+  <script src="src/store.js?v=1.45.0"></script>
+  <script src="src/save.js?v=1.45.0"></script>
+  <script src="src/feeds.js?v=1.45.0"></script>
+  <script src="src/backup.js?v=1.45.0"></script>
+  <script src="src/imports.js?v=1.45.0"></script>
+  <script src="src/dict.js?v=1.45.0"></script>
+  <script src="src/sync.js?v=1.45.0"></script>
+  <script src="src/drive.js?v=1.45.0"></script>
+  <script src="src/qr.js?v=1.45.0"></script>
+  <script src="src/stats.js?v=1.45.0"></script>
+  <script src="src/epub.js?v=1.45.0"></script>
+  <script src="src/files.js?v=1.45.0"></script>
+  <script src="src/pdf.js?v=1.45.0"></script>
+  <script src="src/reader.js?v=1.45.0"></script>
+  <script src="src/app.js?v=1.45.0"></script>
+  <script src="src/app-reader.js?v=1.45.0"></script>
+  <script src="src/app-library.js?v=1.45.0"></script>
+  <script src="src/app-saving.js?v=1.45.0"></script>
+  <script src="src/app-places.js?v=1.45.0"></script>
+  <script src="src/app-settings.js?v=1.45.0"></script>
+  <script src="src/app-lock.js?v=1.45.0"></script>
+  <script src="src/app-start.js?v=1.45.0"></script>
 </body>
 </html>

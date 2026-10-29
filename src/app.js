@@ -9,7 +9,7 @@
 // only use what an earlier part, or its own, has declared. A part's
 // functions can call into any part, since nothing is tapped until all of
 // them have loaded. app-start.js runs last and starts things up.
-const APP_VERSION = "1.44.0";
+const APP_VERSION = "1.45.0";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
@@ -197,6 +197,9 @@ const SPACES = {
   letters: { min: -0.05, max: 0.15, step: 0.01 },
   words: { min: 0, max: 0.5, step: 0.05 },
   paras: { min: 0, max: 3, step: 0.25 },
+  // Text weight (1.45.0): 400 is the font's regular; headings and bold
+  // move with it.
+  weight: { min: 300, max: 600, step: 25 },
 };
 // Every Latin font is followed by a Hebrew one (src/fonts.css), which
 // gives a Hebrew page its letters: the one picked, or else the one
@@ -266,7 +269,7 @@ const HEBREW = [
   { value: "heebo", label: "Heebo", family: '"Heebo"' },
 ];
 const MARGINS = { narrow: ["var(--s-3)", "44rem"], normal: ["20px", "38rem"], wide: ["var(--s-7)", "32rem"] };
-const READING_DEFAULT = { size: 19, spacing: 1.6, letters: 0, words: 0, paras: 1, font: "serif", hebrew: "auto", margins: "normal", align: "auto", layout: "scroll", spread: "auto", rail: true };
+const READING_DEFAULT = { size: 19, spacing: 1.6, letters: 0, words: 0, paras: 1, weight: 400, hyphens: true, font: "serif", hebrew: "auto", margins: "normal", align: "auto", layout: "scroll", spread: "auto", rail: true };
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 // Text alignment (1.19.0). "auto" leaves the clip or file as it came.
@@ -293,6 +296,7 @@ function readingPrefs() {
   if (r.layout !== "pages") r.layout = "scroll";
   if (!["one", "two", "auto"].includes(r.spread)) r.spread = "auto";
   r.rail = r.rail !== false;
+  r.hyphens = r.hyphens !== false;
   return r;
 }
 
@@ -314,7 +318,9 @@ function paintReading() {
   root.setProperty("--reader-ls", r.letters ? r.letters + "em" : "normal");
   root.setProperty("--reader-ws", r.words ? r.words + "em" : "normal");
   root.setProperty("--reader-ps", String(r.paras));
+  root.setProperty("--reader-wt", String(r.weight));
   document.documentElement.dataset.readAlign = r.align;
+  document.documentElement.toggleAttribute("data-read-hyphens", r.hyphens);
   if (C.reader) C.reader.applyTheme();
 }
 

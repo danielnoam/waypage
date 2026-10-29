@@ -9,7 +9,7 @@ body {
   padding: calc(var(--co-top, 0px) + var(--s-5)) var(--reader-pad, 20px) calc(var(--co-bottom, 0px) + var(--s-7));
   background: var(--bg);
   color: var(--ink);
-  font: 400 var(--reader-fs, var(--fs-body))/var(--reader-lh, var(--lh-body)) var(--reader-font, var(--serif));
+  font: var(--reader-wt, 400) var(--reader-fs, var(--fs-body))/var(--reader-lh, var(--lh-body)) var(--reader-font, var(--serif));
   letter-spacing: var(--reader-ls, normal);
   word-spacing: var(--reader-ws, normal);
   overflow-wrap: break-word;
@@ -20,10 +20,10 @@ a { color: var(--accent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .co-meta { margin: 0 0 var(--s-3); font: 400 var(--fs-meta)/var(--lh-meta) var(--sans); color: var(--muted); }
-h1 { margin: 0 0 var(--s-4); font: 700 var(--fs-title)/var(--lh-title) var(--reader-font, var(--serif)); }
+h1 { margin: 0 0 var(--s-4); font: calc(700 + var(--reader-wt, 400) - 400) var(--fs-title)/var(--lh-title) var(--reader-font, var(--serif)); }
 .co-byline { margin: calc(-1 * var(--s-2)) 0 var(--s-4); font: 400 var(--fs-label)/var(--lh-label) var(--sans); color: var(--muted); }
-h2 { margin: var(--s-6) 0 var(--s-3); font: 600 var(--fs-heading)/var(--lh-heading) var(--reader-font, var(--serif)); }
-h3, h4, h5, h6 { margin: var(--s-5) 0 var(--s-2); font-size: var(--reader-fs, var(--fs-body)); line-height: var(--reader-lh, var(--lh-body)); font-weight: 600; }
+h2 { margin: var(--s-6) 0 var(--s-3); font: calc(600 + var(--reader-wt, 400) - 400) var(--fs-heading)/var(--lh-heading) var(--reader-font, var(--serif)); }
+h3, h4, h5, h6 { margin: var(--s-5) 0 var(--s-2); font-size: var(--reader-fs, var(--fs-body)); line-height: var(--reader-lh, var(--lh-body)); font-weight: calc(600 + var(--reader-wt, 400) - 400); }
 p, ul, ol, dl, blockquote, pre, table, details { margin: 0 0 calc(var(--s-4) * var(--reader-ps, 1)); }
 /* Alignment from Settings (1.19.0) wins over the page's own; without it the
    page keeps what it came with. Every block of text, whatever it's made of
@@ -36,7 +36,12 @@ html[data-co-align] body :not(pre, pre *, table, table *, figure, figure *, img,
 html[data-co-align="left"] { --co-align: left; }
 html[data-co-align="right"] { --co-align: right; }
 html[data-co-align="center"] { --co-align: center; }
-html[data-co-align="justify"] { --co-align: justify; hyphens: auto; -webkit-hyphens: auto; }
+html[data-co-align="justify"] { --co-align: justify; }
+/* Hyphenation (1.45.0) is a switch of its own, on by default, whatever
+   the alignment; before, only Justified had it. It needs the clip's
+   language (lang), which saving keeps. */
+html[data-co-hyph] body { hyphens: auto; -webkit-hyphens: auto; }
+html[data-co-hyph] :is(pre, code, a, .co-meta) { hyphens: manual; -webkit-hyphens: manual; }
 ul, ol { padding-inline-start: var(--s-5); }
 blockquote { padding-inline-start: var(--s-4); border-inline-start: 3px solid var(--line); }
 sup, sub { line-height: 0; }

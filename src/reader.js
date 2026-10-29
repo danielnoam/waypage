@@ -12,7 +12,7 @@
     "serif", "sans", "measure", "s-1", "s-2", "s-3", "s-4", "s-5", "s-6", "s-7", "r-sm", "r-md", "r-full",
     "fs-title", "lh-title", "fs-heading", "lh-heading", "fs-body", "lh-body", "fs-label", "lh-label", "fs-meta", "lh-meta",
     "reader-fs", "reader-lh", "reader-font", "reader-pad", "reader-measure",
-    "reader-ls", "reader-ws", "reader-ps"];
+    "reader-ls", "reader-ws", "reader-ps", "reader-wt"];
   const NEAR = 2;
 
   let frame = null, doc = null, scrollTimer = null, scrollFrame = 0, topSpace = null, bottomSpace = null;
@@ -68,6 +68,7 @@
     const align = document.documentElement.dataset.readAlign;
     if (align && align !== "auto") doc.documentElement.setAttribute("data-co-align", align);
     else doc.documentElement.removeAttribute("data-co-align");
+    doc.documentElement.toggleAttribute("data-co-hyph", document.documentElement.hasAttribute("data-read-hyphens"));
     // A new text size or margin moves the columns: back to the same place.
     if (isPaged()) requestAnimationFrame(() => { if (isPaged()) relayout(at); });
     else if (chunks.length) requestAnimationFrame(guessHeights);
@@ -448,10 +449,60 @@
     return cur ? clean(cur) : "";
   }
 
-  // Straight to a heading, just under the bar.
+  // Where each heading sits along the progress line (1.45.0), in
+  // position()'s own units, for its ticks, the skim's names and the
+  // minutes left in a chapter. A heading in a long clip's chunk that may
+  // not be laid out (chunkUp) is put by its share of the chunk's letters
+  // from the chunk's own box, so nothing inside it is laid out for this.
+  let partsKey = "", partsAt = [], shares = null;
+  const NO_PARTS = [];
+  function parts() {
+    if (!doc || !frame || heads.length < 2) return NO_PARTS;
+    const w = frame.contentWindow, root = doc.documentElement;
+    const key = (isPaged() ? "p" + pages() : root.scrollHeight) + "/" + w.innerWidth + "/" + w.innerHeight;
+    if (key === partsKey) return partsAt;
+    const list = headings();
+    if (isPaged()) {
+      const n = pages();
+      partsAt = heads.map((h, i) => ({ ...list[i], at: n <= 1 ? 0 : pageOf(h) / (n - 1) }));
+    } else {
+      const room = root.scrollHeight - w.innerHeight;
+      const lift = (topSpace ? topSpace() : 0) + 8;
+      if (chunks.length && !shares) {
+        shares = heads.map((h) => {
+          const box = h.closest(".co-lazy");
+          if (!box) return null;
+          const r = doc.createRange();
+          r.setStart(box, 0);
+          r.setEndBefore(h);
+          return { box, share: r.toString().length / Math.max(1, box.textContent.length) };
+        });
+      }
+      partsAt = heads.map((h, i) => {
+        const c = shares && shares[i];
+        let y;
+        if (c) { const b = c.box.getBoundingClientRect(); y = b.top + b.height * c.share; } else y = h.getBoundingClientRect().top;
+        return { ...list[i], at: room <= 0 ? 0 : Math.min(1, Math.max(0, (y + w.scrollY - lift) / room)) };
+      });
+    }
+    partsKey = key;
+    return partsAt;
+  }
+  // Skimming (1.45.0): straight to a point along the progress line, a
+  // page in Pages.
+  function skimTo(f) {
+    if (!doc || !frame) return;
+    const w = frame.contentWindow, at = Math.min(1, Math.max(0, f));
+    if (isPaged()) { goPage(Math.round(at * (pages() - 1)), true); return; }
+    w.scrollTo(0, at * Math.max(0, doc.documentElement.scrollHeight - w.innerHeight));
+  }
+
+  // Straight to a heading, just under the bar. Back to where you were
+  // (1.45.0) comes up, as after a link in the text.
   function jumpTo(i) {
     const h = heads[i];
     if (!h || !frame) return;
+    if (onJump) onJump(spot());
     if (isPaged()) { goPage(pageOf(h), true); return; }
     const w = frame.contentWindow;
     w.scrollTo(0, h.getBoundingClientRect().top + w.scrollY - (topSpace ? topSpace() : 0) - 8);
@@ -964,9 +1015,10 @@
   }
 
   // Scrolls (or turns) to a highlight; false when it isn't in the page.
-  function toMark(id) {
+  function toMark(id, back) {
     const mk = marked().find((x) => x.dataset.mark === id);
     if (!mk || !frame) return false;
+    if (back && onJump) onJump(spot());
     if (isPaged()) { goPage(pageOf(mk), true); return true; }
     const w = frame.contentWindow;
     w.scrollTo(0, Math.max(0, mk.getBoundingClientRect().top + w.scrollY - (topSpace ? topSpace() : 0) - 48));
@@ -1322,6 +1374,9 @@
     finds = [];
     findAt = -1;
     heads = [];
+    partsKey = "";
+    partsAt = [];
+    shares = null;
     topSpace = top || null;
     bottomSpace = bottom || null;
     savedFull = meta.mode === "full";
@@ -1476,6 +1531,9 @@
     finds = [];
     findAt = -1;
     heads = [];
+    partsKey = "";
+    partsAt = [];
+    shares = null;
     nextLink = null;
     onNext = null;
     prevLink = null;
@@ -1511,5 +1569,5 @@
       return line;
     }));
   }
-  C.reader = { setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, jumpTo, readable, readableIn, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
+  C.reader = { setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
 })();
