@@ -1323,7 +1323,7 @@ function zipOf(files) {
       await q.context().close();
     });
 
-    await test("the Reading place adds up the week, steps back, and opens a clip; the end of a clip says your time (1.39.0)", async () => {
+    await test("the Stats place adds up the week, steps back, and opens a clip; the end of a clip says your time (1.39.0)", async () => {
       const q = await page(browser, 390);
       await q.fill("#saveUrl", ARTICLE);
       await q.press("#saveUrl", "Enter");
@@ -1335,7 +1335,7 @@ function zipOf(files) {
       });
       await q.evaluate(() => goPlace("reading"));
       await q.waitForSelector(".rs-total");
-      assert.strictEqual(await q.textContent("#placeTitle"), "Reading");
+      assert.strictEqual(await q.textContent("#placeTitle"), "Stats");
       const week = await q.evaluate(() => ({ total: document.querySelector(".rs-total").textContent, cols: document.querySelectorAll(".rs-col").length, top: document.querySelectorAll(".rs-clip").length, streak: document.querySelector(".rs-streak-n").textContent }));
       assert.strictEqual(week.cols, 7);
       assert.strictEqual(week.top, 1);

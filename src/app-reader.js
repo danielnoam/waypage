@@ -751,7 +751,7 @@ function fitRail() {
 }
 function paintRail() {
   const p = state.open;
-  $("railBackLabel").textContent = state.folder || (state.place === "feeds" ? "Feeds" : state.place === "newsletters" ? "Newsletters" : state.place === "highlights" ? "Highlights" : state.place === "reading" ? "Reading" : "Library");
+  $("railBackLabel").textContent = state.folder || (state.place === "feeds" ? "Feeds" : state.place === "newsletters" ? "Newsletters" : state.place === "highlights" ? "Highlights" : state.place === "reading" ? "Stats" : "Library");
   const pages = railPages();
   $("readerRail").classList.toggle("paged", pages.length > 0);
   $("readerRail").setAttribute("aria-label", pages.length ? "Pages" : "Contents");

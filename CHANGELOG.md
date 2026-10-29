@@ -2,6 +2,20 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.43.2] - 2026-10-29
+
+### Changed
+- The sidebar's Reading place is now called Stats (G then S on a
+  keyboard; G then R still works).
+- The sidebar has no lines between its sections any more, just space,
+  and Stats sits apart from Highlights.
+- Favourites, Collections, Clips, Files and the feeds under Library and
+  Feeds are set in a little, so they read as part of the section above.
+
+### Added
+- A small arrow beside Library and Feeds in the sidebar folds their
+  items away and back, sliding. Each stays as you left it on this device.
+
 ## [1.43.1] - 2026-10-28
 
 ### Changed

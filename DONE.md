@@ -40,7 +40,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Watched folders, each into a chosen collection (1.1.0, 1.4.0, 1.28.0)
 - Library storage: app storage, Documents or any folder, moved natively on Android (0.33.0, 1.19.0)
 - Edit clips: find and remove or replace words across many clips (1.22.0)
-- Sidebar with favourites, Collections, Clips, Files, Feeds, Highlights (0.28.0, 1.8.0, 1.14.0)
+- Sidebar with favourites, Collections, Clips, Files, Feeds, Highlights; sections set apart by space, their items indented and folding under an arrow (0.28.0, 1.8.0, 1.14.0, 1.43.2)
 - Import from Pocket, Instapaper, Omnivore, Raindrop (1.9.0)
 
 ## Reading
@@ -102,7 +102,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - App lock: passcode, fingerprint or face on Android, lock after a time away, erase when forgotten (1.38.0)
 - Reading stats: time, words, read aloud, opened, finished, saved, kept per device and added up through GitHub sync and backups (1.38.0, 1.39.0)
 - Minutes by your own reading pace; time stops counting a screen's reading time after the last scroll (1.41.0)
-- Reading place in the sidebar: week, month or year of bars, totals, days in a row, most time (1.39.0)
+- Stats place in the sidebar (named Reading until 1.43.2): week, month or year of bars, totals, days in a row, most time (1.39.0, 1.43.2)
 - Reading widgets on Android: this week's bars, today, days in a row (1.39.0; iOS on TODO)
 - Widgets: Keep reading, Feeds, Favourites, Collection, Highlight (0.29.0, 0.29.2, 0.35.0, 1.9.0; iOS 1.6.0)
 - App icon shortcuts (1.14.0)
