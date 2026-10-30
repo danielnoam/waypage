@@ -2,6 +2,23 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.45.5] - 2026-10-30
+
+### Added
+- Feeds and Newsletters: swipe sideways to go to the next or previous
+  feed or address, All first. The list follows your finger.
+
+### Changed
+- Sidebar: the fold arrow sits inside its row (Library, Feeds,
+  Newsletters), in the same highlight. Library no longer shows the
+  number of clips.
+
+### Fixed
+- Opening the sidebar on a phone no longer hides the bar along the
+  bottom in Library, Feeds and Newsletters. The page slid right under
+  the sidebar and got wider than the screen, so the phone grew its view
+  to fit and the bar went below the edge.
+
 ## [1.45.4] - 2026-10-30
 
 ### Fixed

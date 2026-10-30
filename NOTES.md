@@ -18,6 +18,18 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Sidebar drift and the bottom bar (1.45.5).** The library drifts
+  right under the sidebar on touch. With the transform on the whole
+  `#libraryView`, its moved box made the page wider than the screen; a
+  phone (isMobile in Chromium) then grows the layout viewport to fit
+  (390 to 450 px wide, 844 to 974 px tall), so the sticky `.save-bar` sat
+  below the visible edge. Now each child of `#libraryView` drifts
+  (`drift()`, `libParts()` in app-places.js) and `#libraryView` has
+  `overflow-x: clip`. Desktop Chromium never showed it; Playwright with
+  `isMobile: true` does. Swipe between feeds (`swipeFeeds`) is touch
+  only, starts past the left edge's 24 px (the sidebar's swipe there)
+  and not on the chips row, which scrolls sideways itself.
+
 - **KOReader ideas (1.45.0).** Daniel picked skim, minutes left in a
   chapter, text weight, hyphenation, Wallabag import and offline
   dictionaries from the comparison; settings per book went on TODO.md.

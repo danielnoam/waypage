@@ -807,7 +807,7 @@ function renderSide() {
         onclick: () => (pinned.matches ? toLibrary() : back()).then(() => { if (state.place !== "library") goPlace("library"); openSearch(); }) }, sideSvg("search")) : null),
     // From inside Collections, Clips, a collection or the favourites
     // (1.20.0), Library steps all the way back to the library itself.
-    ...sideFold("library", item(feedIcon("library"), "Library", inLibrary, count(state.pages.length, "side-count"), () =>
+    ...sideFold("library", item(feedIcon("library"), "Library", inLibrary, null, () =>
       inLib && (state.part || state.folder || state.filter === "favourites")
         ? toLibrary().then(() => { if (state.filter === "favourites") setFilter("all"); return goPlace("library"); })
         : goPlace("library")), [
@@ -868,6 +868,12 @@ function sideSvg(name) {
   return box;
 }
 
+// The library's parts move under the sidebar one by one, not the library
+// as a whole: a transform on it made a phone drop the sticky bar along
+// the bottom (1.45.5).
+const libParts = () => [...$("libraryView").children];
+const drift = (t) => libParts().forEach((x) => { x.style.transform = t; });
+
 function openSide() {
   if (state.side || pinned.matches) return;
   state.side = true;
@@ -880,9 +886,9 @@ function openSide() {
   side.hidden = false;
   // The library drifts right a little under it, and stays there while
   // it's open (1.11.0).
-  const lib = $("libraryView");
+  const lib = libParts();
   M.dim($("sideCatch"), true);
-  M.slideIn(side, M.reduced() ? null : lib).then(() => { if (state.side && !pinned.matches && !M.reduced()) lib.style.transform = M.sideDrift(side); });
+  M.slideIn(side, M.reduced() ? null : lib).then(() => { if (state.side && !pinned.matches && !M.reduced()) drift(M.sideDrift(side)); });
   afterSettle(() => {
     if (!state.side) return;
     cover($("libraryView"), true);
@@ -901,7 +907,7 @@ function closeSide() {
     catcher.hidden = true;
     side.style.pointerEvents = "";
     cover($("libraryView"), false);
-    $("libraryView").style.transform = "";
+    drift("");
     return;
   }
   const had = side.contains(document.activeElement);
@@ -909,8 +915,8 @@ function closeSide() {
   side.style.pointerEvents = "none";
   const from = sideDragged;
   sideDragged = 0;
-  const lib = $("libraryView");
-  lib.style.transform = "";
+  const lib = libParts();
+  drift("");
   M.dim(catcher, false).then(() => { if (!state.side) catcher.hidden = true; });
   M.slideOut(side, from, M.reduced() ? null : lib).then(() => { if (!state.side) side.hidden = true; });
   afterSettle(() => {
@@ -1207,7 +1213,7 @@ function dragSide() {
     drag.dx = dx;
     side.style.transform = "translateX(" + dx + "px)";
     catcher.style.opacity = String(Math.max(0, 1 + dx / drag.w));
-    if (!M.reduced()) $("libraryView").style.transform = "translateX(" + Math.round(drag.w * 0.2 * (1 + dx / drag.w)) + "px)";
+    if (!M.reduced()) drift("translateX(" + Math.round(drag.w * 0.2 * (1 + dx / drag.w)) + "px)");
   };
   const up = () => {
     const d = drag;
@@ -1215,12 +1221,12 @@ function dragSide() {
     if (!d || !d.on) return;
     sideDragEnd = performance.now();
     side.style.transform = "";
-    const lib = $("libraryView");
+    const lib = libParts();
     if (d.dx < -d.w / 3 || d.v < -0.5) { sideDragged = d.dx; history.back(); }
     else {
       M.dim(catcher, true);
       M.slideBack(side, d.dx, M.reduced() ? null : lib);
-      if (!M.reduced()) lib.style.transform = M.sideDrift(side);
+      if (!M.reduced()) drift(M.sideDrift(side));
     }
   };
   for (const n of [side, catcher]) {
@@ -1251,6 +1257,64 @@ function swipeToSide(root) {
     if (dx > 64 && dy < dx / 2) { start = null; openSide(); }
   }, { passive: true });
   root.addEventListener("touchend", () => { start = null; }, { passive: true });
+}
+
+// In Feeds and Newsletters a swipe sideways goes to the feed or address
+// next to this one, in the chips' order, All first (1.45.5). The list
+// follows the finger, then the next one comes in from that side. Not from
+// the left edge (the sidebar's) or on the chips, which scroll sideways.
+function swipeFeeds(root) {
+  let go = null;
+  const chips = () => [...root.querySelectorAll(".feed-chips .chip")];
+  const neighbour = (d) => {
+    const all = chips(), at = all.findIndex((c) => c.classList.contains("on"));
+    return at < 0 ? null : all[at + d] || null;
+  };
+  root.addEventListener("touchstart", (e) => {
+    const t = e.touches[0];
+    go = e.touches.length === 1 && t.clientX > EDGE && !state.feedPick && !state.side && !state.menu && chips().length > 1
+      && !e.target.closest(".filters, input, textarea") ? { x: t.clientX, y: t.clientY, on: false, dx: 0, t: e.timeStamp } : null;
+  }, { passive: true });
+  root.addEventListener("touchmove", (e) => {
+    if (!go) return;
+    const t = e.touches[0], dx = t.clientX - go.x, dy = t.clientY - go.y;
+    if (!go.on) {
+      if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { go = null; return; }
+      if (Math.abs(dx) < 16) return;
+      go.on = true;
+    }
+    go.dx = dx;
+    // Past the first or last, it gives a little and no more.
+    const to = neighbour(dx < 0 ? 1 : -1);
+    if (!M.reduced()) root.style.transform = "translateX(" + (to ? dx : dx / 4) + "px)";
+  }, { passive: true });
+  const end = (e) => {
+    const g = go;
+    go = null;
+    if (!g || !g.on) return;
+    const d = g.dx < 0 ? 1 : -1, to = neighbour(d);
+    const fast = Math.abs(g.dx) / Math.max(1, e.timeStamp - g.t) > 0.5;
+    const w = root.offsetWidth || innerWidth;
+    if (!to || (Math.abs(g.dx) < w / 4 && !fast)) {
+      if (M.reduced()) return;
+      root.animate([{ transform: "translateX(" + (to ? g.dx : g.dx / 4) + "px)" }, { transform: "none" }], M.timing("controlEdge"));
+      root.style.transform = "";
+      return;
+    }
+    if (M.reduced()) { to.click(); return; }
+    const out = root.animate([{ transform: "translateX(" + g.dx + "px)" }, { transform: "translateX(" + -d * w + "px)" }], { ...M.timing("control"), fill: "forwards" });
+    root.style.transform = "";
+    out.finished.then(() => {
+      to.click();
+      scrollTo(0, 0);
+      root.animate([{ transform: "translateX(" + d * w + "px)" }, { transform: "none" }], M.timing("sheetEdge"));
+      out.cancel();
+      const on = root.querySelector(".feed-chips .chip.on");
+      if (on) on.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }, () => {});
+  };
+  root.addEventListener("touchend", end, { passive: true });
+  root.addEventListener("touchcancel", end, { passive: true });
 }
 
 // Pulling down from the top checks for what's new: in Feeds the feeds

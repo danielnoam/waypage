@@ -697,6 +697,40 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("on a phone the sidebar keeps the bottom bar on screen, and a swipe goes between feeds (1.45.5)", async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => {
+        const now = Date.now(), post = (n) => ({ id: "s" + n, url: "https://example.org/p/" + n, title: "Post " + n, date: now - n * 36e5 });
+        localStorage.setItem("waypage.feeds", JSON.stringify([
+          { url: "https://a.example/feed.xml", title: "Alpha", days: 7, mode: "show", checkedAt: now, items: [1, 2, 3, 4, 5, 6, 7, 8].map(post) },
+          { url: "https://b.example/rss", title: "Beta", days: 7, mode: "show", checkedAt: now, items: [9, 10].map(post) }]));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => goPlace("feeds"));
+      await q.evaluate(() => openSide());
+      await q.waitForTimeout(900);
+      const bar = await q.evaluate(() => [innerHeight, document.querySelector(".save-bar").getBoundingClientRect().bottom]);
+      assert.deepStrictEqual(bar, [844, 844], "the bottom bar went off screen");
+      await q.evaluate(() => closeSide());
+      await q.waitForTimeout(600);
+      const cdp = await ctx.newCDPSession(q);
+      const swipe = async (x0, x1) => {
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: x0, y: 500 }] });
+        for (let i = 1; i <= 8; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: x0 + (x1 - x0) * i / 8, y: 500 }] });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await q.waitForTimeout(900);
+        return q.evaluate(() => state.feed);
+      };
+      assert.strictEqual(await swipe(300, 80), "https://a.example/feed.xml");
+      assert.strictEqual(await swipe(300, 80), "https://b.example/rss");
+      assert.strictEqual(await swipe(80, 300), "https://a.example/feed.xml");
+      await ctx.close();
+    });
+
     await test("Look up finds a selected word in a dictionary added in Settings, offline and safely (1.45.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(() => openSection("reading"));
