@@ -143,7 +143,7 @@ Each section below shows the computer (left) and the phone (right).
 - Save a post, save all, or pick several; auto-save a feed's posts.
 - Checked with the app closed, with notifications per post or grouped, and quiet feeds.
 - Feeds in and out as OPML.
-- Swipe sideways to go to the next or previous feed (or address in Newsletters).
+- Swipe sideways to go to the next or previous feed (or address in Newsletters); the chips stay still.
 
 ## Newsletters
 

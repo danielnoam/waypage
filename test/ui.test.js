@@ -728,6 +728,12 @@ function zipOf(files) {
       assert.strictEqual(await swipe(300, 80), "https://a.example/feed.xml");
       assert.strictEqual(await swipe(300, 80), "https://b.example/rss");
       assert.strictEqual(await swipe(80, 300), "https://a.example/feed.xml");
+      // Mid-swipe the chips stay put and the posts follow (1.45.6).
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: 300, y: 500 }] });
+      for (let i = 1; i <= 4; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: 300 - i * 25, y: 500 }] });
+      const mid = await q.evaluate(() => [document.querySelector("#feeds .feed-chips").style.transform, document.querySelector("#feeds .feed-head").style.transform]);
+      assert.ok(mid[0] === "" && /^translateX\(-\d+px\)$/.test(mid[1]), JSON.stringify(mid));
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
       await ctx.close();
     });
 

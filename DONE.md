@@ -88,7 +88,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Notifications per post or grouped, quiet feeds, off switch (1.30.0)
 - Select several posts (1.20.0, 1.21.1)
 - Feeds in and out as OPML (1.32.0)
-- Swipe sideways between feeds, and between newsletter addresses (1.45.5)
+- Swipe sideways between feeds, and between newsletter addresses; the chips stay still (1.45.5, 1.45.6)
 
 ## Newsletters
 
