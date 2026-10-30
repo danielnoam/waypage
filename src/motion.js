@@ -21,8 +21,17 @@
     pts[pts.length - 1] = 1;
     return { ms: Math.round(t * 1000), curve: "linear(" + pts.join(", ") + ")", pts };
   }
-  const TOUCH = { sheet: sample(400, 32), control: sample(600, 40) };
-  const DESK = { sheet: sample(700, 2 * Math.sqrt(700)), control: sample(1000, 2 * Math.sqrt(1000)) };
+  // The same spring stopped at 1, for what slides in from an edge or
+  // sits against one (1.45.4): its small overshoot carried a screen, bar
+  // or sheet a few pixels past where it rests, and what was behind
+  // flickered through the gap at the edge.
+  function edge(s) {
+    const pts = s.pts.map((x) => Math.min(1, x));
+    return { ms: s.ms, curve: "linear(" + pts.join(", ") + ")", pts };
+  }
+  const springs = (sheet, control) => ({ sheet, control, sheetEdge: edge(sheet), controlEdge: edge(control) });
+  const TOUCH = springs(sample(400, 32), sample(600, 40));
+  const DESK = springs(sample(700, 2 * Math.sqrt(700)), sample(1000, 2 * Math.sqrt(1000)));
   // Older WebViews without linear(): the nearest cubic-bezier, no overshoot.
   const FALLBACK = "cubic-bezier(0.2, 0.9, 0.3, 1)";
   const hasLinear = !!(window.CSS && CSS.supports && CSS.supports("transition-timing-function", "linear(0, 1)"));
@@ -72,11 +81,11 @@
   const DRIFT = "translateX(-25%)";
   function push(el, under) {
     const f = [{ transform: "translateX(100%)" }, { transform: "none" }];
-    return run([[el, f], !desk() && under && [under, [{ transform: "none" }, { transform: DRIFT }]]], "sheet", true);
+    return run([[el, f], !desk() && under && [under, [{ transform: "none" }, { transform: DRIFT }]]], "sheetEdge", true);
   }
   function pop(el, under, from = 0) {
     const f = [{ transform: "translateX(" + from + "px)" }, { transform: "translateX(100%)" }];
-    return run([[el, f], !desk() && under && [under, [{ transform: DRIFT }, { transform: "none" }]]], "sheet", false);
+    return run([[el, f], !desk() && under && [under, [{ transform: DRIFT }, { transform: "none" }]]], "sheetEdge", false);
   }
 
   // Opening a clip or collection: the screen settles in from slightly
@@ -119,13 +128,13 @@
   // A sheet from the bottom edge (the reader's Aa, the phone's menus);
   // closing goes on from where a drag left it.
   function rise(el) {
-    return one(el, [{ transform: "translateY(100%)" }, { transform: "none" }], "sheet", true);
+    return one(el, [{ transform: "translateY(100%)" }, { transform: "none" }], "sheetEdge", true);
   }
   function sink(el, from = 0) {
     return one(el, [{ transform: "translateY(" + from + "px)" }, { transform: "translateY(100%)" }], "sheet", false);
   }
   function settle(el, from) {
-    return one(el, [{ transform: "translateY(" + from + "px)" }, { transform: "none" }], "control", null);
+    return one(el, [{ transform: "translateY(" + from + "px)" }, { transform: "none" }], "controlEdge", null);
   }
   // The dimming behind a sheet, the sidebar or a dialog: it darkens with
   // the thing it's under, on the same spring, from where a drag left it.
@@ -142,17 +151,17 @@
   // library under it drifts right a little (1.11.0).
   const sideDrift = (side) => "translateX(" + Math.round(side.offsetWidth * 0.2) + "px)";
   function slideIn(el, under) {
-    return run([[el, [{ transform: "translateX(-100%)" }, { transform: "none" }]], under && [under, [{ transform: "none" }, { transform: sideDrift(el) }]]], "sheet", true);
+    return run([[el, [{ transform: "translateX(-100%)" }, { transform: "none" }]], under && [under, [{ transform: "none" }, { transform: sideDrift(el) }]]], "sheetEdge", true);
   }
   function slideOut(el, from = 0, under) {
     const k = el.offsetWidth ? 1 + from / el.offsetWidth : 1;
     return run([[el, [{ transform: "translateX(" + from + "px)" }, { transform: "translateX(-100%)" }]],
-      under && [under, [{ transform: "translateX(" + Math.round(el.offsetWidth * 0.2 * k) + "px)" }, { transform: "none" }]]], from ? "control" : "sheet", false);
+      under && [under, [{ transform: "translateX(" + Math.round(el.offsetWidth * 0.2 * k) + "px)" }, { transform: "none" }]]], from ? "controlEdge" : "sheetEdge", false);
   }
   function slideBack(el, from, under) {
     const k = el.offsetWidth ? 1 + from / el.offsetWidth : 1;
     return run([[el, [{ transform: "translateX(" + from + "px)" }, { transform: "none" }]],
-      under && [under, [{ transform: "translateX(" + Math.round(el.offsetWidth * 0.2 * k) + "px)" }, { transform: sideDrift(el) }]]], "control", null);
+      under && [under, [{ transform: "translateX(" + Math.round(el.offsetWidth * 0.2 * k) + "px)" }, { transform: sideDrift(el) }]]], "controlEdge", null);
   }
 
   // A menu or popover grows out of the button that opened it, from that
@@ -183,8 +192,8 @@
     if (edge === "right") return "translateX(" + Math.ceil(innerWidth - r.left + 8) + "px)";
     return "translateY(" + Math.ceil(innerHeight - r.top + 8) + "px)";
   }
-  const edgeIn = (el, edge = "bottom") => one(el, [{ transform: past(el, edge) }, { transform: "none" }], "sheet", true);
-  const edgeOut = (el, edge = "bottom") => one(el, [{ transform: "none" }, { transform: past(el, edge) }], "sheet", false);
+  const edgeIn = (el, side = "bottom") => one(el, [{ transform: past(el, side) }, { transform: "none" }], "sheetEdge", true);
+  const edgeOut = (el, side = "bottom") => one(el, [{ transform: "none" }, { transform: past(el, side) }], "sheet", false);
 
   // The read-aloud card and the reader's player are one thing (1.26.1).
   // From 1.26.2 only the card's `part` (its play button) is showing at
@@ -263,7 +272,7 @@
   }
   function pageIn(el, side = true, dir = 1) {
     el.style.visibility = "";
-    return one(el, [{ transform: along(side, 100 * dir) }, { transform: "none" }], "sheet", true);
+    return one(el, [{ transform: along(side, 100 * dir) }, { transform: "none" }], "sheetEdge", true);
   }
 
   // The spring as CSS custom properties, for transitions styles.css owns
@@ -274,6 +283,7 @@
     root.setProperty("--spring-sheet-ms", set.sheet.ms + "ms");
     root.setProperty("--spring-control", hasLinear ? set.control.curve : FALLBACK);
     root.setProperty("--spring-control-ms", set.control.ms + "ms");
+    root.setProperty("--spring-control-edge", hasLinear ? set.controlEdge.curve : FALLBACK);
   }
   paintVars();
   deskQ.addEventListener("change", paintVars);

@@ -109,6 +109,11 @@ and the page shows above it.
   - Desktop (`(min-width: 1024px) and (pointer: fine)`): critically
     damped, stiffness 700 and 1000, so nothing overshoots, and no press
     dip on buttons.
+  - What slides in from an edge or sits against one (screens, sheets,
+    the sidebar, the reader's bars, the skim) uses the same spring
+    stopped at 1 (`sheetEdge`, `controlEdge`, `--spring-control-edge`),
+    since 1.45.4: an overshoot of a pixel or two showed what's behind
+    as a flickering seam at the edge.
 - Nothing fades. Things grow, shrink, slide or leave past an edge. The
   only fade is the reduced-motion answer: a 120 ms opacity change, or no
   animation at all for something going away.

@@ -2,6 +2,17 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.45.4] - 2026-10-30
+
+### Fixed
+- The thin line along the bottom of the reader stays put while the bar
+  slides away and back. Since 1.45.2 the row slid over it, so it went
+  missing and popped back.
+- No more thin flicker at the edges while things slide in: the reader's
+  bars, the skim, sheets, the sidebar, and screens coming in from the
+  side. Their springs stopped a pixel or two past where they rest,
+  showing what was behind for a moment. They now stop exactly in place.
+
 ## [1.45.3] - 2026-10-30
 
 ### Fixed

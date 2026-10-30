@@ -728,7 +728,7 @@ body.aloud-bar-up .library, body.aloud-bar-up .screen-body { padding-bottom: cal
 .reader-bar {
   position: absolute; top: 0; left: 0; right: 0; z-index: 3;
   background: var(--bar);
-  transition: transform var(--spring-control-ms, 300ms) var(--spring-control, ease-out);
+  transition: transform var(--spring-control-ms, 300ms) var(--spring-control-edge, ease-out);
 }
 /* Reading on down: the bar slides up out of the way, back on a scroll up
    or when anything in it takes focus. The status bar's strip stays. */
@@ -824,7 +824,7 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
   padding: var(--s-2) calc(var(--gutter) + var(--s-2)) calc(var(--s-2) + env(safe-area-inset-bottom));
   background: var(--bar); color: var(--muted);
   font-size: var(--fs-meta); line-height: var(--lh-meta); font-variant-numeric: tabular-nums;
-  transition: transform var(--spring-control-ms, 300ms) var(--spring-control, ease-out);
+  transition: transform var(--spring-control-ms, 300ms) var(--spring-control-edge, ease-out);
 }
 .read-section { display: flex; flex-direction: column; min-width: 0; white-space: nowrap; }
 /* Pages: 4/20 over the minutes left (1.37.0). */
@@ -884,7 +884,9 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
   .reader.bar-away:not(.brightening) .bright.right,
   .reader:has(.sheet:not([hidden])) .bright.right { transform: translateY(-50%); }
 }
-.read-progress { position: relative; height: 5px; background: var(--line); }
+/* Over the row as it slides away under it (1.45.4): 1.45.2 lifted the
+   row above it and the line went missing while the bar was away. */
+.read-progress { position: relative; z-index: 2; height: 5px; background: var(--line); }
 .read-progress > span:first-child {
   display: block; height: 100%;
   background: var(--accent);
@@ -908,7 +910,7 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
   box-shadow: 0 -1px 0 var(--line), 0 8px 0 var(--bar);
   font: 400 var(--fs-meta)/var(--lh-meta) var(--sans); font-variant-numeric: tabular-nums;
   pointer-events: auto; -webkit-user-select: none; user-select: none;
-  animation: skim-up var(--spring-control-ms, 300ms) var(--spring-control, ease-out);
+  animation: skim-up var(--spring-control-ms, 300ms) var(--spring-control-edge, ease-out);
 }
 .skim-bar > * { max-width: 34rem; margin-inline: auto; }
 .skim-bar[hidden], .skim-left[hidden], .skim-row .icon-btn[hidden] { display: none; }
