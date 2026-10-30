@@ -53,7 +53,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Scroll or Pages, two pages side by side on wide screens (0.29.0, 1.5.0)
 - Place kept and synced as a paragraph on the middle line (0.5.0, 1.3.0, 1.31.0)
 - Contents, progress line, tap to hide the bar (0.13.0, 0.19.0)
-- Skim bar from a tap on the bottom row (1.45.1): slider with chapter notches, chapter before and after, the place kept until you read on; Back to where you were after skimming, Contents or a highlight (1.45.0)
+- Skim from a tap on the bottom row, which grows the bar (1.45.2), also while narrating: slider with chapter notches, chapter before and after, the place kept until you read on; Back to where you were after skimming, Contents or a highlight (1.45.0)
 - Minutes left in this chapter (or section), tap to switch to the whole clip (1.45.0)
 - Section being read in the top bar opens Contents on a computer, a list icon on a phone (1.37.0, 1.42.1); page, minutes left and percent along the bottom (1.37.0)
 - Picture viewer with zoom and swipe (0.14.0, 1.5.0)

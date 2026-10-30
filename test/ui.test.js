@@ -628,7 +628,7 @@ function zipOf(files) {
     });
     await p.context().close();
 
-    await test("skim: a tap on the bottom row raises the skim bar; its slider goes there, the place waits until you read on, Back returns (1.45.1)", async () => {
+    await test("skim: a tap on the bottom row grows the bar into a skim; its slider goes there, the place waits until you read on, Back returns, Narrate follows (1.45.2)", async () => {
       const q = await page(browser, 390);
       await q.fill("#saveUrl", ROOT + "test/fixtures/chapters.html");
       await q.press("#saveUrl", "Enter");
@@ -638,6 +638,7 @@ function zipOf(files) {
       assert.match(await q.locator("#readSection").innerText(), /min left/);
       await q.locator("#readSection").click();
       await q.locator("#skimBar:not([hidden])").waitFor();
+      await q.waitForTimeout(500);
       const row = await q.locator(".read-left").boundingBox();
       const track = await q.locator("#skimTrack").boundingBox();
       assert.ok(track.y + track.height <= row.y, "the slider isn't above the row");
@@ -666,6 +667,32 @@ function zipOf(files) {
       await until(q, () => (state.open.at || 0) > 0.5);
       await q.locator("#jumpBack").click();
       await until(q, () => Waypage.reader.position() < 0.05);
+      // The skim grows the bar itself, and Back rides above it.
+      await q.locator("#readSection").click();
+      await q.locator("#skimBar:not([hidden])").waitFor();
+      await q.waitForTimeout(500);
+      const at = await q.evaluate(() => [document.getElementById("skimBar").getBoundingClientRect().bottom, document.querySelector(".read-left").getBoundingClientRect().top]);
+      assert.ok(Math.abs(at[0] - at[1]) < 1, "the skim isn't part of the bar: " + at);
+      // With Narrate on it skims too, and the voice goes on from there.
+      await q.evaluate(() => {
+        const sp = Waypage.platform.speech;
+        window.plays = [];
+        sp.play = (o) => { window.plays.push(o.start); return Promise.resolve(); };
+        sp.stop = () => Promise.resolve();
+        startAloud();
+      });
+      await until(q, () => window.plays.length === 1 && document.getElementById("readerView").classList.contains("aloud"));
+      if (await q.locator("#skimBar").isHidden()) await q.locator("#readSection").click();
+      await q.locator("#skimBar:not([hidden])").waitFor();
+      const t2 = await q.locator("#skimTrack").boundingBox();
+      await q.mouse.move(t2.x + 4, t2.y + t2.height / 2);
+      await q.mouse.down();
+      for (let x = t2.x + 4; x < t2.x + t2.width * 0.8; x += 20) await q.mouse.move(x, t2.y + t2.height / 2);
+      await q.mouse.up();
+      await until(q, () => window.plays.length === 2);
+      assert.ok(await q.evaluate(() => window.plays[1] > window.plays[0] + 5), "the voice didn't move to the skim");
+      const back = await q.locator("#jumpBack").boundingBox(), bar = await q.locator("#skimBar").boundingBox();
+      assert.ok(back.y + back.height <= bar.y, "Back is under the bar");
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

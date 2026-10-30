@@ -8,8 +8,8 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="src/fonts.css?v=1.45.1">
-  <link rel="stylesheet" href="src/styles.css?v=1.45.1">
+  <link rel="stylesheet" href="src/fonts.css?v=1.45.2">
+  <link rel="stylesheet" href="src/styles.css?v=1.45.2">
 </head>
 <body>
   <div class="app" id="libraryView">
@@ -135,9 +135,6 @@
     </div>
     <iframe class="reader-frame" id="readerFrame" sandbox="allow-same-origin" title="Saved clip"></iframe>
     <div class="reader-wait" id="readerWait" role="status" aria-label="Opening"><span class="spinner" aria-hidden="true"></span></div>
-    <button class="jump-back" id="jumpBack" type="button" hidden>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14l-4-4 4-4"></path><path d="M5 10h9a5 5 0 0 1 0 10h-3"></path></svg>Back to where you were
-    </button>
     <div class="bright" id="bright" hidden>
       <svg class="bright-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
       <div class="bright-track" id="brightTrack" role="slider" tabindex="0" aria-label="Brightness" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="50%">
@@ -146,6 +143,9 @@
       <button class="bright-auto" id="brightAuto" type="button" aria-pressed="true" title="The phone's own brightness">Auto</button>
     </div>
     <div class="read-foot" id="readFoot">
+      <button class="jump-back" id="jumpBack" type="button" hidden>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14l-4-4 4-4"></path><path d="M5 10h9a5 5 0 0 1 0 10h-3"></path></svg>Back to where you were
+      </button>
       <div class="skim-bar" id="skimBar" role="group" aria-label="Skim" hidden>
         <div class="skim-head"><span class="skim-part" id="skimPart" dir="auto"></span><span class="skim-where" id="skimWhere"></span></div>
         <div class="skim-row">
@@ -366,30 +366,30 @@
     </div>
   </section>
 
-  <script src="src/platform.js?v=1.45.1"></script>
-  <script src="src/motion.js?v=1.45.1"></script>
-  <script src="src/vendor/Readability.js?v=1.45.1"></script>
-  <script src="src/store.js?v=1.45.1"></script>
-  <script src="src/save.js?v=1.45.1"></script>
-  <script src="src/feeds.js?v=1.45.1"></script>
-  <script src="src/backup.js?v=1.45.1"></script>
-  <script src="src/imports.js?v=1.45.1"></script>
-  <script src="src/dict.js?v=1.45.1"></script>
-  <script src="src/sync.js?v=1.45.1"></script>
-  <script src="src/drive.js?v=1.45.1"></script>
-  <script src="src/qr.js?v=1.45.1"></script>
-  <script src="src/stats.js?v=1.45.1"></script>
-  <script src="src/epub.js?v=1.45.1"></script>
-  <script src="src/files.js?v=1.45.1"></script>
-  <script src="src/pdf.js?v=1.45.1"></script>
-  <script src="src/reader.js?v=1.45.1"></script>
-  <script src="src/app.js?v=1.45.1"></script>
-  <script src="src/app-reader.js?v=1.45.1"></script>
-  <script src="src/app-library.js?v=1.45.1"></script>
-  <script src="src/app-saving.js?v=1.45.1"></script>
-  <script src="src/app-places.js?v=1.45.1"></script>
-  <script src="src/app-settings.js?v=1.45.1"></script>
-  <script src="src/app-lock.js?v=1.45.1"></script>
-  <script src="src/app-start.js?v=1.45.1"></script>
+  <script src="src/platform.js?v=1.45.2"></script>
+  <script src="src/motion.js?v=1.45.2"></script>
+  <script src="src/vendor/Readability.js?v=1.45.2"></script>
+  <script src="src/store.js?v=1.45.2"></script>
+  <script src="src/save.js?v=1.45.2"></script>
+  <script src="src/feeds.js?v=1.45.2"></script>
+  <script src="src/backup.js?v=1.45.2"></script>
+  <script src="src/imports.js?v=1.45.2"></script>
+  <script src="src/dict.js?v=1.45.2"></script>
+  <script src="src/sync.js?v=1.45.2"></script>
+  <script src="src/drive.js?v=1.45.2"></script>
+  <script src="src/qr.js?v=1.45.2"></script>
+  <script src="src/stats.js?v=1.45.2"></script>
+  <script src="src/epub.js?v=1.45.2"></script>
+  <script src="src/files.js?v=1.45.2"></script>
+  <script src="src/pdf.js?v=1.45.2"></script>
+  <script src="src/reader.js?v=1.45.2"></script>
+  <script src="src/app.js?v=1.45.2"></script>
+  <script src="src/app-reader.js?v=1.45.2"></script>
+  <script src="src/app-library.js?v=1.45.2"></script>
+  <script src="src/app-saving.js?v=1.45.2"></script>
+  <script src="src/app-places.js?v=1.45.2"></script>
+  <script src="src/app-settings.js?v=1.45.2"></script>
+  <script src="src/app-lock.js?v=1.45.2"></script>
+  <script src="src/app-start.js?v=1.45.2"></script>
 </body>
 </html>

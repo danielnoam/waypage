@@ -2,6 +2,19 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.45.2] - 2026-10-30
+
+### Changed
+- Skim is part of the bottom bar again: a tap on the bottom row grows
+  the bar upward with the chapter, the slider and the chapter buttons,
+  in place of a separate card over the text.
+- Back to where you were rides above the bottom bar, so the bar (grown
+  or not) never covers it.
+- Skim works while Narrate is on: tap the row beside the player. When
+  you let go, or tap Back, the voice goes on from the line across the
+  middle of the screen.
+- While the skim is up, a message shows at the top instead of over it.
+
 ## [1.45.1] - 2026-10-30
 
 ### Changed
