@@ -2495,7 +2495,7 @@ $("jumpBack").addEventListener("click", () => {
   closeSkim();
   jumpFrom = null;
   $("jumpBack").hidden = true;
-  if (from && state.open) { C.reader.jump(from.at, from.spot); voiceHere(); }
+  if (from && state.open) { C.reader.jump(from.at, from.spot, true); voiceHere(1000); }
 });
 
 // ---- Skim (1.45.0, from KOReader; in the bar since 1.45.2) ----
@@ -2513,10 +2513,10 @@ const SKIM_HOLD = 60000;
 let skim = null;
 const skimOn = () => !!state.open && !state.sheet;
 let voiceTimer = 0;
-function voiceHere() {
+function voiceHere(wait = 400) {
   clearTimeout(voiceTimer);
   if (!aloudHere() || !aloudOn()) return;
-  voiceTimer = setTimeout(() => { if (aloudHere() && aloudOn() && !(skim && skim.dragging)) startAloud(); }, 400);
+  voiceTimer = setTimeout(() => { if (aloudHere() && aloudOn() && !(skim && skim.dragging)) startAloud(); }, wait);
 }
 const skimUp = () => !$("skimBar").hidden;
 function skimHolds(p, f, s) {
@@ -2592,7 +2592,6 @@ function skimPaint(at) {
   $("skimKnob").style.insetInlineStart = (at * 100).toFixed(2) + "%";
   const [a, b] = skimText(at);
   $("skimPart").textContent = b ? a : "";
-  $("skimWhere").textContent = b || a;
   const track = $("skimTrack");
   track.setAttribute("aria-valuenow", String(Math.round(at * 100)));
   track.setAttribute("aria-valuetext", skimText(at).join(", "));

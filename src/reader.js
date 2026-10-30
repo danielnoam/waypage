@@ -400,7 +400,7 @@
     return "";
   }
   // Scrolls (or turns) to a spot; false when it names nothing here.
-  function toSpot(s) {
+  function toSpot(s, smooth) {
     const m = /^(\d+)\/(\d+)(c?)$/.exec(s || "");
     const el = m && anchors[Number(m[1])];
     if (!el || !doc) return false;
@@ -408,15 +408,20 @@
     if (isPaged()) { goPage(pageOf(el), true); return true; }
     const edge = m[3] ? midLine() : topEdge();
     const rct = el.getBoundingClientRect();
-    w.scrollTo(0, Math.max(0, w.scrollY + rct.top + rct.height * Number(m[2]) / 100 - edge));
+    w.scrollTo({ top: Math.max(0, w.scrollY + rct.top + rct.height * Number(m[2]) / 100 - edge), behavior: smooth ? "smooth" : "auto" });
+    // A long clip's chunks get their real height on the way, so it's
+    // put right once it's there.
+    if (smooth) w.addEventListener("scrollend", () => toSpot(s), { once: true });
     return true;
   }
-  // Goes to where another device got to (app.js, the furthest-read toast).
-  function jump(at, s) {
+  // Goes to where another device got to (app.js, the furthest-read
+  // toast), or back to where you were, gliding there in Scroll (1.45.3).
+  function jump(at, s, smooth) {
     if (!doc) return;
-    if (toSpot(s)) return;
+    smooth = !!smooth && !C.motion.reduced();
+    if (toSpot(s, smooth)) return;
     const w = frame.contentWindow;
-    if (isPaged()) relayout(at); else w.scrollTo(0, at * (doc.documentElement.scrollHeight - w.innerHeight));
+    if (isPaged()) relayout(at); else w.scrollTo({ top: at * (doc.documentElement.scrollHeight - w.innerHeight), behavior: smooth ? "smooth" : "auto" });
   }
 
   // How far down the page the reader is, 0 to 1; a page shorter than the

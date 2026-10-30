@@ -2,6 +2,19 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.45.3] - 2026-10-30
+
+### Fixed
+- The grown bottom bar no longer shows the percent twice; it's on the
+  row under it.
+- No more thin gap flashing between the skim and the row while the bar
+  grows.
+- One bar while it's grown: the thin line along the bottom steps aside
+  for the skim's slider.
+
+### Changed
+- Back to where you were glides there in Scroll, instead of jumping.
+
 ## [1.45.2] - 2026-10-30
 
 ### Changed
