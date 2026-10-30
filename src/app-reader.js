@@ -1626,7 +1626,7 @@ function setAloud(st, index) {
   const b = blockAt(aloud.index);
   $("aloudPrev").disabled = !on || b <= 0;
   $("aloudNext").disabled = !on || b >= (aloud.map[aloud.map.length - 1] ?? 0);
-  if (state.open && state.open.id === aloud.key) C.reader.light(on ? b : -1);
+  if (state.open && state.open.id === aloud.key && !(skim && skim.dragging)) C.reader.light(on ? b : -1);
   if (st === "playing") wentOnFrom = "";
   if (ended && st === "ended" && load(GO_ON_KEY, false) && !sleepEnd() && wentOnFrom !== aloud.key) {
     wentOnFrom = aloud.key;
@@ -2495,11 +2495,11 @@ $("jumpBack").addEventListener("click", () => {
   closeSkim();
   jumpFrom = null;
   $("jumpBack").hidden = true;
-  if (from && state.open) C.reader.jump(from.at, from.spot);
+  if (from && state.open) { C.reader.jump(from.at, from.spot); voiceHere(); }
 });
 
-// ---- Skim (1.45.0, from KOReader; a bar of its own since 1.45.1) ----
-// A tap on the bottom row, with the bar up, raises the skim bar over it:
+// ---- Skim (1.45.0, from KOReader; in the bar since 1.45.2) ----
+// A tap on the bottom row, with the bar up, grows the bar upward:
 // the chapter and where, a slider that goes anywhere in the clip with a
 // tick where each chapter starts, and the chapter before and after. A
 // drag on the row itself sat on the phone's own swipe along the bottom
@@ -2507,11 +2507,17 @@ $("jumpBack").addEventListener("click", () => {
 // place isn't kept or synced while you look: it stays where it was
 // until you read on from there (a scroll or a turn), or after SKIM_HOLD,
 // so a look at the last chapter doesn't move your place on every
-// device. While Narrate reads this clip the row is its player, and the
-// voice decides the place, so there's no skim.
+// device. While Narrate reads this clip the voice moves to where you
+// let go (and to where Back takes you), from the line across the middle.
 const SKIM_HOLD = 60000;
 let skim = null;
-const skimOn = () => !!state.open && !aloudHere() && !state.sheet;
+const skimOn = () => !!state.open && !state.sheet;
+let voiceTimer = 0;
+function voiceHere() {
+  clearTimeout(voiceTimer);
+  if (!aloudHere() || !aloudOn()) return;
+  voiceTimer = setTimeout(() => { if (aloudHere() && aloudOn() && !(skim && skim.dragging)) startAloud(); }, 400);
+}
 const skimUp = () => !$("skimBar").hidden;
 function skimHolds(p, f, s) {
   if (!skim || skim.p !== p) return false;
@@ -2563,6 +2569,7 @@ function skimEnd() {
   me.end = performance.now();
   $("readerView").classList.remove("skimming");
   $("jumpBack").hidden = false;
+  voiceHere();
   requestAnimationFrame(() => requestAnimationFrame(() => {
     if (skim !== me) return;
     me.spot = C.reader.spot();
@@ -2636,7 +2643,7 @@ function skimPart(by) {
   skimGo(to ? to.at : 0);
 }
 $("readFoot").querySelector(".read-left").addEventListener("click", (e) => {
-  if (e.target.closest("button, a, input") || !skimOn()) return;
+  if (e.target.closest("button, a, input, .aloud-player") || !skimOn()) return;
   if (skimUp()) closeSkim();
   else openSkim();
 });

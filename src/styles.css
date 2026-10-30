@@ -755,8 +755,10 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 .find-done { min-height: var(--tap); padding: 0 var(--s-2); }
 /* Back to where you were (1.14.0), after following a link inside the
    clip: over the text at the bottom, until it's used or the clip closes. */
+/* It rides on the bar along the bottom (1.45.2), over the skim when
+   that's up, so the bar never covers it. */
 .jump-back {
-  position: absolute; z-index: 3; left: 50%; bottom: calc(var(--s-6) + env(safe-area-inset-bottom) + 48px);
+  position: absolute; z-index: 2; left: 50%; bottom: calc(100% + var(--s-3)); pointer-events: auto;
   transform: translateX(-50%);
   display: inline-flex; align-items: center; gap: var(--s-2);
   min-height: var(--tap); padding: 0 var(--s-4) 0 var(--s-3);
@@ -889,25 +891,23 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
   transform: scaleX(0); transform-origin: left;
 }
 .read-progress[dir="rtl"] > span:first-child { transform-origin: right; }
-/* Skim (1.45.0; a bar of its own since 1.45.1). A tap on the bottom row
-   raises it: the chapter and where, a slider well clear of the phone's
-   own swipe along the bottom edge (a drag on the row itself switched
-   apps), and buttons for the chapter before and after. */
-.read-left { pointer-events: auto; -webkit-user-select: none; user-select: none; }
+/* Skim (1.45.0; in the bar since 1.45.2). A tap on the bottom row
+   grows the bar upward: the chapter and where, a slider well clear of
+   the phone's own swipe along the bottom edge (a drag on the row itself
+   switched apps), and buttons for the chapter before and after. It
+   slides up from behind the row. */
+.read-left { position: relative; z-index: 1; pointer-events: auto; -webkit-user-select: none; user-select: none; }
 .reader.bar-away:not(.aloud) .read-left { pointer-events: none; }
 .read-ticks { position: absolute; inset: 0; }
 .read-ticks i, .skim-ticks i { position: absolute; top: 0; bottom: 0; width: 2px; margin-inline-start: -1px; background: var(--bg); }
 .skim-bar {
-  position: absolute; bottom: calc(100% + var(--s-3)); left: var(--gutter); right: var(--gutter);
-  max-width: 34rem; margin: 0 auto;
-  padding: var(--s-3) var(--s-2) var(--s-2);
-  border: 1px solid var(--line); border-radius: var(--r-lg);
-  background: var(--surface); color: var(--ink); box-shadow: 0 8px 24px var(--shadow);
+  padding: var(--s-3) calc(var(--gutter) + var(--s-2)) 0;
+  background: var(--bar); color: var(--ink); box-shadow: 0 -1px 0 var(--line);
   font: 400 var(--fs-meta)/var(--lh-meta) var(--sans); font-variant-numeric: tabular-nums;
   pointer-events: auto; -webkit-user-select: none; user-select: none;
-  transform-origin: bottom center;
   animation: skim-up var(--spring-control-ms, 300ms) var(--spring-control, ease-out);
 }
+.skim-bar > * { max-width: 34rem; margin-inline: auto; }
 .skim-bar[hidden], .skim-left[hidden], .skim-row .icon-btn[hidden] { display: none; }
 .reader.bar-away .skim-bar { display: none; }
 .skim-head { display: flex; align-items: baseline; gap: var(--s-3); padding: 0 var(--s-2); }
@@ -927,11 +927,10 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 }
 .reader.skimming .skim-knob { scale: 1.2; }
 .skim-left {
-  display: block; min-height: var(--tap); margin: 0 auto; padding: 0 var(--s-3);
+  display: block; min-height: var(--tap); padding: 0 var(--s-3);
   border: 0; background: none; color: var(--accent); font: 600 var(--fs-meta)/1 var(--sans);
 }
-.reader.skim-open .jump-back { display: none; }
-@keyframes skim-up { from { transform: translateY(16px) scale(0.96); } }
+@keyframes skim-up { from { transform: translateY(100%); } }
 :root[data-motion="off"] .skim-bar { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .skim-bar { animation: none; }
@@ -1162,8 +1161,10 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
   background: transparent; color: var(--bg); font: 600 var(--fs-label)/var(--lh-label) var(--sans);
   text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
 }
-/* With the Aa sheet up, a toast drops from under the reader bar instead. */
-.reader:has(.sheet:not([hidden])) ~ .toast { top: calc(72px + env(safe-area-inset-top)); bottom: auto; }
+/* With the Aa sheet or the skim up, a toast drops from under the reader
+   bar instead. */
+.reader:has(.sheet:not([hidden])) ~ .toast,
+.reader.skim-open ~ .toast { top: calc(72px + env(safe-area-inset-top)); bottom: auto; }
 .toast {
   position: fixed; left: 0; right: 0; bottom: calc(96px + env(safe-area-inset-bottom)); z-index: 20;
   width: fit-content; margin: 0 auto;

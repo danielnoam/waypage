@@ -21,14 +21,21 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 - **KOReader ideas (1.45.0).** Daniel picked skim, minutes left in a
   chapter, text weight, hyphenation, Wallabag import and offline
   dictionaries from the comparison; settings per book went on TODO.md.
-  - *Skim* (bar since 1.45.1): a tap on the bottom row, only while the
-    bar is up, raises #skimBar over it (pointer events on the row, so
-    with the bar up a tap at the very bottom no longer reaches the
-    text). 1.45.0 skimmed by dragging the row itself, but on Android
-    that's the gesture area: Daniel's sideways drags kept switching
-    apps. The slider sits a row's height plus a gap above it, with
-    previous/next chapter buttons and the minutes switch; a scroll that
-    hides the bars, a sheet, Find or leaving put it away. Headings are placed along the line by
+  - *Skim* (in the bar since 1.45.2): a tap on the bottom row, only
+    while the bar is up, grows the bar upward with #skimBar, in the
+    foot's own flow above the row (1.45.1 floated it as a card; Daniel
+    wanted the bar itself to grow). #jumpBack lives in #readFoot too,
+    at 100% + gap, so it rides over whatever height the bar has. With
+    Narrate on, skim works too: letting go, the chapter buttons or Back
+    restart the voice from firstShown() (debounced 400 ms, `voiceHere`),
+    and light() doesn't scroll while dragging. Pointer events are on
+    the row, so with the bar up a tap at the very bottom no longer
+    reaches the text. 1.45.0 skimmed by dragging the row itself, but on
+    Android that's the gesture area: Daniel's sideways drags kept
+    switching apps. The slider sits above the row, with previous/next
+    chapter buttons and the minutes switch; a scroll that hides the
+    bars, a sheet, Find or leaving put it away. Headings are placed
+    along the line by
     `reader.parts()`, in position()'s units and cached by the page's
     size: a heading in a long clip's chunk (1.29.0) is put by its share
     of the chunk's letters from the chunk's own box, so nothing is laid
