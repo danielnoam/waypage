@@ -21,10 +21,14 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 - **KOReader ideas (1.45.0).** Daniel picked skim, minutes left in a
   chapter, text weight, hyphenation, Wallabag import and offline
   dictionaries from the comparison; settings per book went on TODO.md.
-  - *Skim* is the bottom row and the line under it, only while the bar
-    is up (pointer events there, so with the bar up a tap at the very
-    bottom no longer reaches the text). A sideways drag past 8 px skims,
-    a tap switches the minutes. Headings are placed along the line by
+  - *Skim* (bar since 1.45.1): a tap on the bottom row, only while the
+    bar is up, raises #skimBar over it (pointer events on the row, so
+    with the bar up a tap at the very bottom no longer reaches the
+    text). 1.45.0 skimmed by dragging the row itself, but on Android
+    that's the gesture area: Daniel's sideways drags kept switching
+    apps. The slider sits a row's height plus a gap above it, with
+    previous/next chapter buttons and the minutes switch; a scroll that
+    hides the bars, a sheet, Find or leaving put it away. Headings are placed along the line by
     `reader.parts()`, in position()'s units and cached by the page's
     size: a heading in a long clip's chunk (1.29.0) is put by its share
     of the chunk's letters from the chunk's own box, so nothing is laid

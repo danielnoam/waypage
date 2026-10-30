@@ -628,7 +628,7 @@ function zipOf(files) {
     });
     await p.context().close();
 
-    await test("skim: dragging the bottom line goes there, the place waits until you read on, Back returns (1.45.0)", async () => {
+    await test("skim: a tap on the bottom row raises the skim bar; its slider goes there, the place waits until you read on, Back returns (1.45.1)", async () => {
       const q = await page(browser, 390);
       await q.fill("#saveUrl", ROOT + "test/fixtures/chapters.html");
       await q.press("#saveUrl", "Enter");
@@ -636,23 +636,36 @@ function zipOf(files) {
       await q.locator("#readerView:not([hidden])").waitFor();
       await until(q, () => document.querySelectorAll("#readTicks i").length >= 7);
       assert.match(await q.locator("#readSection").innerText(), /min left/);
+      await q.locator("#readSection").click();
+      await q.locator("#skimBar:not([hidden])").waitFor();
       const row = await q.locator(".read-left").boundingBox();
-      const y = row.y + row.height / 2;
-      await q.mouse.move(row.x + 20, y);
+      const track = await q.locator("#skimTrack").boundingBox();
+      assert.ok(track.y + track.height <= row.y, "the slider isn't above the row");
+      assert.strictEqual(await q.locator("#skimTicks i").count(), await q.locator("#readTicks i").count());
+      const y = track.y + track.height / 2;
+      await q.mouse.move(track.x + 4, y);
       await q.mouse.down();
-      for (let x = row.x + 20; x < row.x + row.width * 0.6; x += 15) await q.mouse.move(x, y);
+      for (let x = track.x + 4; x < track.x + track.width * 0.6; x += 15) await q.mouse.move(x, y);
       assert.match(await q.locator("#skimPart").innerText(), /^Chapter 5/);
       await q.mouse.up();
       await q.waitForTimeout(1000);
-      const held = await q.evaluate(() => [state.open.at || 0, Waypage.reader.section(), !document.getElementById("jumpBack").hidden]);
-      assert.deepStrictEqual(held, [0, "Chapter 5: Dinner", true], "the place moved while skimming, or no way back");
+      const held = await q.evaluate(() => [state.open.at || 0, Waypage.reader.section(), !document.getElementById("skimBar").hidden]);
+      assert.deepStrictEqual(held, [0, "Chapter 5: Dinner", true], "the place moved while skimming, or the bar went");
+      await q.locator("#skimNext").click();
+      await until(q, () => Waypage.reader.section() === "Chapter 6: Turbulence");
+      await q.locator("#skimPrev").click();
+      await until(q, () => Waypage.reader.section() === "Chapter 5: Dinner");
+      // The minutes count switches from the bar.
+      await q.locator("#skimLeft").click();
+      assert.match(await q.locator("#readSection").innerText(), /min left in section/);
+      await q.locator("#readSection").click();
+      await q.locator("#skimBar").waitFor({ state: "hidden" });
+      assert.strictEqual(await q.locator("#jumpBack").isVisible(), true, "no way back");
+      await q.waitForTimeout(700);
       await q.frameLocator("#readerFrame").locator("body").evaluate(() => window.scrollBy(0, 200));
       await until(q, () => (state.open.at || 0) > 0.5);
       await q.locator("#jumpBack").click();
       await until(q, () => Waypage.reader.position() < 0.05);
-      // A tap on the line switches to minutes left in the section.
-      await q.locator("#readSection").click();
-      assert.match(await q.locator("#readSection").innerText(), /min left in section/);
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });
