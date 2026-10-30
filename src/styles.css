@@ -902,7 +902,10 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 .read-ticks i, .skim-ticks i { position: absolute; top: 0; bottom: 0; width: 2px; margin-inline-start: -1px; background: var(--bg); }
 .skim-bar {
   padding: var(--s-3) calc(var(--gutter) + var(--s-2)) 0;
-  background: var(--bar); color: var(--ink); box-shadow: 0 -1px 0 var(--line);
+  background: var(--bar); color: var(--ink);
+  /* The second shadow fills under it: the spring overshoots by a pixel
+     or so, which left a seam over the row while it grew (1.45.3). */
+  box-shadow: 0 -1px 0 var(--line), 0 8px 0 var(--bar);
   font: 400 var(--fs-meta)/var(--lh-meta) var(--sans); font-variant-numeric: tabular-nums;
   pointer-events: auto; -webkit-user-select: none; user-select: none;
   animation: skim-up var(--spring-control-ms, 300ms) var(--spring-control, ease-out);
@@ -912,7 +915,10 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 .reader.bar-away .skim-bar { display: none; }
 .skim-head { display: flex; align-items: baseline; gap: var(--s-3); padding: 0 var(--s-2); }
 .skim-part { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-label); font-weight: 600; }
-.skim-where { flex: none; color: var(--muted); }
+.skim-head:has(.skim-part:empty) { visibility: hidden; }
+/* One bar while it's grown: the line under the row keeps its room. */
+.reader.skim-open .read-progress { background: var(--bar); }
+.reader.skim-open .read-progress > * { visibility: hidden; }
 .skim-row { display: flex; align-items: center; gap: var(--s-1); }
 .skim-track { position: relative; flex: 1; min-width: 0; height: var(--tap); touch-action: none; cursor: pointer; }
 .skim-track:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
