@@ -2,6 +2,12 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.45.6] - 2026-10-30
+
+### Changed
+- Feeds and Newsletters: a sideways swipe moves only the posts. The
+  feed chips at the top stay still.
+
 ## [1.45.5] - 2026-10-30
 
 ### Added

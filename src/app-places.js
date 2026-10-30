@@ -1266,6 +1266,10 @@ function swipeToSide(root) {
 function swipeFeeds(root) {
   let go = null;
   const chips = () => [...root.querySelectorAll(".feed-chips .chip")];
+  // The chips stay put; what's under them slides (Daniel, 1.45.6).
+  const parts = () => [...root.children].filter((x) => !x.classList.contains("feed-chips"));
+  const move = (t) => parts().forEach((x) => { x.style.transform = t; });
+  const play = (frames, timing) => parts().map((x) => x.animate(frames, timing));
   const neighbour = (d) => {
     const all = chips(), at = all.findIndex((c) => c.classList.contains("on"));
     return at < 0 ? null : all[at + d] || null;
@@ -1286,7 +1290,7 @@ function swipeFeeds(root) {
     go.dx = dx;
     // Past the first or last, it gives a little and no more.
     const to = neighbour(dx < 0 ? 1 : -1);
-    if (!M.reduced()) root.style.transform = "translateX(" + (to ? dx : dx / 4) + "px)";
+    if (!M.reduced()) move("translateX(" + (to ? dx : dx / 4) + "px)");
   }, { passive: true });
   const end = (e) => {
     const g = go;
@@ -1297,18 +1301,18 @@ function swipeFeeds(root) {
     const w = root.offsetWidth || innerWidth;
     if (!to || (Math.abs(g.dx) < w / 4 && !fast)) {
       if (M.reduced()) return;
-      root.animate([{ transform: "translateX(" + (to ? g.dx : g.dx / 4) + "px)" }, { transform: "none" }], M.timing("controlEdge"));
-      root.style.transform = "";
+      play([{ transform: "translateX(" + (to ? g.dx : g.dx / 4) + "px)" }, { transform: "none" }], M.timing("controlEdge"));
+      move("");
       return;
     }
     if (M.reduced()) { to.click(); return; }
-    const out = root.animate([{ transform: "translateX(" + g.dx + "px)" }, { transform: "translateX(" + -d * w + "px)" }], { ...M.timing("control"), fill: "forwards" });
-    root.style.transform = "";
-    out.finished.then(() => {
+    const out = play([{ transform: "translateX(" + g.dx + "px)" }, { transform: "translateX(" + -d * w + "px)" }], { ...M.timing("control"), fill: "forwards" });
+    move("");
+    Promise.all(out.map((a) => a.finished)).then(() => {
       to.click();
       scrollTo(0, 0);
-      root.animate([{ transform: "translateX(" + d * w + "px)" }, { transform: "none" }], M.timing("sheetEdge"));
-      out.cancel();
+      play([{ transform: "translateX(" + d * w + "px)" }, { transform: "none" }], M.timing("sheetEdge"));
+      out.forEach((a) => a.cancel());
       const on = root.querySelector(".feed-chips .chip.on");
       if (on) on.scrollIntoView({ block: "nearest", inline: "nearest" });
     }, () => {});
