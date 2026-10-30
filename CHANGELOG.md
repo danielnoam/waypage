@@ -2,6 +2,18 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.45.1] - 2026-10-30
+
+### Changed
+- Skim has a bar of its own. Dragging along the bottom row sat right on
+  the phone's own swipe for switching apps, so with the bars up a tap on
+  the bottom row now raises a skim bar well above it: the chapter and
+  the page or percent, a big slider with a notch at each chapter, and
+  buttons for the chapter before and after. The switch between minutes
+  left in the chapter and in the whole book is on it too. Tap the row
+  again, or the text, to put it away. Your place still waits until you
+  read on, and Back to where you were still comes up.
+
 ## [1.45.0] - 2026-10-29
 
 Ideas from KOReader.

@@ -319,6 +319,7 @@ function show(p, html) {
   // when "Keep reading when you leave the clip" is off (1.25.0).
   if (aloud.key && aloud.key !== p.id && !aloudAuto && !load(KEEP_KEY, true)) stopAloud();
   if (skim) { C.reader.settle(); skimDrop(); }
+  closeSkim();
   state.open = p;
   $("aloudPlay").style.visibility = "";
   // Opening counts as reading for the order of things (sort by read, the
@@ -342,7 +343,7 @@ function show(p, html) {
     positionTimer = setTimeout(savePositions, 1500);
   }, OPEN_COUNTS);
   showOffline();
-  $("readProgress").dir = p.dir || "ltr";
+  $("readProgress").dir = $("skimTrack").dir = p.dir || "ltr";
   $("readerContents").hidden = true;
   $("readerTranslate").hidden = true;
   $("readerNow").textContent = "Contents";
@@ -679,6 +680,7 @@ function toggleBar() {
   if (state.sheet) return;
   const away = !$("readerView").classList.contains("bar-away");
   $("readerView").classList.toggle("bar-away", away);
+  if (away) closeSkim();
   lastY = readerY;
   if (!away) readerFoot(C.reader.position());
 }
@@ -721,7 +723,7 @@ function readerScrolled(at, y) {
   if (!(skim && skim.dragging)) skimShow(at);
   railNow();
   if (!$("readerView").classList.contains("bar-away") || aloudHere()) readerFoot(at);
-  if (skim && skim.dragging) { lastY = y; return; }
+  if (skim && (skim.dragging || performance.now() - (skim.end || 0) < 600)) { lastY = y; return; }
   const bar = $("readerView").querySelector(".reader-bar").offsetHeight;
   let away = $("readerView").classList.contains("bar-away");
   if (y <= bar || at >= 0.999 || state.sheet) away = false;
@@ -730,7 +732,8 @@ function readerScrolled(at, y) {
   else return;
   lastY = y;
   $("readerView").classList.toggle("bar-away", away);
-  if (!away) readerFoot(at);
+  if (away) closeSkim();
+  else readerFoot(at);
 }
 
 // ---- The contents rail (1.5.0) ----
@@ -975,6 +978,7 @@ function closeReader() {
   if (!state.open) return;
   C.reader.settle();
   skimDrop();
+  closeSkim();
   C.stats.closed();
   if (positionTimer) savePositions();
   // Where you got to goes to GitHub now, not in four seconds (1.3.0).
@@ -2121,6 +2125,7 @@ function openSheet(kind, fromHistory) {
   if (state.sheet === kind || !state.open || !SHEETS[kind]) return;
   if (state.sheet) closeSheet(true);
   state.sheet = kind;
+  closeSkim();
   const s = SHEETS[kind];
   $("readingBody").replaceChildren(s.build());
   $("readingSheet").setAttribute("aria-label", s.label);
@@ -2487,24 +2492,27 @@ function jumped(spot) {
 $("jumpBack").addEventListener("click", () => {
   const from = jumpFrom;
   skimDrop();
+  closeSkim();
   jumpFrom = null;
   $("jumpBack").hidden = true;
   if (from && state.open) C.reader.jump(from.at, from.spot);
 });
 
-// ---- Skim (1.45.0, from KOReader) ----
-// With the bar up, a finger dragged along the bottom row (or the line
-// under it) goes anywhere in the clip, the chapter it's in named over
-// the finger; the line carries a tick where each chapter starts. Back
-// to where you were comes up after. The place isn't kept or synced
-// while you look: it stays where it was until you read on from there
-// (a scroll or a turn), or after SKIM_HOLD, so a look at the last
-// chapter doesn't move your place on every device. While Narrate reads
-// this clip the row is its player, and the voice decides the place, so
-// there's no skim.
+// ---- Skim (1.45.0, from KOReader; a bar of its own since 1.45.1) ----
+// A tap on the bottom row, with the bar up, raises the skim bar over it:
+// the chapter and where, a slider that goes anywhere in the clip with a
+// tick where each chapter starts, and the chapter before and after. A
+// drag on the row itself sat on the phone's own swipe along the bottom
+// edge and switched apps. Back to where you were comes up after. The
+// place isn't kept or synced while you look: it stays where it was
+// until you read on from there (a scroll or a turn), or after SKIM_HOLD,
+// so a look at the last chapter doesn't move your place on every
+// device. While Narrate reads this clip the row is its player, and the
+// voice decides the place, so there's no skim.
 const SKIM_HOLD = 60000;
 let skim = null;
 const skimOn = () => !!state.open && !aloudHere() && !state.sheet;
+const skimUp = () => !$("skimBar").hidden;
 function skimHolds(p, f, s) {
   if (!skim || skim.p !== p) return false;
   if (skim.dragging || performance.now() - (skim.end || 0) < 600 || skim.spot === undefined) return true;
@@ -2517,12 +2525,28 @@ function skimDrop() {
   clearTimeout(skim.timer);
   skim = null;
   $("readerView").classList.remove("skimming");
-  $("skimTip").hidden = true;
+}
+function openSkim() {
+  if (!skimOn()) return;
+  $("skimBar").hidden = false;
+  $("readerView").classList.add("skim-open");
+  $("readerView").classList.remove("bar-away");
+  const top = C.reader.parts().filter((x) => x.level === 2).length >= 2;
+  $("skimPrev").hidden = $("skimNext").hidden = !top;
+  ticksOf = null;
+  paintTicks();
+  skimShow(C.reader.position());
+}
+function closeSkim() {
+  if (!skimUp()) return;
+  $("skimBar").hidden = true;
+  $("readerView").classList.remove("skim-open");
+  if (document.activeElement && $("skimBar").contains(document.activeElement)) document.activeElement.blur();
 }
 function skimStart() {
   const p = state.open;
   if (!skim || skim.p !== p) {
-    skimDrop();
+    if (skim) { clearTimeout(skim.timer); skim = null; }
     skim = { p };
     if (!jumpFrom) jumpFrom = { spot: C.reader.spot(), at: C.reader.position() };
   }
@@ -2538,7 +2562,6 @@ function skimEnd() {
   me.dragging = false;
   me.end = performance.now();
   $("readerView").classList.remove("skimming");
-  $("skimTip").hidden = true;
   $("jumpBack").hidden = false;
   requestAnimationFrame(() => requestAnimationFrame(() => {
     if (skim !== me) return;
@@ -2552,14 +2575,23 @@ function skimEnd() {
     if (state.open === me.p) notePosition(me.p, C.reader.position(), C.reader.spot());
   }, SKIM_HOLD);
 }
-// The fill, the knob and the slider's value at `at`.
+// The line's fill, and with the skim bar up its slider, name and place.
 function skimShow(at) {
-  const line = $("readProgress");
-  line.firstElementChild.style.transform = "scaleX(" + at + ")";
+  $("readProgress").firstElementChild.style.transform = "scaleX(" + at + ")";
+  if (skimUp()) skimPaint(at);
+}
+function skimPaint(at) {
+  $("skimFill").style.transform = "scaleX(" + at + ")";
   $("skimKnob").style.insetInlineStart = (at * 100).toFixed(2) + "%";
-  $("skimKnob").hidden = !skimOn();
-  line.setAttribute("aria-valuenow", String(Math.round(at * 100)));
-  line.setAttribute("aria-valuetext", skimText(at).join(", "));
+  const [a, b] = skimText(at);
+  $("skimPart").textContent = b ? a : "";
+  $("skimWhere").textContent = b || a;
+  const track = $("skimTrack");
+  track.setAttribute("aria-valuenow", String(Math.round(at * 100)));
+  track.setAttribute("aria-valuetext", skimText(at).join(", "));
+  const p = state.open, top = C.reader.parts().filter((x) => x.level === 2).length >= 2;
+  $("skimLeft").hidden = !top;
+  if (top) $("skimLeft").textContent = leftIn(p) === "part" ? "Count the whole " + (isBook(p) ? "book" : "clip") : "Count this " + (isBook(p) ? "chapter" : "section");
 }
 // The chapter at `at` and where that is: page 12 of 340, or 42%.
 function skimText(at) {
@@ -2571,74 +2603,85 @@ function skimText(at) {
   return part ? [part.text, where] : [where];
 }
 function skimAt(x) {
-  const r = $("readProgress").getBoundingClientRect();
+  const r = $("skimTrack").getBoundingClientRect();
   const f = Math.min(1, Math.max(0, (x - r.left) / Math.max(1, r.width)));
-  return $("readProgress").dir === "rtl" ? 1 - f : f;
+  return $("skimTrack").dir === "rtl" ? 1 - f : f;
 }
 let skimFrame = 0, skimWant = 0;
 function skimMove(x) {
   const f = skimWant = skimAt(x);
   $("readProgress").firstElementChild.style.transform = "scaleX(" + f + ")";
-  $("skimKnob").style.insetInlineStart = (f * 100).toFixed(2) + "%";
-  const [a, b] = skimText(f);
-  const tip = $("skimTip");
-  $("skimPart").textContent = b ? a : "";
-  $("skimPart").hidden = !b;
-  $("skimWhere").textContent = b || a;
-  tip.hidden = false;
-  const half = tip.offsetWidth / 2, room = $("readFoot").getBoundingClientRect();
-  tip.style.left = (Math.min(room.right - half - 16, Math.max(room.left + half + 16, x)) - room.left) + "px";
+  skimPaint(f);
   if (!skimFrame) skimFrame = requestAnimationFrame(() => { skimFrame = 0; if (skim && skim.dragging) C.reader.skimTo(skimWant); });
 }
+// Straight to `f`, from a button or a key.
+function skimGo(f) {
+  skimStart();
+  C.reader.skimTo(Math.min(1, Math.max(0, f)));
+  skimEnd();
+  skimPaint(Math.min(1, Math.max(0, f)));
+}
+// The start of the chapter before (or of this one, once a little in)
+// and after.
+function skimPart(by) {
+  const at = C.reader.position(), top = C.reader.parts().filter((x) => x.level === 2);
+  if (by > 0) {
+    const next = top.find((x) => x.at > at + 0.002);
+    if (next) skimGo(next.at);
+    return;
+  }
+  const before = top.filter((x) => x.at < at - 0.002);
+  const here = before[before.length - 1];
+  const to = here && at - here.at < 0.004 ? before[before.length - 2] : here;
+  skimGo(to ? to.at : 0);
+}
+$("readFoot").querySelector(".read-left").addEventListener("click", (e) => {
+  if (e.target.closest("button, a, input") || !skimOn()) return;
+  if (skimUp()) closeSkim();
+  else openSkim();
+});
+$("skimPrev").addEventListener("click", () => skimPart($("skimTrack").dir === "rtl" ? 1 : -1));
+$("skimNext").addEventListener("click", () => skimPart($("skimTrack").dir === "rtl" ? -1 : 1));
+$("skimLeft").addEventListener("click", () => { toggleLeft(); skimPaint(C.reader.position()); });
 {
+  const track = $("skimTrack");
   let down = null;
-  const start = (e) => {
-    if (e.button > 0 || !skimOn() || e.target.closest("button, a, input") || $("readerView").classList.contains("bar-away")) return;
-    down = { id: e.pointerId, x: e.clientX, y: e.clientY, on: false, el: e.currentTarget };
-  };
-  const move = (e) => {
-    if (!down || e.pointerId !== down.id) return;
-    if (!down.on) {
-      const dx = Math.abs(e.clientX - down.x), dy = Math.abs(e.clientY - down.y);
-      if (dy > 12 && dy > dx) { down = null; return; }
-      if (dx < 8) return;
-      down.on = true;
-      try { down.el.setPointerCapture(e.pointerId); } catch (err) { /* gone */ }
-      skimStart();
-    }
+  track.addEventListener("pointerdown", (e) => {
+    if (e.button > 0 || !skimOn()) return;
+    down = e.pointerId;
+    try { track.setPointerCapture(e.pointerId); } catch (err) { /* gone */ }
+    e.preventDefault();
+    skimStart();
+    skimMove(e.clientX);
+  });
+  track.addEventListener("pointermove", (e) => {
+    if (down !== e.pointerId) return;
     e.preventDefault();
     skimMove(e.clientX);
-  };
+  });
   const end = (e) => {
-    if (!down || e.pointerId !== down.id) return;
-    const was = down;
+    if (down !== e.pointerId) return;
     down = null;
-    if (was.on) {
-      if (skimFrame) { cancelAnimationFrame(skimFrame); skimFrame = 0; }
-      C.reader.skimTo(skimWant);
-      skimEnd();
-    } else if (e.type === "pointerup") toggleLeft();
+    if (skimFrame) { cancelAnimationFrame(skimFrame); skimFrame = 0; }
+    C.reader.skimTo(skimWant);
+    skimEnd();
   };
-  for (const n of [$("readFoot").querySelector(".read-left"), $("readProgress")]) {
-    n.addEventListener("pointerdown", start);
-    n.addEventListener("pointermove", move);
-    n.addEventListener("pointerup", end);
-    n.addEventListener("pointercancel", end);
-  }
-  // From the keyboard: arrows a page or a percent, Page Up and Down ten.
-  $("readProgress").addEventListener("keydown", (e) => {
+  track.addEventListener("pointerup", end);
+  track.addEventListener("pointercancel", end);
+  // From the keyboard: arrows a page or a percent, Page Up and Down ten,
+  // Escape puts it away.
+  track.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeSkim(); return; }
     if (!skimOn()) return;
     const pg = C.reader.pageInfo(), one = pg ? 1 / Math.max(1, pg.pages - 1) : 0.01;
-    const back = $("readProgress").dir === "rtl" ? -1 : 1;
+    const back = track.dir === "rtl" ? -1 : 1;
     const by = { ArrowRight: one * back, ArrowLeft: -one * back, ArrowUp: one, ArrowDown: -one, PageUp: 0.1, PageDown: -0.1 }[e.key];
     const now = C.reader.position();
     const to = e.key === "Home" ? 0 : e.key === "End" ? 1 : by != null ? now + by : null;
     if (to == null) return;
     e.preventDefault();
     e.stopPropagation();
-    skimStart();
-    C.reader.skimTo(Math.min(1, Math.max(0, to)));
-    skimEnd();
+    skimGo(to);
   });
 }
 
@@ -2669,7 +2712,6 @@ function toggleLeft() {
   store(LEFT_KEY, all);
   $("readSection").dataset.at = "";
   readerFoot(C.reader.position());
-  toast(to === "part" ? "Minutes left in this " + (isBook(p) ? "chapter" : "section") : "Minutes left in the whole " + (isBook(p) ? "book" : "clip"));
 }
 // A tick on the line where each chapter starts, while they fit apart.
 let ticksOf = null;
@@ -2679,7 +2721,9 @@ function paintTicks() {
   ticksOf = parts;
   const top = parts.filter((x) => x.level === 2);
   const fit = top.length >= 2 && top.length <= $("readProgress").offsetWidth / 6;
-  fill($("readTicks"), ...(fit ? top.filter((x) => x.at > 0.002).map((x) => el("i", { style: "inset-inline-start: " + (x.at * 100).toFixed(2) + "%" })) : []));
+  const ticks = () => fit ? top.filter((x) => x.at > 0.002).map((x) => el("i", { style: "inset-inline-start: " + (x.at * 100).toFixed(2) + "%" })) : [];
+  fill($("readTicks"), ...ticks());
+  fill($("skimTicks"), ...ticks());
 }
 
 // ---- Find in this clip (1.14.0) ----
@@ -2692,6 +2736,7 @@ function openFind() {
   if (state.finding) { $("findInput").focus(); return; }
   if (state.sheet) { back().then(openFind); return; }
   state.finding = true;
+  closeSkim();
   history.pushState({ ...readerState(state.open), find: true }, "");
   $("findBar").hidden = false;
   $("readerView").classList.remove("bar-away");
