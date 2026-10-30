@@ -831,8 +831,8 @@ function renderSide() {
     // Every highlight in the library (1.8.0), a place of its own.
     item(sideSvg("marks"), "Highlights", inMarks, null, () => goPlace("highlights")),
     item(sideSvg("reading"), "Stats", state.place === "reading", null, () => goPlace("reading")),
-    // On a big screen the sidebar carries the rest (1.5.0): Add a feed,
-    // the tags, and Settings at its foot.
+    // On a big screen the sidebar carries the rest (1.5.0): the tags,
+    // and Settings at its foot. Feeds are added from the Feeds place.
     ...(big ? sideMore() : []));
 }
 
@@ -840,7 +840,6 @@ function sideMore() {
   const tags = allTags().slice(0, 12);
   const leave = () => (state.side ? back() : Promise.resolve());
   return [
-    el("button", { class: "side-link", type: "button", onclick: () => leave().then(() => openMenu("addFeed", { url: "" })) }, "Add a feed"),
     tags.length ? el("div", { class: "side-space", "aria-hidden": "true" }) : null,
     tags.length ? el("p", { class: "side-over" }, "Tags") : null,
     tags.length ? el("div", { class: "side-tags" }, ...tags.map((t) => {

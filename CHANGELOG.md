@@ -2,6 +2,12 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.45.7] - 2026-10-30
+
+### Removed
+- Sidebar on a computer: the "Add a feed" link. Add a feed from the
+  Feeds place (type or paste its address in the bar at the bottom).
+
 ## [1.45.6] - 2026-10-30
 
 ### Changed

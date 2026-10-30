@@ -43,3 +43,5 @@ stops being true.
   and password sign-ins work.
 - **An "I have 15 minutes" filter (Daniel, 17 Oct 2026).** Showing only
   clips you can finish in the time you have. Not needed.
+- **"Add a feed" in the computer's sidebar (Daniel, 30 Oct 2026, 1.45.7).**
+  Removed; feeds are added from the Feeds place's bar, like on a phone.
