@@ -77,6 +77,11 @@ Keeping the notes files right:
 - **The shared project folder's waypage/TODO.md and DONE.md are copies.**
   After changing either in the repo, copy it over the shared one so both
   match.
+- **The README lists every feature, with pictures.** When a release
+  adds or changes something a person can see, update its README section
+  in the same change (a short line, not an essay) and retake that
+  section's screenshots with `node tools/shots.js <section>`; a new area
+  gets its own section, Contents line and shot in `tools/shots.js`.
 - **Before suggesting ideas,** check DONE.md, TODO.md and DROPPED.md so
   nothing shipped, planned or turned down is suggested again.
 

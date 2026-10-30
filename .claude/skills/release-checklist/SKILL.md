@@ -34,6 +34,11 @@ workflow copies this entry into the GitHub release notes.
   area, with the version.
 - Copy TODO.md and DONE.md over the shared project folder's
   waypage/TODO.md and waypage/DONE.md.
+- **README.md**: every feature, one short line under its section. Add or
+  change the line for what this release adds, and retake that section's
+  pictures with `node tools/shots.js <section>` (desktop and phone, into
+  `docs/shots/`). A new area gets a section, a Contents line and a shot in
+  `tools/shots.js`. Look at the new pictures before committing.
 - **NOTES.md**: why something is the way it is, newest first, each entry a
   bold title with its version.
 - **DROPPED.md**: what was decided against, with the reason.
