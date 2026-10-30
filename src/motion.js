@@ -149,19 +149,23 @@
   // The sidebar, from the left edge (0.28.0); closing goes on from where
   // a drag left it (0.30.5), and a short drag springs back. On touch the
   // library under it drifts right a little (1.11.0).
+  // `under` is one element or several (the library's parts, 1.45.5: a
+  // transform on the whole library let the phone drop its sticky bottom
+  // bar while the sidebar was open).
   const sideDrift = (side) => "translateX(" + Math.round(side.offsetWidth * 0.2) + "px)";
+  const unders = (under, frames) => (!under ? [] : Array.isArray(under) ? under : [under]).map((u) => [u, frames]);
   function slideIn(el, under) {
-    return run([[el, [{ transform: "translateX(-100%)" }, { transform: "none" }]], under && [under, [{ transform: "none" }, { transform: sideDrift(el) }]]], "sheetEdge", true);
+    return run([[el, [{ transform: "translateX(-100%)" }, { transform: "none" }]], ...unders(under, [{ transform: "none" }, { transform: sideDrift(el) }])], "sheetEdge", true);
   }
   function slideOut(el, from = 0, under) {
     const k = el.offsetWidth ? 1 + from / el.offsetWidth : 1;
     return run([[el, [{ transform: "translateX(" + from + "px)" }, { transform: "translateX(-100%)" }]],
-      under && [under, [{ transform: "translateX(" + Math.round(el.offsetWidth * 0.2 * k) + "px)" }, { transform: "none" }]]], from ? "controlEdge" : "sheetEdge", false);
+      ...unders(under, [{ transform: "translateX(" + Math.round(el.offsetWidth * 0.2 * k) + "px)" }, { transform: "none" }])], from ? "controlEdge" : "sheetEdge", false);
   }
   function slideBack(el, from, under) {
     const k = el.offsetWidth ? 1 + from / el.offsetWidth : 1;
     return run([[el, [{ transform: "translateX(" + from + "px)" }, { transform: "none" }]],
-      under && [under, [{ transform: "translateX(" + Math.round(el.offsetWidth * 0.2 * k) + "px)" }, { transform: sideDrift(el) }]]], "controlEdge", null);
+      ...unders(under, [{ transform: "translateX(" + Math.round(el.offsetWidth * 0.2 * k) + "px)" }, { transform: sideDrift(el) }])], "controlEdge", null);
   }
 
   // A menu or popover grows out of the button that opened it, from that

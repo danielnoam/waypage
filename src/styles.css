@@ -280,6 +280,10 @@ button, input { font: inherit; color: inherit; }
 /* The library's bar stays while the list scrolls under it (0.28.0): the
    space over it scrolls away, the bar sticks at the top. */
 #libraryView { padding-top: var(--s-5); }
+/* Its parts drift right under the sidebar (1.11.0). Clipped, so the drift
+   doesn't make the page wider: a phone then grew its layout viewport to
+   fit and the sticky bar along the bottom went below the screen (1.45.5). */
+#libraryView { overflow-x: clip; }
 html.native #libraryView { padding-top: 0; }
 .top-bar {
   position: sticky; top: 0; z-index: 4;
@@ -1876,7 +1880,6 @@ html { -webkit-tap-highlight-color: transparent; }
 .side-item[aria-current] { background: var(--bar); font-weight: 600; }
 .side-icon { display: inline-flex; flex-shrink: 0; color: var(--accent); }
 .side-label { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.side-count { font-size: var(--fs-meta); color: var(--muted); font-variant-numeric: tabular-nums; }
 .side-n { font-size: var(--fs-meta); font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
 .side-pill {
   padding: 0 var(--s-2); border-radius: var(--r-full);
@@ -1886,8 +1889,12 @@ html { -webkit-tap-highlight-color: transparent; }
 .side-space { flex-shrink: 0; height: var(--s-5); }
 .side-sub { min-height: var(--tap); margin-inline-start: calc(var(--s-2) + var(--s-4)); font-size: var(--fs-label); }
 .side-sub .side-icon { color: var(--accent); }
-.side-row { display: flex; align-items: stretch; flex-shrink: 0; margin: 0 var(--s-2); }
-.side-row .side-item { flex: 1; min-width: 0; margin: 0; }
+/* A heading with its fold arrow is one item (1.45.5): the arrow sits
+   inside it, in the same highlight, still its own tap. */
+.side-row { display: flex; align-items: stretch; flex-shrink: 0; margin: 0 var(--s-2); border-radius: var(--r-md); }
+.side-row:has(.side-item[aria-current]) { background: var(--bar); }
+.side-row .side-item { flex: 1; min-width: 0; margin: 0; padding-inline-end: 0; }
+.side-row .side-item[aria-current] { background: transparent; }
 .side-fold {
   display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: var(--tap);
   border: 0; border-radius: var(--r-md); background: transparent; color: var(--muted); cursor: pointer;

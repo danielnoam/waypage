@@ -52,7 +52,7 @@ Each section below shows the computer (left) and the phone (right).
 <p><img src="docs/shots/sidebar-desktop.jpg" width="25%" alt="Sidebar on a computer"> <img src="docs/shots/sidebar-phone.jpg" width="34%" alt="Sidebar on a phone"></p>
 
 - Library with favourites, Collections and Clips; Feeds; Newsletters with the latest addresses and unread counts; Highlights; Stats; tags.
-- Library, Feeds and Newsletters fold under an arrow.
+- Library, Feeds and Newsletters fold under an arrow inside their row.
 - Always there on a wide screen, slides in on a phone.
 
 ## Collections and files
@@ -143,6 +143,7 @@ Each section below shows the computer (left) and the phone (right).
 - Save a post, save all, or pick several; auto-save a feed's posts.
 - Checked with the app closed, with notifications per post or grouped, and quiet feeds.
 - Feeds in and out as OPML.
+- Swipe sideways to go to the next or previous feed (or address in Newsletters).
 
 ## Newsletters
 
