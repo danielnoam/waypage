@@ -10,6 +10,12 @@ All notable changes to Carry-on. Newest first.
   explanation; a result opens the screen and lights the row up.
 - Settings › About › Credits: the open-source code and fonts Waypage is
   built with and their licences, and the services it talks to.
+- Settings › About › Preview builds (Android): try a branch before it's
+  released. Every branch with an open pull request has a build; Install
+  puts it over the Waypage you have and keeps your library, and Back to
+  the release puts the released version back. A branch that raised the
+  version number needs an uninstall first, and the row says so. On
+  iPhone the build's page opens instead.
 
 ### Changed
 - Settings say less. Every row is a name and at most one short line, and

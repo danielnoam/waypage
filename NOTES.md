@@ -18,6 +18,19 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+**Preview builds are pre-releases, one per branch (1.48.0).** The
+workflow artifact was the first idea: it needs no token either, but it
+is a zip, its link lives a minute, and it is gone after 90 days. A
+pre-release has a plain stable link for the APK, GitHub leaves it out of
+`releases/latest`, so the updater can't offer it by mistake, and the
+app reads the list the same unauthenticated way. Each push deletes and
+remakes it so the tag follows the commit. Going back is possible
+because Android installs an equal version code over an app and refuses
+only a lower one, which is why feature branches don't bump
+`APP_VERSION`. iOS can't install anything from inside an app, so there
+the build's page opens; the web copy is `main` only, so it has no
+previews.
+
 **Settings search reads the screens (1.48.0).** There is no list of
 settings to keep: when a search starts, every Settings screen is built
 once into a detached box and its headings, rows (name and line), option

@@ -642,7 +642,7 @@ function reportGroup() {
 function aboutGroup() {
   const list = el("div", { class: "group" });
   const releases = C.platform.releasesUrl() || "https://github.com/danielnoam/waypage/releases/latest";
-  list.append(navRow("Credits", "What Waypage is built with", () => openSection("credits", false, true)));
+  list.append(navRow("Credits", null, () => openSection("credits", false, true)));
   list.append(el("a", { class: "row", href: releases, target: "_blank", rel: "noopener" },
     el("span", { class: "row-label accent" }, "Releases and source"),
     el("span", { class: "row-value", "aria-hidden": "true" }, "↗")));
@@ -1011,6 +1011,7 @@ const SECTIONS = {
   edit: { title: "Edit clips", build: editGroup, value: () => "", parent: "library" },
   storage: { title: "Storage", build: () => [placeGroup(), storageGroup(), browserStorageGroup(), backupGroup(roomRows())], value: () => formatSize(totalBytes()) },
   updates: { title: "About", build: () => [updatesGroup(), aboutGroup()], value: () => (updateOut() ? upd.latest + " is out" : APP_VERSION) },
+  previews: { title: "Preview builds", build: () => previewsSections(), value: () => "", parent: "updates" },
   credits: { title: "Credits", build: creditsSections, value: () => "", parent: "updates" },
   report: { title: "Report a problem", build: () => [reportGroup()], value: () => { const n = C.platform.log.list().length; return n ? n + (n === 1 ? " note" : " notes") : ""; } },
 };
@@ -1050,10 +1051,11 @@ const FIND_ALIASES = {
   "Where your library is": "storage folder documents sd card", "App lock": "passcode pin fingerprint face biometric", Notifications: "alerts",
   "Google Drive": "backup cloud", "GitHub sync": "sync devices token", Credits: "about licence licenses open source thanks",
   Version: "update check app", Changelog: "what's new release notes", "Continue reading": "last clip resume",
+  "Preview builds": "beta branch test pull request",
 };
 let settingsIdx = null;
 const settingsQuery = () => { const i = $("settingsSearch"); return i ? i.value.trim() : ""; };
-const menuKeys = () => Object.keys(SECTIONS).filter((k) => !(k === "notifications" && !C.platform.native) && !(k === "drive" && !C.drive.available) && !(k === "lock" && !lockCan()));
+const menuKeys = () => Object.keys(SECTIONS).filter((k) => !((k === "notifications" || k === "previews") && !C.platform.native) && !(k === "drive" && !C.drive.available) && !(k === "lock" && !lockCan()));
 const text = (n) => (n ? n.textContent.replace(/\s+/g, " ").trim() : "");
 function settingsIndex() {
   if (settingsIdx) return settingsIdx;

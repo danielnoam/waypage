@@ -401,6 +401,9 @@ async function checkForNewerApp() {
   if (!C.platform.native || !build || !build.repo) return;
   if (["checking", "downloading", "paused"].includes(upd.phase)) return;
   C.platform.clearOldUpdates(APP_VERSION, isNewerVersion);
+  // A preview build isn't offered the release it came from; Preview
+  // builds has Back to the release.
+  if (C.platform.previewBranch) { setUpd({ phase: "preview" }); return; }
   setUpd({ phase: "checking" });
   try {
     const res = await C.platform.fetchText("https://api.github.com/repos/" + build.repo + "/releases/latest",
@@ -425,7 +428,7 @@ async function checkForNewerApp() {
 // stopped, even after the app was closed.
 let installWhenBack = false;
 async function startUpdate() {
-  if (C.platform.ios) { C.platform.openOutside(C.platform.releasesUrl()); return; }
+  if (C.platform.ios) { C.platform.openOutside(upd.tag ? C.platform.releaseUrl(upd.tag) : C.platform.releasesUrl()); return; }
   if (upd.phase === "ready") return install();
   if (upd.phase === "downloading") { openDownloads(); return; }
   const resuming = upd.phase === "paused";
@@ -433,7 +436,7 @@ async function startUpdate() {
   if (!resuming && !state.downloads) toast("Downloading Waypage " + upd.latest + ".", "Downloads", () => openDownloads());
   let apk;
   try {
-    apk = await C.platform.downloadUpdate(upd.latest, (f, bytes, total) => setUpd({ pct: Math.round(f * 100), bytes: bytes || 0, total: total || 0 }));
+    apk = await C.platform.downloadUpdate(upd.key || upd.latest, (f, bytes, total) => setUpd({ pct: Math.round(f * 100), bytes: bytes || 0, total: total || 0 }), "Waypage.apk", upd.tag || undefined);
   } catch (e) {
     if (e && e.code === "PAUSED") { setUpd({ phase: "paused" }); return; }
     setUpd({ phase: "paused", error: "The download stopped. Resume picks up where it was." });
@@ -441,7 +444,7 @@ async function startUpdate() {
   }
   if (!apk) {
     setUpd({ phase: "available" });
-    C.platform.openOutside(C.platform.apkUrl());
+    C.platform.openOutside(upd.tag ? C.platform.releaseUrl(upd.tag) : C.platform.apkUrl());
     return;
   }
   setUpd({ phase: "ready", apk, error: "", pct: 100 });
@@ -513,13 +516,15 @@ function updatesGroup() {
   const list = el("div", { class: "group" });
   if (C.platform.native) {
     const out = UPD_OUT.includes(upd.phase);
+    const preview = C.platform.previewBranch;
     const status = {
       idle: "Tap to check for updates", checking: "Checking…", current: "You have the latest version",
       failed: upd.error, available: "Waypage " + upd.latest + " is out",
       downloading: "Downloading " + upd.latest + " · " + upd.pct + "%", paused: "Paused at " + upd.pct + "%", ready: "Waypage " + upd.latest + " is ready to install",
+      preview: "Preview of " + preview + builtLine(C.platform.build),
     }[upd.phase];
     const busy = upd.phase === "checking";
-    const version = el("button", { class: "row update-row" + (out ? " out" : ""), type: "button", onclick: () => (out ? startUpdate() : checkForNewerApp()) },
+    const version = el("button", { class: "row update-row" + (out ? " out" : ""), type: "button", onclick: () => (out ? startUpdate() : upd.phase === "preview" ? openPreviews() : checkForNewerApp()) },
       busy ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
       el("span", { class: "choice-text" },
         el("span", { class: "row-label" }, "Version " + APP_VERSION),
@@ -528,13 +533,130 @@ function updatesGroup() {
     version.disabled = busy;
     list.append(version);
     if (out && upd.error) list.append(el("div", { class: "row" }, el("span", { class: "row-label warn" }, upd.error)));
+    if (C.platform.build && C.platform.build.repo) {
+      list.append(navRow("Preview builds", preview ? "Back to the release is here" : "Try a branch before it's released", openPreviews));
+    }
   } else {
     list.append(el("div", { class: "row" }, el("span", { class: "row-label" }, "Version"), el("span", { class: "row-value" }, APP_VERSION)));
   }
-  list.append(el("button", { class: "row", type: "button", onclick: () => openNews() },
-    el("span", { class: "row-label accent" }, "Changelog"), el("span", { class: "row-value", "aria-hidden": "true" }, "›")));
+  list.append(navRow("Changelog", null, () => openNews()));
   return el("section", { class: "settings-section", id: "updatesSection" }, list);
 }
+
+// ---- Preview builds (1.48.0) ----
+// A branch with an open pull request has its APK on the pre-release
+// preview-<branch> (android.yml and tools/preview-release.sh remake it on
+// every push; the iOS workflow adds the IPA). A pre-release is never
+// GitHub's "latest", so the updater above never offers one; this screen
+// lists them from the public releases list, no token, and installs one
+// through the same download as an update. The release installs back over
+// a preview because Android takes an equal version code, only not a
+// lower one: a branch that raised APP_VERSION needs an uninstall first,
+// and the row says so.
+const pv = { phase: "idle", list: [], stable: null, error: "" };
+const builtLine = (b) => (b && b.builtAt ? ", built " + whenText(new Date(b.builtAt).getTime()) : "");
+// The pre-release's notes start with "version: x.y.z", "branch:", "commit:", "pr:".
+function previewNotes(body) {
+  const out = {};
+  for (const line of String(body || "").split("\n")) {
+    const m = /^(version|branch|commit|pr):\s*(\S+)/.exec(line);
+    if (m) out[m[1]] = m[2];
+    else if (!line.trim()) break;
+  }
+  return out;
+}
+function openPreviews() {
+  openSection("previews", false, true);
+  if (pv.phase !== "loaded") loadPreviews();
+}
+async function loadPreviews() {
+  const build = await C.platform.ready;
+  if (!build || !build.repo || pv.phase === "loading") return;
+  pv.phase = "loading";
+  pv.error = "";
+  paintPreviews();
+  try {
+    const res = await C.platform.fetchText("https://api.github.com/repos/" + build.repo + "/releases?per_page=60",
+      { headers: { Accept: "application/vnd.github+json" } });
+    if (res.status !== 200) throw new Error("HTTP " + res.status);
+    const all = JSON.parse(res.text).filter((r) => r && !r.draft);
+    const stable = all.find((r) => !r.prerelease && /^app-v\d+\.\d+\.\d+$/.test(r.tag_name));
+    pv.stable = stable ? stable.tag_name.replace(/^app-v/, "") : null;
+    pv.list = all.filter((r) => r.prerelease && /^preview-/.test(r.tag_name)).map((r) => {
+      const n = previewNotes(r.body);
+      const assets = (r.assets || []).map((a) => a.name);
+      return { tag: r.tag_name, title: String(r.name || "").replace(/^Preview: /, "") || n.branch || r.tag_name, branch: n.branch || r.tag_name.slice(8),
+        version: n.version || "", sha: n.commit || "", pr: n.pr || "", at: Date.parse(r.published_at || r.created_at) || 0,
+        apk: assets.includes("Waypage.apk"), ipa: assets.includes("Waypage.ipa") };
+    }).sort((a, b) => b.at - a.at);
+    pv.phase = "loaded";
+  } catch (e) {
+    pv.phase = "failed";
+    pv.error = "Couldn't look for builds. Try again when you're online.";
+  }
+  paintPreviews();
+}
+function paintPreviews() {
+  if (state.section === "previews" && $("previewsSection")) $("previewsSection").replaceWith(previewsSection());
+}
+// The same download and installer as an update, under the preview's own
+// name; on iPhone the pre-release's page opens, as the updater's does.
+function installPreview(p) {
+  if (!p.apk && !C.platform.ios) { C.platform.openOutside(C.platform.releaseUrl(p.tag)); return; }
+  Object.assign(upd, { phase: "available", latest: "preview of " + p.branch, tag: p.tag, key: p.tag + "-" + p.sha.slice(0, 7), notes: "", apk: null, error: "" });
+  startUpdate();
+}
+function backToRelease() {
+  if (!pv.stable) return;
+  Object.assign(upd, { phase: "available", latest: pv.stable, tag: null, key: null, notes: "", apk: null, error: "" });
+  startUpdate();
+}
+function previewsSection() {
+  const here = C.platform.previewBranch;
+  const mine = C.platform.build && C.platform.build.sha ? String(C.platform.build.sha).slice(0, 7) : null;
+  const rows = [];
+  if (pv.phase === "idle" || pv.phase === "loading") {
+    rows.push(el("div", { class: "row update-row" }, el("span", { class: "spinner", "aria-hidden": "true" }), el("span", { class: "row-label" }, "Looking for builds…")));
+  } else if (pv.phase === "failed") {
+    rows.push(el("button", { class: "row", type: "button", onclick: loadPreviews },
+      el("span", { class: "choice-text" }, el("span", { class: "row-label warn" }, pv.error), el("span", { class: "choice-note" }, "Tap to try again"))));
+  } else if (!pv.list.length) {
+    rows.push(el("div", { class: "row" }, el("span", { class: "row-label" }, "No branch has a build right now")));
+  } else {
+    for (const p of pv.list) {
+      const installed = !!mine && p.sha.slice(0, 7) === mine;
+      const higher = !!pv.stable && !!p.version && isNewerVersion(p.version, pv.stable);
+      const note = p.branch + (p.at ? " · " + whenText(p.at) : "") + (p.pr ? " · #" + p.pr : "");
+      const row = el("button", { class: "row update-row", type: "button", onclick: () => installPreview(p) },
+        el("span", { class: "choice-text" },
+          el("span", { class: "row-label" }, p.title),
+          el("span", { class: "choice-note" }, note),
+          higher ? el("span", { class: "choice-note warn" }, "Needs an uninstall to go back") : null),
+        installed ? el("span", { class: "row-value" }, "Installed") : el("span", { class: "btn-small", "aria-hidden": "true" }, C.platform.ios ? "Get it" : "Install"));
+      row.disabled = installed;
+      rows.push(row);
+    }
+  }
+  if (here && pv.phase === "loaded") {
+    const stuck = !!pv.stable && isNewerVersion(APP_VERSION, pv.stable);
+    const back = el("button", { class: "row", type: "button", onclick: backToRelease },
+      el("span", { class: "choice-text" },
+        el("span", { class: "row-label accent" }, "Back to the release"),
+        el("span", { class: "choice-note" + (stuck ? " warn" : "") }, stuck ? "Uninstall Waypage first: this preview's " + APP_VERSION + " is above " + pv.stable
+          : pv.stable ? "Waypage " + pv.stable + " installs over this preview" : "No release found")));
+    back.disabled = stuck || !pv.stable;
+    rows.push(back);
+  }
+  const sec = section("Branches", "A preview is a build of a branch with an open pull request, before it's released. It installs over the Waypage you have and keeps your library. "
+    + "Back to the release puts the released version back, as long as the branch didn't raise the version number."
+    + (C.platform.ios ? " On iPhone, Get it opens the build's page; install it with AltStore or SideStore." : ""),
+    el("div", { class: "group" }, ...rows),
+    el("div", { class: "group" }, el("button", { class: "row", type: "button", onclick: loadPreviews, disabled: pv.phase === "loading" ? "" : null },
+      el("span", { class: "row-label accent" }, "Check again"))));
+  sec.id = "previewsSection";
+  return sec;
+}
+function previewsSections() { return [previewsSection()]; }
 
 // ---- What's new ----
 // CHANGELOG.md, bundled with the app, read into versions of headed lists.

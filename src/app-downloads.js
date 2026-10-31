@@ -55,7 +55,10 @@ function renderDownloads() {
 // Install, like a clip being saved.
 // The app update's phase: idle, checking, current, failed, available,
 // downloading, paused, ready (app-start.js checks and downloads it).
-const upd = { phase: "idle", latest: null, notes: "", pct: 0, bytes: 0, total: 0, apk: null, error: "" };
+// `tag` and `key` are set when what downloads is a preview build (1.48.0):
+// the pre-release's tag and the APK's file name part; `latest` is then the
+// words shown ("preview of <branch>").
+const upd = { phase: "idle", latest: null, notes: "", pct: 0, bytes: 0, total: 0, apk: null, error: "", tag: null, key: null };
 const UPD_OUT = ["available", "downloading", "paused", "ready"];
 const updShown = () => C.platform.android && ["downloading", "paused", "ready"].includes(upd.phase) && !!upd.latest;
 function updateCard() {
