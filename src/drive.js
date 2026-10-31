@@ -11,7 +11,7 @@
 (function () {
   const C = window.Waypage;
   // From the Google Cloud project's Web client. Not a secret.
-  const WEB_CLIENT = "713128219626-k0dbj8fk364sprduqon2o97a0bum8rst.apps.googleusercontent.com";
+  const WEB_CLIENT = "791545260220-0eu4p2ki1didn4lb3hr3g5qjbnuk2291.apps.googleusercontent.com";
   const SCOPE = "https://www.googleapis.com/auth/drive.file";
   const API = "https://www.googleapis.com/drive/v3";
   const UPLOAD = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size,createdTime,description";
