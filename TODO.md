@@ -43,6 +43,13 @@ Planned, not built yet. Show the reworked screens before building.
   in sync. Open: whether marks go back into the PDF file itself (only
   for a copied-in file, never one read from where it is, unless asked),
   and how marks stay put when the text reflows at another size.
+- **Choose how often Drive backs up.** Auto backup is weekly only
+  (`WEEK` in drive.js, checked in app-saving.js). Make it a choice in
+  Sync › Google Drive: every day, every few days, every week, every two
+  weeks, every month, with weekly staying the default. Watch: the 6-hour
+  wait after a failed try must stay shorter than the shortest choice, and
+  `KEEP` (3 backups kept) means only three days of history when backups
+  are daily, so it may need to count days instead of backups.
 
 ## iOS release (later, Daniel 11 Oct 2026)
 
