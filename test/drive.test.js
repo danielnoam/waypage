@@ -40,8 +40,10 @@ function startServer() {
 }
 
 // ---- A fake Google ----
-const drive = { files: new Map(), n: 0, signIns: 0, slow: 0, uploads: 0 };
-const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type", "Access-Control-Allow-Methods": "GET, POST, DELETE, PATCH" };
+const drive = { files: new Map(), n: 0, signIns: 0, slow: 0, uploads: 0, sessions: new Map(), pieces: 0, sent: 0 };
+// Like Google's, which shows a browser the upload id but not Location.
+const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type, content-range, x-upload-content-type, x-upload-content-length",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH", "Access-Control-Expose-Headers": "X-GUploader-UploadID, Range" };
 const json = (route, status, body) => route.fulfill({ status, headers: { ...CORS, "Content-Type": "application/json" }, body: body == null ? "" : JSON.stringify(body) });
 const pick = (f, fields) => {
   const out = { id: f.id, name: f.name, size: String(f.bytes ? f.bytes.length : 0), createdTime: new Date(f.at).toISOString(), description: f.description, appProperties: f.appProperties };
@@ -61,6 +63,41 @@ async function google(route) {
   if (!/^Bearer tok\d+$/.test(req.headers().authorization || "")) return json(route, 401, { error: { code: 401 } });
   const p = url.pathname;
   if (p === "/drive/v3/about") return json(route, 200, { user: { emailAddress: "reader@example.com" } });
+  // A resumable upload (1.47.0): the session, then its pieces.
+  if (p === "/upload/drive/v3/files" && url.searchParams.get("uploadType") === "resumable") {
+    if (req.method() === "POST") {
+      drive.uploads++;
+      const id = "up" + ++drive.n;
+      drive.sessions.set(id, { meta: JSON.parse(req.postData()), total: Number(req.headers()["x-upload-content-length"]), chunks: [] });
+      return route.fulfill({ status: 200, headers: { ...CORS, "X-GUploader-UploadID": id, Location: url.href + "&upload_id=" + id }, body: "" });
+    }
+    const s = drive.sessions.get(url.searchParams.get("upload_id"));
+    if (!s) return json(route, 404, { error: { code: 404 } });
+    const have = s.chunks.reduce((n, c) => n + c.length, 0);
+    // How far it got, asked after a pause; a finished one answers with
+    // its file, as Drive does.
+    if (/^bytes \*\/\d+$/.test(req.headers()["content-range"] || "")) {
+      drive.asked = (drive.asked || 0) + 1;
+      if (s.file) return json(route, 200, pick(s.file));
+      return route.fulfill({ status: 308, headers: { ...CORS, ...(have ? { Range: "bytes=0-" + (have - 1) } : {}) }, body: "" });
+    }
+    if (s.file) return json(route, 200, pick(s.file));
+    const m = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(req.headers()["content-range"] || "");
+    const body = req.postDataBuffer() || Buffer.alloc(0);
+    if (!m || Number(m[1]) !== have) return json(route, 400, { error: { code: 400 } });
+    // Taken before the answer is slow to come: a piece stopped while
+    // waiting may still have reached Drive.
+    s.chunks.push(body);
+    drive.pieces++;
+    drive.sent += body.length;
+    if (have + body.length >= s.total) {
+      s.file = { id: "f" + ++drive.n, at: Date.now() + drive.n, bytes: Buffer.concat(s.chunks), ...s.meta };
+      drive.files.set(s.file.id, s.file);
+    }
+    if (drive.slow) await new Promise((go) => setTimeout(go, drive.slow));
+    if (!s.file) return route.fulfill({ status: 308, headers: CORS, body: "" });
+    return json(route, 200, pick(s.file));
+  }
   if (p === "/upload/drive/v3/files" && req.method() === "POST") {
     drive.uploads++;
     if (drive.slow) await new Promise((go) => setTimeout(go, drive.slow));
@@ -236,6 +273,33 @@ async function connect(p) {
       assert.strictEqual(drive.n, now, "it backed up with Only when I ask");
       await p.locator("label.choice", { hasText: "Every week" }).click();
       assert.strictEqual(await p.evaluate(() => window.Waypage.drive.auto), true);
+    });
+
+    await test("a browser sends a big backup in pieces and goes on from the last one after a pause (1.47.0)", async () => {
+      const sentBefore = drive.sent;
+      drive.slow = 300;
+      const got = await p.evaluate(async () => {
+        const D = window.Waypage.drive;
+        const bytes = new Uint8Array(20 * 1024 * 1024);
+        for (let i = 0; i < bytes.length; i += 4096) bytes[i] = i % 251;
+        const out = { blob: new Blob([bytes]), name: "waypage-backup-big.zip" };
+        const ctl = {};
+        const first = D.upload(out, { device: "test", clips: 1 }, null, ctl);
+        // Paused while the second piece waits for its answer.
+        const pause = setInterval(() => { if (ctl.at >= 8 * 1024 * 1024 && ctl.stop) { clearInterval(pause); ctl.stop(); } }, 20);
+        const why = await first.then(() => "finished", (e) => e.code);
+        const made = await D.upload(out, { device: "test", clips: 1 }, null, ctl);
+        return { why, size: made.size };
+      });
+      drive.slow = 0;
+      assert.strictEqual(got.why, "cancelled", JSON.stringify(got));
+      assert.strictEqual(got.size, 20 * 1024 * 1024, JSON.stringify(got));
+      assert.ok(drive.asked >= 1, "it didn't ask Drive how far it got");
+      assert.ok(drive.sent - sentBefore < 28 * 1024 * 1024, "it sent " + (drive.sent - sentBefore) + " bytes for a 20 MB backup");
+      const big = [...drive.files.values()].find((f) => f.name === "waypage-backup-big.zip");
+      assert.strictEqual(big.bytes.length, 20 * 1024 * 1024);
+      assert.strictEqual(big.bytes[4096 * 7], (4096 * 7) % 251);
+      drive.files.delete(big.id);
     });
 
     await test("a backup can be deleted from the list (1.31.0)", async () => {

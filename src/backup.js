@@ -244,19 +244,33 @@
     const zip = zipWriter(native ? (b) => file.append(b) : (b) => { parts.push(b); });
     for (const h of head) await zip.add(h.name, utf8(h.text));
     let done = 0;
-    for (const p of pages) {
-      if (native) {
+    const stop = async () => { if (gate && !(await gate())) throw Object.assign(new Error("Stopped."), { code: "cancelled" }); };
+    if (native) {
+      for (const p of pages) {
         for (const rel of await S().listFiles(p.id)) {
           try { await zip.add("pages/" + p.id + "/" + rel, await S().readBytes(p.id, rel)); } catch (e) { /* gone since listing */ }
         }
-      } else {
-        const html = await S().readPage(p.id).catch(() => null);
-        if (html) await zip.add("pages/" + p.id + "/page.html", utf8(html));
-        const words = await S().readText(p.id);
-        if (words != null) await zip.add("pages/" + p.id + "/text.txt", utf8(words));
+        if (onProgress) onProgress(++done, pages.length);
+        await stop();
       }
-      if (onProgress) onProgress(++done, pages.length);
-      if (gate && !(await gate())) throw Object.assign(new Error("Stopped."), { code: "cancelled" });
+    } else {
+      // A batch read at a time (1.47.0), the next one read while this one
+      // is packed.
+      const BATCH = 50;
+      const read = (at) => (at < pages.length ? S().readPages(pages.slice(at, at + BATCH).map((p) => p.id)) : null);
+      let next = read(0);
+      for (let at = 0; at < pages.length; at += BATCH) {
+        const got = await next;
+        next = read(at + BATCH);
+        for (let i = 0; i < got.length; i++) {
+          const id = pages[at + i].id, { html, text } = got[i];
+          if (html) await zip.add("pages/" + id + "/page.html", utf8(html));
+          if (text != null) await zip.add("pages/" + id + "/text.txt", utf8(text));
+          if (onProgress) onProgress(++done, pages.length);
+        }
+        await stop();
+      }
+      if (next) await next.catch(() => {});
     }
     await zip.finish();
     return native ? { uri: await file.uri(), name } : { blob: new Blob(parts, { type: "application/zip" }), name };
