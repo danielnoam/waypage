@@ -47,6 +47,7 @@
     if (m.cut === true) out.cut = true;
     if (num(m.archived)) out.archived = num(m.archived);
     if (num(m.editedAt)) out.editedAt = num(m.editedAt);
+    if (num(m.back)) out.back = num(m.back);
     if (m.fav === true) { out.fav = true; out.favAt = num(m.favAt) || out.savedAt; }
     if (typeof m.next === "string") out.next = httpUrl(m.next);
     if (typeof m.prev === "string") out.prev = httpUrl(m.prev);
@@ -314,6 +315,9 @@
           while (taken.has(id)) id = C.save.newId();
           meta.id = id;
           taken.add(id);
+          // Brought back on purpose (1.46.0): sync lets it beat an older
+          // deletion, rather than deleting it again.
+          meta.back = Date.now();
           await restorePage(blob, entries, from, meta);
           if (i >= 0) { pages[i] = meta; replaced++; } else { pages.push(meta); added++; }
         }

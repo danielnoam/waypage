@@ -18,6 +18,17 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+**A restore beats an older deletion (1.46.0).** Sync keeps a tombstone
+for 90 days and a restored clip keeps its old id, so restoring a backup
+with sync on brought deleted clips back only until the next sync. A
+clip a restore adds now carries `back` (when), and sync's merge drops any
+tombstone older than it, on every device (each device's own base still
+has the tombstone, so the check runs on both sides). Feeds needed no new
+field: a restored feed is followed again with `addedAt` now, which
+already beats an older unfollow. Files read from outside never go in a
+backup at all (Daniel: a clip from a file is a clip; an outside file
+stays where it is), and older backups' ones are skipped on restore.
+
 - **A merge is not a release unless it bumps the version (31 Oct 2026).**
   With more than one person merging, "every merge with a new version
   releases" meant two kinds of trouble: version numbers taken from

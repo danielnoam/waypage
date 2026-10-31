@@ -22,7 +22,8 @@
   const ASK_KEY = "waypage.driveAsk";     // what that answer must carry
   const FOLDER = "Waypage";
   const KEEP = 3;
-  const WEEK = 7 * 24 * 3600 * 1000;
+  const DAY = 24 * 3600 * 1000;
+  const EVERY = [1, 3, 7, 14, 30];
 
   const load = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } };
   const keep = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* not kept */ } };
@@ -249,9 +250,17 @@
     });
   }
 
+  // The newest KEEP, and with backups more often than weekly (1.46.0)
+  // the newest one at least a week older than those too, so a mistake
+  // found a few days late can still be undone.
   async function prune(dir) {
     const all = await list();
-    for (const f of all.slice(KEEP)) await api("/files/" + f.id, { method: "DELETE" }).catch(() => {});
+    const keep = new Set(all.slice(0, KEEP));
+    if (all.length && cfg && cfg.auto && cfg.every < 7) {
+      const week = all.find((f) => !keep.has(f) && f.at <= all[0].at - 7 * DAY);
+      if (week) keep.add(week);
+    }
+    for (const f of all) if (!keep.has(f)) await api("/files/" + f.id, { method: "DELETE" }).catch(() => {});
   }
 
   // One backup deleted, by hand from the Sync screen (1.31.0). Into
@@ -322,13 +331,16 @@
   }
 
   C.drive = {
-    DriveError, KEEP, WEEK, connect, disconnect, list, upload, download, remove, getToken,
+    DriveError, KEEP, DAY, EVERY, connect, disconnect, list, upload, download, remove, getToken,
     // There's a way in: the plugin in the app, a client ID in a browser.
     get available() { return C.platform.native ? !!P() : !!WEB_CLIENT && (location.protocol === "https:" || location.hostname === "localhost"); },
     get on() { return !!cfg; },
     get email() { return cfg ? cfg.email : ""; },
     get auto() { return !!(cfg && cfg.auto); },
     set auto(v) { if (cfg) { cfg.auto = !!v; save(); } },
+    // Days between automatic backups (1.46.0; a week until then).
+    get every() { return (cfg && EVERY.includes(cfg.every) && cfg.every) || 7; },
+    set every(v) { if (cfg && EVERY.includes(v)) { cfg.every = v; save(); } },
     // What goes in a backup: clips (files copied in among them), feeds,
     // newsletter addresses (1.46.0; a Files switch until then).
     get what() { return cfg ? { clips: true, feeds: true, newsletters: true, ...(cfg.what || {}) } : null; },
