@@ -15,6 +15,8 @@ All notable changes to Carry-on. Newest first.
   called Actions.
 - Restore or open a file is now just Restore.
 - Import moved from Saving to Library.
+- About: What's new is now Changelog, and the line under Releases and
+  source is gone.
 - Time at the end of a clip moved from Text to Layout, in Settings and
   in the reader's settings.
 

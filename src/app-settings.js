@@ -669,8 +669,7 @@ function aboutGroup() {
   return el("section", { class: "settings-section" },
     list,
     !C.platform.native && !installed && !installPrompt && ios
-      ? el("p", { class: "footnote install-hint" }, "To install Waypage, tap Share, then Add to Home Screen.") : null,
-    el("p", { class: "footnote" }, "Clips stay " + ON_HERE + ". Waypage collects nothing."));
+      ? el("p", { class: "footnote install-hint" }, "To install Waypage, tap Share, then Add to Home Screen.") : null);
 }
 
 // The browser's own install offer (Chrome, Edge, Android), kept for the
