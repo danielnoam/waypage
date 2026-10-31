@@ -949,7 +949,7 @@ async function undoEdits() {
 
 // ---- Credits (1.48.0) ----
 // What Waypage is built with. Anything vendored or bundled goes here
-// their name here in their first pull request (CONTRIBUTING.md).
+// with its author and licence (CONTRIBUTING.md).
 const CREDITS = {
   code: [
     { name: "Readability", by: "Mozilla", licence: "Apache 2.0", url: "https://github.com/mozilla/readability", note: "Picks the article out of a page" },
