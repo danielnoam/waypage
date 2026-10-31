@@ -295,7 +295,7 @@ function bookHead(list, next, done) {
   const head = el("div", { class: "book-head" },
     bookCover(list),
     el("div", { class: "book-facts" },
-      el("p", { class: "book-site" }, [list[0].site, "Collection"].filter(Boolean).join(" · ")),
+      el("p", { class: "book-site" }, [siteOf(list[0]), "Collection"].filter(Boolean).join(" · ")),
       title,
       el("p", { class: "meta folder-meta" }, meta),
       bar));
@@ -812,7 +812,7 @@ function pageSheet(p, where) {
     fill(box,
       inReader ? null : el("div", { class: "menu-head" },
         el("p", { class: "menu-title", dir: "auto" }, p.title),
-        el("p", { class: "meta" }, [p.site, p.folder, readingLine(p), formatSize(p.bytes || 0)].filter(Boolean).join(" · "))),
+        el("p", { class: "meta" }, [siteOf(p), p.folder, readingLine(p), formatSize(p.bytes || 0)].filter(Boolean).join(" · "))),
       el("div", { class: "tile-row" },
         inReader ? null : tileButton("open", "Open", () => back().then(() => openPage(p.id))),
         // A clip made from a file has no address to share or go back to.

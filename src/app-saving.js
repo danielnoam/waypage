@@ -1396,7 +1396,7 @@ function updateWidgets(now) {
       .map(({ f, it }) => ({ title: it.title, site: f.title, url: it.url, feed: f.url }));
     C.platform.widgets.update({
       reading: p ? { id: p.id, title: p.title, at: p.at || 0,
-        meta: [p.site, (p.at || 0) >= 0.995 ? "Finished" : clipLeft(p, p.at || 0) + " min left"].filter(Boolean).join(" · ") } : null,
+        meta: [siteOf(p), (p.at || 0) >= 0.995 ? "Finished" : clipLeft(p, p.at || 0) + " min left"].filter(Boolean).join(" · ") } : null,
       feeds: { following: siteFeeds().length > 0, fresh: freshPosts(), posts },
       favourites: [
         ...allFolders().filter(folderFav).map((name) => ({ name, at: Math.max(...folderPages(name).map((x) => x.folderFavAt || 0)) }))
@@ -1426,7 +1426,7 @@ function updateWidgets(now) {
   }, now ? 0 : 800);
 }
 
-const clipMeta = (x) => [x.site, readingLine(x)].filter(Boolean).join(" · ");
+const clipMeta = (x) => [siteOf(x), readingLine(x)].filter(Boolean).join(" · ");
 const readCount = (list) => { const done = list.filter((x) => x.finished).length; return done === list.length ? "All read" : done + " of " + list.length + " read"; };
 
 // A widget's tap: the page to keep reading, a post, Feeds or a collection.

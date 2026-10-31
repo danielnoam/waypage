@@ -1428,6 +1428,13 @@
         // the bottom line says better.
         const metaLine = doc.querySelector(".co-head > .co-meta");
         if (metaLine) metaLine.textContent = metaLine.textContent.replace(/ · \d+ min$/, "");
+        // A file copied into a clip before 1.45.8 still names its kind
+        // and file: shown like any clip now.
+        if (meta && meta.file && !meta.link) {
+          if (metaLine) metaLine.textContent = metaLine.textContent.replace(/^[^·]+ · added (.+)$/, "Saved $1");
+          const foot = doc.querySelector(".co-licence");
+          if (foot && /^Opened from /.test(foot.textContent)) foot.remove();
+        }
         // Loose text is wrapped now, not on the first selection (1.11.1):
         // wrapping the words being selected dropped that selection.
         wrapLoose();

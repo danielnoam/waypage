@@ -18,6 +18,23 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Copies are clips, PDFs in two directions (1.45.8).** A file copied
+  into a clip now saves with an empty `site` and a head line of only
+  "Saved <date>", no "Opened from" footer. Older copies still hold the
+  kind as `site` and in their HTML, so `siteOf()` in app.js hides it
+  when it equals `C.files.KINDS[file.kind]`, and reader.open rewrites
+  the head and drops that footer. `file` stays on the entry: duplicates,
+  sync's pictures and Show as text still need it. "chapter" wording
+  (isBook) is kept for copies, since that's about the content. pdf.js
+  gives each text item's letters in logical order but `linesOf` joined
+  a line's items left to right, so right-to-left lines came out in
+  reversed pieces. `readingOrder` in pdf.js picks the line's direction
+  by its letters, reverses right-to-left runs, and in a right-to-left
+  line the run order too (numbers and Latin stay left to right). RTL
+  lines measure their indent from the right edge, and a direction
+  change starts a new paragraph. Only one level of embedding: a quote
+  inside a quote inside a quote can still come out off.
+
 - **Sidebar drift and the bottom bar (1.45.5).** The library drifts
   right under the sidebar on touch. With the transform on the whole
   `#libraryView`, its moved box made the page wider than the screen; a

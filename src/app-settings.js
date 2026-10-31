@@ -495,7 +495,7 @@ function roomGroup() {
     el("div", { class: "group" }, ...big.map((p) => el("button", { class: "row", type: "button", onclick: () => toLibrary().then(() => openMenu("page", p)) },
       el("span", { class: "choice-text" },
         el("span", { class: "row-label", dir: "auto" }, p.title),
-        el("span", { class: "choice-note" }, [p.site, p.finished ? "Finished" : readingLine(p)].filter(Boolean).join(" · "))),
+        el("span", { class: "choice-note" }, [siteOf(p), p.finished ? "Finished" : readingLine(p)].filter(Boolean).join(" · "))),
       el("span", { class: "row-value" }, formatSize(p.bytes || 0))))),
     el("p", { class: "footnote" }, "Tap one to delete it, or change what it keeps.")) : null];
 }

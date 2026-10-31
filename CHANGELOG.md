@@ -2,6 +2,19 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.45.8] - 2026-10-31
+
+### Fixed
+- Files copied into a clip no longer say they were a PDF (or EPUB,
+  Text...): no file kind on the card, its picture, the reader's top or
+  the clip's own first and last lines. A clip added as a copy before now
+  is shown the same way. Files read from where they are keep their marks.
+- PDFs with Hebrew or Arabic and English together: a line's words come
+  out in the right order (the pieces of a right-to-left line were read
+  backwards), each paragraph reads in its own direction, and
+  right-aligned paragraphs no longer break at every line. A PDF added
+  before this needs adding again to get its text fixed.
+
 ## [1.45.7] - 2026-10-30
 
 ### Removed

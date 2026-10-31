@@ -9,7 +9,7 @@
 // only use what an earlier part, or its own, has declared. A part's
 // functions can call into any part, since nothing is tapped until all of
 // them have loaded. app-start.js runs last and starts things up.
-const APP_VERSION = "1.45.7";
+const APP_VERSION = "1.45.8";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
@@ -358,6 +358,12 @@ async function loadThumbs() {
   webThumbs.clear();
   got.forEach((url, id) => webThumbs.set(id, url));
 }
+
+// A file copied into a clip is a clip like any other (1.45.8): it
+// doesn't say what kind of file it came from. Copies made before then
+// keep the kind as their site, so it's dropped here.
+const siteOf = (p) => (p.file && !p.link && p.site === C.files.KINDS[p.file.kind] ? "" : p.site || "");
+const dotted = (...parts) => parts.filter(Boolean).flatMap((x, i) => (i ? [" · ", x] : [x]));
 
 function thumbUrl(p) {
   if (!p.thumb) return null;
@@ -826,7 +832,7 @@ function donePageCard(p, e) {
     el("button", { class: "card-open", type: "button", "aria-label": p.title, onclick: () => toLibrary().then(() => openPage(p.id)) }),
     thumb ? el("img", { class: "card-thumb", src: thumb, alt: "", loading: "lazy" }) : siteMark(p),
     el("span", { class: "card-body" },
-      el("span", { class: "card-site", dir: "auto" }, p.site, p.folder ? " · " + p.folder : null),
+      el("span", { class: "card-site", dir: "auto" }, ...dotted(siteOf(p), p.folder)),
       el("span", { class: "card-title", dir: "auto" }, p.title),
       el("span", { class: "card-status" }, "Saved " + whenText(e.at),
         p.missing ? " · " : null, p.missing ? el("span", { class: "warn" }, p.missing + (p.missing === 1 ? " preview" : " previews") + " missing") : null)));
@@ -976,7 +982,7 @@ function pageCard(p, found, hero) {
     favThumb(p.fav, cover ? el("img", { class: "card-thumb cover", src: cover, alt: "", loading: "lazy" })
       : thumb ? el("img", { class: "card-thumb", src: thumb, alt: "", loading: "lazy" }) : siteMark(p)),
     el("span", { class: "card-body" },
-      el("span", { class: "card-site", dir: "auto" }, p.site, p.folder ? " · " + p.folder : null, ...(p.tags || []).map((t) => el("span", { class: "card-tag" }, " · #" + t))),
+      el("span", { class: "card-site", dir: "auto" }, ...dotted(siteOf(p), p.folder, ...(p.tags || []).map((t) => el("span", { class: "card-tag" }, "#" + t)))),
       el("span", { class: "card-title", dir: "auto" }, p.title),
       found ? el("span", { class: "card-found", dir: "auto" }, found) : null,
       el("span", { class: "card-status" }, facts, status ? " · " : null, status, retry ? " · " : null, retry),
@@ -1000,7 +1006,8 @@ function favThumb(fav, thumb) {
 // or the site's first letter when there's no icon to show.
 function siteMark(p) {
   // A file with no picture shows what kind it is (0.31.0).
-  if (p.file) return el("span", { class: "card-thumb site-mark", "aria-hidden": "true" }, el("span", { class: "site-letter file-ext" }, p.file.ext.toUpperCase()));
+  if (p.link) return el("span", { class: "card-thumb site-mark", "aria-hidden": "true" }, el("span", { class: "site-letter file-ext" }, p.file.ext.toUpperCase()));
+  if (p.file) return el("span", { class: "card-thumb site-mark", "aria-hidden": "true" }, el("span", { class: "site-letter" }, (p.title || "?").trim().charAt(0).toUpperCase()));
   const letter = el("span", { class: "site-letter" }, (p.site || "?").replace(/^www\./, "").charAt(0).toUpperCase());
   const box = el("span", { class: "card-thumb site-mark", "aria-hidden": "true" }, letter);
   const src = iconUrl(p);
@@ -1051,7 +1058,7 @@ const texts = new Map();
 let reading = null, searching = false;
 
 function metaMatch(p, ts) {
-  const hay = fold([p.title, p.site, p.folder, ...(p.tags || []).map((t) => "#" + t)].join(" "));
+  const hay = fold([p.title, siteOf(p), p.folder, ...(p.tags || []).map((t) => "#" + t)].join(" "));
   return ts.every((t) => hay.includes(t));
 }
 
@@ -1196,7 +1203,7 @@ const BY = {
   saved: (a, b) => (b.savedAt || 0) - (a.savedAt || 0),
   read: (a, b) => (b.readAt || 0) - (a.readAt || 0) || (b.savedAt || 0) - (a.savedAt || 0),
   length: (a, b) => (b.minutes || 0) - (a.minutes || 0),
-  site: (a, b) => (a.site || "").localeCompare(b.site || "") || a.title.localeCompare(b.title),
+  site: (a, b) => siteOf(a).localeCompare(siteOf(b)) || a.title.localeCompare(b.title),
 };
 const sorted = (list) => [...list].sort(BY[state.sort] || BY.saved);
 
@@ -1396,7 +1403,7 @@ function foldersByUse() {
 // reshuffled them with every one that landed (1.1.0).
 function asItem(name) {
   const list = folderPages(name);
-  return { folder: name, title: name, site: list[0].site,
+  return { folder: name, title: name, site: siteOf(list[0]),
     savedAt: Math.min(...list.map((p) => p.savedAt || 0)),
     readAt: Math.max(...list.map((p) => p.readAt || 0)),
     minutes: list.reduce((n, p) => n + (p.minutes || 0), 0) };
@@ -1405,7 +1412,7 @@ function asItem(name) {
 // One list's groups: by day under Newest saved and Last read, by site
 // under Site, none under Longest.
 function groupOf(x) {
-  if (state.sort === "site") return x.site || "";
+  if (state.sort === "site") return siteOf(x);
   if (state.sort === "length") return "";
   const t = state.sort === "read" ? x.readAt : x.savedAt;
   if (!t) return "Not started";

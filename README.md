@@ -61,7 +61,8 @@ Each section below shows the computer (left) and the phone (right).
 
 - Collections are ordered folders: chapters in order, "2 of 4 read", Continue.
 - A collection linked to a story's page finds new chapters and shows a "+N" to save them.
-- Files: EPUB, PDF, MOBI, AZW3, FB2, CBZ, Markdown, text and HTML, copied in or read from where they are. Books keep their own contents.
+- Files: EPUB, PDF, MOBI, AZW3, FB2, CBZ, Markdown, text and HTML, copied in (a clip like any other) or read from where they are. Books keep their own contents.
+- PDFs mixing Hebrew or Arabic with English keep each line's words in order.
 - Big PDFs are read a piece at a time, never whole in memory.
 - Watched folders bring new files into a chosen collection.
 - The library can live in app storage, Documents or any folder you pick.
