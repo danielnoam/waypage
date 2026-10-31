@@ -3,17 +3,46 @@
 Only what's left. When something ships it leaves this file and goes to
 CHANGELOG.md; the rules every release keeps are at the top of NOTES.md.
 
-## Next
+## Next (Daniel, 31 Oct 2026)
 
-Nothing waiting. Ask Daniel what's next.
+Planned, not built yet. Show the reworked screens before building.
 
-## Later (Daniel, 29 Oct 2026)
-
-- **Settings per book, from KOReader.** A file (EPUB, PDF, comic)
-  remembers its own font, size, margins and Scroll or Pages, with "Use
-  everywhere" to make them the default. Kept to Files, not every web
-  clip, so the text settings don't need a "This clip / Everywhere"
-  choice on every control. Open question: whether they sync.
+- **Clean up Settings.** Tidy the pages and move some buttons to where
+  they belong. Settings was last regrouped in 1.12.0 and has grown a lot
+  since (dictionaries, fonts, Translate, Narrate, Drive, newsletters,
+  app lock). To do first: walk every page, list what sits where, and
+  show Daniel the new layout before moving anything.
+- **Settings per clip, per collection and per book.** A clip, a
+  collection or a file (EPUB, PDF, comic) can keep its own font, size,
+  margins and Scroll or Pages, KOReader-style, with "Use everywhere" to
+  make them the default. Order: the clip's own, then its collection's,
+  then Settings. Replaces the 29 Oct "settings per book, Files only"
+  plan, which kept web clips out so every text control wouldn't need a
+  "This clip / Everywhere" choice; that problem is still the one to
+  solve, likely one "This clip" / "This collection" switch at the top of
+  the Aa sheet rather than one on every control. Open: whether they sync.
+- **A better Night view for PDFs and pictures.** Today Dim pictures
+  (1.32.0) only dims pictures in a clip's text; a scanned PDF's pages,
+  comics and full pictures stay bright white in Night. Try: pages that
+  are mostly text or line art drawn inverted (`invert(1) hue-rotate(180deg)`
+  in the frame, so colours keep their hue), photos left as they are or
+  dimmed, decided per picture from how much of it is near white; and a
+  per-clip switch for when the guess is wrong. Check every dark theme
+  for contrast.
+- **The changelog with the update.** Since 0.11.0 an update shows
+  "Updated to X" with a What's new button that has to be tapped. Show the
+  new version's changes themselves when the update arrives (that
+  version's CHANGELOG entry, and every one skipped since the version
+  seen last), and on Android also before installing, in Settings ›
+  Updates, read from the release.
+- **Annotations on PDFs, and writing on them.** A text PDF is already a
+  clip, so highlights and notes work there; a scanned PDF's pages are
+  pictures and take neither. Add drawing and handwriting with a finger
+  or pen (pen, highlighter, eraser, colours) on PDF pages, and maybe
+  later on any clip, kept with the clip's highlights, in its export and
+  in sync. Open: whether marks go back into the PDF file itself (only
+  for a copied-in file, never one read from where it is, unless asked),
+  and how marks stay put when the text reflows at another size.
 
 ## iOS release (later, Daniel 11 Oct 2026)
 
