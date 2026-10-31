@@ -178,7 +178,11 @@ null rather than for a platform. The native plugins live in
   own time, so the newest place wins across devices. On mobile data it
   can sync only places.
 - **Google Drive** (`drive.js`): zipped backups (`backup.js`) in a
-  Waypage folder in the person's Drive, resumable, the last few kept.
+  Waypage folder in the person's Drive, resumable (the browser in 8 MB
+  pieces), the last few kept. On Android the zip is packed natively
+  (`LibraryZip`), and `DriveBackupJob` makes the automatic one with the
+  app closed, from a plan the app hands over each time it goes to the
+  background.
 - Files read from outside (`link` on the entry) are this device's alone:
   neither sync nor any backup takes them, and a restore skips them.
 - **Backups and exports** (`backup.js`, `epub.js`): one zip of the whole

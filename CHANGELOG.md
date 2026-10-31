@@ -5,10 +5,27 @@ All notable changes to Carry-on. Newest first.
 ## Unreleased
 
 ### Added
+- Google Drive backs up by itself with Waypage closed, on Android: on
+  Wi-Fi, with the battery not low, when it's due. A quiet notification
+  shows while it packs and sends; one Android stops part way goes on from
+  where Drive got to the next time.
+- Google Drive › What goes in › Links only, like GitHub sync: clips that
+  can be saved again go in as their addresses, and a restore saves them
+  again from their links. Books copied in and newsletter mails still go in
+  whole.
+- GitHub sync › What this device syncs has switches like Google Drive's:
+  Clips (with Clips too or Links only under it), Feeds, Newsletters and
+  Reading stats. A part turned off is neither sent nor taken here, and
+  stays on GitHub as your other devices left it.
 - Back up the library has Pause and Stop while it runs, like Google
   Drive's backups.
 
 ### Changed
+- Back up by itself is a drop-down.
+- Google Drive backups in a browser go up in 8 MB pieces, so Pause and
+  Resume (or a dropped connection) go on from the last piece instead of
+  starting over, and pack about four times faster (3000 clips: 5.3 s to
+  1.3 s), reading clips fifty at a time.
 - Storage starts with where your library is kept, then its size by
   collection. Make pictures smaller and Keep only the text of finished
   clips moved down beside the backup buttons, under a heading now

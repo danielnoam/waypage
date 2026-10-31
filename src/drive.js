@@ -15,6 +15,11 @@
   const SCOPE = "https://www.googleapis.com/auth/drive.file";
   const API = "https://www.googleapis.com/drive/v3";
   const UPLOAD = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size,createdTime,description";
+  const RESUMABLE = "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,size,createdTime,description";
+  // A browser's backup goes up in pieces this big (1.47.0): Drive wants
+  // a multiple of 256 KB, and a piece is all a pause or a dropped
+  // connection costs.
+  const CHUNK = 8 * 1024 * 1024;
   const FIELDS = "id,name,size,createdTime,description,appProperties";
   const CFG_KEY = "waypage.drive";      // { email, folder, auto, what, last }
   const TOKEN_KEY = "waypage.driveToken"; // a browser's token: { token, exp }
@@ -192,7 +197,7 @@
   // browser) and keeps the newest KEEP. Resolves to the new file.
   // `ctl.stop()` (set here) breaks the transfer off: it rejects
   // "cancelled". Called again with the same `ctl`, the app goes on from
-  // where Drive got to; a browser starts the file again.
+  // where Drive got to, and a browser (1.47.0) from its last piece.
   async function upload(out, info, onProgress, ctl = {}) {
     const dir = await folder();
     const meta = { name: out.name, parents: [dir], mimeType: "application/zip",
@@ -217,14 +222,74 @@
         if (heard) heard.remove();
       }
     } else {
-      made = await send(out.blob, meta, await getToken(false), onProgress, ctl);
+      made = await sendInPieces(out.blob, meta, onProgress, ctl);
     }
     await prune(dir).catch(() => {});
     return { id: made.id, size: Number(made.size) || 0 };
   }
   const parseBody = (msg) => { try { return JSON.parse(String(msg).replace(/^[^{]*/, "")); } catch (e) { return null; } };
 
-  // One multipart request, with XMLHttpRequest for its upload progress.
+  // A browser's backup as a resumable upload (1.47.0), as the app sends
+  // it: a session at Drive, then the file a piece at a time, so Resume
+  // goes on from the last piece Drive took instead of from the start.
+  // The session's address is Location, or, where a browser isn't shown
+  // that, the upload id Drive does show; neither, and it's one request
+  // as before. `ctl` keeps the session and how far it got.
+  async function sendInPieces(blob, meta, onProgress, ctl) {
+    const total = blob.size;
+    if (!ctl.session) {
+      const res = await fetch(RESUMABLE, { method: "POST", headers: { Authorization: "Bearer " + await getToken(false),
+        "Content-Type": "application/json; charset=UTF-8", "X-Upload-Content-Type": "application/zip", "X-Upload-Content-Length": String(total) },
+        body: JSON.stringify(meta) }).catch(() => null);
+      if (!res) throw new DriveError("The backup didn't finish sending. Try again on a steadier connection.", "network");
+      if (res.status === 401) setToken(null);
+      if (!res.ok) throw failure(res.status, await res.json().catch(() => null));
+      const id = res.headers.get("X-GUploader-UploadID");
+      ctl.session = res.headers.get("Location") || (id ? RESUMABLE + "&upload_id=" + encodeURIComponent(id) : null);
+      ctl.at = 0;
+      if (!ctl.session) return send(blob, meta, await getToken(false), onProgress, ctl);
+    }
+    for (;;) {
+      // After a pause or a dropped piece, Drive says how much it has: a
+      // piece cut off may still have reached it.
+      const asking = !!ctl.unsure;
+      const from = ctl.at || 0, to = asking ? from : Math.min(total, from + CHUNK);
+      ctl.unsure = true;
+      const x = await piece(ctl, asking ? null : blob.slice(from, to), from, to, total, onProgress);
+      ctl.unsure = false;
+      if (x.status === 308) {
+        const range = /^bytes=0-(\d+)$/.exec(x.getResponseHeader("Range") || "");
+        ctl.at = range ? Number(range[1]) + 1 : asking ? 0 : to;
+        continue;
+      }
+      let got = null;
+      try { got = JSON.parse(x.responseText); } catch (e) { got = null; }
+      if (x.status >= 200 && x.status < 300 && got && got.id) return got;
+      // A session Drive has forgotten starts over next time.
+      if (x.status === 404 || x.status === 410) ctl.session = null;
+      if (x.status === 401) setToken(null);
+      throw failure(x.status, got);
+    }
+  }
+  async function piece(ctl, part, from, to, total, onProgress) {
+    const t = await getToken(false);
+    return new Promise((ok, no) => {
+      const x = new XMLHttpRequest();
+      x.open("PUT", ctl.session);
+      x.setRequestHeader("Authorization", "Bearer " + t);
+      x.setRequestHeader("Content-Range", part ? "bytes " + from + "-" + (to - 1) + "/" + total : "bytes */" + total);
+      if (onProgress) x.upload.onprogress = (e) => onProgress(from + e.loaded, total);
+      ctl.stop = () => x.abort();
+      const done = () => { ctl.stop = null; };
+      x.onload = () => { done(); ok(x); };
+      x.onabort = () => { done(); no(new DriveError("Stopped.", "cancelled")); };
+      x.onerror = () => { done(); no(new DriveError("The backup didn't finish sending. Try again on a steadier connection.", "network")); };
+      x.send(part);
+    });
+  }
+
+  // One multipart request, with XMLHttpRequest for its upload progress:
+  // where a resumable session can't be had.
   function send(blob, meta, t, onProgress, ctl) {
     const cut = "waypage" + Math.random().toString(36).slice(2);
     const body = new Blob(["--" + cut + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(meta) +
@@ -337,13 +402,21 @@
     get on() { return !!cfg; },
     get email() { return cfg ? cfg.email : ""; },
     get auto() { return !!(cfg && cfg.auto); },
+    get folder() { return (cfg && cfg.folder) || ""; },
+    // The backup that runs with the app closed (1.47.0, Android): its
+    // plan handed over, held while the app is open, and what it did.
+    get background() { return !!(P() && P().background); },
+    handOver(plan) { return P() && P().background ? P().background(plan ? { plan: JSON.stringify(plan) } : {}).catch(() => {}) : Promise.resolve(); },
+    hold(on) { if (P() && P().backgroundHold) P().backgroundHold({ hold: on }).catch(() => {}); },
+    async backgroundDone() { try { return P() && P().backgroundState ? await P().backgroundState() : null; } catch (e) { return null; } },
     set auto(v) { if (cfg) { cfg.auto = !!v; save(); } },
     // Days between automatic backups (1.46.0; a week until then).
     get every() { return (cfg && EVERY.includes(cfg.every) && cfg.every) || 7; },
     set every(v) { if (cfg && EVERY.includes(v)) { cfg.every = v; save(); } },
     // What goes in a backup: clips (files copied in among them), feeds,
     // newsletter addresses (1.46.0; a Files switch until then).
-    get what() { return cfg ? { clips: true, feeds: true, newsletters: true, ...(cfg.what || {}) } : null; },
+    // `links` (1.47.0): clips that can be saved again go in as links only.
+    get what() { return cfg ? { clips: true, links: false, feeds: true, newsletters: true, ...(cfg.what || {}) } : null; },
     setWhat(k, v) { if (!cfg) return; cfg.what = { ...this.what, [k]: !!v }; save(); },
     get last() { return (cfg && cfg.last) || {}; },
     get since() { return (cfg && cfg.since) || 0; },

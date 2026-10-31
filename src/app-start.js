@@ -331,6 +331,7 @@ Promise.all([C.platform.ready, firstIndex]).then(([, [pages]]) => {
   if (C.drive.resume === "connect") driveConnect(null);
   else if (C.drive.resume === "backup") driveBackUp(false);
   else setTimeout(driveDue, 8000);
+  driveTakeBackground();
   paintSync();
   watchSoon(2500);
   document.addEventListener("visibilitychange", () => {
@@ -342,9 +343,10 @@ Promise.all([C.platform.ready, firstIndex]).then(([, [pages]]) => {
       const writes = [flushIndex()];
       if (positionTimer) writes.push(savePositions());
       updateWidgets(true);
-      Promise.all(writes).then(() => { if (unsynced || syncTimer) syncNow(); });
+      Promise.all(writes).then(() => { if (unsynced || syncTimer) syncNow(); driveHandOver(); });
       return;
     }
+    driveTakeBackground();
     takeFeedNews();
     takeWidget();
     syncSoon(1000);

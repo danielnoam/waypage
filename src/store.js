@@ -276,6 +276,26 @@
     return idbDo("readonly", (s) => s.get(id));
   }
 
+  // Many pages and their text in one go, for a backup in a browser
+  // (1.47.0): one transaction for a batch instead of opening the database
+  // twice a clip, which was four fifths of packing 3000 clips.
+  // [{ html, text }] in the order of `ids`; null where there's none.
+  async function readPages(ids) {
+    if (FS()) return Promise.all(ids.map(async (id) => ({ html: await readPage(id).catch(() => null), text: await readText(id) })));
+    const db = await idb();
+    return new Promise((resolve, reject) => {
+      const out = ids.map(() => ({ html: null, text: null }));
+      const tx = db.transaction("pages", "readonly");
+      const s = tx.objectStore("pages");
+      ids.forEach((id, i) => {
+        s.get(id).onsuccess = (e) => { if (typeof e.target.result === "string") out[i].html = e.target.result; };
+        s.get(id + ":text").onsuccess = (e) => { if (typeof e.target.result === "string") out[i].text = e.target.result; };
+      });
+      tx.oncomplete = () => { db.close(); resolve(out); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+  }
+
   async function removePage(id) {
     if (FS()) {
       try { await (await B()).rmdir("pages/" + id); } catch (e) { /* already gone */ }
@@ -603,6 +623,6 @@
   }
 
   window.Waypage.store = { ready,
-    get place() { return cur ? cur.place : savedPlace(); }, placeName, get problem() { return problem; }, moveTo, readIndex, writeIndex, writeIndexOnly, set onIndex(f) { onIndex = f; }, writeThumb, readThumbs, storageInfo, keepStored, writePage, readPage, removePage, writeText, readText, writeTranslation, readTranslation, download, removeFile, sizeOf, shrink, squeeze, pageDirUrl, bytesOf,
+    get place() { return cur ? cur.place : savedPlace(); }, placeName, get problem() { return problem; }, moveTo, readIndex, writeIndex, writeIndexOnly, set onIndex(f) { onIndex = f; }, writeThumb, readThumbs, storageInfo, keepStored, writePage, readPage, readPages, removePage, writeText, readText, writeTranslation, readTranslation, download, removeFile, sizeOf, shrink, squeeze, pageDirUrl, bytesOf,
     listFiles, listSized, readBytes, writeBytes, cacheFile, packSource, toBase64, listFonts, readFont, addFont, removeFont };
 })();

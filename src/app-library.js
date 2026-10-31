@@ -1764,8 +1764,11 @@ async function restoreBackup(file, say) {
   await loadThumbs();
   if (res.added + res.replaced) C.store.keepStored();
   const followed = restoreFeeds(res.feeds);
+  // A Links only backup's clips (1.47.0), saved again as sync's are.
+  if (res.links.length) saveFromLinks(res.links, "From the backup");
   const n = res.added + res.replaced;
-  const what = [n ? countLine(n) : "", followed ? (followed === 1 ? "1 feed" : followed + " feeds") : ""].filter(Boolean).join(" and ");
+  const what = [n ? countLine(n) : "", followed ? (followed === 1 ? "1 feed" : followed + " feeds") : "",
+    res.links.length ? res.links.length + " to save again from their links" : ""].filter(Boolean).join(" and ");
   toast((what ? "Restored " + what : "Nothing new to restore") + (res.kept ? ". " + res.kept + " already here" + (res.kept === 1 ? " was" : " were") + " kept." : "."));
 }
 
