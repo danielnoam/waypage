@@ -17,7 +17,7 @@ const LOCK_MIN = 4, LOCK_MAX = 12;
 const LOCK_FREE_TRIES = 5, LOCK_WAIT_MS = 30000, LOCK_WAIT_MAX = 15 * 60000;
 const LOCK_AFTERS = [
   { value: 0, label: "Right away", note: "Every time you leave the app" },
-  { value: 60000, label: "After 1 minute", note: "Time to pick a file or sign in to a site without unlocking again" },
+  { value: 60000, label: "After 1 minute", note: "Time to pick a file or sign in" },
   { value: 5 * 60000, label: "After 5 minutes" },
   { value: 15 * 60000, label: "After 15 minutes" },
 ];
@@ -302,35 +302,30 @@ async function setLockBio(on, input) {
 
 function lockSections() {
   const c = lockCfg();
-  const foot = el("p", { class: "footnote" }, "The lock is for this " + (C.platform.native ? "phone" : "browser") + " only, and the passcode never leaves it. "
+  const help = "The lock is for this " + (C.platform.native ? "phone" : "browser") + " only, and the passcode never leaves it. "
     + "It keeps anyone who picks up your " + (C.platform.native ? "phone" : "computer") + " out of Waypage; it doesn't encrypt the files. "
-    + "Forgot it? You can erase Waypage on this device and start again: GitHub sync or a Google Drive backup brings your clips back.");
-  if (!c) return [el("section", { class: "settings-section" },
+    + "Forgot it? You can erase Waypage on this device and start again: GitHub sync or a Google Drive backup brings your clips back.";
+  if (!c) return [section("Lock", help,
     el("div", { class: "group" },
       el("button", { class: "row", type: "button", onclick: turnLockOn },
         el("span", { class: "choice-text" },
           el("span", { class: "choice-label accent" }, "Turn on app lock"),
-          el("span", { class: "choice-note" }, "A passcode to open Waypage" + (C.platform.os === "android" ? ", then fingerprint or face if you like" : ""))))),
-    foot)];
-  const bio = el("section", { class: "settings-section", hidden: "" });
+          el("span", { class: "choice-note" }, "A passcode" + (C.platform.os === "android" ? ", fingerprint or face" : ""))))))];
+  const bio = el("label", { class: "row", hidden: "" });
   C.platform.lock.biometric().then((ok) => {
     if (!ok) return;
     const input = el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!c.bio, onchange: (e) => setLockBio(e.target.checked, e.target) });
-    fill(bio, el("div", { class: "group" }, el("label", { class: "row" },
-      el("span", { class: "choice-text" },
-        el("span", { class: "choice-label" }, "Fingerprint or face"),
-        el("span", { class: "choice-note" }, "Instead of the passcode, which still works")),
-      input)));
+    bio.append(el("span", { class: "choice-text" },
+      el("span", { class: "choice-label" }, "Fingerprint or face"),
+      el("span", { class: "choice-note" }, "The passcode still works")), input);
     bio.hidden = false;
   });
-  return [bio,
-    choiceGroup({ key: LOCK_KEY + ".after", label: "Lock", get: () => (lockCfg() || {}).after || 0, set: (v) => lockChange({ after: Number(v) }),
-      options: LOCK_AFTERS }),
-    el("section", { class: "settings-section" },
-      el("div", { class: "group" },
-        menuRow("Change the passcode", changeLock),
-        menuRow("Turn off app lock", turnLockOff, "warn")),
-      foot)];
+  return [section("Lock", help + " Locks says how long Waypage stays open after you leave it; a minute gives time to pick a file or sign in to a site without unlocking again.",
+    el("div", { class: "group" },
+      bio,
+      pickRow({ key: LOCK_KEY + ".after", label: "Locks", get: () => (lockCfg() || {}).after || 0, set: (v) => lockChange({ after: Number(v) }), options: LOCK_AFTERS }),
+      menuRow("Change the passcode", changeLock),
+      menuRow("Turn off app lock", turnLockOff, "warn")))];
 }
 const lockValue = () => (lockCfg() ? "On" : "Off");
 SECTIONS.lock = { title: "App lock", build: lockSections, value: lockValue };

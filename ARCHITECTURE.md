@@ -50,7 +50,7 @@ src/app-reader.js   moving between screens; the reader around the page: brightne
 src/app-library.js  tags, collections, a clip's sheet, multi-select, export, import, watched folders
 src/app-saving.js   sync screen, saving several, next links and new chapters, feeds, home-screen widgets
 src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestures, a feed's sheets
-src/app-settings.js Settings (built from data), Make room, Report a problem
+src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
 src/app-lock.js     app lock: passcode (PBKDF2 hash), fingerprint or face on Android
 src/app-start.js    wiring at launch, what other apps share in, self-update, What's new
 src/save.js         link to saved page: fetch, Wikipedia adapter or Readability, allowlist cleaner, picture previews, video cards

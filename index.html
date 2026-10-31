@@ -8,8 +8,8 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="src/fonts.css?v=1.47.0">
-  <link rel="stylesheet" href="src/styles.css?v=1.47.0">
+  <link rel="stylesheet" href="src/fonts.css?v=1.48.0">
+  <link rel="stylesheet" href="src/styles.css?v=1.48.0">
 </head>
 <body>
   <div class="app" id="libraryView">
@@ -271,6 +271,15 @@
       <h1 class="bar-title">Settings</h1>
       <span class="bar-spacer" aria-hidden="true"></span>
     </header>
+    <div class="settings-search">
+      <div class="search" role="search">
+        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path></svg>
+        <input id="settingsSearch" type="search" placeholder="Search settings" aria-label="Search settings" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" dir="auto">
+        <button class="icon-btn search-clear" id="settingsSearchClear" type="button" aria-label="Clear search" hidden>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+        </button>
+      </div>
+    </div>
     <div class="screen-body" id="settingsBody"></div>
   </section>
   <section class="screen" id="sectionView" hidden aria-labelledby="sectionTitle">
@@ -366,36 +375,36 @@
     </div>
   </section>
 
-  <script src="src/platform.js?v=1.47.0"></script>
-  <script src="src/motion.js?v=1.47.0"></script>
-  <script src="src/vendor/Readability.js?v=1.47.0"></script>
-  <script src="src/store.js?v=1.47.0"></script>
-  <script src="src/save.js?v=1.47.0"></script>
-  <script src="src/feeds.js?v=1.47.0"></script>
-  <script src="src/backup.js?v=1.47.0"></script>
-  <script src="src/imports.js?v=1.47.0"></script>
-  <script src="src/dict.js?v=1.47.0"></script>
-  <script src="src/sync.js?v=1.47.0"></script>
-  <script src="src/drive.js?v=1.47.0"></script>
-  <script src="src/qr.js?v=1.47.0"></script>
-  <script src="src/stats.js?v=1.47.0"></script>
-  <script src="src/epub.js?v=1.47.0"></script>
-  <script src="src/files.js?v=1.47.0"></script>
-  <script src="src/pdf.js?v=1.47.0"></script>
-  <script src="src/reader.js?v=1.47.0"></script>
-  <script src="src/app.js?v=1.47.0"></script>
-  <script src="src/app-reading.js?v=1.47.0"></script>
-  <script src="src/app-cards.js?v=1.47.0"></script>
-  <script src="src/app-downloads.js?v=1.47.0"></script>
-  <script src="src/app-search.js?v=1.47.0"></script>
-  <script src="src/app-draw.js?v=1.47.0"></script>
-  <script src="src/app-jobs.js?v=1.47.0"></script>
-  <script src="src/app-reader.js?v=1.47.0"></script>
-  <script src="src/app-library.js?v=1.47.0"></script>
-  <script src="src/app-saving.js?v=1.47.0"></script>
-  <script src="src/app-places.js?v=1.47.0"></script>
-  <script src="src/app-settings.js?v=1.47.0"></script>
-  <script src="src/app-lock.js?v=1.47.0"></script>
-  <script src="src/app-start.js?v=1.47.0"></script>
+  <script src="src/platform.js?v=1.48.0"></script>
+  <script src="src/motion.js?v=1.48.0"></script>
+  <script src="src/vendor/Readability.js?v=1.48.0"></script>
+  <script src="src/store.js?v=1.48.0"></script>
+  <script src="src/save.js?v=1.48.0"></script>
+  <script src="src/feeds.js?v=1.48.0"></script>
+  <script src="src/backup.js?v=1.48.0"></script>
+  <script src="src/imports.js?v=1.48.0"></script>
+  <script src="src/dict.js?v=1.48.0"></script>
+  <script src="src/sync.js?v=1.48.0"></script>
+  <script src="src/drive.js?v=1.48.0"></script>
+  <script src="src/qr.js?v=1.48.0"></script>
+  <script src="src/stats.js?v=1.48.0"></script>
+  <script src="src/epub.js?v=1.48.0"></script>
+  <script src="src/files.js?v=1.48.0"></script>
+  <script src="src/pdf.js?v=1.48.0"></script>
+  <script src="src/reader.js?v=1.48.0"></script>
+  <script src="src/app.js?v=1.48.0"></script>
+  <script src="src/app-reading.js?v=1.48.0"></script>
+  <script src="src/app-cards.js?v=1.48.0"></script>
+  <script src="src/app-downloads.js?v=1.48.0"></script>
+  <script src="src/app-search.js?v=1.48.0"></script>
+  <script src="src/app-draw.js?v=1.48.0"></script>
+  <script src="src/app-jobs.js?v=1.48.0"></script>
+  <script src="src/app-reader.js?v=1.48.0"></script>
+  <script src="src/app-library.js?v=1.48.0"></script>
+  <script src="src/app-saving.js?v=1.48.0"></script>
+  <script src="src/app-places.js?v=1.48.0"></script>
+  <script src="src/app-settings.js?v=1.48.0"></script>
+  <script src="src/app-lock.js?v=1.48.0"></script>
+  <script src="src/app-start.js?v=1.48.0"></script>
 </body>
 </html>

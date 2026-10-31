@@ -2,6 +2,32 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.48.0] - 2026-10-31
+
+### Added
+- A search box at the top of Settings. A word or two finds a setting
+  wherever it sits, by its name, its line, its heading or its
+  explanation; a result opens the screen and lights the row up.
+- Settings › About › Credits: who made Waypage, the open-source code and
+  fonts it's built with and their licences, and the services it talks to.
+
+### Changed
+- Settings say less. Every row is a name and at most one short line, and
+  the longer explanation sits behind a ? on its section's heading, the
+  way the Steam Deck explains a setting only when asked. Saving went from
+  two and a half screens to one.
+- Lists of options are drop-downs in a row (Images, On mobile data, how
+  soon the app locks, where the library is kept, how new posts notify,
+  which clips to edit), and Appearance's ten theme rows are a grid of
+  swatches, two rows tall. Library's layout is a Scroll/Pages-style
+  switch.
+- Saving's picture settings are one group: Images, Make full images
+  smaller, Load pictures only when tapped and On mobile data. GitHub
+  sync's On mobile data sits under What this device syncs.
+- Pressing the ? and a switch answer with motion: the ? dips and turns,
+  a pressed switch's knob stretches toward where it's going, and a
+  drop-down's new choice pops into place.
+
 ## [1.47.0] - 2026-10-31
 
 ### Added

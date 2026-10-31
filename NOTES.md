@@ -18,6 +18,25 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+**Settings search reads the screens (1.48.0).** There is no list of
+settings to keep: when a search starts, every Settings screen is built
+once into a detached box and its headings, rows (name and line), option
+groups and help texts are read into the index, which is dropped when
+Settings close. So a row added anywhere is found with no extra work, and
+the words searched are exactly the words shown. The build takes a few
+milliseconds; Storage's per-clip rows and the report log are skipped. A
+result opens the screen and finds its row again by heading and name,
+since a rebuilt screen has new nodes. The help text that's hidden
+behind a ? is searched too, so "OLED" finds Theme.
+
+**Why help hides behind a ? (1.48.0).** Daniel's complaint was text
+everywhere. The Steam Deck shows a setting's description only for the
+one under the cursor; a phone has no hover, so the nearest thing is a
+button on the section's heading that unfolds the explanation. The
+explanation is still there, searchable, one tap away; the screen reads
+as a list of names again. What reports a state stays a visible footnote,
+because hiding a warning or a progress line behind a ? would lose it.
+
 **Drive backups with the app closed (Unreleased, after 1.46.0).** A
 JobService (`DriveBackupJob`) rather than WorkManager, as the feed check
 is, so no new dependency. The job can't run the WebView, so the app hands

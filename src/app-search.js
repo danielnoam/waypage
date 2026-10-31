@@ -227,7 +227,15 @@ function dropdown(o) {
       const check = el("span", { class: "dropdown-check", "aria-hidden": "true" });
       if (x.value === value) check.innerHTML = CHECK;
       return el("button", { class: "dropdown-item", type: "button", role: "option", "aria-selected": String(x.value === value),
-        onclick: () => { const changed = x.value !== value; value = x.value; show(); close(true); if (changed) o.onpick(x.value); } },
+        onclick: () => {
+          const changed = x.value !== value;
+          value = x.value;
+          show();
+          // The new choice pops into the face (1.48.0).
+          if (changed) { face.classList.remove("changed"); void face.offsetWidth; face.classList.add("changed"); }
+          close(true);
+          if (changed) o.onpick(x.value);
+        } },
         el("span", { class: "dropdown-text", dir: "auto", style: x.style || null }, x.label, x.sample || null), check);
     });
     const items = nodes.filter((x) => x.tagName === "BUTTON");

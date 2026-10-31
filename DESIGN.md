@@ -273,6 +273,22 @@ and the page shows above it.
   own screen. A new version adds an accent-bordered "Waypage 0.20.0 is
   out" card with View above the groups. At 900 px and wider the menu
   stays on the left (360 px) and the section fills the rest.
+- **Settings rows and help (1.48.0):** a search field (the library's
+  search box, 44 px) sits under the bar; typing swaps the menu for
+  matching rows (name, then "Section › Heading" in `--muted`), and a
+  result opens its screen and gives the row a 2 px accent outline for
+  two seconds. On a screen, every row is a name and at most one line of
+  `--fs-meta` in `--muted`: a state or scope, never a paragraph. A
+  section's heading (the overline) carries a 28 px round ? at its right
+  (`--surface`, `--line` border, `--muted`; accent when open); tapping it
+  unfolds the section's explanation under the heading on the control
+  spring, and the ? dips on press and turns once when open. Whatever
+  reports a state (a move in progress, what isn't ready) stays a visible
+  footnote. A pick between options is a row with its name, the picked
+  option's few words under it, and the drop-down (accent, no border) at
+  its end; a chosen option pops into the face from 80%. A pressed
+  switch's knob stretches 6 px toward where it's going. The themes are a
+  grid of swatches, five across and two rows, labels under them.
 - **Storage by collection (Now):** under "By collection", one row a collection,
   biggest first (name, page count, size, a chevron), then "Not in a
   collection" in `--muted`. A tap opens the group in place: its pages
