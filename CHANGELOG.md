@@ -2,7 +2,7 @@
 
 All notable changes to Carry-on. Newest first.
 
-## Unreleased
+## [1.47.0] - 2026-10-31
 
 ### Added
 - Google Drive backs up by itself with Waypage closed, on Android: on

@@ -13,7 +13,7 @@
 // app-cards, app-downloads, app-search, app-draw, app-jobs, app-reader,
 // app-library, app-saving, app-places, app-settings, app-lock, and
 // app-start, which runs last and starts things up.
-const APP_VERSION = "1.46.0";
+const APP_VERSION = "1.47.0";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
