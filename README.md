@@ -221,9 +221,11 @@ Chromium, like `test/ui.test.js`.
 
 ```
 index.html          app shell
-src/app.js          version, state, the library and the shared helpers;
-src/app-*.js        the rest of the shell in parts: reader, library,
-                    saving and feeds, places and sidebar, settings, lock, start
+src/app.js          version, the shared helpers, theme and state;
+src/app-*.js        the rest of the shell in parts, loaded in order: reading
+                    look, cards, downloads, search, drawing the library,
+                    saving jobs, reader, library, saving and feeds, places
+                    and sidebar, settings, lock, start (see CONTRIBUTING.md)
 src/save.js         link to saved page: Wikipedia, Readability, the
                     allowlist cleaner, picture previews, video cards
 src/reader.js       a saved page in the sandboxed iframe

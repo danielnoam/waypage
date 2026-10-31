@@ -2,6 +2,14 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.45.11] - 2026-10-31
+
+### Changed
+- Nothing to see: the app's main script is split into smaller files by
+  area (reading look, cards, Downloads, search, drawing the library,
+  saving jobs), so people working on different parts don't trip over each
+  other. No build step, same files loaded in the same order.
+
 ## [1.45.10] - 2026-10-31
 
 ### Changed

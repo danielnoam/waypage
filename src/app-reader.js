@@ -1,4 +1,4 @@
-// Waypage's shell, part 2 of 7 (1.14.0): moving between screens, the
+// Waypage's shell (1.14.0): moving between screens, the
 // reader around the page (brightness, contents, Read aloud, highlights,
 // its sheets) and the image viewer. See app.js for how the parts share.
 // ---- Screens ----

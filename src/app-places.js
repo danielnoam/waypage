@@ -1,4 +1,4 @@
-// Waypage's shell, part 5 of 7 (1.14.0): the Highlights place, the
+// Waypage's shell (1.14.0): the Highlights place, the
 // sidebar, big screens, keys, gestures and a feed's sheets. See app.js
 // for how the parts share.
 // ---- Every highlight in one place (1.8.0) ----

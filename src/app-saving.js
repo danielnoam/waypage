@@ -1,4 +1,4 @@
-// Waypage's shell, part 4 of 7 (1.14.0): sync, saving several, next
+// Waypage's shell (1.14.0): sync, saving several, next
 // links and new chapters, feeds and the home screen widgets. See app.js
 // for how the parts share.
 // ---- Sync (0.30.0) ----

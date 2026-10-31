@@ -1,4 +1,4 @@
-// Waypage's shell, part 3 of 7 (1.14.0): tags, collections, what a clip
+// Waypage's shell (1.14.0): tags, collections, what a clip
 // keeps, picking several, the library's sheets, export, import and
 // watched folders. See app.js for how the parts share.
 // ---- Tags ----

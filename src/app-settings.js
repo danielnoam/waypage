@@ -1,4 +1,4 @@
-// Waypage's shell, part 6 of 7 (1.14.0): Settings, making room and
+// Waypage's shell (1.14.0): Settings, making room and
 // Report a problem. See app.js for how the parts share.
 // ---- Settings ----
 // Each group is data: a new setting is a new entry here, not new markup.
