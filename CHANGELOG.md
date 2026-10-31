@@ -2,6 +2,12 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.48.1] - 2026-10-31
+
+### Changed
+- Credits: no ? on its headings; the licence lines say enough.
+- Two cards in one Settings section no longer touch (About, Preview builds, Google Drive, GitHub sync).
+
 ## [1.48.0] - 2026-10-31
 
 ### Added

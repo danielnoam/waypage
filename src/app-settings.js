@@ -978,12 +978,12 @@ function creditsSections() {
     value ? el("span", { class: "row-value" }, value) : null,
     el("span", { class: "row-value", "aria-hidden": "true" }, "↗"));
   return [
-    section("Code", "Open-source code bundled into Waypage, each under its own licence; the licence texts are in the repo beside the code.",
+    section("Code", null,
       el("div", { class: "group" }, ...CREDITS.code.map((c) => out(c.url, c.name, c.note, c.by + " · " + c.licence)))),
-    section("Fonts", "All under the SIL Open Font License, bundled as Latin and Hebrew subsets.",
+    section("Fonts", null,
       el("div", { class: "group" }, ...CREDITS.fonts.map(([name, by]) => el("div", { class: "row" },
         el("span", { class: "row-label", style: "font-family: '" + name + "', var(--sans)" }, name), el("span", { class: "row-value" }, by))))),
-    section("Services", "Sites Waypage talks to for a feature, only when you use it. Nothing else leaves the device.",
+    section("Services", null,
       el("div", { class: "group" }, ...CREDITS.services.map((c) => out(c.url, c.name, c.note)))),
   ];
 }
