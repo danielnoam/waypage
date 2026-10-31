@@ -1144,7 +1144,31 @@ function zipOf(files) {
       await go.waitFor();
       assert.strictEqual(await go.isDisabled(), false);
       assert.ok(/1 clip you've finished/.test(await go.innerText()));
-      assert.strictEqual(await q.locator(".room-big .row").count(), 1);
+      assert.strictEqual(await q.locator(".room-big").count(), 0);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Back up the library pauses, stops, then runs to a file (1.47.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const pages = Array.from({ length: 20 }, (_, i) => ({ id: "b" + i, url: "https://example.org/" + i, title: "Clip " + i, site: "example.org", savedAt: 1000 + i, minutes: 1, mode: "previews", bytes: 1000 }));
+        await window.Waypage.store.writeIndex(pages);
+      });
+      await q.reload();
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Storage" }).click();
+      await q.locator("#backupRow").waitFor();
+      await q.evaluate(() => { const o = C.backup.exportLibrary; C.backup.exportLibrary = (pg, on, f, gate) => o(pg, on, f, async () => { await new Promise((r) => setTimeout(r, 50)); return gate(); }); });
+      await q.click("#backupRow");
+      await q.click("#backupRow .btn-small");
+      await q.waitForFunction(() => /^Paused/.test($("backupStatus").textContent));
+      await q.click("#backupRow .danger");
+      await q.waitForFunction(() => $("backupRow").tagName === "BUTTON");
+      const got = q.waitForEvent("download");
+      await q.click("#backupRow");
+      assert.ok(/^waypage-backup-.*\.zip$/.test((await got).suggestedFilename()));
+      assert.strictEqual(await q.locator("#backupSection .overline").textContent(), "Actions");
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

@@ -463,15 +463,16 @@ const remeasured = () => { if (state.section === "storage") renderSection(); };
 // ---- Making room (1.9.0) ----
 // Clips you've finished keep their text and lose their saved pictures,
 // which show from the web again when you're online: usually most of a
-// clip's size. Then the biggest clips, to open and delete.
+// clip's size. (Biggest clips was taken out in 1.47.0: By collection
+// already lists every clip, biggest first.)
 let makingRoom = false;
 const roomFor = () => state.pages.filter((p) => p.finished && !p.link && !p.file && p.images && p.mode !== "links" && /^https?:/.test(p.url || ""));
-function roomGroup() {
+// Its two rows sit under Storage's Actions since 1.47.0, after the backup ones.
+function roomRows() {
   const list = roomFor();
   const known = list.reduce((n, p) => n + (p.imageBytes || 0), 0);
   if (list.some((p) => p.imageBytes == null)) measureSizes(list, remeasured);
-  const big = [...state.pages].sort((a, b) => (b.bytes || 0) - (a.bytes || 0)).filter((p) => (p.bytes || 0) > 0).slice(0, 5);
-  if (!list.length && !big.length && !squeezable().length) return [];
+  if (!list.length && !squeezable().length) return [];
   const go = el("button", { class: "row room-go", type: "button", ...(list.length && !makingRoom ? {} : { disabled: "" }), onclick: () => dropPictures(list, go) },
     el("span", { class: "choice-text" },
       el("span", { class: "choice-label" + (list.length ? " accent" : "") }, makingRoom ? "Making room…" : "Keep only the text of finished clips"),
@@ -487,17 +488,7 @@ function roomGroup() {
       el("span", { class: "choice-label accent" }, makingRoom ? "Making room…" : "Make pictures smaller"),
       el("span", { class: "choice-note" }, countLine(full.length) + " with full pictures" + (fullBytes ? ", about " + formatSize(fullBytes) : "") + ". Big ones usually end up a quarter of the size; they stay sharp on a phone.")),
     fullBytes ? el("span", { class: "row-value" }, formatSize(fullBytes)) : null) : null;
-  return [el("section", { class: "settings-section room" },
-    el("h2", { class: "overline" }, "Make room"),
-    el("div", { class: "group" }, squeezeBtn, go)),
-    big.length ? el("section", { class: "settings-section room-big" },
-    el("h2", { class: "overline" }, "Biggest clips"),
-    el("div", { class: "group" }, ...big.map((p) => el("button", { class: "row", type: "button", onclick: () => toLibrary().then(() => openMenu("page", p)) },
-      el("span", { class: "choice-text" },
-        el("span", { class: "row-label", dir: "auto" }, p.title),
-        el("span", { class: "choice-note" }, [siteOf(p), p.finished ? "Finished" : readingLine(p)].filter(Boolean).join(" · "))),
-      el("span", { class: "row-value" }, formatSize(p.bytes || 0))))),
-    el("p", { class: "footnote" }, "Tap one to delete it, or change what it keeps.")) : null];
+  return [squeezeBtn, go];
 }
 const squeezable = () => !C.platform.native ? [] : state.pages.filter((p) => !p.link && (p.mode === "full" || p.comic) && p.images && !(p.squeezed >= 1));
 async function squeezePictures(list, btn) {
@@ -547,7 +538,7 @@ async function dropPictures(list, btn) {
   if (state.section === "storage") renderSection();
 }
 
-// Where the library lives (0.33.0): the app's own storage, the phone's
+// Where the library lives (0.33.0), first on Storage since 1.47.0: the app's own storage, the phone's
 // Documents folder, or a folder you pick. Choosing another moves
 // everything there. Android only: on iOS the app's own storage already
 // shows in the Files app.
@@ -982,15 +973,15 @@ const SECTIONS = {
     value: () => { const r = readingPrefs(); return (FONTS.find((f) => f.value === r.font) || FONTS[0]).label + " · " + r.size + " px"; } },
   library: { title: "Library", build: () => [
     choiceGroup({ key: LAYOUT_KEY, label: "Layout", get: layout, set: (v) => { store(LAYOUT_KEY, v); renderLibrary(); }, options: LAYOUTS }),
-    libraryGroup(), watchGroup(), editNavGroup()],
+    libraryGroup(), watchGroup(), importGroup(), editNavGroup()],
     value: () => (LAYOUTS.find((l) => l.value === layout()) || LAYOUTS[0]).label },
-  saving: { title: "Saving", build: () => [readyGroup(), choiceGroup(SETTINGS[1]), compressGroup(), tapPicturesGroup(), dataGroup(DATA_SAVE_KEY, "Save", "Pages and pictures come down on any connection.", "Saves wait in Downloads until you're on Wi-Fi; feeds, new chapters and missing pictures check then too."), signedGroup(), sendGroup(), importGroup()],
+  saving: { title: "Saving", build: () => [readyGroup(), choiceGroup(SETTINGS[1]), compressGroup(), tapPicturesGroup(), dataGroup(DATA_SAVE_KEY, "Save", "Pages and pictures come down on any connection.", "Saves wait in Downloads until you're on Wi-Fi; feeds, new chapters and missing pictures check then too."), signedGroup(), sendGroup()],
     value: () => SETTINGS[1].options.find((o) => o.value === SETTINGS[1].get()).label },
   sync: { title: "GitHub sync", build: syncSections, value: () => (C.sync.on ? (C.sync.last.error ? "Stopped" : "On") : "Off") },
   drive: { title: "Google Drive", build: driveSections, value: driveValue },
   notifications: { title: "Notifications", build: notesSections, value: notesValue },
   edit: { title: "Edit clips", build: editGroup, value: () => "", parent: "library" },
-  storage: { title: "Storage", build: () => [storageGroup(), ...roomGroup(), placeGroup(), backupGroup(), browserStorageGroup()], value: () => formatSize(totalBytes()) },
+  storage: { title: "Storage", build: () => [placeGroup(), storageGroup(), browserStorageGroup(), backupGroup(roomRows())], value: () => formatSize(totalBytes()) },
   updates: { title: "About", build: () => [updatesGroup(), aboutGroup()], value: () => (updateOut() ? upd.latest + " is out" : APP_VERSION) },
   report: { title: "Report a problem", build: () => [reportGroup()], value: () => { const n = C.platform.log.list().length; return n ? n + (n === 1 ? " note" : " notes") : ""; } },
 };

@@ -2,6 +2,26 @@
 
 All notable changes to Carry-on. Newest first.
 
+## Unreleased
+
+### Added
+- Back up the library has Pause and Stop while it runs, like Google
+  Drive's backups.
+
+### Changed
+- Storage starts with where your library is kept, then its size by
+  collection. Make pictures smaller and Keep only the text of finished
+  clips moved down beside the backup buttons, under a heading now
+  called Actions.
+- Restore or open a file is now just Restore.
+- Import moved from Saving to Library.
+- Time at the end of a clip moved from Text to Layout, in Settings and
+  in the reader's settings.
+
+### Removed
+- Storage's Biggest clips list: By collection already shows every clip,
+  biggest first.
+
 ## [1.46.0] - 2026-10-31
 
 ### Changed

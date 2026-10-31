@@ -1427,21 +1427,69 @@ async function printFile(make, btn) {
   btn.disabled = false;
 }
 
-async function backUp(btn) {
+// Back up the library (1.47.0): Pause and Stop while it runs, like
+// Google Drive's. In a browser `gate` holds it between clips; the app's
+// native packing listens to holdPack and stopPack instead.
+let backupRun = null;
+async function backUp() {
+  if (backupRun) return;
   if (!state.pages.length && !feeds.length) { toast("There's nothing to back up yet."); return; }
-  btn.disabled = true;
-  const label = btn.querySelector(".row-label");
-  label.textContent = "Backing up…";
+  if (driveRun) { toast("Wait for the Google Drive backup to finish."); return; }
+  const r = backupRun = { text: "Getting ready…", paused: false, stopped: false, wake: null };
+  backupPaint(true);
+  const gate = async () => {
+    while (r.paused && !r.stopped) await new Promise((go) => { r.wake = go; });
+    return !r.stopped;
+  };
   try {
-    const out = await C.backup.exportLibrary(state.pages, (done, total) => { label.textContent = "Backing up, " + done + " of " + total; }, feeds);
+    const out = await C.backup.exportLibrary(state.pages, (done, total) => { r.text = done + " of " + total; backupPaint(); }, feeds, gate);
+    backupRun = null;
+    backupPaint(true);
     if (out.uri) await C.platform.shareFile(out.uri, out.name);
     else C.platform.download(out.name, out.blob);
   } catch (e) {
-    console.error(e);
-    toast("Couldn't write the backup. Free some space and try again.");
+    if (e && e.code === "cancelled") toast("Backup stopped.");
+    else { console.error(e); toast("Couldn't write the backup. Free some space and try again."); }
   }
-  btn.disabled = false;
-  label.textContent = "Back up the library";
+  backupRun = null;
+  backupPaint(true);
+}
+function backupPause(on) {
+  const r = backupRun;
+  if (!r || r.stopped) return;
+  r.paused = on;
+  C.backup.holdPack(on);
+  if (!on && r.wake) { r.wake(); r.wake = null; }
+  backupPaint(true);
+}
+function backupStop() {
+  const r = backupRun;
+  if (!r) return;
+  r.stopped = true;
+  C.backup.stopPack();
+  if (r.wake) { r.wake(); r.wake = null; }
+  backupPaint(true);
+}
+// Progress changes only the line; Pause, Stop and the end redraw the row.
+function backupPaint(whole) {
+  const row = $("backupRow");
+  if (!row) return;
+  if (whole) { row.replaceWith(backupRow()); return; }
+  const line = $("backupStatus");
+  if (line && backupRun) line.textContent = backupLine();
+}
+const backupLine = () => { const r = backupRun; return r.stopped ? "Stopping…" : r.paused ? "Paused · " + r.text : r.text; };
+function backupRow() {
+  const r = backupRun;
+  if (!r) return el("button", { class: "row", id: "backupRow", type: "button", onclick: backUp },
+    el("span", { class: "row-label accent" }, "Back up the library"));
+  return el("div", { class: "row", id: "backupRow" },
+    el("span", { class: "choice-text" },
+      el("span", { class: "choice-label" }, "Backing up"),
+      el("span", { class: "choice-note", id: "backupStatus", "aria-live": "polite" }, backupLine())),
+    el("span", { class: "backup-actions" },
+      el("button", { class: "btn-small", type: "button", ...(r.stopped ? { disabled: "" } : {}), onclick: () => backupPause(!r.paused) }, r.paused ? "Resume" : "Pause"),
+      el("button", { class: "btn-quiet danger", type: "button", ...(r.stopped ? { disabled: "" } : {}), onclick: backupStop }, "Stop")));
 }
 
 // Every highlight as one Markdown file (1.14.0), clip by clip, the clip
@@ -1631,7 +1679,7 @@ async function openFile(file, btn, open, ref) {
     const feedList = await C.imports.readOpml(file).catch(() => null);
     if (feedList) {
       if (ref) C.platform.files.release(ref);
-      if (btn) { btn.disabled = false; say("Restore or open a file"); }
+      if (btn) { btn.disabled = false; say("Restore"); }
       followFeeds(feedList);
       return;
     }
@@ -1639,7 +1687,7 @@ async function openFile(file, btn, open, ref) {
     const exported = await C.imports.read(file).catch(() => null);
     if (exported) {
       if (ref) C.platform.files.release(ref);
-      if (btn) { btn.disabled = false; say("Restore or open a file"); }
+      if (btn) { btn.disabled = false; say("Restore"); }
       importing = exported;
       openMenu("importList");
       return;
@@ -1651,13 +1699,13 @@ async function openFile(file, btn, open, ref) {
       if (ref) C.platform.files.release(ref);
       toast("Already in your library, from " + ((watchOf(inFolder) || {}).name || "your watched folder"));
       if (open) openPage(inFolder.id);
-      if (btn) { btn.disabled = false; say("Restore or open a file"); }
+      if (btn) { btn.disabled = false; say("Restore"); }
       return;
     }
     let link = null;
     if (C.files.canLink(kind) && (ref || C.platform.files.canLink)) {
       const asked = await askKeep(file, kind, !!ref);
-      if (asked == null) { if (btn) { btn.disabled = false; say("Restore or open a file"); } return; }
+      if (asked == null) { if (btn) { btn.disabled = false; say("Restore"); } return; }
       link = asked ? ref : null;
     }
     if (ref && !link) C.platform.files.release(ref);
@@ -2021,24 +2069,24 @@ async function stopWatching(w) {
   toast("Stopped watching " + w.name + ". Its files stay in your library.");
 }
 
-function backupGroup() {
+// Storage's Actions (1.47.0, was Backup): backing up, then making room.
+function backupGroup(more = []) {
   const input = el("input", { type: "file", class: "visually-hidden", tabindex: "-1", "aria-hidden": "true" });
   const open = el("button", { class: "row", type: "button", onclick: () => (C.platform.files.canLink ? pickFile() : input.click()) },
-    el("span", { class: "row-label accent" }, "Restore or open a file"));
+    el("span", { class: "row-label accent" }, "Restore"));
   input.addEventListener("change", () => { const f = input.files[0]; input.value = ""; openFile(f, open); });
   return el("section", { class: "settings-section", id: "backupSection" },
-    el("h2", { class: "overline" }, "Backup"),
+    el("h2", { class: "overline" }, "Actions"),
     el("div", { class: "group" },
-      el("button", { class: "row", type: "button", onclick: (e) => backUp(e.currentTarget) },
-        el("span", { class: "row-label accent" }, "Back up the library")),
+      backupRow(),
       state.pages.some((p) => (p.marks || []).length) ? el("button", { class: "row", type: "button", onclick: (e) => saveHighlights(e.currentTarget) },
         el("span", { class: "row-label accent" }, "Save all highlights")) : null,
       siteFeeds().length ? el("button", { class: "row", type: "button", onclick: (e) => saveOpml(e.currentTarget) },
         el("span", { class: "row-label accent" }, "Save the feeds you follow (OPML)")) : null,
-      open, input),
-    el("p", { class: "footnote" }, "One file with every clip, its pictures, tags, collections and where you were, and the feeds and newsletters you follow. Files read from outside stay out. " + (C.platform.native ? "Keep it off the phone" : "Keep it somewhere other than this browser") + ". Restoring keeps whichever copy of a clip was saved last. A clip sent as a file opens here too." + (state.pages.some((p) => (p.marks || []).length) ? " Highlights save as one Markdown file, with their notes and links." : "")));
+      open, ...more, input),
+    el("p", { class: "footnote" }, "Back up the library makes one file with every clip, its pictures, tags, collections and where you were, and the feeds and newsletters you follow. Files read from outside stay out. " + (C.platform.native ? "Keep it off the phone" : "Keep it somewhere other than this browser") + ". Restore brings a backup back, keeping whichever copy of a clip was saved last." + (state.pages.some((p) => (p.marks || []).length) ? " Highlights save as one Markdown file, with their notes and links." : "")));
 }
-// Import, in Saving since 1.12.0 (it was under Backup): the same picker.
+// Import, in Library since 1.47.0 (Saving from 1.12.0, Backup before): the same picker.
 function importGroup() {
   const input = el("input", { type: "file", class: "visually-hidden", tabindex: "-1", "aria-hidden": "true" });
   const open = el("button", { class: "row", type: "button", onclick: () => (C.platform.files.canLink ? pickFile() : input.click()) },

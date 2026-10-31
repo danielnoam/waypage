@@ -1514,6 +1514,8 @@ html { -webkit-tap-highlight-color: transparent; }
 @media (prefers-reduced-motion: reduce) { .storage-folder .row-chev { transition: none; } }
 .nav-row[aria-current] { background: var(--bg); }
 .storage-total { margin: 0 0 var(--s-1) var(--s-1); font: 700 var(--fs-title)/var(--lh-title) var(--serif); }
+/* Pause and Stop on Back up the library while it runs (1.47.0). */
+.backup-actions { display: flex; gap: var(--s-2); align-items: center; flex: none; }
 .settings-section > .section-lead { margin-bottom: var(--s-5); }
 .drive-done { margin: 0; padding: var(--s-8) var(--s-5); text-align: center; color: var(--ink); font-size: var(--fs-meta); }
 .update-card { border-color: var(--accent); }
