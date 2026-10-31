@@ -379,24 +379,15 @@ const notesValue = () => { const n = notesPrefs(); return n.on ? (n.posts === "e
 function libraryGroup() {
   const input = el("input", { class: "switch", type: "checkbox", role: "switch", checked: load(CONTINUE_KEY, true),
     onchange: (e) => { store(CONTINUE_KEY, e.target.checked); renderLibrary(); } });
-  return section("Keeping up", "Continue reading keeps the clip you read last at the top of the library. New chapters are looked for once a day when you're online, for collections saved with Save next; Check now looks right away.",
+  return section("Keeping up", "Continue reading keeps the clip you read last at the top of the library. New chapters are looked for once a day when you're online, for collections saved with Save next; the library's own check looks right away.",
     el("div", { class: "group" },
       el("label", { class: "row" },
         el("span", { class: "choice-text" },
           el("span", { class: "choice-label" }, "Continue reading"),
           el("span", { class: "choice-note" }, "Your last clip at the top of the library")),
         input),
-      switchRow("Check for new chapters", "Once a day, when you're online", load(DAILY_KEY, true), (on) => store(DAILY_KEY, on)),
-      el("button", { class: "row", type: "button", onclick: async (e) => {
-        if (!navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
-        const b = e.currentTarget;
-        b.disabled = true;
-        const found = await dailyCheck(true);
-        b.disabled = false;
-        toast(found ? countFolders(found) + " with new chapters." : "No new chapters yet.");
-      } }, el("span", { class: "row-label accent" }, "Check all collections now"))));
+      switchRow("Check for new chapters", "Once a day, when you're online", load(DAILY_KEY, true), (on) => store(DAILY_KEY, on))));
 }
-const countFolders = (n) => n + (n === 1 ? " collection" : " collections");
 
 // Folders first, biggest first, then the pages in no folder as one
 // more group; a group opens in place to its pages, biggest first.
