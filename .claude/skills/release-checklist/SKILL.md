@@ -39,6 +39,9 @@ workflow copies this entry into the GitHub release notes.
   pictures with `node tools/shots.js <section>` (desktop and phone, into
   `docs/shots/`). A new area gets a section, a Contents line and a shot in
   `tools/shots.js`. Look at the new pictures before committing.
+- **ARCHITECTURE.md**: a file added, removed or renamed, or a flow
+  changed, is updated here in the same change (`test/docs.test.js`
+  checks the file list).
 - **NOTES.md**: why something is the way it is, newest first, each entry a
   bold title with its version.
 - **DROPPED.md**: what was decided against, with the reason.
@@ -60,11 +63,15 @@ with their licence beside them. Reuse helpers in `src/app.js` (`el`,
   and Filesystem don't exist in a browser): say so in the report when a
   change touches them and wasn't run on a phone.
 
-## 6. Commit and push to main
+## 6. Commit, open a PR, merge on green
 
-Work on `main` directly: no feature branches or PRs unless asked. Commit
-the version bump, CHANGELOG.md and notes with the change. `git fetch
-origin main` and rebase if it moved; never force-push `main`.
+`main` only takes pull requests (31 Oct 2026): push the branch, open a
+PR, and merge it once the Tests check (`.github/workflows/test.yml`,
+`node test/run-all.js` with Playwright) is green. No review is required;
+merge without asking. Commit the version bump, CHANGELOG.md and notes
+with the change. If `main` moved, merge it into the branch (a squash
+merge makes the old tip unmergeable by fast-forward, so merge, don't
+rebase or force-push). Never force-push `main`.
 
 ## 7. Check the builds
 

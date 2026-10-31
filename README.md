@@ -11,8 +11,6 @@ files run in a browser (the web copy on GitHub Pages) and, wrapped by
 
 Each section below shows the computer (left) and the phone (right).
 
-Working on Waypage? Start with [CONTRIBUTING.md](CONTRIBUTING.md).
-
 ## Contents
 
 - [Library](#library)
@@ -31,10 +29,7 @@ Working on Waypage? Start with [CONTRIBUTING.md](CONTRIBUTING.md).
 - [Settings and the app](#settings-and-the-app)
 - [Privacy and security](#privacy-and-security)
 - [Run it](#run-it)
-- [The phone apps](#the-phone-apps)
-- [Screenshots](#screenshots)
-- [Layout](#layout)
-- [Notes files](#notes-files)
+- [Working on Waypage](#working-on-waypage)
 
 ## Library
 
@@ -196,71 +191,10 @@ Working on Waypage? Start with [CONTRIBUTING.md](CONTRIBUTING.md).
 `node server.js` (or double-click `start.cmd` on Windows) and open
 <http://localhost:5173>.
 
-## The phone apps
+## Working on Waypage
 
-- **Android:** `.github/workflows/android.yml` builds an APK on every push
-  and publishes a release `app-v<version>` when `APP_VERSION` is new and
-  the signing secrets are set (`ANDROID_KEYSTORE_B64`,
-  `ANDROID_KEYSTORE_PASSWORD`, key alias `carryon`, kept from before the
-  rename). Without them it still builds a test APK but publishes nothing.
-- **iOS:** `.github/workflows/ios.yml` builds an unsigned `Waypage.ipa`
-  on a Mac runner and attaches it to the same release. Install it with
-  AltStore or SideStore.
-- **Locally:** `npm install`, `npm run android:sync`, then open `android/`
-  in Android Studio.
-
-## Screenshots
-
-`node tools/shots.js` retakes every picture above at 1280 px and 390 px
-into `docs/shots/`, from a demo library it saves through the app itself
-(`tools/shots/demo/`, original text and drawings). `node tools/shots.js
-reader skim` retakes only those sections. It needs Playwright with a
-Chromium, like `test/ui.test.js`.
-
-## Layout
-
-```
-index.html          app shell
-src/app.js          version, the shared helpers, theme and state;
-src/app-*.js        the rest of the shell in parts, loaded in order: reading
-                    look, cards, downloads, search, drawing the library,
-                    saving jobs, reader, library, saving and feeds, places
-                    and sidebar, settings, lock, start (see CONTRIBUTING.md)
-src/save.js         link to saved page: Wikipedia, Readability, the
-                    allowlist cleaner, picture previews, video cards
-src/reader.js       a saved page in the sandboxed iframe
-src/store.js        page folders and library.json (IndexedDB in a browser)
-src/platform.js     browser vs app: native fetch, downloads, speech, links
-src/files.js        EPUB, Kindle, FB2, CBZ, Markdown, text and HTML files
-src/pdf.js          PDFs through pdf.js in a locked-down frame
-src/feeds.js        RSS, Atom and JSON Feed
-src/sync.js         GitHub sync (merging in src/sync-worker.js)
-src/drive.js        Google Drive backups
-src/backup.js       one-file backups and exports; src/epub.js EPUB export
-src/imports.js      Pocket, Instapaper, Omnivore, Raindrop, Wallabag
-src/stats.js        reading stats
-src/dict.js         StarDict dictionaries
-src/motion.js       the springs from DESIGN.md
-src/qr.js           QR code for sync's setup link, made on the device
-src/styles.css      tokens, themes, layout (see DESIGN.md)
-src/reader.css      the saved page inside the reader's frame
-src/fonts.css       the bundled fonts
-src/vendor/         Readability, pdf.js, foliate-js's MOBI reader, with licences
-native/share/       Capacitor plugin: Android's share sheet into the app
-sw.js               offline cache for the web copy; its ASSETS list is
-                    also what goes into the app
-tools/              build-www, Android and iOS project patches, APK
-                    signing, shots.js for the README's pictures
-test/               node test/run-all.js
-design/             the design canvas's artboards, for reference
-docs/PROPOSAL.md    architecture, storage, legal and store decisions
-docs/shots/         the README's screenshots
-```
-
-## Notes files
-
-- **TODO.md** the work still to do
-- **DONE.md** what the app already does, by area
-- **NOTES.md** why things are the way they are
-- **DROPPED.md** what was decided against, and why
-- **CHANGELOG.md** what each version shipped
+[ARCHITECTURE.md](ARCHITECTURE.md) is the map: every file, how the
+scripts share one scope, how a link becomes a clip, where clips live,
+the sandboxed reader, sync, the phone apps, tests and screenshots.
+[CONTRIBUTING.md](CONTRIBUTING.md) is the rulebook: the decisions already
+made, the rules for every change, and how versions and releases work.

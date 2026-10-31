@@ -34,8 +34,9 @@ borrows its stack, build workflows and native-fetch trick from.
 
 - Use the `release-checklist` skill for every change. It follows
   CONTRIBUTING.md's "Versions and releases".
-- `main` is production. A push deploys the web copy, and a new
-  `APP_VERSION` publishes the APK and IPA. Check the runs went green.
+- `main` is production and takes only pull requests. A merge deploys
+  the web copy, and a new `APP_VERSION` publishes the APK and IPA. Check
+  the runs went green.
 - After changing TODO.md or DONE.md in the repo, copy it over the shared
   project folder's `waypage/TODO.md` / `waypage/DONE.md` so both match.
 

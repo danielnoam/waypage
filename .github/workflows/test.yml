@@ -1,0 +1,44 @@
+# Runs the test suite on every pull request and every push to main, so
+# "Tests" is a check main can require before a merge (CONTRIBUTING.md).
+# The app builds (android.yml, ios.yml) skip Markdown-only changes; this
+# runs on everything, since build.test.js checks CHANGELOG.md too.
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # build.test.js reads Capacitor's iOS template out of node_modules.
+      - run: npm ci
+
+      # ui.test.js and drive.test.js skip themselves without Playwright;
+      # here they must run, so it's installed with its Chromium.
+      - name: Install Playwright
+        run: |
+          npm install --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+
+      - run: node test/run-all.js
