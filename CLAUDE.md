@@ -12,7 +12,9 @@ borrows its stack, build workflows and native-fetch trick from.
 - `git pull --ff-only` first.
 - Read **docs/PROPOSAL.md** before changing architecture: it records why
   there is no server, how a page is captured and stored, and the legal and
-  store rules the design keeps to. **TODO.md** is the work, **DONE.md**
+  store rules the design keeps to. **docs/ARCHITECTURE.md** maps the code; the other docs/ files cover
+  stored formats, the save and read pipeline, working on it and a user guide.
+  **TODO.md** is the work, **DONE.md**
   what the app already does, **NOTES.md** why things are the way they
   are, **DROPPED.md** what was decided against.
 - Read **Working with Daniel** below; it's what he'd otherwise have to
@@ -72,6 +74,9 @@ Keeping the notes files right:
   becomes a line in DONE.md (and the CHANGELOG entry), a no becomes a line
   in DROPPED.md with his reason. Also remove anything stale or already
   covered. Never leave done work in TODO.md.
+- **docs/ stays true.** A change to a module's job, a stored format, the
+  save and read pipeline or the dev workflow updates its doc in `docs/` in
+  the same change; a changed setup step updates docs/GUIDE.md.
 - **DONE.md is one line per feature, by area, with its version.** Add to
   it with every release that adds something.
 - **The shared project folder's waypage/TODO.md and DONE.md are copies.**

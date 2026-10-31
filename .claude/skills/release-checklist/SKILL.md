@@ -39,6 +39,10 @@ workflow copies this entry into the GitHub release notes.
   pictures with `node tools/shots.js <section>` (desktop and phone, into
   `docs/shots/`). A new area gets a section, a Contents line and a shot in
   `tools/shots.js`. Look at the new pictures before committing.
+- **docs/**: a change to a module's job, a stored format, the save and
+  read pipeline or the dev workflow updates its doc in the same change
+  (ARCHITECTURE.md, FORMATS.md, PIPELINE.md, DEVELOPING.md); a new or
+  changed setup step updates GUIDE.md.
 - **NOTES.md**: why something is the way it is, newest first, each entry a
   bold title with its version.
 - **DROPPED.md**: what was decided against, with the reason.

@@ -1,5 +1,7 @@
 # Carry-on: proposal
 
+> This is the original proposal, written when the app was Carry-on. For how the code is put together now, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
 2 October 2026. Copied from the proposal doc
 (https://claude.ai/code/artifact/5c6cf847-cd85-4c91-a466-2da95fbde60b),
 with the decisions taken since folded in.

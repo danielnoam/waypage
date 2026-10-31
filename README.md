@@ -248,7 +248,12 @@ tools/              build-www, Android and iOS project patches, APK
                     signing, shots.js for the README's pictures
 test/               node test/run-all.js
 design/             the design canvas's artboards, for reference
-docs/PROPOSAL.md    architecture, storage, legal and store decisions
+docs/GUIDE.md        a step-by-step guide for using the app
+docs/ARCHITECTURE.md how the code fits together
+docs/FORMATS.md      what is stored: pages, library.json, the sync repo, backups
+docs/PIPELINE.md     saving a link and reading it, and the security boundaries
+docs/DEVELOPING.md   running, testing, building and releasing
+docs/PROPOSAL.md    the original architecture, storage, legal and store decisions
 docs/shots/         the README's screenshots
 ```
 
