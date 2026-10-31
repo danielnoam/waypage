@@ -2787,3 +2787,9 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 - **Readability is vendored at 0.6.0 (0.1.0).** One file, Apache-2.0, the
   same parser Firefox Reader View uses. Vendored rather than installed to
   keep the no-build rule.
+- **Privacy policy and terms pages (31 Oct 2026, no version).**
+  `privacy.html` and `terms.html` at the repo root, served by the web
+  copy at danielnoam.github.io/waypage/. Google's OAuth branding (App
+  domain) links to them, which publishing the Drive sign-in out of
+  Testing needs. They aren't part of the app (not in sw.js ASSETS).
+  Keep privacy.html true whenever a feature starts sending something.
