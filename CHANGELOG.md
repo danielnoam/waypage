@@ -13,11 +13,12 @@ All notable changes to Carry-on. Newest first.
   can be saved again go in as their addresses, and a restore saves them
   again from their links. Books copied in and newsletter mails still go in
   whole.
-
 - GitHub sync › What this device syncs has switches like Google Drive's:
   Clips (with Clips too or Links only under it), Feeds, Newsletters and
   Reading stats. A part turned off is neither sent nor taken here, and
   stays on GitHub as your other devices left it.
+- Back up the library has Pause and Stop while it runs, like Google
+  Drive's backups.
 
 ### Changed
 - Back up by itself is a drop-down.
@@ -25,6 +26,20 @@ All notable changes to Carry-on. Newest first.
   Resume (or a dropped connection) go on from the last piece instead of
   starting over, and pack about four times faster (3000 clips: 5.3 s to
   1.3 s), reading clips fifty at a time.
+- Storage starts with where your library is kept, then its size by
+  collection. Make pictures smaller and Keep only the text of finished
+  clips moved down beside the backup buttons, under a heading now
+  called Actions.
+- Restore or open a file is now just Restore.
+- Import moved from Saving to Library.
+- About: What's new is now Changelog, and the line under Releases and
+  source is gone.
+- Time at the end of a clip moved from Text to Layout, in Settings and
+  in the reader's settings.
+
+### Removed
+- Storage's Biggest clips list: By collection already shows every clip,
+  biggest first.
 
 ## [1.46.0] - 2026-10-31
 

@@ -532,7 +532,7 @@ function updatesGroup() {
     list.append(el("div", { class: "row" }, el("span", { class: "row-label" }, "Version"), el("span", { class: "row-value" }, APP_VERSION)));
   }
   list.append(el("button", { class: "row", type: "button", onclick: () => openNews() },
-    el("span", { class: "row-label accent" }, "What's new"), el("span", { class: "row-value", "aria-hidden": "true" }, "›")));
+    el("span", { class: "row-label accent" }, "Changelog"), el("span", { class: "row-value", "aria-hidden": "true" }, "›")));
   return el("section", { class: "settings-section", id: "updatesSection" }, list);
 }
 

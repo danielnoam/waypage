@@ -1985,6 +1985,8 @@ function readingControls(withTheme) {
       { value: "narrow", label: "Narrow" }, { value: "normal", label: "Normal" }, { value: "wide", label: "Wide" },
     ], r.margins, (v) => setReading({ margins: v }))),
     ...(brightSwitch(id) || []),
+    // Under Layout since 1.47.0: it adds a line to the page, not to the type.
+    spentSwitch(),
     // Big screens (1.5.0): two pages side by side, and the contents
     // beside the text.
     wide.matches ? stack("Pages on a wide window", seg(id + "-spread", "Pages on a wide window", [
@@ -2013,7 +2015,6 @@ function readingControls(withTheme) {
     row("Weight", el("div", { class: "stepper" },
       slider("Text weight", SPACES.weight.min, SPACES.weight.max, SPACES.weight.step, (v) => setReading({ weight: v }), "weight")), "weight"),
     pinchSwitch(),
-    spentSwitch(),
     row("Alignment", fontPick("align", "Alignment", ALIGNS)),
     el("label", { class: "rc-row switch-row" },
       el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Hyphenate"),
