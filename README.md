@@ -163,9 +163,9 @@ Each section below shows the computer (left) and the phone (right).
 
 <p><img src="docs/shots/sync-desktop.jpg" width="74%" alt="Sync on a computer"> <img src="docs/shots/sync-phone.jpg" width="21%" alt="Sync on a phone"></p>
 
-- GitHub sync of clips, places, highlights, feeds and stats through your own private repo, with a token for that repo only.
+- GitHub sync of clips, copied-in files, places, highlights, feeds, newsletters and stats through your own private repo, with a token for that repo only. Settings list what syncs.
 - Resumes after the app closes; on mobile data, sync only places and reading time.
-- Google Drive backups, weekly or on demand, with pause, resume and delete.
+- Google Drive backups, weekly or on demand, with pause, resume and delete; pick clips, files, feeds and newsletters. Files read from outside stay out of both.
 - Back up and restore one file; export clips and collections as EPUB, HTML, PDF or Markdown.
 - Storage: Make room, Make pictures smaller, sizes by collection.
 

@@ -2036,7 +2036,7 @@ function backupGroup() {
       siteFeeds().length ? el("button", { class: "row", type: "button", onclick: (e) => saveOpml(e.currentTarget) },
         el("span", { class: "row-label accent" }, "Save the feeds you follow (OPML)")) : null,
       open, input),
-    el("p", { class: "footnote" }, "One file with every clip, its pictures, tags, collections and where you were, and the feeds you follow. " + (C.platform.native ? "Keep it off the phone" : "Keep it somewhere other than this browser") + ". Restoring keeps whichever copy of a clip was saved last. A clip sent as a file opens here too." + (state.pages.some((p) => (p.marks || []).length) ? " Highlights save as one Markdown file, with their notes and links." : "")));
+    el("p", { class: "footnote" }, "One file with every clip and file you copied in, their pictures, tags, collections and where you were, and the feeds and newsletters you follow. Files read from outside stay out. " + (C.platform.native ? "Keep it off the phone" : "Keep it somewhere other than this browser") + ". Restoring keeps whichever copy of a clip was saved last. A clip sent as a file opens here too." + (state.pages.some((p) => (p.marks || []).length) ? " Highlights save as one Markdown file, with their notes and links." : "")));
 }
 // Import, in Saving since 1.12.0 (it was under Backup): the same picker.
 function importGroup() {

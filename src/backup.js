@@ -223,7 +223,10 @@
   // cache, for the share sheet) or { blob } in a browser.
   // `gate`, when given, is awaited between clips: false stops the backup
   // (1.27.1), which then throws an Error with code "cancelled".
+  // A file read from outside never goes in (1.46.0): the file stays where
+  // it is, and its link to it means nothing on another device.
   async function exportLibrary(pages, onProgress, feeds, gate) {
+    pages = pages.filter((p) => !p.link);
     const native = C.platform.native;
     const name = "waypage-backup-" + today() + ".zip";
     const head = [
@@ -298,7 +301,9 @@
     const taken = new Set(pages.map((p) => p.id));
     let added = 0, replaced = 0, kept = 0, done = 0;
     for (const raw of list) {
-      const from = raw && typeof raw.id === "string" && ID.test(raw.id) ? raw.id : null;
+      // An older backup's file read from outside (before 1.46.0) is left
+      // out, rather than coming back as a clip of its text.
+      const from = raw && typeof raw.id === "string" && ID.test(raw.id) && !raw.link ? raw.id : null;
       const meta = from && entries.has("pages/" + from + "/page.html") && cleanMeta(raw, from);
       if (meta) {
         const i = pages.findIndex((p) => (meta.file ? sameFile(p, meta) : same(p.url, meta.url)));

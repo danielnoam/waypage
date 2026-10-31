@@ -2,6 +2,19 @@
 
 All notable changes to Carry-on. Newest first.
 
+## Unreleased
+
+### Changed
+- Google Drive backups leave out files read from outside and watched
+  folders, like GitHub sync: they stay where they are. An older backup's
+  outside files are skipped on restore instead of coming back as text
+  clips. The same goes for Back up the library.
+- Google Drive's What goes in has its own Newsletters switch (your
+  addresses), and every switch says what it actually puts in.
+- GitHub sync has a What syncs list: clips, files you copied in, feeds,
+  newsletters and reading stats, each with what goes, and what doesn't
+  (files read from outside, watched folders, settings).
+
 ## [1.45.11] - 2026-10-31
 
 ### Changed

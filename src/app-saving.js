@@ -161,7 +161,7 @@ async function fetchPictures() {
 // off, the three steps to a first device and a way in for the next one;
 // on, the state and a code that sets up another device.
 function syncSections() {
-  return C.sync.on ? [C.sync.oldToken ? syncNewToken() : null, syncState(), syncWhat(), dataGroup(DATA_SYNC_KEY, "Sync", "Syncs on any connection.", "Syncs when you're on Wi-Fi. Changes wait until then.",
+  return C.sync.on ? [C.sync.oldToken ? syncNewToken() : null, syncState(), syncsList(), syncWhat(), dataGroup(DATA_SYNC_KEY, "Sync", "Syncs on any connection.", "Syncs when you're on Wi-Fi. Changes wait until then.",
       { value: "places", label: "Places and reading time only", note: "Where you are in each clip, what you finished and your reading time sync on any connection. New clips, tags and collections wait for Wi-Fi." }), syncShare(), syncLeave()] : [syncSteps(), syncJoin()];
 }
 async function connectSync(text, btn) {
@@ -190,7 +190,7 @@ function syncSteps() {
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); connect(); } });
   return el("section", { class: "settings-section" },
     el("h2", { class: "overline" }, "Sync with GitHub"),
-    el("p", { class: "section-lead" }, "Keeps your clips, tags, collections, favourites and where you are the same on every device, through a private repo on your GitHub. Each device gets the pictures itself."),
+    el("p", { class: "section-lead" }, "Keeps your clips, files you copied in, feeds and newsletters the same on every device, through a private repo on your GitHub. Files read from outside stay on the device that has them."),
     el("div", { class: "group" },
       outRow("https://github.com/signup", "1", "Make a free GitHub account", "Skip this if you have one."),
       outRow(C.sync.NEW_REPO_URL, "2", "Make a private repo for your library", "GitHub fills it in. Keep it Private, then Create repository."),
@@ -367,6 +367,20 @@ function syncLeave() {
     el("p", { class: "footnote" }, "Forgets the token on this device. Your clips stay here and on GitHub."));
 }
 // Pages too, or links only: the library and its marks always sync.
+// Said plainly (1.46.0), like Google Drive's What goes in.
+const syncsRow = (label, note) => el("div", { class: "row" },
+  el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, label), el("span", { class: "choice-note" }, note)));
+function syncsList() {
+  return el("section", { class: "settings-section" },
+    el("h2", { class: "overline" }, "What syncs"),
+    el("div", { class: "group" },
+      syncsRow("Clips", "Their text, highlights, tags, collections, favourites and where you were. Each device gets a clip's pictures from its site"),
+      syncsRow("Files", "Books, PDFs and comics you copied in, with their pictures when they come to 100 MB or less a file"),
+      syncsRow("Feeds", "Which feeds you follow and how. Each device looks for new posts itself, and a post you saved goes as a clip"),
+      syncsRow("Newsletters", "Your addresses and how they're set. The phone collects new mail, and a mail you saved goes as a clip"),
+      syncsRow("Reading stats", "Your reading time from every device, added up in Stats")),
+    el("p", { class: "footnote" }, "Files read from outside and watched folders don't sync: they stay on the device that has them. Settings don't sync either."));
+}
 function syncWhat() {
   return el("section", { class: "settings-section" },
     el("h2", { class: "overline" }, "What this device syncs"),
@@ -1949,10 +1963,11 @@ function driveSections() {
     el("section", { class: "settings-section" },
       el("h2", { class: "overline" }, "What goes in"),
       el("div", { class: "group" },
-        sw("clips", "Clips", "With their pictures, highlights and where you were"),
-        sw("files", "Files", "Books, PDFs and comics, usually the biggest part"),
-        sw("feeds", "Feeds you follow", "")),
-      el("p", { class: "footnote" }, "Tags, collections and favourites go with the clips and files they're on.")),
+        sw("clips", "Clips", "Their text, pictures, highlights and where you were"),
+        sw("files", "Files", "Books, PDFs and comics you copied in, with their pictures. Usually the biggest part"),
+        sw("feeds", "Feeds", "Which feeds you follow and how. A post you saved goes in as a clip"),
+        sw("newsletters", "Newsletters", "Your addresses and how they're set. A mail you saved goes in as a clip")),
+      el("p", { class: "footnote" }, "Tags, collections and favourites go with the clips and files they're on, and your reading stats go too. Files read from outside and watched folders don't go in: they stay where they are. Settings don't go in either.")),
     el("section", { class: "settings-section" },
       el("h2", { class: "overline" }, "Restore"),
       el("div", { class: "group" }, ...(list.length ? list
@@ -2008,10 +2023,11 @@ async function driveRefresh() {
 }
 
 // What a backup holds, from Settings › Google Drive › What goes in.
+// Files read from outside stay out, as in GitHub sync (1.46.0).
 function driveContents() {
   const w = C.drive.what;
-  const pages = state.pages.filter((p) => (p.file ? w.files : w.clips));
-  return { pages, feeds: w.feeds ? feeds : [] };
+  const pages = state.pages.filter((p) => !p.link && (p.file ? w.files : w.clips));
+  return { pages, feeds: [...(w.feeds ? siteFeeds() : []), ...(w.newsletters ? mailBoxes() : [])] };
 }
 
 async function driveBackUp(auto) {
