@@ -948,7 +948,7 @@ async function undoEdits() {
 }
 
 // ---- Credits (1.48.0) ----
-// Who made Waypage and what it's built with. A new contributor adds
+// What Waypage is built with. Anything vendored or bundled goes here
 // their name here in their first pull request (CONTRIBUTING.md).
 const CREDITS = {
   code: [
