@@ -2,6 +2,14 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.45.9] - 2026-10-31
+
+### Fixed
+- Google Drive: connecting again after Disconnect on the phone said
+  "Connect Google Drive again" and stopped. The phone kept the old
+  sign-in Disconnect had cancelled; it's now dropped, so Google asks
+  again. Also a privacy policy and terms page for Google's sign-in screen.
+
 ## [1.45.8] - 2026-10-31
 
 ### Fixed

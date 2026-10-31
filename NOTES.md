@@ -2793,3 +2793,10 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
   domain) links to them, which publishing the Drive sign-in out of
   Testing needs. They aren't part of the app (not in sw.js ASSETS).
   Keep privacy.html true whenever a feature starts sending something.
+- **Drive reconnect after Disconnect (1.45.9).** Disconnect revokes the
+  token at Google, but Play Services keeps its cached copy and
+  `authorize` hands it back with no resolution, so /about got 401 twice
+  and Connect toasted "Connect Google Drive again". DrivePlugin now has
+  `clearToken` (GoogleAuthUtil.clearToken); drive.js calls it on
+  Disconnect and on the first 401 before retrying, and connect's /about
+  call may ask, so the retry can show Google's screen.
