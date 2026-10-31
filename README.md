@@ -188,8 +188,23 @@ Each section below shows the computer (left) and the phone (right).
 
 ## Run it
 
-`node server.js` (or double-click `start.cmd` on Windows) and open
-<http://localhost:5173>.
+Three ways to use Waypage, same files, same features:
+
+- **In a browser,** nothing to install: open
+  <https://danielnoam.github.io/waypage/>. Your clips stay in that
+  browser's own storage, offline too (the page is cached, so it opens
+  with no connection), and Install or Add to Home Screen makes it look
+  like an app. Pictures are kept as links there.
+- **On an Android phone,** as the app: download `Waypage.apk` from the
+  [latest release](https://github.com/danielnoam/waypage/releases/latest),
+  tap it, and allow your browser to install apps the first time. The app
+  saves pictures and books to the phone, shares in from other apps, has
+  widgets, and updates itself from the releases. iPhone: the same
+  release carries an unsigned `Waypage.ipa` for AltStore or SideStore.
+- **On your own computer, from the source:** clone the repo, run
+  `node server.js` (or double-click `start.cmd` on Windows) and open
+  <http://localhost:5173>. That is the web copy served from your disk,
+  which is how changes are tried before they are pushed.
 
 ## Working on Waypage
 
