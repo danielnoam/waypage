@@ -190,7 +190,7 @@ function syncSteps() {
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); connect(); } });
   return el("section", { class: "settings-section" },
     el("h2", { class: "overline" }, "Sync with GitHub"),
-    el("p", { class: "section-lead" }, "Keeps your clips, files you copied in, feeds and newsletters the same on every device, through a private repo on your GitHub. Files read from outside stay on the device that has them."),
+    el("p", { class: "section-lead" }, "Keeps your clips, feeds and newsletters the same on every device, through a private repo on your GitHub. Files read from outside stay on the device that has them."),
     el("div", { class: "group" },
       outRow("https://github.com/signup", "1", "Make a free GitHub account", "Skip this if you have one."),
       outRow(C.sync.NEW_REPO_URL, "2", "Make a private repo for your library", "GitHub fills it in. Keep it Private, then Create repository."),
@@ -374,8 +374,7 @@ function syncsList() {
   return el("section", { class: "settings-section" },
     el("h2", { class: "overline" }, "What syncs"),
     el("div", { class: "group" },
-      syncsRow("Clips", "Their text, highlights, tags, collections, favourites and where you were. Each device gets a clip's pictures from its site"),
-      syncsRow("Files", "Books, PDFs and comics you copied in, with their pictures when they come to 100 MB or less a file"),
+      syncsRow("Clips", "Their text, highlights, tags, collections, favourites and where you were. Each device gets a clip's pictures from its site, or from GitHub when it has no site, up to 100 MB a clip"),
       syncsRow("Feeds", "Which feeds you follow and how. Each device looks for new posts itself, and a post you saved goes as a clip"),
       syncsRow("Newsletters", "Your addresses and how they're set. The phone collects new mail, and a mail you saved goes as a clip"),
       syncsRow("Reading stats", "Your reading time from every device, added up in Stats")),
@@ -1964,10 +1963,9 @@ function driveSections() {
       el("h2", { class: "overline" }, "What goes in"),
       el("div", { class: "group" },
         sw("clips", "Clips", "Their text, pictures, highlights and where you were"),
-        sw("files", "Files", "Books, PDFs and comics you copied in, with their pictures. Usually the biggest part"),
         sw("feeds", "Feeds", "Which feeds you follow and how. A post you saved goes in as a clip"),
         sw("newsletters", "Newsletters", "Your addresses and how they're set. A mail you saved goes in as a clip")),
-      el("p", { class: "footnote" }, "Tags, collections and favourites go with the clips and files they're on, and your reading stats go too. Files read from outside and watched folders don't go in: they stay where they are. Settings don't go in either.")),
+      el("p", { class: "footnote" }, "Tags, collections and favourites go with the clips they're on, and your reading stats go too. Files read from outside and watched folders don't go in: they stay where they are. Settings don't go in either.")),
     el("section", { class: "settings-section" },
       el("h2", { class: "overline" }, "Restore"),
       el("div", { class: "group" }, ...(list.length ? list
@@ -2023,10 +2021,11 @@ async function driveRefresh() {
 }
 
 // What a backup holds, from Settings › Google Drive › What goes in.
-// Files read from outside stay out, as in GitHub sync (1.46.0).
+// Files read from outside stay out, as in GitHub sync, and a file copied
+// in is a clip like any other (1.46.0: no Files switch).
 function driveContents() {
   const w = C.drive.what;
-  const pages = state.pages.filter((p) => !p.link && (p.file ? w.files : w.clips));
+  const pages = w.clips ? state.pages.filter((p) => !p.link) : [];
   return { pages, feeds: [...(w.feeds ? siteFeeds() : []), ...(w.newsletters ? mailBoxes() : [])] };
 }
 
