@@ -576,7 +576,7 @@ async function loadPreviews() {
   pv.error = "";
   paintPreviews();
   try {
-    const res = await C.platform.fetchText("https://api.github.com/repos/" + build.repo + "/releases?per_page=60",
+    const res = await C.platform.fetchText("https://api.github.com/repos/" + build.repo + "/releases?per_page=100",
       { headers: { Accept: "application/vnd.github+json" } });
     if (res.status !== 200) throw new Error("HTTP " + res.status);
     const all = JSON.parse(res.text).filter((r) => r && !r.draft);
