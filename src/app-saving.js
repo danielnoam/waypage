@@ -1961,7 +1961,7 @@ function driveSections() {
             dropdown({ label: "Back up by itself", cls: "field-pick drive-every", value: C.drive.auto ? String(C.drive.every) : "off",
               options: [...C.drive.EVERY.map((d) => ({ value: String(d), label: DRIVE_EVERY[d] })), { value: "off", label: "Only when I ask" }],
               onpick: (v) => { if (v === "off") C.drive.auto = false; else { C.drive.every = Number(v); C.drive.auto = true; } renderSection(); } })))),
-      el("p", { class: "footnote" }, (C.platform.native ? "On Wi-Fi, while Waypage is open. " : "Asks first, since this browser signs in to Google for an hour at a time. ")
+      el("p", { class: "footnote" }, (C.platform.native ? (C.drive.background ? "On Wi-Fi, even with Waypage closed, when Android finds a good moment. " : "On Wi-Fi, while Waypage is open. ") : "Asks first, since this browser signs in to Google for an hour at a time. ")
         + "Drive keeps the last " + C.drive.KEEP + " backups" + (C.drive.auto && C.drive.every < 7 ? ", and one from a week before them" : "") + "; an older one is deleted when a new one is made.")),
     el("section", { class: "settings-section" },
       el("h2", { class: "overline" }, "What goes in"),
@@ -2043,6 +2043,36 @@ function driveContents() {
   const pages = w.clips ? state.pages.filter((p) => !p.link) : [];
   const bare = w.clips && w.links ? new Set(pages.filter(savableAgain).map((p) => p.id)) : null;
   return { pages, bare, feeds: [...(w.feeds ? siteFeeds() : []), ...(w.newsletters ? mailBoxes() : [])] };
+}
+
+// The automatic backup with Waypage closed (1.47.0, Android): on going to
+// the background the job gets what a backup now would hold; on coming
+// back it's held, and what it did becomes the last backup here.
+let driveHanded = "";
+async function driveHandOver() {
+  if (!C.drive.background) return;
+  if (!C.drive.on || !C.drive.auto || !C.drive.folder) { if (driveHanded !== "off") { driveHanded = "off"; C.drive.handOver(null); } return; }
+  const from = await C.store.packSource().catch(() => null);
+  if (!from) return;
+  const { pages, bare, feeds: fs } = driveContents();
+  const kept = pages.filter((p) => !p.link);
+  const ids = kept.filter((p) => !bare || !bare.has(p.id)).map((p) => p.id);
+  const l = C.drive.last;
+  const plan = { every: C.drive.every, last: Math.max(l.at || 0, C.drive.since), tried: l.tried || 0, folder: C.drive.folder,
+    device: load(DEVICE_KEY, "") || guessedName(), clips: kept.length, ids, head: C.backup.headFiles(kept, fs), ...from };
+  const sig = JSON.stringify({ ...plan, head: plan.head.map((h) => (h.name === "waypage.json" ? "" : h.text)) });
+  if (sig === driveHanded) return;
+  driveHanded = sig;
+  C.drive.handOver(plan);
+}
+async function driveTakeBackground() {
+  if (!C.drive.background || !C.drive.on) return;
+  C.drive.hold(true);
+  const s = await C.drive.backgroundDone();
+  if (!s) return;
+  const l = C.drive.last;
+  if (s.at > (l.at || 0)) { C.drive.last = { at: s.at, size: s.size || 0 }; driveFiles = null; drivePaint(); }
+  else if (s.error && s.tried > (l.tried || 0) && s.tried > (l.at || 0)) { C.drive.last = { ...l, error: s.error, tried: s.tried }; drivePaint(); }
 }
 
 async function driveBackUp(auto) {

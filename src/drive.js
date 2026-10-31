@@ -402,6 +402,13 @@
     get on() { return !!cfg; },
     get email() { return cfg ? cfg.email : ""; },
     get auto() { return !!(cfg && cfg.auto); },
+    get folder() { return (cfg && cfg.folder) || ""; },
+    // The backup that runs with the app closed (1.47.0, Android): its
+    // plan handed over, held while the app is open, and what it did.
+    get background() { return !!(P() && P().background); },
+    handOver(plan) { return P() && P().background ? P().background(plan ? { plan: JSON.stringify(plan) } : {}).catch(() => {}) : Promise.resolve(); },
+    hold(on) { if (P() && P().backgroundHold) P().backgroundHold({ hold: on }).catch(() => {}); },
+    async backgroundDone() { try { return P() && P().backgroundState ? await P().backgroundState() : null; } catch (e) { return null; } },
     set auto(v) { if (cfg) { cfg.auto = !!v; save(); } },
     // Days between automatic backups (1.46.0; a week until then).
     get every() { return (cfg && EVERY.includes(cfg.every) && cfg.every) || 7; },

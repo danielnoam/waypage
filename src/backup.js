@@ -220,6 +220,18 @@
 
   const today = () => new Date().toISOString().slice(0, 10);
 
+  // The files a backup starts with, also handed to the Drive backup that
+  // runs with the app closed (1.47.0).
+  function headFiles(listed, feeds) {
+    return [
+      { name: "waypage.json", text: JSON.stringify({ format: 1, app: C.version, made: Date.now(), pages: listed.length, feeds: (feeds || []).length }) },
+      { name: "library.json", text: JSON.stringify(listed) },
+      ...(feeds && feeds.length ? [{ name: "feeds.json", text: JSON.stringify(feeds) }] : []),
+      // Reading stats (1.39.0): this device's and the others it knows.
+      ...(C.stats ? [{ name: "stats.json", text: JSON.stringify(C.stats.backup()) }] : []),
+    ];
+  }
+
   // Writes the backup and resolves to { uri } in the app (a file in its
   // cache, for the share sheet) or { blob } in a browser.
   // `gate`, when given, is awaited between clips: false stops the backup
@@ -235,13 +247,7 @@
     if (bare && bare.size) pages = pages.filter((p) => !bare.has(p.id));
     const native = C.platform.native;
     const name = "waypage-backup-" + today() + ".zip";
-    const head = [
-      { name: "waypage.json", text: JSON.stringify({ format: 1, app: C.version, made: Date.now(), pages: listed.length, feeds: (feeds || []).length }) },
-      { name: "library.json", text: JSON.stringify(listed) },
-      ...(feeds && feeds.length ? [{ name: "feeds.json", text: JSON.stringify(feeds) }] : []),
-      // Reading stats (1.39.0): this device's and the others it knows.
-      ...(C.stats ? [{ name: "stats.json", text: JSON.stringify(C.stats.backup()) }] : []),
-    ];
+    const head = headFiles(listed, feeds);
     const from = native ? await S().packSource().catch(() => null) : null;
     if (from) return packNatively(name, pages, head, from, onProgress);
     const file = native ? await S().cacheFile(name) : null;
@@ -631,5 +637,5 @@
     return meta;
   }
 
-  C.backup = { holdPack, stopPack, cleanMeta, cleanMarks, marksMarkdown, sameFile, cleanFeed, crc32, zipWriter, zipEntries, zipRead, exportLibrary, restoreLibrary, exportPage, exportPages, exportMarkdown, exportMarkdownAll, importPage, imageType, mdBlocks };
+  C.backup = { holdPack, stopPack, cleanMeta, cleanMarks, marksMarkdown, sameFile, cleanFeed, crc32, zipWriter, zipEntries, zipRead, headFiles, exportLibrary, restoreLibrary, exportPage, exportPages, exportMarkdown, exportMarkdownAll, importPage, imageType, mdBlocks };
 })();
