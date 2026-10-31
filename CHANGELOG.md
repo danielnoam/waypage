@@ -8,8 +8,8 @@ All notable changes to Carry-on. Newest first.
 - A search box at the top of Settings. A word or two finds a setting
   wherever it sits, by its name, its line, its heading or its
   explanation; a result opens the screen and lights the row up.
-- Settings › About › Credits: who made Waypage, the open-source code and
-  fonts it's built with and their licences, and the services it talks to.
+- Settings › About › Credits: the open-source code and fonts Waypage is
+  built with and their licences, and the services it talks to.
 
 ### Changed
 - Settings say less. Every row is a name and at most one short line, and

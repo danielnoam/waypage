@@ -117,11 +117,11 @@ its heading. A pick between options is a drop-down row (`pickRow`), not
 a list of radios. Settings search reads the screens themselves, so a
 new row is found without any extra work.
 
-**Credits.** Your first pull request adds your name (and GitHub login,
-if you like) to `CREDITS.people` in `src/app-settings.js`, shown under
-Settings › About › Credits. Anything vendored or bundled (code, a font)
-goes under `CREDITS.code` or `CREDITS.fonts` with its author and
-licence, beside its licence file in the repo.
+**Credits.** Anything vendored or bundled (code, a font) goes under
+`CREDITS.code` or `CREDITS.fonts` in `src/app-settings.js`, shown under
+Settings › About › Credits, with its author and licence, beside its
+licence file in the repo. People aren't listed there; the commit
+history is the record.
 
 **"Add to TODO" means plan it, not build it.** It goes into TODO.md with
 enough detail for someone else to pick it up.

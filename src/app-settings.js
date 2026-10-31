@@ -642,7 +642,7 @@ function reportGroup() {
 function aboutGroup() {
   const list = el("div", { class: "group" });
   const releases = C.platform.releasesUrl() || "https://github.com/danielnoam/waypage/releases/latest";
-  list.append(navRow("Credits", "Who made Waypage, and what it's built with", () => openSection("credits", false, true)));
+  list.append(navRow("Credits", "What Waypage is built with", () => openSection("credits", false, true)));
   list.append(el("a", { class: "row", href: releases, target: "_blank", rel: "noopener" },
     el("span", { class: "row-label accent" }, "Releases and source"),
     el("span", { class: "row-value", "aria-hidden": "true" }, "↗")));
@@ -951,10 +951,6 @@ async function undoEdits() {
 // Who made Waypage and what it's built with. A new contributor adds
 // their name here in their first pull request (CONTRIBUTING.md).
 const CREDITS = {
-  people: [
-    { name: "Daniel Noam", login: "danielnoam", note: "Made Waypage" },
-    { name: "Claude", url: "https://claude.ai", note: "Anthropic's AI, which wrote most of the code with Daniel" },
-  ],
   code: [
     { name: "Readability", by: "Mozilla", licence: "Apache 2.0", url: "https://github.com/mozilla/readability", note: "Picks the article out of a page" },
     { name: "pdf.js", by: "Mozilla", licence: "Apache 2.0", url: "https://mozilla.github.io/pdf.js/", note: "Shows PDFs" },
@@ -982,8 +978,6 @@ function creditsSections() {
     value ? el("span", { class: "row-value" }, value) : null,
     el("span", { class: "row-value", "aria-hidden": "true" }, "↗"));
   return [
-    section("People", "Waypage is open source, made in the open on GitHub. Anyone who sends a change in adds their name here.",
-      el("div", { class: "group" }, ...CREDITS.people.map((p) => out(p.url || "https://github.com/" + p.login, p.name, p.note, p.login ? "@" + p.login : null)))),
     section("Code", "Open-source code bundled into Waypage, each under its own licence; the licence texts are in the repo beside the code.",
       el("div", { class: "group" }, ...CREDITS.code.map((c) => out(c.url, c.name, c.note, c.by + " · " + c.licence)))),
     section("Fonts", "All under the SIL Open Font License, bundled as Latin and Hebrew subsets.",

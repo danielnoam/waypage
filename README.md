@@ -175,7 +175,7 @@ Each section below shows the computer (left) and the phone (right).
 
 - Settings in groups: Appearance, Reading, Library, App lock, Saving, GitHub sync, Google Drive, Storage; a search box at the top finds any setting.
 - Every setting is a name and one short line; the longer explanation is behind a ? on its heading. Options are drop-downs, themes a grid of swatches.
-- About has the version, the changelog, and Credits: who made Waypage and what it's built with.
+- About has the version, the changelog, and Credits: what Waypage is built with.
 - App lock: passcode, fingerprint or face on Android, erase when forgotten.
 - Home screen widgets on Android and iOS: Keep reading, Feeds, Favourites, Collection, Highlight; app icon shortcuts.
 - The Android app updates itself and shows What's new.

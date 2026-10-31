@@ -123,4 +123,4 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Notifications settings (1.30.0)
 - Settings search: finds a setting by its name, line, heading or explanation, opens its screen and lights the row (1.48.0)
 - Compact Settings: a name and one line per row, the explanation behind a ? on the heading, options as drop-downs, themes as a swatch grid (1.48.0)
-- Credits under About: people, open-source code and fonts with their licences, services (1.48.0)
+- Credits under About: open-source code and fonts with their licences, services (1.48.0)
