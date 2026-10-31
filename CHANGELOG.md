@@ -2,6 +2,15 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.48.0] - 2026-10-31
+
+### Changed
+- Brought in the upstream changes of 1.45.8 to 1.45.11: Hebrew and Arabic
+  PDF order, copied-in files look like any clip, Google Drive reconnect,
+  faster backups, privacy and terms pages, and app.js split into more
+  parts. Fork edits kept: dark PDF pages, PowerPoint decks, own Google
+  client.
+
 ## [1.47.0] - 2026-10-31
 
 ### Added
