@@ -462,6 +462,16 @@
     };
   }
 
+  // Where the phone's own packer reads the library from (1.45.10): a
+  // picked folder's tree, or the library's file:// address. null when it
+  // can't (a browser, or an app from before the packer).
+  async function packSource() {
+    if (!F() || !F().pack) return null;
+    const b = await B();
+    if (b.place.kind === "folder") return { tree: b.place.tree };
+    return { dir: (await FS().getUri({ path: b.pre, directory: b.directory })).uri };
+  }
+
   function toBase64(bytes) {
     let s = "";
     for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
@@ -594,5 +604,5 @@
 
   window.Waypage.store = { ready,
     get place() { return cur ? cur.place : savedPlace(); }, placeName, get problem() { return problem; }, moveTo, readIndex, writeIndex, writeIndexOnly, set onIndex(f) { onIndex = f; }, writeThumb, readThumbs, storageInfo, keepStored, writePage, readPage, removePage, writeText, readText, writeTranslation, readTranslation, download, removeFile, sizeOf, shrink, squeeze, pageDirUrl, bytesOf,
-    listFiles, listSized, readBytes, writeBytes, cacheFile, toBase64, listFonts, readFont, addFont, removeFont };
+    listFiles, listSized, readBytes, writeBytes, cacheFile, packSource, toBase64, listFonts, readFont, addFont, removeFont };
 })();

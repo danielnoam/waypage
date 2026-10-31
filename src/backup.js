@@ -226,14 +226,19 @@
   async function exportLibrary(pages, onProgress, feeds, gate) {
     const native = C.platform.native;
     const name = "waypage-backup-" + today() + ".zip";
+    const head = [
+      { name: "waypage.json", text: JSON.stringify({ format: 1, app: C.version, made: Date.now(), pages: pages.length, feeds: (feeds || []).length }) },
+      { name: "library.json", text: JSON.stringify(pages) },
+      ...(feeds && feeds.length ? [{ name: "feeds.json", text: JSON.stringify(feeds) }] : []),
+      // Reading stats (1.39.0): this device's and the others it knows.
+      ...(C.stats ? [{ name: "stats.json", text: JSON.stringify(C.stats.backup()) }] : []),
+    ];
+    const from = native ? await S().packSource().catch(() => null) : null;
+    if (from) return packNatively(name, pages, head, from, onProgress);
     const file = native ? await S().cacheFile(name) : null;
     const parts = [];
     const zip = zipWriter(native ? (b) => file.append(b) : (b) => { parts.push(b); });
-    await zip.add("waypage.json", utf8(JSON.stringify({ format: 1, app: C.version, made: Date.now(), pages: pages.length, feeds: (feeds || []).length })));
-    await zip.add("library.json", utf8(JSON.stringify(pages)));
-    if (feeds && feeds.length) await zip.add("feeds.json", utf8(JSON.stringify(feeds)));
-    // Reading stats (1.39.0): this device's and the others it knows.
-    if (C.stats) await zip.add("stats.json", utf8(JSON.stringify(C.stats.backup())));
+    for (const h of head) await zip.add(h.name, utf8(h.text));
     let done = 0;
     for (const p of pages) {
       if (native) {
@@ -252,6 +257,28 @@
     await zip.finish();
     return native ? { uri: await file.uri(), name } : { blob: new Blob(parts, { type: "application/zip" }), name };
   }
+
+  // In the app, FilesPlugin streams the files into the zip itself
+  // (1.45.10): many times faster than reading each one into the WebView
+  // and writing it back over the bridge. Pause and Stop reach it through
+  // holdPack and stopPack, since it doesn't come back between clips.
+  let packing = false;
+  async function packNatively(name, pages, head, from, onProgress) {
+    const F = C.platform.plugin("Files");
+    const heard = onProgress ? await F.addListener("packProgress", (p) => onProgress(p.done, p.total)) : null;
+    packing = true;
+    try {
+      const r = await F.pack({ name, ids: pages.map((p) => p.id), head, ...from });
+      return { uri: r.uri, name };
+    } catch (e) {
+      throw e && e.code === "cancelled" ? Object.assign(new Error("Stopped."), { code: "cancelled" }) : e;
+    } finally {
+      packing = false;
+      if (heard) heard.remove();
+    }
+  }
+  const holdPack = (hold) => { if (packing) C.platform.plugin("Files").packHold({ hold: !!hold }).catch(() => {}); };
+  const stopPack = () => { if (packing) C.platform.plugin("Files").packStop().catch(() => {}); };
 
   const PAGE_FILE = /^(page\.html|meta\.json|text\.txt|images\/[A-Za-z0-9._-]{1,80})$/;
 
@@ -569,5 +596,5 @@
     return meta;
   }
 
-  C.backup = { cleanMeta, cleanMarks, marksMarkdown, sameFile, cleanFeed, crc32, zipWriter, zipEntries, zipRead, exportLibrary, restoreLibrary, exportPage, exportPages, exportMarkdown, exportMarkdownAll, importPage, imageType, mdBlocks };
+  C.backup = { holdPack, stopPack, cleanMeta, cleanMarks, marksMarkdown, sameFile, cleanFeed, crc32, zipWriter, zipEntries, zipRead, exportLibrary, restoreLibrary, exportPage, exportPages, exportMarkdown, exportMarkdownAll, importPage, imageType, mdBlocks };
 })();

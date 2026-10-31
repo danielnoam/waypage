@@ -716,4 +716,173 @@ public class FilesPlugin extends Plugin {
         out.put("size", size);
         return out;
     }
+
+    // ---- The library as one zip (1.45.10) ----
+    // Backups used to be packed in the WebView: every byte read over its
+    // file server, summed there and written back over the bridge as base64
+    // a megabyte at a time. Here it's streamed file to zip. Text is
+    // deflated; pictures, books and the rest are stored as they are, which
+    // is what restoreLibrary reads fastest.
+    //
+    //   pack({ name, ids, head: [{ name, text }], dir | tree })
+    //     dir: the library's file:// address (app storage, Documents)
+    //     tree: a picked folder's tree
+    //   → { uri, size }; "packProgress" { done, total } as it goes
+    //   packHold({ hold }) pauses between files; packStop() ends it ("cancelled")
+
+    private volatile boolean packHeld;
+    private volatile boolean packStopped;
+    private final Object packLock = new Object();
+
+    @PluginMethod
+    public void pack(PluginCall call) {
+        String name = call.getString("name");
+        JSArray ids = call.getArray("ids");
+        JSArray head = call.getArray("head");
+        String dir = call.getString("dir");
+        String tree = call.getString("tree");
+        if (name == null || ids == null || (dir == null && tree == null) || name.contains("/")) {
+            call.reject("Nothing to pack");
+            return;
+        }
+        packHeld = false;
+        packStopped = false;
+        new Thread(() -> {
+            File out = new File(getContext().getCacheDir(), name);
+            try {
+                List<String> list = ids.toList();
+                Packer src = tree != null ? new TreePacker(Uri.parse(tree)) : new DirPacker(new File(Uri.parse(dir).getPath()));
+                try (java.util.zip.ZipOutputStream zip = new java.util.zip.ZipOutputStream(new java.io.BufferedOutputStream(new java.io.FileOutputStream(out), 1 << 16))) {
+                    if (head != null) {
+                        for (int i = 0; i < head.length(); i++) {
+                            org.json.JSONObject h = head.getJSONObject(i);
+                            byte[] b = h.getString("text").getBytes(StandardCharsets.UTF_8);
+                            putEntry(zip, h.getString("name"), () -> new java.io.ByteArrayInputStream(b), b.length);
+                        }
+                    }
+                    long last = 0;
+                    for (int i = 0; i < list.size(); i++) {
+                        String id = list.get(i);
+                        if (id.matches("[A-Za-z0-9_-]{1,80}")) src.page(id, zip);
+                        long now = System.currentTimeMillis();
+                        if (now - last > 120 || i == list.size() - 1) {
+                            last = now;
+                            JSObject p = new JSObject();
+                            p.put("done", i + 1);
+                            p.put("total", list.size());
+                            notifyListeners("packProgress", p);
+                        }
+                    }
+                }
+                JSObject res = new JSObject();
+                res.put("uri", Uri.fromFile(out).toString());
+                res.put("size", out.length());
+                call.resolve(res);
+            } catch (Stopped e) {
+                out.delete();
+                call.reject("Stopped", "cancelled");
+            } catch (Exception e) {
+                out.delete();
+                call.reject(String.valueOf(e.getMessage()), "failed");
+            }
+        }).start();
+    }
+
+    @PluginMethod
+    public void packHold(PluginCall call) {
+        packHeld = call.getBoolean("hold", false);
+        synchronized (packLock) { packLock.notifyAll(); }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void packStop(PluginCall call) {
+        packStopped = true;
+        synchronized (packLock) { packLock.notifyAll(); }
+        call.resolve();
+    }
+
+    private static class Stopped extends Exception {}
+
+    private interface Opener { InputStream open() throws java.io.IOException; }
+
+    private interface Packer { void page(String id, java.util.zip.ZipOutputStream zip) throws Exception; }
+
+    private void gate() throws Stopped, InterruptedException {
+        synchronized (packLock) {
+            while (packHeld && !packStopped) packLock.wait();
+        }
+        if (packStopped) throw new Stopped();
+    }
+
+    private static boolean deflates(String path) {
+        return path.matches("(?i).*\\.(html?|txt|json|xml|css|svg|md)$");
+    }
+
+    private void putEntry(java.util.zip.ZipOutputStream zip, String path, Opener open, long size) throws Exception {
+        gate();
+        java.util.zip.ZipEntry e = new java.util.zip.ZipEntry(path);
+        byte[] buf = new byte[1 << 16];
+        int n;
+        if (deflates(path)) {
+            e.setMethod(java.util.zip.ZipEntry.DEFLATED);
+        } else {
+            java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+            long len = 0;
+            try (InputStream in = open.open()) {
+                while ((n = in.read(buf)) > 0) { crc.update(buf, 0, n); len += n; }
+            }
+            e.setMethod(java.util.zip.ZipEntry.STORED);
+            e.setSize(len);
+            e.setCompressedSize(len);
+            e.setCrc(crc.getValue());
+        }
+        zip.putNextEntry(e);
+        try (InputStream in = open.open()) {
+            while ((n = in.read(buf)) > 0) zip.write(buf, 0, n);
+        }
+        zip.closeEntry();
+    }
+
+    private class DirPacker implements Packer {
+        final File pages;
+        DirPacker(File root) { pages = new File(root, "pages"); }
+        public void page(String id, java.util.zip.ZipOutputStream zip) throws Exception {
+            walk(new File(pages, id), "pages/" + id + "/", zip);
+        }
+        void walk(File dir, String at, java.util.zip.ZipOutputStream zip) throws Exception {
+            File[] files = dir.listFiles();
+            if (files == null) return;
+            for (File f : files) {
+                if (f.isDirectory()) walk(f, at + f.getName() + "/", zip);
+                else if (f.isFile()) putEntry(zip, at + f.getName(), () -> new FileInputStream(f), f.length());
+            }
+        }
+    }
+
+    private class TreePacker implements Packer {
+        final Uri tree;
+        final Map<String, Uri> pages = new HashMap<>();
+        TreePacker(Uri tree) {
+            this.tree = tree;
+            Uri dir = find(tree, "pages", false);
+            if (dir != null) for (String[] c : children(tree, dir)) pages.put(c[1], DocumentsContract.buildDocumentUriUsingTree(tree, c[0]));
+        }
+        public void page(String id, java.util.zip.ZipOutputStream zip) throws Exception {
+            Uri dir = pages.get(id);
+            if (dir != null) walk(dir, "pages/" + id + "/", zip);
+        }
+        void walk(Uri dir, String at, java.util.zip.ZipOutputStream zip) throws Exception {
+            ContentResolver cr = getContext().getContentResolver();
+            for (String[] c : children(tree, dir)) {
+                Uri doc = DocumentsContract.buildDocumentUriUsingTree(tree, c[0]);
+                if (DocumentsContract.Document.MIME_TYPE_DIR.equals(c[2])) walk(doc, at + c[1] + "/", zip);
+                else putEntry(zip, at + c[1], () -> {
+                    InputStream in = cr.openInputStream(doc);
+                    if (in == null) throw new java.io.FileNotFoundException(c[1]);
+                    return in;
+                }, c[3] == null ? -1 : Long.parseLong(c[3]));
+            }
+        }
+    }
 }

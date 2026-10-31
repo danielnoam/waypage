@@ -2800,3 +2800,16 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
   `clearToken` (GoogleAuthUtil.clearToken); drive.js calls it on
   Disconnect and on the first 401 before retrying, and connect's /about
   call may ask, so the retry can show Google's screen.
+- **Backups packed natively (1.45.10).** Daniel: backing up to Drive
+  was slow, in the Packing part. exportLibrary read every file through
+  the WebView's file server, ran crc32 in JS and wrote the zip back
+  through Filesystem.appendFile as base64, 1 MB at a time. In the app
+  it now calls FilesPlugin.pack (Android), which streams pages/<id>/
+  into a ZipOutputStream in the cache: text deflated, everything else
+  stored (crc pre-pass) so restoreLibrary reads big files as before.
+  Works for all three storage places (file dir or SAF tree, via
+  store.packSource). Pause/Stop reach it through backup.holdPack /
+  stopPack (packHold/packStop), since the JS gate between clips no
+  longer runs. iOS and browsers keep the JS writer. Java's zip uses data
+  descriptors for deflated entries; zipEntries reads sizes from the
+  central directory, so that's fine (checked with a Java-made zip).

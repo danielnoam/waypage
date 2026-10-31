@@ -1757,6 +1757,7 @@ function drivePause(on) {
   const r = driveRun;
   if (!r || r.stopped) return;
   r.paused = on;
+  C.backup.holdPack(on);
   if (on && r.ctl.stop) r.ctl.stop();
   if (!on && r.wake) { r.wake(); r.wake = null; }
   drivePaint();
@@ -1765,6 +1766,7 @@ function driveStop() {
   const r = driveRun;
   if (!r) return;
   r.stopped = true;
+  C.backup.stopPack();
   if (r.ctl.stop) r.ctl.stop();
   if (r.wake) { r.wake(); r.wake = null; }
   drivePaint();

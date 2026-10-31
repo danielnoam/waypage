@@ -2,6 +2,13 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.45.10] - 2026-10-31
+
+### Changed
+- Backing up is much faster on the phone: the app packs the backup
+  itself instead of passing every picture and book through the page.
+  Text in a backup is now compressed too, so it's smaller to send.
+
 ## [1.45.9] - 2026-10-31
 
 ### Fixed
