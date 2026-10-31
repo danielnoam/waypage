@@ -151,9 +151,17 @@ Plus a `## [x.y.z] - YYYY-MM-DD` entry at the top of CHANGELOG.md
 (`### Added` / `Changed` / `Fixed` / `Removed`, in user-facing words).
 The release workflow copies that entry into the GitHub release notes.
 
-**What a push does:**
+**How a change gets in:** `main` takes only pull requests. Push a
+branch, open a PR, and merge it when the **Tests** check is green
+(`.github/workflows/test.yml` runs `node test/run-all.js` with
+Playwright on every PR and on `main`). No review is required: anyone
+with write access merges on green, and Daniel decides who has write
+access. A PR from a fork runs the tests too, but without the repo's
+secrets, so it can't sign or publish anything.
 
-- A push to **`main`** deploys the web copy (GitHub Pages serves `main`
+**What a merge does:**
+
+- A merge to **`main`** deploys the web copy (GitHub Pages serves `main`
   as it is).
 - `.github/workflows/android.yml` and `ios.yml` build on every push to
   `main` and to `claude/**` branches. Pushes that only touch `**.md`,
@@ -179,21 +187,16 @@ change touches them and wasn't run on a phone. After pushing, check that
 both workflow runs went green.
 
 **Two releases at once.** If someone else released while you worked,
-their version number is taken. Rebase on `main` and take the next free
+their version number is taken. Merge `main` in and take the next free
 version above the latest release, or the updater will ignore yours.
 
 ### Changing soon
 
 With more than one person, "every merge is a release" means version
-clashes and shipping each other's half-finished work. The plan, in order:
-
-1. Protect `main`: changes go in by pull request with green checks and
-   one review.
-2. Separate merging from releasing: merges land on `main`, and a release
-   happens only on a tag or a manual run, which is when the version is
-   bumped.
-
-This section will be rewritten when those are in place.
+clashes and shipping each other's half-finished work. The plan: separate merging from releasing, so merges land on `main`
+and a release happens only on a tag or a manual run, which is when the
+version is bumped. This section will be rewritten when that is in
+place.
 
 ## Signing and secrets
 
