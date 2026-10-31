@@ -18,6 +18,26 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **A deck is redrawn, not converted (1.47.0).** Android has no PowerPoint
+  renderer, Apache POI would add about 20 MB, and a server is ruled out, so
+  `src/pptx.js` reads the zip's XML itself and draws each slide on a
+  canvas. Trade-offs, said plainly: it is an approximation (no charts or
+  SmartArt without a stand-in picture, no effects, animations or WordArt;
+  fonts the phone lacks fall back to Instrument Sans or Source Serif 4,
+  and the sheet says so). Each slide becomes a JPEG (1600 px long side,
+  quality 0.85) so a 100-slide deck holds one canvas at a time (about 45
+  ms a slide on a computer, heap flat). Words go in as an invisible text
+  layer so the PDF reader's search, Narrate and highlights work, and so
+  the clip's words aren't a blank. Right-to-left lines are stored in
+  visual order, which pdf.js turns back. Safe by construction: the XML is
+  only parsed, pictures only decoded, a relationship marked External is
+  never fetched, parts over 64 MB and decks over 600 slides are cut off.
+  The PDF is saved by the person (a save screen), not into a folder of
+  ours, so Waypage holds no wider access than that one file. The PDF is
+  written with plain ASCII strings because a Blob writes a byte above 127
+  as two, which shifted the xref table. The yield between slides is a
+  MessageChannel message: a background page's timers wait a second each.
+
 - **A hidden `.rc-row` needs its own rule (1.46.1).** `.rc-row` is
   `display: flex`, which beats the browser's `[hidden]`, so the Dark PDF
   pages row stayed visible in every clip. `.rc-row[hidden]` now hides it.

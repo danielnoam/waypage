@@ -35,6 +35,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Collections linked to a story page, new chapters, "+N" badge to save them (0.26.0, 1.8.0)
 - Files: EPUB, PDF, CBZ, Markdown, text and HTML, copied in or read from where they are (0.31.0, 0.32.0)
 - Books' own contents (EPUB nav, PDF bookmarks) (1.27.2)
+- PowerPoint decks (.pptx): asked to convert to a PDF, redrawn on the device, saved where you pick and read from there (1.47.0)
 - Kindle books without DRM (MOBI, AZW, AZW3) and FB2, also zipped (1.42.0)
 - Big PDFs read from where they are, a piece at a time, never whole in memory (1.35.0)
 - Watched folders, each into a chosen collection (1.1.0, 1.4.0, 1.28.0)

@@ -109,13 +109,20 @@ You can also pick a collection when you save: **Save with options**, then
 
 1. Tap **Open a file** in the empty Library, or open **Save with options** and
    tap **Open a file**. On a computer you can drag a file onto the window.
-2. Pick an EPUB, PDF, MOBI, AZW3, FB2, CBZ, Markdown, text or HTML file, or an
-   email (.eml).
+2. Pick an EPUB, PDF, MOBI, AZW3, FB2, CBZ, Markdown, text or HTML file, an
+   email (.eml), or a PowerPoint deck (.pptx).
 3. **Android app:** Waypage asks how to keep it.
    - **Keep a copy** makes a clip like any other. It syncs, and stays when
      the file goes.
    - **Read from where it is** costs almost nothing, but the file has to stay
      where it is, and it doesn't sync.
+
+**A PowerPoint deck** can't be read as it is, so Waypage asks whether to
+**Convert to PDF**. Cancel opens nothing. Convert redraws the slides, then asks
+where to save the PDF (on Android the screen opens in the deck's folder), and
+opens it from there like a PDF you picked. The slides are redrawn, not
+copied from PowerPoint, so some effects, charts and fonts may look different;
+Waypage tells you how many charts or pictures it couldn't draw.
 
 ### Watch a folder (Android app)
 

@@ -2,6 +2,20 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.47.0] - 2026-10-31
+
+### Added
+- PowerPoint decks: Open a file now takes a .pptx. It asks whether to
+  convert it to a PDF; Cancel stops and opens nothing. Convert redraws the
+  slides (text, shapes, pictures, tables, theme colours), asks where to save
+  the new PDF (on Android the save screen opens in the deck's folder), and
+  adds that PDF to Files, read from where it was saved, like any PDF you
+  open. Search, Narrate and highlights work on the slides' words. Hidden
+  slides are left out. Charts and diagrams without a picture, effects and
+  animations are not drawn, and the app says how many it left out. Nothing
+  is sent anywhere, and a picture that points outside the file is never
+  loaded.
+
 ## [1.46.1] - 2026-10-31
 
 ### Fixed

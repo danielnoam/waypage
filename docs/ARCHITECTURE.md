@@ -60,8 +60,9 @@ code); `platform.js` creates the object, the rest add to it.
 | 14 | `epub.js` | `C.epub` | Clips as an EPUB 3 book |
 | 15 | `files.js` | `C.files` | EPUB, Kindle (MOBI/AZW3), FB2, CBZ, Markdown, text, HTML and PDF files become clips |
 | 16 | `pdf.js` | `C.pdf` | PDFs through pdf.js in a locked-down frame |
-| 17 | `reader.js` | `C.reader` | Shows a saved page in the sandboxed iframe: position, find, pages, highlights painting |
-| 18-25 | `app.js`, `app-*.js` | (the shell) | See below |
+| 17 | `pptx.js` | `C.pptx` | A PowerPoint deck redrawn slide by slide on a canvas and written as a PDF with an invisible text layer |
+| 18 | `reader.js` | `C.reader` | Shows a saved page in the sandboxed iframe: position, find, pages, highlights painting |
+| 19-26 | `app.js`, `app-*.js` | (the shell) | See below |
 
 Plus, outside the page's scripts: `sync-worker.js` (a Worker that
 `importScripts` `backup.js` and `sync.js` and runs the three-way merge) and

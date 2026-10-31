@@ -3,6 +3,8 @@ package io.github.danielnoam.waypage.share;
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
+import android.provider.DocumentsContract;
 import androidx.activity.result.ActivityResult;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -21,7 +23,10 @@ import java.io.OutputStream;
  *
  *   save({ uri, name, mime })   resolves to { saved } (false if put away)
  *
- * `uri` is a file the app already wrote to its cache.
+ * `uri` is a file the app already wrote to its cache. With `keep: true`
+ * (1.47.0, a deck turned into a PDF) the place chosen is also held on to
+ * for reading, and comes back as `uri`; `near` is a content:// file whose
+ * folder the screen opens in.
  */
 @CapacitorPlugin(name = "FileSave")
 public class FileSavePlugin extends Plugin {
@@ -36,6 +41,13 @@ public class FileSavePlugin extends Plugin {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType(call.getString("mime", "application/octet-stream"));
         intent.putExtra(Intent.EXTRA_TITLE, call.getString("name", "Page"));
+        String near = call.getString("near", "");
+        if (!near.isEmpty() && Build.VERSION.SDK_INT >= 26) {
+            try { intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, Uri.parse(near)); } catch (Exception e) { /* opens where it last was */ }
+        }
+        if (Boolean.TRUE.equals(call.getBoolean("keep", false))) {
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        }
         startActivityForResult(call, intent, "picked");
     }
 
@@ -60,6 +72,12 @@ public class FileSavePlugin extends Plugin {
                 while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
                 JSObject res = new JSObject();
                 res.put("saved", true);
+                if (Boolean.TRUE.equals(call.getBoolean("keep", false))) {
+                    try {
+                        getContext().getContentResolver().takePersistableUriPermission(target, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        res.put("uri", target.toString());
+                    } catch (Exception e) { /* saved, but only this once */ }
+                }
                 call.resolve(res);
             } catch (Exception e) {
                 call.reject("Couldn't save the file", e);

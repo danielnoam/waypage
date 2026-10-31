@@ -56,7 +56,7 @@
   }
 
   // What a file is, from its name and first bytes: one of KINDS, "backup"
-  // (a Waypage backup zip), "clip" (a clip sent as a file), "pdf", "zip"
+  // (a Waypage backup zip), "pptx" (a PowerPoint deck, made into a PDF first, 1.47.0), "clip" (a clip sent as a file), "pdf", "zip"
   // (any other zip, or a broken one), or null.
   async function kindOf(file) {
     const head = new Uint8Array(await file.slice(0, 1024).arrayBuffer());
@@ -68,6 +68,7 @@
       try { entries = await B().zipEntries(file); } catch (e) { return "zip"; }
       if (entries.has("library.json")) return "backup";
       if (entries.has("META-INF/container.xml")) return "epub";
+      if (entries.has("ppt/presentation.xml")) return "pptx";
       if ([...entries.keys()].some((n) => PICTURE.test(n))) return "cbz";
       if ([...entries.keys()].some((n) => /\.fb2$/i.test(n))) return "fb2";
       return "zip";

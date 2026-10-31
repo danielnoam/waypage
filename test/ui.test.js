@@ -10,6 +10,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
+const { pptxBytes } = require("./pptx-fixture");
 
 function playwright() {
   const tries = ["playwright", "/opt/node-tools/node_modules/playwright"];
@@ -1950,6 +1951,58 @@ function zipOf(files) {
       assert.strictEqual(await row.count(), 1, "the row is built, then hidden");
       assert.ok(!(await row.isVisible()), "the switch is not visible in a web clip");
       assert.strictEqual(await row.evaluate((r) => getComputedStyle(r).display), "none");
+      await q.context().close();
+    });
+
+    await test("a PowerPoint deck becomes a PDF with its words, asking first, and Cancel stops (1.47.0)", async () => {
+      const q = await page(browser, 390);
+      const asked = [];
+      q.on("request", (r) => asked.push(r.url()));
+      const bytes = [...pptxBytes()];
+      const made = await q.evaluate(async (b) => {
+        const file = new File([new Uint8Array(b)], "Quarterly deck.pptx");
+        const W = window.Waypage;
+        const out = { kind: await W.files.kindOf(file) };
+        const r = await W.pptx.toPdf(file, () => {});
+        const read = await W.pdf.read(new Uint8Array(await r.blob.arrayBuffer()), () => {}, {});
+        out.name = r.name; out.slides = r.slides; out.hidden = r.hidden; out.skipped = r.skipped;
+        out.words = read.blocks.filter((x) => x.s).map((x) => x.s).join(" | ");
+        return out;
+      }, bytes);
+      assert.strictEqual(made.kind, "pptx");
+      assert.strictEqual(made.name, "Quarterly deck.pdf");
+      assert.strictEqual(made.slides, 2, "the hidden slide is left out");
+      assert.strictEqual(made.hidden, 1);
+      assert.strictEqual(made.skipped, 2, "the chart and the outside picture are counted");
+      for (const w of ["Quarterly Review", "First point about the night train", "Northern", "Grouped words inside", "שלום עולם"]) assert.ok(made.words.includes(w), w + " in " + made.words);
+      assert.ok(!made.words.includes("Hidden slide words"));
+      assert.ok(!asked.some((u) => /example\.invalid/.test(u)), "a picture outside the file is never fetched");
+      // Cancel opens and saves nothing.
+      await q.evaluate((b) => { window.__p = openFile(new File([new Uint8Array(b)], "Quarterly deck.pptx"), null, true); }, bytes);
+      await q.locator("#menuSheet .row", { hasText: "Convert to PDF" }).waitFor();
+      await q.locator("#menuSheet .row", { hasText: "Cancel" }).click();
+      await q.evaluate(() => window.__p);
+      assert.strictEqual(await q.evaluate(() => state.pages.length), 0);
+      // Convert: saved where the person picks (stubbed, read from there), then opened.
+      await q.evaluate((b) => {
+        const W = window.Waypage;
+        window.__saveArgs = null;
+        W.platform.saveLinked = async (blob, name, mime, near) => {
+          window.__saveArgs = { name, mime, near };
+          const file = new File([blob], name, { type: mime });
+          W.platform.files.blob = async () => file;
+          return { saved: true, ref: "content://docs/Quarterly%20deck.pdf" };
+        };
+        window.__p = openFile(new File([new Uint8Array(b)], "Quarterly deck.pptx"), null, true, "content://docs/deck.pptx");
+      }, bytes);
+      await q.locator("#menuSheet .row", { hasText: "Convert to PDF" }).click();
+      await q.evaluate(() => window.__p);
+      const got = await q.evaluate(() => ({ pages: state.pages.map((p) => ({ link: p.link, kind: p.file.kind, name: p.file.name })), args: window.__saveArgs }));
+      assert.deepStrictEqual(got.args, { name: "Quarterly deck.pdf", mime: "application/pdf", near: "content://docs/deck.pptx" });
+      assert.strictEqual(got.pages.length, 1);
+      assert.strictEqual(got.pages[0].kind, "pdf");
+      assert.strictEqual(got.pages[0].link, "content://docs/Quarterly%20deck.pdf", "it reads from where it was saved, without the keep-a-copy question");
+      assert.deepStrictEqual(q.errors, []);
       await q.context().close();
     });
 

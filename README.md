@@ -63,6 +63,7 @@ Each section below shows the computer (left) and the phone (right).
 - A collection linked to a story's page finds new chapters and shows a "+N" to save them.
 - Files: EPUB, PDF, MOBI, AZW3, FB2, CBZ, Markdown, text and HTML, copied in or read from where they are. Books keep their own contents.
 - Big PDFs are read a piece at a time, never whole in memory.
+- A PowerPoint deck (.pptx) is offered as a PDF: Convert redraws the slides, you save the PDF where you like, and it opens like any PDF you picked there.
 - Watched folders bring new files into a chosen collection.
 - The library can live in app storage, Documents or any folder you pick.
 
