@@ -55,10 +55,35 @@ test("the app's index.html is marked native and edge to edge", () => {
   assert.ok(/<html[^>]*class="native"/.test(html));
 });
 
-test("CHANGELOG.md's newest entry is APP_VERSION", () => {
-  const m = fs.readFileSync(path.join(ROOT, "CHANGELOG.md"), "utf8").match(/^## \[([^\]]+)\]/m);
+// An "## Unreleased" section may sit above it: work that landed on main
+// and ships with the next release PR (tools/release.js).
+test("CHANGELOG.md's newest numbered entry is APP_VERSION", () => {
+  const log = fs.readFileSync(path.join(ROOT, "CHANGELOG.md"), "utf8");
+  const m = log.match(/^## \[([^\]]+)\]/m);
   assert.ok(m, "no version heading");
   assert.strictEqual(m[1], appVersion());
+  const heads = log.match(/^## .*$/gm);
+  assert.ok(heads.length < 2 || !/^## Unreleased/.test(heads[1]), "Unreleased must be the first heading");
+});
+
+test("tools/release.js bumps the three places and dates the Unreleased entry", () => {
+  const { bump } = require("../tools/release.js");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "waypage-release-"));
+  fs.mkdirSync(path.join(dir, "src"));
+  fs.writeFileSync(path.join(dir, "src", "app.js"), 'const APP_VERSION = "1.2.3";\n');
+  fs.writeFileSync(path.join(dir, "index.html"), '<script src="src/app.js?v=1.2.3"></script>\n<link rel="stylesheet" href="src/styles.css?v=1.2.3">\n');
+  fs.writeFileSync(path.join(dir, "sw.js"), 'const CACHE = "waypage-v7";\n');
+  fs.writeFileSync(path.join(dir, "CHANGELOG.md"), "# Changelog\n\n## Unreleased\n\n### Added\n- A thing.\n\n## [1.2.3] - 2026-01-01\n\n### Fixed\n- Old.\n");
+  assert.throws(() => bump("1.2.3", { root: dir }), /isn't above/);
+  assert.throws(() => bump("1.3", { root: dir }), /x\.y\.z/);
+  const r = bump("1.3.0", { root: dir, date: "2026-02-02" });
+  assert.strictEqual(r.tags, 2);
+  assert.ok(fs.readFileSync(path.join(dir, "src", "app.js"), "utf8").includes('APP_VERSION = "1.3.0"'));
+  assert.ok(!fs.readFileSync(path.join(dir, "index.html"), "utf8").includes("1.2.3"));
+  assert.ok(fs.readFileSync(path.join(dir, "sw.js"), "utf8").includes("waypage-v8"));
+  const log = fs.readFileSync(path.join(dir, "CHANGELOG.md"), "utf8");
+  assert.ok(log.startsWith("# Changelog\n\n## [1.3.0] - 2026-02-02\n\n### Added\n- A thing.\n"));
+  assert.throws(() => bump("1.4.0", { root: dir }), /no '## Unreleased'/);
 });
 
 test("every ?v= in index.html is APP_VERSION", () => {

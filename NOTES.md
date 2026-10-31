@@ -18,6 +18,23 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **A merge is not a release unless it bumps the version (31 Oct 2026).**
+  With more than one person merging, "every merge with a new version
+  releases" meant two kinds of trouble: version numbers taken from
+  under an open PR, and one person's half-done work shipped by another's
+  release. The rule now: a PR that bumps `APP_VERSION` releases on merge
+  (Daniel's one-ask-one-release habit keeps working), one that doesn't
+  lands under `## Unreleased` in CHANGELOG.md and ships with the next
+  `node tools/release.js x.y.z` PR. CI is unchanged: android.yml still
+  publishes when the version on main is new. Tag-based releases were
+  considered and dropped: a tag push needs a terminal and write access,
+  and the GitHub Actions token can't bypass a PR-only ruleset to commit
+  a bump itself. The web copy refreshes on every merge regardless, since
+  sw.js paints from cache and fetches fresh files (stale-while-revalidate),
+  so `?v=` only matters for the apps and for a browser that never ran
+  the service worker. `main` is PR-only with the Tests check since the
+  same day (CONTRIBUTING.md).
+
 - **app.js split again (1.45.11).** The 1,946 lines left in app.js after
   the 1.14.0 split were six areas in one file, and it was the file most
   commits touched (42 of 51 in the last two weeks). Now app.js is the

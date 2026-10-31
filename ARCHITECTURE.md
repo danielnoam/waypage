@@ -78,6 +78,7 @@ icons/, icon.svg    app icons
 native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Brightness, AppLock, PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
 tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-build.json
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
+tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
 tools/sign-apk.sh   signs the APK with the release key in CI
 tools/shots.js      retakes the README's screenshots (tools/shots/demo is the demo library)
 test/               node test/run-all.js runs every *.test.js
@@ -189,12 +190,15 @@ Nothing leaves the device unless the person turned it on (CONTRIBUTING.md).
 
 A version lives in three places: `APP_VERSION` in `src/app.js`, the
 `?v=` on every script and stylesheet tag in `index.html`, and `CACHE` in
-`sw.js`. The service worker caches `ASSETS` for the web copy and drops
-the old cache when `CACHE` changes. The apps bundle the same `ASSETS`
-list (`tools/build-www.js`), so a new file must be added there. The
+`sw.js`; `tools/release.js` bumps all three and dates CHANGELOG.md's
+`## Unreleased` entry. The service worker caches `ASSETS` for the web
+copy, paints from cache and fetches fresh files for the next launch, and
+drops the old cache when `CACHE` changes. The apps bundle the same
+`ASSETS` list (`tools/build-www.js`), so a new file must be added there.
+A merge to `main` with a new `APP_VERSION` publishes the release; the
 built-in updater (`app-start.js`) reads the repo's GitHub releases and
-offers any version higher than its own. CONTRIBUTING.md has the release
-steps.
+offers any version higher than its own. A merge without a bump only
+refreshes the web copy. CONTRIBUTING.md has the steps.
 
 ## The phone apps
 
