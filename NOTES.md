@@ -18,6 +18,19 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **Dark PDF pages are a CSS filter, not a redraw (1.46.0).** A PDF's
+  pages are JPEGs drawn white in the sandbox (src/pdf.js). Drawing them
+  dark would throw away every drawn page and rail thumbnail on each switch
+  or theme change, so the page stays as drawn and an SVG filter
+  (reader.js, pdfDarkFilter) maps each channel as ink + (bg - ink) * in:
+  white becomes the theme's --bg, black its --ink, after a 180 degree hue
+  rotation that keeps colours near their own hue. Text contrast is then the
+  theme's own pair. Trade-offs: photos and coloured figures come out as
+  negatives (as in any PDF reader's dark mode); it acts only in dark
+  themes and only for printed pages (not Show as text); a filter on every
+  shown page costs something on a huge PDF, not yet measured on a phone.
+  Nothing new crosses the sandbox or leaves the device.
+
 - **Sidebar drift and the bottom bar (1.45.5).** The library drifts
   right under the sidebar on touch. With the transform on the whole
   `#libraryView`, its moved box made the page wider than the screen; a

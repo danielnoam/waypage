@@ -68,6 +68,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Previous/Next and a collection list in the reader (1.23.0)
 - Big-screen layouts and keyboard shortcuts (1.5.0)
 - Dim pictures in dark themes (1.32.0)
+- Dark PDF pages: a switch at the foot of Aa › Layout, with a PDF open, recolours its pages to a dark theme (1.46.0)
 - Volume buttons turn pages on Android (1.32.0)
 
 - Your time in a clip at its very end, with a switch in Settings › Reading (1.39.0)

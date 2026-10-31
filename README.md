@@ -96,6 +96,7 @@ Each section below shows the computer (left) and the phone (right).
 - Previous and Next, and the collection's list, inside the reader.
 - Brightness by a swipe on the edge, with Auto.
 - Volume buttons turn pages on Android; keyboard shortcuts on a computer.
+- Dark PDF pages: with a PDF open, a switch at the foot of Layout recolours its pages to a dark theme.
 
 ## Text and themes
 

@@ -1849,6 +1849,44 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("dark PDF pages map white to the theme's background and black to its ink, in a dark theme only (1.46.0)", async () => {
+      const q = await page(browser, 390);
+      const got = await q.evaluate(() => {
+        const root = document.documentElement;
+        const funcs = () => ["R", "G", "B"].map((c) => {
+          const f = document.querySelector("#pdf-dark feFunc" + c);
+          return f ? [Number(f.getAttribute("slope")), Number(f.getAttribute("intercept"))] : null;
+        });
+        const out = {};
+        store("waypage.pdfDark", true);
+        state.open = { id: "x", link: "x", file: { kind: "pdf" } };
+        setTheme("night"); paintPdfDark();
+        out.night = root.hasAttribute("data-pdf-dark");
+        const css = getComputedStyle(root);
+        const hex = (v) => { v = v.trim(); return [1, 3, 5].map((i) => parseInt(v.slice(i, i + 2), 16) / 255); };
+        const bg = hex(css.getPropertyValue("--bg")), ink = hex(css.getPropertyValue("--ink"));
+        out.white = funcs().map((f, i) => Math.abs(f[0] + f[1] - bg[i]) < 0.001);
+        out.black = funcs().map((f, i) => Math.abs(f[1] - ink[i]) < 0.001);
+        out.row = !!document.querySelector('[data-pref="pdfDark"]') || "none";
+        setTheme("paper"); paintPdfDark();
+        out.paper = root.hasAttribute("data-pdf-dark");
+        out.paperFilter = !!document.getElementById("pdf-dark");
+        setTheme("night");
+        state.open.view = "text"; paintPdfDark();
+        out.text = root.hasAttribute("data-pdf-dark");
+        state.open = null; paintPdfDark();
+        store("waypage.pdfDark", false);
+        return out;
+      });
+      assert.strictEqual(got.night, true, JSON.stringify(got));
+      assert.deepStrictEqual(got.white, [true, true, true], JSON.stringify(got));
+      assert.deepStrictEqual(got.black, [true, true, true], JSON.stringify(got));
+      assert.strictEqual(got.paper, false, JSON.stringify(got));
+      assert.strictEqual(got.paperFilter, false, JSON.stringify(got));
+      assert.strictEqual(got.text, false, JSON.stringify(got));
+      await q.context().close();
+    });
+
     await test("a big PDF read from where it is is read by ranges, never whole (1.35.0)", async () => {
       const q = await page(browser, 390);
       const bytes = [...pdfBytes()];

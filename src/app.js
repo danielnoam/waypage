@@ -9,7 +9,7 @@
 // only use what an earlier part, or its own, has declared. A part's
 // functions can call into any part, since nothing is tapped until all of
 // them have loaded. app-start.js runs last and starts things up.
-const APP_VERSION = "1.45.7";
+const APP_VERSION = "1.46.0";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
@@ -133,7 +133,7 @@ function paintTheme(choice) {
   document.documentElement.toggleAttribute("data-dim-pictures", !!(themeOf(theme) || {}).dark && load(DIM_KEY, true) !== false);
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
-  if (C.reader) C.reader.applyTheme();
+  if (C.reader) { if (typeof paintPdfDark === "function") paintPdfDark(); C.reader.applyTheme(); }
 }
 
 // A new theme is there at once (1.11.0): the cross-fade it had was a

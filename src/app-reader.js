@@ -321,6 +321,7 @@ function show(p, html) {
   if (skim) { C.reader.settle(); skimDrop(); }
   closeSkim();
   state.open = p;
+  paintPdfDark();
   $("aloudPlay").style.visibility = "";
   // Opening counts as reading for the order of things (sort by read, the
   // sidebar, Continue reading). The place has a time of its own,
@@ -646,6 +647,35 @@ function spentSwitch() {
         document.querySelectorAll('input[data-pref="spentLine"]').forEach((i) => { i.checked = e.target.checked; });
         if (state.open && C.reader) C.reader.setEnd(spentLines(state.open));
       } }));
+}
+
+// Dark PDF pages (1.46.0): a switch at the foot of Layout, shown while a
+// PDF's printed pages are open. In a dark theme the pages take its colours
+// (reader.js, pdfDarkFilter); in a light one there's nothing to darken.
+const PDF_DARK_KEY = "waypage.pdfDark";
+const pdfDarkOn = () => !!load(PDF_DARK_KEY, false);
+const pdfPages = () => !!(state.open && C.files.printed(state.open));
+function paintPdfDark() {
+  const root = document.documentElement;
+  const dark = pdfDarkOn() && pdfPages() && !!(themeOf(root.dataset.theme) || {}).dark;
+  root.toggleAttribute("data-pdf-dark", dark);
+  // The rail's small pages are in the app's own document, so they get a copy.
+  const css = getComputedStyle(root);
+  C.reader.pdfDarkFilter(document, "pdf-dark", dark ? css.getPropertyValue("--bg") : "", css.getPropertyValue("--ink"));
+}
+function pdfDarkSwitch() {
+  const row = el("label", { class: "rc-row switch-row pdf-dark-row" },
+    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Dark PDF pages"),
+      el("span", { class: "choice-note" }, "In a dark theme, pages take its colours")),
+    el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "pdfDark", checked: pdfDarkOn(),
+      onchange: (e) => {
+        store(PDF_DARK_KEY, e.target.checked);
+        document.querySelectorAll('input[data-pref="pdfDark"]').forEach((i) => { i.checked = e.target.checked; });
+        paintPdfDark();
+        C.reader.applyTheme();
+      } }));
+  row.hidden = !pdfPages();
+  return row;
 }
 
 // Shown only with Pages picked (1.35.1): in Scroll there's nothing to turn.
@@ -998,6 +1028,7 @@ function closeReader() {
   const from = aloudHere() && !$("aloudPlayer").hidden ? player.getBoundingClientRect() : null;
   if (from) player.style.visibility = "hidden";
   state.open = null;
+  paintPdfDark();
   volumeWatch();
   showAloudBar(from);
   // The library redraws (where you got to) before the reader shrinks
@@ -1997,7 +2028,9 @@ function readingControls(withTheme) {
         onchange: (e) => setReading({ rail: e.target.checked }) })) : null,
     withTheme ? stack("Theme", seg(id + "-theme", "Theme",
       [{ value: "system", label: "Auto", swatch: autoSwatch(), auto: true }, ...themeOptions(THEMES)],
-      state.theme, (v) => { setTheme(v); syncThemeInputs(); }, "themes scroll")) : null);
+      state.theme, (v) => { setTheme(v); syncThemeInputs(); }, "themes scroll")) : null,
+    // Only in the reader's own sheet, where a PDF is open.
+    withTheme ? pdfDarkSwitch() : null);
   const text = part("text", "Text",
     row("Font", fontPick("font", "Font",
       FONTS.map((f) => ({ value: f.value, label: f.label, style: "font-family: " + f.family + ", var(--sans)" })))),

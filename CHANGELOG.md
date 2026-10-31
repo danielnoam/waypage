@@ -2,6 +2,16 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.46.0] - 2026-10-31
+
+### Added
+- Dark PDF pages: a switch at the bottom of Aa › Layout, shown while a PDF
+  opened from its file is on screen. In a dark theme the pages are
+  recoloured to the theme (paper becomes its background, black text its
+  text colour) instead of staying white. Photos and coloured figures turn
+  into negatives. Off by default; Paper and the other light themes keep
+  white pages.
+
 ## [1.45.7] - 2026-10-30
 
 ### Removed

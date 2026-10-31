@@ -139,7 +139,7 @@ is in PIPELINE.md.
 | `index.html` | App shell markup; the `?v=` on every script and stylesheet |
 | `sw.js` | Offline cache for the web copy (`CACHE`, `ASSETS`) |
 | `manifest.json` | Web app manifest |
-| `src/styles.css`, `reader.css`, `fonts.css` | Tokens and themes; the saved page inside the frame; bundled fonts |
+| `src/styles.css`, `reader.css`, `fonts.css` | Tokens and themes; the saved page inside the frame (a dark PDF's pages get an SVG colour-map filter from `reader.js` `pdfDarkFilter`, 1.46.0); bundled fonts |
 | `native/share/` | Capacitor plugin: Android's share sheet into the app |
 | `tools/` | `build-www.js`, Android and iOS project patches, APK signing, `shots.js` |
 | `test/` | `node test/run-all.js` |
