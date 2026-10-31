@@ -41,9 +41,13 @@ shipped, planned or turned down comes back.
 
 - `index.html` loads every script as a classic `<script>` in order. There
   are no modules and no bundler.
-- `src/app.js` and the `src/app-*.js` files (reader, library, saving,
-  places, settings, start) share **one global scope**. Code that runs at
-  load may only use what an earlier file, or the same one, declared.
+- `src/app.js` and the `src/app-*.js` files share **one global scope**.
+  The order is the one in `index.html`: app (version, helpers, theme,
+  state), reading, cards, downloads, search, draw, jobs, reader, library,
+  saving, places, settings, lock, start. Code that runs at load may only
+  use what an earlier file, or the same one, declared. New shell code
+  goes in the file for its area, or a new `app-<area>.js` added to
+  `index.html` and `sw.js`'s `ASSETS`.
 - `src/reader.js`, `save.js`, `sync.js`, `store.js`, `files.js` and the
   rest are self-contained areas. Vendored code lives only in `src/vendor/`
   with its licence beside it.

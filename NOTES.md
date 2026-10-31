@@ -18,6 +18,22 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **app.js split again (1.45.11).** The 1,946 lines left in app.js after
+  the 1.14.0 split were six areas in one file, and it was the file most
+  commits touched (42 of 51 in the last two weeks). Now app.js is the
+  version, helpers, theme and state (190 lines), followed by app-reading,
+  app-cards, app-downloads, app-search, app-draw and app-jobs, cut at the
+  old `// ----` section marks and loaded in the old order, so the
+  load-order rule (what runs at load uses only what an earlier part
+  declared) holds without moving a line; the one move is the clip-card
+  code (clipMinutes, pageCard) joining the other cards ahead of
+  Downloads, which runs nothing at load but a setInterval. Checked by a
+  script over every top-level statement and the functions they reach.
+  Thirteen parts now; the "part N of 7" headers are gone. What splitting
+  does not fix: the version line in app.js, index.html's `?v=` and
+  sw.js's CACHE change with every release, so two releases at once still
+  conflict there; releasing on a tag is the answer to that.
+
 - **Copies are clips, PDFs in two directions (1.45.8).** A file copied
   into a clip now saves with an empty `site` and a head line of only
   "Saved <date>", no "Opened from" footer. Older copies still hold the
