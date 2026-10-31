@@ -1887,6 +1887,51 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a linked PDF's pages go dark from the Layout switch, which only a PDF's own sheet has (1.46.0)", async () => {
+      const q = await page(browser, 390);
+      const bytes = [...pdfBytes()];
+      const id = await q.evaluate(async (b) => {
+        const file = new File([new Uint8Array(b)], "night.pdf", { type: "application/pdf" });
+        window.Waypage.platform.files.blob = async () => file;
+        const meta = await window.Waypage.files.bring(file, "pdf", { has: () => false, link: "content://docs/night.pdf" });
+        await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
+        return meta.id;
+      }, bytes);
+      await q.reload();
+      await q.evaluate(async (b) => {
+        const file = new File([new Uint8Array(b)], "night.pdf", { type: "application/pdf" });
+        window.Waypage.platform.files.blob = async () => file;
+        setTheme("night");
+      }, bytes);
+      await q.evaluate((i) => openPage(i), id);
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      await until(q, () => document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-printed img[src]").length > 0);
+      const frame = () => q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument;
+        const img = d.querySelector(".co-printed img[src]");
+        return { attr: d.documentElement.hasAttribute("data-co-pdf-dark"), filter: getComputedStyle(img).filter, svg: !!d.getElementById("co-pdf-dark") };
+      });
+      assert.strictEqual((await frame()).attr, false);
+      await q.click("#readerAa");
+      await q.locator('input[name="sheet-tab"][value="layout"]').evaluate((i) => i.click());
+      const sw = q.locator('input[data-pref="pdfDark"]');
+      assert.strictEqual(await sw.count(), 1);
+      assert.ok(await sw.isVisible(), "the switch is shown with a PDF open");
+      await sw.evaluate((i) => i.click());
+      await until(q, () => document.getElementById("readerFrame").contentDocument.documentElement.hasAttribute("data-co-pdf-dark"));
+      let got = await frame();
+      assert.ok(got.svg && /url\(/.test(got.filter), JSON.stringify(got));
+      // Paper has nothing to darken.
+      await q.evaluate(() => setTheme("paper"));
+      await until(q, () => !document.getElementById("readerFrame").contentDocument.documentElement.hasAttribute("data-co-pdf-dark"));
+      assert.strictEqual((await frame()).svg, false);
+      await q.evaluate(() => setTheme("night"));
+      await until(q, () => document.getElementById("readerFrame").contentDocument.documentElement.hasAttribute("data-co-pdf-dark"));
+      const errors = q.errors.filter((e) => !/serviceWorker/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a big PDF read from where it is is read by ranges, never whole (1.35.0)", async () => {
       const q = await page(browser, 390);
       const bytes = [...pdfBytes()];

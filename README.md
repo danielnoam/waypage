@@ -87,6 +87,7 @@ Each section below shows the computer (left) and the phone (right).
 ## Reader
 
 <p><img src="docs/shots/reader-desktop.jpg" width="74%" alt="Reader on a computer"> <img src="docs/shots/reader-phone.jpg" width="21%" alt="Reader on a phone"></p>
+<p><img src="docs/shots/pdf-desktop.jpg" width="74%" alt="A PDF in Night with dark pages, on a computer"> <img src="docs/shots/pdf-phone.jpg" width="21%" alt="A PDF in Night with dark pages, on a phone"></p>
 
 - Scroll or Pages, with two pages side by side on wide screens.
 - Your place is kept as the paragraph on the middle line, and synced.
