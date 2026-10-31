@@ -135,16 +135,31 @@ enough detail for someone else to pick it up.
   folder (`waypage/`). Claude sessions copy them over after changing
   either; people don't need to.
 
-## Versions and releases (how it works today)
+## Versions and releases
 
-This section describes the current setup. It is about to change so that
-several people can work at once (see "Changing soon" below).
+**A merge is not a release unless it bumps the version.** Two kinds of
+pull request land on `main`:
 
-**A version lives in three places,** and a release bumps all three:
+- **A PR that bumps the version** is a release: when it merges, the
+  Android workflow publishes `app-v<version>` with the APK, iOS attaches
+  the IPA, and every phone's updater offers it. Use this for a change
+  that should reach phones on its own (a fix, a small ask).
+- **A PR that doesn't** just lands. Its CHANGELOG lines go under a
+  `## Unreleased` heading at the top of CHANGELOG.md, and it ships with
+  the next release. Use this for work in progress, big features landing
+  in pieces, and anything another person's change should go out with.
 
-1. `APP_VERSION` in `src/app.js`. New feature: minor (`1.X.0`). Fix or
-   tweak: patch. A change to the saved-page format that old versions
-   can't read: major.
+**To release what has gathered:** on an up-to-date branch run
+`node tools/release.js 1.46.0` (new feature: minor; fix or tweak: patch;
+a saved-page format old versions can't read: major, and always above the
+latest release, since the updater ignores lower numbers). It bumps the
+three version places and turns `## Unreleased` into `## [1.46.0] - date`.
+Look at the diff, commit it as "Release 1.46.0", open the PR, merge on
+green.
+
+**The three places,** so a bump by hand is the same as the tool's:
+
+1. `APP_VERSION` in `src/app.js`.
 2. The `?v=x.y.z` on every `<script>` and `<link rel="stylesheet">` in
    `index.html`, so browsers fetch the changed files.
 3. `CACHE` in `sw.js` (`waypage-vN` → `vN+1`), so the old offline cache is
@@ -152,9 +167,11 @@ several people can work at once (see "Changing soon" below).
    `sw.js`'s `ASSETS`, which is the list that goes into the apps; the
    build fails if `index.html` loads a file it lacks.
 
-Plus a `## [x.y.z] - YYYY-MM-DD` entry at the top of CHANGELOG.md
-(`### Added` / `Changed` / `Fixed` / `Removed`, in user-facing words).
-The release workflow copies that entry into the GitHub release notes.
+CHANGELOG.md entries are `### Added` / `Changed` / `Fixed` / `Removed`,
+in user-facing words; the release workflow copies the entry into the
+GitHub release notes. `test/build.test.js` checks that the newest
+numbered entry is `APP_VERSION` and that `## Unreleased`, if present, is
+the first heading.
 
 **How a change gets in:** `main` takes only pull requests. Push a
 branch, open a PR, and merge it when the **Tests** check is green
@@ -166,8 +183,9 @@ secrets, so it can't sign or publish anything.
 
 **What a merge does:**
 
-- A merge to **`main`** deploys the web copy (GitHub Pages serves `main`
-  as it is).
+- A merge to **`main`** refreshes the web copy (GitHub Pages serves
+  `main` as it is; the service worker paints from cache and fetches the
+  new files for the next launch), version bump or not.
 - `.github/workflows/android.yml` and `ios.yml` build on every push to
   `main` and to `claude/**` branches. Pushes that only touch `**.md`,
   `test/**` or `.claude/**` don't run them.
@@ -177,31 +195,18 @@ secrets, so it can't sign or publish anything.
   `Waypage.ipa` to it a few minutes later.
 - The app's built-in updater reads the repo's releases (the repo is
   public for this reason) and offers any version **higher** than its own.
-  A lower or equal number is ignored.
-
-So today **every merge to `main` that bumps the version is a release** to
-every installed copy. Changes that only touch TODO.md or other notes push
-to `main` without a version bump.
 
 **Before a release:** `node --check` every edited `.js`, run
 `node test/run-all.js`, then run `node server.js` and check at phone width
 (390 px) and desktop width (~1280 px) in Paper, Sepia and Night with zero
 console errors. Saving and reading can only be fully checked in the app
 (CapacitorHttp and Filesystem don't exist in a browser): say so when a
-change touches them and wasn't run on a phone. After pushing, check that
+change touches them and wasn't run on a phone. After merging, check that
 both workflow runs went green.
 
-**Two releases at once.** If someone else released while you worked,
-their version number is taken. Merge `main` in and take the next free
-version above the latest release, or the updater will ignore yours.
-
-### Changing soon
-
-With more than one person, "every merge is a release" means version
-clashes and shipping each other's half-finished work. The plan: separate merging from releasing, so merges land on `main`
-and a release happens only on a tag or a manual run, which is when the
-version is bumped. This section will be rewritten when that is in
-place.
+**Two releases at once.** If someone else released while your release
+PR was open, their number is taken: merge `main` in, run
+`tools/release.js` again with the next free number, and push.
 
 ## Signing and secrets
 

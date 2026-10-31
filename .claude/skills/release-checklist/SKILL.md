@@ -8,24 +8,29 @@ description: Release checklist for Waypage (danielnoam/waypage): bump APP_VERSIO
 Adapted from LifeLog's. Every change pushed to `main` leaves the version,
 CHANGELOG.md and the notes files in step with it.
 
-## 1. Bump the version (three places)
+## 1. Decide whether this PR releases
 
-- `APP_VERSION` in `src/app.js`. New feature: minor (`0.X.0`). Fix or
-  tweak: patch. A change to the saved-page format that old versions can't
-  read: major.
-- The `?v=x.y.z` on every `<script>` and `<link rel="stylesheet">` in
-  `index.html`, so browsers fetch the changed files.
-- `CACHE` in `sw.js` (`waypage-vN` → `vN+1`), so the old cache is dropped.
-- A file added to or removed from `src/` goes in or out of `sw.js`'s
-  `ASSETS` too. That list is also what goes into the apps
-  (`tools/build-www.js`), and the build fails if `index.html` loads a file
-  it lacks. `test/build.test.js` checks fonts in `styles.css` the same way.
+A merge releases only if it bumps the version (CONTRIBUTING.md,
+"Versions and releases"). A change that should reach phones on its own
+(a fix, a small ask) bumps it; work landing in pieces, or that should go
+out with someone else's change, doesn't: its CHANGELOG lines go under
+`## Unreleased` and the next release PR takes them.
+
+To bump: `node tools/release.js x.y.z` (new feature: minor, fix: patch,
+saved-page format change: major; always above the latest release). It
+changes `APP_VERSION` in `src/app.js`, every `?v=` in `index.html` and
+`CACHE` in `sw.js`, and dates the `## Unreleased` entry. By hand it's
+the same three places. A file added to or removed from `src/` goes in or
+out of `sw.js`'s `ASSETS` too (that list is what goes into the apps;
+`tools/build-www.js` fails if `index.html` loads a file it lacks).
 
 ## 2. CHANGELOG.md
 
 `## [x.y.z] - YYYY-MM-DD`, newest first, `### Added` / `### Changed` /
-`### Fixed` / `### Removed`, in plain user-facing words. The release
-workflow copies this entry into the GitHub release notes.
+`### Fixed` / `### Removed`, in plain user-facing words. A PR that
+doesn't release writes its lines under `## Unreleased` at the top
+instead (make the heading if it isn't there). The release workflow
+copies the version's entry into the GitHub release notes.
 
 ## 3. Notes files (one home per entry)
 
