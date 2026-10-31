@@ -42,6 +42,10 @@ import java.util.Collections;
  *   clearToken({ token }) drops Play Services' cached copy of a token
  *                        Google turned down, so the next authorize asks
  *                        Google again instead of handing it back (1.45.9)
+ *   background({ plan }) hands DriveBackupJob its plan (a JSON string) and
+ *                        schedules it; no plan cancels it (1.47.0)
+ *   backgroundHold({ hold }) keeps the job from running while the app is open
+ *   backgroundState()    { at, size, error, tried, sending }: what it did
  *
  * Both transfers send "progress" { done, total } as they go.
  */
@@ -112,6 +116,30 @@ public class DrivePlugin extends Plugin {
                 call.reject(e.getMessage(), "failed");
             }
         }).start();
+    }
+
+    @PluginMethod
+    public void background(PluginCall call) {
+        String plan = call.getString("plan");
+        new Thread(() -> {
+            DriveBackupJob.handOver(getContext(), plan);
+            call.resolve();
+        }).start();
+    }
+
+    @PluginMethod
+    public void backgroundHold(PluginCall call) {
+        DriveBackupJob.hold(getContext(), call.getBoolean("hold", true));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void backgroundState(PluginCall call) {
+        try {
+            call.resolve(new JSObject(DriveBackupJob.state(getContext()).toString()));
+        } catch (Exception e) {
+            call.resolve(new JSObject());
+        }
     }
 
     private void answer(PluginCall call, AuthorizationResult r) {

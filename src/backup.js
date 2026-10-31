@@ -220,23 +220,34 @@
 
   const today = () => new Date().toISOString().slice(0, 10);
 
+  // The files a backup starts with, also handed to the Drive backup that
+  // runs with the app closed (1.47.0).
+  function headFiles(listed, feeds) {
+    return [
+      { name: "waypage.json", text: JSON.stringify({ format: 1, app: C.version, made: Date.now(), pages: listed.length, feeds: (feeds || []).length }) },
+      { name: "library.json", text: JSON.stringify(listed) },
+      ...(feeds && feeds.length ? [{ name: "feeds.json", text: JSON.stringify(feeds) }] : []),
+      // Reading stats (1.39.0): this device's and the others it knows.
+      ...(C.stats ? [{ name: "stats.json", text: JSON.stringify(C.stats.backup()) }] : []),
+    ];
+  }
+
   // Writes the backup and resolves to { uri } in the app (a file in its
   // cache, for the share sheet) or { blob } in a browser.
   // `gate`, when given, is awaited between clips: false stops the backup
   // (1.27.1), which then throws an Error with code "cancelled".
   // A file read from outside never goes in (1.46.0): the file stays where
   // it is, and its link to it means nothing on another device.
-  async function exportLibrary(pages, onProgress, feeds, gate) {
+  // `bare`, when given (1.47.0, Drive's Links only), is the ids whose
+  // files stay out: they go in the list alone, to be saved again from
+  // their links on restore.
+  async function exportLibrary(pages, onProgress, feeds, gate, bare) {
     pages = pages.filter((p) => !p.link);
+    const listed = pages;
+    if (bare && bare.size) pages = pages.filter((p) => !bare.has(p.id));
     const native = C.platform.native;
     const name = "waypage-backup-" + today() + ".zip";
-    const head = [
-      { name: "waypage.json", text: JSON.stringify({ format: 1, app: C.version, made: Date.now(), pages: pages.length, feeds: (feeds || []).length }) },
-      { name: "library.json", text: JSON.stringify(pages) },
-      ...(feeds && feeds.length ? [{ name: "feeds.json", text: JSON.stringify(feeds) }] : []),
-      // Reading stats (1.39.0): this device's and the others it knows.
-      ...(C.stats ? [{ name: "stats.json", text: JSON.stringify(C.stats.backup()) }] : []),
-    ];
+    const head = headFiles(listed, feeds);
     const from = native ? await S().packSource().catch(() => null) : null;
     if (from) return packNatively(name, pages, head, from, onProgress);
     const file = native ? await S().cacheFile(name) : null;
@@ -244,19 +255,33 @@
     const zip = zipWriter(native ? (b) => file.append(b) : (b) => { parts.push(b); });
     for (const h of head) await zip.add(h.name, utf8(h.text));
     let done = 0;
-    for (const p of pages) {
-      if (native) {
+    const stop = async () => { if (gate && !(await gate())) throw Object.assign(new Error("Stopped."), { code: "cancelled" }); };
+    if (native) {
+      for (const p of pages) {
         for (const rel of await S().listFiles(p.id)) {
           try { await zip.add("pages/" + p.id + "/" + rel, await S().readBytes(p.id, rel)); } catch (e) { /* gone since listing */ }
         }
-      } else {
-        const html = await S().readPage(p.id).catch(() => null);
-        if (html) await zip.add("pages/" + p.id + "/page.html", utf8(html));
-        const words = await S().readText(p.id);
-        if (words != null) await zip.add("pages/" + p.id + "/text.txt", utf8(words));
+        if (onProgress) onProgress(++done, pages.length);
+        await stop();
       }
-      if (onProgress) onProgress(++done, pages.length);
-      if (gate && !(await gate())) throw Object.assign(new Error("Stopped."), { code: "cancelled" });
+    } else {
+      // A batch read at a time (1.47.0), the next one read while this one
+      // is packed.
+      const BATCH = 50;
+      const read = (at) => (at < pages.length ? S().readPages(pages.slice(at, at + BATCH).map((p) => p.id)) : null);
+      let next = read(0);
+      for (let at = 0; at < pages.length; at += BATCH) {
+        const got = await next;
+        next = read(at + BATCH);
+        for (let i = 0; i < got.length; i++) {
+          const id = pages[at + i].id, { html, text } = got[i];
+          if (html) await zip.add("pages/" + id + "/page.html", utf8(html));
+          if (text != null) await zip.add("pages/" + id + "/text.txt", utf8(text));
+          if (onProgress) onProgress(++done, pages.length);
+        }
+        await stop();
+      }
+      if (next) await next.catch(() => {});
     }
     await zip.finish();
     return native ? { uri: await file.uri(), name } : { blob: new Blob(parts, { type: "application/zip" }), name };
@@ -289,8 +314,9 @@
   // Merges a backup into the library: a page not here is added, one here
   // already is replaced only by a copy saved later, never the other way.
   // `same(a, b)` says whether two addresses are the same page. Resolves to
-  // { pages, added, replaced, kept, feeds } where `pages` is the new index
-  // and `feeds` the backup's followed feeds, cleaned.
+  // { pages, added, replaced, kept, feeds, links } where `pages` is the new
+  // index, `feeds` the backup's followed feeds, cleaned, and `links` the
+  // clips it holds as links only (1.47.0), not here yet, to be saved again.
   async function restoreLibrary(blob, current, same, onProgress) {
     let entries;
     try { entries = await zipEntries(blob); } catch (e) { throw new Error("This file isn't a Waypage backup."); }
@@ -301,11 +327,17 @@
     const pages = [...current];
     const taken = new Set(pages.map((p) => p.id));
     let added = 0, replaced = 0, kept = 0, done = 0;
+    const links = [];
     for (const raw of list) {
       // An older backup's file read from outside (before 1.46.0) is left
       // out, rather than coming back as a clip of its text.
       const from = raw && typeof raw.id === "string" && ID.test(raw.id) && !raw.link ? raw.id : null;
       const meta = from && entries.has("pages/" + from + "/page.html") && cleanMeta(raw, from);
+      const link = from && !meta && cleanMeta(raw, from);
+      if (link && link.url && !link.file && !pages.some((p) => same(p.url, link.url))) {
+        link.back = Date.now();
+        links.push(link);
+      }
       if (meta) {
         const i = pages.findIndex((p) => (meta.file ? sameFile(p, meta) : same(p.url, meta.url)));
         if (i >= 0 && (pages[i].savedAt || 0) >= meta.savedAt) kept++;
@@ -335,7 +367,7 @@
     if (statsEntry && C.stats) {
       try { C.stats.restore(JSON.parse(new TextDecoder().decode(await zipRead(blob, statsEntry)))); } catch (e) { /* the clips matter more */ }
     }
-    return { pages, added, replaced, kept, feeds };
+    return { pages, added, replaced, kept, feeds, links };
   }
 
   async function restorePage(blob, entries, from, meta) {
@@ -605,5 +637,5 @@
     return meta;
   }
 
-  C.backup = { holdPack, stopPack, cleanMeta, cleanMarks, marksMarkdown, sameFile, cleanFeed, crc32, zipWriter, zipEntries, zipRead, exportLibrary, restoreLibrary, exportPage, exportPages, exportMarkdown, exportMarkdownAll, importPage, imageType, mdBlocks };
+  C.backup = { holdPack, stopPack, cleanMeta, cleanMarks, marksMarkdown, sameFile, cleanFeed, crc32, zipWriter, zipEntries, zipRead, headFiles, exportLibrary, restoreLibrary, exportPage, exportPages, exportMarkdown, exportMarkdownAll, importPage, imageType, mdBlocks };
 })();

@@ -706,14 +706,14 @@
     return false;
   }
 
-  function run({ getPages, setPages, getFeeds, setFeeds, getSeen, setSeen, sameUrl, urlKey, onProgress, light }) {
+  function run({ getPages, setPages, getFeeds, setFeeds, getSeen, setSeen, sameUrl, urlKey, onProgress, light, isMail }) {
     if (!cfg || cfg.paused) return Promise.resolve(null);
     if (running) return running;
     const told = (p) => { progress = p; if (onProgress) onProgress(p); };
     running = (async () => {
       try {
         if (await settle().catch(() => false)) throw new SyncError(PUBLIC_REPO);
-        const res = await once(getPages, setPages, sameUrl || ((a, b) => a === b), told, getFeeds, setFeeds, getSeen, setSeen, urlKey, !!light);
+        const res = await once(getPages, setPages, sameUrl || ((a, b) => a === b), told, getFeeds, setFeeds, getSeen, setSeen, urlKey, !!light, isMail || (() => false));
         last = { at: Date.now(), error: "" };
         if (light) last.light = true;
         cfg.at = last.at;
@@ -730,12 +730,17 @@
     return running;
   }
 
-  async function once(getPages, setPages, sameUrl, onProgress, getFeeds, setFeeds, getSeen, setSeen, urlKey, light) {
+  async function once(getPages, setPages, sameUrl, onProgress, getFeeds, setFeeds, getSeen, setSeen, urlKey, light, isMail) {
     // A library Waypage can't reach reads as empty; sent as it is, that
     // would look like every clip deleted (0.33.0).
     if (C.store.problem) throw new Error(C.store.problem);
+    // What this device syncs (1.47.0). A part turned off is neither sent
+    // nor taken: GitHub keeps what it has of it, as another device left it.
+    const what = C.sync.what;
+    const noClips = !what.clips && !light;
+    const skip = (u) => (isMail(u) ? !what.newsletters : !what.feeds);
     const before = getPages().map((p) => ({ ...p }));
-    const feedsBefore = getFeeds ? getFeeds().map(feedShare) : null;
+    const feedsBefore = getFeeds ? getFeeds().map(feedShare).filter((f) => !skip(f.url)) : null;
     const snapshot = new Map(before.map((p) => [p.id, JSON.stringify(p)]));
     await breathe();
     // Pages a run sent before it was cut off (the app closed or updated)
@@ -796,9 +801,25 @@
       await breathe();
       // What GitHub would hold of each page, so the two compare like for
       // like; then the merge, off the main thread where it can be.
-      const got = await mergeOff(before, load(BASE_KEY, null), remote ? remote.data : null, waiting, feedsBefore, getSeen ? getSeen() : 0, Date.now(), sameUrl, urlKey);
+      // A feed or newsletter this device doesn't sync goes in as GitHub
+      // has it, so it reads as neither changed nor unfollowed here.
+      const feedsHere = feedsBefore && feedsBefore.concat(((remote && remote.data && remote.data.feeds) || []).filter((f) => f && skip(f.url)));
+      const got = await mergeOff(before, load(BASE_KEY, null), remote ? remote.data : null, waiting, feedsHere, getSeen ? getSeen() : 0, Date.now(), sameUrl, urlKey);
       merged = got.merged;
       const remoteDoc = got.remoteDoc;
+      // Clips not synced here: only the feeds, newsletters and their seen
+      // mark go up, onto GitHub's library as it is; base and waiting stay.
+      if (noClips) {
+        if (!remote) break;
+        const doc = { ...remoteDoc, feeds: merged.feeds, feedsGone: merged.feedsGone };
+        if (merged.feedsSeen) doc.feedsSeen = merged.feedsSeen;
+        if (await sameOff(doc, remoteDoc)) break;
+        halt();
+        try { await write("library.json", JSON.stringify(doc), remote.sha, "Feeds: " + (merged.feeds || []).length); break; } catch (e) {
+          if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e;
+        }
+        continue;
+      }
       if (tries === 0 && remote && !light) await placesFirst(merged);
       // Places and stats only (1.40.0), on mobile data: where you got to
       // comes over onto every clip here and goes up onto every clip GitHub
@@ -898,9 +919,33 @@
         if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e;
       }
     }
+    const stats = async () => { if (what.stats) try { await syncStats(); } catch (e) { if (e instanceof Paused) throw e; } };
+    // Feeds the same way as clips: one changed here while this ran keeps
+    // this device's version, which goes up next time. Those not synced
+    // here stay as they are.
+    const takeFeeds = () => {
+      if (!setFeeds || !merged.feeds) return;
+      const was = new Map(feedsBefore.map((f) => [f.url, JSON.stringify(f)]));
+      const live = new Map(getFeeds().map((f) => [f.url, feedShare(f)]));
+      const changed = (u) => was.has(u) && live.has(u) && was.get(u) !== JSON.stringify(live.get(u));
+      const list = [];
+      for (const m of merged.feeds) {
+        if (skip(m.url)) continue;
+        if (changed(m.url)) list.push(live.get(m.url));
+        else if (live.has(m.url) || !was.has(m.url)) list.push(m);
+      }
+      for (const [u, f] of live) if ((skip(u) || !was.has(u)) && !list.some((m) => m.url === u)) list.push(f);
+      setFeeds(list);
+    };
     if (light) {
-      try { await syncStats(); } catch (e) { if (e instanceof Paused) throw e; }
+      await stats();
       return { up: 0, down: 0, removed: 0, downloads: [], fromLinks: [], light: true };
+    }
+    if (noClips) {
+      takeFeeds();
+      if (setSeen && merged.feedsSeen && merged.feedsSeen > (getSeen() || 0)) setSeen(merged.feedsSeen);
+      await stats();
+      return { up: 0, down: 0, removed: 0, downloads: [], fromLinks: [] };
     }
     // This device catches up: new pages' text comes down; deleted ones go.
     // `decided` is what each page becomes (null: removed).
@@ -990,25 +1035,12 @@
     // sync ran is kept (and sent next time) rather than written over.
     const { out, gone } = await settleSome(decided, true);
     keep(WAIT_KEY, stillWaiting.length ? stillWaiting : null);
-    // Feeds the same way: one changed here while this ran keeps this
-    // device's version, which goes up next time.
-    if (setFeeds && merged.feeds) {
-      const was = new Map(feedsBefore.map((f) => [f.url, JSON.stringify(f)]));
-      const live = new Map(getFeeds().map((f) => [f.url, feedShare(f)]));
-      const changed = (u) => was.has(u) && live.has(u) && was.get(u) !== JSON.stringify(live.get(u));
-      const list = [];
-      for (const m of merged.feeds) {
-        if (changed(m.url)) list.push(live.get(m.url));
-        else if (live.has(m.url) || !was.has(m.url)) list.push(m);
-      }
-      for (const [u, f] of live) if (!was.has(u) && !list.some((m) => m.url === u)) list.push(f);
-      setFeeds(list);
-    }
+    takeFeeds();
     if (setSeen && merged.feedsSeen && merged.feedsSeen > (getSeen() || 0)) setSeen(merged.feedsSeen);
     await setPages(out);
     for (const id of gone) await C.store.removePage(id);
     // Reading stats last (1.39.0), and never the reason a sync failed.
-    try { await syncStats(); } catch (e) { if (e instanceof Paused) throw e; }
+    await stats();
     return { up, down, removed: gone.length, downloads, fromLinks };
   }
 
@@ -1089,6 +1121,9 @@
     get last() { return last; },
     get progress() { return progress; },
     get links() { return !!(cfg && cfg.links); },
+    // What this device syncs (1.47.0): clips, feeds, newsletters, stats.
+    get what() { return { clips: true, feeds: true, newsletters: true, stats: true, ...((cfg && cfg.what) || {}) }; },
+    setWhat(k, v) { if (!cfg) return; cfg.what = { ...this.what, [k]: !!v }; keep(CFG_KEY, cfg); },
     get paused() { return !!(cfg && cfg.paused); },
     set paused(v) { if (!cfg) return; if (v) cfg.paused = true; else delete cfg.paused; keep(CFG_KEY, cfg); },
     set links(v) { if (!cfg) return; if (v) cfg.links = true; else delete cfg.links; keep(CFG_KEY, cfg); },

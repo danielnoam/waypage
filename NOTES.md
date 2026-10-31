@@ -18,6 +18,19 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+**Drive backups with the app closed (Unreleased, after 1.46.0).** A
+JobService (`DriveBackupJob`) rather than WorkManager, as the feed check
+is, so no new dependency. The job can't run the WebView, so the app hands
+over everything JavaScript decides (which clips, the head files, the
+library's place, the folder id) each time it goes to the background, and
+the job only packs (`LibraryZip`, shared with Back up now) and sends.
+It's held while the app is open so the two never back up at once. A
+job gets about ten minutes: a big library may take several runs, so the
+zip and the resumable session are kept between them (six days, under
+Drive's week). The browser's resumable upload reads the session from the
+upload id Drive exposes when Location isn't, and asks Drive how far it
+got after a pause, since a piece stopped while waiting may have arrived.
+
 **A restore beats an older deletion (1.46.0).** Sync keeps a tombstone
 for 90 days and a restored clip keeps its old id, so restoring a backup
 with sync on brought deleted clips back only until the next sync. A

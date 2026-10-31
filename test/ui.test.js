@@ -1346,6 +1346,47 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a part turned off in What this device syncs is neither sent nor taken (1.47.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t", what: { clips: false, newsletters: false } }));
+        const c = (id, more) => ({ id, url: "https://example.com/" + id, title: "Clip " + id, site: "example.com", savedAt: 100, minutes: 1, mode: "links", at: 0, ...more });
+        await window.Waypage.store.writeIndex([c("mine1")]);
+        await window.Waypage.store.writePage("mine1", "<!doctype html><html><body><p>Mine.</p></body></html>", c("mine1"));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const f = (url, more) => ({ url, title: url, mode: "show", images: "previews", folder: "", days: 7, addedAt: 50, checkedAt: 0, error: "", items: [], ...more });
+        feeds.length = 0;
+        feeds.push(f("https://example.com/site.xml"), f("https://kill-the-newsletter.com/feeds/here1.xml"));
+        const c = (id, more) => ({ id, url: "https://example.com/" + id, title: "Clip " + id, site: "example.com", savedAt: 100, minutes: 1, mode: "links", at: 0, ...more });
+        const remote = { format: 1, deleted: {}, files: { rem1: { at: 100, sha: "s1" } }, pages: [c("rem1")], feeds: [f("https://kill-the-newsletter.com/feeds/there1.xml")], feedsGone: {} };
+        const b64 = (t) => btoa(unescape(encodeURIComponent(t)));
+        const puts = [];
+        let wrote = null;
+        window.fetch = async (url, opts = {}) => {
+          const method = opts.method || "GET";
+          const ok = (j) => new Response(JSON.stringify(j), { status: 200 });
+          if (/\/repos\/me\/waypage-data$/.test(url)) return ok({ name: "waypage-data" });
+          if (/contents\/library\.json/.test(url) && method === "GET") return ok({ sha: "lib1", content: b64(JSON.stringify(remote)) });
+          if (/contents\/library\.json/.test(url) && method === "PUT") { wrote = JSON.parse(decodeURIComponent(escape(atob(JSON.parse(opts.body).content)))); return ok({ content: { sha: "lib2" } }); }
+          if (method === "PUT") { if (/contents\/pages\//.test(url)) puts.push(url); return ok({ content: { sha: "x" } }); }
+          return new Response("{}", { status: 404 });
+        };
+        await syncNow(true);
+        return { puts, sentPages: wrote && wrote.pages.map((p) => p.id), sentFeeds: wrote && wrote.feeds.map((x) => x.url).sort(),
+          here: state.pages.map((p) => p.id), feedsHere: feeds.map((x) => x.url).sort() };
+      });
+      assert.deepStrictEqual(got, {
+        puts: [], sentPages: ["rem1"],
+        sentFeeds: ["https://example.com/site.xml", "https://kill-the-newsletter.com/feeds/there1.xml"],
+        here: ["mine1"],
+        feedsHere: ["https://example.com/site.xml", "https://kill-the-newsletter.com/feeds/here1.xml"],
+      }, JSON.stringify(got));
+      await q.context().close();
+    });
+
     await test("on mobile data with places only, places and finished come and go but clips wait (1.40.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

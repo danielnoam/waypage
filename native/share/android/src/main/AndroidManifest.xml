@@ -31,6 +31,11 @@
             android:name="io.github.danielnoam.waypage.share.FeedCheckJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- Google Drive backups with the app closed (1.47.0). -->
+        <service
+            android:name="io.github.danielnoam.waypage.share.DriveBackupJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
         <!-- Home screen widgets (0.29.0). -->
         <receiver
             android:name="io.github.danielnoam.waypage.share.ReadingWidget"
