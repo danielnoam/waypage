@@ -121,6 +121,11 @@
     return signIn(then);
   }
 
+  async function forget(t) {
+    const D = P();
+    if (D && t && D.clearToken) await D.clearToken({ token: t }).catch(() => {});
+  }
+
   async function api(path, opts = {}, ask) {
     for (let tries = 0; ; tries++) {
       const t = await getToken(ask);
@@ -130,7 +135,9 @@
       } catch (e) {
         throw new DriveError("Couldn't reach Google Drive. Check the connection and try again.", "network");
       }
-      if (res.status === 401 && !tries) { setToken(null); continue; }
+      // Play Services hands back its cached token until told it's dead,
+      // say after Disconnect revoked it (1.45.9).
+      if (res.status === 401 && !tries) { setToken(null); await forget(t); continue; }
       if (res.status === 204) return null;
       const body = await res.json().catch(() => null);
       if (!res.ok) throw failure(res.status, body);
@@ -294,7 +301,7 @@
 
   async function connect() {
     await getToken(true, "connect");
-    const about = await api("/about?fields=user(emailAddress)");
+    const about = await api("/about?fields=user(emailAddress)", {}, true);
     // The first weekly backup is a week after connecting (1.27.1), not now.
     cfg = { email: (about && about.user && about.user.emailAddress) || "", auto: true, what: { clips: true, files: true, feeds: true }, last: {}, since: Date.now() };
     save();
@@ -308,7 +315,9 @@
     cfg = null;
     keep(CFG_KEY, null);
     setToken(null);
-    if (t) fetch("https://oauth2.googleapis.com/revoke", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    if (!t) return;
+    await forget(t);
+    fetch("https://oauth2.googleapis.com/revoke", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: "token=" + encodeURIComponent(t) }).catch(() => {});
   }
 

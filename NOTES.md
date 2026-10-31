@@ -57,6 +57,56 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
   shown page costs something on a huge PDF, not yet measured on a phone.
   Nothing new crosses the sandbox or leaves the device.
 
+- **A merge is not a release unless it bumps the version (31 Oct 2026).**
+  With more than one person merging, "every merge with a new version
+  releases" meant two kinds of trouble: version numbers taken from
+  under an open PR, and one person's half-done work shipped by another's
+  release. The rule now: a PR that bumps `APP_VERSION` releases on merge
+  (Daniel's one-ask-one-release habit keeps working), one that doesn't
+  lands under `## Unreleased` in CHANGELOG.md and ships with the next
+  `node tools/release.js x.y.z` PR. CI is unchanged: android.yml still
+  publishes when the version on main is new. Tag-based releases were
+  considered and dropped: a tag push needs a terminal and write access,
+  and the GitHub Actions token can't bypass a PR-only ruleset to commit
+  a bump itself. The web copy refreshes on every merge regardless, since
+  sw.js paints from cache and fetches fresh files (stale-while-revalidate),
+  so `?v=` only matters for the apps and for a browser that never ran
+  the service worker. `main` is PR-only with the Tests check since the
+  same day (CONTRIBUTING.md).
+
+- **app.js split again (1.45.11).** The 1,946 lines left in app.js after
+  the 1.14.0 split were six areas in one file, and it was the file most
+  commits touched (42 of 51 in the last two weeks). Now app.js is the
+  version, helpers, theme and state (190 lines), followed by app-reading,
+  app-cards, app-downloads, app-search, app-draw and app-jobs, cut at the
+  old `// ----` section marks and loaded in the old order, so the
+  load-order rule (what runs at load uses only what an earlier part
+  declared) holds without moving a line; the one move is the clip-card
+  code (clipMinutes, pageCard) joining the other cards ahead of
+  Downloads, which runs nothing at load but a setInterval. Checked by a
+  script over every top-level statement and the functions they reach.
+  Thirteen parts now; the "part N of 7" headers are gone. What splitting
+  does not fix: the version line in app.js, index.html's `?v=` and
+  sw.js's CACHE change with every release, so two releases at once still
+  conflict there; releasing on a tag is the answer to that.
+
+- **Copies are clips, PDFs in two directions (1.45.8).** A file copied
+  into a clip now saves with an empty `site` and a head line of only
+  "Saved <date>", no "Opened from" footer. Older copies still hold the
+  kind as `site` and in their HTML, so `siteOf()` in app.js hides it
+  when it equals `C.files.KINDS[file.kind]`, and reader.open rewrites
+  the head and drops that footer. `file` stays on the entry: duplicates,
+  sync's pictures and Show as text still need it. "chapter" wording
+  (isBook) is kept for copies, since that's about the content. pdf.js
+  gives each text item's letters in logical order but `linesOf` joined
+  a line's items left to right, so right-to-left lines came out in
+  reversed pieces. `readingOrder` in pdf.js picks the line's direction
+  by its letters, reverses right-to-left runs, and in a right-to-left
+  line the run order too (numbers and Latin stay left to right). RTL
+  lines measure their indent from the right edge, and a direction
+  change starts a new paragraph. Only one level of embedding: a quote
+  inside a quote inside a quote can still come out off.
+
 - **Sidebar drift and the bottom bar (1.45.5).** The library drifts
   right under the sidebar on touch. With the transform on the whole
   `#libraryView`, its moved box made the page wider than the screen; a
@@ -2809,3 +2859,29 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 - **Readability is vendored at 0.6.0 (0.1.0).** One file, Apache-2.0, the
   same parser Firefox Reader View uses. Vendored rather than installed to
   keep the no-build rule.
+- **Privacy policy and terms pages (31 Oct 2026, no version).**
+  `privacy.html` and `terms.html` at the repo root, served by the web
+  copy at danielnoam.github.io/waypage/. Google's OAuth branding (App
+  domain) links to them, which publishing the Drive sign-in out of
+  Testing needs. They aren't part of the app (not in sw.js ASSETS).
+  Keep privacy.html true whenever a feature starts sending something.
+- **Drive reconnect after Disconnect (1.45.9).** Disconnect revokes the
+  token at Google, but Play Services keeps its cached copy and
+  `authorize` hands it back with no resolution, so /about got 401 twice
+  and Connect toasted "Connect Google Drive again". DrivePlugin now has
+  `clearToken` (GoogleAuthUtil.clearToken); drive.js calls it on
+  Disconnect and on the first 401 before retrying, and connect's /about
+  call may ask, so the retry can show Google's screen.
+- **Backups packed natively (1.45.10).** Daniel: backing up to Drive
+  was slow, in the Packing part. exportLibrary read every file through
+  the WebView's file server, ran crc32 in JS and wrote the zip back
+  through Filesystem.appendFile as base64, 1 MB at a time. In the app
+  it now calls FilesPlugin.pack (Android), which streams pages/<id>/
+  into a ZipOutputStream in the cache: text deflated, everything else
+  stored (crc pre-pass) so restoreLibrary reads big files as before.
+  Works for all three storage places (file dir or SAF tree, via
+  store.packSource). Pause/Stop reach it through backup.holdPack /
+  stopPack (packHold/packStop), since the JS gate between clips no
+  longer runs. iOS and browsers keep the JS writer. Java's zip uses data
+  descriptors for deflated entries; zipEntries reads sizes from the
+  central directory, so that's fine (checked with a Java-made zip).

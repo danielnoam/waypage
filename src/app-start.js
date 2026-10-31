@@ -1,4 +1,4 @@
-// Waypage's shell, part 7 of 7 (1.14.0): wiring the page up, what other
+// Waypage's shell (1.14.0): wiring the page up, what other
 // apps share in, the app updating itself and What's new. The last part,
 // so what runs here at load can use anything above. See app.js.
 // ---- Wiring ----

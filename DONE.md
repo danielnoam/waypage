@@ -38,6 +38,8 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - PowerPoint decks (.pptx): asked to convert to a PDF, redrawn on the device, saved where you pick and read from there (1.47.0)
 - Kindle books without DRM (MOBI, AZW, AZW3) and FB2, also zipped (1.42.0)
 - Big PDFs read from where they are, a piece at a time, never whole in memory (1.35.0)
+- Copied-in files look like any clip, no file kind shown (1.45.8)
+- PDFs mixing right-to-left and left-to-right text read in order, each paragraph in its own direction (1.45.8)
 - Watched folders, each into a chosen collection (1.1.0, 1.4.0, 1.28.0)
 - Library storage: app storage, Documents or any folder, moved natively on Android (0.33.0, 1.19.0)
 - Edit clips: find and remove or replace words across many clips (1.22.0)

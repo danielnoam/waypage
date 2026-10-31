@@ -1827,6 +1827,30 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a PDF in Hebrew and English keeps each line's words in order, and a copy doesn't say it's a PDF (1.45.8)", async () => {
+      const he = "זהו משפט בעברית עם המילה Waypage Offline Reader באמצע, ועוד מילים כדי שהשורה תהיה ארוכה מספיק להישבר לשתי שורות, וגם המספר 2026 כאן.";
+      const en = "An English sentence with the Hebrew words שלום עולם in the middle, long enough that it wraps across more than one line of this page.";
+      const maker = await browser.newPage();
+      await maker.setContent("<body style=\"font: 14px 'DejaVu Sans', sans-serif; width: 480px\"><p dir=\"rtl\">" + he + "</p><p>" + en + "</p><p dir=\"rtl\">" + he + "</p></body>");
+      const bytes = [...await maker.pdf({ format: "A4" })];
+      await maker.close();
+      const q = await page(browser, 390);
+      const got = await q.evaluate(async (b) => {
+        const file = new File([new Uint8Array(b)], "mixed.pdf", { type: "application/pdf" });
+        const meta = await window.Waypage.files.bring(file, "pdf", { has: () => false });
+        const d = new DOMParser().parseFromString(await window.Waypage.store.readPage(meta.id), "text/html");
+        return { site: meta.site, head: d.querySelector(".co-meta").textContent, foot: !!d.querySelector(".co-licence"),
+          paras: [...d.querySelectorAll(".co-body p")].map((n) => [n.getAttribute("dir"), n.textContent]) };
+      }, bytes);
+      assert.deepStrictEqual(got.paras, [["rtl", he], ["ltr", en], ["rtl", he]], JSON.stringify(got.paras));
+      assert.strictEqual(got.site, "");
+      assert.ok(/^Saved /.test(got.head) && !/PDF/.test(got.head), got.head);
+      assert.ok(!got.foot, "no Opened from line on a copy");
+      const errors = q.errors.filter((e) => !/serviceWorker/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a PDF's bookmarks are its contents, read when saved and when opened (1.28.0)", async () => {
       const q = await page(browser, 390);
       const bytes = [...pdfBytes()];
@@ -2166,7 +2190,7 @@ function zipOf(files) {
       assert.strictEqual(got.lockedKind, "azw3");
       assert.strictEqual(got.title, "A Kindle Book");
       assert.strictEqual(got.byline, "Ada Writer");
-      assert.strictEqual(got.site, "MOBI");
+      assert.strictEqual(got.site, "", "a copy says nothing about its kind (1.45.8)");
       assert.ok(got.images >= 1, "no picture");
       assert.ok(/DRM/.test(got.refused), got.refused);
       await q.reload();

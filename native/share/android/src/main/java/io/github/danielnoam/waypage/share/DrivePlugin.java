@@ -10,6 +10,7 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.google.android.gms.auth.GoogleAuthUtil;
 import com.google.android.gms.auth.api.identity.AuthorizationRequest;
 import com.google.android.gms.auth.api.identity.AuthorizationResult;
 import com.google.android.gms.auth.api.identity.Identity;
@@ -38,6 +39,9 @@ import java.util.Collections;
  *                        resolves to Drive's answer, { id, size, ... }
  *   download({ id, token })  a Drive file into the cache: { uri, size }
  *   cancel()             stops a send or download; it rejects "cancelled"
+ *   clearToken({ token }) drops Play Services' cached copy of a token
+ *                        Google turned down, so the next authorize asks
+ *                        Google again instead of handing it back (1.45.9)
  *
  * Both transfers send "progress" { done, total } as they go.
  */
@@ -91,6 +95,23 @@ public class DrivePlugin extends Plugin {
                 consent.launch(new IntentSenderRequest.Builder(r.getPendingIntent().getIntentSender()).build());
             })
             .addOnFailureListener((e) -> call.reject(e.getMessage(), "failed"));
+    }
+
+    @PluginMethod
+    public void clearToken(PluginCall call) {
+        String token = call.getString("token");
+        if (token == null) {
+            call.resolve();
+            return;
+        }
+        new Thread(() -> {
+            try {
+                GoogleAuthUtil.clearToken(getContext(), token);
+                call.resolve();
+            } catch (Exception e) {
+                call.reject(e.getMessage(), "failed");
+            }
+        }).start();
     }
 
     private void answer(PluginCall call, AuthorizationResult r) {

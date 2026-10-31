@@ -1,4 +1,4 @@
-// Waypage's shell, part 5 of 7 (1.14.0): the Highlights place, the
+// Waypage's shell (1.14.0): the Highlights place, the
 // sidebar, big screens, keys, gestures and a feed's sheets. See app.js
 // for how the parts share.
 // ---- Every highlight in one place (1.8.0) ----
@@ -59,7 +59,7 @@ function renderHighlights() {
   const nodes = clips.slice(0, marksUpTo).map(({ p, list }) => el("section", { class: "hl-clip", "data-key": "hl:" + p.id },
     el("button", { class: "hl-title", type: "button", onclick: () => openPage(p.id) },
       el("span", { class: "hl-name", dir: "auto" }, p.title),
-      el("span", { class: "meta" }, p.site || "")),
+      el("span", { class: "meta" }, siteOf(p))),
     el("ol", { class: "group marks-rows" }, ...list.map((m) => el("li", { class: "mark-item" },
       el("button", { class: "row mark-row", type: "button", "aria-label": m.text.slice(0, 120) + ", in " + p.title, onclick: () => goToMark(p, m.id) },
         el("span", { class: "mark-quote", "data-c": colorOf(m), dir: "auto" }, m.text),
@@ -256,7 +256,7 @@ function renderReading() {
         clipCover(t.p),
         el("span", { class: "rs-clip-text" },
           el("span", { class: "rs-clip-title", dir: "auto" }, t.p.title),
-          el("span", { class: "meta" }, [t.p.link ? "Files" : t.p.site, (C.stats.clip(t.p.id) || {}).finished ? "finished" : null].filter(Boolean).join(" · "))),
+          el("span", { class: "meta" }, [t.p.link ? "Files" : siteOf(t.p), (C.stats.clip(t.p.id) || {}).finished ? "finished" : null].filter(Boolean).join(" · "))),
         el("span", { class: "rs-clip-time" }, spanText(t.ms)))))) : null,
     el("p", { class: "footnote rs-note" }, (C.sync.on
       ? "Each of your devices counts its own, and GitHub sync adds them up. "

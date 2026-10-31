@@ -209,6 +209,40 @@ async function read(job) {
 
 // One page's text items as lines: items sharing a baseline, in reading
 // order, with a space where the gap between two items asks for one.
+// pdf.js gives each item's own letters in reading order, but a line is
+// its items left to right, so a Hebrew or Arabic line came out with its
+// pieces backwards (1.45.8). A line goes by the letters most of it is
+// written in; right-to-left runs in a left-to-right line, and
+// left-to-right runs (and numbers) in a right-to-left one, read the
+// other way.
+const RTL = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/;
+const RTL_ALL = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/g;
+const LTR_ALL = /[A-Za-z0-9\u00C0-\u058F\u0900-\u1FFF\u3040-\uFAFF]/g;
+const sideOf = (s) => (RTL.test(s) ? "r" : /[A-Za-z0-9\u00C0-\u058F\u0900-\u1FFF\u3040-\uFAFF]/.test(s) ? "l" : "");
+function readingOrder(row) {
+  const r = row.reduce((n, it) => n + (it.s.match(RTL_ALL) || []).length, 0);
+  const l = row.reduce((n, it) => n + (it.s.match(LTR_ALL) || []).length, 0);
+  const base = r > l ? "r" : "l";
+  if (!r) return { list: row, rtl: false };
+  // A space or a mark between two pieces of the same side goes with them.
+  const sides = row.map((it) => sideOf(it.s));
+  for (let i = 0; i < sides.length; i++) {
+    if (sides[i]) continue;
+    let a = i - 1, b = i + 1;
+    while (a >= 0 && !sides[a]) a--;
+    while (b < sides.length && !sides[b]) b++;
+    sides[i] = a >= 0 && b < sides.length && sides[a] === sides[b] ? sides[a] : base;
+  }
+  const runs = [];
+  for (const [i, it] of row.entries()) {
+    const last = runs[runs.length - 1];
+    if (last && last.side === sides[i]) last.items.push(it);
+    else runs.push({ side: sides[i], items: [it] });
+  }
+  for (const run of runs) if (run.side === "r") run.items.reverse();
+  if (base === "r") runs.reverse();
+  return { list: runs.flatMap((run) => run.items), rtl: base === "r" };
+}
 function linesOf(items) {
   const rows = new Map();
   for (const it of items) {
@@ -223,20 +257,25 @@ function linesOf(items) {
   const out = [];
   for (const y of ys) {
     const row = rows.get(y).sort((a, b) => a.x - b.x);
-    let text = "";
-    let last = null;
-    for (const it of row) {
+    // Spaces go in by the gaps on the page, before the pieces are put in
+    // reading order.
+    const spaced = [];
+    for (const [i, it] of row.entries()) {
+      const last = row[i - 1];
       if (last) {
         const gap = it.x - (last.x + last.w);
-        if (gap > Math.max(1, last.h * 0.18) && !/\s$/.test(text) && !/^\s/.test(it.s)) text += " ";
+        if (gap > Math.max(1, last.h * 0.18) && !/\s$/.test(last.s) && !/^\s/.test(it.s)) spaced.push({ x: it.x, w: 0, h: it.h, s: " " });
       }
-      text += it.s;
-      last = it;
+      spaced.push(it);
     }
-    text = text.replace(/\s+/g, " ").trim();
+    const { list, rtl } = readingOrder(spaced);
+    const text = list.map((it) => it.s).join("").replace(/\s+/g, " ").trim();
     if (!text) continue;
     const h = Math.max(...row.map((it) => it.h), 0);
-    out.push({ y, h, x: Math.min(...row.map((it) => it.x)), text });
+    // A right-to-left line starts at its right edge, which is what lines
+    // of one paragraph share.
+    const x = rtl ? -Math.max(...row.map((it) => it.x + it.w)) : Math.min(...row.map((it) => it.x));
+    out.push({ y, h, x, text, rtl });
   }
   return out;
 }
@@ -267,9 +306,9 @@ function blocksOf(pages) {
       if (edge && (repeats(l) || /^[ivxlcdm\d]+$/i.test(l.text))) { before = l; continue; }
       const gap = before ? before.y - l.y : 0;
       const head = l.h > body * 1.22 && l.text.length < 120;
-      if (head) { flush(); blocks.push({ t: "h", s: l.text }); before = l; continue; }
-      const apart = before && (gap > l.h * 1.7 || Math.abs(l.x - before.x) > l.h * 0.9);
-      if (!para || apart) { flush(); para = { t: "p", s: "" }; }
+      if (head) { flush(); blocks.push({ t: "h", s: l.text, rtl: l.rtl }); before = l; continue; }
+      const apart = before && (gap > l.h * 1.7 || Math.abs(l.x - before.x) > l.h * 0.9 || l.rtl !== before.rtl);
+      if (!para || apart) { flush(); para = { t: "p", s: "", rtl: l.rtl }; }
       if (para.s) {
         // A word broken across two lines is put back together.
         if (/[a-zÀ-ɏ]-$/.test(para.s)) para.s = para.s.slice(0, -1);

@@ -1,6 +1,6 @@
 # Architecture
 
-How Waypage's code fits together. Describes **1.45.7**. Read from the
+How Waypage's code fits together. Describes **1.45.7**. **The root [ARCHITECTURE.md](../ARCHITECTURE.md) is the maintained map (its file list is tested); this copy has the longer load-order table.** Read from the
 source: every file, export and load-order claim below was checked against
 `index.html` and the `src/` headers. For *why* the design is this way see
 [PROPOSAL.md](PROPOSAL.md) (the original proposal, written as Carry-on) and

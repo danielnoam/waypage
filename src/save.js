@@ -1540,7 +1540,10 @@
     head.className = "co-head";
     const line = out.createElement("p");
     line.className = "co-meta";
-    line.textContent = [meta.site, (meta.file ? "added " : "saved ") + formatDate(meta.savedAt)].join(" · ");
+    // A file copied into a clip (1.45.8) says only when it came, like
+    // any clip; one read from outside says what kind of file it is.
+    line.textContent = meta.file && !meta.link ? "Saved " + formatDate(meta.savedAt)
+      : [meta.site, (meta.file ? "added " : "saved ") + formatDate(meta.savedAt)].join(" · ");
     const h1 = out.createElement("h1");
     h1.textContent = meta.title;
     head.append(line, h1);
@@ -1553,7 +1556,7 @@
     const foot = out.createElement("footer");
     foot.className = "co-licence";
     // A file of your own (0.31.0) has no address to go back to.
-    if (meta.file) foot.append("Opened from " + meta.file.name + " on " + formatDate(meta.savedAt) + ".");
+    if (meta.file && meta.link) foot.append("Opened from " + meta.file.name + " on " + formatDate(meta.savedAt) + ".");
     const link = out.createElement("a");
     link.href = meta.url;
     link.textContent = "Read the original";
@@ -1576,7 +1579,7 @@
       cut.append("This may be only the start. The site keeps the rest for subscribers or signed-in readers, and Waypage saves pages signed out. ", more);
       doc.body.append(cut);
     }
-    doc.body.append(foot);
+    if (foot.childNodes.length) doc.body.append(foot);
     return "<!doctype html>\n" + doc.documentElement.outerHTML;
   }
 

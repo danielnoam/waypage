@@ -1,4 +1,4 @@
-// Waypage's shell, part 2 of 7 (1.14.0): moving between screens, the
+// Waypage's shell (1.14.0): moving between screens, the
 // reader around the page (brightness, contents, Read aloud, highlights,
 // its sheets) and the image viewer. See app.js for how the parts share.
 // ---- Screens ----
@@ -188,7 +188,7 @@ function readerWait(p, fromHistory) {
   $("readerTranslate").hidden = true;
   $("readerNow").textContent = "Contents";
   $("readerContents").setAttribute("aria-label", "Contents");
-  fill($("readerName"), p.site ? el("span", { class: "reader-site" }, p.site) : null, el("span", { class: "reader-title" }, p.title));
+  fill($("readerName"), siteOf(p) ? el("span", { class: "reader-site" }, siteOf(p)) : null, el("span", { class: "reader-title" }, p.title));
   if (!fromHistory) swap ? history.replaceState(readerState(p), "") : history.pushState(readerState(p), "");
   pushScreen($("readerView"));
 }
@@ -359,7 +359,7 @@ function show(p, html) {
   $("readerView").classList.toggle("railed", pinned.matches && readingPrefs().rail && !asPane($("readerView")));
   $("readerRail").hidden = !$("readerView").classList.contains("railed");
   fill($("railList"));
-  fill($("readerName"), p.site ? el("span", { class: "reader-site" }, p.site) : null, el("span", { class: "reader-title" }, p.title));
+  fill($("readerName"), siteOf(p) ? el("span", { class: "reader-site" }, siteOf(p)) : null, el("span", { class: "reader-title" }, p.title));
   readerScrolled(p.at || 0, 0);
   if (!p.preview) C.stats.opened(p.id);
   return C.reader.open($("readerFrame"), html, p, {
@@ -1218,7 +1218,7 @@ async function startAloud(from, spot) {
 function mediaInfo(p) {
   const list = p.folder ? folderPages(p.folder) : [];
   const at = list.indexOf(p);
-  return { title: p.title, subtitle: p.folder || p.site || "", album: p.folder || p.site || "",
+  return { title: p.title, subtitle: p.folder || siteOf(p), album: p.folder || siteOf(p),
     track: at >= 0 ? at + 1 : 0, tracks: at >= 0 ? list.length : 0 };
 }
 
@@ -1616,7 +1616,7 @@ function paintPip() {
   }
   $("pipText").textContent = text;
   $("pipTitle").textContent = p ? p.title : "";
-  $("pipOver").textContent = p ? p.folder || p.site || "" : "";
+  $("pipOver").textContent = p ? p.folder || siteOf(p) : "";
   // A small window shows only the words being read (1.27.0).
   $("pipView").classList.toggle("has-text", !!text);
   $("pipState").textContent = aloud.state === "paused" ? "Paused" : "";

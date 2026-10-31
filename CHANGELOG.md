@@ -33,6 +33,42 @@ All notable changes to Carry-on. Newest first.
   into negatives. Off by default; Paper and the other light themes keep
   white pages.
 
+## [1.45.11] - 2026-10-31
+
+### Changed
+- Nothing to see: the app's main script is split into smaller files by
+  area (reading look, cards, Downloads, search, drawing the library,
+  saving jobs), so people working on different parts don't trip over each
+  other. No build step, same files loaded in the same order.
+
+## [1.45.10] - 2026-10-31
+
+### Changed
+- Backing up is much faster on the phone: the app packs the backup
+  itself instead of passing every picture and book through the page.
+  Text in a backup is now compressed too, so it's smaller to send.
+
+## [1.45.9] - 2026-10-31
+
+### Fixed
+- Google Drive: connecting again after Disconnect on the phone said
+  "Connect Google Drive again" and stopped. The phone kept the old
+  sign-in Disconnect had cancelled; it's now dropped, so Google asks
+  again. Also a privacy policy and terms page for Google's sign-in screen.
+
+## [1.45.8] - 2026-10-31
+
+### Fixed
+- Files copied into a clip no longer say they were a PDF (or EPUB,
+  Text...): no file kind on the card, its picture, the reader's top or
+  the clip's own first and last lines. A clip added as a copy before now
+  is shown the same way. Files read from where they are keep their marks.
+- PDFs with Hebrew or Arabic and English together: a line's words come
+  out in the right order (the pieces of a right-to-left line were read
+  backwards), each paragraph reads in its own direction, and
+  right-aligned paragraphs no longer break at every line. A PDF added
+  before this needs adding again to get its text fixed.
+
 ## [1.45.7] - 2026-10-30
 
 ### Removed

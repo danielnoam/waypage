@@ -4,3 +4,7 @@ node_modules/
 /www/
 /android/
 /ios/
+
+# Local Gradle output
+native/share/android/.gradle/
+native/share/android/build/

@@ -810,10 +810,14 @@
       if (!pics.n) throw new FileError("There's nothing to read in this PDF.");
     } else {
       let page = 1;
+      // A PDF in two directions, Hebrew and English say, gives each
+      // paragraph its own (1.45.8).
+      const both = (got.blocks || []).some((b) => b.rtl) && (got.blocks || []).some((b) => b.t !== "page" && !b.rtl);
       for (const b of got.blocks || []) {
         if (b.t === "page") { page = b.n; continue; }
         const el = out.createElement(b.t === "h" ? "h2" : "p");
         el.textContent = b.s;
+        if (both) el.setAttribute("dir", b.rtl ? "rtl" : "ltr");
         root.append(el);
         if (!at.has(page)) at.set(page, el);
       }
@@ -1273,7 +1277,7 @@
     const { root } = got;
     const words = root.textContent;
     const meta = {
-      id, url: "", title: (title || got.title || baseName(file.name)).slice(0, 300), site: KINDS[kind], byline: (got.byline || "").slice(0, 200), licence: null,
+      id, url: "", title: (title || got.title || baseName(file.name)).slice(0, 300), site: link ? KINDS[kind] : "", byline: (got.byline || "").slice(0, 200), licence: null,
       savedAt: Date.now(), minutes: kind === "cbz" ? Math.max(1, Math.round(pics.n / 10)) : C.save.readingMinutes(words),
       lang: (got.lang || "").slice(0, 20), dir: got.dir || C.save.textDir(out, words), mode: "full", next: "", prev: "", at: 0, finished: false,
       images: root.querySelectorAll("img").length, missing: 0, imageBytes: pics.bytes,

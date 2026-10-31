@@ -29,10 +29,7 @@ Each section below shows the computer (left) and the phone (right).
 - [Settings and the app](#settings-and-the-app)
 - [Privacy and security](#privacy-and-security)
 - [Run it](#run-it)
-- [The phone apps](#the-phone-apps)
-- [Screenshots](#screenshots)
-- [Layout](#layout)
-- [Notes files](#notes-files)
+- [Working on Waypage](#working-on-waypage)
 
 ## Library
 
@@ -61,7 +58,8 @@ Each section below shows the computer (left) and the phone (right).
 
 - Collections are ordered folders: chapters in order, "2 of 4 read", Continue.
 - A collection linked to a story's page finds new chapters and shows a "+N" to save them.
-- Files: EPUB, PDF, MOBI, AZW3, FB2, CBZ, Markdown, text and HTML, copied in or read from where they are. Books keep their own contents.
+- Files: EPUB, PDF, MOBI, AZW3, FB2, CBZ, Markdown, text and HTML, copied in (a clip like any other) or read from where they are. Books keep their own contents.
+- PDFs mixing Hebrew or Arabic with English keep each line's words in order.
 - Big PDFs are read a piece at a time, never whole in memory.
 - A PowerPoint deck (.pptx) is offered as a PDF: Convert redraws the slides, you save the PDF where you like, and it opens like any PDF you picked there.
 - Watched folders bring new files into a chosen collection.
@@ -193,77 +191,28 @@ Each section below shows the computer (left) and the phone (right).
 
 ## Run it
 
-`node server.js` (or double-click `start.cmd` on Windows) and open
-<http://localhost:5173>.
+Three ways to use Waypage, same files, same features:
 
-## The phone apps
+- **In a browser,** nothing to install: open
+  <https://danielnoam.github.io/waypage/>. Your clips stay in that
+  browser's own storage, offline too (the page is cached, so it opens
+  with no connection), and Install or Add to Home Screen makes it look
+  like an app. Pictures are kept as links there.
+- **On an Android phone,** as the app: download `Waypage.apk` from the
+  [latest release](https://github.com/danielnoam/waypage/releases/latest),
+  tap it, and allow your browser to install apps the first time. The app
+  saves pictures and books to the phone, shares in from other apps, has
+  widgets, and updates itself from the releases. iPhone: the same
+  release carries an unsigned `Waypage.ipa` for AltStore or SideStore.
+- **On your own computer, from the source:** clone the repo, run
+  `node server.js` (or double-click `start.cmd` on Windows) and open
+  <http://localhost:5173>. That is the web copy served from your disk,
+  which is how changes are tried before they are pushed.
 
-- **Android:** `.github/workflows/android.yml` builds an APK on every push
-  and publishes a release `app-v<version>` when `APP_VERSION` is new and
-  the signing secrets are set (`ANDROID_KEYSTORE_B64`,
-  `ANDROID_KEYSTORE_PASSWORD`, key alias `carryon`, kept from before the
-  rename). Without them it still builds a test APK but publishes nothing.
-- **iOS:** `.github/workflows/ios.yml` builds an unsigned `Waypage.ipa`
-  on a Mac runner and attaches it to the same release. Install it with
-  AltStore or SideStore.
-- **Locally:** `npm install`, `npm run android:sync`, then open `android/`
-  in Android Studio.
+## Working on Waypage
 
-## Screenshots
-
-`node tools/shots.js` retakes every picture above at 1280 px and 390 px
-into `docs/shots/`, from a demo library it saves through the app itself
-(`tools/shots/demo/`, original text and drawings). `node tools/shots.js
-reader skim` retakes only those sections. It needs Playwright with a
-Chromium, like `test/ui.test.js`.
-
-## Layout
-
-```
-index.html          app shell
-src/app.js          version, state, the library and the shared helpers;
-src/app-*.js        the rest of the shell in parts: reader, library,
-                    saving and feeds, places and sidebar, settings, lock, start
-src/save.js         link to saved page: Wikipedia, Readability, the
-                    allowlist cleaner, picture previews, video cards
-src/reader.js       a saved page in the sandboxed iframe
-src/store.js        page folders and library.json (IndexedDB in a browser)
-src/platform.js     browser vs app: native fetch, downloads, speech, links
-src/files.js        EPUB, Kindle, FB2, CBZ, Markdown, text and HTML files
-src/pdf.js          PDFs through pdf.js in a locked-down frame
-src/feeds.js        RSS, Atom and JSON Feed
-src/sync.js         GitHub sync (merging in src/sync-worker.js)
-src/drive.js        Google Drive backups
-src/backup.js       one-file backups and exports; src/epub.js EPUB export
-src/imports.js      Pocket, Instapaper, Omnivore, Raindrop, Wallabag
-src/stats.js        reading stats
-src/dict.js         StarDict dictionaries
-src/motion.js       the springs from DESIGN.md
-src/qr.js           QR code for sync's setup link, made on the device
-src/styles.css      tokens, themes, layout (see DESIGN.md)
-src/reader.css      the saved page inside the reader's frame
-src/fonts.css       the bundled fonts
-src/vendor/         Readability, pdf.js, foliate-js's MOBI reader, with licences
-native/share/       Capacitor plugin: Android's share sheet into the app
-sw.js               offline cache for the web copy; its ASSETS list is
-                    also what goes into the app
-tools/              build-www, Android and iOS project patches, APK
-                    signing, shots.js for the README's pictures
-test/               node test/run-all.js
-design/             the design canvas's artboards, for reference
-docs/GUIDE.md        a step-by-step guide for using the app
-docs/ARCHITECTURE.md how the code fits together
-docs/FORMATS.md      what is stored: pages, library.json, the sync repo, backups
-docs/PIPELINE.md     saving a link and reading it, and the security boundaries
-docs/DEVELOPING.md   running, testing, building and releasing
-docs/PROPOSAL.md    the original architecture, storage, legal and store decisions
-docs/shots/         the README's screenshots
-```
-
-## Notes files
-
-- **TODO.md** the work still to do
-- **DONE.md** what the app already does, by area
-- **NOTES.md** why things are the way they are
-- **DROPPED.md** what was decided against, and why
-- **CHANGELOG.md** what each version shipped
+[ARCHITECTURE.md](ARCHITECTURE.md) is the map: every file, how the
+scripts share one scope, how a link becomes a clip, where clips live,
+the sandboxed reader, sync, the phone apps, tests and screenshots.
+[CONTRIBUTING.md](CONTRIBUTING.md) is the rulebook: the decisions already
+made, the rules for every change, and how versions and releases work.
