@@ -110,6 +110,25 @@ layout mode.
 change is shown or explained to Daniel (a mockup, a screenshot, a short
 write-up) and waits for his OK before it's built.
 
+**Settings say little.** A row is a name and at most one short line that
+says its state or scope. Anything longer goes in the section's help
+(`section(title, help, ...)` in `src/app-settings.js`), behind the ? on
+its heading. A pick between options is a drop-down row (`pickRow`), not
+a list of radios. Settings search reads the screens themselves, so a
+new row is found without any extra work.
+
+**Credits.** Anything vendored or bundled (code, a font) goes under
+`CREDITS.code` or `CREDITS.fonts` in `src/app-settings.js`, shown under
+Settings › About › Credits, with its author and licence, beside its
+licence file in the repo. People aren't listed there; the commit
+history is the record.
+
+**Don't bump the version on a feature branch.** Every branch with an
+open pull request gets a preview build (Settings › About › Preview
+builds), and the release installs back over it only while the two have
+the same version code. The release PR is the one that bumps
+`APP_VERSION`, with `node tools/release.js`.
+
 **"Add to TODO" means plan it, not build it.** It goes into TODO.md with
 enough detail for someone else to pick it up.
 
@@ -187,8 +206,10 @@ secrets, so it can't sign or publish anything.
   `main` as it is; the service worker paints from cache and fetches the
   new files for the next launch), version bump or not.
 - `.github/workflows/android.yml` and `ios.yml` build on every push to
-  `main` and to `claude/**` branches. Pushes that only touch `**.md`,
-  `test/**` or `.claude/**` don't run them.
+  any branch. Pushes that only touch `**.md`, `test/**` or `.claude/**`
+  don't run them. A branch with an open pull request gets its build on
+  the pre-release `preview-<branch>`, which the app's Preview builds
+  screen lists; it goes away with the branch.
 - On `main`, when `APP_VERSION` has no release yet and the signing secrets
   are set, the Android workflow publishes the release `app-v<version>`
   with `Waypage.apk`, and the iOS workflow attaches an unsigned

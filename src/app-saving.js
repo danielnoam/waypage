@@ -162,8 +162,7 @@ async function fetchPictures() {
 // off, the three steps to a first device and a way in for the next one;
 // on, the state and a code that sets up another device.
 function syncSections() {
-  return C.sync.on ? [C.sync.oldToken ? syncNewToken() : null, syncState(), syncsList(), syncWhat(), dataGroup(DATA_SYNC_KEY, "Sync", "Syncs on any connection.", "Syncs when you're on Wi-Fi. Changes wait until then.",
-      { value: "places", label: "Places and reading time only", note: "Where you are in each clip, what you finished and your reading time sync on any connection. New clips, tags and collections wait for Wi-Fi." }), syncShare(), syncLeave()] : [syncSteps(), syncJoin()];
+  return C.sync.on ? [C.sync.oldToken ? syncNewToken() : null, syncState(), syncsList(), syncWhat(), syncShare(), syncLeave()] : [syncSteps(), syncJoin()];
 }
 async function connectSync(text, btn) {
   if (btn) { btn.disabled = true; btn.textContent = "Connecting…"; }
@@ -189,19 +188,16 @@ function syncSteps() {
   const connect = async () => { note.textContent = (await connectSync(input.value, go)) || ""; };
   go.addEventListener("click", connect);
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); connect(); } });
-  return el("section", { class: "settings-section" },
-    el("h2", { class: "overline" }, "Sync with GitHub"),
-    el("p", { class: "section-lead" }, "Keeps your clips, feeds and newsletters the same on every device, through a private repo on your GitHub. Files read from outside stay on the device that has them."),
+  return section("Sync with GitHub", "Keeps your clips, feeds and newsletters the same on every device, through a private repo on your GitHub. Files read from outside stay on the device that has them. The token stays on this device and goes only to GitHub; made for waypage-data only, it can't touch anything else on your account. Sync stops if that repo is ever made public.",
     el("div", { class: "group" },
-      outRow("https://github.com/signup", "1", "Make a free GitHub account", "Skip this if you have one."),
-      outRow(C.sync.NEW_REPO_URL, "2", "Make a private repo for your library", "GitHub fills it in. Keep it Private, then Create repository."),
-      outRow(C.sync.KEY_URL, "3", "Make a token for that repo only", "GitHub fills it in. Under Repository access pick Only select repositories, then waypage-data. Generate token, and copy it."),
+      outRow("https://github.com/signup", "1", "Make a free GitHub account", "Skip this if you have one"),
+      outRow(C.sync.NEW_REPO_URL, "2", "Make a private repo for your library", "GitHub fills it in: keep it Private, then Create"),
+      outRow(C.sync.KEY_URL, "3", "Make a token for that repo only", "Only select repositories › waypage-data, then Generate and copy"),
       el("div", { class: "row sync-step sync-paste" },
         el("span", { class: "step-num", "aria-hidden": "true" }, "4"),
         el("div", { class: "choice-text" },
           el("span", { class: "choice-label" }, "Paste it here"),
-          input, go, note))),
-    el("p", { class: "footnote" }, "The token stays on this device and goes only to GitHub. Made for waypage-data only, it can't touch anything else on your account. Sync stops if that repo is ever made public."));
+          input, go, note))));
 }
 // A token made under the old steps reaches every repo on the account
 // (1.30.1): swapped here for one made for waypage-data alone, without
@@ -218,25 +214,21 @@ function syncNewToken() {
   };
   go.addEventListener("click", connect);
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); connect(); } });
-  return el("section", { class: "settings-section" },
-    el("h2", { class: "overline" }, "Make a safer token"),
-    el("p", { class: "section-lead" }, "This device's token can change every repo on your GitHub. If it ever got out, all of them would be open. A token for waypage-data alone can't touch anything else."),
+  return section("Make a safer token", "This device's token can change every repo on your GitHub. If it ever got out, all of them would be open. A token for waypage-data alone can't touch anything else.",
     el("div", { class: "group" },
-      outRow(C.sync.KEY_URL, "1", "Make a token for waypage-data only", "Under Repository access pick Only select repositories, then waypage-data. Generate token, and copy it."),
+      outRow(C.sync.KEY_URL, "1", "Make a token for waypage-data only", "Only select repositories › waypage-data, then Generate and copy"),
       el("div", { class: "row sync-step sync-paste" },
         el("span", { class: "step-num", "aria-hidden": "true" }, "2"),
         el("div", { class: "choice-text" },
           el("span", { class: "choice-label" }, "Paste it here"),
           input, go, note)),
-      outRow("https://github.com/settings/personal-access-tokens", "3", "Delete the old token", "On GitHub, in Fine-grained tokens. Your other devices ask for the new one, or scan this one's setup code.")));
+      outRow("https://github.com/settings/personal-access-tokens", "3", "Delete the old token", "In GitHub's Fine-grained tokens; other devices then ask for the new one")));
 }
 function syncJoin() {
   const scan = C.platform.canScan ? el("button", { class: "row", type: "button", onclick: scanSync },
     el("span", { class: "row-label accent" }, "Scan its setup code")) : null;
-  return el("section", { class: "settings-section" },
-    el("h2", { class: "overline" }, "Already syncing on another device?"),
-    scan ? el("div", { class: "group" }, scan) : null,
-    el("p", { class: "footnote" }, (scan ? "" : "Open its setup link here, or paste it in step 4. ") + "The code and link are on that device, in Settings, Sync."));
+  return section("Already syncing on another device?", "The setup code and link are on that device, in Settings › GitHub sync › Add another device. " + (scan ? "Scan the code here, or paste the link in step 4." : "Open its setup link here, or paste it in step 4."),
+    scan ? el("div", { class: "group" }, scan) : el("div", { class: "group" }, el("div", { class: "row" }, el("span", { class: "row-label muted" }, "Paste its setup link in step 4"))));
 }
 async function scanSync() {
   let text = null;
@@ -325,8 +317,7 @@ function syncState() {
     : last.error ? last.error : syncsPlacesOnly() ? (last.light ? "Places synced " + whenText(last.at) : "On mobile data") + ". Clips wait for Wi-Fi"
     : last.at ? "Synced " + whenText(last.at) : "Not synced yet";
   const after = C.sync.running ? "" : syncAfter();
-  return el("section", { class: "settings-section" },
-    el("h2", { class: "overline" }, "Sync with GitHub"),
+  return section("Sync with GitHub", "Syncs when Waypage opens, after a change, and every few minutes while it's open. Pausing stops at the next clip and picks up where it left off; nothing syncs until you resume, and what synced before stays.",
     el("div", { class: "group" },
       el("div", { class: "row sync-status" }, el("span", { class: "choice-text" },
         el("span", { class: "row-label" }, C.sync.account),
@@ -337,10 +328,7 @@ function syncState() {
       paused ? null : el("button", { class: "row", type: "button", ...(C.sync.running ? { disabled: "" } : {}), onclick: () => syncNow(false) },
         el("span", { class: "row-label accent" }, "Sync now")),
       el("button", { class: "row", type: "button", onclick: () => pauseSync(!paused) },
-        el("span", { class: "row-label accent" }, paused ? "Resume syncing" : "Pause syncing"))),
-    el("p", { class: "footnote" }, paused
-      ? "Nothing syncs until you resume. What synced before stays."
-      : "Syncs when Waypage opens, after a change, and every few minutes while it's open. Pausing stops at the next clip and picks up where it left off."));
+        el("span", { class: "row-label accent" }, paused ? "Resume syncing" : "Pause syncing"))));
 }
 // Pause stops a sync at the next page and starts none until Resume;
 // pages saving from their links and pictures wait too (0.30.4).
@@ -362,10 +350,9 @@ function disconnectSync() {
   toast("Disconnected. Your clips stay here and on GitHub.");
 }
 function syncLeave() {
-  return el("section", { class: "settings-section" },
+  return section("Connection", "Disconnecting forgets the token on this device. Your clips stay here and on GitHub.",
     el("div", { class: "group" },
-      el("button", { class: "row", type: "button", onclick: disconnectSync }, el("span", { class: "row-label warn" }, "Disconnect from GitHub"))),
-    el("p", { class: "footnote" }, "Forgets the token on this device. Your clips stay here and on GitHub."));
+      el("button", { class: "row", type: "button", onclick: disconnectSync }, el("span", { class: "row-label warn" }, "Disconnect from GitHub"))));
 }
 // Pages too, or links only: the library and its marks always sync.
 // What this device syncs (1.47.0): switches, like Google Drive's What
@@ -376,31 +363,26 @@ function syncsList() {
     el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, label), el("span", { class: "choice-note" }, note)),
     el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!what[key],
       onchange: (e) => { C.sync.setWhat(key, e.target.checked); renderSection(); syncSoon(500); } }));
-  return el("section", { class: "settings-section" },
-    el("h2", { class: "overline" }, "What this device syncs"),
+  return section("What this device syncs", "Clips go with their highlights, tags, collections, favourites and where you were. With Clips too, each clip's text goes up, so another device gets it as you saved it even if the site changes; pictures come from the clip's site, or from GitHub when it has none, up to 100 MB a clip. With Links only, clips new to a device are saved again from their links, so one that changed or went away comes back different or not at all. A part turned off here is left as it is on GitHub for your other devices. Files read from outside, watched folders and settings don't sync."
+      + (C.platform.knowsConnection ? " On mobile data, Places and reading time only moves where you are in each clip, what you finished and your reading time on any connection, while new clips, tags and collections wait for Wi-Fi." : ""),
     el("div", { class: "group" },
-      sw("clips", "Clips", C.sync.links ? "Their addresses, highlights, tags, collections, favourites and where you were. Saved again from their links on each device"
-        : "Their text, highlights, tags, collections, favourites and where you were. Each device gets a clip's pictures from its site, or from GitHub when it has no site, up to 100 MB a clip"),
+      sw("clips", "Clips", C.sync.links ? "Links, highlights, tags, collections and places" : "Text, highlights, tags, collections and places"),
       what.clips ? el("div", { class: "row" }, seg("sync-what", "What goes up of each clip", [{ value: "pages", label: "Clips too" }, { value: "links", label: "Links only" }],
         C.sync.links ? "links" : "pages", (v) => { C.sync.links = v === "links"; renderSection(); syncSoon(500); })) : null,
-      sw("feeds", "Feeds", "Which feeds you follow and how. Each device looks for new posts itself, and a post you saved goes as a clip"),
-      sw("newsletters", "Newsletters", "Your addresses and how they're set. The phone collects new mail, and a mail you saved goes as a clip"),
-      sw("stats", "Reading stats", "Your reading time from every device, added up in Stats")),
-    what.clips ? el("p", { class: "footnote" }, C.sync.links
-      ? "Links only: clips new to this device are saved again from their links, so one that changed or went away comes back different or not at all."
-      : "Each clip's text goes up with it, so another device gets the clip as you saved it, even if the site changes or takes it down.") : null,
-    el("p", { class: "footnote" }, "A part turned off here is left as it is on GitHub for your other devices. Files read from outside and watched folders don't sync: they stay on the device that has them. Settings don't sync either."));
+      sw("feeds", "Feeds", "Which you follow and how"),
+      sw("newsletters", "Newsletters", "Your addresses and how they're set"),
+      sw("stats", "Reading stats", "Reading time from every device, added up"),
+      dataRow(DATA_SYNC_KEY, "Sync", "Everything, on any connection", "Changes wait until then",
+        { value: "places", label: "Places and reading time only", note: "Clips, tags and collections wait for Wi-Fi" })));
 }
 function syncWhat() {
-  return el("section", { class: "settings-section" },
-    el("h2", { class: "overline" }, "This device"),
+  return section("This device", "The name shows on your other devices when this one read a clip further.",
     el("div", { class: "group" },
       el("div", { class: "rc-list" },
         el("div", { class: "rc-row stack" }, el("label", { class: "rc-label", for: "deviceName" }, "This device's name"),
           el("input", { class: "feed-input", id: "deviceName", type: "text", maxlength: "40", autocomplete: "off",
             value: load(DEVICE_KEY, ""), placeholder: guessedName().replace(/^./, (c) => c.toUpperCase()),
-            onchange: (e) => store(DEVICE_KEY, e.target.value.trim().slice(0, 40)) })))),
-    el("p", { class: "footnote" }, "The name shows on your other devices when this one read a clip further."));
+            onchange: (e) => store(DEVICE_KEY, e.target.value.trim().slice(0, 40)) })))));
 }
 // The setup link points at the web copy: inside the app this page is at
 // https://localhost, which no other device can open. The app's scanner
@@ -414,12 +396,10 @@ function syncShare() {
     try { await navigator.clipboard.writeText(link); toast("Setup link copied. Only send it to yourself."); }
     catch (e) { toast("Couldn't copy the link."); }
   };
-  return el("section", { class: "settings-section" },
-    el("h2", { class: "overline" }, "Add another device"),
+  return section("Add another device", "In Waypage on the other device, go to Settings › GitHub sync and scan this code, or paste the link there. A phone's camera opens it in the web copy instead.",
     el("div", { class: "group" },
       qr,
       el("button", { class: "row", type: "button", onclick: copy }, el("span", { class: "row-label accent" }, "Copy setup link"))),
-    el("p", { class: "footnote" }, "In Waypage on the other device, go to Settings, Sync and scan this code, or paste the link there. A camera opens it in the web copy instead."),
     el("p", { class: "footnote warn" }, "The code and link hold your token. Only use them on your own devices."));
 }
 
@@ -1921,13 +1901,10 @@ function driveValue() {
 
 function driveSections() {
   if (!C.drive.on) {
-    return [el("section", { class: "settings-section" },
-      el("h2", { class: "overline" }, "Back up to Google Drive"),
-      el("p", { class: "section-lead" }, "A copy of your library in your own Google Drive, made by itself as often as you pick and whenever you ask, to bring back on a new phone or after a mistake."),
+    return [section("Back up to Google Drive", "A copy of your library in your own Google Drive, made by itself as often as you pick and whenever you ask, to bring back on a new phone or after a mistake. Waypage can only see the backups it makes, in a Waypage folder in your Drive; nothing else there is opened or read.",
       el("div", { class: "group" },
         el("button", { class: "row", type: "button", onclick: (e) => driveConnect(e.currentTarget) },
-          el("span", { class: "row-label accent" }, "Connect Google Drive"))),
-      el("p", { class: "footnote" }, "Waypage can only see the backups it makes, in a Waypage folder in your Drive. Nothing else there is opened or read."))];
+          el("span", { class: "row-label accent" }, "Connect Google Drive"))))];
   }
   const l = C.drive.last;
   const status = driveRun ? driveStatusText()
@@ -1951,45 +1928,37 @@ function driveSections() {
       el("span", { class: "visually-hidden" }, "Delete"),
       svgBin()))) : [];
   return [
-    el("section", { class: "settings-section" },
+    section("Backups", "A copy of your library in a Waypage folder in your Drive, which is all Waypage can see there. "
+        + (C.platform.native ? (C.drive.background ? "Automatic backups run on Wi-Fi, even with Waypage closed, when Android finds a good moment. " : "Automatic backups run on Wi-Fi while Waypage is open. ") : "This browser signs in to Google for an hour at a time, so an automatic backup asks first. ")
+        + "Drive keeps the last " + C.drive.KEEP + " backups" + (C.drive.auto && C.drive.every < 7 ? ", and one from a week before them" : "") + "; an older one is deleted when a new one is made.",
       el("div", { class: "group" },
         el("button", { class: "row", type: "button", ...driveBusy(), onclick: () => driveBackUp(false) },
           el("span", { class: "choice-text" },
             el("span", { class: "choice-label accent" }, "Back up now"),
             el("span", { class: "choice-note" + (l.error && !driveRun ? " warn" : ""), id: "driveStatus", role: "status" }, status))),
-        driveRun ? el("div", { class: "row" }, driveControls("drive-actions")) : null)),
-    // How often (1.46.0; it was a weekly switch), in a drop-down (1.47.0).
-    el("section", { class: "settings-section" },
+        driveRun ? el("div", { class: "row" }, driveControls("drive-actions")) : null),
+      // How often (1.46.0; it was a weekly switch), in a drop-down (1.47.0).
       el("div", { class: "group" },
         el("div", { class: "rc-list" },
           el("div", { class: "rc-row stack" }, el("span", { class: "rc-label" }, "Back up by itself"),
             dropdown({ label: "Back up by itself", cls: "field-pick drive-every", value: C.drive.auto ? String(C.drive.every) : "off",
               options: [...C.drive.EVERY.map((d) => ({ value: String(d), label: DRIVE_EVERY[d] })), { value: "off", label: "Only when I ask" }],
-              onpick: (v) => { if (v === "off") C.drive.auto = false; else { C.drive.every = Number(v); C.drive.auto = true; } renderSection(); } })))),
-      el("p", { class: "footnote" }, (C.platform.native ? (C.drive.background ? "On Wi-Fi, even with Waypage closed, when Android finds a good moment. " : "On Wi-Fi, while Waypage is open. ") : "Asks first, since this browser signs in to Google for an hour at a time. ")
-        + "Drive keeps the last " + C.drive.KEEP + " backups" + (C.drive.auto && C.drive.every < 7 ? ", and one from a week before them" : "") + "; an older one is deleted when a new one is made.")),
-    el("section", { class: "settings-section" },
-      el("h2", { class: "overline" }, "What goes in"),
+              onpick: (v) => { if (v === "off") C.drive.auto = false; else { C.drive.every = Number(v); C.drive.auto = true; } renderSection(); } }))))),
+    section("What goes in", "Tags, collections, favourites and your reading stats go with the clips. Links only makes a backup much smaller, but a clip whose page changed or went away comes back different or not at all" + (C.platform.native ? "" : ", and this browser can only save Wikipedia pages again") + "; books you copied in and newsletter mails still go in whole. Files read from outside and watched folders stay where they are, and settings don't go in.",
       el("div", { class: "group" },
-        sw("clips", "Clips", what.links ? "Their addresses, highlights and where you were. Saved again from their links when restored" : "Their text, pictures, highlights and where you were"),
+        sw("clips", "Clips", what.links ? "Links, highlights and places" : "Text, pictures, highlights and places"),
         what.clips ? el("div", { class: "row" }, seg("drive-links", "What goes in of each clip", [{ value: "pages", label: "Clips too" }, { value: "links", label: "Links only" }],
           what.links ? "links" : "pages", (v) => { C.drive.setWhat("links", v === "links"); renderSection(); })) : null,
-        sw("feeds", "Feeds", "Which feeds you follow and how. A post you saved goes in as a clip"),
-        sw("newsletters", "Newsletters", "Your addresses and how they're set. A mail you saved goes in as a clip")),
-      what.clips && what.links ? el("p", { class: "footnote" }, "Links only makes a backup much smaller, but a clip whose page changed or went away comes back different or not at all"
-        + (C.platform.native ? "" : ", and this browser can only save Wikipedia pages again") + ". Books you copied in and newsletter mails still go in whole.") : null,
-      el("p", { class: "footnote" }, "Tags, collections and favourites go with the clips they're on, and your reading stats go too. Files read from outside and watched folders don't go in: they stay where they are. Settings don't go in either.")),
-    el("section", { class: "settings-section" },
-      el("h2", { class: "overline" }, "Restore"),
+        sw("feeds", "Feeds", "Which you follow and how"),
+        sw("newsletters", "Newsletters", "Your addresses and how they're set"))),
+    section("Restore", "Restoring adds what isn't here and keeps whichever copy of a clip was saved last. Nothing here is deleted. A clip or feed you deleted since comes back, on your synced devices too. The bin deletes a backup from Drive for good.",
       el("div", { class: "group" }, ...(list.length ? list
         : driveListError === DRIVE_SIGN_IN ? [el("button", { class: "row", type: "button", onclick: driveSignIn }, el("span", { class: "row-label accent" }, "Sign in to Google to see them"))]
-        : [el("div", { class: "row" }, el("span", { class: "row-label" + (driveListError ? " warn" : "") }, driveListError || (driveFiles ? "No backups in Drive yet" : "Looking in Drive…")))])),
-      el("p", { class: "footnote" }, "Restoring adds what isn't here and keeps whichever copy of a clip was saved last. Nothing here is deleted. A clip or feed you deleted since comes back, on your synced devices too. The bin deletes a backup from Drive for good.")),
-    el("section", { class: "settings-section" },
+        : [el("div", { class: "row" }, el("span", { class: "row-label" + (driveListError ? " warn" : "") }, driveListError || (driveFiles ? "No backups in Drive yet" : "Looking in Drive…")))]))),
+    section("Account", "Disconnecting forgets the sign-in on this device. The backups stay in your Drive.",
       el("div", { class: "group" },
         el("button", { class: "row", type: "button", ...driveBusy(), onclick: driveDisconnect },
-          el("span", { class: "row-label warn" }, "Disconnect Google Drive"))),
-      el("p", { class: "footnote" }, (C.drive.email ? "Connected as " + C.drive.email + ". " : "") + "The backups stay in your Drive.")),
+          el("span", { class: "choice-text" }, el("span", { class: "choice-label warn" }, "Disconnect Google Drive"), C.drive.email ? el("span", { class: "choice-note" }, "Connected as " + C.drive.email) : null)))),
   ];
 }
 

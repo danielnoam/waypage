@@ -50,9 +50,9 @@ src/app-reader.js   moving between screens; the reader around the page: brightne
 src/app-library.js  tags, collections, a clip's sheet, multi-select, export, import, watched folders
 src/app-saving.js   sync screen, saving several, next links and new chapters, feeds, home-screen widgets
 src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestures, a feed's sheets
-src/app-settings.js Settings (built from data), Make room, Report a problem
+src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
 src/app-lock.js     app lock: passcode (PBKDF2 hash), fingerprint or face on Android
-src/app-start.js    wiring at launch, what other apps share in, self-update, What's new
+src/app-start.js    wiring at launch, what other apps share in, self-update, Preview builds, What's new
 src/save.js         link to saved page: fetch, Wikipedia adapter or Readability, allowlist cleaner, picture previews, video cards
 src/reader.js       a saved page in the sandboxed iframe: place, find, highlights, translation, pages mode
 src/store.js        one directory per clip and library.json; IndexedDB in a browser
@@ -80,12 +80,13 @@ tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-bui
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
 tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
 tools/sign-apk.sh   signs the APK with the release key in CI
+tools/preview-release.sh   puts a branch's build on its preview-<branch> pre-release
 tools/shots.js      retakes the README's screenshots (tools/shots/demo is the demo library)
 test/               node test/run-all.js runs every *.test.js
 design/             the design canvas's artboards, for the exact markup
 docs/PROPOSAL.md    the original architecture, storage, legal and store reasoning
 docs/shots/         the README's screenshots
-.github/workflows/  test.yml (every PR), android.yml and ios.yml (builds and releases)
+.github/workflows/  test.yml (every PR), android.yml and ios.yml (builds, releases, previews), preview-cleanup.yml
 ```
 
 ## Load order and the one scope
@@ -210,11 +211,23 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
 
 - **Android:** `.github/workflows/android.yml` generates the Capacitor
   project, patches it (`tools/android-manifest.js`,
-  `tools/android-version.js`), builds an APK on every push to `main` and
-  `claude/**`, signs it with the release key (secrets
+  `tools/android-version.js`), builds an APK on every push to any
+  branch, signs it with the release key (secrets
   `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, alias `carryon`)
   and publishes the release `app-v<version>` when `APP_VERSION` is new.
   Without the secrets it builds a test APK and publishes nothing.
+- **Previews (1.48.0):** on any other branch with an open pull request,
+  `tools/preview-release.sh` remakes the pre-release `preview-<branch>`
+  at the pushed commit with the APK (and the iOS workflow adds the IPA).
+  Its notes start with `version:`, `branch:`, `commit:`, `pr:`, which
+  Settings › About › Preview builds (`app-start.js`) reads from the
+  public releases list to offer the build; `app-build.json` carries the
+  branch and commit, so a preview build knows it is one and skips the
+  update check. A pre-release is never GitHub's "latest", so the
+  updater ignores it. `preview-cleanup.yml` removes the pre-release when
+  the branch or its pull request closes. Android installs an equal
+  version code over the app, so the release goes back over a preview
+  only when the branch didn't bump `APP_VERSION`.
 - **iOS:** `.github/workflows/ios.yml` builds an unsigned `Waypage.ipa`
   on a Mac runner (`tools/ios-project.js`, `tools/ios-extensions.rb` add
   the share extension and widgets) and attaches it to the same release.

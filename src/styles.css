@@ -1503,6 +1503,46 @@ html { -webkit-tap-highlight-color: transparent; }
 
 /* Settings: a short menu of screens. */
 .settings-menu { display: flex; flex-direction: column; gap: var(--s-5); }
+/* Compact Settings (1.48.0): the search box under the bar, a ? on a
+   section's heading that shows its explanation, and the row a search
+   result lands on lit for a moment. */
+.settings-search { padding: var(--s-3) var(--gutter) 0; }
+.settings-search .search { margin: 0 auto; max-width: 40rem; }
+.settings-search .search input { height: var(--tap); }
+.found-none { margin: var(--s-4) var(--s-1); text-align: start; }
+.section-top { margin-bottom: var(--s-2); }
+.section-top .help-text { margin: var(--s-2) var(--s-1) var(--s-3); }
+.help-wrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--spring-control-ms, 300ms) var(--spring-control, ease-out); }
+.help-wrap.open { grid-template-rows: 1fr; }
+.help-inner { min-height: 0; overflow: hidden; }
+.help-wrap:not(.open) .help-text { visibility: hidden; }
+.settings-section .section-head { align-items: flex-end; gap: var(--s-2); min-height: 28px; margin: 0 0 var(--s-2); }
+.section-top > .section-head { margin-bottom: 0; }
+.help-btn {
+  flex-shrink: 0; width: 28px; height: 28px; margin: 0 calc(-1 * var(--s-1)) 0 0; padding: 0;
+  border: 1px solid var(--line); border-radius: var(--r-full); background: var(--surface); color: var(--muted);
+  font: 600 13px/1 var(--sans); cursor: pointer;
+}
+.help-btn:hover, .help-btn[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+.help-btn { transition: transform var(--spring-control-ms, 300ms) var(--spring-control, ease-out), color 120ms linear, border-color 120ms linear; }
+.help-btn:active { transform: scale(0.88); }
+.help-btn[aria-expanded="true"] { transform: rotate(360deg); }
+/* A drop-down's new choice pops into its face; a pressed switch's knob
+   stretches toward where it's going (1.48.0). */
+.dropdown-face.changed { animation: face-pop var(--spring-control-ms, 300ms) var(--spring-control, ease-out); }
+@keyframes face-pop { from { transform: scale(0.8); } to { transform: none; } }
+.switch:active::before { width: 26px; }
+.switch:checked:active::before { transform: translateX(14px); }
+[dir="rtl"] .switch:checked:active::before { transform: translateX(-14px); }
+.help-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.found { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r-md); }
+.row.found, .choice.found { background: var(--press); }
+.theme-grid .seg-face { padding: var(--s-2) 2px; }
+.pick-row { gap: var(--s-2); padding-inline-end: var(--s-2); }
+.pick-row .row-pick { flex: 0 1 auto; max-width: 58%; }
+.pick-row .row-pick .dropdown-btn { flex: 0 1 auto; max-width: 100%; border: 0; background: transparent; padding: 0 var(--s-2); color: var(--accent); font-weight: 500; }
+.pick-row .row-pick .dropdown-menu { left: auto; right: 0; min-width: 240px; max-width: min(80vw, 360px); }
+.storage-total { margin: 0 0 var(--s-3) var(--s-1); }
 .nav-row .row-value { max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-chev { flex-shrink: 0; color: var(--muted); font-size: 22px; line-height: 1; margin-inline-start: calc(-1 * var(--s-1)); }
 .storage-folder .row-chev { transition: transform var(--spring-control-ms, 300ms) var(--spring-control, ease-out); }
@@ -1533,7 +1573,7 @@ html { -webkit-tap-highlight-color: transparent; }
 .switch::before {
   content: ""; position: absolute; top: 4px; left: 4px; width: 20px; height: 20px;
   border-radius: var(--r-full); background: var(--muted);
-  transition: transform var(--spring-control-ms, 300ms) var(--spring-control, ease-out), background-color 120ms linear;
+  transition: transform var(--spring-control-ms, 300ms) var(--spring-control, ease-out), width var(--spring-control-ms, 300ms) var(--spring-control, ease-out), background-color 120ms linear;
 }
 .switch:checked { background: var(--accent); border-color: var(--accent); }
 .switch:checked::before { transform: translateX(20px); background: var(--accent-ink); }
@@ -2358,7 +2398,9 @@ kbd {
   #settingsBack svg { width: 18px; height: 18px; }
   #settingsView .bar-title { padding: 0 var(--s-3); text-align: start; font: 700 var(--fs-screen)/var(--lh-screen) var(--serif); }
   #settingsView .bar-spacer { display: none; }
+  #settingsView .settings-search { width: var(--settings-w); padding: var(--s-3) var(--s-4) 0; }
   #settingsView .screen-body { width: var(--settings-w); padding: var(--s-4) var(--s-4) var(--s-5); }
+  #settingsView .found-list .group { background: transparent; border: 0; border-radius: 0; overflow: visible; }
   #settingsView .screen-body > * { margin: 0; max-width: none; }
   #settingsView { border-inline-end: 0; }
   #settingsView .settings-menu { gap: 0; }

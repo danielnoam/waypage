@@ -140,8 +140,25 @@ test("the updater downloads the asset the workflow publishes", () => {
   const yml = fs.readFileSync(path.join(ROOT, ".github", "workflows", "android.yml"), "utf8");
   const platform = fs.readFileSync(path.join(ROOT, "src", "platform.js"), "utf8");
   assert.ok(/gh release create "app-v\$V" Waypage\.apk/.test(yml));
-  assert.ok(platform.includes('"/releases/download/app-v" + version + "/" + file'));
-  assert.ok(platform.includes('file = "Waypage.apk"'));
+  assert.ok(platform.includes('"/releases/download/" + tag + "/" + file'));
+  assert.ok(platform.includes('file = "Waypage.apk", tag = "app-v" + version'));
+});
+
+// Preview builds (1.48.0): a branch's APK goes on preview-<branch>, a
+// pre-release, so releases/latest never names it; the iOS workflow adds
+// the IPA to the same one, and the cleanup workflow removes it.
+test("a branch's build is published as a pre-release the updater never sees", () => {
+  const yml = fs.readFileSync(path.join(ROOT, ".github", "workflows", "android.yml"), "utf8");
+  const ios = fs.readFileSync(path.join(ROOT, ".github", "workflows", "ios.yml"), "utf8");
+  const sh = fs.readFileSync(path.join(ROOT, "tools", "preview-release.sh"), "utf8");
+  const tidy = fs.readFileSync(path.join(ROOT, ".github", "workflows", "preview-cleanup.yml"), "utf8");
+  assert.ok(/branches: \["\*\*"\]/.test(yml) && /branches: \["\*\*"\]/.test(ios));
+  assert.ok(/github\.ref != 'refs\/heads\/main'[\s\S]*preview-release\.sh create Waypage\.apk/.test(yml));
+  assert.ok(/github\.ref != 'refs\/heads\/main'[\s\S]*preview-release\.sh attach Waypage\.ipa/.test(ios));
+  assert.ok(sh.includes("--prerelease") && sh.includes('gh pr list --head "$BRANCH" --state open'));
+  assert.ok(/^TAG="preview-/m.test(sh) && tidy.includes('TAG="preview-') && tidy.includes("--cleanup-tag"));
+  const start = fs.readFileSync(path.join(ROOT, "src", "app-start.js"), "utf8");
+  assert.ok(start.includes('/releases?per_page=') && start.includes('r.prerelease && /^preview-/.test(r.tag_name)'));
 });
 
 // The iOS project (1.6.0): what tools/ios-project.js and ios-extensions.rb

@@ -723,10 +723,12 @@
   // Since 1.23.0 it comes through Downloads' own fetch, which goes on
   // with the app put away and can pause and pick up where it stopped: a
   // pause rejects with code "PAUSED". Older builds use Filesystem.
-  async function downloadUpdate(version, onProgress, file = "Waypage.apk") {
+  // A preview build (1.48.0) comes from the pre-release `tag` instead,
+  // and `version` is then its file's name part (preview-<branch>-<sha>).
+  async function downloadUpdate(version, onProgress, file = "Waypage.apk", tag = "app-v" + version) {
     const FS = plugin("Filesystem");
     if (os !== "android" || !FS || !plugin("FileOpener") || !repo()) return null;
-    const url = "https://github.com/" + repo() + "/releases/download/app-v" + version + "/" + file;
+    const url = "https://github.com/" + repo() + "/releases/download/" + tag + "/" + file;
     const path = file.replace(/\.apk$/, "") + "-" + version + ".apk";
     const D = plugin("Downloads");
     if (D && typeof D.fetch === "function") {
@@ -758,16 +760,19 @@
   function openInstaller(uri) {
     return plugin("FileOpener").openFile({ path: uri, mimeType: APK_MIME });
   }
-  // APKs for versions already installed have done their job.
+  // APKs for versions already installed have done their job, and so has
+  // a preview's once this is that preview.
   async function clearOldUpdates(currentVersion, isNewer) {
     const FS = plugin("Filesystem");
     if (!FS) return;
+    const here = build && build.sha ? String(build.sha).slice(0, 7) : null;
     try {
       const { files } = await FS.readdir({ path: "", directory: "CACHE" });
       for (const f of files || []) {
         const name = typeof f === "string" ? f : f.name;
         const m = /^Waypage-(\d+\.\d+\.\d+)\.apk(\.part)?$/.exec(name || "");
-        if (m && !isNewer(m[1], currentVersion)) await FS.deleteFile({ path: name, directory: "CACHE" });
+        const p = /^Waypage-preview-.*-([0-9a-f]{7})\.apk(\.part)?$/.exec(name || "");
+        if ((m && !isNewer(m[1], currentVersion)) || (p && p[1] === here)) await FS.deleteFile({ path: name, directory: "CACHE" });
       }
     } catch (e) { /* nothing to tidy */ }
   }
@@ -1112,6 +1117,9 @@
     openInstaller,
     clearOldUpdates,
     releasesUrl() { return repo() ? "https://github.com/" + repo() + "/releases/latest" : null; },
+    releaseUrl(tag) { return repo() ? "https://github.com/" + repo() + "/releases/tag/" + tag : null; },
+    // The branch this build came from, when it isn't a release (1.48.0).
+    get previewBranch() { return build && build.branch && build.branch !== "main" ? build.branch : null; },
     apkUrl(file = "Waypage.apk") { return repo() ? "https://github.com/" + repo() + "/releases/latest/download/" + file : null; },
     // The web copy the app was built from: inside the app this page is at
     // https://localhost, which another device can't open.

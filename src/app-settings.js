@@ -22,11 +22,11 @@ const SETTINGS = [
     label: "Images",
     get: () => load(IMAGES_KEY, "previews"),
     set: (v) => { store(IMAGES_KEY, v); toast("New saves use " + v.replace("previews", "previews and links").replace("full", "full images").replace("links", "links only") + "."); },
-    footnote: "Applies to clips you save from now on.",
+    help: "For clips saved from now on; a clip's own menu changes its pictures later. A preview is about 30 KB and the full picture loads from its site when you're online. Full images are about 150 KB each and suit maps and diagrams. Links only keeps no pictures on the phone.",
     options: [
-      { value: "previews", label: "Previews and links", note: "About 30 KB an image. The full image loads when you're online." },
-      { value: "full", label: "Full images", note: "About 150 KB an image. For maps and diagrams." },
-      { value: "links", label: "Links only", note: "No images on the phone. They load when you're online." },
+      { value: "previews", label: "Previews and links", note: "Small previews; the full picture online" },
+      { value: "full", label: "Full images", note: "Sharp offline, about five times the size" },
+      { value: "links", label: "Links only", note: "Pictures only when you're online" },
     ],
   },
 ];
@@ -38,25 +38,61 @@ function swatch(themes, cls) {
 
 const CHECK = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
+// Compact Settings (1.48.0). A row says what it is in a few words, and
+// the longer explanation sits behind a ? on its section's heading, the
+// way the Steam Deck explains a setting only when you ask: `section`
+// builds the heading, the ? and the hidden text, then the rows.
+// Whatever shows a state (a moving library, what isn't ready) stays a
+// visible footnote.
+const helpOpen = new Set();
+function section(title, help, ...kids) {
+  const sec = el("section", { class: "settings-section" });
+  if (title || help) sec.append(settingHead(title, help));
+  sec.append(...kids.filter(Boolean));
+  return sec;
+}
+function settingHead(title, help) {
+  const head = el("div", { class: "section-head" }, el("h2", { class: "overline" }, title || ""));
+  if (!help) return head;
+  const text = el("p", { class: "footnote help-text" }, ...[].concat(help));
+  const open = helpOpen.has(title);
+  // The text unfolds under the heading (a grid row growing from 0fr).
+  const wrap = el("div", { class: "help-wrap" + (open ? " open" : "") }, el("div", { class: "help-inner" }, text));
+  const btn = el("button", { class: "help-btn", type: "button", "aria-label": "About " + (title || "this"), title: "What this does", "aria-expanded": String(open),
+    onclick: () => { const now = !wrap.classList.contains("open"); wrap.classList.toggle("open", now); btn.setAttribute("aria-expanded", String(now)); if (now) helpOpen.add(title); else helpOpen.delete(title); } }, "?");
+  head.append(btn);
+  return el("div", { class: "section-top" }, head, wrap);
+}
+// A switch in a row: its label, a few words of state or scope, the switch.
+function switchRow(label, note, on, set, more) {
+  return el("label", { class: "row" },
+    el("span", { class: "choice-text" }, el("span", { class: "choice-label", dir: "auto" }, label), note ? el("span", { class: "choice-note" }, note) : null),
+    el("input", { class: "switch", type: "checkbox", role: "switch", checked: on, ...(more || {}), onchange: (e) => set(e.target.checked) }));
+}
+// A row that opens another screen.
+function navRow(label, note, onclick) {
+  return el("button", { class: "row nav-row", type: "button", onclick },
+    el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, label), note ? el("span", { class: "choice-note" }, note) : null),
+    el("span", { class: "row-chev", "aria-hidden": "true" }, "›"));
+}
+
+// A pick in a row (1.48.0, Daniel's ask; a list of radios until then):
+// the setting's name, the picked option's few words under it, and a
+// drop-down of the options at the end.
+function pickRow(g) {
+  const at = () => g.options.find((o) => o.value === g.get()) || g.options[0];
+  const note = el("span", { class: "choice-note" }, g.note || at().note || "");
+  const pick = dropdown({ label: g.label, cls: "field-pick row-pick", value: at().value, options: g.options.map((o) => ({ value: o.value, label: o.label })),
+    onpick: (v) => { g.set(v); const o = g.options.find((x) => x.value === v); note.textContent = g.note || (o && o.note) || ""; } });
+  const row = el("div", { class: "row pick-row" },
+    el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, g.label), note),
+    pick);
+  if (g.disabled) pick.querySelector("button").disabled = true;
+  row.set = pick.set;
+  return row;
+}
 function choiceGroup(g) {
-  const current = g.get();
-  const list = el("div", { class: "group", role: "radiogroup", "aria-label": g.label });
-  for (const o of g.options) {
-    const check = el("span", { class: "choice-check", "aria-hidden": "true" });
-    check.innerHTML = CHECK;
-    list.append(el("label", { class: "choice" },
-      el("input", { class: "visually-hidden", type: "radio", name: g.key, value: o.value, checked: o.value === current,
-        onchange: () => g.set(o.value) }),
-      o.swatch ? swatch(o.auto ? autoSwatch() : o.swatch, o.auto ? "auto" : "") : null,
-      el("span", { class: "choice-text" },
-        el("span", { class: "choice-label" }, o.label),
-        o.note ? el("span", { class: "choice-note" }, o.note) : null),
-      check));
-  }
-  return el("section", { class: "settings-section" },
-    el("h2", { class: "overline" }, g.label),
-    list,
-    g.footnote ? el("p", { class: "footnote" }, g.footnote) : null);
+  return section(g.title || "", g.help, el("div", { class: "group" }, pickRow(g)), g.footnote ? el("p", { class: "footnote" }, g.footnote) : null);
 }
 
 // Big pictures made smaller (1.18.0): full images and comics no wider
@@ -96,13 +132,12 @@ function readyGroup() {
   const busy = ready.running || state.saving.some((s) => !s.error);
   const go = el("button", { class: "btn-small", type: "button", onclick: getReady }, ready.running ? "Working…" : "Get ready");
   go.disabled = ready.running;
-  return el("section", { class: "settings-section" },
-    el("h2", { class: "overline" }, "Before you go offline"),
+  return section("Before you go offline", "One press before a flight: saves missing pictures, retries failed saves, fetches new chapters of followed collections and new posts of feeds that save themselves, then lists what still won't read in full offline.",
     el("div", { class: "group" },
       el("div", { class: "row" },
         el("span", { class: "choice-text" },
           el("span", { class: "choice-label" }, ready.running ? "Getting everything ready…" : "Get everything ready"),
-          el("span", { class: "choice-note" }, "Saves missing pictures, failed saves, new chapters and feed posts, then lists what still isn't ready")),
+          el("span", { class: "choice-note" }, "Pictures, failed saves, new chapters and posts")),
         go),
       ...left.slice(0, 20).map((p) => el("button", { class: "row nav-row", type: "button", onclick: () => toLibrary().then(() => openPage(p.id)) },
         el("span", { class: "choice-text" },
@@ -121,28 +156,27 @@ function sendGroup() {
   if (C.platform.native) return null;
   const link = el("a", { class: "btn-small", href: bookmarklet(), draggable: "true",
     onclick: (e) => { e.preventDefault(); toast("Drag it to your bookmarks bar."); } }, "Send to Waypage");
-  return el("section", { class: "settings-section", id: "sendSection" },
-    el("h2", { class: "overline" }, "Save from your browser"),
+  const sec = section("Save from your browser", "On any page, click the bookmark to save the page as your browser shows it, signed in too. The page goes straight from that tab to this one, with no server in between, and you press Save before anything is kept. Some sites keep other windows out; save those on your phone.",
     el("div", { class: "group" },
       el("div", { class: "row" },
         el("span", { class: "choice-text" },
-          el("span", { class: "choice-label" }, "A bookmark for any page"),
-          el("span", { class: "choice-note" }, "Drag the button to your bookmarks bar. On any page, click it to save the page as your browser shows it, signed in too")),
-        link)),
-    el("p", { class: "footnote" }, "The page goes straight from that tab to this one, with no server in between, and you press Save before anything is kept. Some sites keep other windows out; save those on your phone."));
+          el("span", { class: "choice-label" }, "Bookmark for your browser"),
+          el("span", { class: "choice-note" }, "Drag it to your bookmarks bar")),
+        link)));
+  sec.id = "sendSection";
+  return sec;
 }
 
-function compressGroup() {
-  return el("section", { class: "settings-section" },
-    el("h2", { class: "overline" }, "Big pictures"),
+// The two picture switches in one section (1.48.0): big ones made
+// smaller as they're saved, and pictures held back online.
+function savingGroup() {
+  return section("Saving", SETTINGS[1].help + " Make full images smaller keeps full images and comics no wider than 1600 px, in a smaller format: usually a quarter of the size, still sharp on a phone; Storage has the same for clips already saved. Full-size and linked pictures come from their sites, which can see when you read; Load only when tapped keeps that from happening until you tap one, while previews saved on the phone always show."
+      + (C.platform.knowsConnection ? " On Wait for Wi-Fi, saves wait in Downloads until you're on Wi-Fi, and feeds, new chapters and missing pictures are checked then too." : ""),
     el("div", { class: "group" },
-      el("label", { class: "row" },
-        el("span", { class: "choice-text" },
-          el("span", { class: "choice-label" }, "Make full images smaller"),
-          el("span", { class: "choice-note" }, "Full images and comics are saved at most 1600 px wide, in a smaller format. Usually a quarter of the size, still sharp on a phone")),
-        el("input", { class: "switch", type: "checkbox", role: "switch", checked: C.save.compress,
-          onchange: (e) => { store(COMPRESS_KEY, e.target.checked); C.save.compress = e.target.checked; } }))),
-    el("p", { class: "footnote" }, "For clips already saved, Storage has Make pictures smaller."));
+      pickRow(SETTINGS[1]),
+      switchRow("Make full images smaller", "No wider than 1600 px", C.save.compress, (on) => { store(COMPRESS_KEY, on); C.save.compress = on; }),
+      switchRow("Load pictures only when tapped", "Online, nothing loads until you tap it", load(TAP_PICTURES_KEY, false), (on) => { store(TAP_PICTURES_KEY, on); C.reader.tapPictures = on; }),
+      dataRow(DATA_SAVE_KEY, "Save", "On any connection", "Saves wait in Downloads until then")));
 }
 
 // Pictures on tap (1.30.1): a clip opened online loads nothing from the
@@ -150,25 +184,13 @@ function compressGroup() {
 // is how saving works (CLAUDE.md).
 const TAP_PICTURES_KEY = "waypage.tapPictures";
 C.reader.tapPictures = load(TAP_PICTURES_KEY, false);
-function tapPicturesGroup() {
-  return el("section", { class: "settings-section" },
-    el("h2", { class: "overline" }, "Pictures online"),
-    el("div", { class: "group" },
-      el("label", { class: "row" },
-        el("span", { class: "choice-text" },
-          el("span", { class: "choice-label" }, "Load pictures only when tapped"),
-          el("span", { class: "choice-note" }, "Full-size and linked pictures come from their sites, which can see when you read. With this on, nothing loads until you tap it")),
-        el("input", { class: "switch", type: "checkbox", role: "switch", checked: load(TAP_PICTURES_KEY, false),
-          onchange: (e) => { store(TAP_PICTURES_KEY, e.target.checked); C.reader.tapPictures = e.target.checked; } }))),
-    el("p", { class: "footnote" }, "Previews saved on the phone always show. Applies to the next clip you open."));
-}
 
 // On mobile data (1.4.1): save or sync as always, or wait for Wi-Fi.
 // Only the app can tell the two apart (on iOS since 1.6.0); in a browser
 // the group stays out.
-function dataGroup(key, verb, anyNote, wifiNote, middle) {
+function dataRow(key, verb, anyNote, wifiNote, middle) {
   if (!C.platform.knowsConnection) return null;
-  return choiceGroup({ key, label: "On mobile data", get: () => load(key, "any"),
+  return pickRow({ key, label: "On mobile data", get: () => load(key, "any"),
     set: (v) => { store(key, v); if (v !== "wifi") { while (wifiWaiters.length) wifiWaiters.shift()(); if (key === DATA_SYNC_KEY) syncSoon(1000); else fetchPictures(); } if (state.section) renderSection(); },
     options: [{ value: "any", label: verb, note: anyNote }, middle, { value: "wifi", label: "Wait for Wi-Fi", note: wifiNote }].filter(Boolean) });
 }
@@ -177,59 +199,50 @@ function dataGroup(key, verb, anyNote, wifiNote, middle) {
 function autoGroup() {
   const a = autoThemes();
   const row = (text, control) => el("div", { class: "rc-row stack" }, el("span", { class: "rc-label" }, text), control);
-  const box = el("section", { class: "settings-section", id: "autoSection" },
-    el("h2", { class: "overline" }, "Auto uses"),
+  const box = section("Auto uses", "Which theme Auto shows when your phone is in light mode, and which in dark mode.",
     el("div", { class: "group" },
       el("div", { class: "rc-list" },
         row("When your phone is light", seg("auto-light", "Light theme for Auto", themeOptions(THEMES.filter((t) => !t.dark), true), a.light,
           (v) => setAutoTheme({ light: v }), "themes grid five")),
         row("When your phone is dark", seg("auto-dark", "Dark theme for Auto", themeOptions(THEMES.filter((t) => t.dark), true), a.dark,
           (v) => setAutoTheme({ dark: v }), "themes grid")))));
+  box.id = "autoSection";
   box.hidden = state.theme !== "system";
   return box;
 }
 
 // Animations (1.12.0): off, nothing moves at all, for a slow phone or
 // for anyone who'd rather things just change.
-function dimGroup() {
-  return el("section", { class: "settings-section" },
+function looksGroup() {
+  return section("Pictures and motion", "Dim pictures softens them in Night, Black, Dusk and Solarized Dark; tap one to see it in full. With Animations off, screens, menus and pages change at once, with no movement. Your phone's Reduce motion setting is followed either way.",
     el("div", { class: "group" },
-      el("label", { class: "row" },
-        el("span", { class: "choice-text" },
-          el("span", { class: "choice-label" }, "Dim pictures in dark themes"),
-          el("span", { class: "choice-note" }, "In Night, Black, Dusk and Solarized Dark. Tap a picture to see it in full.")),
-        el("input", { class: "switch", type: "checkbox", role: "switch", checked: load(DIM_KEY, true) !== false,
-          onchange: (e) => { store(DIM_KEY, e.target.checked); paintTheme(state.theme); } }))));
+      switchRow("Dim pictures in dark themes", "Tap a picture to see it in full", load(DIM_KEY, true) !== false, (on) => { store(DIM_KEY, on); paintTheme(state.theme); }),
+      switchRow("Animations", "Off: everything changes at once", !M.still(), (on) => { store(MOTION_KEY, on); M.setStill(!on); })));
 }
 
-function motionGroup() {
-  return el("section", { class: "settings-section" },
-    el("h2", { class: "overline" }, "Motion"),
+// Themes as a grid of swatches (1.48.0), two rows instead of ten.
+function themeGroup() {
+  const g = SETTINGS[0];
+  const light = THEMES.filter((t) => !t.dark).map((t) => t.label).join(", ");
+  return section("Theme", "Auto follows your phone, switching between the light and dark themes picked under it. Light: " + light + "; High contrast is black on white for bright sun. Dark: Night for a dim cabin, Black for OLED screens' batteries, Dusk warm and soft for bedtime, and Solarized Dark.",
     el("div", { class: "group" },
-      el("label", { class: "row" },
-        el("span", { class: "choice-text" },
-          el("span", { class: "choice-label" }, "Animations"),
-          el("span", { class: "choice-note" }, "Off: screens, menus and pages change at once, with no movement")),
-        el("input", { class: "switch", type: "checkbox", role: "switch", checked: !M.still(),
-          onchange: (e) => { store(MOTION_KEY, e.target.checked); M.setStill(!e.target.checked); } }))),
-    el("p", { class: "footnote" }, "Your phone's Reduce motion setting is followed either way."));
+      el("div", { class: "rc-list" },
+        seg(THEME_KEY, "Theme", g.options.map((o) => ({ value: o.value, label: o.label, swatch: o.swatch, auto: o.auto })), g.get(), (v) => g.set(v), "themes grid five theme-grid"))));
 }
 
 // Read aloud's settings in Settings too (1.12.0), the same as the Aa
 // sheet's tab; the voice is for the phone's language here.
 function aloudGroup() {
   if (!speech.available) return null;
-  return el("section", { class: "settings-section" },
-    el("h2", { class: "overline" }, "Narrate"),
+  return section("Narrate", "The voice for the phone's language, its speed, and what Narrate reads and does at the end of a clip. The same controls sit in the reader's Aa sheet.",
     el("div", { class: "group" }, el("div", { class: "rc-list" }, aloudControls())));
 }
 
 function readingGroup() {
-  return el("section", { class: "settings-section" },
+  return section("Layout and text", "The same controls as the reader's Aa sheet, behind the gear while you read: how a clip is laid out and how its text is set. The line at the top shows your choices.",
     el("div", { class: "group" },
       el("p", { class: "reading-sample" }, "The page is the product. Everything else gets out of its way."),
-      readingControls(false)),
-    el("p", { class: "footnote" }, "The same as the reader's settings, behind the gear while you read."));
+      readingControls(false)));
 }
 
 // Your own fonts (1.33.0): add a font file, or take one away. A .ttf,
@@ -269,16 +282,14 @@ function fontsGroup() {
   const place = C.store.place.kind;
   const where = place === "documents" ? "Or put font files in Documents/Waypage/fonts on the phone. "
     : place === "folder" ? "Or put font files in a fonts folder inside " + C.store.placeName(C.store.place) + ". " : "";
-  return el("section", { class: "settings-section" },
-    el("h2", { class: "overline" }, "Your fonts"),
+  return section("Your fonts", where + "A font you add stays on this device and shows under Font with the others. Hebrew still uses the Hebrew font. A .ttf, .otf, .woff or .woff2 up to 10 MB.",
     el("div", { class: "group" },
       ...mine.map((f) => el("div", { class: "row" },
         el("span", { class: "choice-text" }, el("span", { class: "choice-label", style: "font-family: " + f.family + ", var(--sans)" }, f.label)),
         el("button", { class: "btn-text warn", type: "button", onclick: () => removeFontFile(f.user) }, "Remove"))),
       el("button", { class: "row", type: "button", onclick: () => input.click() },
         el("span", { class: "row-label accent" }, "Add a font")),
-      input),
-    el("p", { class: "footnote" }, where + "A font you add stays on this device and shows under Font with the others. Hebrew still uses the Hebrew font."));
+      input));
 }
 
 // Dictionaries (1.45.0): StarDict files, for Look up on selected words.
@@ -308,28 +319,23 @@ function dictsGroup() {
     el("span", { class: "row-label accent" }, "Add a dictionary"));
   input.addEventListener("change", () => { const f = [...input.files]; input.value = ""; addDictFiles(f, add); });
   const more = el("a", { href: "https://github.com/koreader/koreader/wiki/Dictionary-support", onclick: (e) => { e.preventDefault(); C.platform.openOutside(e.currentTarget.href); } }, "where to find free ones");
-  return el("section", { class: "settings-section", id: "dictSection" },
-    el("h2", { class: "overline" }, "Dictionaries"),
+  const sec = section("Dictionaries", ["Select a word while reading and tap Look up. StarDict dictionaries: pick the .ifo, .idx and .dict (or .dict.dz) files together, or a .zip or .tar.gz of them; see ",
+      more, ". A dictionary stays on this device and works offline; looking a word up sends nothing anywhere."],
     el("div", { class: "group" },
       ...C.dict.list().map((d) => el("div", { class: "row" },
         el("span", { class: "choice-text" },
           el("span", { class: "choice-label", dir: "auto" }, d.name),
           el("span", { class: "choice-note" }, d.words.toLocaleString() + " words · " + formatSize(d.bytes))),
         el("button", { class: "btn-text warn", type: "button", onclick: () => removeDict(d) }, "Remove"))),
-      add, input),
-    el("p", { class: "footnote" }, "StarDict dictionaries: pick the .ifo, .idx and .dict (or .dict.dz) files together, or a .zip or .tar.gz of them; see ",
-      more, ". Then select a word while reading and tap Look up. A dictionary stays on this device and works offline; looking a word up sends nothing anywhere."));
+      add, input));
+  sec.id = "dictSection";
+  return sec;
 }
 
 // Edit clips, inside Library since 1.27.1 (it was its own menu entry).
 function editNavGroup() {
-  return el("section", { class: "settings-section" },
-    el("div", { class: "group" },
-      el("button", { class: "row nav-row", type: "button", onclick: () => openSection("edit", false, true) },
-        el("span", { class: "choice-text" },
-          el("span", { class: "choice-label" }, "Edit clips"),
-          el("span", { class: "choice-note" }, "Find and replace words across many clips at once")),
-        el("span", { class: "row-chev", "aria-hidden": "true" }, "›"))));
+  return section(null, null,
+    el("div", { class: "group" }, navRow("Edit clips", "Find and replace across many clips", () => openSection("edit", false, true))));
 }
 
 // Notifications (1.30.0): the app's only ones that alert are new feed
@@ -345,35 +351,27 @@ function notesSections() {
     el("input", { class: "switch", type: "checkbox", role: "switch", checked: on, onchange: (e) => set(e.target.checked) }));
   const phone = el("p", { class: "footnote warn", hidden: true }, "Your phone has Waypage's notifications turned off. Turn them on in its settings.");
   C.platform.feedChecks.allowed().then((ok) => { if (ok === false && notesPrefs().on) phone.hidden = false; });
-  const out = [el("section", { class: "settings-section" },
+  const out = [section("Alerts", "Waypage's only alerts: new posts from the feeds you follow, found while the app is closed. Each post on its own shows a post's title and the start of what it says, grouped by feed, with a Save button; All together is one notification saying how many new posts there are and from which feeds." + (C.platform.os === "android" ? " Saving, sync and Narrate show a quiet notification while they run, which Android needs to keep them going with the app put away; those aren't alerts and can't be turned off here." : ""),
     el("div", { class: "group" },
-      sw("Notifications", "New posts from the feeds you follow, found with the app closed", n.on, (on) => {
+      sw("Notifications", "New posts from feeds you follow", n.on, (on) => {
         if (on) askToNotify = true;
         setNotes({ on });
         renderSection();
-      })),
+      }),
+      n.on ? pickRow({ key: NOTES_KEY, label: "New posts", get: () => notesPrefs().posts, set: (v) => setNotes({ posts: v }),
+        options: [
+          { value: "each", label: "Each post on its own", note: "Its title and first words, with Save" },
+          { value: "together", label: "All together", note: "One saying how many, and from where" },
+        ] }) : null),
     phone)];
   if (!n.on) return out;
-  out.push(choiceGroup({ key: NOTES_KEY, label: "New posts", get: () => notesPrefs().posts, set: (v) => setNotes({ posts: v }),
-    options: [
-      { value: "each", label: "Each post on its own", note: "Its title and the start of what it says, grouped by feed, with Save" },
-      { value: "together", label: "All together", note: "One notification saying how many new posts, and from which feeds" },
-    ] }));
   if (feeds.length) {
-    out.push(el("section", { class: "settings-section" },
-      el("h2", { class: "overline" }, "Feeds"),
+    out.push(section("Feeds", "A feed turned off here is still checked; its posts wait in Feeds without a notification.",
       el("div", { class: "group" }, ...[...feeds].sort((a, b) => a.title.localeCompare(b.title)).map((f) =>
-        sw(f.title, null, !feedQuiet(f), (on) => setFeedQuiet(f, !on)))),
-      el("p", { class: "footnote" }, "A feed turned off here is still checked; its posts wait in Feeds.")));
+        sw(f.title, null, !feedQuiet(f), (on) => setFeedQuiet(f, !on))))));
   }
-  out.push(el("section", { class: "settings-section" },
-    el("div", { class: "group" },
-      el("button", { class: "row nav-row", type: "button", onclick: () => C.platform.feedChecks.settings() },
-        el("span", { class: "choice-text" },
-          el("span", { class: "choice-label" }, "Sound and more"),
-          el("span", { class: "choice-note" }, "In your phone's settings for Waypage")),
-        el("span", { class: "row-chev", "aria-hidden": "true" }, "›"))),
-    C.platform.os === "android" ? el("p", { class: "footnote" }, "Saving, sync and Narrate show a quiet notification while they run, which Android needs to keep them going with the app put away. Those aren't alerts and can't be turned off here.") : null));
+  out.push(section(null, null,
+    el("div", { class: "group" }, navRow("Sound and more", "In your phone's settings for Waypage", () => C.platform.feedChecks.settings()))));
   return out;
 }
 const notesValue = () => { const n = notesPrefs(); return n.on ? (n.posts === "each" ? "Each post" : "All together") : "Off"; };
@@ -381,20 +379,14 @@ const notesValue = () => { const n = notesPrefs(); return n.on ? (n.posts === "e
 function libraryGroup() {
   const input = el("input", { class: "switch", type: "checkbox", role: "switch", checked: load(CONTINUE_KEY, true),
     onchange: (e) => { store(CONTINUE_KEY, e.target.checked); renderLibrary(); } });
-  return el("section", { class: "settings-section" },
-    el("h2", { class: "overline" }, "Keeping up"),
+  return section("Keeping up", "Continue reading keeps the clip you read last at the top of the library. New chapters are looked for once a day when you're online, for collections saved with Save next; Check now looks right away.",
     el("div", { class: "group" },
       el("label", { class: "row" },
         el("span", { class: "choice-text" },
           el("span", { class: "choice-label" }, "Continue reading"),
-          el("span", { class: "choice-note" }, "The clip you read last, at the top of the library")),
+          el("span", { class: "choice-note" }, "Your last clip at the top of the library")),
         input),
-      el("label", { class: "row" },
-        el("span", { class: "choice-text" },
-          el("span", { class: "choice-label" }, "Check for new chapters"),
-          el("span", { class: "choice-note" }, "Once a day, for collections saved with Save next, when you're online")),
-        el("input", { class: "switch", type: "checkbox", role: "switch", checked: load(DAILY_KEY, true),
-          onchange: (e) => store(DAILY_KEY, e.target.checked) })),
+      switchRow("Check for new chapters", "Once a day, when you're online", load(DAILY_KEY, true), (on) => store(DAILY_KEY, on)),
       el("button", { class: "row", type: "button", onclick: async (e) => {
         if (!navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
         const b = e.currentTarget;
@@ -451,11 +443,9 @@ function storageGroup() {
       el("span", { class: "row-chev", "aria-hidden": "true" }, "›"));
     list.append(head, pages);
   }
-  return el("section", { class: "settings-section" },
-    el("p", { class: "storage-total" }, formatSize(totalBytes())),
-    el("p", { class: "section-lead" }, n ? countLine(n) + " " + ON_HERE + ". Delete a clip from its menu: press and hold it in the library." : "Clips you save show here with their size."),
-    el("h2", { class: "overline" }, "By collection"),
-    list);
+  const sec = section("By collection", "Every collection with its size, biggest first, and the clips in no collection as one more group. Open one to see its clips by size; tap a clip to read it. To delete a clip, press and hold it in the library.", list);
+  sec.prepend(el("p", { class: "storage-total" }, formatSize(totalBytes()) + (n ? " · " + countLine(n) : "")));
+  return sec;
 }
 
 const remeasured = () => { if (state.section === "storage") renderSection(); };
@@ -477,8 +467,8 @@ function roomRows() {
     el("span", { class: "choice-text" },
       el("span", { class: "choice-label" + (list.length ? " accent" : "") }, makingRoom ? "Making room…" : "Keep only the text of finished clips"),
       el("span", { class: "choice-note" }, list.length
-        ? countLine(list.length) + " you've finished" + (known ? ", their pictures about " + formatSize(known) : "") + ". The pictures show again when you're online."
-        : "Nothing to drop: the clips you've finished have no saved pictures.")),
+        ? countLine(list.length) + " you've finished" + (known ? ", pictures about " + formatSize(known) : "")
+        : "The clips you've finished have no saved pictures")),
     known ? el("span", { class: "row-value" }, formatSize(known)) : null);
   // Clips with full pictures (1.18.0), made smaller in place.
   const full = squeezable();
@@ -486,7 +476,7 @@ function roomRows() {
   const squeezeBtn = full.length ? el("button", { class: "row room-squeeze", type: "button", ...(makingRoom ? { disabled: "" } : {}), onclick: () => squeezePictures(full, squeezeBtn) },
     el("span", { class: "choice-text" },
       el("span", { class: "choice-label accent" }, makingRoom ? "Making room…" : "Make pictures smaller"),
-      el("span", { class: "choice-note" }, countLine(full.length) + " with full pictures" + (fullBytes ? ", about " + formatSize(fullBytes) : "") + ". Big ones usually end up a quarter of the size; they stay sharp on a phone.")),
+      el("span", { class: "choice-note" }, countLine(full.length) + " with full pictures" + (fullBytes ? ", about " + formatSize(fullBytes) : ""))),
     fullBytes ? el("span", { class: "row-value" }, formatSize(fullBytes)) : null) : null;
   return [squeezeBtn, go];
 }
@@ -549,24 +539,20 @@ function placeGroup() {
   // On iOS the app's own storage already shows in the Files app; a folder
   // you pick (1.6.0) can be in iCloud Drive or on a drive plugged in.
   const options = [
-    { value: "app", label: "Inside Waypage", note: C.platform.ios
-      ? "Recommended, and the quickest. It shows in the Files app under On My iPhone, then Waypage. Uninstalling Waypage deletes it."
-      : "Recommended. Private to the app, and the quickest. Uninstalling Waypage deletes it." },
+    { value: "app", label: "Inside Waypage", note: "Recommended, and the quickest" },
   ];
   if (androidSdk >= 30 || place.kind === "documents") {
-    options.push({ value: "documents", label: "Documents/Waypage", note: "You can see it in the Files app, and it stays if you uninstall Waypage. After reinstalling, the empty library offers to get it back." });
+    options.push({ value: "documents", label: "Documents/Waypage", note: "Stays if you uninstall Waypage" });
   }
   options.push({ value: "folder", label: place.kind === "folder" ? place.name || "A folder you picked" : "A folder you pick",
-    note: place.kind === "folder" ? "Pick this again to choose another folder."
-      : C.platform.ios ? "Any folder in the Files app, like one in iCloud Drive. Saving there is a little slower."
-      : "Any folder on the phone or a memory card. Saving there is a little slower." });
-  const group = choiceGroup({ key: "storage-place", label: "Where your library is", get: () => place.kind, options,
+    note: place.kind === "folder" ? "Pick again to choose another" : C.platform.ios ? "Like one in iCloud Drive" : "On the phone or a memory card" });
+  const group = choiceGroup({ key: "storage-place", title: "Where your library is", label: "Kept in", get: () => place.kind, options, disabled: !!moving,
     set: (v) => changePlace(v),
-    footnote: moving ? moving : "Changing it moves every clip there. A library already in the new place is added to yours." });
-  if (moving) group.querySelectorAll("input").forEach((i) => { i.disabled = true; });
-  // The picked folder can be picked again, which a radio that's already on doesn't report.
-  const again = group.querySelector('input[value="folder"]');
-  if (again && place.kind === "folder") again.addEventListener("click", () => changePlace("folder"));
+    help: "Changing it moves every clip there; a library already in the new place is added to yours. Inside Waypage is private to the app" + (C.platform.ios ? " and shows in the Files app under On My iPhone" : "") + "; uninstalling Waypage deletes it. Documents/Waypage shows in the Files app and stays after an uninstall; the empty library offers to get it back. A folder you pick can be anywhere" + (C.platform.ios ? " in the Files app" : ", a memory card too") + ", and saving there is a little slower.",
+    footnote: moving ? moving : null });
+  // The picked folder can be picked again (another folder), which a pick that's already on doesn't report.
+  if (place.kind === "folder" && !moving) group.querySelector(".group").append(el("button", { class: "row", type: "button", onclick: () => changePlace("folder") },
+    el("span", { class: "row-label accent" }, "Choose another folder")));
   return group;
 }
 async function changePlace(kind, initial) {
@@ -637,24 +623,26 @@ function reportGroup() {
     const body = text.length > 6000 ? text.slice(0, 1500) + "\n…\n" + text.slice(-4400) : text;
     C.platform.openOutside(REPORT_REPO + "/issues/new?title=" + encodeURIComponent(title) + "&body=" + encodeURIComponent("```\n" + body + "\n```"));
   };
-  return el("section", { class: "settings-section report" },
+  const sec = section("The report", "Nothing leaves " + HERE + " unless you send it. The report holds what you wrote, Waypage's version, the phone's model and system, how long opening took, and the notes below, with addresses cut to their pages. An issue on GitHub is public, so anyone can read it.",
     field,
     el("div", { class: "group" },
       el("button", { class: "row", type: "button", onclick: send }, el("span", { class: "row-label accent" }, "Send the report")),
       el("button", { class: "row", type: "button", onclick: issue }, el("span", { class: "row-label accent" }, "Open an issue on GitHub")),
       el("button", { class: "row", type: "button", onclick: async () => copyText(await reportText(), "Report copied") }, el("span", { class: "row-label accent" }, "Copy the report"))),
-    el("p", { class: "footnote" }, "Nothing leaves " + HERE + " unless you send it. The report holds what you wrote, Waypage's version, the phone's model and system, how long opening took, and the notes below, with addresses cut to their pages. An issue on GitHub is public, so anyone can read it."),
     startLine() ? el("p", { class: "footnote start-line" }, startLine()) : null,
     el("h2", { class: "overline" }, list.length ? "What went wrong lately" : "Nothing went wrong lately"),
     list.length ? el("ol", { class: "group report-log" }, ...list.slice().reverse().slice(0, 30).map((x) => el("li", { class: "report-line" },
       el("span", { class: "meta" }, logTime(x.at) + " · " + x.kind + (x.n ? " ×" + x.n : "")),
       el("span", { class: "report-msg", dir: "auto" }, x.msg)))) : null,
     list.length ? el("button", { class: "btn-text report-clear", type: "button", onclick: () => { C.platform.log.clear(); renderSection(); renderSettings(); } }, "Clear these") : null);
+  sec.classList.add("report");
+  return sec;
 }
 
 function aboutGroup() {
   const list = el("div", { class: "group" });
   const releases = C.platform.releasesUrl() || "https://github.com/danielnoam/waypage/releases/latest";
+  list.append(navRow("Credits", null, () => openSection("credits", false, true)));
   list.append(el("a", { class: "row", href: releases, target: "_blank", rel: "noopener" },
     el("span", { class: "row-label accent" }, "Releases and source"),
     el("span", { class: "row-value", "aria-hidden": "true" }, "↗")));
@@ -713,14 +701,13 @@ function browserStorageGroup() {
         draw(await C.store.storageInfo());
       } }, el("span", { class: "choice-text" },
         el("span", { class: "choice-label accent" }, "Keep clips from being cleared"),
-        el("span", { class: "choice-note" }, "Browsers may clear a site's data when space runs low.")));
+        el("span", { class: "choice-note" }, "Asks the browser not to clear this site")));
     box.replaceChildren(
-      el("h2", { class: "overline" }, "This browser"),
+      settingHead("This browser", "Clips saved here stay in this browser only. Clearing its site data deletes them, so keep a backup. Browsers may clear a site's data when space runs low; Keep asks this one not to."),
       el("div", { class: "group" },
         el("div", { class: "row" }, el("span", { class: "row-label" }, "Space used"),
           el("span", { class: "row-value" }, formatSize(info.usage) + (info.quota ? " of " + formatSize(info.quota) : ""))),
-        kept),
-      el("p", { class: "footnote" }, "Clips saved here stay in this browser only. Clearing its site data deletes them, so keep a backup."));
+        kept));
   };
   C.store.storageInfo().then(draw);
   return box;
@@ -758,12 +745,11 @@ function editGroup() {
   const clips = editClips();
   const folders = allFolders();
   const scope = el("section", { class: "settings-section edit-sec" },
-    el("h2", { class: "overline" }, "Which clips"),
-    choiceList("edit-scope", "Which clips", [
+    el("div", { class: "group" }, pickRow({ key: "edit-scope", label: "Which clips", get: () => edit.scope, set: (v) => { edit.scope = v; editChanged(); }, options: [
       { value: "all", label: "All clips", note: countLine(state.pages.filter((p) => !p.link && !p.preview).length) },
       folders.length ? { value: "folders", label: "Collections", note: "The ones you tick below" } : null,
       { value: "picked", label: "Clips you pick", note: edit.picked.length ? countLine(edit.picked.length) + " picked in the library" : "Pick them in the library, then tap Edit" },
-    ].filter(Boolean), edit.scope, (v) => { edit.scope = v; editChanged(); }),
+    ].filter(Boolean) })),
     edit.scope === "folders" ? el("div", { class: "group edit-folders" }, ...folders.map((f) => el("label", { class: "row" },
       el("span", { class: "choice-text" },
         el("span", { class: "choice-label", dir: "auto" }, f),
@@ -961,20 +947,63 @@ async function undoEdits() {
   toast("Undone: " + countLine(list.length) + " back as they were.");
 }
 
+// ---- Credits (1.48.0) ----
+// What Waypage is built with. Anything vendored or bundled goes here
+// with its author and licence (CONTRIBUTING.md).
+const CREDITS = {
+  code: [
+    { name: "Readability", by: "Mozilla", licence: "Apache 2.0", url: "https://github.com/mozilla/readability", note: "Picks the article out of a page" },
+    { name: "pdf.js", by: "Mozilla", licence: "Apache 2.0", url: "https://mozilla.github.io/pdf.js/", note: "Shows PDFs" },
+    { name: "foliate-js", by: "John Factotum", licence: "MIT", url: "https://github.com/johnfactotum/foliate-js", note: "Reads Kindle books" },
+    { name: "Capacitor", by: "Ionic", licence: "MIT", url: "https://capacitorjs.com", note: "Wraps the app for Android and iOS" },
+    { name: "Capacitor File Opener", by: "Capawesome", licence: "MIT", url: "https://github.com/capawesome-team/capacitor-plugins", note: "Opens the downloaded update" },
+    { name: "Capacitor ML Kit Barcode Scanning", by: "Capawesome", licence: "Apache 2.0", url: "https://github.com/capawesome-team/capacitor-mlkit", note: "Scans the sync setup code" },
+  ],
+  fonts: [
+    ["Source Serif 4", "Adobe"], ["Instrument Sans", "Rodrigo Fuenzalida"], ["Literata", "TypeTogether"], ["Lora", "Cyreal"],
+    ["Merriweather", "Sorkin Type"], ["EB Garamond", "Georg Duffner"], ["Inter", "Rasmus Andersson"], ["Atkinson Hyperlegible", "Braille Institute"],
+    ["OpenDyslexic", "Abbie Gonzalez"], ["Assistant", "Ben Nathan"], ["David Libre", "Meir Sadan"], ["Frank Ruhl Libre", "Yanek Iontef"], ["Heebo", "Oded Ezer"],
+  ],
+  services: [
+    { name: "Kill the Newsletter!", url: "https://kill-the-newsletter.com", note: "Turns newsletters into feeds" },
+    { name: "Internet Archive", url: "https://web.archive.org", note: "The Wayback Machine's copy when a page is gone" },
+    { name: "Wikipedia", url: "https://www.wikipedia.org", note: "Articles through its REST API, under CC BY-SA 4.0" },
+    { name: "Google ML Kit", url: "https://developers.google.com/ml-kit", note: "Translates on the device, on Android" },
+  ],
+};
+function creditsSections() {
+  const out = (href, label, note, value) => el("a", { class: "row", href, target: "_blank", rel: "noopener",
+    onclick: (e) => { e.preventDefault(); C.platform.openOutside(href); } },
+    el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, label), note ? el("span", { class: "choice-note" }, note) : null),
+    value ? el("span", { class: "row-value" }, value) : null,
+    el("span", { class: "row-value", "aria-hidden": "true" }, "↗"));
+  return [
+    section("Code", "Open-source code bundled into Waypage, each under its own licence; the licence texts are in the repo beside the code.",
+      el("div", { class: "group" }, ...CREDITS.code.map((c) => out(c.url, c.name, c.note, c.by + " · " + c.licence)))),
+    section("Fonts", "All under the SIL Open Font License, bundled as Latin and Hebrew subsets.",
+      el("div", { class: "group" }, ...CREDITS.fonts.map(([name, by]) => el("div", { class: "row" },
+        el("span", { class: "row-label", style: "font-family: '" + name + "', var(--sans)" }, name), el("span", { class: "row-value" }, by))))),
+    section("Services", "Sites Waypage talks to for a feature, only when you use it. Nothing else leaves the device.",
+      el("div", { class: "group" }, ...CREDITS.services.map((c) => out(c.url, c.name, c.note)))),
+  ];
+}
+
 // Settings is a short menu; each entry is a screen of its own.
 const updateOut = () => UPD_OUT.includes(upd.phase) && upd.latest;
 // Settings sorted by what you came to change (1.12.0): how it looks,
 // how you read, the library; then saving, sync and storage; then About.
 const SECTIONS = {
-  appearance: { title: "Appearance", build: () => [choiceGroup(SETTINGS[0]), autoGroup(), dimGroup(), motionGroup()],
+  appearance: { title: "Appearance", build: () => [themeGroup(), autoGroup(), looksGroup()],
     value: () => themeName(state.theme) },
   reading: { title: "Reading", build: () => [readingGroup(), fontsGroup(), dictsGroup(), aloudGroup()],
     value: () => { const r = readingPrefs(); return (FONTS.find((f) => f.value === r.font) || FONTS[0]).label + " · " + r.size + " px"; } },
   library: { title: "Library", build: () => [
-    choiceGroup({ key: LAYOUT_KEY, label: "Layout", get: layout, set: (v) => { store(LAYOUT_KEY, v); renderLibrary(); }, options: LAYOUTS }),
+    section("Layout", LAYOUTS.map((l) => l.label + ": " + l.note.toLowerCase()).join(". ") + ".",
+      el("div", { class: "group" }, el("div", { class: "rc-list" },
+        seg(LAYOUT_KEY, "Layout", LAYOUTS.map((l) => ({ value: l.value, label: l.label })), layout(), (v) => { store(LAYOUT_KEY, v); renderLibrary(); })))),
     libraryGroup(), watchGroup(), importGroup(), editNavGroup()],
     value: () => (LAYOUTS.find((l) => l.value === layout()) || LAYOUTS[0]).label },
-  saving: { title: "Saving", build: () => [readyGroup(), choiceGroup(SETTINGS[1]), compressGroup(), tapPicturesGroup(), dataGroup(DATA_SAVE_KEY, "Save", "Pages and pictures come down on any connection.", "Saves wait in Downloads until you're on Wi-Fi; feeds, new chapters and missing pictures check then too."), signedGroup(), sendGroup()],
+  saving: { title: "Saving", build: () => [savingGroup(), readyGroup(), signedGroup(), sendGroup()],
     value: () => SETTINGS[1].options.find((o) => o.value === SETTINGS[1].get()).label },
   sync: { title: "GitHub sync", build: syncSections, value: () => (C.sync.on ? (C.sync.last.error ? "Stopped" : "On") : "Off") },
   drive: { title: "Google Drive", build: driveSections, value: driveValue },
@@ -982,10 +1011,13 @@ const SECTIONS = {
   edit: { title: "Edit clips", build: editGroup, value: () => "", parent: "library" },
   storage: { title: "Storage", build: () => [placeGroup(), storageGroup(), browserStorageGroup(), backupGroup(roomRows())], value: () => formatSize(totalBytes()) },
   updates: { title: "About", build: () => [updatesGroup(), aboutGroup()], value: () => (updateOut() ? upd.latest + " is out" : APP_VERSION) },
+  previews: { title: "Preview builds", build: () => previewsSections(), value: () => "", parent: "updates" },
+  credits: { title: "Credits", build: creditsSections, value: () => "", parent: "updates" },
   report: { title: "Report a problem", build: () => [reportGroup()], value: () => { const n = C.platform.log.list().length; return n ? n + (n === 1 ? " note" : " notes") : ""; } },
 };
 
 function renderSettings() {
+  if (settingsQuery()) { renderFound(); return; }
   const row = (key) => {
     const s = SECTIONS[key];
     const b = el("button", { class: "row nav-row", type: "button", onclick: () => openSection(key) },
@@ -1005,6 +1037,110 @@ function renderSettings() {
       el("div", { class: "group" }, row("appearance"), row("reading"), row("library"), C.platform.native ? row("notifications") : null, row("lock")),
       el("div", { class: "group" }, row("saving"), row("sync"), C.drive.available ? row("drive") : null, row("storage")),
       el("div", { class: "group" }, row("updates"), row("report"))));
+}
+
+// ---- Searching Settings (1.48.0) ----
+// Every screen is built once, out of sight, and its headings, rows and
+// explanations read into a list; a word or two finds a setting wherever
+// it sits. The list is made the first time it's needed after Settings
+// opens, and dropped when they close, so it says what the screens say.
+// Each result opens its screen and lights the row up for a moment.
+const FIND_ALIASES = {
+  Theme: "dark mode light mode colours night", Animations: "motion", Images: "pictures photos", Layout: "shelf list grid scroll pages margins",
+  "Text size": "font size bigger smaller", Font: "typeface", Narrate: "read aloud voice speech tts", "On mobile data": "wi-fi cellular",
+  "Where your library is": "storage folder documents sd card", "App lock": "passcode pin fingerprint face biometric", Notifications: "alerts",
+  "Google Drive": "backup cloud", "GitHub sync": "sync devices token", Credits: "about licence licenses open source thanks",
+  Version: "update check app", Changelog: "what's new release notes", "Continue reading": "last clip resume",
+  "Preview builds": "beta branch test pull request",
+};
+let settingsIdx = null;
+const settingsQuery = () => { const i = $("settingsSearch"); return i ? i.value.trim() : ""; };
+const menuKeys = () => Object.keys(SECTIONS).filter((k) => !((k === "notifications" || k === "previews") && !C.platform.native) && !(k === "drive" && !C.drive.available) && !(k === "lock" && !lockCan()));
+const text = (n) => (n ? n.textContent.replace(/\s+/g, " ").trim() : "");
+function settingsIndex() {
+  if (settingsIdx) return settingsIdx;
+  const list = [];
+  const box = el("div", { hidden: "" });
+  document.body.append(box);
+  for (const key of menuKeys()) {
+    const s = SECTIONS[key];
+    const path = (s.parent ? SECTIONS[s.parent].title + " › " : "") + s.title;
+    list.push({ key, path, head: "", label: s.title, note: "", more: FIND_ALIASES[s.title] || "" });
+    let built = [];
+    try { built = (s.build() || []).filter(Boolean); } catch (e) { console.error(e); }
+    box.replaceChildren(...built);
+    for (const sec of box.querySelectorAll(".settings-section")) {
+      const head = text(sec.querySelector(".overline"));
+      const help = text(sec.querySelector(".help-text"));
+      if (head) list.push({ key, path, head, label: head, note: "", more: help + " " + (FIND_ALIASES[head] || "") });
+      for (const row of sec.querySelectorAll(".row, .choice, .rc-row, [role=radiogroup]")) {
+        if (row.closest(".storage-pages, .report-log, .edit-samples")) continue;
+        const label = row.matches("[role=radiogroup]") ? row.getAttribute("aria-label") : text(row.querySelector(".choice-label, .row-label, .rc-label, .step-num + .choice-text .choice-label"));
+        if (!label || label === head || list.some((x) => x.key === key && x.head === head && x.label === label)) continue;
+        const note = row.matches("[role=radiogroup]") ? [...row.querySelectorAll(".seg-face")].map(text).join(", ") : text(row.querySelector(".choice-note"));
+        list.push({ key, path, head, label, note, more: (FIND_ALIASES[label] || "") + " " + help });
+      }
+    }
+  }
+  box.remove();
+  for (const x of list) x.folded = fold([x.label, x.note, x.head, x.path, x.more].join(" "));
+  return (settingsIdx = list);
+}
+function findSettings(q) {
+  const words = fold(q).split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const score = (x) => {
+    if (!words.every((w) => x.folded.includes(w))) return 0;
+    const label = fold(x.label), head = fold(x.head);
+    return words.reduce((n, w) => n + (label.startsWith(w) ? 4 : label.includes(w) ? 3 : head.includes(w) ? 2 : fold(x.note).includes(w) ? 1.5 : 1), 0) + (x.head ? 0 : 0.5);
+  };
+  return settingsIndex().map((x) => [score(x), x]).filter(([n]) => n > 0).sort((a, b) => b[0] - a[0]).slice(0, 24).map(([, x]) => x);
+}
+function renderFound() {
+  const found = findSettings(settingsQuery());
+  fill($("settingsBody"), el("div", { class: "settings-menu found-list" },
+    found.length ? el("div", { class: "group" }, ...found.map((x) => el("button", { class: "row nav-row", type: "button", onclick: () => goToSetting(x) },
+      el("span", { class: "choice-text" },
+        el("span", { class: "choice-label", dir: "auto" }, x.label),
+        el("span", { class: "choice-note" }, x.path + (x.head && x.head !== x.label ? " › " + x.head : ""))),
+      el("span", { class: "row-chev", "aria-hidden": "true" }, "›"))))
+      : el("p", { class: "empty-text found-none" }, "Nothing in Settings matches that.")));
+}
+function goToSetting(x) {
+  const s = SECTIONS[x.key];
+  if (state.section !== x.key) openSection(x.key, false, !!s.parent);
+  const body = $("sectionBody");
+  let target = null;
+  for (const sec of body.querySelectorAll(".settings-section")) {
+    if (text(sec.querySelector(".overline")) !== x.head) continue;
+    target = sec;
+    if (x.label === x.head) break;
+    for (const row of sec.querySelectorAll(".row, .choice, .rc-row, [role=radiogroup]")) {
+      const label = row.matches("[role=radiogroup]") ? row.getAttribute("aria-label") : text(row.querySelector(".choice-label, .row-label, .rc-label"));
+      if (label === x.label) { target = row; break; }
+    }
+    break;
+  }
+  if (!target) return;
+  const wait = state.section === x.key && !wide.matches ? 0 : 0;
+  setTimeout(() => {
+    target.scrollIntoView({ block: "center", behavior: M.still() ? "auto" : "smooth" });
+    target.classList.remove("found");
+    void target.offsetWidth;
+    target.classList.add("found");
+    setTimeout(() => target.classList.remove("found"), 2000);
+  }, wait);
+}
+function wireSettingsSearch() {
+  const input = $("settingsSearch"), clear = $("settingsSearchClear");
+  if (!input) return;
+  const paint = () => { clear.hidden = !input.value; if (state.settings) renderSettings(); };
+  input.addEventListener("input", paint);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && input.value) { e.preventDefault(); input.value = ""; paint(); }
+    if (e.key === "Enter") { const first = $("settingsBody").querySelector(".found-list .nav-row"); if (first) first.click(); }
+  });
+  clear.addEventListener("click", () => { input.value = ""; paint(); input.focus(); });
 }
 
 function renderSection() {
@@ -1040,6 +1176,7 @@ function closeSection() {
 // `at` names a section to open over the menu (the update bar opens Updates).
 function openSettings(fromHistory, at) {
   if (state.settings) return;
+  settingsIdx = null;
   // With room for the section beside the menu, the first one is open.
   if (wide.matches && !at && !fromHistory) at = "appearance";
   state.settings = true;
@@ -1056,4 +1193,9 @@ function closeSettings() {
   closeSection();
   state.settings = false;
   popScreen($("settingsView"));
+  const q = $("settingsSearch");
+  if (q) { q.value = ""; $("settingsSearchClear").hidden = true; }
+  settingsIdx = null;
 }
+
+wireSettingsSearch();

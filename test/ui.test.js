@@ -913,7 +913,9 @@ function zipOf(files) {
         openSettings();
         openSection("notifications");
         await new Promise((r) => setTimeout(r, 300));
-        document.querySelector('#sectionBody input[value="together"]').click();
+        document.querySelector("#sectionBody .pick-row .dropdown-btn").click();
+        await new Promise((r) => setTimeout(r, 300));
+        [...document.querySelectorAll("#sectionBody .dropdown-item")].find((b) => b.textContent.includes("All together")).click();
         await new Promise((r) => setTimeout(r, 1200));
         [...document.querySelectorAll("#sectionBody .row")].find((r) => r.textContent.includes("Example News")).querySelector("input").click();
         await new Promise((r) => setTimeout(r, 1200));
@@ -1207,7 +1209,8 @@ function zipOf(files) {
       await until(q, async () => /~~whole~~/.test(await window.Waypage.store.readPage("ed1")));
       // Titles, in one collection only.
       await q.locator(".seg-item", { hasText: "Titles" }).click();
-      await q.locator("label.choice", { hasText: "Collections" }).click();
+      await q.locator(".pick-row .dropdown-btn").click();
+      await q.locator(".dropdown-item", { hasText: "Collections" }).click();
       await q.locator(".edit-folders label.row", { hasText: "Notes" }).locator("input").click();
       await q.fill("#editFind", "Clip");
       await q.fill("#editPut", "Note");

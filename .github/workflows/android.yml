@@ -1,16 +1,18 @@
 # Builds the Android app from the same files GitHub Pages serves, and
-# publishes it as a release when APP_VERSION is new. From LifeLog's
-# android.yml, without its widgets.
+# publishes it as a release when APP_VERSION is new. Any other branch with
+# an open pull request gets a preview pre-release instead (1.48.0,
+# tools/preview-release.sh). From LifeLog's android.yml, without its widgets.
 name: Android app
 
 on:
   push:
-    branches: [main, "claude/**"]
+    branches: ["**"]
     paths-ignore: ["**.md", "test/**", ".claude/**"]
   workflow_dispatch:
 
 permissions:
   contents: write
+  pull-requests: read
 
 concurrency:
   group: android-${{ github.ref }}
@@ -109,3 +111,13 @@ jobs:
             echo "**iPhone:** **Waypage.ipa** is added here a few minutes later. It's unsigned: install it with AltStore or SideStore, which sign it with your own Apple ID."
           } >> notes.md
           gh release create "app-v$V" Waypage.apk --title "Waypage $V" --notes-file notes.md
+
+      # Any other branch with an open pull request: the APK goes on the
+      # pre-release preview-<branch>, remade on every push, which Settings
+      # › About › Preview builds lists. Never "latest", so never an update.
+      - name: Publish the preview
+        if: github.ref != 'refs/heads/main' && steps.sign.outputs.signed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ steps.v.outputs.version }}
+        run: bash tools/preview-release.sh create Waypage.apk

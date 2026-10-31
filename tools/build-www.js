@@ -10,8 +10,9 @@
 // the build rather than shipping an app that 404s on its own script.
 //
 // Also writes www/app-build.json: the version, the repo the build came from
-// (so the app can link to its Releases page) and the web copy's address.
-// See src/platform.js for what reads it.
+// (so the app can link to its Releases page), the web copy's address and,
+// on Actions, the branch and commit (a branch other than main is a preview
+// build, 1.48.0). See src/platform.js for what reads it.
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
@@ -96,6 +97,8 @@ function build(out = OUT, root = ROOT) {
     // GitHub Pages: the host is the owner lowercased, the path the repo as named.
     webUrl: repo ? "https://" + owner.toLowerCase() + ".github.io/" + name + "/" : null,
     builtAt: new Date().toISOString(),
+    branch: process.env.GITHUB_REF_NAME || null,
+    sha: process.env.GITHUB_SHA || null,
   };
   fs.writeFileSync(path.join(out, "app-build.json"), JSON.stringify(info, null, 2) + "\n");
   return { out, files: assets.length + 1, info };

@@ -7,11 +7,6 @@ CHANGELOG.md; the rules every release keeps are at the top of NOTES.md.
 
 Planned, not built yet. Show the reworked screens before building.
 
-- **Clean up Settings.** Tidy the pages and move some buttons to where
-  they belong. Settings was last regrouped in 1.12.0 and has grown a lot
-  since (dictionaries, fonts, Translate, Narrate, Drive, newsletters,
-  app lock). To do first: walk every page, list what sits where, and
-  show Daniel the new layout before moving anything.
 - **Settings per clip, per collection and per book.** A clip, a
   collection or a file (EPUB, PDF, comic) can keep its own font, size,
   margins and Scroll or Pages, KOReader-style, with "Use everywhere" to
