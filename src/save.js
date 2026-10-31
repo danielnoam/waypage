@@ -180,7 +180,9 @@
   // there is one (so an ad beside it stays out), else every picture that
   // could be a panel; null when there are none. Run after
   // resolveLazyImages.
-  function comicPanels(doc, base) {
+  // Under this much article text, a column of panels makes the page a comic.
+  const COMIC_MAX_TEXT = 1200;
+  function comicItems(doc, base) {
     const ids = new Map();
     const keyOf = (n) => { if (!ids.has(n)) ids.set(n, ids.size); return ids.get(n); };
     const items = [];
@@ -191,6 +193,10 @@
       for (let n = img.parentElement; n && n !== doc.body && path.length < 4; n = n.parentElement) path.push(keyOf(n));
       items.push({ src, path, img });
     }
+    return items;
+  }
+  function comicPanels(doc, base) {
+    const items = comicItems(doc, base);
     const group = comicGroup(items);
     if (group) return group.srcs;
     // No clear column: every picture that could be a panel, in page order.
@@ -1098,6 +1104,16 @@
     }
     if (typeof window.Readability !== "function") throw new SaveError("The reader part of the app didn't load. Restart Waypage.");
     const article = new window.Readability(doc, { charThreshold: 500, keepClasses: false }).parse();
+    // A comic chapter nobody said was one (1.49.0): little or no text and a
+    // column of large pictures. A page with real text stays an article.
+    if (!article || (article.textContent || "").trim().length < COMIC_MAX_TEXT) {
+      const group = comicGroup(comicItems(doc, finalUrl));
+      if (group) {
+        if (own && own.next !== undefined) next = own.next;
+        if (own && own.prev !== undefined) prev = own.prev;
+        return { doc, docTitle, headline: (own && own.title) || headline, next, prev, panels: group.srcs, series: (own && own.series) || "", byline: (own && own.byline) || "", blanks: standIns(doc) };
+      }
+    }
     if (!article || (article.textContent || "").trim().length < MIN_TEXT) return null;
     if (own && own.next !== undefined) next = own.next;
     if (own && own.prev !== undefined) prev = own.prev;
@@ -1140,6 +1156,8 @@
     }
     let got = readArticle(res.text, finalUrl, comic, site, asPage);
     let html = res.text;
+    // A page found to be a comic (1.49.0) gets the comic treatment below.
+    if (got && got.panels) comic = true;
     // Pages that build themselves with scripts, or wait behind a browser
     // check, get drawn in a hidden WebView on Android and read again. The
     // saved copy is the same script-free HTML as any other page's.
@@ -1650,7 +1668,7 @@
   // Saves `url`; onProgress({ stage, done, total }) reports drawing a
   // script-built page, then images as they land. Resolves to the page's meta, which the library index lists.
   // `kind` "comic" saves the page's pictures as an image chapter instead
-  // of reading an article out of it; it is chosen, never guessed.
+  // of reading an article out of it; chosen, or found by readArticle (1.49.0).
   // `archived` ({ url, at }, from findArchived): the page is read from
   // the Wayback Machine's copy, and keeps its own address.
   async function save(url, { mode = "previews", kind = "article", asPage = false, onProgress, id: keepId, archived, given } = {}) {

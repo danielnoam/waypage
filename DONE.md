@@ -13,7 +13,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Save several links at once, and a web novel's contents page as its chapters (0.9.0, 0.21.0)
 - Save next / previous / All along a site's next-chapter links (0.10.0, 0.20.0)
 - Royal Road, AO3, Scribble Hub, FanFiction.net, Blogger serials, WEBTOON, Tapas, Wattpad (0.25.0, 0.26.0, 0.29.1)
-- Comics and manga as image chapters, read edge to edge (0.22.0)
+- Comics and manga as image chapters, read edge to edge (0.22.0); spotted when saved, and Save as comic on a clip (1.49.0)
 - Pages built by JavaScript, drawn out of sight first (0.12.0 Android, 1.6.0 iPhone)
 - Saving signed in to a site, and "Only the start" on paywalled saves (1.7.0, 1.8.0)
 - The Internet Archive's copy when a page is gone (1.15.0)

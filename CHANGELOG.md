@@ -2,6 +2,15 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.49.0] - 2026-10-31
+
+### Added
+- Manga and comics are spotted when you save them. A page with little text
+  and a column of large pictures now saves as a comic (its panels, edge to
+  edge) without picking Comic in the new-collection options.
+- Save as comic, under More on a clip that was saved as an article: fetches
+  the page again as its pictures, in the old copy's place.
+
 ## [1.48.0] - 2026-10-31
 
 ### Changed

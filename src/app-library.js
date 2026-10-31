@@ -846,6 +846,9 @@ function pageSheet(p, where) {
         // The page changed since (1.38.0): fetched again in its place.
         p.file || p.preview || !/^https?:/.test(p.url || "") ? null
           : menuRow("Update from the site", () => back().then(() => updateClip(p))),
+        // A manga read as an article (1.49.0): saved again as its pictures.
+        p.file || p.preview || p.comic || !/^https?:/.test(p.url || "") ? null
+          : menuRow("Save as comic", () => back().then(() => saveClipAsComic(p))),
         // The original gone or changed (1.15.0): the Wayback Machine's copy.
         p.file || p.preview || p.comic || !/^https?:/.test(p.url || "") ? null
           : menuRow(p.archived ? "Find a newer archived copy" : "Use the archived copy", () => back().then(() => archiveClip(p))),

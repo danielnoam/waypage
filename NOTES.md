@@ -18,6 +18,17 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+**Comics are guessed now, carefully (1.49.0).** save.js's old comment said
+a comic "is chosen, never guessed". readArticle now tries comicGroup
+(four panels at least, most of all the page's pictures) when Readability
+finds under 1200 characters of article, or none. A long article with many
+pictures stays an article, and a page with a few pictures finds no group.
+The wrong guess costs a clip of pictures instead of text, so More has
+"Save as comic" to redo a clip by hand (and "Update from the site" keeps
+a comic a comic, as before). Checked in the browser with `given` pages
+(6 panels: comic; 6 panels and long text: article; 2 panels: no); the
+live fetch and saving on a phone weren't run.
+
 - **A deck is redrawn, not converted (1.47.0).** Android has no PowerPoint
   renderer, Apache POI would add about 20 MB, and a server is ruled out, so
   `src/pptx.js` reads the zip's XML itself and draws each slide on a

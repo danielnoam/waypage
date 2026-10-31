@@ -329,6 +329,24 @@ async function updateClip(p) {
   if (state.open === p && after) { history.replaceState(readerState(meta), ""); show(meta, after); }
 }
 
+// Save as comic (1.49.0): a clip of a manga or comic that was read as an
+// article, saved again as its pictures, in the old copy's place.
+async function saveClipAsComic(p) {
+  if (!navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
+  if (state.saving.some((s) => s.again === p)) return;
+  const job = { ...newJob(p.url, p.folder), key: "again:" + p.id, again: p, mode: "full", kind: "comic" };
+  state.saving.unshift(job);
+  renderLibrary();
+  toast("Saving it as a comic…");
+  const meta = await runJob(job);
+  if (!meta) { toast("Couldn't find the pictures. It's in Downloads to try once more."); return; }
+  toast("Saved as a comic.");
+  if (state.open === p) {
+    const html = await C.store.readPage(meta.id).catch(() => null);
+    if (html && state.open === p) { history.replaceState(readerState(meta), ""); show(meta, html); }
+  }
+}
+
 // The Wayback Machine (1.15.0): a page that's gone saved from the
 // Internet Archive's newest copy, with its own address kept.
 async function findArchive(url) {
