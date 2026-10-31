@@ -25,6 +25,7 @@ which fails without `node_modules/@capacitor`.
 
 | File | What it holds |
 |---|---|
+| `ARCHITECTURE.md` | The map of the code: every file, load order, and the flows (saving, storing, reading, sync, the apps). |
 | `docs/PROPOSAL.md` | Why there is no server, how a page is captured and stored, the legal and store rules. Read it before changing architecture. |
 | `DESIGN.md` | The design language: color tokens, type and space scales, motion, components, accessibility. |
 | `TODO.md` | What's left to do. Only that. |
@@ -119,6 +120,10 @@ enough detail for someone else to pick it up.
   DONE.md and a CHANGELOG entry; a "no" becomes a line in DROPPED.md with
   the reason. Remove anything stale.
 - **DONE.md** gets one line per feature, under its area, with its version.
+- **ARCHITECTURE.md** changes in the same commit as the code when a file
+  is added, removed or renamed, or a flow it describes changes.
+  `test/docs.test.js` fails when a source file isn't named there, so a
+  missed file fails the Tests check.
 - **NOTES.md** gets an entry for anything non-obvious: a bold title with
   the version, then why.
 - **README.md lists every feature, with pictures.** A change a person can

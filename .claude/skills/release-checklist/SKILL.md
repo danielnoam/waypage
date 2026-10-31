@@ -39,6 +39,9 @@ workflow copies this entry into the GitHub release notes.
   pictures with `node tools/shots.js <section>` (desktop and phone, into
   `docs/shots/`). A new area gets a section, a Contents line and a shot in
   `tools/shots.js`. Look at the new pictures before committing.
+- **ARCHITECTURE.md**: a file added, removed or renamed, or a flow
+  changed, is updated here in the same change (`test/docs.test.js`
+  checks the file list).
 - **NOTES.md**: why something is the way it is, newest first, each entry a
   bold title with its version.
 - **DROPPED.md**: what was decided against, with the reason.
