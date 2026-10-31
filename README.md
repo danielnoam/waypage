@@ -11,6 +11,8 @@ files run in a browser (the web copy on GitHub Pages) and, wrapped by
 
 Each section below shows the computer (left) and the phone (right).
 
+Working on Waypage? Start with [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Contents
 
 - [Library](#library)
