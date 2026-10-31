@@ -18,6 +18,12 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+- **A hidden `.rc-row` needs its own rule (1.46.1).** `.rc-row` is
+  `display: flex`, which beats the browser's `[hidden]`, so the Dark PDF
+  pages row stayed visible in every clip. `.rc-row[hidden]` now hides it.
+  The 1.46.0 test only looked at a PDF; the fix has a web clip and a PDF
+  shown as text in its tests.
+
 - **Dark PDF pages are a CSS filter, not a redraw (1.46.0).** A PDF's
   pages are JPEGs drawn white in the sandbox (src/pdf.js). Drawing them
   dark would throw away every drawn page and rail thumbnail on each switch

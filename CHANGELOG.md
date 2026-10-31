@@ -2,6 +2,13 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.46.1] - 2026-10-31
+
+### Fixed
+- Dark PDF pages: the switch in Aa › Layout showed for every clip. It now
+  shows only while a PDF's own pages are open, and not when the PDF is
+  shown as text.
+
 ## [1.46.0] - 2026-10-31
 
 ### Added

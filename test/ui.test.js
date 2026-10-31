@@ -1927,8 +1927,29 @@ function zipOf(files) {
       assert.strictEqual((await frame()).svg, false);
       await q.evaluate(() => setTheme("night"));
       await until(q, () => document.getElementById("readerFrame").contentDocument.documentElement.hasAttribute("data-co-pdf-dark"));
+      // Show as text has no printed pages to darken, so no switch (1.46.1).
+      await q.evaluate(() => switchView(state.open, "reader"));
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open && state.open.view === "text");
+      await q.click("#readerAa");
+      await q.locator('input[name="sheet-tab"][value="layout"]').evaluate((i) => i.click());
+      assert.ok(!(await q.locator('input[data-pref="pdfDark"]').isVisible()), "no switch with the PDF shown as text");
       const errors = q.errors.filter((e) => !/serviceWorker/.test(e));
       assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("the Dark PDF pages switch is hidden in a web clip's Layout, where .rc-row's flex must not beat [hidden] (1.46.1)", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ARTICLE);
+      await q.press("#saveUrl", "Enter");
+      await q.locator(".page-card", { hasText: "The Long Haul Flight" }).first().click();
+      await frameText(q).getByText("oceanic track").waitFor();
+      await q.click("#readerAa");
+      await q.locator('input[name="sheet-tab"][value="layout"]').evaluate((i) => i.click());
+      const row = q.locator(".pdf-dark-row");
+      assert.strictEqual(await row.count(), 1, "the row is built, then hidden");
+      assert.ok(!(await row.isVisible()), "the switch is not visible in a web clip");
+      assert.strictEqual(await row.evaluate((r) => getComputedStyle(r).display), "none");
       await q.context().close();
     });
 
