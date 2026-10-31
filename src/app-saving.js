@@ -74,6 +74,7 @@ async function syncNow(quiet = true) {
       sameUrl,
       onProgress: () => { if (state.section === "sync") renderSection(); paintDownloads(); },
       light: syncsPlacesOnly(),
+      isMail: (u) => isMail({ url: u }),
     });
   } catch (e) {
     if (!joined) unsynced = unsynced || sending;
@@ -367,34 +368,38 @@ function syncLeave() {
     el("p", { class: "footnote" }, "Forgets the token on this device. Your clips stay here and on GitHub."));
 }
 // Pages too, or links only: the library and its marks always sync.
-// Said plainly (1.46.0), like Google Drive's What goes in.
-const syncsRow = (label, note) => el("div", { class: "row" },
-  el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, label), el("span", { class: "choice-note" }, note)));
+// What this device syncs (1.47.0): switches, like Google Drive's What
+// goes in, with Links only under Clips (0.30.3).
 function syncsList() {
-  return el("section", { class: "settings-section" },
-    el("h2", { class: "overline" }, "What syncs"),
-    el("div", { class: "group" },
-      syncsRow("Clips", "Their text, highlights, tags, collections, favourites and where you were. Each device gets a clip's pictures from its site, or from GitHub when it has no site, up to 100 MB a clip"),
-      syncsRow("Feeds", "Which feeds you follow and how. Each device looks for new posts itself, and a post you saved goes as a clip"),
-      syncsRow("Newsletters", "Your addresses and how they're set. The phone collects new mail, and a mail you saved goes as a clip"),
-      syncsRow("Reading stats", "Your reading time from every device, added up in Stats")),
-    el("p", { class: "footnote" }, "Files read from outside and watched folders don't sync: they stay on the device that has them. Settings don't sync either."));
-}
-function syncWhat() {
+  const what = C.sync.what;
+  const sw = (key, label, note) => el("label", { class: "row" },
+    el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, label), el("span", { class: "choice-note" }, note)),
+    el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!what[key],
+      onchange: (e) => { C.sync.setWhat(key, e.target.checked); renderSection(); syncSoon(500); } }));
   return el("section", { class: "settings-section" },
     el("h2", { class: "overline" }, "What this device syncs"),
     el("div", { class: "group" },
+      sw("clips", "Clips", C.sync.links ? "Their addresses, highlights, tags, collections, favourites and where you were. Saved again from their links on each device"
+        : "Their text, highlights, tags, collections, favourites and where you were. Each device gets a clip's pictures from its site, or from GitHub when it has no site, up to 100 MB a clip"),
+      what.clips ? el("div", { class: "row" }, seg("sync-what", "What goes up of each clip", [{ value: "pages", label: "Clips too" }, { value: "links", label: "Links only" }],
+        C.sync.links ? "links" : "pages", (v) => { C.sync.links = v === "links"; renderSection(); syncSoon(500); })) : null,
+      sw("feeds", "Feeds", "Which feeds you follow and how. Each device looks for new posts itself, and a post you saved goes as a clip"),
+      sw("newsletters", "Newsletters", "Your addresses and how they're set. The phone collects new mail, and a mail you saved goes as a clip"),
+      sw("stats", "Reading stats", "Your reading time from every device, added up in Stats")),
+    what.clips ? el("p", { class: "footnote" }, C.sync.links
+      ? "Links only: clips new to this device are saved again from their links, so one that changed or went away comes back different or not at all."
+      : "Each clip's text goes up with it, so another device gets the clip as you saved it, even if the site changes or takes it down.") : null,
+    el("p", { class: "footnote" }, "A part turned off here is left as it is on GitHub for your other devices. Files read from outside and watched folders don't sync: they stay on the device that has them. Settings don't sync either."));
+}
+function syncWhat() {
+  return el("section", { class: "settings-section" },
+    el("h2", { class: "overline" }, "This device"),
+    el("div", { class: "group" },
       el("div", { class: "rc-list" },
-        el("div", { class: "rc-row stack" }, el("span", { class: "rc-label" }, "Clips"),
-          seg("sync-what", "What this device syncs", [{ value: "pages", label: "Clips too" }, { value: "links", label: "Links only" }],
-            C.sync.links ? "links" : "pages", (v) => { C.sync.links = v === "links"; renderSection(); syncSoon(500); })),
         el("div", { class: "rc-row stack" }, el("label", { class: "rc-label", for: "deviceName" }, "This device's name"),
           el("input", { class: "feed-input", id: "deviceName", type: "text", maxlength: "40", autocomplete: "off",
             value: load(DEVICE_KEY, ""), placeholder: guessedName().replace(/^./, (c) => c.toUpperCase()),
             onchange: (e) => store(DEVICE_KEY, e.target.value.trim().slice(0, 40)) })))),
-    el("p", { class: "footnote" }, C.sync.links
-      ? "Only links, tags, collections and where you are go up. Clips new to this device are saved again from their links, so one that changed or went away comes back different or not at all."
-      : "Each clip's text goes up with it, so another device gets the clip as you saved it, even if the site changes or takes it down."),
     el("p", { class: "footnote" }, "The name shows on your other devices when this one read a clip further."));
 }
 // The setup link points at the web copy: inside the app this page is at

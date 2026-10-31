@@ -104,7 +104,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Google Drive backups, weekly, pause/resume, delete (1.27.0, 1.27.1, 1.31.0; iOS on TODO)
 - What syncs / What goes in spelled out, Newsletters switch (no Files switch: a copied file is a clip), files read from outside left out of backups (1.46.0)
 - Choose how often Drive backs up; a restore beats an older deletion in sync (1.46.0)
-- Drive backups with the app closed (Android), Links only, resumable and faster in the browser (Unreleased)
+- Drive backups with the app closed (Android), Links only, resumable and faster in the browser; GitHub sync switches for what syncs (Unreleased)
 - Back up and restore to one file; export clips and collections as EPUB, HTML, PDF, Markdown (0.18.0, 0.25.2, 0.26.0)
 - Make room, Make pictures smaller, storage by collection (0.23.0, 1.9.0, 1.18.0)
 

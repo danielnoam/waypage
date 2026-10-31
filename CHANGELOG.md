@@ -14,6 +14,11 @@ All notable changes to Carry-on. Newest first.
   again from their links. Books copied in and newsletter mails still go in
   whole.
 
+- GitHub sync › What this device syncs has switches like Google Drive's:
+  Clips (with Clips too or Links only under it), Feeds, Newsletters and
+  Reading stats. A part turned off is neither sent nor taken here, and
+  stays on GitHub as your other devices left it.
+
 ### Changed
 - Back up by itself is a drop-down.
 - Google Drive backups in a browser go up in 8 MB pieces, so Pause and
