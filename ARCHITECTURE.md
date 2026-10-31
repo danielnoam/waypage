@@ -179,6 +179,8 @@ null rather than for a platform. The native plugins live in
   can sync only places.
 - **Google Drive** (`drive.js`): zipped backups (`backup.js`) in a
   Waypage folder in the person's Drive, resumable, the last few kept.
+- Files read from outside (`link` on the entry) are this device's alone:
+  neither sync nor any backup takes them, and a restore skips them.
 - **Backups and exports** (`backup.js`, `epub.js`): one zip of the whole
   library, one HTML file per clip, an EPUB of chosen clips.
 - **Imports** (`imports.js`): other read-later apps' exports become

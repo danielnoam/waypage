@@ -257,6 +257,12 @@
     for (const id of B.keys()) if (!L.has(id) && !(local.waiting || []).includes(id)) deleted[id] = deleted[id] || now;
     // Gone from GitHub since the base, without a tombstone: deleted there.
     if (remote) for (const id of B.keys()) if (!R.has(id) && !deleted[id]) deleted[id] = now;
+    // Restored from a backup after it was deleted (1.46.0): the restore
+    // is the newer choice, here and on every other device.
+    for (const id of new Set([...L.keys(), ...R.keys()])) {
+      const back = Math.max((L.get(id) || {}).back || 0, (R.get(id) || {}).back || 0);
+      if (deleted[id] && back > deleted[id]) delete deleted[id];
+    }
     const pages = [];
     for (const id of new Set([...L.keys(), ...R.keys()])) {
       if (deleted[id]) continue;

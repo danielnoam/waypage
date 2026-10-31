@@ -222,6 +222,22 @@ async function connect(p) {
       assert.strictEqual(await p.locator("#sectionBody button[disabled]").count(), 0, "it went again within the week");
     });
 
+    await test("how often is picked here: every day goes after a day, Only when I ask never (1.46.0)", async () => {
+      await p.locator("label.choice", { hasText: "Every day" }).click();
+      assert.strictEqual(await p.evaluate(() => window.Waypage.drive.every), 1);
+      const made = drive.n;
+      await p.evaluate(() => { window.Waypage.drive.last = { at: Date.now() - 2 * 24 * 3600e3 }; driveDue(); });
+      await until(p, () => !document.querySelector("#sectionBody button[disabled]") && window.Waypage.drive.last.at > Date.now() - 6e4, null, 15000);
+      assert.ok(drive.n > made, "no daily backup was sent");
+      await p.locator("label.choice", { hasText: "Only when I ask" }).click();
+      const now = drive.n;
+      await p.evaluate(() => { window.Waypage.drive.last = { at: Date.now() - 60 * 24 * 3600e3 }; driveDue(); });
+      await p.waitForTimeout(800);
+      assert.strictEqual(drive.n, now, "it backed up with Only when I ask");
+      await p.locator("label.choice", { hasText: "Every week" }).click();
+      assert.strictEqual(await p.evaluate(() => window.Waypage.drive.auto), true);
+    });
+
     await test("a backup can be deleted from the list (1.31.0)", async () => {
       const count = () => [...drive.files.values()].filter((f) => f.appProperties && f.appProperties.waypage === "backup").length;
       const had = count();

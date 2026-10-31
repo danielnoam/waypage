@@ -161,7 +161,7 @@ async function fetchPictures() {
 // off, the three steps to a first device and a way in for the next one;
 // on, the state and a code that sets up another device.
 function syncSections() {
-  return C.sync.on ? [C.sync.oldToken ? syncNewToken() : null, syncState(), syncWhat(), dataGroup(DATA_SYNC_KEY, "Sync", "Syncs on any connection.", "Syncs when you're on Wi-Fi. Changes wait until then.",
+  return C.sync.on ? [C.sync.oldToken ? syncNewToken() : null, syncState(), syncsList(), syncWhat(), dataGroup(DATA_SYNC_KEY, "Sync", "Syncs on any connection.", "Syncs when you're on Wi-Fi. Changes wait until then.",
       { value: "places", label: "Places and reading time only", note: "Where you are in each clip, what you finished and your reading time sync on any connection. New clips, tags and collections wait for Wi-Fi." }), syncShare(), syncLeave()] : [syncSteps(), syncJoin()];
 }
 async function connectSync(text, btn) {
@@ -190,7 +190,7 @@ function syncSteps() {
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); connect(); } });
   return el("section", { class: "settings-section" },
     el("h2", { class: "overline" }, "Sync with GitHub"),
-    el("p", { class: "section-lead" }, "Keeps your clips, tags, collections, favourites and where you are the same on every device, through a private repo on your GitHub. Each device gets the pictures itself."),
+    el("p", { class: "section-lead" }, "Keeps your clips, feeds and newsletters the same on every device, through a private repo on your GitHub. Files read from outside stay on the device that has them."),
     el("div", { class: "group" },
       outRow("https://github.com/signup", "1", "Make a free GitHub account", "Skip this if you have one."),
       outRow(C.sync.NEW_REPO_URL, "2", "Make a private repo for your library", "GitHub fills it in. Keep it Private, then Create repository."),
@@ -367,6 +367,19 @@ function syncLeave() {
     el("p", { class: "footnote" }, "Forgets the token on this device. Your clips stay here and on GitHub."));
 }
 // Pages too, or links only: the library and its marks always sync.
+// Said plainly (1.46.0), like Google Drive's What goes in.
+const syncsRow = (label, note) => el("div", { class: "row" },
+  el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, label), el("span", { class: "choice-note" }, note)));
+function syncsList() {
+  return el("section", { class: "settings-section" },
+    el("h2", { class: "overline" }, "What syncs"),
+    el("div", { class: "group" },
+      syncsRow("Clips", "Their text, highlights, tags, collections, favourites and where you were. Each device gets a clip's pictures from its site, or from GitHub when it has no site, up to 100 MB a clip"),
+      syncsRow("Feeds", "Which feeds you follow and how. Each device looks for new posts itself, and a post you saved goes as a clip"),
+      syncsRow("Newsletters", "Your addresses and how they're set. The phone collects new mail, and a mail you saved goes as a clip"),
+      syncsRow("Reading stats", "Your reading time from every device, added up in Stats")),
+    el("p", { class: "footnote" }, "Files read from outside and watched folders don't sync: they stay on the device that has them. Settings don't sync either."));
+}
 function syncWhat() {
   return el("section", { class: "settings-section" },
     el("h2", { class: "overline" }, "What this device syncs"),
@@ -1354,11 +1367,12 @@ function followFeeds(list) {
 // Feeds from a backup: one not followed here is followed again, with its
 // posts; one followed already keeps its settings here. Returns how
 // many were added.
+// Followed again now (1.46.0), so sync takes it over an older unfollow.
 function restoreFeeds(list) {
   let added = 0;
   for (const f of list || []) {
     if (feeds.some((h) => sameUrl(h.url, f.url))) continue;
-    feeds.push(f);
+    feeds.push({ ...f, addedAt: Date.now() });
     added++;
   }
   if (added) {
@@ -1722,7 +1736,7 @@ function renderFeeds() {
 }
 
 // ---- Google Drive backups (1.27.0) ----
-// Beside sync, not instead of it: Back up now, a weekly backup on Wi-Fi
+// Beside sync, not instead of it: Back up now, an automatic one on Wi-Fi (how often picked since 1.46.0)
 // while Waypage is open, the last three kept, and any of them restored
 // the way a backup file is (the copy saved last wins).
 
@@ -1864,7 +1878,7 @@ function githubCard() {
 // Back up now.
 function driveRestCard() {
   const on = C.drive.on, l = C.drive.last;
-  const status = !on ? "A copy of your library in your own Google Drive, every week and whenever you ask."
+  const status = !on ? "A copy of your library in your own Google Drive, made by itself as often as you pick and whenever you ask."
     : driveRun ? "Restoring a backup, in Downloads"
     : l.error ? l.error
     : l.at ? "Last backup " + whenText(l.at) + (l.size ? ", " + formatSize(l.size) : "") : "No backup yet";
@@ -1904,7 +1918,7 @@ function driveSections() {
   if (!C.drive.on) {
     return [el("section", { class: "settings-section" },
       el("h2", { class: "overline" }, "Back up to Google Drive"),
-      el("p", { class: "section-lead" }, "A copy of your library in your own Google Drive, made every week and whenever you ask, to bring back on a new phone or after a mistake."),
+      el("p", { class: "section-lead" }, "A copy of your library in your own Google Drive, made by itself as often as you pick and whenever you ask, to bring back on a new phone or after a mistake."),
       el("div", { class: "group" },
         el("button", { class: "row", type: "button", onclick: (e) => driveConnect(e.currentTarget) },
           el("span", { class: "row-label accent" }, "Connect Google Drive"))),
@@ -1938,27 +1952,27 @@ function driveSections() {
           el("span", { class: "choice-text" },
             el("span", { class: "choice-label accent" }, "Back up now"),
             el("span", { class: "choice-note" + (l.error && !driveRun ? " warn" : ""), id: "driveStatus", role: "status" }, status))),
-        driveRun ? el("div", { class: "row" }, driveControls("drive-actions")) : null,
-        el("label", { class: "row" },
-          el("span", { class: "choice-text" },
-            el("span", { class: "choice-label" }, "Every week"),
-            el("span", { class: "choice-note" }, C.platform.native ? "On Wi-Fi, while Waypage is open" : "Asks first, since this browser signs in to Google for an hour at a time")),
-          el("input", { class: "switch", type: "checkbox", role: "switch", checked: C.drive.auto,
-            onchange: (e) => { C.drive.auto = e.target.checked; } }))),
-      el("p", { class: "footnote" }, "Drive keeps the last " + C.drive.KEEP + " backups; an older one is deleted when a new one is made.")),
+        driveRun ? el("div", { class: "row" }, driveControls("drive-actions")) : null)),
+    // How often (1.46.0): it was a weekly switch.
+    choiceGroup({ key: "drive-every", label: "Back up by itself",
+      get: () => (C.drive.auto ? String(C.drive.every) : "off"),
+      set: (v) => { if (v === "off") C.drive.auto = false; else { C.drive.every = Number(v); C.drive.auto = true; } renderSection(); },
+      options: [...C.drive.EVERY.map((d) => ({ value: String(d), label: DRIVE_EVERY[d] })), { value: "off", label: "Only when I ask" }],
+      footnote: (C.platform.native ? "On Wi-Fi, while Waypage is open. " : "Asks first, since this browser signs in to Google for an hour at a time. ")
+        + "Drive keeps the last " + C.drive.KEEP + " backups" + (C.drive.auto && C.drive.every < 7 ? ", and one from a week before them" : "") + "; an older one is deleted when a new one is made." }),
     el("section", { class: "settings-section" },
       el("h2", { class: "overline" }, "What goes in"),
       el("div", { class: "group" },
-        sw("clips", "Clips", "With their pictures, highlights and where you were"),
-        sw("files", "Files", "Books, PDFs and comics, usually the biggest part"),
-        sw("feeds", "Feeds you follow", "")),
-      el("p", { class: "footnote" }, "Tags, collections and favourites go with the clips and files they're on.")),
+        sw("clips", "Clips", "Their text, pictures, highlights and where you were"),
+        sw("feeds", "Feeds", "Which feeds you follow and how. A post you saved goes in as a clip"),
+        sw("newsletters", "Newsletters", "Your addresses and how they're set. A mail you saved goes in as a clip")),
+      el("p", { class: "footnote" }, "Tags, collections and favourites go with the clips they're on, and your reading stats go too. Files read from outside and watched folders don't go in: they stay where they are. Settings don't go in either.")),
     el("section", { class: "settings-section" },
       el("h2", { class: "overline" }, "Restore"),
       el("div", { class: "group" }, ...(list.length ? list
         : driveListError === DRIVE_SIGN_IN ? [el("button", { class: "row", type: "button", onclick: driveSignIn }, el("span", { class: "row-label accent" }, "Sign in to Google to see them"))]
         : [el("div", { class: "row" }, el("span", { class: "row-label" + (driveListError ? " warn" : "") }, driveListError || (driveFiles ? "No backups in Drive yet" : "Looking in Drive…")))])),
-      el("p", { class: "footnote" }, "Restoring adds what isn't here and keeps whichever copy of a clip was saved last. Nothing here is deleted. The bin deletes a backup from Drive for good.")),
+      el("p", { class: "footnote" }, "Restoring adds what isn't here and keeps whichever copy of a clip was saved last. Nothing here is deleted. A clip or feed you deleted since comes back, on your synced devices too. The bin deletes a backup from Drive for good.")),
     el("section", { class: "settings-section" },
       el("div", { class: "group" },
         el("button", { class: "row", type: "button", ...driveBusy(), onclick: driveDisconnect },
@@ -1966,6 +1980,8 @@ function driveSections() {
       el("p", { class: "footnote" }, (C.drive.email ? "Connected as " + C.drive.email + ". " : "") + "The backups stay in your Drive.")),
   ];
 }
+
+const DRIVE_EVERY = { 1: "Every day", 3: "Every 3 days", 7: "Every week", 14: "Every 2 weeks", 30: "Every month" };
 
 async function driveConnect(btn) {
   if (btn) { btn.disabled = true; btn.querySelector(".row-label").textContent = "Connecting…"; }
@@ -2008,10 +2024,12 @@ async function driveRefresh() {
 }
 
 // What a backup holds, from Settings › Google Drive › What goes in.
+// Files read from outside stay out, as in GitHub sync, and a file copied
+// in is a clip like any other (1.46.0: no Files switch).
 function driveContents() {
   const w = C.drive.what;
-  const pages = state.pages.filter((p) => (p.file ? w.files : w.clips));
-  return { pages, feeds: w.feeds ? feeds : [] };
+  const pages = w.clips ? state.pages.filter((p) => !p.link) : [];
+  return { pages, feeds: [...(w.feeds ? siteFeeds() : []), ...(w.newsletters ? mailBoxes() : [])] };
 }
 
 async function driveBackUp(auto) {
@@ -2096,16 +2114,17 @@ async function driveRestore(f) {
   drivePaint();
 }
 
-// The weekly backup, looked for on opening and on coming back: a week
-// since the last one (or since connecting, 1.27.1), on Wi-Fi, and not again within six hours of one
+// The automatic backup, looked for on opening and on coming back: its
+// days (a week unless picked, 1.46.0) since the last one (or since
+// connecting, 1.27.1), on Wi-Fi, and not again within six hours of one
 // that failed. A browser without a live sign-in asks with a toast.
 function driveDue() {
   if (!C.drive.available || !C.drive.on || !C.drive.auto || driveRun || document.hidden) return;
   const l = C.drive.last;
-  if (Date.now() - Math.max(l.at || 0, C.drive.since) < C.drive.WEEK || Date.now() - (l.tried || 0) < 6 * 3600e3) return;
+  if (Date.now() - Math.max(l.at || 0, C.drive.since) < C.drive.every * C.drive.DAY || Date.now() - (l.tried || 0) < 6 * 3600e3) return;
   if (!navigator.onLine || C.platform.metered) return;
   if (C.drive.signedIn) { driveBackUp(true); return; }
   if (driveDueSaid) return;
   driveDueSaid = true;
-  toast("Your weekly Google Drive backup is due", "Back up", () => driveBackUp(false));
+  toast("Your Google Drive backup is due", "Back up", () => driveBackUp(false));
 }

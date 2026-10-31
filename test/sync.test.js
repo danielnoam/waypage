@@ -36,6 +36,32 @@ test("a page deleted on one device is deleted, and stays deleted", () => {
   assert.deepStrictEqual(ids(r3), ["c3d4"]);
 });
 
+test("a page restored from a backup beats its older deletion, on every device (1.46.0)", () => {
+  const base = lib([page("c3d4")]);
+  const gone = lib([page("c3d4")], { deleted: { a1b2: NOW - 864e5 } });
+  // Restored here: it stays, and the tombstone goes.
+  const r = S.merge(base, lib([page("a1b2", { back: NOW - 1000 }), page("c3d4")]), gone, NOW);
+  assert.deepStrictEqual(ids(r), ["a1b2", "c3d4"]);
+  assert.ok(!r.deleted.a1b2);
+  // The other device, whose own base still has the tombstone, takes it too.
+  const r2 = S.merge(gone, lib([page("c3d4")]), r, NOW);
+  assert.deepStrictEqual(ids(r2), ["a1b2", "c3d4"]);
+  // Deleted again after the restore: deleted.
+  const r3 = S.merge(lib([page("a1b2", { back: NOW - 1000 })]), lib([]), lib([page("a1b2", { back: NOW - 1000 })]), NOW);
+  assert.deepStrictEqual(ids(r3), []);
+  // Without a restore, an old copy still doesn't come back.
+  assert.deepStrictEqual(ids(S.merge(base, lib([page("a1b2"), page("c3d4")]), gone, NOW)), ["c3d4"]);
+});
+
+test("a feed followed again by a restore beats its older unfollow", () => {
+  const f = (addedAt) => ({ url: "https://example.com/feed", title: "F", addedAt });
+  const remote = lib([], { feeds: [], feedsGone: { "https://example.com/feed": NOW - 864e5 } });
+  const r = S.merge(lib([], { feeds: [] }), lib([], { feeds: [f(NOW - 1000)] }), remote, NOW);
+  assert.strictEqual(r.feeds.length, 1);
+  const old = S.merge(lib([], { feeds: [] }), lib([], { feeds: [f(NOW - 9e9)] }), remote, NOW);
+  assert.strictEqual(old.feeds.length, 0);
+});
+
 test("a page whose text hasn't come down yet isn't taken for a deletion", () => {
   const base = lib([page("a1b2")]);
   const r = S.merge(base, { pages: [], waiting: ["a1b2"] }, base, NOW);
