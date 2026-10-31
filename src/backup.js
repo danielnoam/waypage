@@ -226,13 +226,18 @@
   // (1.27.1), which then throws an Error with code "cancelled".
   // A file read from outside never goes in (1.46.0): the file stays where
   // it is, and its link to it means nothing on another device.
-  async function exportLibrary(pages, onProgress, feeds, gate) {
+  // `bare`, when given (1.47.0, Drive's Links only), is the ids whose
+  // files stay out: they go in the list alone, to be saved again from
+  // their links on restore.
+  async function exportLibrary(pages, onProgress, feeds, gate, bare) {
     pages = pages.filter((p) => !p.link);
+    const listed = pages;
+    if (bare && bare.size) pages = pages.filter((p) => !bare.has(p.id));
     const native = C.platform.native;
     const name = "waypage-backup-" + today() + ".zip";
     const head = [
-      { name: "waypage.json", text: JSON.stringify({ format: 1, app: C.version, made: Date.now(), pages: pages.length, feeds: (feeds || []).length }) },
-      { name: "library.json", text: JSON.stringify(pages) },
+      { name: "waypage.json", text: JSON.stringify({ format: 1, app: C.version, made: Date.now(), pages: listed.length, feeds: (feeds || []).length }) },
+      { name: "library.json", text: JSON.stringify(listed) },
       ...(feeds && feeds.length ? [{ name: "feeds.json", text: JSON.stringify(feeds) }] : []),
       // Reading stats (1.39.0): this device's and the others it knows.
       ...(C.stats ? [{ name: "stats.json", text: JSON.stringify(C.stats.backup()) }] : []),
@@ -303,8 +308,9 @@
   // Merges a backup into the library: a page not here is added, one here
   // already is replaced only by a copy saved later, never the other way.
   // `same(a, b)` says whether two addresses are the same page. Resolves to
-  // { pages, added, replaced, kept, feeds } where `pages` is the new index
-  // and `feeds` the backup's followed feeds, cleaned.
+  // { pages, added, replaced, kept, feeds, links } where `pages` is the new
+  // index, `feeds` the backup's followed feeds, cleaned, and `links` the
+  // clips it holds as links only (1.47.0), not here yet, to be saved again.
   async function restoreLibrary(blob, current, same, onProgress) {
     let entries;
     try { entries = await zipEntries(blob); } catch (e) { throw new Error("This file isn't a Waypage backup."); }
@@ -315,11 +321,17 @@
     const pages = [...current];
     const taken = new Set(pages.map((p) => p.id));
     let added = 0, replaced = 0, kept = 0, done = 0;
+    const links = [];
     for (const raw of list) {
       // An older backup's file read from outside (before 1.46.0) is left
       // out, rather than coming back as a clip of its text.
       const from = raw && typeof raw.id === "string" && ID.test(raw.id) && !raw.link ? raw.id : null;
       const meta = from && entries.has("pages/" + from + "/page.html") && cleanMeta(raw, from);
+      const link = from && !meta && cleanMeta(raw, from);
+      if (link && link.url && !link.file && !pages.some((p) => same(p.url, link.url))) {
+        link.back = Date.now();
+        links.push(link);
+      }
       if (meta) {
         const i = pages.findIndex((p) => (meta.file ? sameFile(p, meta) : same(p.url, meta.url)));
         if (i >= 0 && (pages[i].savedAt || 0) >= meta.savedAt) kept++;
@@ -349,7 +361,7 @@
     if (statsEntry && C.stats) {
       try { C.stats.restore(JSON.parse(new TextDecoder().decode(await zipRead(blob, statsEntry)))); } catch (e) { /* the clips matter more */ }
     }
-    return { pages, added, replaced, kept, feeds };
+    return { pages, added, replaced, kept, feeds, links };
   }
 
   async function restorePage(blob, entries, from, meta) {

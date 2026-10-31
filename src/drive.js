@@ -408,7 +408,8 @@
     set every(v) { if (cfg && EVERY.includes(v)) { cfg.every = v; save(); } },
     // What goes in a backup: clips (files copied in among them), feeds,
     // newsletter addresses (1.46.0; a Files switch until then).
-    get what() { return cfg ? { clips: true, feeds: true, newsletters: true, ...(cfg.what || {}) } : null; },
+    // `links` (1.47.0): clips that can be saved again go in as links only.
+    get what() { return cfg ? { clips: true, links: false, feeds: true, newsletters: true, ...(cfg.what || {}) } : null; },
     setWhat(k, v) { if (!cfg) return; cfg.what = { ...this.what, [k]: !!v }; save(); },
     get last() { return (cfg && cfg.last) || {}; },
     get since() { return (cfg && cfg.since) || 0; },

@@ -220,6 +220,25 @@ async function connect(p) {
       await p.locator("label.row", { hasText: "Clips" }).locator("input").check();
     });
 
+    await test("Links only puts clips in as their addresses, and a restore saves them again (1.47.0)", async () => {
+      await p.locator(".seg-item", { hasText: "Links only" }).click();
+      const made = drive.n;
+      await p.locator(".row", { hasText: "Back up now" }).click();
+      await until(p, () => !document.querySelector("#sectionBody button[disabled]"), null, 15000);
+      assert.ok(drive.n > made, "no backup was sent");
+      const newest = [...drive.files.values()].filter((f) => f.appProperties && f.appProperties.waypage === "backup").sort((a, b) => b.at - a.at)[0];
+      const text = newest.bytes.toString("latin1");
+      assert.ok(text.includes("library.json") && text.includes(ARTICLE), "the clip's address isn't in it");
+      assert.ok(!/pages\/[a-z0-9]+\/page\.html/.test(text), "a clip's page went in");
+      const got = await p.evaluate(async (bytes) => {
+        const res = await window.Waypage.backup.restoreLibrary(new Blob([new Uint8Array(bytes)]), [], (a, b) => a === b);
+        return { added: res.added, links: res.links.map((m) => m.url), back: !!(res.links[0] && res.links[0].back) };
+      }, [...newest.bytes]);
+      assert.deepStrictEqual(got, { added: 0, links: [ARTICLE], back: true });
+      await p.locator(".seg-item", { hasText: "Clips too" }).click();
+      drive.files.delete(newest.id);
+    });
+
     await test("a backup can be paused, resumed and stopped, here and on the Sync screen (1.28.0)", async () => {
       drive.slow = 1500;
       const before = drive.n;
@@ -260,18 +279,18 @@ async function connect(p) {
     });
 
     await test("how often is picked here: every day goes after a day, Only when I ask never (1.46.0)", async () => {
-      await p.locator("label.choice", { hasText: "Every day" }).click();
+      await p.locator(".drive-every .dropdown-btn").click(); await p.locator(".dropdown-item", { hasText: "Every day" }).click();
       assert.strictEqual(await p.evaluate(() => window.Waypage.drive.every), 1);
       const made = drive.n;
       await p.evaluate(() => { window.Waypage.drive.last = { at: Date.now() - 2 * 24 * 3600e3 }; driveDue(); });
       await until(p, () => !document.querySelector("#sectionBody button[disabled]") && window.Waypage.drive.last.at > Date.now() - 6e4, null, 15000);
       assert.ok(drive.n > made, "no daily backup was sent");
-      await p.locator("label.choice", { hasText: "Only when I ask" }).click();
+      await p.locator(".drive-every .dropdown-btn").click(); await p.locator(".dropdown-item", { hasText: "Only when I ask" }).click();
       const now = drive.n;
       await p.evaluate(() => { window.Waypage.drive.last = { at: Date.now() - 60 * 24 * 3600e3 }; driveDue(); });
       await p.waitForTimeout(800);
       assert.strictEqual(drive.n, now, "it backed up with Only when I ask");
-      await p.locator("label.choice", { hasText: "Every week" }).click();
+      await p.locator(".drive-every .dropdown-btn").click(); await p.locator(".dropdown-item", { hasText: "Every week" }).click();
       assert.strictEqual(await p.evaluate(() => window.Waypage.drive.auto), true);
     });
 

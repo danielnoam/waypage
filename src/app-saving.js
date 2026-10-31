@@ -91,7 +91,7 @@ async function syncNow(quiet = true) {
 // Pages that came as links only (0.30.3), saved here one after another
 // like a run, each into its place in the library. In a browser only
 // Wikipedia can be fetched, so the rest wait for the app.
-async function saveFromLinks(list) {
+async function saveFromLinks(list, label) {
   if (linksStopped) return;
   // One already saved here under the same address is left to sync, which
   // keeps one copy of each (sync.js, oneCopyEach).
@@ -100,7 +100,7 @@ async function saveFromLinks(list) {
     && !savedAs(m.url) && !(m.requested && savedAs(m.requested)) && !savingAs(m.url))
     .map((m) => ({ ...newJob(m.url, null), key: "sync:" + m.id, synced: m, mode: m.mode, kind: m.comic ? "comic" : "article", waiting: true }));
   if (!jobs.length) return;
-  const run = jobs.length > 1 ? Object.assign(startRun(null, jobs[0].site, jobs.length), { label: "From sync", sync: true, paused: C.sync.paused }) : null;
+  const run = jobs.length > 1 ? Object.assign(startRun(null, jobs[0].site, jobs.length), { label: label || "From sync", sync: true, paused: !label && C.sync.paused }) : null;
   jobs.forEach((j) => { j.run = run; });
   state.saving = [...jobs, ...state.saving];
   renderLibrary();
@@ -1953,19 +1953,26 @@ function driveSections() {
             el("span", { class: "choice-label accent" }, "Back up now"),
             el("span", { class: "choice-note" + (l.error && !driveRun ? " warn" : ""), id: "driveStatus", role: "status" }, status))),
         driveRun ? el("div", { class: "row" }, driveControls("drive-actions")) : null)),
-    // How often (1.46.0): it was a weekly switch.
-    choiceGroup({ key: "drive-every", label: "Back up by itself",
-      get: () => (C.drive.auto ? String(C.drive.every) : "off"),
-      set: (v) => { if (v === "off") C.drive.auto = false; else { C.drive.every = Number(v); C.drive.auto = true; } renderSection(); },
-      options: [...C.drive.EVERY.map((d) => ({ value: String(d), label: DRIVE_EVERY[d] })), { value: "off", label: "Only when I ask" }],
-      footnote: (C.platform.native ? "On Wi-Fi, while Waypage is open. " : "Asks first, since this browser signs in to Google for an hour at a time. ")
-        + "Drive keeps the last " + C.drive.KEEP + " backups" + (C.drive.auto && C.drive.every < 7 ? ", and one from a week before them" : "") + "; an older one is deleted when a new one is made." }),
+    // How often (1.46.0; it was a weekly switch), in a drop-down (1.47.0).
+    el("section", { class: "settings-section" },
+      el("div", { class: "group" },
+        el("div", { class: "rc-list" },
+          el("div", { class: "rc-row stack" }, el("span", { class: "rc-label" }, "Back up by itself"),
+            dropdown({ label: "Back up by itself", cls: "field-pick drive-every", value: C.drive.auto ? String(C.drive.every) : "off",
+              options: [...C.drive.EVERY.map((d) => ({ value: String(d), label: DRIVE_EVERY[d] })), { value: "off", label: "Only when I ask" }],
+              onpick: (v) => { if (v === "off") C.drive.auto = false; else { C.drive.every = Number(v); C.drive.auto = true; } renderSection(); } })))),
+      el("p", { class: "footnote" }, (C.platform.native ? "On Wi-Fi, while Waypage is open. " : "Asks first, since this browser signs in to Google for an hour at a time. ")
+        + "Drive keeps the last " + C.drive.KEEP + " backups" + (C.drive.auto && C.drive.every < 7 ? ", and one from a week before them" : "") + "; an older one is deleted when a new one is made.")),
     el("section", { class: "settings-section" },
       el("h2", { class: "overline" }, "What goes in"),
       el("div", { class: "group" },
-        sw("clips", "Clips", "Their text, pictures, highlights and where you were"),
+        sw("clips", "Clips", what.links ? "Their addresses, highlights and where you were. Saved again from their links when restored" : "Their text, pictures, highlights and where you were"),
+        what.clips ? el("div", { class: "row" }, seg("drive-links", "What goes in of each clip", [{ value: "pages", label: "Clips too" }, { value: "links", label: "Links only" }],
+          what.links ? "links" : "pages", (v) => { C.drive.setWhat("links", v === "links"); renderSection(); })) : null,
         sw("feeds", "Feeds", "Which feeds you follow and how. A post you saved goes in as a clip"),
         sw("newsletters", "Newsletters", "Your addresses and how they're set. A mail you saved goes in as a clip")),
+      what.clips && what.links ? el("p", { class: "footnote" }, "Links only makes a backup much smaller, but a clip whose page changed or went away comes back different or not at all"
+        + (C.platform.native ? "" : ", and this browser can only save Wikipedia pages again") + ". Books you copied in and newsletter mails still go in whole.") : null,
       el("p", { class: "footnote" }, "Tags, collections and favourites go with the clips they're on, and your reading stats go too. Files read from outside and watched folders don't go in: they stay where they are. Settings don't go in either.")),
     el("section", { class: "settings-section" },
       el("h2", { class: "overline" }, "Restore"),
@@ -2026,15 +2033,21 @@ async function driveRefresh() {
 // What a backup holds, from Settings › Google Drive › What goes in.
 // Files read from outside stay out, as in GitHub sync, and a file copied
 // in is a clip like any other (1.46.0: no Files switch).
+// With Links only (1.47.0), a clip that can be saved again from its
+// address goes in as that address alone; one that can't (a file copied
+// in, a newsletter's mail, which Kill the Newsletter keeps a month) goes
+// in whole.
+const savableAgain = (p) => !!p.url && !p.file && !p.url.startsWith(MAIL_ENTRY);
 function driveContents() {
   const w = C.drive.what;
   const pages = w.clips ? state.pages.filter((p) => !p.link) : [];
-  return { pages, feeds: [...(w.feeds ? siteFeeds() : []), ...(w.newsletters ? mailBoxes() : [])] };
+  const bare = w.clips && w.links ? new Set(pages.filter(savableAgain).map((p) => p.id)) : null;
+  return { pages, bare, feeds: [...(w.feeds ? siteFeeds() : []), ...(w.newsletters ? mailBoxes() : [])] };
 }
 
 async function driveBackUp(auto) {
   if (driveRun || !C.drive.on) return;
-  const { pages, feeds: fs } = driveContents();
+  const { pages, bare, feeds: fs } = driveContents();
   if (!pages.length && !fs.length) { if (!auto) toast("There's nothing to back up with what's picked."); return; }
   const run = driveRun = { restore: false, text: "Getting ready…", share: null, paused: false, stopped: false, ctl: {} };
   drivePaint();
@@ -2043,7 +2056,7 @@ async function driveBackUp(auto) {
     // Asked for first: a browser can open Google's window only straight
     // from the tap.
     await C.drive.getToken(!auto, "backup");
-    out = await C.backup.exportLibrary(pages, (done, total) => driveSay("Packing, " + done + " of " + total, (done / total) * 0.3), fs, driveGate);
+    out = await C.backup.exportLibrary(pages, (done, total) => driveSay("Packing, " + done + " of " + total, (done / total) * 0.3), fs, driveGate, bare);
     if (!(await driveGate())) throw new C.drive.DriveError("Stopped.", "cancelled");
     driveSay("Sending to Drive…", 0.3);
     const info = { device: load(DEVICE_KEY, "") || guessedName(), clips: pages.length };
