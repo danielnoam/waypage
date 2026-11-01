@@ -2,7 +2,7 @@
 
 All notable changes to Carry-on. Newest first.
 
-## Unreleased
+## [1.50.0] - 2026-11-01
 
 ### Added
 - Narrate (Android): Kokoro voices. More speech engines, under Get

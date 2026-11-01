@@ -559,7 +559,7 @@ function versionRow(label, status, open) {
     el("button", { class: "btn-small", type: "button", onclick: startUpdate }, upd.phase === "downloading" ? upd.pct + "%" : C.platform.ios ? "Get it" : upd.phase === "ready" ? "Install" : upd.phase === "paused" ? "Resume" : "Update"));
 }
 
-// What a newer release brings (1.49.4): What's new opened from the bar's
+// What a newer release brings (1.50.0): What's new opened from the bar's
 // View or About shows every version between this one and it, from that
 // release's own CHANGELOG.md, or its release notes when that doesn't load.
 const coming = { latest: null, entries: null };
@@ -664,7 +664,7 @@ function paintPreviews() {
   if (state.section === "previews" && $("previewsSection")) $("previewsSection").replaceWith(previewsSection());
 }
 // A preview (or the release, from Back to the release) being downloaded
-// shows it on its row as About's version row does (1.49.3, Daniel's ask):
+// shows it on its row as About's version row does (1.50.0, Daniel's ask):
 // the percent, Paused, Install, and a tap goes on with it.
 const fetching = (tag) => ["downloading", "paused", "ready"].includes(upd.phase) && (upd.tag || null) === tag;
 const fetchNote = () => upd.error || { downloading: "Downloading · " + upd.pct + "%", paused: "Paused at " + upd.pct + "%", ready: "Downloaded, ready to install" }[upd.phase];
