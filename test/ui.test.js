@@ -2010,6 +2010,29 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    // CONTRIBUTING "Explain less": a ? only where Daniel agreed to one.
+    await test("Settings keeps its ? marks to the agreed list (1.48.2)", async () => {
+      const q = await page(browser, 390);
+      const agreed = ["Your fonts", "Dictionaries", "Before you go offline", "Save from your browser", "Sync with GitHub",
+        "Already syncing on another device?", "Back up to Google Drive", "Backups", "What goes in", "Restore", "Account", "Feeds", "Newsletters",
+        "This browser", "Where your library is", "Actions", "Branches", "The report", "Lock"];
+      const found = await q.evaluate(async () => {
+        openSettings();
+        const out = [];
+        for (const k of Object.keys(SECTIONS)) {
+          state.section = null;
+          openSection(k);
+          await new Promise((r) => setTimeout(r, 250));
+          out.push(...[...document.querySelectorAll("#sectionBody .section-top .overline")].map((h) => k + " › " + h.textContent.trim()));
+        }
+        return out;
+      });
+      const extra = found.filter((t) => !agreed.includes(t.split(" › ")[1]));
+      assert.deepStrictEqual(extra, [], "a ? that wasn't agreed: " + extra.join(", "));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("Saving has the switch for making full images smaller, on by default (1.18.0)", async () => {
       const q = await page(browser, 390);
       await q.click("#settingsBtn");
