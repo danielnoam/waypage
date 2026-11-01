@@ -7,7 +7,7 @@
 // release's changed files new URLs. Third-party requests are never touched.
 //
 // ASSETS is also exactly what tools/build-www.js copies into the app.
-const CACHE = "waypage-v109";
+const CACHE = "waypage-v110";
 const ASSETS = [
   "./", "./index.html",
   "./src/fonts.css", "./src/styles.css", "./src/reader.css",
@@ -30,7 +30,7 @@ self.addEventListener("activate", (e) => {
   );
 });
 
-// A preview build in the browser (1.49.0). Settings › About › Preview
+// A test build in the browser (1.49.0). Settings › About › Test
 // builds puts the picked build in the cache PREVIEW as preview.json
 // ({ repo, sha, title, pr }); while it's there, every file of this copy
 // comes from that commit on raw.githubusercontent.com, given its type
@@ -57,7 +57,7 @@ async function fromPreview(p, url, request) {
     try {
       got = await fetch("https://raw.githubusercontent.com/" + p.repo + "/" + p.sha + "/" + rel.split("/").map(encodeURIComponent).join("/"));
     } catch (e) {
-      return new Response("Offline, and this preview's file isn't saved yet.", { status: 503, headers: { "Content-Type": "text/plain" } });
+      return new Response("Offline, and this test build's file isn't saved yet.", { status: 503, headers: { "Content-Type": "text/plain" } });
     }
     if (!got.ok) return new Response("", { status: got.status });
     res = new Response(await got.arrayBuffer(), { headers: { "Content-Type": TYPES[rel.split(".").pop().toLowerCase()] || "application/octet-stream" } });
@@ -67,7 +67,7 @@ async function fromPreview(p, url, request) {
   const name = p.title || (p.pr ? "#" + p.pr : "preview");
   const bar = '<a href="./?release" style="position:fixed;z-index:2147483647;top:calc(env(safe-area-inset-top) + 6px);left:50%;transform:translateX(-50%);'
     + 'max-width:calc(100% - 32px);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:4px 12px;border-radius:999px;'
-    + 'font:12px/1.4 system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.72);text-decoration:none">Preview: ' + escHtml(name) + ' · Back to the release</a>';
+    + 'font:12px/1.4 system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.72);text-decoration:none">Test build: ' + escHtml(name) + ' · Back to the release</a>';
   return new Response((await res.text()).replace(/<\/body>/i, bar + "</body>"), { headers: { "Content-Type": "text/html" } });
 }
 

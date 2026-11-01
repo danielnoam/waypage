@@ -48,7 +48,7 @@ function route(s) {
   if (view === "reader" && s.sheet !== state.sheet) closeSheet();
   if (view === "reader" && s.sheet && state.open && state.open.id === s.page) openSheet(s.sheet, true);
   if (inSettings) { openSettings(true); if (s.section) openSection(s.section, true); }
-  if (view === "news") openNews(true);
+  if (view === "news") openNews(true, s.ahead);
   if (view === "downloads") openDownloads(true);
   if (view === "sync") openSyncPage(true);
 }
@@ -389,9 +389,13 @@ function setUpd(change) {
   if (was !== upd.phase + upd.error || !("pct" in change)) {
     if (state.settings) renderSettings();
     if (state.section === "updates" && $("updatesSection")) $("updatesSection").replaceWith(updatesGroup());
+    paintPreviews();
+    paintNews();
     renderDownloads();
   } else {
     if (state.section === "updates" && $("updatesSection")) $("updatesSection").replaceWith(updatesGroup());
+    paintPreviews();
+    paintNews();
     paintUpdateCard();
   }
 }
@@ -401,7 +405,7 @@ async function checkForNewerApp() {
   if (!C.platform.native || !build || !build.repo) return;
   if (["checking", "downloading", "paused"].includes(upd.phase)) return;
   C.platform.clearOldUpdates(APP_VERSION, isNewerVersion);
-  // A preview build isn't offered the release it came from; Preview
+  // A test build isn't offered the release it came from; Preview
   // builds has Back to the release.
   if (C.platform.previewBranch) { setUpd({ phase: "preview" }); return; }
   setUpd({ phase: "checking" });
@@ -470,8 +474,8 @@ async function install() {
   }
 }
 
-// The library's bar: a newer version is out (View opens Settings at
-// Updates), or this one just arrived (What's new). × puts it away.
+// The library's bar: a newer version is out (View opens What's new for
+// it, with its Update), or this one just arrived (What's new). × puts it away.
 let barDismissed = null;
 function paintUpdateBar() {
   const bar = $("updateBar");
@@ -488,7 +492,7 @@ function paintUpdateBar() {
     : "Updated to " + APP_VERSION;
   const btn = $("updateBtn");
   btn.textContent = out ? "View" : "What's new";
-  btn.onclick = () => (out && upd.phase !== "available" ? openDownloads() : out ? openSettings(false, "updates") : openNews());
+  btn.onclick = () => (out && !upd.tag ? openNews(false, true) : out ? openSettings(false, "updates") : openNews());
   $("updateClose").onclick = () => {
     barDismissed = key;
     if (fresh) justUpdated = false;
@@ -521,32 +525,70 @@ function updatesGroup() {
       idle: "Tap to check for updates", checking: "Checking…", current: "You have the latest version",
       failed: upd.error, available: "Waypage " + upd.latest + " is out",
       downloading: "Downloading " + upd.latest + " · " + upd.pct + "%", paused: "Paused at " + upd.pct + "%", ready: "Waypage " + upd.latest + " is ready to install",
-      preview: "Preview of " + preview + builtLine(C.platform.build),
+      preview: "Test build of " + preview + builtLine(C.platform.build),
     }[upd.phase];
-    const busy = upd.phase === "checking";
-    const version = el("button", { class: "row update-row" + (out ? " out" : ""), type: "button", onclick: () => (out ? startUpdate() : upd.phase === "preview" ? openPreviews() : checkForNewerApp()) },
-      busy ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
-      el("span", { class: "choice-text" },
-        el("span", { class: "row-label" }, "Version " + APP_VERSION),
-        el("span", { class: "choice-note" + (out ? " accent" : upd.phase === "failed" ? " warn" : ""), role: "status" }, status)),
-      out ? el("span", { class: "btn-small", "aria-hidden": "true" }, upd.phase === "downloading" ? upd.pct + "%" : C.platform.ios ? "Get it" : upd.phase === "ready" ? "Install" : upd.phase === "paused" ? "Resume" : "Update") : null);
-    version.disabled = busy;
-    list.append(version);
+    list.append(versionRow("Version " + APP_VERSION, status, out && !upd.tag ? () => openNews(false, true) : null));
     if (out && upd.error) list.append(el("div", { class: "row" }, el("span", { class: "row-label warn" }, upd.error)));
     if (C.platform.build && C.platform.build.repo) {
-      list.append(navRow("Preview builds", preview ? "Back to the release is here" : "Try a branch before it's released", openPreviews));
+      list.append(navRow("Test builds", preview ? "Back to the release is here" : "Try a branch before it's released", openPreviews));
     }
   } else {
     list.append(el("div", { class: "row" }, el("span", { class: "row-label" }, "Version"), el("span", { class: "row-value" }, APP_VERSION)));
-    if (webPreviews()) list.append(navRow("Preview builds", pv.web ? "Preview: " + previewName(pv.web) : "Try a branch before it's released", openPreviews));
+    if (webPreviews()) list.append(navRow("Test builds", pv.web ? "Test build: " + previewName(pv.web) : "Try a branch before it's released", openPreviews));
   }
   list.append(navRow("Changelog", null, () => openNews()));
   return el("section", { class: "settings-section", id: "updatesSection" }, list);
 }
 
-// ---- Preview builds (1.48.0) ----
+// The version row: tap to check. With a newer one out it's two buttons
+// (Daniel's ask): the version opens What's new for it, Update fetches it.
+function versionRow(label, status, open) {
+  const out = UPD_OUT.includes(upd.phase);
+  const busy = upd.phase === "checking";
+  const text = [busy ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
+    el("span", { class: "choice-text" },
+      el("span", { class: "row-label" }, label),
+      status ? el("span", { class: "choice-note" + (out ? " accent" : upd.phase === "failed" ? " warn" : ""), role: "status" }, status) : null)];
+  if (!out) {
+    const row = el("button", { class: "row update-row", type: "button", onclick: () => (upd.phase === "preview" ? openPreviews() : checkForNewerApp()) }, ...text);
+    row.disabled = busy;
+    return row;
+  }
+  return el("div", { class: "row update-row out" },
+    open ? el("button", { class: "update-text", type: "button", onclick: open }, ...text) : el("span", { class: "update-text" }, ...text),
+    el("button", { class: "btn-small", type: "button", onclick: startUpdate }, upd.phase === "downloading" ? upd.pct + "%" : C.platform.ios ? "Get it" : upd.phase === "ready" ? "Install" : upd.phase === "paused" ? "Resume" : "Update"));
+}
+
+// What a newer release brings (1.50.0): What's new opened from the bar's
+// View or About shows every version between this one and it, from that
+// release's own CHANGELOG.md, or its release notes when that doesn't load.
+const coming = { latest: null, entries: null };
+function comingEntries() {
+  const latest = upd.latest;
+  if (coming.latest === latest) return coming.entries;
+  coming.latest = latest;
+  coming.entries = null;
+  const fromNotes = () => {
+    const body = String(upd.notes || "").split(/\n---\s*\n/)[0];
+    const e = changelogEntries("## [" + latest + "]\n" + body);
+    return e.length && e[0].sections.length ? e : [];
+  };
+  const repo = C.platform.build && C.platform.build.repo;
+  (repo ? C.platform.fetchText("https://raw.githubusercontent.com/" + repo + "/app-v" + latest + "/CHANGELOG.md", { headers: { Accept: "text/plain" } })
+    .then((r) => (r.status === 200 ? changelogEntries(r.text).filter((e) => /^\d+\.\d+\.\d+$/.test(e.version) && isNewerVersion(e.version, APP_VERSION) && !isNewerVersion(e.version, latest)) : []))
+    : Promise.resolve([]))
+    .catch(() => [])
+    .then((list) => {
+      if (coming.latest !== latest) return;
+      coming.entries = list.length ? list : fromNotes();
+      if (state.news === "ahead") paintNews();
+    });
+  return null;
+}
+
+// ---- Test builds (1.48.0) ----
 // A branch with an open pull request has its APK on the pre-release
-// preview-<branch> (android.yml and tools/preview-release.sh remake it on
+// test-<branch> (android.yml and tools/test-build.sh remake it on
 // every push; the iOS workflow adds the IPA). A pre-release is never
 // GitHub's "latest", so the updater above never offers one; this screen
 // lists them from the public releases list, no token, and installs one
@@ -601,10 +643,10 @@ async function loadPreviews() {
     const all = JSON.parse(res.text).filter((r) => r && !r.draft);
     const stable = all.find((r) => !r.prerelease && /^app-v\d+\.\d+\.\d+$/.test(r.tag_name));
     pv.stable = stable ? stable.tag_name.replace(/^app-v/, "") : null;
-    pv.list = all.filter((r) => r.prerelease && /^preview-/.test(r.tag_name)).map((r) => {
+    pv.list = all.filter((r) => r.prerelease && /^(test|preview)-/.test(r.tag_name)).map((r) => {
       const n = previewNotes(r.body);
       const assets = (r.assets || []).map((a) => a.name);
-      return { tag: r.tag_name, title: String(r.name || "").replace(/^Preview: /, "") || n.branch || r.tag_name, branch: n.branch || r.tag_name.slice(8),
+      return { tag: r.tag_name, title: String(r.name || "").replace(/^(Test|Preview): /, "") || n.branch || r.tag_name, branch: n.branch || r.tag_name.replace(/^(test|preview)-/, ""),
         version: n.version || "", sha: n.commit || "", pr: n.pr || "", at: Date.parse(r.published_at || r.created_at) || 0,
         apk: assets.includes("Waypage.apk"), ipa: assets.includes("Waypage.ipa") };
     }).sort((a, b) => b.at - a.at);
@@ -621,6 +663,12 @@ async function loadPreviews() {
 function paintPreviews() {
   if (state.section === "previews" && $("previewsSection")) $("previewsSection").replaceWith(previewsSection());
 }
+// A preview (or the release, from Back to the release) being downloaded
+// shows it on its row as About's version row does (1.50.0, Daniel's ask):
+// the percent, Paused, Install, and a tap goes on with it.
+const fetching = (tag) => ["downloading", "paused", "ready"].includes(upd.phase) && (upd.tag || null) === tag;
+const fetchNote = () => upd.error || { downloading: "Downloading · " + upd.pct + "%", paused: "Paused at " + upd.pct + "%", ready: "Downloaded, ready to install" }[upd.phase];
+const fetchBtn = () => (upd.phase === "downloading" ? upd.pct + "%" : upd.phase === "ready" ? "Install" : "Resume");
 // The same download and installer as an update, under the preview's own
 // name; on iPhone the pre-release's page opens, as the updater's does.
 async function openWebPreview(p) {
@@ -636,7 +684,7 @@ async function openWebPreview(p) {
 function installPreview(p) {
   if (!C.platform.native) { if (p.sha) openWebPreview(p); return; }
   if (!p.apk && !C.platform.ios) { C.platform.openOutside(C.platform.releaseUrl(p.tag)); return; }
-  Object.assign(upd, { phase: "available", latest: "preview of " + p.branch, tag: p.tag, key: p.tag + "-" + p.sha.slice(0, 7), notes: "", apk: null, error: "" });
+  Object.assign(upd, { phase: "available", latest: "test build of " + p.branch, tag: p.tag, key: p.tag + "-" + p.sha.slice(0, 7), notes: "", apk: null, error: "" });
   startUpdate();
 }
 function backToRelease() {
@@ -663,12 +711,15 @@ function previewsSection() {
       const installed = !!mine && p.sha.slice(0, 7) === mine;
       const higher = !web && !!pv.stable && !!p.version && isNewerVersion(p.version, pv.stable);
       const note = p.branch + (p.at ? " · " + whenText(p.at) : "") + (p.pr ? " · #" + p.pr : "");
-      const row = el("button", { class: "row update-row", type: "button", onclick: () => installPreview(p) },
+      const going = !web && fetching(p.tag);
+      const row = el("button", { class: "row update-row" + (going ? " out" : ""), type: "button", onclick: () => (going ? startUpdate() : installPreview(p)) },
+        going && upd.phase === "downloading" ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
         el("span", { class: "choice-text" },
           el("span", { class: "row-label" }, p.title),
-          el("span", { class: "choice-note" }, note),
+          going ? el("span", { class: "choice-note " + (upd.error ? "warn" : "accent"), role: "status" }, fetchNote()) : el("span", { class: "choice-note" }, note),
           higher ? el("span", { class: "choice-note warn" }, "Needs an uninstall to go back") : null),
-        installed ? el("span", { class: "row-value" }, web ? "Open now" : "Installed") : el("span", { class: "btn-small", "aria-hidden": "true" }, web ? "Open" : C.platform.ios ? "Get it" : "Install"));
+        installed ? el("span", { class: "row-value" }, web ? "Open now" : "Installed")
+          : el("span", { class: "btn-small", "aria-hidden": "true" }, going ? fetchBtn() : web ? "Open" : C.platform.ios ? "Get it" : "Install"));
       row.disabled = installed;
       rows.push(row);
     }
@@ -679,17 +730,21 @@ function previewsSection() {
         el("span", { class: "choice-note" }, "The released Waypage opens again"))));
   } else if (here && pv.phase === "loaded") {
     const stuck = !!pv.stable && isNewerVersion(APP_VERSION, pv.stable);
-    const back = el("button", { class: "row", type: "button", onclick: backToRelease },
+    const going = fetching(null);
+    const back = el("button", { class: "row update-row" + (going ? " out" : ""), type: "button", onclick: () => (going ? startUpdate() : backToRelease()) },
+      going && upd.phase === "downloading" ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
       el("span", { class: "choice-text" },
         el("span", { class: "row-label accent" }, "Back to the release"),
-        el("span", { class: "choice-note" + (stuck ? " warn" : "") }, stuck ? "Uninstall Waypage first: this preview's " + APP_VERSION + " is above " + pv.stable
-          : pv.stable ? "Waypage " + pv.stable + " installs over this preview" : "No release found")));
+        going ? el("span", { class: "choice-note " + (upd.error ? "warn" : "accent"), role: "status" }, fetchNote())
+          : el("span", { class: "choice-note" + (stuck ? " warn" : "") }, stuck ? "Uninstall Waypage first: this test build's " + APP_VERSION + " is above " + pv.stable
+          : pv.stable ? "Waypage " + pv.stable + " installs over this test build" : "No release found")),
+      going ? el("span", { class: "btn-small", "aria-hidden": "true" }, fetchBtn()) : null);
     back.disabled = stuck || !pv.stable;
     rows.push(back);
   }
   const sec = section("Branches", web
-    ? "A preview is a build of a pull request, before it's released. Open one and this browser runs it with the library you have; Back to the release, here or on the bar at the top, puts the released version back."
-    : "A preview is a build of a pull request, before it's released. It installs over the Waypage you have and keeps your library. "
+    ? "A test build is a build of a pull request, before it's released. Open one and this browser runs it with the library you have; Back to the release, here or on the bar at the top, puts the released version back."
+    : "A test build is a build of a pull request, before it's released. It installs over the Waypage you have and keeps your library. "
     + "Back to the release puts the released version back, as long as the branch didn't raise the version number."
     + (C.platform.ios ? " On iPhone, Get it opens the build's page; install it with AltStore or SideStore." : ""),
     el("div", { class: "group" }, ...rows),
@@ -746,22 +801,40 @@ async function readChangelog() {
   return changelog;
 }
 
-async function openNews(fromHistory) {
+async function openNews(fromHistory, ahead) {
   if (state.news) return;
-  state.news = true;
+  state.news = ahead ? "ahead" : true;
   const over = state.settings ? "settings" : undefined;
-  if (!fromHistory) history.pushState({ view: "news", over, section: state.section || undefined }, "");
+  if (!fromHistory) history.pushState({ view: "news", ahead: ahead || undefined, over, section: state.section || undefined }, "");
   justUpdated = false;
   paintUpdateBar();
   $("newsBody").replaceChildren(el("p", { class: "meta" }, "Loading…"));
   $("newsBody").scrollTop = 0;
   pushScreen($("newsView")).then(() => $("newsBack").focus());
+  if (ahead) { paintNews(); return; }
   const entries = await readChangelog();
-  if (!state.news) return;
+  if (state.news !== true) return;
   $("newsBody").replaceChildren(...(entries && entries.length ? entries.map((e) => el("section", { class: "news-entry" + (e.version === APP_VERSION ? " now" : "") },
     el("h2", { class: "news-version" }, e.version, e.version === APP_VERSION ? el("span", { class: "news-you" }, "You have this") : null),
     e.date ? el("p", { class: "meta" }, formatDay(e.date)) : null,
     ...notesView([e]))) : [el("p", { class: "empty-text" }, "The list of changes didn't load.")]));
+}
+
+// What's new for the version that's out, with its Update on top.
+function paintNews() {
+  if (state.news !== "ahead") return;
+  const out = UPD_OUT.includes(upd.phase) && !upd.tag && upd.latest;
+  if (!out) { $("newsBody").replaceChildren(el("p", { class: "empty-text" }, "You have the latest version.")); return; }
+  const entries = comingEntries();
+  const status = { available: "You have " + APP_VERSION, downloading: "Downloading · " + upd.pct + "%", paused: "Paused at " + upd.pct + "%", ready: "Downloaded, ready to install" }[upd.phase];
+  $("newsBody").replaceChildren(
+    el("div", { class: "group update-card news-update" }, versionRow("Waypage " + upd.latest, upd.error || status)),
+    ...(entries === null ? [el("p", { class: "meta" }, "Loading…")]
+      : entries.length ? entries.map((e) => el("section", { class: "news-entry" },
+        el("h2", { class: "news-version" }, e.version),
+        e.date ? el("p", { class: "meta" }, formatDay(e.date)) : null,
+        ...notesView([e])))
+      : [el("p", { class: "empty-text" }, "The list of changes didn't load. Changelog has it once you've updated.")]));
 }
 
 function closeNews() {

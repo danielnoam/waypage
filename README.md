@@ -183,7 +183,7 @@ Each section below shows the computer (left) and the phone (right).
 - About has the version, the changelog, and Credits: what Waypage is built with.
 - App lock: passcode, fingerprint or face on Android, erase when forgotten.
 - Home screen widgets on Android and iOS: Keep reading, Feeds, Favourites, Collection, Highlight; app icon shortcuts.
-- The Android app updates itself and shows What's new; About › Preview builds installs a branch's build before it's released, and puts the release back.
+- The Android app updates itself and shows What's new; About › Test builds installs a branch's build before it's released, and puts the release back.
 - Report a problem with a local error log.
 - Animations switch; motion zooms and moves, and only dialogs fade.
 

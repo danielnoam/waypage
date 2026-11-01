@@ -1087,7 +1087,7 @@ const SECTIONS = {
   kokoro: { title: "More speech engines", build: kokoroSections, value: () => "", parent: "reading" },
   storage: { title: "Storage", build: () => [placeGroup(), storageGroup(), browserStorageGroup(), backupGroup(roomRows())], value: () => formatSize(totalBytes()) },
   updates: { title: "About", build: () => [updatesGroup(), aboutGroup()], value: () => (updateOut() ? upd.latest + " is out" : APP_VERSION) },
-  previews: { title: "Preview builds", build: () => previewsSections(), value: () => "", parent: "updates" },
+  previews: { title: "Test builds", build: () => previewsSections(), value: () => "", parent: "updates" },
   credits: { title: "Credits", build: creditsSections, value: () => "", parent: "updates" },
   report: { title: "Report a problem", build: () => [reportGroup()], value: () => { const n = C.platform.log.list().length; return n ? n + (n === 1 ? " note" : " notes") : ""; } },
 };
@@ -1109,7 +1109,7 @@ function renderSettings() {
       out ? el("div", { class: "group update-card" },
         el("div", { class: "row update-row out" },
           el("span", { class: "row-label accent" }, "Waypage " + upd.latest + " is out"),
-          el("button", { class: "btn-small", type: "button", onclick: () => openSection("updates") }, "View"))) : null,
+          el("button", { class: "btn-small", type: "button", onclick: () => (upd.tag ? openSection("updates") : openNews(false, true)) }, "View"))) : null,
       el("div", { class: "group" }, row("appearance"), row("reading"), row("library"), C.platform.native ? row("notifications") : null, row("lock")),
       el("div", { class: "group" }, row("saving"), row("sync"), C.drive.available ? row("drive") : null, row("storage")),
       el("div", { class: "group" }, row("updates"), row("report"))));
@@ -1127,7 +1127,7 @@ const FIND_ALIASES = {
   "Where your library is": "storage folder documents sd card", "App lock": "passcode pin fingerprint face biometric", Notifications: "alerts",
   "Google Drive": "backup cloud", "GitHub sync": "sync devices token", Credits: "about licence licenses open source thanks",
   Version: "update check app", Changelog: "what's new release notes", "Continue reading": "last clip resume",
-  "Preview builds": "beta branch test pull request",
+  "Test builds": "beta branch preview pull request",
 };
 let settingsIdx = null;
 const settingsQuery = () => { const i = $("settingsSearch"); return i ? i.value.trim() : ""; };

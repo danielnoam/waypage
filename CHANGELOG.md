@@ -2,7 +2,7 @@
 
 All notable changes to Carry-on. Newest first.
 
-## Unreleased
+## [1.50.0] - 2026-11-01
 
 ### Added
 - Narrate (Android): Kokoro voices. More speech engines, under Get
@@ -24,6 +24,24 @@ All notable changes to Carry-on. Newest first.
   ahead on its own).
 - Narrate's Speech engine list names the phone's default engine once,
   not as the default and again on its own.
+- Reader: Auto-scroll's button is a play sign pointing down, not the
+  download-style arrow.
+- A clip's sheet (hold it in the library): Read as Article / Comic in
+  place of Save as comic, both ways. A web clip saves again that way; a
+  file (not a PDF read from outside) only changes how it's shown.
+- A drop-down in a short sheet (Export as) drops up over the screen
+  with its whole list, instead of being cut off at the sheet's edge.
+- Auto-scroll: a tap on the page pauses it; another tap, or scrolling
+  yourself, lets it go on. Holding a finger still holds it as before.
+- Preview builds are now Test builds, in the app and on GitHub: the
+  labels are test, test-android and test-ios, and the pre-releases
+  test-<branch>.
+- Test builds: a build being downloaded shows its progress on its row,
+  as About's update does (percent, Paused, Install).
+- A new version's bar: View opens What's new for it, every version since
+  yours with Update on top, so you see the changes before updating. In
+  About, tapping the version opens the same, and Update downloads it.
+
 ## [1.49.2] - 2026-11-01
 
 ### Changed

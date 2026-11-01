@@ -200,20 +200,35 @@ function dropdown(o) {
     btn.setAttribute("aria-expanded", "false");
     const g = wrap.closest(".group");
     document.removeEventListener("pointerdown", outside, true);
-    M.popOut(m, btn.getBoundingClientRect()).then(() => { m.remove(); if (g && !menu) g.classList.remove("menu-open"); });
+    M.popOut(m, btn.getBoundingClientRect()).then(() => {
+      m.remove();
+      if (g && !menu) g.classList.remove("menu-open");
+    });
     if (focus) btn.focus();
   }
   // In a sheet or other scrolling box (0.34.1), a menu fits inside it:
   // it opens upward when there's more room above and scrolls in itself,
   // so the box under it doesn't scroll and stay moved. On the page, a
   // menu opened low on the screen scrolls the page up instead.
+  // In a sheet too short for it (Export, 1.50.0), the menu leaves the
+  // sheet and drops up (or down) over the screen, the sheet left as it is.
   function fit(m) {
-    let box = null;
+    let box = null, sc = null;
     for (let p = wrap.parentElement; p && p !== document.body; p = p.parentElement) {
-      if (/auto|scroll/.test(getComputedStyle(p).overflowY)) { box = p.getBoundingClientRect(); break; }
+      if (/auto|scroll/.test(getComputedStyle(p).overflowY)) { sc = p; box = p.getBoundingClientRect(); break; }
     }
     if (!box) { m.scrollIntoView({ block: "nearest" }); return false; }
     const b = btn.getBoundingClientRect(), gap = 8, need = m.scrollHeight;
+    const roomIn = Math.max(Math.min(box.bottom, innerHeight) - b.bottom, b.top - Math.max(box.top, 0)) - gap;
+    if (need > roomIn && sc.closest(".sheet")) {
+      const w = m.getBoundingClientRect(), upRoom = b.top - gap * 2, downRoom = innerHeight - b.bottom - gap * 2;
+      const up = need > downRoom && upRoom > downRoom;
+      Object.assign(m.style, { position: "fixed", left: w.left + "px", width: w.width + "px", right: "auto",
+        top: up ? "auto" : b.bottom + gap + "px", bottom: up ? innerHeight - b.top + gap + "px" : "auto" });
+      if (need > (up ? upRoom : downRoom)) m.style.maxHeight = (up ? upRoom : downRoom) + "px";
+      m.classList.toggle("up", up);
+      return up;
+    }
     const below = Math.min(box.bottom, innerHeight) - b.bottom - gap;
     const above = b.top - Math.max(box.top, 0) - gap;
     const up = need > below && above > below;
