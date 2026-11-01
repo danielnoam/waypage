@@ -10,6 +10,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
+const { pptxBytes } = require("./pptx-fixture");
 
 function playwright() {
   const tries = ["playwright", "/opt/node-tools/node_modules/playwright"];
@@ -1939,6 +1940,163 @@ function zipOf(files) {
         marks: ["Part One@1", "Part Two@3"],
       }, JSON.stringify(got));
       // pdf.js's sandboxed frame asks for a service worker it can't have.
+      const errors = q.errors.filter((e) => !/serviceWorker/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("dark PDF pages map white to the theme's background and black to its ink, in a dark theme only (1.49.0)", async () => {
+      const q = await page(browser, 390);
+      const got = await q.evaluate(() => {
+        const root = document.documentElement;
+        const funcs = () => ["R", "G", "B"].map((c) => {
+          const f = document.querySelector("#pdf-dark feFunc" + c);
+          return f ? [Number(f.getAttribute("slope")), Number(f.getAttribute("intercept"))] : null;
+        });
+        const out = {};
+        store("waypage.pdfDark", true);
+        state.open = { id: "x", link: "x", file: { kind: "pdf" } };
+        setTheme("night"); paintPdfDark();
+        out.night = root.hasAttribute("data-pdf-dark");
+        const css = getComputedStyle(root);
+        const hex = (v) => { v = v.trim(); return [1, 3, 5].map((i) => parseInt(v.slice(i, i + 2), 16) / 255); };
+        const bg = hex(css.getPropertyValue("--bg")), ink = hex(css.getPropertyValue("--ink"));
+        out.white = funcs().map((f, i) => Math.abs(f[0] + f[1] - bg[i]) < 0.001);
+        out.black = funcs().map((f, i) => Math.abs(f[1] - ink[i]) < 0.001);
+        out.row = !!document.querySelector('[data-pref="pdfDark"]') || "none";
+        setTheme("paper"); paintPdfDark();
+        out.paper = root.hasAttribute("data-pdf-dark");
+        out.paperFilter = !!document.getElementById("pdf-dark");
+        setTheme("night");
+        state.open.view = "text"; paintPdfDark();
+        out.text = root.hasAttribute("data-pdf-dark");
+        state.open = null; paintPdfDark();
+        store("waypage.pdfDark", false);
+        return out;
+      });
+      assert.strictEqual(got.night, true, JSON.stringify(got));
+      assert.deepStrictEqual(got.white, [true, true, true], JSON.stringify(got));
+      assert.deepStrictEqual(got.black, [true, true, true], JSON.stringify(got));
+      assert.strictEqual(got.paper, false, JSON.stringify(got));
+      assert.strictEqual(got.paperFilter, false, JSON.stringify(got));
+      assert.strictEqual(got.text, false, JSON.stringify(got));
+      await q.context().close();
+    });
+
+    await test("a linked PDF's pages go dark from the Layout switch, which only a PDF's own sheet has (1.49.0)", async () => {
+      const q = await page(browser, 390);
+      const bytes = [...pdfBytes()];
+      const id = await q.evaluate(async (b) => {
+        const file = new File([new Uint8Array(b)], "night.pdf", { type: "application/pdf" });
+        window.Waypage.platform.files.blob = async () => file;
+        const meta = await window.Waypage.files.bring(file, "pdf", { has: () => false, link: "content://docs/night.pdf" });
+        await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
+        return meta.id;
+      }, bytes);
+      await q.reload();
+      await q.evaluate(async (b) => {
+        const file = new File([new Uint8Array(b)], "night.pdf", { type: "application/pdf" });
+        window.Waypage.platform.files.blob = async () => file;
+        setTheme("night");
+      }, bytes);
+      await q.evaluate((i) => openPage(i), id);
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      await until(q, () => document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-printed img[src]").length > 0);
+      const frame = () => q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument;
+        const img = d.querySelector(".co-printed img[src]");
+        return { attr: d.documentElement.hasAttribute("data-co-pdf-dark"), filter: getComputedStyle(img).filter, svg: !!d.getElementById("co-pdf-dark") };
+      });
+      assert.strictEqual((await frame()).attr, false);
+      await q.click("#readerAa");
+      await q.locator('input[name="sheet-tab"][value="layout"]').evaluate((i) => i.click());
+      const sw = q.locator('input[data-pref="pdfDark"]');
+      assert.strictEqual(await sw.count(), 1);
+      assert.ok(await sw.isVisible(), "the switch is shown with a PDF open");
+      await sw.evaluate((i) => i.click());
+      await until(q, () => document.getElementById("readerFrame").contentDocument.documentElement.hasAttribute("data-co-pdf-dark"));
+      let got = await frame();
+      assert.ok(got.svg && /url\(/.test(got.filter), JSON.stringify(got));
+      // Paper has nothing to darken.
+      await q.evaluate(() => setTheme("paper"));
+      await until(q, () => !document.getElementById("readerFrame").contentDocument.documentElement.hasAttribute("data-co-pdf-dark"));
+      assert.strictEqual((await frame()).svg, false);
+      await q.evaluate(() => setTheme("night"));
+      await until(q, () => document.getElementById("readerFrame").contentDocument.documentElement.hasAttribute("data-co-pdf-dark"));
+      // Show as text has no printed pages to darken, so no switch (1.49.0).
+      await q.evaluate(() => switchView(state.open, "reader"));
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open && state.open.view === "text");
+      await q.click("#readerAa");
+      await q.locator('input[name="sheet-tab"][value="layout"]').evaluate((i) => i.click());
+      assert.ok(!(await q.locator('input[data-pref="pdfDark"]').isVisible()), "no switch with the PDF shown as text");
+      const errors = q.errors.filter((e) => !/serviceWorker/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("the Dark PDF pages switch is hidden in a web clip's Layout, where .rc-row's flex must not beat [hidden] (1.49.0)", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ARTICLE);
+      await q.press("#saveUrl", "Enter");
+      await q.locator(".page-card", { hasText: "The Long Haul Flight" }).first().click();
+      await frameText(q).getByText("oceanic track").waitFor();
+      await q.click("#readerAa");
+      await q.locator('input[name="sheet-tab"][value="layout"]').evaluate((i) => i.click());
+      const row = q.locator(".pdf-dark-row");
+      assert.strictEqual(await row.count(), 1, "the row is built, then hidden");
+      assert.ok(!(await row.isVisible()), "the switch is not visible in a web clip");
+      assert.strictEqual(await row.evaluate((r) => getComputedStyle(r).display), "none");
+      await q.context().close();
+    });
+
+    await test("a PowerPoint deck becomes a PDF with its words, asking first, and Cancel stops (1.49.0)", async () => {
+      const q = await page(browser, 390);
+      const asked = [];
+      q.on("request", (r) => asked.push(r.url()));
+      const bytes = [...pptxBytes()];
+      const made = await q.evaluate(async (b) => {
+        const file = new File([new Uint8Array(b)], "Quarterly deck.pptx");
+        const W = window.Waypage;
+        const out = { kind: await W.files.kindOf(file) };
+        const r = await W.pptx.toPdf(file, () => {});
+        const read = await W.pdf.read(new Uint8Array(await r.blob.arrayBuffer()), () => {}, {});
+        out.name = r.name; out.slides = r.slides; out.hidden = r.hidden; out.skipped = r.skipped;
+        out.words = read.blocks.filter((x) => x.s).map((x) => x.s).join(" | ");
+        return out;
+      }, bytes);
+      assert.strictEqual(made.kind, "pptx");
+      assert.strictEqual(made.name, "Quarterly deck.pdf");
+      assert.strictEqual(made.slides, 2, "the hidden slide is left out");
+      assert.strictEqual(made.hidden, 1);
+      assert.strictEqual(made.skipped, 2, "the chart and the outside picture are counted");
+      for (const w of ["Quarterly Review", "First point about the night train", "Northern", "Grouped words inside", "שלום עולם"]) assert.ok(made.words.includes(w), w + " in " + made.words);
+      assert.ok(!made.words.includes("Hidden slide words"));
+      assert.ok(!asked.some((u) => /example\.invalid/.test(u)), "a picture outside the file is never fetched");
+      // Cancel opens and saves nothing.
+      await q.evaluate((b) => { window.__p = openFile(new File([new Uint8Array(b)], "Quarterly deck.pptx"), null, true); }, bytes);
+      await q.locator("#menuSheet .row", { hasText: "Convert to PDF" }).waitFor();
+      await q.locator("#menuSheet .row", { hasText: "Cancel" }).click();
+      await q.evaluate(() => window.__p);
+      assert.strictEqual(await q.evaluate(() => state.pages.length), 0);
+      // Convert: saved where the person picks (stubbed, read from there), then opened.
+      await q.evaluate((b) => {
+        const W = window.Waypage;
+        window.__saveArgs = null;
+        W.platform.saveLinked = async (blob, name, mime, near) => {
+          window.__saveArgs = { name, mime, near };
+          const file = new File([blob], name, { type: mime });
+          W.platform.files.blob = async () => file;
+          return { saved: true, ref: "content://docs/Quarterly%20deck.pdf" };
+        };
+        window.__p = openFile(new File([new Uint8Array(b)], "Quarterly deck.pptx"), null, true, "content://docs/deck.pptx");
+      }, bytes);
+      await q.locator("#menuSheet .row", { hasText: "Convert to PDF" }).click();
+      await q.evaluate(() => window.__p);
+      const got = await q.evaluate(() => ({ pages: state.pages.map((p) => ({ link: p.link, kind: p.file.kind, name: p.file.name })), args: window.__saveArgs }));
+      assert.deepStrictEqual(got.args, { name: "Quarterly deck.pdf", mime: "application/pdf", near: "content://docs/deck.pptx" });
+      assert.strictEqual(got.pages.length, 1);
+      assert.strictEqual(got.pages[0].kind, "pdf");
+      assert.strictEqual(got.pages[0].link, "content://docs/Quarterly%20deck.pdf", "it reads from where it was saved, without the keep-a-copy question");
       const errors = q.errors.filter((e) => !/serviceWorker/.test(e));
       assert.deepStrictEqual(errors, [], errors.join(" | "));
       await q.context().close();

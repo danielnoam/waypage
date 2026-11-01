@@ -222,6 +222,30 @@ const SHOTS = {
   async stats(p) { await home(p); await p.evaluate(() => goPlace("reading")); await p.waitForSelector(".rs-total"); },
   async sync(p) { await home(p); await p.evaluate(() => openSyncPage()); await p.locator("#syncView:not([hidden])").waitFor(); },
   async settings(p) { await home(p); await p.evaluate(() => openSettings()); await p.locator("#settingsView:not([hidden])").waitFor(); },
+  // A PDF read from its file, its pages recoloured to Night (1.49.0). Last,
+  // since the PDF stays in this library for the shots after it.
+  async pdf(p) {
+    await home(p, "night");
+    const id = await p.evaluate(async (url) => {
+      const file = new File([await (await fetch(url)).arrayBuffer()], "night-train.pdf", { type: "application/pdf" });
+      window.Waypage.platform.files.blob = async () => file;
+      const meta = await window.Waypage.files.bring(file, "pdf", { has: () => false, link: "content://demo/night-train.pdf" });
+      await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
+      return meta.id;
+    }, DEMO + "night-train.pdf");
+    await p.goto(ROOT);
+    await p.waitForSelector(".page-card");
+    await p.evaluate(async (url) => {
+      const file = new File([await (await fetch(url)).arrayBuffer()], "night-train.pdf", { type: "application/pdf" });
+      window.Waypage.platform.files.blob = async () => file;
+      store("waypage.pdfDark", true);
+    }, DEMO + "night-train.pdf");
+    await p.evaluate((id) => openPage(id), id);
+    await p.locator("#readerView:not([hidden])").waitFor();
+    await p.frameLocator("#readerFrame").locator(".co-printed img[src]").first().waitFor();
+    await p.waitForTimeout(1200);
+    await p.evaluate(() => { if (document.getElementById("readerView").classList.contains("bar-away")) toggleBar(); });
+  },
 };
 
 const VERSION = (fs.readFileSync(path.join(__dirname, "..", "src", "app.js"), "utf8").match(/APP_VERSION = "([^"]+)"/) || [])[1];

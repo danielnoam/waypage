@@ -43,6 +43,11 @@ Planned, not built yet. Show the reworked screens before building.
 
 Everything iOS-only, kept for one iOS release.
 
+- **Convert a deck, keep the PDF where it was saved, on iOS (1.49.0).**
+  `FileSavePlugin.swift` saves through the document picker but returns no
+  address, so a converted deck opens as a copy. Return the saved URL with a
+  security-scoped bookmark so it can be read from where it is, as on
+  Android.
 - **Reading widgets on iOS.** Android has Reading this week, Reading
   today and Days in a row since 1.39.0 (Widgets.java, statsWeek and the
   rest), drawn from the `stats` the app hands over in widgets.update.
