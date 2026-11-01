@@ -247,4 +247,22 @@ test("no class the share extension or widgets compile is taken for a plugin", ()
   }
 });
 
+// The page's scripts share one global scope, so two files with the same
+// top-level name means the later one silently replaces the earlier (1.49.0:
+// the reader's switchRow took over Settings' and broke the Narrate section).
+test("no two scripts index.html loads declare the same top-level name", () => {
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const seen = {};
+  for (const [, f] of html.matchAll(/<script src="([^"?]+)/g)) {
+    const src = fs.readFileSync(path.join(ROOT, f), "utf8");
+    const first = src.replace(/^(\s*(\/\/.*|\/\*[\s\S]*?\*\/))*\s*/, "");
+    if (first.startsWith("(")) continue;
+    for (const m of src.matchAll(/^(?:async\s+)?(?:function\*?\s+(\w+)|(?:const|let|class)\s+(\w+))/gm)) {
+      const name = m[1] || m[2];
+      assert.ok(!seen[name], name + " is declared in both " + seen[name] + " and " + f);
+      seen[name] = f;
+    }
+  }
+});
+
 console.log("\n" + passed + " passed");

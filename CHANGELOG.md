@@ -2,6 +2,12 @@
 
 All notable changes to Carry-on. Newest first.
 
+## Unreleased
+
+### Fixed
+- Settings › Reading › Narrate and the reader's Narrate and Auto-scroll
+  tabs: the switches showed their storage names and were all on (1.49.0).
+
 ## [1.49.0] - 2026-11-01
 
 ### Added
