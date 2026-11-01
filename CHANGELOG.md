@@ -2,7 +2,7 @@
 
 All notable changes to Carry-on. Newest first.
 
-## Unreleased
+## [1.49.2] - 2026-11-01
 
 ### Changed
 - Computer and tablet: Settings opens as a window over the library,
