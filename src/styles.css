@@ -512,7 +512,7 @@ html.native .screen-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
 }
 .screen-body > * { max-width: 40rem; margin-left: auto; margin-right: auto; }
 
-.settings-section + .settings-section { margin-top: var(--s-6); }
+:is(.settings-section, .reading-controls.split) + .settings-section { margin-top: var(--s-6); }
 /* Two cards in one section (a list and its action, say) stand apart (1.48.1). */
 .settings-section > .group + .group, .settings-section > :is(.footnote, .warn-note, textarea, .report-field) + .group { margin-top: var(--s-3); }
 .overline {
@@ -1227,7 +1227,13 @@ html { -webkit-tap-highlight-color: transparent; }
    the next. Spinners keep turning; they say something is happening. */
 :root[data-motion="off"] *, :root[data-motion="off"] *::before, :root[data-motion="off"] *::after { transition: none !important; }
 :root[data-motion="off"] :is(.card, .tile, .tile-btn, .btn-primary, .btn-small, .btn-quiet, .icon-btn, .step-btn, .chip, .sheet-row,
-.select-act, .btn-text, .dropdown-btn):active { transform: none; }
+.select-act, .btn-text, .dropdown-btn, .help-btn):active { transform: none; }
+/* Nor the press stretch of a switch's knob, the ? turn or a drop-down's pop (1.48.3). */
+:root[data-motion="off"] .switch:active::before { width: 20px; }
+:root[data-motion="off"] .switch:checked:active::before { transform: translateX(20px); }
+:root[data-motion="off"][dir="rtl"] .switch:checked:active::before, :root[data-motion="off"] [dir="rtl"] .switch:checked:active::before { transform: translateX(-20px); }
+:root[data-motion="off"] .help-btn[aria-expanded="true"] { transform: none; }
+:root[data-motion="off"] :is(.dropdown-face.changed, .lock-dots.shake) { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 1ms !important; animation-duration: 1ms !important; }
 }

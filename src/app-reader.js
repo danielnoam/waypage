@@ -437,7 +437,7 @@ function setBrightSide(side, dx = 0) {
   store(BRIGHT_SIDE_KEY, side);
   box.style.transition = "none";
   box.classList.toggle("right", side === "right");
-  document.querySelectorAll('input[name$="-brightSide"]').forEach((i) => { i.checked = i.value === side; });
+  if (brightOn()) document.querySelectorAll('input[name$="-brightSide"]').forEach((i) => { i.checked = i.value === side; });
   const now = box.getBoundingClientRect().left;
   box.style.translate = (was + dx - now) + "px 0";
   void box.offsetWidth;
@@ -567,24 +567,21 @@ const brightEdge = {
   $("brightAuto").addEventListener("click", brightAuto);
   addEventListener("resize", () => { if (state.open && !$("bright").hidden) placeBright(); });
 })();
+// One row (1.48.3, was a switch and a side): Off, or the slider's side.
+// Off keeps the chosen side for when it's back.
 function brightSwitch(id) {
   if (!C.platform.brightness.available) return null;
-  return [el("label", { class: "rc-row switch-row" },
-    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Brightness along the edge"),
-      el("span", { class: "choice-note" }, "Swipe up or down along the slider's side while reading")),
-    el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "brightSwipe", checked: brightOn(),
-      onchange: (e) => {
-        store(BRIGHT_SWIPE_KEY, e.target.checked);
-        document.querySelectorAll('input[data-pref="brightSwipe"]').forEach((i) => { i.checked = e.target.checked; });
-        if (!state.open) return;
-        if (e.target.checked) brightOpen();
-        else { brightClose(); $("bright").hidden = true; }
-      } })),
-  // Also by holding the slider half a second and swiping it across.
-  el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Brightness slider"),
-    seg(id + "-brightSide", "Brightness slider side", [
-      { value: "left", label: "Left" }, { value: "right", label: "Right" },
-    ], brightSide(), (v) => { setBrightSide(v); placeBright(); }))];
+  return [el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Brightness"),
+    seg(id + "-brightSide", "Brightness slider", [
+      { value: "off", label: "Off" }, { value: "left", label: "Left" }, { value: "right", label: "Right" },
+    ], brightOn() ? brightSide() : "off", (v) => {
+      store(BRIGHT_SWIPE_KEY, v !== "off");
+      if (v !== "off") { setBrightSide(v); placeBright(); }
+      document.querySelectorAll('input[name$="-brightSide"]').forEach((i) => { i.checked = i.value === v; });
+      if (!state.open) return;
+      if (v !== "off") brightOpen();
+      else { brightClose(); $("bright").hidden = true; }
+    }))];
 }
 
 // Text size from a pinch on a clip's words (1.16.0); pictures and a
@@ -2006,6 +2003,7 @@ function readingControls(withTheme) {
     row("Hebrew", fontPick("hebrew", "Hebrew font",
       HEBREW.map((f) => ({ value: f.value, label: f.label,
         sample: f.family ? el("span", { class: "seg-sample", lang: "he", dir: "rtl", style: "font-family: " + f.family, "aria-hidden": "true" }, "עברית") : null })))),
+    row("Alignment", fontPick("align", "Alignment", ALIGNS)),
     row("Text size", el("div", { class: "stepper" },
       el("button", { class: "step-btn small", type: "button", "data-step": "-1", "aria-label": "Smaller text", onclick: () => nudge(-1) }, "A"),
       slider("Text size", SIZE_MIN, SIZE_MAX, 1, (v) => setReading({ size: v }), "size"),
@@ -2014,13 +2012,12 @@ function readingControls(withTheme) {
     // screen. Fonts made only as regular and bold go in one step.
     row("Weight", el("div", { class: "stepper" },
       slider("Text weight", SPACES.weight.min, SPACES.weight.max, SPACES.weight.step, (v) => setReading({ weight: v }), "weight")), "weight"),
-    pinchSwitch(),
-    row("Alignment", fontPick("align", "Alignment", ALIGNS)),
     el("label", { class: "rc-row switch-row" },
       el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Hyphenate"),
         el("span", { class: "choice-note" }, "Breaks long words at the line's end, in the clip's language")),
       el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "hyphens", checked: r.hyphens,
         onchange: (e) => setReading({ hyphens: e.target.checked }) })),
+    pinchSwitch(),
     // Spacing (1.19.0), headed on its own so the labels stay one word.
     el("h2", { class: "overline rc-sub" }, "Spacing"),
     row("Lines", el("div", { class: "stepper" },
