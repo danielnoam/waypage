@@ -83,6 +83,7 @@ public class SpeechService extends Service {
     private Job job;
     private int index;
     private int generation;
+    private int ahead = -1;
     private String state = "stopped";
     private MediaSession session;
     private PowerManager.WakeLock wake;
@@ -233,11 +234,26 @@ public class SpeechService extends Service {
         if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) {
             main.postDelayed(() -> said(id), 300);
         }
-        // Some engines say nothing back for a piece they can't voice, which
-        // left the reading stuck there: after well over its length, go on.
+        guard(id, text);
+        report();
+        queueAhead();
+    }
+
+    // Some engines say nothing back for a piece they can't voice, which
+    // left the reading stuck there: after well over its length, go on.
+    private void guard(String id, String text) {
         long most = 8000 + (long) (text.length() * 160 / Math.max(0.5f, job.rate));
         main.postDelayed(() -> said(id), most);
-        report();
+    }
+
+    // The next piece goes to the engine while this one plays, so it's
+    // made by the time this one ends: a slower engine (Kokoro) paused
+    // at every paragraph while it made the next.
+    private void queueAhead() {
+        int n = index + 1;
+        ahead = -1;
+        if (job == null || n >= job.items.length) return;
+        if (tts.speak(job.items[n], TextToSpeech.QUEUE_ADD, null, generation + ":" + n) == TextToSpeech.SUCCESS) ahead = n;
     }
 
     private void applyVoice() {
@@ -277,6 +293,12 @@ public class SpeechService extends Service {
             return;
         }
         index++;
+        if (ahead == index) {
+            guard(generation + ":" + index, job.items[index]);
+            report();
+            queueAhead();
+            return;
+        }
         speakCurrent();
     }
 
