@@ -135,6 +135,7 @@ Each section below shows the computer (left) and the phone (right).
 - Goes on to the next clip; keeps the screen on if you like; picture in picture; Bluetooth previous and next.
 - Sleep timer from the moon on the player, and Sleep 15 min on the lock screen.
 - Speech engine picker and Get more voices on Android; Allow mixing with other apps' sound.
+- Kokoro voices on Android: download one of three Kokoro models in Settings and pick a speech engine per language.
 
 ## Feeds
 
@@ -189,7 +190,7 @@ Each section below shows the computer (left) and the phone (right).
 
 - No server: pages are fetched on the device.
 - Saved pages are untrusted and shown in a sandboxed frame with no scripts and a strict CSP; PDFs render in their own locked-down frame.
-- Nothing leaves the device unless you turn it on (sync, Drive backups), and Translate runs on the device. The trade-offs are written in NOTES.md.
+- Nothing leaves the device unless you turn it on (sync, Drive backups), and Translate runs on the device. The trade-offs are listed in ARCHITECTURE.md.
 
 ## Run it
 

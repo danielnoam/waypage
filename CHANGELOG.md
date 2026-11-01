@@ -25,6 +25,17 @@ All notable changes to Carry-on. Newest first.
 - Narrate's Speech engine list names the phone's default engine once,
   not as the default and again on its own.
 
+## [1.49.1] - 2026-11-01
+
+### Changed
+- Preview builds: only a pull request labelled preview gets one
+  (preview-android or preview-ios for one platform, sooner). Adding the
+  label builds it; taking it off removes it.
+
+### Fixed
+- Settings › Reading › Narrate and the reader's Narrate and Auto-scroll
+  tabs: the switches showed their storage names and were all on (1.49.0).
+
 ## [1.49.0] - 2026-11-01
 
 ### Added

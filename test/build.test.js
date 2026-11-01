@@ -171,7 +171,7 @@ test("a branch's build is published as a pre-release the updater never sees", ()
   const yml = fs.readFileSync(path.join(ROOT, ".github", "workflows", "android.yml"), "utf8");
   const ios = fs.readFileSync(path.join(ROOT, ".github", "workflows", "ios.yml"), "utf8");
   const sh = fs.readFileSync(path.join(ROOT, "tools", "preview-release.sh"), "utf8");
-  const tidy = fs.readFileSync(path.join(ROOT, ".github", "workflows", "preview-cleanup.yml"), "utf8");
+  const tidy = fs.readFileSync(path.join(ROOT, ".github", "workflows", "previews.yml"), "utf8");
   assert.ok(/branches: \["\*\*"\]/.test(yml) && /branches: \["\*\*"\]/.test(ios));
   assert.ok(/github\.ref != 'refs\/heads\/main'[\s\S]*preview-release\.sh create Waypage\.apk/.test(yml));
   assert.ok(/github\.ref != 'refs\/heads\/main'[\s\S]*preview-release\.sh attach Waypage\.ipa/.test(ios));
@@ -264,6 +264,24 @@ test("the workflow adds and signs the extensions ios-extensions.rb names", () =>
 test("no class the share extension or widgets compile is taken for a plugin", () => {
   for (const f of ["native/share/ios/ShareExtension/ShareViewController.swift", "native/share/ios/Widgets/WaypageWidgets.swift", "native/share/ios/Shared/WaypageShared.swift"]) {
     assert.ok(!/@objc\(/.test(fs.readFileSync(path.join(ROOT, f), "utf8")), f);
+  }
+});
+
+// The page's scripts share one global scope, so two files with the same
+// top-level name means the later one silently replaces the earlier (1.49.0:
+// the reader's switchRow took over Settings' and broke the Narrate section).
+test("no two scripts index.html loads declare the same top-level name", () => {
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const seen = {};
+  for (const [, f] of html.matchAll(/<script src="([^"?]+)/g)) {
+    const src = fs.readFileSync(path.join(ROOT, f), "utf8");
+    const first = src.replace(/^(\s*(\/\/.*|\/\*[\s\S]*?\*\/))*\s*/, "");
+    if (first.startsWith("(")) continue;
+    for (const m of src.matchAll(/^(?:async\s+)?(?:function\*?\s+(\w+)|(?:const|let|class)\s+(\w+))/gm)) {
+      const name = m[1] || m[2];
+      assert.ok(!seen[name], name + " is declared in both " + seen[name] + " and " + f);
+      seen[name] = f;
+    }
   }
 });
 

@@ -688,8 +688,8 @@ function previewsSection() {
     rows.push(back);
   }
   const sec = section("Branches", web
-    ? "A preview is a build of a branch with an open pull request, before it's released. Open one and this browser runs it with the library you have; Back to the release, here or on the bar at the top, puts the released version back."
-    : "A preview is a build of a branch with an open pull request, before it's released. It installs over the Waypage you have and keeps your library. "
+    ? "A preview is a build of a pull request, before it's released. Open one and this browser runs it with the library you have; Back to the release, here or on the bar at the top, puts the released version back."
+    : "A preview is a build of a pull request, before it's released. It installs over the Waypage you have and keeps your library. "
     + "Back to the release puts the released version back, as long as the branch didn't raise the version number."
     + (C.platform.ios ? " On iPhone, Get it opens the build's page; install it with AltStore or SideStore." : ""),
     el("div", { class: "group" }, ...rows),

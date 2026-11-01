@@ -151,8 +151,8 @@ and the page shows above it.
   shrink ending in a cut looked like a glitch.
 - Only `transform` and `opacity` move on screens; small menus use a
   clip-path. In scroll mode the next chapter comes up from the bottom,
-  in Pages it turns sideways. `inert` on the
-  library waits until the spring has all but landed (0.30.8).
+  in Pages it turns sideways. The library under a screen is covered
+  with `cover()`, never `inert`, which restyles every card.
 
 ## 5. Components
 
