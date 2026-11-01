@@ -25,17 +25,64 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && !k.startsWith(PREVIEW)).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
+
+// A preview build in the browser (1.49.0). Settings › About › Preview
+// builds puts the picked build in the cache PREVIEW as preview.json
+// ({ repo, sha, title, pr }); while it's there, every file of this copy
+// comes from that commit on raw.githubusercontent.com, given its type
+// (raw serves everything as text/plain), and kept in PREVIEW-<sha> for
+// offline. Same origin, so the library is the one you have, as with a
+// preview in the app. index.html gets a small "Back to the release" link
+// (./?release), which works whatever the branch's own code is.
+const PREVIEW = "waypage-preview";
+const TYPES = {
+  html: "text/html", js: "text/javascript", mjs: "text/javascript", css: "text/css", json: "application/json",
+  md: "text/markdown", svg: "image/svg+xml", png: "image/png", jpg: "image/jpeg", webp: "image/webp", woff2: "font/woff2",
+};
+const previewState = () => caches.open(PREVIEW).then((c) => c.match("./preview.json")).then((r) => (r ? r.json() : null)).catch(() => null);
+const leavePreview = () => caches.keys().then((keys) => Promise.all(keys.filter((k) => k.startsWith(PREVIEW)).map((k) => caches.delete(k))));
+const escHtml = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+async function fromPreview(p, url, request) {
+  const base = new URL(self.registration.scope).pathname;
+  if (!url.pathname.startsWith(base)) return fetch(request);
+  const rel = url.pathname.slice(base.length) || "index.html";
+  const cache = await caches.open(PREVIEW + "-" + p.sha);
+  let res = await cache.match("./" + rel);
+  if (!res) {
+    let got;
+    try {
+      got = await fetch("https://raw.githubusercontent.com/" + p.repo + "/" + p.sha + "/" + rel.split("/").map(encodeURIComponent).join("/"));
+    } catch (e) {
+      return new Response("Offline, and this preview's file isn't saved yet.", { status: 503, headers: { "Content-Type": "text/plain" } });
+    }
+    if (!got.ok) return new Response("", { status: got.status });
+    res = new Response(await got.arrayBuffer(), { headers: { "Content-Type": TYPES[rel.split(".").pop().toLowerCase()] || "application/octet-stream" } });
+    await cache.put("./" + rel, res.clone());
+  }
+  if (rel !== "index.html") return res;
+  const name = p.title || (p.pr ? "#" + p.pr : "preview");
+  const bar = '<a href="./?release" style="position:fixed;z-index:2147483647;top:calc(env(safe-area-inset-top) + 6px);left:50%;transform:translateX(-50%);'
+    + 'max-width:calc(100% - 32px);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:4px 12px;border-radius:999px;'
+    + 'font:12px/1.4 system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.72);text-decoration:none">Preview: ' + escHtml(name) + ' · Back to the release</a>';
+  return new Response((await res.text()).replace(/<\/body>/i, bar + "</body>"), { headers: { "Content-Type": "text/html" } });
+}
 
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET") return;
   if (url.origin !== self.location.origin) return;
+  e.respondWith(previewState().then((p) => {
+    if (p && e.request.mode === "navigate" && url.searchParams.has("release")) return leavePreview().then(() => Response.redirect(self.registration.scope, 302));
+    return p && p.repo && p.sha ? fromPreview(p, url, e.request) : fromRelease(e);
+  }));
+});
 
-  e.respondWith(
+function fromRelease(e) {
+  return (
     caches.open(CACHE).then((cache) =>
       cache.match(e.request).then((cached) => {
         const fetching = fetch(e.request)
@@ -46,4 +93,4 @@ self.addEventListener("fetch", (e) => {
       })
     )
   );
-});
+}

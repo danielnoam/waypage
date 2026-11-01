@@ -31,6 +31,15 @@ All notable changes to Carry-on. Newest first.
   stays on while it scrolls, so its button can always stop it. The Aa tab
   shows only Speed (its own, apart from Narrate's), Go on to the next clip
   (the next chapter starts scrolling at the end) and Keep the screen on.
+- Preview builds in the browser: Settings › About › Preview builds on
+  the web copy opens a pull request's build in place of the release,
+  with a "Back to the release" link at the top.
+
+### Fixed
+- Settings › About › Preview builds: Check again works (it was always
+  greyed out), keeps the list on screen while it looks, and says when
+  it last checked. Opening the screen always looks again.
+- A branch without an open pull request no longer gets a preview build.
 
 ## [1.48.4] - 2026-11-01
 
