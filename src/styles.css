@@ -1105,6 +1105,9 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 /* Reader settings (0.34.0): Layout, Text and Read aloud, each its own part. */
 .rc-part { display: flex; flex-direction: column; gap: var(--s-3); }
 .rc-part[hidden] { display: none; }
+/* Settings > Reading (1.48.2): the one box split into Layout and Text sections; the section heads replace the parts' own. */
+.reading-controls.split { display: contents; }
+.reading-controls.split .rc-part > .overline:not(.rc-sub) { display: none; }
 .rc-part > .overline { margin: var(--s-2) 0 calc(-1 * var(--s-1)) var(--s-1); }
 .reader-settings { display: flex; flex-direction: column; gap: var(--s-4); }
 .reader-settings .rc-part > .overline { display: none; }

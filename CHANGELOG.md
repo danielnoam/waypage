@@ -2,6 +2,19 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.48.2] - 2026-11-01
+
+### Changed
+- Settings › Reading: Layout and Text are two sections, like Narrate.
+- Settings › Library: Import from another app and Edit clips sit under
+  one Actions heading, like Storage's.
+- Fewer ? in Settings: Theme, Auto uses, Pictures and motion, Layout,
+  Text, Narrate, Library's Layout and Keeping up, Import, Alerts,
+  Saving, GitHub sync's This device and Storage's By collection lost
+  explanations that only repeated their rows. Your fonts keeps its ?,
+  with the file types and where font files can go; This device has a
+  line under it.
+
 ## [1.48.1] - 2026-10-31
 
 ### Changed
