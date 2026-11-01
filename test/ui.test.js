@@ -2169,6 +2169,27 @@ function zipOf(files) {
     });
 
     // CONTRIBUTING "Explain less": a ? only where Daniel agreed to one.
+    await test("Kokoro voices: Download starts the one pressed, and is pressable when nothing else is downloading", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(() => {
+        window.asked = [];
+        const st = { supported: true, engine: "app", use: "", busy: "", step: "", done: 0, total: 0, packs: [
+          { id: "v019", title: "Kokoro 0.19", note: "English", bytes: 98.5e6, ready: false, size: 0, voices: 11 },
+          { id: "v10", title: "Kokoro 1.0", note: "8 languages", bytes: 350e6, ready: false, size: 0, voices: 53 }] };
+        Object.defineProperty(C.platform.speech, "kokoro", { value: async (action, id) => { if (action) window.asked.push(action + " " + id); return action ? null : JSON.parse(JSON.stringify(st)); } });
+        openSettings();
+        openSection("kokoro");
+      });
+      const btn = q.locator(".kokoro-row", { hasText: "Kokoro 1.0" }).getByRole("button", { name: "Download" });
+      await btn.waitFor();
+      assert.strictEqual(await btn.isDisabled(), false);
+      await btn.click();
+      await until(q, () => window.asked.length > 0);
+      assert.deepStrictEqual(await q.evaluate(() => window.asked), ["download v10"]);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("Settings keeps its ? marks to the agreed list (1.48.2)", async () => {
       const q = await page(browser, 390);
       const agreed = ["Your fonts", "Dictionaries", "Before you go offline", "Save from your browser", "Sync with GitHub",

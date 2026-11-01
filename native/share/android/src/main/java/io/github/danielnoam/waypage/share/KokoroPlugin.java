@@ -29,6 +29,17 @@ public class KokoroPlugin extends Plugin {
     private static String failed = "";
     private static String failedPack = "";
 
+    // Installing a build without the engine (main, before Kokoro) and
+    // coming back resets it to off in the manifest, though the voices are
+    // still here: put it back on the phone's list at each start.
+    @Override
+    public void load() {
+        final Context c = getContext().getApplicationContext();
+        new Thread(() -> {
+            try { if (Kokoro.supported()) Kokoro.listEngine(c); } catch (Throwable e) { /* tried at the next start */ }
+        }, "kokoro-list").start();
+    }
+
     @PluginMethod
     public void status(PluginCall call) {
         Context c = getContext();

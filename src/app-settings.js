@@ -233,10 +233,8 @@ function themeGroup() {
 // sheet's tab; the voice is for the phone's language here.
 function aloudGroup() {
   if (!speech.available) return null;
-  const kokoro = el("span", { hidden: true });
-  kokoroRow(kokoro);
   return section("Narrate", null,
-    el("div", { class: "group" }, el("div", { class: "rc-list" }, aloudControls()), kokoro));
+    el("div", { class: "group" }, el("div", { class: "rc-list" }, aloudControls())));
 }
 
 // Kokoro voices (Android, arm64): downloads that become Waypage's own
@@ -250,18 +248,6 @@ function kokoroArrived(s) {
   store(KOKORO_IN_KEY, true);
   store(ENGINE_KEY, { ...enginePicks(), en: s.engine });
 }
-async function kokoroRow(slot) {
-  const s = await speech.kokoro();
-  if (!s) return;
-  kokoroArrived(s);
-  const busy = kokoroBusy(s) && s.packs.find((p) => p.id === s.busy);
-  const use = s.packs.find((p) => p.id === s.use);
-  const note = busy ? kokoroStep(s, busy) : use ? use.title + " in use" : "Natural voices, downloaded";
-  const row = navRow("Kokoro voices", note, () => openSection("kokoro", false, true));
-  slot.replaceWith(row);
-  if (busy) setTimeout(() => { if (row.isConnected) kokoroRow(row); }, 1000);
-}
-// `p`: the pack's name in the line (the Narrate row), or not (its own row).
 function kokoroStep(s, p) {
   const which = p ? " " + p.title : "";
   if (s.step === "downloading") return "Downloading" + which + " · " + (s.total ? Math.min(99, Math.floor(s.done / s.total * 100)) : 0) + "%";
@@ -304,7 +290,7 @@ async function fillKokoro(slot) {
       : mine && busy ? null
       : p.id === s.use ? el("span", { class: "row-value accent" }, "In use")
       : p.ready ? el("button", { class: "btn-text", type: "button", onclick: act("use", p.id) }, "Use")
-      : el("button", { class: "btn-text", type: "button", disabled: busy, onclick: act("download", p.id) }, "Download");
+      : el("button", { class: "btn-text", type: "button", disabled: busy || null, onclick: act("download", p.id) }, "Download");
     return el("div", { class: "row kokoro-row" },
       el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, p.title), el("span", { class: "choice-note" }, note)), control);
   });

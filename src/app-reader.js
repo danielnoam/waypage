@@ -1954,6 +1954,14 @@ function aloudControls() {
   const engineSlot = el("span", { hidden: true }), moreSlot = el("span", { hidden: true });
   const engineRow = el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Speech engine"));
   const more = el("button", { class: "btn-quiet aloud-more", type: "button", onclick: () => speech.moreVoices(engineOf(lang)) }, "Get more voices");
+  // Kokoro voices (Android, 64-bit ARM), under Get more voices (Daniel's
+  // ask): their own screen in Settings.
+  const kokoroSlot = el("span", { hidden: true });
+  speech.kokoro().then((k) => {
+    if (!k) return;
+    kokoroSlot.replaceWith(el("button", { class: "btn-quiet aloud-more", type: "button",
+      onclick: () => { if (state.settings) openSection("kokoro", false, true); else { closeSheet(); openSettings(false, "kokoro"); } } }, "Kokoro voices"));
+  });
   speech.engines().then(({ engines, default: def }) => {
     if (!engines.length) return;
     moreSlot.replaceWith(more);
@@ -2004,6 +2012,7 @@ function aloudControls() {
     engineSlot,
     voiceRow,
     moreSlot,
+    kokoroSlot,
     el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Speed", shown),
       el("div", { class: "stepper" }, speed)),
     check(FOOTNOTES_KEY, "Read footnotes", "The notes at the end, as part of the clip."),
