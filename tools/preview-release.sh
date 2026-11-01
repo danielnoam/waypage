@@ -12,7 +12,8 @@
 # releases/latest, never offers it. The notes start with four lines the
 # app reads: version, branch, commit, pr. .github/workflows/preview-cleanup.yml
 # removes the pre-release when its branch or pull request closes.
-# Needs GH_TOKEN, V (the app version), GITHUB_SHA and GITHUB_REF_NAME.
+# Needs GH_TOKEN, V (the app version), GITHUB_SHA, GITHUB_REF_NAME and
+# GITHUB_REPOSITORY.
 set -euo pipefail
 MODE="$1"
 FILE="$2"
@@ -25,6 +26,13 @@ if [ -z "$PR" ]; then
 fi
 NUMBER="${PR%%	*}"
 TITLE="${PR#*	}"
+# A pull request that only changes notes (Markdown, tests, .claude) has
+# nothing to try, so it gets no preview (Daniel's ask, 1 Nov 2026).
+FILES="$(gh api "repos/${GITHUB_REPOSITORY:?}/pulls/$NUMBER/files" --paginate --jq '.[].filename' 2>/dev/null || echo "?")"
+if ! printf '%s\n' "$FILES" | grep -qvE '(\.md$|^test/|^\.claude/)'; then
+  echo "#$NUMBER only changes notes, so no preview"
+  exit 0
+fi
 
 case "$MODE" in
   create)
