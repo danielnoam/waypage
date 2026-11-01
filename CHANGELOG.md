@@ -16,6 +16,8 @@ All notable changes to Carry-on. Newest first.
   yourself, lets it go on. Holding a finger still holds it as before.
 - Preview builds: a build being downloaded shows its progress on its
   row, as About's update does (percent, Paused, Install).
+- A new version's bar: View opens About with what's new in it (every
+  version since yours) above Update, so you see the changes first.
 
 ## [1.49.2] - 2026-11-01
 

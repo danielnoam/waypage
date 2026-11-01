@@ -473,7 +473,7 @@ async function install() {
 }
 
 // The library's bar: a newer version is out (View opens Settings at
-// Updates), or this one just arrived (What's new). × puts it away.
+// About, with what it brings), or this one just arrived (What's new). × puts it away.
 let barDismissed = null;
 function paintUpdateBar() {
   const bar = $("updateBar");
@@ -490,7 +490,7 @@ function paintUpdateBar() {
     : "Updated to " + APP_VERSION;
   const btn = $("updateBtn");
   btn.textContent = out ? "View" : "What's new";
-  btn.onclick = () => (out && upd.phase !== "available" ? openDownloads() : out ? openSettings(false, "updates") : openNews());
+  btn.onclick = () => (out ? openSettings(false, "updates") : openNews());
   $("updateClose").onclick = () => {
     barDismissed = key;
     if (fresh) justUpdated = false;
@@ -543,7 +543,48 @@ function updatesGroup() {
     if (webPreviews()) list.append(navRow("Preview builds", pv.web ? "Preview: " + previewName(pv.web) : "Try a branch before it's released", openPreviews));
   }
   list.append(navRow("Changelog", null, () => openNews()));
-  return el("section", { class: "settings-section", id: "updatesSection" }, list);
+  const sec = el("section", { class: "settings-section", id: "updatesSection" }, list);
+  const coming = comingGroup();
+  if (coming) sec.append(coming);
+  return sec;
+}
+
+// What a newer release brings (1.49.4), under the version row before
+// updating: every version between this one and it, from that release's
+// own CHANGELOG.md, or its release notes when that doesn't load.
+const coming = { latest: null, entries: null };
+function comingEntries() {
+  const latest = upd.latest;
+  if (coming.latest === latest) return coming.entries;
+  coming.latest = latest;
+  coming.entries = null;
+  const fromNotes = () => {
+    const body = String(upd.notes || "").split(/\n---\s*\n/)[0];
+    const e = changelogEntries("## [" + latest + "]\n" + body);
+    return e.length && e[0].sections.length ? e : [];
+  };
+  const repo = C.platform.build && C.platform.build.repo;
+  (repo ? C.platform.fetchText("https://raw.githubusercontent.com/" + repo + "/app-v" + latest + "/CHANGELOG.md", { headers: { Accept: "text/plain" } })
+    .then((r) => (r.status === 200 ? changelogEntries(r.text).filter((e) => /^\d+\.\d+\.\d+$/.test(e.version) && isNewerVersion(e.version, APP_VERSION) && !isNewerVersion(e.version, latest)) : []))
+    : Promise.resolve([]))
+    .catch(() => [])
+    .then((list) => {
+      if (coming.latest !== latest) return;
+      coming.entries = list.length ? list : fromNotes();
+      if (state.section === "updates" && $("updatesSection")) $("updatesSection").replaceWith(updatesGroup());
+    });
+  return null;
+}
+function comingGroup() {
+  if (!C.platform.native || upd.tag || !UPD_OUT.includes(upd.phase) || !upd.latest) return null;
+  const entries = comingEntries();
+  return el("div", { class: "coming" },
+    el("div", { class: "section-head" }, el("h2", { class: "overline" }, entries && entries.length > 1 ? "New since " + APP_VERSION : "New in " + upd.latest)),
+    ...(entries === null ? [el("p", { class: "meta" }, "Loading…")]
+      : entries.length ? entries.map((e) => el("section", { class: "news-entry" },
+        entries.length > 1 ? el("h4", { class: "news-version coming-version" }, e.version) : null,
+        ...notesView([e])))
+      : [el("p", { class: "meta" }, "The list of changes didn't load. Changelog has it once you've updated.")]));
 }
 
 // ---- Preview builds (1.48.0) ----

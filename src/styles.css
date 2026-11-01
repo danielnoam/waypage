@@ -1578,6 +1578,9 @@ html { -webkit-tap-highlight-color: transparent; }
 .settings-section > .section-lead { margin-bottom: var(--s-5); }
 .drive-done { margin: 0; padding: var(--s-8) var(--s-5); text-align: center; color: var(--ink); font-size: var(--fs-meta); }
 .update-card { border-color: var(--accent); }
+.coming { margin-top: var(--s-5); }
+.coming .news-entry + .news-entry { margin-top: var(--s-5); padding-top: var(--s-4); }
+.coming-version { font-size: var(--fs-body); }
 
 
 /* 0.19.1: the filters between Folders and the pages, and a switch. */
