@@ -1061,7 +1061,7 @@ function onKeys(e) {
   const acts = {
     g: () => { gAt = Date.now(); },
     // 1 to 5: the sidebar's places, in its order (1.49.0).
-    ...Object.fromEntries(PLACE_KEYS.map((to, i) => [String(i + 1), () => goPlace(to)])),
+    ...Object.fromEntries(PLACE_KEYS.map((to, i) => [String(i + 1), () => (state.folder ? toLibrary() : Promise.resolve()).then(() => goPlace(to))])),
     "/": () => (state.folder ? toLibrary() : Promise.resolve()).then(() => {
       if (state.place === "highlights") { $("highlights").querySelector(".hl-search input").focus(); return; }
       return (["feeds", "reading"].includes(state.place) ? goPlace("library") : Promise.resolve()).then(openSearch);

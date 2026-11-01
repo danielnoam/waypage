@@ -302,7 +302,7 @@ html.native .top-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top));
   margin: 0;
   font: 700 var(--fs-screen)/var(--lh-screen) var(--serif);
 }
-.top-actions { display: flex; gap: var(--s-1); flex-shrink: 0; }
+.top-actions { display: flex; gap: var(--s-1); flex-shrink: 0; margin-inline-start: auto; }
 .top-actions [hidden] { display: none; }
 .meta { margin: var(--s-1) 0 0; font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--muted); }
 
