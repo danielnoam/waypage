@@ -1,6 +1,6 @@
 ---
 name: release-checklist
-description: Release checklist for Waypage (danielnoam/waypage): bump APP_VERSION in three places, add a CHANGELOG.md entry, file notes under TODO.md/NOTES.md/DROPPED.md, keep the vanilla app lean, run the tests, verify phone and desktop width, and push to main (which publishes the APK and IPA). Use before shipping any change.
+description: Release checklist for Waypage (danielnoam/waypage): bump APP_VERSION in three places, add a CHANGELOG.md entry, update DROPPED.md, ARCHITECTURE.md's traps and the project's TODO, keep the vanilla app lean, run the tests, verify phone and desktop width, and push to main (which publishes the APK and IPA). Use before shipping any change.
 ---
 
 # Waypage release checklist
@@ -34,11 +34,9 @@ copies the version's entry into the GitHub release notes.
 
 ## 3. Notes files (one home per entry)
 
-- **TODO.md**: remove what this change completes, add follow-ups.
-- **DONE.md**: one line for each feature this release adds, under its
-  area, with the version.
-- Copy TODO.md and DONE.md over the shared project folder's
-  waypage/TODO.md and waypage/DONE.md.
+- **TODO** (not in the repo; it lives at
+  `/mnt/project-files/waypage/TODO.md`): remove what this change
+  completes, add follow-ups.
 - **README.md**: every feature, one short line under its section. Add or
   change the line for what this release adds, and retake that section's
   pictures with `node tools/shots.js <section>` (desktop and phone, into
@@ -47,8 +45,9 @@ copies the version's entry into the GitHub release notes.
 - **ARCHITECTURE.md**: a file added, removed or renamed, or a flow
   changed, is updated here in the same change (`test/docs.test.js`
   checks the file list).
-- **NOTES.md**: why something is the way it is, newest first, each entry a
-  bold title with its version.
+- **Why**: in the commit message and PR body. A trap that would bite
+  again or a new trade-off gets a line in ARCHITECTURE.md (Traps,
+  Trade-offs). There is no NOTES.md.
 - **DROPPED.md**: what was decided against, with the reason.
 
 ## 4. Keep it lean

@@ -2,7 +2,7 @@
    reader's sandboxed page (reader.css). Latin subsets, and Hebrew-only
    subsets of the Hebrew faces, so a Hebrew page takes its letters from
    the Hebrew face after the chosen one; other scripts fall back to the
-   system font by unicode-range (NOTES.md). OpenDyslexic is its unmodified
+   system font by unicode-range. OpenDyslexic is its unmodified
    release file, since its licence reserves the name for unmodified ones.
    Each face claims every weight its file has (1.45.0), so Text weight
    reaches them; the files themselves are as they were. */

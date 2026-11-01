@@ -39,8 +39,9 @@ borrows its stack, build workflows and native-fetch trick from.
   and IPA (`node tools/release.js x.y.z`). Daniel's own asks still ship
   as one release each; work landing in pieces goes under `## Unreleased`
   and the next release PR takes it. Check the runs went green.
-- After changing TODO.md or DONE.md in the repo, copy it over the shared
-  project folder's `waypage/TODO.md` / `waypage/DONE.md` so both match.
+- The to-do list is not in the repo. It lives only in the shared project
+  folder, `/mnt/project-files/waypage/TODO.md`: read it there, and edit it
+  there in the same turn as the change it tracks.
 
   ## Branch names
 

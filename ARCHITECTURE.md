@@ -4,8 +4,9 @@ The map of the code and the flows through it, for anyone changing it.
 Keep it current: when a file is added, removed or renamed, or a flow
 below changes, this file changes in the same commit (`test/docs.test.js`
 fails when a source file isn't named here). The rules for changes are in
-CONTRIBUTING.md; why things are the way they are is in NOTES.md; the
-original reasoning is in docs/PROPOSAL.md.
+CONTRIBUTING.md; the original reasoning is in docs/PROPOSAL.md. Why a
+line is the way it is lives in its commit and PR (`git log -S`,
+`git blame`).
 
 ## Contents
 
@@ -21,7 +22,9 @@ original reasoning is in docs/PROPOSAL.md.
 - [Versions, cache and updates](#versions-cache-and-updates)
 - [The phone apps](#the-phone-apps)
 - [Tests and screenshots](#tests-and-screenshots)
-- [Notes files](#notes-files)
+- [Trade-offs](#trade-offs)
+- [Traps](#traps)
+- [The docs](#the-docs)
 
 ## The shape
 
@@ -264,12 +267,88 @@ into `docs/shots/`, from a demo library it saves through the app itself
 (`tools/shots/demo/`). `node tools/shots.js reader skim` retakes only
 those sections.
 
-## Notes files
+## Trade-offs
 
-- **TODO.md** the work still to do, and only that
-- **DONE.md** what the app already does, by area, with versions
-- **NOTES.md** why things are the way they are, newest first
+What the app gives up on purpose, said plainly. A change that adds one
+adds a line here.
+
+- Full pictures load from the web when a clip is opened online, so the
+  picture host sees the visit (Settings › Saving › Load pictures only
+  when tapped turns that off).
+- The `waypage-data` sync repo is private on GitHub, not encrypted.
+- The web copy shares `danielnoam.github.io`'s storage with every other
+  Pages site on that account, so its sync token is as safe as the least
+  safe of them.
+- Android Auto Backup stays on: Google's backup is end-to-end encrypted
+  with the screen lock, and it carries the library to a new phone.
+- App lock is a gate, not encryption: it keeps out someone holding the
+  unlocked phone, not someone with the files or developer tools.
+- Newsletters go through Kill the Newsletter, which receives and can read
+  the emails; the address and feed link are keys.
+- Translate downloads each language's model from Google once, which tells
+  Google the languages, never the words.
+- A deck (PPTX) is redrawn by `pptx.js`, an approximation: no charts,
+  SmartArt, effects or WordArt.
+- Dictionaries live in their own IndexedDB, so they aren't moved with the
+  library, synced or backed up.
+
+## Traps
+
+Things that broke once and would again. Check here before touching the
+area.
+
+- **Saved HTML:** `save.js` rebuilds every element from an allowlist
+  (`ATTRS`), never copies the fetched DOM. The reader frame keeps
+  `allow-same-origin` only because it has no `allow-scripts`; the two
+  together are dangerous, and `test/save.test.js` fails if
+  `allow-scripts` appears.
+- **pdf.js frame:** opaque origin, so modules and workers can't load
+  across origins; the app posts the library's text in and the frame makes
+  its own blob: URLs. Pages draw with `intent: "print"`, because the
+  screen intent waits on requestAnimationFrame, which never runs in a
+  frame kept out of sight.
+- **Native number arguments:** read them with `getData().optLong`, not
+  `PluginCall.getLong`, which returns the default for a JS number that
+  arrives as an Integer (every read started at byte 0).
+- **`Filesystem.downloadFile` on Android ignores `recursive`:** make the
+  folder first (`platform.downloadTo` does).
+- **Plugin stand-ins in tests** must behave like the real plugin (offsets,
+  missing folders); two shipped bugs hid behind stand-ins that were
+  kinder than Android.
+- **Don't set `inert` on the library:** it restyles every card (50-70 ms
+  at 6x). `cover()` in `app-reader.js` does the job.
+- **No transform on `#libraryView`:** a moved box makes the page wider and
+  a phone grows its layout viewport, pushing the sticky bottom bar off
+  screen. Move its children. Only Playwright with `isMobile: true` shows it.
+- **Long clips use `content-visibility` chunks:** measuring anything
+  inside a skipped chunk lays it out, so a loop over
+  `getBoundingClientRect` across a book undoes the speed-up.
+- **Moving an iframe reloads it.** Wrap it where it will stay at start-up.
+- **Classic scripts share one scope:** a global function can shadow a
+  `window` method (`moveTo` had to become `moveInFolder`).
+- **History survives a WebView reload:** entries carry the launch's mark
+  and `route()` drops older ones.
+- **A background page's timers run late** (about a second each): yield
+  with a MessageChannel message, and keep timers that must fire (sleep)
+  in the native service.
+- **`display: flex` beats `[hidden]`:** a flex row that can hide needs its
+  own `[hidden]` rule.
+- **`.group` clips its overflow** for its corners, so a drop-down inside
+  sets `menu-open` on the group while it's up.
+- **Widgets (RemoteViews):** only allowed view classes inflate (a bare
+  `<View>` breaks the widget), and every id the Java hides must exist in
+  the layout.
+- **Sync:** never write over a stale sha (on 409, merge again); settle a
+  run's result without awaiting anything; update clip objects in place,
+  since the open reader and menus hold them; write the waiting list before
+  the base, or a cut-off run reads as deletions; a library that can't be
+  reached reads as empty, so sync refuses to run.
+- **A Blob writes a string byte above 127 as two:** binary formats (the
+  PDF writer) use plain ASCII strings or bytes.
+
+## The docs
+
+- **CHANGELOG.md** what each version shipped, in user-facing words
 - **DROPPED.md** what was decided against, and why
-- **CHANGELOG.md** what each version shipped
 - **DESIGN.md** the design language
 - **CONTRIBUTING.md** the rules for every change and how releases work
