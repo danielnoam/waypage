@@ -1938,13 +1938,13 @@ function driveSections() {
             el("span", { class: "choice-label accent" }, "Back up now"),
             el("span", { class: "choice-note" + (l.error && !driveRun ? " warn" : ""), id: "driveStatus", role: "status" }, status))),
         driveRun ? el("div", { class: "row" }, driveControls("drive-actions")) : null),
-      // How often (1.46.0; it was a weekly switch), in a drop-down (1.47.0).
+      // How often (1.46.0; it was a weekly switch), a pick row like the
+      // other settings' (1.48.4; a drop-down under its name from 1.47.0).
       el("div", { class: "group" },
-        el("div", { class: "rc-list" },
-          el("div", { class: "rc-row stack" }, el("span", { class: "rc-label" }, "Back up by itself"),
-            dropdown({ label: "Back up by itself", cls: "field-pick drive-every", value: C.drive.auto ? String(C.drive.every) : "off",
-              options: [...C.drive.EVERY.map((d) => ({ value: String(d), label: DRIVE_EVERY[d] })), { value: "off", label: "Only when I ask" }],
-              onpick: (v) => { if (v === "off") C.drive.auto = false; else { C.drive.every = Number(v); C.drive.auto = true; } renderSection(); } }))))),
+        pickRow({ label: "Back up by itself", cls: "drive-every", get: () => (C.drive.auto ? String(C.drive.every) : "off"),
+          set: (v) => { if (v === "off") C.drive.auto = false; else { C.drive.every = Number(v); C.drive.auto = true; } renderSection(); },
+          options: [...C.drive.EVERY.map((d) => ({ value: String(d), label: DRIVE_EVERY[d], note: "And whenever you ask" })),
+            { value: "off", label: "Only when I ask", note: "Back up now, above" }] }))),
     section("What goes in", "Tags, collections, favourites and your reading stats go with the clips. Links only makes a backup much smaller, but a clip whose page changed or went away comes back different or not at all" + (C.platform.native ? "" : ", and this browser can only save Wikipedia pages again") + "; books you copied in and newsletter mails still go in whole. Files read from outside and watched folders stay where they are, and settings don't go in.",
       el("div", { class: "group" },
         sw("clips", "Clips", what.links ? "Links, highlights and places" : "Text, pictures, highlights and places"),

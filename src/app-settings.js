@@ -82,7 +82,7 @@ function navRow(label, note, onclick) {
 function pickRow(g) {
   const at = () => g.options.find((o) => o.value === g.get()) || g.options[0];
   const note = el("span", { class: "choice-note" }, g.note || at().note || "");
-  const pick = dropdown({ label: g.label, cls: "field-pick row-pick", value: at().value, options: g.options.map((o) => ({ value: o.value, label: o.label })),
+  const pick = dropdown({ label: g.label, cls: "field-pick row-pick" + (g.cls ? " " + g.cls : ""), value: at().value, options: g.options.map((o) => ({ value: o.value, label: o.label })),
     onpick: (v) => { g.set(v); const o = g.options.find((x) => x.value === v); note.textContent = g.note || (o && o.note) || ""; } });
   const row = el("div", { class: "row pick-row" },
     el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, g.label), note),

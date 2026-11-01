@@ -50,7 +50,10 @@ These are on top of CONTRIBUTING.md, for Claude sessions only.
   "shall I merge".
 - **When he says "don't build yet" or "fixes only",** commit locally and
   don't push (a branch push builds too) until he says build.
-- **Small asks he lists without "add to TODO", build now.**
+- **Small asks he lists without "add to TODO", do now,** but commit
+  them on the branch and wait for his "Build" (or "Ship") before pushing
+  or opening the release PR. He said so on 1 Nov 2026 after a release
+  went out unasked. A branch push builds a preview, so hold that too.
 - **Several asks go out as one release,** or two at most when grouped;
   don't split them into many.
 - **App stores aren't a priority.** Don't bring up store prep.

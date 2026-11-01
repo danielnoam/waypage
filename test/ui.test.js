@@ -656,10 +656,13 @@ function zipOf(files) {
       await until(q, () => Waypage.reader.section() === "Chapter 6: Turbulence");
       await q.locator("#skimPrev").click();
       await until(q, () => Waypage.reader.section() === "Chapter 5: Dinner");
-      // The minutes count switches from the bar.
-      await q.locator("#skimLeft").click();
+      // The minutes count switches from Reading › Layout (Time left in).
+      await q.evaluate(() => toggleSheet("reading"));
+      await q.locator('#readingSheet .sheet-tabs .seg-item:has(input[value="layout"])').click();
+      await q.locator('#readingSheet .seg-item:has(input[name$="-leftIn"][value="part"])').click();
+      await q.evaluate(() => toggleSheet("reading"));
       assert.match(await q.locator("#readSection").innerText(), /min left in section/);
-      await q.locator("#readSection").click();
+      // Opening the sheet closed the skim.
       await q.locator("#skimBar").waitFor({ state: "hidden" });
       assert.strictEqual(await q.locator("#jumpBack").isVisible(), true, "no way back");
       await q.waitForTimeout(700);

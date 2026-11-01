@@ -2,6 +2,16 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.48.4] - 2026-11-01
+
+### Changed
+- Reader: while skimming, a ring on the bar marks where Back takes you.
+- Settings › Reading › Layout "Time left in": Section or Whole, one
+  choice for clips and books. It was the Count this section button on
+  the skim bar.
+- Settings › Google Drive: Back up by itself is a row like the other
+  picks, its choice at the end, not a drop-down under its name.
+
 ## [1.48.3] - 2026-11-01
 
 ### Changed

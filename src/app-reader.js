@@ -1983,6 +1983,9 @@ function readingControls(withTheme) {
     ], r.margins, (v) => setReading({ margins: v }))),
     ...(brightSwitch(id) || []),
     // Under Layout since 1.47.0: it adds a line to the page, not to the type.
+    row("Time left in", seg(id + "-leftIn", "Time left in", [
+      { value: "part", label: "Section" }, { value: "clip", label: "Whole" },
+    ], leftIn(state.open), setLeftIn)),
     spentSwitch(),
     // Big screens (1.5.0): two pages side by side, and the contents
     // beside the text.
@@ -2483,6 +2486,12 @@ function saveLinked(urls, folder) {
   toast("They save when you're back online. They're in Downloads.");
 }
 
+// Where Back would take you, as a mark on the skim track (1.48.4).
+function paintFrom() {
+  const mark = $("skimFrom");
+  mark.hidden = !jumpFrom;
+  if (jumpFrom) mark.style.insetInlineStart = (jumpFrom.at * 100).toFixed(2) + "%";
+}
 function jumped(spot) {
   if (!jumpFrom) jumpFrom = { spot, at: C.reader.position() };
   $("jumpBack").hidden = false;
@@ -2493,6 +2502,7 @@ $("jumpBack").addEventListener("click", () => {
   closeSkim();
   jumpFrom = null;
   $("jumpBack").hidden = true;
+  paintFrom();
   if (from && state.open) { C.reader.jump(from.at, from.spot, true); voiceHere(1000); }
 });
 
@@ -2588,14 +2598,12 @@ function skimShow(at) {
 function skimPaint(at) {
   $("skimFill").style.transform = "scaleX(" + at + ")";
   $("skimKnob").style.insetInlineStart = (at * 100).toFixed(2) + "%";
+  paintFrom();
   const [a, b] = skimText(at);
   $("skimPart").textContent = b ? a : "";
   const track = $("skimTrack");
   track.setAttribute("aria-valuenow", String(Math.round(at * 100)));
   track.setAttribute("aria-valuetext", skimText(at).join(", "));
-  const p = state.open, top = C.reader.parts().filter((x) => x.level === 2).length >= 2;
-  $("skimLeft").hidden = !top;
-  if (top) $("skimLeft").textContent = leftIn(p) === "part" ? "Count the whole " + (isBook(p) ? "book" : "clip") : "Count this " + (isBook(p) ? "chapter" : "section");
 }
 // The chapter at `at` and where that is: page 12 of 340, or 42%.
 function skimText(at) {
@@ -2646,7 +2654,6 @@ $("readFoot").querySelector(".read-left").addEventListener("click", (e) => {
 });
 $("skimPrev").addEventListener("click", () => skimPart($("skimTrack").dir === "rtl" ? 1 : -1));
 $("skimNext").addEventListener("click", () => skimPart($("skimTrack").dir === "rtl" ? -1 : 1));
-$("skimLeft").addEventListener("click", () => { toggleLeft(); skimPaint(C.reader.position()); });
 {
   const track = $("skimTrack");
   let down = null;
@@ -2707,15 +2714,15 @@ function partLeft(p, at) {
   const mins = Math.max(1, Math.ceil(clipMinutes(p) * Math.max(0, (next ? next.at : 1) - at)));
   return mins + " min left in " + (isBook(p) ? "chapter" : "section");
 }
-function toggleLeft() {
-  const p = state.open;
-  if (!p || C.reader.parts().filter((x) => x.level === 2).length < 2) return;
-  const all = load(LEFT_KEY, {});
-  const to = leftIn(p) === "part" ? "clip" : "part";
-  all[isBook(p) ? "book" : "clip"] = to;
-  store(LEFT_KEY, all);
+// Settings › Reading › Layout "Time left in" (1.48.4; a button on the
+// skim bar before). One choice for books and clips alike.
+function setLeftIn(v) {
+  store(LEFT_KEY, { book: v, clip: v });
+  document.querySelectorAll('input[name$="-leftIn"]').forEach((i) => { i.checked = i.value === v; });
+  if (!state.open) return;
   $("readSection").dataset.at = "";
   readerFoot(C.reader.position());
+  if (skimUp()) skimPaint(C.reader.position());
 }
 // A tick on the line where each chapter starts, while they fit apart.
 let ticksOf = null;
