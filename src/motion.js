@@ -169,23 +169,38 @@
   }
 
   // A menu or popover grows out of the button that opened it, from that
-  // button's corner, and shrinks back into it (1.11.0).
-  function popFrames(el, anchor) {
+  // button's corner, and shrinks back into it (1.11.0). `popGeom` is the
+  // menu's shape at the button; `popAt(g, k)` is k of the way to full.
+  function popGeom(el, anchor) {
     const P = box(el), B = anchor;
-    if (!B || !B.width || !P.width || !hasClip) return [{ transform: "scale(0.6)", transformOrigin: "50% 0" }, { transform: "none", transformOrigin: "50% 0" }];
+    if (!B || !B.width || !P.width || !hasClip) return null;
     const w = Math.min(B.width, P.width), h = Math.min(B.height, P.height);
     const left = Math.max(0, Math.min(P.width - w, B.left - P.left));
     const below = B.top < P.top + P.height / 2;
     const top = below ? 0 : P.height - h;
-    const dy = below ? B.top - P.top : B.bottom - P.bottom;
     const r = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
-    return [
-      { clipPath: "inset(" + top + "px " + (P.width - left - w) + "px " + (P.height - top - h) + "px " + left + "px round " + Math.min(r, h / 2) + "px)", transform: "translateY(" + dy + "px)" },
-      { clipPath: "inset(0px 0px 0px 0px round " + r + "px)", transform: "none" },
-    ];
+    return { top, right: P.width - left - w, bottom: P.height - top - h, left, round: Math.min(r, h / 2), r, dy: below ? B.top - P.top : B.bottom - P.bottom };
+  }
+  function popAt(g, k) {
+    const at = (v) => (v * (1 - k)).toFixed(2) + "px";
+    return { clipPath: "inset(" + [g.top, g.right, g.bottom, g.left].map(at).join(" ") + " round " + (g.round + (g.r - g.round) * k).toFixed(2) + "px)",
+      transform: k >= 1 ? "none" : "translateY(" + at(g.dy) + ")" };
+  }
+  function popFrames(el, anchor) {
+    const g = popGeom(el, anchor);
+    if (!g) return [{ transform: "scale(0.6)", transformOrigin: "50% 0" }, { transform: "none", transformOrigin: "50% 0" }];
+    return [popAt(g, 0), popAt(g, 1)];
   }
   const popFrom = (el, anchor) => one(el, popFrames(el, anchor), "control", true);
   const popInto = (el, anchor) => one(el, back(popFrames(el, anchor)), "control", false);
+  // A drop-down menu leaves by only the last stretch of its arrival,
+  // run backwards, and is gone before it reaches the button (1.48.3).
+  function popOut(el, anchor) {
+    const g = popGeom(el, anchor);
+    const frames = g ? [{ ...popAt(g, 1), opacity: 1 }, { ...popAt(g, 0.75), opacity: 0 }]
+      : [{ transform: "none", transformOrigin: "50% 0", opacity: 1 }, { transform: "scale(0.9)", transformOrigin: "50% 0", opacity: 0 }];
+    return one(el, frames, "control", false);
+  }
 
   // Bars and toasts come in past the screen's edge they sit nearest and
   // leave the same way.
@@ -295,6 +310,6 @@
   window.Waypage = window.Waypage || {};
   window.Waypage.motion = {
     busy, timing, reduced, still, setStill, desk, push, pop, grow, shrink, rise, sink, settle, dim, slideIn, slideOut, slideBack,
-    popFrom, popInto, edgeIn, edgeOut, morph, appear, vanish, measure, flip, ghostOut, fromPast, pageOut, pageIn, sideDrift,
+    popFrom, popInto, popOut, edgeIn, edgeOut, morph, appear, vanish, measure, flip, ghostOut, fromPast, pageOut, pageIn, sideDrift,
   };
 })();

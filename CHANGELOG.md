@@ -11,6 +11,8 @@ All notable changes to Carry-on. Newest first.
   text size below Hyphenate.
 - Settings › Notifications: feeds and newsletter addresses are two
   sections.
+- A drop-down menu closes with only a short move back toward its
+  button, not the whole way.
 
 ### Fixed
 - Settings: a section after Reading's Text touched its card.

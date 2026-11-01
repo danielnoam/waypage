@@ -200,7 +200,7 @@ function dropdown(o) {
     btn.setAttribute("aria-expanded", "false");
     const g = wrap.closest(".group");
     document.removeEventListener("pointerdown", outside, true);
-    M.popInto(m, btn.getBoundingClientRect()).then(() => { m.remove(); if (g && !menu) g.classList.remove("menu-open"); });
+    M.popOut(m, btn.getBoundingClientRect()).then(() => { m.remove(); if (g && !menu) g.classList.remove("menu-open"); });
     if (focus) btn.focus();
   }
   // In a sheet or other scrolling box (0.34.1), a menu fits inside it:

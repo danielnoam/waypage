@@ -571,7 +571,7 @@ const brightEdge = {
 // Off keeps the chosen side for when it's back.
 function brightSwitch(id) {
   if (!C.platform.brightness.available) return null;
-  return [el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Brightness"),
+  return [el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Brightness slider"),
     seg(id + "-brightSide", "Brightness slider", [
       { value: "off", label: "Off" }, { value: "left", label: "Left" }, { value: "right", label: "Right" },
     ], brightOn() ? brightSide() : "off", (v) => {
