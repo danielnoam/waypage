@@ -1992,7 +1992,7 @@ function aloudControls() {
     // Applied when the thumb is let go: a phone's voice restarts its sentence on each change.
     onchange: (e) => { const v = Number(e.target.value); store(RATE_KEY, v); if (aloud.state !== "stopped") speech.rate(v); } });
   speed.value = rate;
-  const check = switchRow;
+  const check = aloudSwitch;
   return el("div", { class: "aloud-controls" },
     engineSlot,
     voiceRow,
@@ -2009,7 +2009,7 @@ function aloudControls() {
     note);
 }
 const rateText = (v) => (Math.round(v * 10) / 10) + "×";
-function switchRow(key, text, note, restart = true, on = false) {
+function aloudSwitch(key, text, note, restart = true, on = false) {
   const input = el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!load(key, on),
     onchange: () => {
       store(key, input.checked);
@@ -2039,8 +2039,8 @@ function scrollControls() {
   return el("div", { class: "aloud-controls" },
     el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Speed", shown),
       el("div", { class: "stepper" }, speed)),
-    switchRow(GO_ON_KEY, "Go on to the next clip", "At the end, the next chapter starts scrolling by itself.", false),
-    switchRow(AWAKE_KEY, "Keep the screen on", "While it scrolls, so you can follow along.", false));
+    aloudSwitch(GO_ON_KEY, "Go on to the next clip", "At the end, the next chapter starts scrolling by itself.", false),
+    aloudSwitch(AWAKE_KEY, "Keep the screen on", "While it scrolls, so you can follow along.", false));
 }
 
 

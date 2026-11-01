@@ -158,9 +158,9 @@ Settings › About › Credits, with its author and licence, beside its
 licence file in the repo. People aren't listed there; the commit
 history is the record.
 
-**Don't bump the version on a feature branch.** Every branch with an
-open pull request gets a preview build (Settings › About › Preview
-builds), and the release installs back over it only while the two have
+**Don't bump the version on a feature branch.** A pull request can get
+a preview build (Settings › About › Preview builds, with the label
+`preview`), and the release installs back over it only while the two have
 the same version code. The release PR is the one that bumps
 `APP_VERSION`, with `node tools/release.js`.
 
@@ -240,9 +240,12 @@ secrets, so it can't sign or publish anything.
   new files for the next launch), version bump or not.
 - `.github/workflows/android.yml` and `ios.yml` build on every push to
   any branch. Pushes that only touch `**.md`, `test/**` or `.claude/**`
-  don't run them. A branch with an open pull request gets its build on
+  don't run them. A pull request labelled for it gets its build on
   the pre-release `preview-<branch>`, which the app's Preview builds
-  screen lists; it goes away with the branch.
+  screen lists; it goes away with the branch. Only a PR with a preview
+  label gets one: `preview` (APK and IPA), `preview-android` or
+  `preview-ios` (one, sooner). Adding the label builds it; taking it off
+  removes it.
 - On `main`, when `APP_VERSION` has no release yet and the signing secrets
   are set, the Android workflow publishes the release `app-v<version>`
   with `Waypage.apk`, and the iOS workflow attaches an unsigned

@@ -84,13 +84,13 @@ tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-bui
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
 tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
 tools/sign-apk.sh   signs the APK with the release key in CI
-tools/preview-release.sh   puts a branch's build on its preview-<branch> pre-release
+tools/preview-release.sh   puts a labelled pull request's build on its preview-<branch> pre-release
 tools/shots.js      retakes the README's screenshots (tools/shots/demo is the demo library)
 test/               node test/run-all.js runs every *.test.js
 design/             the design canvas's artboards, for the exact markup
 docs/PROPOSAL.md    the original architecture, storage, legal and store reasoning
 docs/shots/         the README's screenshots
-.github/workflows/  test.yml (every PR), android.yml and ios.yml (builds, releases, previews), preview-cleanup.yml
+.github/workflows/  test.yml (every PR), android.yml and ios.yml (builds, releases, previews), previews.yml (preview labels: build on, remove off)
 ```
 
 ## Load order and the one scope
@@ -106,7 +106,10 @@ put one object on `window.Waypage` (`C.save`, `C.reader`, `C.store`,
 global scope**, as if they were one file. The rule that keeps it working:
 code that runs at load may only use what an earlier file, or the same
 one, declared; functions can call into any file, since nothing is tapped
-before all of them have loaded. `app-start.js` is last and starts things
+before all of them have loaded. Two shell files must never declare the
+same top-level name: the later one silently replaces the earlier for
+every caller (1.49.0 broke the Narrate switches that way), and
+`build.test.js` fails when they do. `app-start.js` is last and starts things
 up. A new shell file goes in the order in `index.html` and in `sw.js`'s
 `ASSETS`.
 
@@ -220,16 +223,20 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
   `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, alias `carryon`)
   and publishes the release `app-v<version>` when `APP_VERSION` is new.
   Without the secrets it builds a test APK and publishes nothing.
-- **Previews (1.48.0):** on any other branch with an open pull request,
-  `tools/preview-release.sh` remakes the pre-release `preview-<branch>`
+- **Previews (1.48.0, by label since 1.49.1):** on any other branch whose
+  open pull request has a preview label, `tools/preview-release.sh` remakes the pre-release `preview-<branch>`
   at the pushed commit with the APK (and the iOS workflow adds the IPA).
   Its notes start with `version:`, `branch:`, `commit:`, `pr:`, which
   Settings › About › Preview builds (`app-start.js`) reads from the
   public releases list to offer the build; `app-build.json` carries the
   branch and commit, so a preview build knows it is one and skips the
   update check. A pre-release is never GitHub's "latest", so the
-  updater ignores it. `preview-cleanup.yml` removes the pre-release when
-  the branch or its pull request closes. Android installs an equal
+  updater ignores it. The labels: `preview` (APK and IPA),
+  `preview-android` or `preview-ios` (one, sooner; with `preview-ios`
+  alone the iOS workflow makes the pre-release itself). `previews.yml`
+  runs the build workflows on the branch when a label goes on, and
+  removes the pre-release when it comes off, the pull request closes or
+  the branch goes. Android installs an equal
   version code over the app, so the release goes back over a preview
   only when the branch didn't bump `APP_VERSION`.
 - **Previews in the browser (1.49.0):** the web copy's Preview builds
@@ -256,8 +263,10 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
 Playwright and skip when it isn't installed; `build.test.js` checks the
 bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
-every source file; `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js` and `pptx.test.js` test their areas in Node. The Tests workflow runs them all on every PR.
+every source file (and `build.test.js` that no two shell files share
+a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
+`sync.test.js`, `syncbatch.test.js` and `pptx.test.js` test their areas in Node. The Tests workflow runs them all on every PR; a PR that only
+changes Markdown runs just `build.test.js` and `docs.test.js`.
 
 `node tools/shots.js` retakes the README's pictures at 1280 px and 390 px
 into `docs/shots/`, from a demo library it saves through the app itself
