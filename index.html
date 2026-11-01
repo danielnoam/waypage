@@ -8,8 +8,8 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="src/fonts.css?v=1.49.1">
-  <link rel="stylesheet" href="src/styles.css?v=1.49.1">
+  <link rel="stylesheet" href="src/fonts.css?v=1.49.2">
+  <link rel="stylesheet" href="src/styles.css?v=1.49.2">
 </head>
 <body>
   <div class="app" id="libraryView">
@@ -265,6 +265,7 @@
       <div class="downloads" id="syncList"></div>
     </div>
   </section>
+  <div class="settings-win" id="settingsWin">
   <section class="screen" id="settingsView" hidden aria-label="Settings">
     <header class="screen-bar">
       <button class="icon-btn" id="settingsBack" type="button" aria-label="Back to library">
@@ -294,6 +295,7 @@
     </header>
     <div class="screen-body" id="sectionBody"></div>
   </section>
+  </div>
   <section class="screen" id="newsView" hidden aria-label="What's new">
     <header class="screen-bar">
       <button class="icon-btn" id="newsBack" type="button" aria-label="Back">
@@ -320,6 +322,7 @@
   </div>
   <div class="screen-catch" id="screenCatch" hidden></div>
   <p class="pane-note" id="paneNote">Pick a post to read it here</p>
+  <div class="pane-grip" id="paneGrip" role="separator" aria-orientation="vertical" aria-label="List width" aria-valuemin="0" aria-valuemax="100" tabindex="0"></div>
   <div class="menu-catch side-catch" id="sideCatch" hidden></div>
   <nav class="sidebar" id="sidebar" aria-label="Library and feeds" hidden></nav>
   <div class="menu-catch" id="menuCatch" hidden></div>
@@ -377,37 +380,37 @@
     </div>
   </section>
 
-  <script src="src/platform.js?v=1.49.1"></script>
-  <script src="src/motion.js?v=1.49.1"></script>
-  <script src="src/vendor/Readability.js?v=1.49.1"></script>
-  <script src="src/store.js?v=1.49.1"></script>
-  <script src="src/save.js?v=1.49.1"></script>
-  <script src="src/feeds.js?v=1.49.1"></script>
-  <script src="src/backup.js?v=1.49.1"></script>
-  <script src="src/imports.js?v=1.49.1"></script>
-  <script src="src/dict.js?v=1.49.1"></script>
-  <script src="src/sync.js?v=1.49.1"></script>
-  <script src="src/drive.js?v=1.49.1"></script>
-  <script src="src/qr.js?v=1.49.1"></script>
-  <script src="src/stats.js?v=1.49.1"></script>
-  <script src="src/epub.js?v=1.49.1"></script>
-  <script src="src/files.js?v=1.49.1"></script>
-  <script src="src/pdf.js?v=1.49.1"></script>
-  <script src="src/pptx.js?v=1.49.1"></script>
-  <script src="src/reader.js?v=1.49.1"></script>
-  <script src="src/app.js?v=1.49.1"></script>
-  <script src="src/app-reading.js?v=1.49.1"></script>
-  <script src="src/app-cards.js?v=1.49.1"></script>
-  <script src="src/app-downloads.js?v=1.49.1"></script>
-  <script src="src/app-search.js?v=1.49.1"></script>
-  <script src="src/app-draw.js?v=1.49.1"></script>
-  <script src="src/app-jobs.js?v=1.49.1"></script>
-  <script src="src/app-reader.js?v=1.49.1"></script>
-  <script src="src/app-library.js?v=1.49.1"></script>
-  <script src="src/app-saving.js?v=1.49.1"></script>
-  <script src="src/app-places.js?v=1.49.1"></script>
-  <script src="src/app-settings.js?v=1.49.1"></script>
-  <script src="src/app-lock.js?v=1.49.1"></script>
-  <script src="src/app-start.js?v=1.49.1"></script>
+  <script src="src/platform.js?v=1.49.2"></script>
+  <script src="src/motion.js?v=1.49.2"></script>
+  <script src="src/vendor/Readability.js?v=1.49.2"></script>
+  <script src="src/store.js?v=1.49.2"></script>
+  <script src="src/save.js?v=1.49.2"></script>
+  <script src="src/feeds.js?v=1.49.2"></script>
+  <script src="src/backup.js?v=1.49.2"></script>
+  <script src="src/imports.js?v=1.49.2"></script>
+  <script src="src/dict.js?v=1.49.2"></script>
+  <script src="src/sync.js?v=1.49.2"></script>
+  <script src="src/drive.js?v=1.49.2"></script>
+  <script src="src/qr.js?v=1.49.2"></script>
+  <script src="src/stats.js?v=1.49.2"></script>
+  <script src="src/epub.js?v=1.49.2"></script>
+  <script src="src/files.js?v=1.49.2"></script>
+  <script src="src/pdf.js?v=1.49.2"></script>
+  <script src="src/pptx.js?v=1.49.2"></script>
+  <script src="src/reader.js?v=1.49.2"></script>
+  <script src="src/app.js?v=1.49.2"></script>
+  <script src="src/app-reading.js?v=1.49.2"></script>
+  <script src="src/app-cards.js?v=1.49.2"></script>
+  <script src="src/app-downloads.js?v=1.49.2"></script>
+  <script src="src/app-search.js?v=1.49.2"></script>
+  <script src="src/app-draw.js?v=1.49.2"></script>
+  <script src="src/app-jobs.js?v=1.49.2"></script>
+  <script src="src/app-reader.js?v=1.49.2"></script>
+  <script src="src/app-library.js?v=1.49.2"></script>
+  <script src="src/app-saving.js?v=1.49.2"></script>
+  <script src="src/app-places.js?v=1.49.2"></script>
+  <script src="src/app-settings.js?v=1.49.2"></script>
+  <script src="src/app-lock.js?v=1.49.2"></script>
+  <script src="src/app-start.js?v=1.49.2"></script>
 </body>
 </html>

@@ -35,9 +35,9 @@ function cover(node, on) {
 const covered = (node) => !!node.dataset.covered;
 document.addEventListener("focusin", (e) => {
   if (!e.target.closest || !e.target.closest("[data-covered]")) return;
-  const tops = [...document.querySelectorAll(".screen:not([hidden]):not([data-covered]), #sidebar:not([hidden]), #menuSheet:not([hidden])")];
+  const tops = [...document.querySelectorAll(".screen:not([hidden]):not([data-covered]), #sidebar:not([hidden]):not([data-covered]), #menuSheet:not([hidden])")];
   const top = tops[tops.length - 1];
-  const first = top && top.querySelector("button:not(:disabled), [href], input:not(:disabled), [tabindex]:not([tabindex=\"-1\"])");
+  const first = top && [...top.querySelectorAll("button:not(:disabled), [href], input:not(:disabled), [tabindex]:not([tabindex=\"-1\"])")].find((n) => n.getClientRects().length);
   if (first) first.focus({ preventScroll: true }); else e.target.blur();
 });
 
@@ -94,11 +94,13 @@ const asPane = (screen) => screen.id === "readerView" && pinned.matches && inner
 
 function pushScreen(screen) {
   pushes.set(screen, (pushes.get(screen) || 0) + 1);
+  // In Settings' window a section takes the pane at once, like a tab.
   if (screen.id === "sectionView" && wide.matches) {
     screen.dataset.beside = "1";
     screen.hidden = false;
-    return M.push(screen);
+    return Promise.resolve();
   }
+  if (screen.id === "settingsView" && wide.matches) return openWin(screen);
   delete screen.dataset.beside;
   const dialog = asDialog(screen);
   if (dialog || asPane(screen)) {
@@ -117,7 +119,7 @@ function pushScreen(screen) {
     showAloudBar();
     if (again) return Promise.resolve();
     const from = dialog && anchorOf(screen);
-    return dialog ? M.popFrom(screen, from && from.getBoundingClientRect()) : M.push(screen);
+    return dialog ? M.dialogIn(screen, from && from.getBoundingClientRect()) : M.push(screen);
   }
   delete screen.dataset.dialog;
   delete screen.dataset.pane;
@@ -135,6 +137,53 @@ function pushScreen(screen) {
   moved.then(() => { if (pushes.get(screen) === n && !screen.hidden && !screen.dataset.leaving) cover(under, true); });
   return moved;
 }
+// Settings on a big screen (1.49.0): a window over the library that
+// fades in by the gear it was opened from, like Downloads and Sync. Until then the whole screen slid in from the
+// right and its menu crossed the window to land on the left. Its menu
+// and section are still the two screens they are on a phone, inside
+// #settingsWin, which is their box (display: contents on a phone).
+let winGone = Promise.resolve(), winTurn = 0;
+const gear = () => ($("settingsBtn").offsetParent ? $("settingsBtn") : null);
+function openWin(screen) {
+  const win = $("settingsWin"), c = $("screenCatch");
+  const again = !!win.dataset.open && !win.dataset.leaving;
+  winTurn++;
+  delete win.dataset.leaving;
+  win.dataset.open = "1";
+  screen.hidden = false;
+  c.classList.remove("clear");
+  c.hidden = false;
+  M.dim(c, true);
+  const n = pushes.get(screen);
+  afterSettle(() => {
+    if (pushes.get(screen) !== n || win.dataset.leaving) return;
+    cover(below(screen), true);
+    cover($("sidebar"), true);
+  });
+  if (again) return Promise.resolve();
+  const from = gear();
+  $("settingsBack").focus({ preventScroll: true });
+  return M.dialogIn(win, from && from.getBoundingClientRect());
+}
+function closeWin(screen, hide) {
+  const win = $("settingsWin"), c = $("screenCatch"), n = pushes.get(screen), t = ++winTurn;
+  win.dataset.leaving = "1";
+  M.dim(c, false).then(() => { if (winTurn === t) c.hidden = true; });
+  cover(below(screen), false);
+  cover($("sidebar"), false);
+  const to = gear();
+  winGone = M.dialogOut(win, to && to.getBoundingClientRect()).then(() => {
+    if (pushes.get(screen) !== n || winTurn !== t) return;
+    delete win.dataset.open;
+    delete win.dataset.leaving;
+    hide();
+    const b = gear();
+    const a = document.activeElement;
+    if (b && (!a || a === document.body || a.closest("#settingsWin"))) b.focus({ preventScroll: true });
+  });
+  return winGone;
+}
+
 // Heavy work after an animation's first frame, so it starts at once.
 const afterStart = (fn) => requestAnimationFrame(() => setTimeout(fn, 0));
 // Work after a spring has all but landed (0.30.8).
@@ -143,7 +192,9 @@ const afterSettle = (fn) => setTimeout(fn, M.reduced() ? 130 : 300);
 function popScreen(screen) {
   const n = pushes.get(screen);
   const hide = () => { if (pushes.get(screen) === n) screen.hidden = true; };
-  if (screen.dataset.beside) return M.pop(screen).then(hide);
+  // A section closing with the window goes when the window has gone.
+  if (screen.dataset.beside) return ($("settingsWin").dataset.leaving ? winGone : Promise.resolve()).then(hide);
+  if (screen.id === "settingsView" && $("settingsWin").dataset.open) return closeWin(screen, hide);
   if (screen.dataset.dialog || screen.dataset.pane) {
     screen.dataset.leaving = "1";
     if (screen.dataset.dialog) {
@@ -152,7 +203,7 @@ function popScreen(screen) {
       afterSettle(() => { if (pushes.get(screen) === n) cover(under, false); });
     }
     const to = screen.dataset.dialog && anchorOf(screen);
-    return (screen.dataset.dialog ? M.popInto(screen, to && to.getBoundingClientRect()) : M.pop(screen)).then(hide).then(() => showAloudBar());
+    return (screen.dataset.dialog ? M.dialogOut(screen, to && to.getBoundingClientRect()) : M.pop(screen)).then(hide).then(() => showAloudBar());
   }
   const under = below(screen);
   screen.dataset.leaving = "1";
@@ -1794,14 +1845,13 @@ function placeAloudBar() {
   const gutter = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--gutter")) || 16;
   const safe = parseFloat(getComputedStyle(bar).getPropertyValue("--safe-bottom")) || 0;
   const w = bar.offsetWidth, h = bar.offsetHeight;
-  // Docked at the foot of the pinned sidebar (1.5.0), over Settings,
-  // when the sidebar is what's beside it.
+  // Docked at the foot of the pinned sidebar (1.5.0), when the sidebar
+  // is what's beside it.
   const docked = pinned.matches && !document.querySelector("#readerView:not([hidden]), #settingsView:not([hidden])");
   bar.classList.toggle("docked", docked);
   document.body.classList.toggle("aloud-docked", docked);
   if (docked) {
-    const settings = $("sidebar").querySelector(".side-settings");
-    const foot = settings ? settings.getBoundingClientRect().top : innerHeight - gutter;
+    const foot = innerHeight - gutter;
     bar.style.left = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--s-4")) + "px";
     bar.style.top = foot - h - 8 + "px";
     return;
@@ -1960,7 +2010,7 @@ function aloudControls() {
   speech.kokoro().then((k) => {
     if (!k) return;
     kokoroSlot.replaceWith(el("button", { class: "btn-quiet aloud-more", type: "button",
-      onclick: () => { if (state.settings) openSection("kokoro", false, true); else { closeSheet(); openSettings(false, "kokoro"); } } }, "Kokoro voices"));
+      onclick: () => { if (state.settings) openSection("kokoro", false, true); else { closeSheet(); openSettings(false, "kokoro"); } } }, "Waypage voices"));
   });
   speech.engines().then(({ engines, default: def }) => {
     if (!engines.length) return;

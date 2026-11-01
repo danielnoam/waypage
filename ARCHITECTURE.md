@@ -304,6 +304,9 @@ adds a line here.
   before unpacking. It is a real Android speech engine (`KokoroTtsService`),
   so the lock screen, PiP and sleep timer work unchanged, but other apps
   can use it too. 32-bit and x86 phones, iOS and the web copy get none.
+- Dialogs (Downloads, Sync, Save with options, Settings) fade in and out,
+  the one planned exception to "nothing fades" (Daniel's pick over the
+  grow and the zoom).
 
 ## Traps
 
@@ -367,6 +370,12 @@ area.
   reached reads as empty, so sync refuses to run.
 - **A Blob writes a string byte above 127 as two:** binary formats (the
   PDF writer) use plain ASCII strings or bytes.
+- **The Settings window from 700 px:** `#settingsWin` is `display:
+  contents` on a phone and a box with `contain: layout paint` above, so
+  the two screens' `position: fixed; inset: 0` fill the window. Close
+  the window before the section, or the section vanishes first.
+- **Dragging the list/post line:** iframes take `pointer-events: none`
+  while it moves (`body.resizing`), or the reader swallows the drag.
 
 ## The docs
 

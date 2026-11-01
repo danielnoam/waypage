@@ -802,9 +802,7 @@ function renderSide() {
   const hasFolders = allFolders().length > 0;
   fill($("sidebar"),
     el("div", { class: "side-head" },
-      el("p", { class: "side-title" }, "Waypage"),
-      big && inLib ? el("button", { class: "icon-btn side-search", type: "button", "aria-label": "Search", title: "Search (/)",
-        onclick: () => (pinned.matches ? toLibrary() : back()).then(() => { if (state.place !== "library") goPlace("library"); openSearch(); }) }, sideSvg("search")) : null),
+      el("p", { class: "side-title" }, "Waypage")),
     // From inside Collections, Clips, a collection or the favourites
     // (1.20.0), Library steps all the way back to the library itself.
     ...sideFold("library", item(feedIcon("library"), "Library", inLibrary, null, () =>
@@ -838,7 +836,6 @@ function renderSide() {
 
 function sideMore() {
   const tags = allTags().slice(0, 12);
-  const leave = () => (state.side ? back() : Promise.resolve());
   return [
     tags.length ? el("div", { class: "side-space", "aria-hidden": "true" }) : null,
     tags.length ? el("p", { class: "side-over" }, "Tags") : null,
@@ -848,18 +845,17 @@ function sideMore() {
         onclick: () => goPlace("library").then(() => setFilter(on ? "all" : "#" + t)) }, "#" + t);
       return b;
     })) : null,
+    // Search and Settings live at the top bar's right end, as on a phone
+    // (1.49.0, Daniel's ask), not in the sidebar. The gap keeps room for
+    // the docked Narrate player.
     el("span", { class: "side-gap", "aria-hidden": "true" }),
-    el("button", { class: "side-item side-settings", type: "button", onclick: () => leave().then(() => openSettings()) },
-      sideSvg("settings"), el("span", { class: "side-label" }, "Settings")),
   ];
 }
 
 const SIDE_SVG = {
-  search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
   marks: ICONS.mark,
   reading: '<path d="M5 20V12M10 20V6M15 20v-9M20 20V9"/>',
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
-  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
 };
 function sideSvg(name) {
   const box = el("span", { class: "side-icon", "aria-hidden": "true" });
@@ -961,7 +957,8 @@ function fitWidth() {
 // rest of the app has letters too, listed behind "?". Keys pressed in
 // the reader's page come here through reader.js.
 const KEYS = [
-  ["Anywhere", [["/", "Search the library"], [(/Mac/.test(navigator.platform) && navigator.maxTouchPoints < 2 ? "⌘" : "Ctrl") + " V", "Save a copied link"], ["G then L", "Go to the library"],
+  ["Anywhere", [["/", "Search the library"], [(/Mac/.test(navigator.platform) && navigator.maxTouchPoints < 2 ? "⌘" : "Ctrl") + " V", "Save a copied link"],
+    ["1  2  3  4  5", "Library, Feeds, Newsletters, Highlights, Stats"], ["G then L", "Go to the library"],
     ["G then F", "Go to Feeds"], ["G then N", "Go to Newsletters"], ["G then H", "Go to Highlights"], ["G then S", "Go to Stats"], ["D", "Downloads"], [",", "Settings"], ["?", "These shortcuts"]]],
   ["In the library", [["↑ ↓", "Move between clips"], ["Enter", "Open"], ["X", "Pick, to act on several"], ["Shift-click", "Pick a run"],
     ["F", "Favourite"], ["E", "Export"], ["Del", "Delete"]]],
@@ -1006,6 +1003,7 @@ function jumpSection(d) {
 }
 
 let gAt = 0;
+const PLACE_KEYS = ["library", "feeds", "newsletters", "highlights", "reading"];
 function onKeys(e) {
   if (e.defaultPrevented || e.isComposing) return;
   const k = e.key, inFrame = e.target && e.target.ownerDocument !== document;
@@ -1062,6 +1060,8 @@ function onKeys(e) {
   const p = focusedPage(), node = focusedNode();
   const acts = {
     g: () => { gAt = Date.now(); },
+    // 1 to 5: the sidebar's places, in its order (1.49.0).
+    ...Object.fromEntries(PLACE_KEYS.map((to, i) => [String(i + 1), () => (state.folder ? toLibrary() : Promise.resolve()).then(() => goPlace(to))])),
     "/": () => (state.folder ? toLibrary() : Promise.resolve()).then(() => {
       if (state.place === "highlights") { $("highlights").querySelector(".hl-search input").focus(); return; }
       return (["feeds", "reading"].includes(state.place) ? goPlace("library") : Promise.resolve()).then(openSearch);
@@ -1078,6 +1078,48 @@ function onKeys(e) {
   };
   const act = acts[k.length === 1 ? k.toLowerCase() : k];
   if (act) go(act);
+}
+
+// The line between a list and the post beside it, from 1280 px (1.49.0):
+// drag it, or focus it and use the arrow keys; a double-click puts it
+// back in the middle. The share of the room is kept, so it holds when
+// the window is resized.
+{
+  const grip = $("paneGrip"), KEY = "waypage.listShare", MIN = 320, PANE_MIN = 400;
+  const sideW = () => $("sidebar").offsetWidth || 272;
+  const room = () => innerWidth - sideW();
+  let share = load(KEY, 0.5);
+  function place(f) {
+    const r = room(), w = Math.round(Math.max(MIN, Math.min(r - PANE_MIN, f * r)));
+    document.documentElement.style.setProperty("--list-w", w + "px");
+    grip.setAttribute("aria-valuenow", String(Math.round((w / r) * 100)));
+    return w / r;
+  }
+  const keep = (f) => { share = place(f); store(KEY, share); };
+  place(share);
+  addEventListener("resize", () => place(share));
+  grip.addEventListener("pointerdown", (e) => {
+    if (e.button) return;
+    e.preventDefault();
+    grip.setPointerCapture(e.pointerId);
+    grip.classList.add("dragging");
+    document.body.classList.add("resizing");
+  });
+  grip.addEventListener("pointermove", (e) => { if (grip.classList.contains("dragging")) share = place((e.clientX - sideW()) / room()); });
+  const end = () => {
+    if (!grip.classList.contains("dragging")) return;
+    grip.classList.remove("dragging");
+    document.body.classList.remove("resizing");
+    keep(share);
+  };
+  grip.addEventListener("pointerup", end);
+  grip.addEventListener("pointercancel", end);
+  grip.addEventListener("dblclick", () => keep(0.5));
+  grip.addEventListener("keydown", (e) => {
+    const d = { ArrowLeft: -0.02, ArrowRight: 0.02 }[e.key];
+    if (d) { e.preventDefault(); keep(share + d); }
+    else if (e.key === "Home" || e.key === "End") { e.preventDefault(); keep(e.key === "Home" ? 0 : 1); }
+  });
 }
 
 // Ctrl V (⌘ V) with no field to paste into saves the link, from 700 px.

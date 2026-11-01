@@ -1084,7 +1084,7 @@ const SECTIONS = {
   drive: { title: "Google Drive", build: driveSections, value: driveValue },
   notifications: { title: "Notifications", build: notesSections, value: notesValue },
   edit: { title: "Edit clips", build: editGroup, value: () => "", parent: "library" },
-  kokoro: { title: "Kokoro voices", build: kokoroSections, value: () => "", parent: "reading" },
+  kokoro: { title: "Waypage voices", build: kokoroSections, value: () => "", parent: "reading" },
   storage: { title: "Storage", build: () => [placeGroup(), storageGroup(), browserStorageGroup(), backupGroup(roomRows())], value: () => formatSize(totalBytes()) },
   updates: { title: "About", build: () => [updatesGroup(), aboutGroup()], value: () => (updateOut() ? upd.latest + " is out" : APP_VERSION) },
   previews: { title: "Preview builds", build: () => previewsSections(), value: () => "", parent: "updates" },
@@ -1266,9 +1266,9 @@ function openSettings(fromHistory, at) {
 
 function closeSettings() {
   if (!state.settings) return;
-  closeSection();
-  state.settings = false;
-  popScreen($("settingsView"));
+  // In the window, the window leaves first and takes its section with it.
+  if (wide.matches) { state.settings = false; popScreen($("settingsView")); closeSection(); }
+  else { closeSection(); state.settings = false; popScreen($("settingsView")); }
   const q = $("settingsSearch");
   if (q) { q.value = ""; $("settingsSearchClear").hidden = true; }
   settingsIdx = null;

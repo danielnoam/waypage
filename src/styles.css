@@ -302,7 +302,7 @@ html.native .top-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top));
   margin: 0;
   font: 700 var(--fs-screen)/var(--lh-screen) var(--serif);
 }
-.top-actions { display: flex; gap: var(--s-1); flex-shrink: 0; }
+.top-actions { display: flex; gap: var(--s-1); flex-shrink: 0; margin-inline-start: auto; }
 .top-actions [hidden] { display: none; }
 .meta { margin: var(--s-1) 0 0; font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--muted); }
 
@@ -483,6 +483,8 @@ a.btn-small { text-decoration: none; white-space: nowrap; display: inline-flex; 
 }
 @keyframes breathe { 50% { opacity: 0.35; } }
 
+/* Settings' two screens; a box of their own only on a big screen. */
+.settings-win { display: contents; }
 .screen {
   position: fixed; inset: 0; z-index: 10;
   display: flex; flex-direction: column;
@@ -2266,7 +2268,6 @@ html { -webkit-tap-highlight-color: transparent; }
   .sidebar { width: min(var(--side-w), 85vw); padding: calc(var(--s-5) + env(safe-area-inset-top)) var(--s-4) calc(var(--s-4) + env(safe-area-inset-bottom)); }
   .side-head { display: flex; align-items: center; justify-content: space-between; margin: 0 0 var(--s-4) var(--s-3); }
   .side-head .side-title { margin: 0; }
-  .side-search { color: var(--muted); }
   .side-item { margin: 0; }
   .side-row { margin: 0; }
   .side-sub { margin-inline-start: var(--s-4); }
@@ -2274,7 +2275,6 @@ html { -webkit-tap-highlight-color: transparent; }
   .side-tags { display: flex; flex-wrap: wrap; gap: var(--s-2); padding: 0 var(--s-3); }
   .side-tag { min-height: 32px; }
   .side-gap { flex: 1; min-height: var(--s-4); }
-  .side-settings .side-icon { color: var(--muted); }
 }
 @media (min-width: 700px) and (pointer: fine) {
   .side-item { min-height: 40px; }
@@ -2290,7 +2290,7 @@ html { -webkit-tap-highlight-color: transparent; }
   }
   body.pinned { --lib-left: var(--side-w); --lib-pad: max(var(--gutter), calc((100vw - var(--side-w) - var(--content-max)) / 2)); }
   body.pinned #libraryView { margin-inline-start: var(--side-w); }
-  body.pinned .menu-btn, body.pinned #searchBtn, body.pinned #settingsBtn { display: none; }
+  body.pinned .menu-btn { display: none; }
   body.pinned .side-catch { display: none; }
   /* A collection opens beside the sidebar; the reader and Settings cover
      everything. */
@@ -2436,6 +2436,24 @@ kbd {
   #sectionView .bar-title { text-align: start; font: 700 var(--fs-screen)/var(--lh-screen) var(--serif); }
   #sectionView .screen-body { padding: var(--s-5) var(--s-7) var(--s-8); }
   #sectionView .screen-body > * { margin-left: 0; max-width: 42rem; }
+
+  /* Settings' window (1.49.0): the menu and section inside a box over the
+     library, grown from the gear (openWin in app-reader.js). The box
+     contains them, so their inset: 0 fills it. */
+  .settings-win {
+    display: block; position: fixed; inset: 0; z-index: 13; margin: auto;
+    width: min(65rem, calc(100vw - 2 * var(--s-5))); height: min(46rem, calc(100dvh - 2 * var(--s-6)));
+    background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-lg);
+    box-shadow: 0 24px 64px var(--shadow); overflow: hidden; contain: layout paint;
+  }
+  .settings-win:not([data-open]) { display: none; }
+  .settings-win > .screen { box-shadow: none; }
+  #newsView { z-index: 14; }
+}
+@media (min-width: 700px) and (max-width: 1023px) {
+  .settings-win { --settings-w: 240px; }
+  #sectionView .screen-bar { padding: var(--s-5) var(--s-5) 0; }
+  #sectionView .screen-body { padding: var(--s-4) var(--s-5) var(--s-7); }
 }
 @media (min-width: 700px) and (pointer: fine) {
   .menu-sheet .sheet-row, .reader .sheet .row { min-height: 40px; }
@@ -2510,14 +2528,28 @@ kbd {
   }
   .reader.aloud .read-keys { display: none; }
 }
+.pane-grip { display: none; }
 @media (min-width: 1280px) {
-  body.pinned #libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"]) { width: 500px; border-inline-end: 1px solid var(--line); }
+  /* The list and the post beside it share the room half and half, and
+     the line between them can be dragged (1.49.0, Daniel's ask; it was a
+     500 px list). --list-w is set from the saved share in app-places.js. */
+  :root { --list-w: calc((100vw - var(--side-w)) / 2); }
+  body.pinned #libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"]) { width: var(--list-w); border-inline-end: 1px solid var(--line); }
+  body.pinned:has(#libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"])):not(:has(#readerView:not([hidden]):not([data-pane]))) .pane-grip {
+    display: block; position: fixed; top: 0; bottom: 0; left: calc(var(--side-w) + var(--list-w) - 5px); z-index: 11; width: 10px;
+    cursor: col-resize; touch-action: none;
+  }
+  .pane-grip::after { content: ""; position: absolute; top: 0; bottom: 0; left: 4px; width: 2px; background: transparent; transition: background-color 120ms linear; }
+  .pane-grip:hover::after, .pane-grip.dragging::after, .pane-grip:focus-visible::after { background: var(--accent); }
+  .pane-grip:focus-visible { outline: none; }
+  body.resizing { cursor: col-resize; user-select: none; }
+  body.resizing iframe { pointer-events: none; }
   body.pinned #libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"]) > * { padding-inline: var(--s-5); }
   body.pinned:has(#libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"])):has(#readerView[hidden]) .pane-note {
-    display: flex; position: fixed; inset: 0 0 0 calc(var(--side-w) + 500px); align-items: center; justify-content: center; margin: 0;
+    display: flex; position: fixed; inset: 0 0 0 calc(var(--side-w) + var(--list-w)); align-items: center; justify-content: center; margin: 0;
     color: var(--muted);
   }
-  #readerView[data-pane] { left: calc(var(--side-w) + 500px); box-shadow: none; }
+  #readerView[data-pane] { left: calc(var(--side-w) + var(--list-w)); box-shadow: none; }
 }
 @media (min-width: 1024px) and (pointer: fine) {
   .read-left .read-time { margin-inline-start: auto; }

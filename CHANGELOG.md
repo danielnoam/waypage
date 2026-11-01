@@ -5,8 +5,8 @@ All notable changes to Carry-on. Newest first.
 ## Unreleased
 
 ### Added
-- Narrate (Android): Kokoro voices. Settings › Reading › Narrate ›
-  Kokoro voices is a screen of three downloads: Kokoro 0.19 (English,
+- Narrate (Android): Kokoro voices. Waypage voices, under Get more
+  voices, is a screen of three downloads: Kokoro 0.19 (English,
   11 voices, about 99 MB, fastest), 1.0 (8 languages, 53 voices, about
   350 MB, the best voices) and 1.1 (English and Chinese, 103 voices,
   140 MB). One is in use at a time; they become a speech engine of the
@@ -24,6 +24,23 @@ All notable changes to Carry-on. Newest first.
   ahead on its own).
 - Narrate's Speech engine list names the phone's default engine once,
   not as the default and again on its own.
+## [1.49.2] - 2026-11-01
+
+### Changed
+- Computer and tablet: Settings opens as a window over the library,
+  instead of sliding in from the right across the whole window.
+- Computer: Search and Settings sit at the top right, beside Downloads,
+  instead of in the sidebar.
+- Downloads, Sync, Save with options and Settings fade in as they open,
+  and fade out as they close. Before, the box was uncovered from the
+  button's corner, which looked like a cut-out sliding open.
+- Computer: Feeds, Newsletters and Highlights split the room half and
+  half between the list and what's open beside it. Drag the line
+  between them to change it (or focus it and use the arrow keys;
+  double-click puts it back in the middle).
+
+### Added
+- Keys 1 to 5 go to Library, Feeds, Newsletters, Highlights and Stats.
 
 ## [1.49.1] - 2026-11-01
 
