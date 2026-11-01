@@ -4,7 +4,26 @@ All notable changes to Carry-on. Newest first.
 
 ## Unreleased
 
+### Added
+- Narrate (Android): Kokoro voices. More speech engines, under Get
+  more voices, has three downloads: Kokoro 0.19 (English,
+  11 voices, about 99 MB, fastest), 1.0 (8 languages, 53 voices, about
+  350 MB, the best voices) and 1.1 (English and Chinese, 103 voices,
+  140 MB). One is in use at a time; they become a speech engine of the
+  app's own, picked for English when the first is in. Remove sits under
+  Actions. Phones with 64-bit ARM only.
+
 ### Changed
+- Narrate (Android): the speech engine is picked for each language, so
+  an installed Kokoro engine can read English while Hebrew stays with
+  the phone's default. An engine picked before stays for every language
+  until one is changed.
+- Narrate (Android) hands the phone's voice the next paragraph while
+  one is read, and Kokoro starts making it right then, so it doesn't
+  pause between paragraphs (Android lets a voice get only half a second
+  ahead on its own).
+- Narrate's Speech engine list names the phone's default engine once,
+  not as the default and again on its own.
 - Reader: Auto-scroll's button is a play sign pointing down, not the
   download-style arrow.
 - A clip's sheet (hold it in the library): Read as Article / Comic in

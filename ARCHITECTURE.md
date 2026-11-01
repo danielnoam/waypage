@@ -79,11 +79,12 @@ src/fonts.css       the bundled fonts (src/fonts/)
 src/vendor/         Readability, pdf.js, foliate-js's MOBI reader, each with its licence
 assets/             icon and splash sources for the apps
 icons/, icon.svg    app icons
-native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Brightness, AppLock, PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
+native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
 tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-build.json
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
 tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
 tools/sign-apk.sh   signs the APK with the release key in CI
+tools/sherpa-lib.sh   fetches sherpa-onnx's arm64 library (Kokoro voices) into the Android build, pinned and checked
 tools/test-build.sh        puts a labelled pull request's build on its test-<branch> pre-release
 tools/shots.js      retakes the README's screenshots (tools/shots/demo is the demo library)
 test/               node test/run-all.js runs every *.test.js
@@ -298,6 +299,12 @@ adds a line here.
   SmartArt, effects or WordArt.
 - Dictionaries live in their own IndexedDB, so they aren't moved with the
   library, synced or backed up.
+- Kokoro voices: the engine library (sherpa-onnx, arm64 only) ships in the
+  APK, since running downloaded native code would let anyone who swaps the
+  file in; only the model is downloaded, and checked against its SHA-256
+  before unpacking. It is a real Android speech engine (`KokoroTtsService`),
+  so the lock screen, PiP and sleep timer work unchanged, but other apps
+  can use it too. 32-bit and x86 phones, iOS and the web copy get none.
 - Dialogs (Downloads, Sync, Save with options, Settings) fade in and out,
   the one planned exception to "nothing fades" (Daniel's pick over the
   grow and the zoom).
@@ -306,6 +313,15 @@ adds a line here.
 
 Things that broke once and would again. Check here before touching the
 area.
+
+- **Android TTS engines get only ~0.5 s ahead:** the framework hands an
+  engine the next piece only when one ends, so Kokoro paused between
+  paragraphs. `SpeechService.makeAhead` asks `Kokoro.take` for the next
+  piece, made on its own thread.
+- **`el()` attributes:** `disabled: false` still disables a button (it's
+  set as an attribute); pass `null`.
+- **A build without `KokoroTtsService`** (main before Kokoro) resets its
+  enabled state; `KokoroPlugin.load` puts it back on the list at start.
 
 - **Saved HTML:** `save.js` rebuilds every element from an allowlist
   (`ATTRS`), never copies the fetched DOM. The reader frame keeps

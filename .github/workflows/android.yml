@@ -70,6 +70,10 @@ jobs:
           node tools/android-version.js
           echo "version=$(node -p "require('./tools/build-www').appVersion()")" >> "$GITHUB_OUTPUT"
 
+      # Kokoro voices' engine (sherpa-onnx), pinned and checked.
+      - name: Speech engine library
+        run: bash tools/sherpa-lib.sh
+
       - run: npx cap sync android
 
       - name: Build
