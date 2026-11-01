@@ -560,7 +560,7 @@ html.native .screen-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
 .drive-row { padding: 0; padding-inline-end: var(--s-1); gap: 0; cursor: default; }
 .drive-row:active { background-image: none; }
 .drive-pick { flex: 1; min-width: 0; padding-inline-end: var(--s-2); }
-.drive-delete:hover { color: var(--warn); }
+.drive-delete:hover, .kokoro-delete:hover { color: var(--warn); }
 /* Under a watched folder, the collection its new files go into (1.28.0). */
 .watch-into { gap: var(--s-3); }
 .watch-into .row-label { flex: none; color: var(--muted); font-size: var(--fs-label); }
@@ -607,6 +607,16 @@ html.native .reader-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
 .aloud-sleep-left:empty { display: none; }
 .aloud-play .aloud-play-icon, .aloud-play.paused .aloud-pause-icon { display: none; }
 .aloud-play.paused .aloud-play-icon { display: block; }
+/* Thinking: the engine is still making the piece it's on (a slow voice
+   like Kokoro, at the start or after a skip). A ring turns round Pause
+   until the voice starts; shown only past a quarter second. */
+.aloud-player .aloud-play { position: relative; overflow: visible; }
+.aloud-play.thinking::after { content: ""; position: absolute; inset: -5px; border-radius: var(--r-full); pointer-events: none;
+  border: 2.5px solid color-mix(in srgb, var(--accent) 22%, transparent); border-top-color: var(--accent);
+  animation: spin 0.9s linear infinite, think-in 0.2s ease-out; }
+@keyframes think-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .aloud-play.thinking::after { animation-duration: 2.4s, 0.2s; } }
+:root[data-motion="off"] .aloud-play.thinking::after { animation: none; }
 /* Even room above and below the buttons (1.24.2): 2px above sat them on
    the bar's top edge, most of all over a phone's gesture area. */
 .reader.aloud .read-left { align-items: center; padding-top: var(--s-2); padding-bottom: calc(var(--s-2) + env(safe-area-inset-bottom)); }

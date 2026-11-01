@@ -260,8 +260,8 @@ function forgetKokoro(engine) {
   store(ENGINE_KEY, picks);
 }
 
-// The Kokoro voices screen: each model with what it has and its size,
-// the one in use, and Download / Use; removing sits under Actions.
+// More speech engines: each Kokoro model with what it has and its size,
+// and Download, or a bin once it's here.
 function kokoroSections() {
   const slot = el("div", { class: "kokoro-slot" }, el("p", { class: "footnote" }, "Looking…"));
   fillKokoro(slot);
@@ -286,24 +286,22 @@ async function fillKokoro(slot) {
       : mine && s.step === "bad" ? "The download wasn't the right file. Try again."
       : mine && s.step === "failed" ? "Couldn't download. Try again."
       : p.note + " · " + formatSize(p.ready ? p.size : p.bytes);
+    const remove = async () => {
+      if (!confirm("Delete " + p.title + "? It takes " + formatSize(p.size) + "; you can download it again.")) return;
+      const last = s.packs.filter((x) => x.ready).length === 1;
+      await act("remove", p.id, () => { if (last) forgetKokoro(s.engine); })();
+    };
+    // Downloaded: a bin to delete it (Daniel's ask); which one speaks is
+    // picked in Narrate's Speech engine list.
     const control = mine && s.step === "downloading" ? el("button", { class: "btn-text", type: "button", onclick: act("cancel") }, "Stop")
       : mine && busy ? null
-      : p.id === s.use ? el("span", { class: "row-value accent" }, "In use")
-      : p.ready ? el("button", { class: "btn-text", type: "button", onclick: act("use", p.id) }, "Use")
+      : p.ready ? el("button", { class: "row-x kokoro-delete", type: "button", "aria-label": "Delete " + p.title, title: "Delete", disabled: busy || null, onclick: remove },
+        el("span", { class: "visually-hidden" }, "Delete"), svgBin())
       : el("button", { class: "btn-text", type: "button", disabled: busy || null, onclick: act("download", p.id) }, "Download");
     return el("div", { class: "row kokoro-row" },
       el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, p.title), el("span", { class: "choice-note" }, note)), control);
   });
-  const ready = s.packs.filter((p) => p.ready);
-  const remove = (p) => async () => {
-    if (!confirm("Remove " + p.title + "? It takes " + formatSize(p.size) + "; you can download it again.")) return;
-    await act("remove", p.id, () => { if (ready.length === 1) forgetKokoro(s.engine); })();
-  };
-  // replaceChildren writes a null out as the text "null": leave it out.
-  const parts = [section("Kokoro", null, el("div", { class: "group" }, ...rows))];
-  if (ready.length) parts.push(section("Actions", null, el("div", { class: "group" },
-    ...ready.map((p) => el("button", { class: "row", type: "button", onclick: remove(p) }, el("span", { class: "row-label warn" }, "Remove " + p.title))))));
-  slot.replaceChildren(...parts);
+  slot.replaceChildren(section("Kokoro", null, el("div", { class: "group" }, ...rows)));
   if (busy) setTimeout(() => { if (slot.isConnected) again(); }, 1000);
 }
 

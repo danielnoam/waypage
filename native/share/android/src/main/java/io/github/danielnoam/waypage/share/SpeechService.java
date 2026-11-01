@@ -54,7 +54,7 @@ public class SpeechService extends Service {
     }
 
     interface Listener {
-        void onProgress(String key, int index, String state);
+        void onProgress(String key, int index, String state, boolean thinking);
     }
     // The sleep timer's end (ms since 1970, 0 for off), told to the app
     // when it's set from the lock screen or runs out (1.36.0).
@@ -148,6 +148,13 @@ public class SpeechService extends Service {
             tts.setAudioAttributes(attributes());
             tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
                 @Override public void onStart(String id) {}
+                // The first sound of a piece: the engine has stopped
+                // thinking about it (Narrate's ring round Pause).
+                @Override public void onAudioAvailable(String id, byte[] audio) {
+                    if (id.equals(lastVoiced)) return;
+                    lastVoiced = id;
+                    main.post(() -> voicedNow(id));
+                }
                 @Override public void onDone(String id) { main.post(() -> said(id)); }
                 @Override public void onError(String id) { main.post(() -> said(id)); }
             });
@@ -227,6 +234,8 @@ public class SpeechService extends Service {
     private void speakCurrent() {
         if (!ready || job == null) return;
         generation++;
+        voiced.clear();
+        thinking = true;
         applyVoice();
         tts.setSpeechRate(job.rate);
         String id = generation + ":" + index;
@@ -264,6 +273,20 @@ public class SpeechService extends Service {
         if (job == null || n >= job.items.length) return;
         makeAhead(n);
         if (tts.speak(job.items[n], TextToSpeech.QUEUE_ADD, null, generation + ":" + n) == TextToSpeech.SUCCESS) ahead = n;
+    }
+
+    // Thinking: playing, but no sound yet for this piece (the engine is
+    // still making it). Told to the app on its own, without the
+    // notification report() redraws.
+    private boolean thinking;
+    private volatile String lastVoiced = "";
+    private final java.util.Set<String> voiced = new java.util.HashSet<>();
+    private void voicedNow(String id) {
+        voiced.add(id);
+        if (thinking && job != null && id.equals(generation + ":" + index)) {
+            thinking = false;
+            if (listener != null) listener.onProgress(job.key, index, state, false);
+        }
     }
 
     private void applyVoice() {
@@ -304,6 +327,7 @@ public class SpeechService extends Service {
         }
         index++;
         if (ahead == index) {
+            thinking = !voiced.contains(generation + ":" + index);
             guard(generation + ":" + index, job.items[index]);
             report();
             queueAhead();
@@ -316,6 +340,7 @@ public class SpeechService extends Service {
         if (!"playing".equals(state)) return;
         pausedForFocus = false;
         state = "paused";
+        thinking = false;
         generation++;
         if (tts != null) tts.stop();
         if (wake.isHeld()) wake.release();
@@ -424,7 +449,7 @@ public class SpeechService extends Service {
 
     // Tells the app, and redraws the notification and the lock screen.
     private void report() {
-        if (listener != null && job != null) listener.onProgress(job.key, index, state);
+        if (listener != null && job != null) listener.onProgress(job.key, index, state, thinking);
         if (job == null || "ended".equals(state) || "stopped".equals(state) || "error".equals(state)) return;
         boolean playing = "playing".equals(state);
         // What a car's screen or the earbuds' app shows (1.26.0): the clip,

@@ -1923,18 +1923,29 @@ $("aloudBarOpen").addEventListener("click", async () => {
 });
 addEventListener("resize", () => { if (!$("aloudBar").hidden) placeAloudBar(); });
 
-speech.onProgress(({ key, index, state: st }) => {
+speech.onProgress(({ key, index, state: st, thinking }) => {
   if (!key) return;
   const moved = key !== aloud.key;
   if (moved && !wentOn(key)) return;
   setAloud(st, index);
   if (moved) queueNext();
+  aloudThinking(!!thinking && st === "playing");
 });
+// The ring round Pause while the engine makes the piece (Daniel's ask);
+// a quick one never shows it.
+let thinkTimer = 0;
+function aloudThinking(on) {
+  clearTimeout(thinkTimer);
+  const b = $("aloudPlay");
+  if (!on) { b.classList.remove("thinking"); b.removeAttribute("aria-busy"); return; }
+  thinkTimer = setTimeout(() => { b.classList.add("thinking"); b.setAttribute("aria-busy", "true"); }, 250);
+}
 // Back from the lock screen: the reading may have moved on or ended
 // while the page slept.
 document.addEventListener("visibilitychange", async () => {
   if (document.hidden || !aloudOn()) return;
   const now = await speech.state();
+  aloudThinking(false);
   if (now.key && (now.key === aloud.key || wentOn(now.key))) {
     setAloud(now.state, now.index);
     queueNext();
@@ -2013,7 +2024,7 @@ function aloudControls() {
     kokoroSlot.replaceWith(el("button", { class: "btn-quiet aloud-more", type: "button",
       onclick: () => { if (state.settings) openSection("kokoro", false, true); else { closeSheet(); openSettings(false, "kokoro"); } } }, "More speech engines"));
   });
-  Promise.all([speech.engines(), kokoro]).then(([{ engines, default: def }, k]) => {
+  const enginesIn = Promise.all([speech.engines(), kokoro]).then(([{ engines, default: def }, k]) => {
     if (!engines.length) return;
     moreSlot.replaceWith(more);
     if (engines.length < 2) return;
@@ -2032,13 +2043,20 @@ function aloudControls() {
         const [name, pack] = v.split("#");
         if (pack) { try { await speech.kokoro("use", pack); } catch (e) { toast(e && e.message || "Couldn't switch. Try again."); } }
         store(ENGINE_KEY, { ...enginePicks(), [lang]: name });
+        // Filled again in place, once the new rows are in: the reader
+        // sheet's tab keeps this box (and its heading), so a new one in its
+        // place showed nothing, and rows arriving one by one jumped.
         const box = engineRow.closest(".aloud-controls");
-        if (box) box.replaceWith(aloudControls());
+        if (box) {
+          const fresh = aloudControls();
+          await fresh.ready;
+          box.replaceChildren(...box.querySelectorAll(":scope > h2.overline"), ...fresh.childNodes);
+        }
         restart();
       } }));
     engineSlot.replaceWith(engineRow);
   });
-  speech.voices(engineOf(lang)).then((all) => {
+  const voicesIn = speech.voices(engineOf(lang)).then((all) => {
     const mine = all.filter((v) => primary(v.lang) === lang);
     if (!mine.length) {
       voiceRow.lastChild.replaceWith(el("span", { class: "meta" }, "Phone's default"));
@@ -2066,7 +2084,7 @@ function aloudControls() {
     onchange: (e) => { const v = Number(e.target.value); store(RATE_KEY, v); if (aloud.state !== "stopped") speech.rate(v); } });
   speed.value = rate;
   const check = aloudSwitch;
-  return el("div", { class: "aloud-controls" },
+  const box = el("div", { class: "aloud-controls" },
     engineSlot,
     voiceRow,
     moreSlot,
@@ -2081,6 +2099,8 @@ function aloudControls() {
     speech.background ? check(MIX_KEY, "Allow mixing", "Music or a podcast in another app keeps playing under the voice. Off: they pause while it narrates.") : null,
     speech.background ? check(PIP_KEY, "Small window outside the app", "Going home, the reading stays in a window you can move. Off: only in the app.", false, true) : null,
     note);
+  box.ready = Promise.all([enginesIn, voicesIn, kokoro]).catch(() => {});
+  return box;
 }
 const rateText = (v) => (Math.round(v * 10) / 10) + "×";
 function aloudSwitch(key, text, note, restart = true, on = false) {
