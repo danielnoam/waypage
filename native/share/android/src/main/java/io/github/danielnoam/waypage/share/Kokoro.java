@@ -83,11 +83,11 @@ final class Kokoro {
     private static final String MULTI = "lexicon-us-en.txt,lexicon-zh.txt";
     static final Pack[] PACKS = {
         new Pack("v019", "Kokoro 0.19", "English · 11 voices · fastest", "kokoro-int8-en-v0_19.tar.bz2",
-            "c9f0dd393615805b0bab050c340834d5e684e732aec91c0e860cd30e982c08bd", 98_500_000L, "", V019),
+            "c9f0dd393615805b0bab050c340834d5e684e732aec91c0e860cd30e982c08bd", 103_248_205L, "", V019),
         new Pack("v10", "Kokoro 1.0", "8 languages · 53 voices · the best voices, slowest", "kokoro-multi-lang-v1_0.tar.bz2",
             "60703707bc05ccd48d60e1eb723f38b07d6e474795a0b6a588d7220400e0f7a4", 349_886_476L, MULTI, V10),
         new Pack("v11", "Kokoro 1.1", "English and Chinese · 103 voices, 3 English", "kokoro-int8-multi-lang-v1_1.tar.bz2",
-            "a1e94694776049035c4f2c6529f003aaece993c76aae9a78995831c3c4dcafc6", 140_000_000L, MULTI, V11),
+            "259c9c8bc906d6078e4e0570421885dabb68b539c2f970fcbb890a58eeaf3e9c", 147_052_523L, MULTI, V11),
     };
 
     static Pack pack(String id) {

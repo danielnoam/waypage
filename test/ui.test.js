@@ -2191,6 +2191,59 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a drop-down too long for its sheet opens right at its button, and one at a time", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ROOT + "test/fixtures/chapters.html");
+      await q.press("#saveUrl", "Enter");
+      await q.locator(".page-card", { hasText: "Night Crossing" }).first().click();
+      await q.locator("#readerView:not([hidden])").waitFor();
+      await q.click("#readerAa");
+      await q.locator("#readingSheet .sheet-tabs .seg-face", { hasText: "Text" }).click();
+      await q.evaluate(() => {
+        const make = (id) => { const d = dropdown({ label: id, options: Array.from({ length: 30 }, (_, i) => ({ value: "v" + i, label: "Voice " + i })), value: "v0", onpick() {} }); d.id = id; return d; };
+        document.querySelector('#readingSheet .rc-part:not([hidden])').prepend(make("ddA"), make("ddB"));
+      });
+      await q.locator("#ddA .dropdown-btn").click();
+      await q.waitForTimeout(400);
+      const at = await q.evaluate(() => { const b = document.querySelector("#ddA .dropdown-btn").getBoundingClientRect(), m = document.querySelector("#ddA .dropdown-menu").getBoundingClientRect(); return [b.top, b.bottom, m.top, m.bottom]; });
+      assert.ok((at[2] >= at[1] && at[2] - at[1] < 20) || (at[3] <= at[0] && at[0] - at[3] < 20), "the menu isn't at its button: " + at.map(Math.round).join(","));
+      assert.ok(at[3] <= 844 && at[2] >= 0, "the menu runs off the screen");
+      await q.evaluate(() => document.querySelector("#ddB .dropdown-btn").click());
+      await q.waitForTimeout(400);
+      assert.deepStrictEqual(await q.evaluate(() => [...document.querySelectorAll(".dropdown-menu")].filter((m) => m.style.pointerEvents !== "none").map((m) => m.parentElement.id)), ["ddB"]);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Speech engine lists each downloaded Kokoro version, and picking one puts it in use", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(() => {
+        window.asked = [];
+        const st = { supported: true, engine: "app", use: "v019", busy: "", step: "", done: 0, total: 0, packs: [
+          { id: "v019", title: "Kokoro 0.19", note: "English", bytes: 98.5e6, ready: true, size: 1, voices: 11 },
+          { id: "v10", title: "Kokoro 1.0", note: "8 languages", bytes: 350e6, ready: true, size: 1, voices: 53 },
+          { id: "v11", title: "Kokoro 1.1", note: "English and Chinese", bytes: 140e6, ready: false, size: 0, voices: 103 }] };
+        const sp = C.platform.speech;
+        Object.defineProperty(sp, "kokoro", { value: async (action, id) => { if (action) { window.asked.push(action + " " + id); if (action === "use") st.use = id; return null; } return JSON.parse(JSON.stringify(st)); } });
+        Object.defineProperty(sp, "engines", { value: async () => ({ engines: [{ name: "g", label: "Google" }, { name: "app", label: "Kokoro" }], default: "g" }) });
+        Object.defineProperty(sp, "voices", { value: async () => [] });
+        openSettings();
+        openSection("reading");
+      });
+      const btn = q.getByRole("button", { name: /^Speech engine/ });
+      await btn.waitFor();
+      await btn.click();
+      const names = await q.locator(".dropdown-menu .dropdown-item").allInnerTexts();
+      assert.deepStrictEqual(names.map((x) => x.trim()), ["Phone's default (Google)", "Kokoro 0.19", "Kokoro 1.0"]);
+      await q.locator(".dropdown-menu .dropdown-item", { hasText: "Kokoro 1.0" }).click();
+      await until(q, () => window.asked.length > 0);
+      assert.deepStrictEqual(await q.evaluate(() => window.asked), ["use v10"]);
+      await until(q, () => Object.values(JSON.parse(localStorage.getItem("waypage.aloudEngine") || "{}")).includes("app"));
+      await until(q, () => /Kokoro 1\.0/.test(document.querySelector("[aria-label^='Speech engine']").getAttribute("aria-label")));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("Settings keeps its ? marks to the agreed list (1.48.2)", async () => {
       const q = await page(browser, 390);
       const agreed = ["Your fonts", "Dictionaries", "Before you go offline", "Save from your browser", "Sync with GitHub",

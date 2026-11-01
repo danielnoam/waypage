@@ -2007,23 +2007,31 @@ function aloudControls() {
   // Kokoro voices (Android, 64-bit ARM), under Get more voices (Daniel's
   // ask): their own screen in Settings.
   const kokoroSlot = el("span", { hidden: true });
-  speech.kokoro().then((k) => {
+  const kokoro = speech.kokoro().catch(() => null);
+  kokoro.then((k) => {
     if (!k) return;
     kokoroSlot.replaceWith(el("button", { class: "btn-quiet aloud-more", type: "button",
       onclick: () => { if (state.settings) openSection("kokoro", false, true); else { closeSheet(); openSettings(false, "kokoro"); } } }, "More speech engines"));
   });
-  speech.engines().then(({ engines, default: def }) => {
+  Promise.all([speech.engines(), kokoro]).then(([{ engines, default: def }, k]) => {
     if (!engines.length) return;
     moreSlot.replaceWith(more);
     if (engines.length < 2) return;
     const dflt = engines.find((e) => e.name === def);
+    // Each downloaded Kokoro version is its own option (Daniel's ask),
+    // engine#version; the phone has one Kokoro engine, speaking the one in use.
+    const packs = k ? k.packs.filter((x) => x.ready) : [];
+    const listed = (e) => (k && e.name === k.engine && packs.length ? packs.map((x) => ({ value: e.name + "#" + x.id, label: x.title })) : [{ value: e.name, label: e.label }]);
     // The phone's default engine is the first option, not listed again.
-    const options = [{ value: "", label: "Phone's default" + (dflt ? " (" + dflt.label + ")" : "") }, ...engines.filter((e) => e.name !== def).map((e) => ({ value: e.name, label: e.label }))];
-    const picked = engineOf(lang) === def ? "" : engineOf(lang);
+    const options = [{ value: "", label: "Phone's default" + (dflt ? " (" + dflt.label + ")" : "") }, ...engines.filter((e) => e.name !== def).flatMap(listed)];
+    const engine = engineOf(lang) === def ? "" : engineOf(lang);
+    const picked = k && engine === k.engine && k.use ? engine + "#" + k.use : engine;
     engineRow.append(dropdown({ label: "Speech engine", cls: "field-pick font-pick", options,
       value: options.some((o) => o.value === picked) ? picked : "",
-      onpick: (v) => {
-        store(ENGINE_KEY, { ...enginePicks(), [lang]: v });
+      onpick: async (v) => {
+        const [name, pack] = v.split("#");
+        if (pack) { try { await speech.kokoro("use", pack); } catch (e) { toast(e && e.message || "Couldn't switch. Try again."); } }
+        store(ENGINE_KEY, { ...enginePicks(), [lang]: name });
         const box = engineRow.closest(".aloud-controls");
         if (box) box.replaceWith(aloudControls());
         restart();

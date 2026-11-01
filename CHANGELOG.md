@@ -2,6 +2,20 @@
 
 All notable changes to Carry-on. Newest first.
 
+## Unreleased
+
+### Changed
+- Narrate (Android): the Speech engine list names each downloaded Kokoro
+  version (Kokoro 0.19, Kokoro 1.0, Kokoro 1.1), and picking one switches
+  to it.
+- Only one drop-down is open at a time: opening another closes it.
+
+### Fixed
+- Kokoro 1.1 downloads again; it was turned away as the wrong file.
+- "null" no longer shows under Kokoro in More speech engines.
+- A drop-down in a short sheet (Narrate's Voice) opens at its button
+  instead of far below it, off the screen.
+
 ## [1.50.0] - 2026-11-01
 
 ### Added

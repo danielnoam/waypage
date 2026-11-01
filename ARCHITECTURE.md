@@ -320,6 +320,14 @@ area.
   piece, made on its own thread.
 - **`el()` attributes:** `disabled: false` still disables a button (it's
   set as an attribute); pass `null`.
+- **`replaceChildren`/`append` write a `null` out as the text "null":**
+  leave a missing part out of the list rather than passing null.
+- **`position: fixed` inside a sheet** counts from the sheet, not the
+  screen, because `.sheet` has `will-change: transform`; `dropdown()`'s
+  `fit` measures and corrects for it.
+- **Pinned download hashes:** read each one from the real file (a CI step
+  can fetch GitHub release files this container can't); Kokoro 1.1 shipped
+  in 1.50.0 with a wrong one and every download was refused.
 - **A build without `KokoroTtsService`** (main before Kokoro) resets its
   enabled state; `KokoroPlugin.load` puts it back on the list at start.
 
