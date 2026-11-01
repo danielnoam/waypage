@@ -83,6 +83,7 @@ public class SpeechService extends Service {
     private Job job;
     private int index;
     private int generation;
+    private int ahead = -1;
     private String state = "stopped";
     private MediaSession session;
     private PowerManager.WakeLock wake;
@@ -230,14 +231,39 @@ public class SpeechService extends Service {
         tts.setSpeechRate(job.rate);
         String id = generation + ":" + index;
         String text = job.items[index];
+        makeAhead(index);
         if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) {
             main.postDelayed(() -> said(id), 300);
         }
-        // Some engines say nothing back for a piece they can't voice, which
-        // left the reading stuck there: after well over its length, go on.
+        guard(id, text);
+        report();
+        queueAhead();
+    }
+
+    // Some engines say nothing back for a piece they can't voice, which
+    // left the reading stuck there: after well over its length, go on.
+    private void guard(String id, String text) {
         long most = 8000 + (long) (text.length() * 160 / Math.max(0.5f, job.rate));
         main.postDelayed(() -> said(id), most);
-        report();
+    }
+
+    // Waypage's own Kokoro engine makes a piece as soon as it's asked for
+    // here, not when Android hands it over (Kokoro.take).
+    private void makeAhead(int n) {
+        if (!getPackageName().equals(engine) || !Kokoro.ready(this)) return;
+        Locale l = job.lang != null && !job.lang.isEmpty() ? Locale.forLanguageTag(job.lang) : Locale.getDefault();
+        Kokoro.take(this, job.items[n], Kokoro.sidFor(this, job.voice, l), Kokoro.speedOf((int) (job.rate * 100)));
+    }
+
+    // The next piece goes to the engine while this one plays, so it's
+    // made by the time this one ends: a slower engine (Kokoro) paused
+    // at every paragraph while it made the next.
+    private void queueAhead() {
+        int n = index + 1;
+        ahead = -1;
+        if (job == null || n >= job.items.length) return;
+        makeAhead(n);
+        if (tts.speak(job.items[n], TextToSpeech.QUEUE_ADD, null, generation + ":" + n) == TextToSpeech.SUCCESS) ahead = n;
     }
 
     private void applyVoice() {
@@ -266,6 +292,10 @@ public class SpeechService extends Service {
                 next.rate = job.rate;
                 job = next;
                 index = Math.max(0, Math.min(job.start, job.items.length - 1));
+                // Another language can have its own engine; the new
+                // one speaks once it has started.
+                String want = job.engine == null ? "" : job.engine;
+                if (!want.equals(engine)) { makeTts(want); return; }
                 speakCurrent();
                 return;
             }
@@ -273,6 +303,12 @@ public class SpeechService extends Service {
             return;
         }
         index++;
+        if (ahead == index) {
+            guard(generation + ":" + index, job.items[index]);
+            report();
+            queueAhead();
+            return;
+        }
         speakCurrent();
     }
 

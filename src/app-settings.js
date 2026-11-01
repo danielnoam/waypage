@@ -237,6 +237,75 @@ function aloudGroup() {
     el("div", { class: "group" }, el("div", { class: "rc-list" }, aloudControls())));
 }
 
+// Kokoro voices (Android, arm64): downloads that become Waypage's own
+// speech engine, picked for English when the first is in. Three to pick
+// from on their own screen (Daniel's ask), one in use at a time. Asked
+// again about once a second while one downloads or unpacks.
+const KOKORO_IN_KEY = "waypage.kokoroIn";
+const kokoroBusy = (s) => s.step === "downloading" || s.step === "checking" || s.step === "unpacking";
+function kokoroArrived(s) {
+  if (!s.use || load(KOKORO_IN_KEY, false)) return;
+  store(KOKORO_IN_KEY, true);
+  store(ENGINE_KEY, { ...enginePicks(), en: s.engine });
+}
+function kokoroStep(s, p) {
+  const which = p ? " " + p.title : "";
+  if (s.step === "downloading") return "Downloading" + which + " · " + (s.total ? Math.min(99, Math.floor(s.done / s.total * 100)) : 0) + "%";
+  return "Unpacking" + which + "…";
+}
+function forgetKokoro(engine) {
+  store(KOKORO_IN_KEY, false);
+  const picks = enginePicks();
+  for (const k of Object.keys(picks)) if (picks[k] === engine) delete picks[k];
+  store(ENGINE_KEY, picks);
+}
+
+// The Kokoro voices screen: each model with what it has and its size,
+// the one in use, and Download / Use; removing sits under Actions.
+function kokoroSections() {
+  const slot = el("div", { class: "kokoro-slot" }, el("p", { class: "footnote" }, "Looking…"));
+  fillKokoro(slot);
+  return [slot];
+}
+async function fillKokoro(slot) {
+  const s = await speech.kokoro();
+  if (!slot.isConnected && slot.dataset.drawn) return;
+  slot.dataset.drawn = "1";
+  if (!s) { slot.replaceChildren(el("p", { class: "footnote" }, "Kokoro voices need an Android phone with a 64-bit processor.")); return; }
+  kokoroArrived(s);
+  const busy = kokoroBusy(s);
+  const again = () => fillKokoro(slot);
+  const act = (action, id, then) => async () => {
+    try { await speech.kokoro(action, id); } catch (e) { toast(e && e.message || "Couldn't do that. Try again."); }
+    if (then) then();
+    again();
+  };
+  const rows = s.packs.map((p) => {
+    const mine = s.busy === p.id;
+    const note = mine && busy ? kokoroStep(s)
+      : mine && s.step === "bad" ? "The download wasn't the right file. Try again."
+      : mine && s.step === "failed" ? "Couldn't download. Try again."
+      : p.note + " · " + formatSize(p.ready ? p.size : p.bytes);
+    const control = mine && s.step === "downloading" ? el("button", { class: "btn-text", type: "button", onclick: act("cancel") }, "Stop")
+      : mine && busy ? null
+      : p.id === s.use ? el("span", { class: "row-value accent" }, "In use")
+      : p.ready ? el("button", { class: "btn-text", type: "button", onclick: act("use", p.id) }, "Use")
+      : el("button", { class: "btn-text", type: "button", disabled: busy || null, onclick: act("download", p.id) }, "Download");
+    return el("div", { class: "row kokoro-row" },
+      el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, p.title), el("span", { class: "choice-note" }, note)), control);
+  });
+  const ready = s.packs.filter((p) => p.ready);
+  const remove = (p) => async () => {
+    if (!confirm("Remove " + p.title + "? It takes " + formatSize(p.size) + "; you can download it again.")) return;
+    await act("remove", p.id, () => { if (ready.length === 1) forgetKokoro(s.engine); })();
+  };
+  slot.replaceChildren(
+    section("Kokoro", null, el("div", { class: "group" }, ...rows)),
+    ready.length ? section("Actions", null, el("div", { class: "group" },
+      ...ready.map((p) => el("button", { class: "row", type: "button", onclick: remove(p) }, el("span", { class: "row-label warn" }, "Remove " + p.title))))) : null);
+  if (busy) setTimeout(() => { if (slot.isConnected) again(); }, 1000);
+}
+
 // Layout and Text are two sections here (1.48.2, Daniel's ask), out of
 // the one box readingControls makes, which stays their common parent so
 // syncReadingControls still finds every control in it.
@@ -1015,6 +1084,7 @@ const SECTIONS = {
   drive: { title: "Google Drive", build: driveSections, value: driveValue },
   notifications: { title: "Notifications", build: notesSections, value: notesValue },
   edit: { title: "Edit clips", build: editGroup, value: () => "", parent: "library" },
+  kokoro: { title: "More speech engines", build: kokoroSections, value: () => "", parent: "reading" },
   storage: { title: "Storage", build: () => [placeGroup(), storageGroup(), browserStorageGroup(), backupGroup(roomRows())], value: () => formatSize(totalBytes()) },
   updates: { title: "About", build: () => [updatesGroup(), aboutGroup()], value: () => (updateOut() ? upd.latest + " is out" : APP_VERSION) },
   previews: { title: "Preview builds", build: () => previewsSections(), value: () => "", parent: "updates" },
@@ -1053,7 +1123,7 @@ function renderSettings() {
 // Each result opens its screen and lights the row up for a moment.
 const FIND_ALIASES = {
   Theme: "dark mode light mode colours night", Animations: "motion", Images: "pictures photos", Layout: "shelf list grid scroll pages margins",
-  "Text size": "font size bigger smaller", Font: "typeface", Narrate: "read aloud voice speech tts", "On mobile data": "wi-fi cellular",
+  "Text size": "font size bigger smaller", Font: "typeface", Narrate: "read aloud voice speech tts kokoro", "On mobile data": "wi-fi cellular",
   "Where your library is": "storage folder documents sd card", "App lock": "passcode pin fingerprint face biometric", Notifications: "alerts",
   "Google Drive": "backup cloud", "GitHub sync": "sync devices token", Credits: "about licence licenses open source thanks",
   Version: "update check app", Changelog: "what's new release notes", "Continue reading": "last clip resume",

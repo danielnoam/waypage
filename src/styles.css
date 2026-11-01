@@ -1909,6 +1909,8 @@ html { -webkit-tap-highlight-color: transparent; }
 .storage-pages > .saved-view { border-top: 1px solid var(--line); padding-inline-start: var(--s-6); }
 .storage-pages > .saved-view + .row { border-top: 1px solid var(--line); }
 .choice-note.warn { color: var(--warn); }
+/* The Kokoro voices screen fills in once the phone answers. */
+.kokoro-slot { display: contents; }
 
 /* ---- 0.27.12: the browser release ---- */
 .empty-open { margin-top: var(--s-4); }

@@ -65,6 +65,8 @@ dependencies {
     // Translating a whole clip on the phone (1.42.0).
     implementation "com.google.mlkit:translate:17.0.3"
     implementation "com.google.mlkit:language-id:17.0.6"
+    // Unpacking the downloaded Kokoro voices (.tar.bz2).
+    implementation "org.apache.commons:commons-compress:1.27.1"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
