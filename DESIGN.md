@@ -126,7 +126,10 @@ and the page shows above it.
   halfway. Only transform and opacity move. The one fade with motion on.
 - Screens with no card behind them (Settings, a pane) come in from the
   right; on touch the screen under them drifts 25% left. Downloads and
-  dialogs grow from their button. Menus and popovers grow from their
+  dialogs grow from their button. On a big screen (700 px and up)
+  Settings is a window that grows from the gear (1.49.0): there,
+  nothing crosses the window to land on the far side; a screen comes
+  from its button or from the side it ends up on. Menus and popovers grow from their
   button, ⋯ or the point pressed.
 - Collections › and Clips ›: the cards and tiles that stay move to their
   new places (FLIP); the sections that go leave past the top or bottom

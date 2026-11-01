@@ -25,9 +25,9 @@ function route(s) {
   if (!inSettings) closeSettings();
   else if (!s.section) {
     // Back from a section beside the menu leaves Settings altogether.
-    const had = state.section && state.settings && wide.matches && view === "settings";
+    // The section stays in the window until the window has gone.
+    if (state.section && state.settings && wide.matches && view === "settings") { history.back(); return; }
     closeSection();
-    if (had) { history.back(); return; }
   }
   if (view !== "batch") closeBatch();
   if (view === "batch") openBatch("", true, s.folder);

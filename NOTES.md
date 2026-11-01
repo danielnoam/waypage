@@ -18,6 +18,20 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+**Settings is a window on a big screen (1.49.0).** From 700 px it slid
+in from the right like a phone screen, but its menu ends up on the
+left, where the sidebar is, so the menu crossed the whole window to get
+there (Daniel: "comes from the wrong side"). It now grows out of the
+gear as a window over the dimmed library, like Downloads and Sync
+(Daniel's pick of two, the other being menu from the left and section
+from the right). The menu and section stay two screens so the phone is
+untouched; `#settingsWin` around them is `display: contents` on a phone
+and their box (with `contain: layout paint`, so their `position: fixed;
+inset: 0` fills it) from 700 px. A section changes in place there, and
+leaves with the window rather than first. Search and Settings moved
+from the sidebar to the top bar's right end at the same time (Daniel's
+ask), so the window has one place to grow from on every big screen.
+
 **Preview builds are pre-releases, one per branch (1.48.0).** The
 workflow artifact was the first idea: it needs no token either, but it
 is a zip, its link lives a minute, and it is gone after 90 days. A

@@ -68,7 +68,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Look up in your own StarDict dictionaries, offline: added in Settings › Reading, with word endings, synonyms and Hebrew prefixes (1.45.0)
 - Brightness swipe with Auto, movable to the right (1.10.0, 1.14.0, 1.16.0)
 - Previous/Next and a collection list in the reader (1.23.0)
-- Big-screen layouts and keyboard shortcuts (1.5.0)
+- Big-screen layouts and keyboard shortcuts (1.5.0); Settings as a window from the gear, Search and Settings at the top right, keys 1 to 5 for the sidebar's places (1.49.0)
 - Dim pictures in dark themes (1.32.0)
 - Volume buttons turn pages on Android (1.32.0)
 
