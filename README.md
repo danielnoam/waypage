@@ -189,7 +189,7 @@ Each section below shows the computer (left) and the phone (right).
 
 - No server: pages are fetched on the device.
 - Saved pages are untrusted and shown in a sandboxed frame with no scripts and a strict CSP; PDFs render in their own locked-down frame.
-- Nothing leaves the device unless you turn it on (sync, Drive backups), and Translate runs on the device. The trade-offs are written in NOTES.md.
+- Nothing leaves the device unless you turn it on (sync, Drive backups), and Translate runs on the device. The trade-offs are listed in ARCHITECTURE.md.
 
 ## Run it
 
