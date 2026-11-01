@@ -16,6 +16,8 @@ All notable changes to Carry-on. Newest first.
   an installed Kokoro engine can read English while Hebrew stays with
   the phone's default. An engine picked before stays for every language
   until one is changed.
+- Narrate's Speech engine list names the phone's default engine once,
+  not as the default and again on its own.
 
 ## [1.48.4] - 2026-11-01
 

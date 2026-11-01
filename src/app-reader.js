@@ -1873,8 +1873,9 @@ function aloudControls() {
     moreSlot.replaceWith(more);
     if (engines.length < 2) return;
     const dflt = engines.find((e) => e.name === def);
-    const options = [{ value: "", label: "Phone's default" + (dflt ? " (" + dflt.label + ")" : "") }, ...engines.map((e) => ({ value: e.name, label: e.label }))];
-    const picked = engineOf(lang);
+    // The phone's default engine is the first option, not listed again.
+    const options = [{ value: "", label: "Phone's default" + (dflt ? " (" + dflt.label + ")" : "") }, ...engines.filter((e) => e.name !== def).map((e) => ({ value: e.name, label: e.label }))];
+    const picked = engineOf(lang) === def ? "" : engineOf(lang);
     engineRow.append(dropdown({ label: "Speech engine", cls: "field-pick font-pick", options,
       value: options.some((o) => o.value === picked) ? picked : "",
       onpick: (v) => {
