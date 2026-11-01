@@ -175,6 +175,9 @@ function sortControl() {
 // Our own dropdown (0.26.0), in place of the system's <select>: a
 // button showing the choice, and a small menu that arrives under it.
 // Arrow keys move through it, Escape or a tap outside puts it away.
+// One drop-down open at a time (Daniel's ask): opening one closes the
+// other, as a tap anywhere else does.
+let dropdownOpen = null;
 function dropdown(o) {
   let value = o.value;
   const face = el("span", { class: "dropdown-face" });
@@ -196,6 +199,7 @@ function dropdown(o) {
     if (!menu) return;
     const m = menu;
     menu = null;
+    if (dropdownOpen === close) dropdownOpen = null;
     m.style.pointerEvents = "none";
     btn.setAttribute("aria-expanded", "false");
     const g = wrap.closest(".group");
@@ -226,6 +230,12 @@ function dropdown(o) {
       Object.assign(m.style, { position: "fixed", left: w.left + "px", width: w.width + "px", right: "auto",
         top: up ? "auto" : b.bottom + gap + "px", bottom: up ? innerHeight - b.top + gap + "px" : "auto" });
       if (need > (up ? upRoom : downRoom)) m.style.maxHeight = (up ? upRoom : downRoom) + "px";
+      // The sheet's will-change: transform makes "fixed" count from the
+      // sheet, not the screen: move it by what's measured.
+      const r = m.getBoundingClientRect();
+      if (up) m.style.bottom = innerHeight - b.top + gap + (r.bottom - (b.top - gap)) + "px";
+      else m.style.top = b.bottom + gap - (r.top - (b.bottom + gap)) + "px";
+      m.style.left = w.left - (r.left - w.left) + "px";
       m.classList.toggle("up", up);
       return up;
     }
@@ -237,6 +247,8 @@ function dropdown(o) {
     return up;
   }
   function open() {
+    if (dropdownOpen) dropdownOpen(false);
+    dropdownOpen = close;
     const nodes = o.options.map((x) => {
       if (x.head) return el("div", { class: "dropdown-head", role: "presentation" }, x.head);
       const check = el("span", { class: "dropdown-check", "aria-hidden": "true" });
