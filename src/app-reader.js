@@ -1983,10 +1983,10 @@ function readingControls(withTheme) {
     ], r.margins, (v) => setReading({ margins: v }))),
     ...(brightSwitch(id) || []),
     // Under Layout since 1.47.0: it adds a line to the page, not to the type.
-    spentSwitch(),
     row("Time left in", seg(id + "-leftIn", "Time left in", [
       { value: "part", label: "Section" }, { value: "clip", label: "Whole" },
     ], leftIn(state.open), setLeftIn)),
+    spentSwitch(),
     // Big screens (1.5.0): two pages side by side, and the contents
     // beside the text.
     wide.matches ? stack("Pages on a wide window", seg(id + "-spread", "Pages on a wide window", [
