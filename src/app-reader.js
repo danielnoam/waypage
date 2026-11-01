@@ -1984,6 +1984,9 @@ function readingControls(withTheme) {
     ...(brightSwitch(id) || []),
     // Under Layout since 1.47.0: it adds a line to the page, not to the type.
     spentSwitch(),
+    row("Time left in", seg(id + "-leftIn", "Time left in", [
+      { value: "part", label: "Section" }, { value: "clip", label: "Whole" },
+    ], leftIn(state.open), setLeftIn)),
     // Big screens (1.5.0): two pages side by side, and the contents
     // beside the text.
     wide.matches ? stack("Pages on a wide window", seg(id + "-spread", "Pages on a wide window", [
@@ -2601,24 +2604,6 @@ function skimPaint(at) {
   const track = $("skimTrack");
   track.setAttribute("aria-valuenow", String(Math.round(at * 100)));
   track.setAttribute("aria-valuetext", skimText(at).join(", "));
-  const p = state.open, top = C.reader.parts().filter((x) => x.level === 2).length >= 2;
-  $("skimLeft").hidden = !top;
-  if (top) paintLeft(p);
-}
-// What the minutes left count: this chapter or the whole (1.48.4; a
-// button saying "Count this section" before). Built once per open clip.
-let leftFor = null;
-function paintLeft(p) {
-  const box = $("skimLeft"), book = isBook(p), now = leftIn(p);
-  if (leftFor !== p) {
-    leftFor = p;
-    box.querySelector(".seg")?.remove();
-    box.append(seg("skim-left", "Time left for", [
-      { value: "part", label: book ? "This chapter" : "This section" },
-      { value: "clip", label: book ? "Whole book" : "Whole clip" },
-    ], now, (v) => { if (v !== leftIn(state.open)) toggleLeft(); skimPaint(C.reader.position()); }));
-  }
-  box.querySelectorAll('input[name="skim-left"]').forEach((i) => { i.checked = i.value === now; });
 }
 // The chapter at `at` and where that is: page 12 of 340, or 42%.
 function skimText(at) {
@@ -2729,15 +2714,15 @@ function partLeft(p, at) {
   const mins = Math.max(1, Math.ceil(clipMinutes(p) * Math.max(0, (next ? next.at : 1) - at)));
   return mins + " min left in " + (isBook(p) ? "chapter" : "section");
 }
-function toggleLeft() {
-  const p = state.open;
-  if (!p || C.reader.parts().filter((x) => x.level === 2).length < 2) return;
-  const all = load(LEFT_KEY, {});
-  const to = leftIn(p) === "part" ? "clip" : "part";
-  all[isBook(p) ? "book" : "clip"] = to;
-  store(LEFT_KEY, all);
+// Settings › Reading › Layout "Time left in" (1.48.4; a button on the
+// skim bar before). One choice for books and clips alike.
+function setLeftIn(v) {
+  store(LEFT_KEY, { book: v, clip: v });
+  document.querySelectorAll('input[name$="-leftIn"]').forEach((i) => { i.checked = i.value === v; });
+  if (!state.open) return;
   $("readSection").dataset.at = "";
   readerFoot(C.reader.position());
+  if (skimUp()) skimPaint(C.reader.position());
 }
 // A tick on the line where each chapter starts, while they fit apart.
 let ticksOf = null;

@@ -919,7 +919,7 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
   animation: skim-up var(--spring-control-ms, 300ms) var(--spring-control-edge, ease-out);
 }
 .skim-bar > * { max-width: 34rem; margin-inline: auto; }
-.skim-bar[hidden], .skim-left[hidden], .skim-row .icon-btn[hidden] { display: none; }
+.skim-bar[hidden], .skim-row .icon-btn[hidden] { display: none; }
 .reader.bar-away .skim-bar { display: none; }
 .skim-head { display: flex; align-items: baseline; gap: var(--s-3); padding: 0 var(--s-2); }
 .skim-part { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-label); font-weight: 600; }
@@ -946,10 +946,6 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
   transition: scale var(--spring-control-ms, 300ms) var(--spring-control, ease-out);
 }
 .reader.skimming .skim-knob { scale: 1.2; }
-.skim-left { display: flex; align-items: center; justify-content: center; gap: var(--s-3); min-height: var(--tap); padding: var(--s-1) var(--s-3) 0; }
-.skim-left-label { color: var(--muted); font: 500 var(--fs-meta)/var(--lh-meta) var(--sans); white-space: nowrap; }
-.skim-left .seg { flex: 0 1 240px; }
-.skim-left .seg-face { min-height: 30px; font-size: var(--fs-meta); }
 @keyframes skim-up { from { transform: translateY(100%); } }
 :root[data-motion="off"] .skim-bar { animation: none; }
 @media (prefers-reduced-motion: reduce) {
