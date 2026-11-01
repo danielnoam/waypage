@@ -57,6 +57,35 @@
     return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + head) : head + html;
   }
 
+  // Dark PDF pages (1.49.0): a colour map that sends a page's white to the
+  // theme's background and its black to the theme's ink, so a printed page
+  // reads like the text around it. A filter on the shown picture, so
+  // switching it or the theme redraws nothing. Pass an empty bg to remove it.
+  function pdfDarkFilter(into, id, bg, ink) {
+    const old = into.getElementById(id + "-svg");
+    const rgb = (c) => {
+      const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(c).trim());
+      if (!m) return null;
+      const h = m[1].length === 3 ? m[1].replace(/./g, "$&$&") : m[1];
+      return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+    };
+    const b = rgb(bg), k = rgb(ink);
+    if (!b || !k) { if (old) old.remove(); return; }
+    const svgNs = "http://www.w3.org/2000/svg";
+    const funcs = ["R", "G", "B"].map((ch, i) =>
+      '<feFunc' + ch + ' type="linear" slope="' + (b[i] - k[i]).toFixed(4) + '" intercept="' + k[i].toFixed(4) + '"/>').join("");
+    const html = '<filter id="' + id + '" color-interpolation-filters="sRGB" x="0" y="0" width="100%" height="100%">' +
+      '<feColorMatrix type="hueRotate" values="180"/><feComponentTransfer>' + funcs + '</feComponentTransfer></filter>';
+    const svg = old || into.createElementNS(svgNs, "svg");
+    svg.setAttribute("id", id + "-svg");
+    svg.setAttribute("width", "0");
+    svg.setAttribute("height", "0");
+    svg.setAttribute("aria-hidden", "true");
+    svg.style.cssText = "position:absolute";
+    svg.innerHTML = html;
+    if (!old) (into.body || into.documentElement).append(svg);
+  }
+
   function applyTheme() {
     if (!doc) return;
     const at = isPaged() ? position() : 0;
@@ -64,6 +93,9 @@
     for (const t of TOKENS) doc.documentElement.style.setProperty("--" + t, css.getPropertyValue("--" + t).trim());
     doc.documentElement.style.colorScheme = css.colorScheme;
     doc.documentElement.toggleAttribute("data-co-dim", document.documentElement.hasAttribute("data-dim-pictures"));
+    const dark = document.documentElement.hasAttribute("data-pdf-dark");
+    doc.documentElement.toggleAttribute("data-co-pdf-dark", dark);
+    pdfDarkFilter(doc, "co-pdf-dark", dark ? css.getPropertyValue("--bg") : "", css.getPropertyValue("--ink"));
     if (window.Waypage.fontsInto) window.Waypage.fontsInto(doc);
     const align = document.documentElement.dataset.readAlign;
     if (align && align !== "auto") doc.documentElement.setAttribute("data-co-align", align);
@@ -1200,6 +1232,49 @@
     }, { passive: false });
   }
 
+  // Auto-scroll for an image chapter (1.49.0): glide(v, onEnd) moves the
+  // page v pixels a second, glide(0) stops it. A finger on the page holds it
+  // (to look back at a panel) and lifting lets it go on; onEnd() is told
+  // once the bottom is reached, and the glide is over.
+  let glideV = 0, glideEnd = null, glideRaf = 0, glideAt = 0, glideRest = 0, touching = 0;
+  function glide(v, onEnd) {
+    glideV = v > 0 && doc ? v : 0;
+    glideEnd = glideV ? onEnd || null : null;
+    cancelAnimationFrame(glideRaf);
+    glideRaf = 0;
+    glideRest = 0;
+    if (!glideV) return;
+    glideAt = performance.now();
+    const step = (now) => {
+      glideRaf = 0;
+      if (!glideV || !doc || !frame) return;
+      const dt = Math.min(0.25, (now - glideAt) / 1000);
+      glideAt = now;
+      const w = frame.contentWindow;
+      if (!touching && !pinch) {
+        glideRest += glideV * dt;
+        const whole = Math.floor(glideRest);
+        if (whole) { glideRest -= whole; w.scrollBy(0, whole); }
+        if (w.scrollY + w.innerHeight >= doc.documentElement.scrollHeight - 2) {
+          const done = glideEnd;
+          glideV = 0;
+          glideEnd = null;
+          if (done) done();
+          return;
+        }
+      }
+      glideRaf = requestAnimationFrame(step);
+    };
+    glideRaf = requestAnimationFrame(step);
+  }
+  function glideInput() {
+    touching = 0;
+    const down = (e) => { touching = e.touches.length; };
+    doc.addEventListener("touchstart", down, { passive: true });
+    doc.addEventListener("touchend", down, { passive: true });
+    doc.addEventListener("touchcancel", () => { touching = 0; }, { passive: true });
+  }
+
   // Brightness from the left edge (1.10.0): a touch that starts in the
   // left part of the page and goes up or down is the brightness, not a
   // scroll. onEdge: { start(), move(d) with d the change, -1 to 1, end() }.
@@ -1443,6 +1518,7 @@
         chunkUp();
         pagedInput();
         zoomInput();
+        glideInput();
         edgeInput();
         textPinchInput();
         // Keys pressed in the page that it doesn't use itself go to the
@@ -1527,6 +1603,7 @@
   }
 
   function close() {
+    glide(0);
     settle();
     tell = null;
     if (frame) { frame.onload = null; frame.srcdoc = ""; }
@@ -1581,5 +1658,5 @@
       return line;
     }));
   }
-  C.reader = { setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted };
+  C.reader = { pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
 })();

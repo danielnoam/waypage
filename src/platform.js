@@ -654,6 +654,31 @@
     return !!(res && res.saved);
   }
 
+  // A file the app made (a deck turned into a PDF, 1.49.0) saved where
+  // the person picks, with a lasting permission so a clip can read from
+  // it. `near` is a file whose folder the picker opens in. Resolves to
+  // { saved, ref }: ref is null when the place can't be held on to (no
+  // such picker, or iOS), and saved false when it was put away.
+  async function saveLinked(blob, name, mime, near) {
+    const F = plugin("FileSave");
+    if (F) {
+      const cache = await window.Waypage.store.cacheFile(name);
+      for (let i = 0; i < blob.size; i += 1 << 20) await cache.append(new Uint8Array(await blob.slice(i, i + (1 << 20)).arrayBuffer()));
+      const res = await F.save({ uri: await cache.uri(), name, mime, keep: true, near: near || "" });
+      return { saved: !!(res && res.saved), ref: (res && res.saved && res.uri) || null };
+    }
+    if (!native && typeof window.showSaveFilePicker === "function") {
+      let handle;
+      try { handle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: "PDF", accept: { [mime]: [".pdf"] } }] }); } catch (e) { return { saved: false, ref: null }; }
+      const w = await handle.createWritable();
+      await w.write(blob);
+      await w.close();
+      const got = await files.adopt(handle);
+      return { saved: true, ref: got ? got.ref : null };
+    }
+    return { saved: null, ref: null };
+  }
+
   // Text written to the app's cache as a file; resolves to its uri, or
   // null in a browser.
   async function writeCache(filename, text) {
@@ -817,13 +842,13 @@
   // a content:// address in the app, a stored handle in a browser (Chrome
   // and Edge on a computer; Firefox and Safari have no such picker).
   const FILE_MIMES = ["application/epub+zip", "text/markdown", "text/x-markdown", "text/plain", "text/html", "message/rfc822",
-    "application/pdf", "application/vnd.comicbook+zip", "application/x-cbz", "application/zip",
+    "application/pdf", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "application/vnd.comicbook+zip", "application/x-cbz", "application/zip",
     // Another app's export to import (1.9.0).
     "text/csv", "text/comma-separated-values", "application/json",
     // Kindle books and FB2 (1.42.0). Many phones call an AZW3 just data.
     "application/x-mobipocket-ebook", "application/vnd.amazon.ebook", "application/x-mobi8-ebook", "application/x-fictionbook+xml",
     "application/x-fictionbook", "text/xml", "application/xml", "application/octet-stream"];
-  const FILE_EXTS = [".epub", ".mobi", ".azw", ".azw3", ".prc", ".fb2", ".md", ".markdown", ".txt", ".html", ".htm", ".eml", ".pdf", ".cbz", ".csv", ".json", ".zip"];
+  const FILE_EXTS = [".epub", ".mobi", ".azw", ".azw3", ".prc", ".fb2", ".md", ".markdown", ".txt", ".html", ".htm", ".eml", ".pdf", ".pptx", ".cbz", ".csv", ".json", ".zip"];
   const PIECE = 4 << 20;
   const KEEP = 64 << 20;
 
@@ -1096,7 +1121,7 @@
     downloadTo,
     openOutside,
     saveAndShare,
-    saveFile,
+    saveFile, saveLinked,
     writeCache,
     get canSaveFiles() { return !!plugin("FileSave"); },
     shareFile,

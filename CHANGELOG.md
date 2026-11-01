@@ -5,6 +5,32 @@ All notable changes to Carry-on. Newest first.
 ## Unreleased
 
 ### Added
+- Dark PDF pages: a switch at the bottom of Aa › Layout, shown while a
+  PDF's own pages are open (not when it is shown as text). In a dark
+  theme the pages are recoloured to the theme (paper becomes its
+  background, black text its text colour) instead of staying white.
+  Photos and coloured figures turn into negatives. Off by default; Paper
+  and the other light themes keep white pages.
+- PowerPoint decks: Open a file now takes a .pptx. It asks whether to
+  convert it to a PDF; Cancel stops and opens nothing. Convert redraws the
+  slides (text, shapes, pictures, tables, theme colours), asks where to save
+  the new PDF (on Android the save screen opens in the deck's folder), and
+  adds that PDF to Files, read from where it was saved, like any PDF you
+  open. Search, Narrate and highlights work on the slides' words. Hidden
+  slides are left out. Charts and diagrams without a picture, effects and
+  animations are not drawn, and the app says how many it left out. Nothing
+  is sent anywhere, and a picture that points outside the file is never
+  loaded.
+- Manga and comics are spotted when you save them. A page with little text
+  and a column of large pictures now saves as a comic (its panels, edge to
+  edge) without picking Comic in the new-collection options.
+- Save as comic, under More on a clip that was saved as an article: fetches
+  the page again as its pictures, in the old copy's place.
+- Comics and manga have Auto-scroll where Narrate was: the page moves by
+  itself, a finger on it holds it, and lifting lets it go on. The top bar
+  stays on while it scrolls, so its button can always stop it. The Aa tab
+  shows only Speed (its own, apart from Narrate's), Go on to the next clip
+  (the next chapter starts scrolling at the end) and Keep the screen on.
 - Preview builds in the browser: Settings › About › Preview builds on
   the web copy opens a pull request's build in place of the release,
   with a "Back to the release" link at the top.

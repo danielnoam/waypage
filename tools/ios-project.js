@@ -53,6 +53,7 @@ const str = (v) => "<string>" + v + "</string>";
 const DOCS = [
   ["Book", ["org.idpf.epub-container"], "Alternate"],
   ["PDF", ["com.adobe.pdf"], "Alternate"],
+  ["PowerPoint", ["org.openxmlformats.presentationml.presentation"], "Alternate"],
   ["Comic", ["io.github.danielnoam.waypage.cbz"], "Owner"],
   ["Kindle book", ["io.github.danielnoam.waypage.mobi"], "Alternate"],
   ["FB2 book", ["io.github.danielnoam.waypage.fb2"], "Owner"],
