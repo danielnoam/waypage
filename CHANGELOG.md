@@ -2,6 +2,24 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.49.2] - 2026-11-01
+
+### Changed
+- Computer and tablet: Settings opens as a window over the library,
+  instead of sliding in from the right across the whole window.
+- Computer: Search and Settings sit at the top right, beside Downloads,
+  instead of in the sidebar.
+- Downloads, Sync, Save with options and Settings fade in as they open,
+  and fade out as they close. Before, the box was uncovered from the
+  button's corner, which looked like a cut-out sliding open.
+- Computer: Feeds, Newsletters and Highlights split the room half and
+  half between the list and what's open beside it. Drag the line
+  between them to change it (or focus it and use the arrow keys;
+  double-click puts it back in the middle).
+
+### Added
+- Keys 1 to 5 go to Library, Feeds, Newsletters, Highlights and Stats.
+
 ## [1.49.1] - 2026-11-01
 
 ### Changed

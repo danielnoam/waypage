@@ -50,7 +50,7 @@ Each section below shows the computer (left) and the phone (right).
 
 - Library with favourites, Collections and Clips; Feeds; Newsletters with the latest addresses and unread counts; Highlights; Stats; tags.
 - Library, Feeds and Newsletters fold under an arrow inside their row.
-- Always there on a wide screen, slides in on a phone.
+- Always there on a wide screen, slides in on a phone. Keys 1 to 5 go to its places.
 
 ## Collections and files
 
@@ -145,6 +145,7 @@ Each section below shows the computer (left) and the phone (right).
 - Checked with the app closed, with notifications per post or grouped, and quiet feeds.
 - Feeds in and out as OPML.
 - Swipe sideways to go to the next or previous feed (or address in Newsletters); the chips stay still.
+- On a computer the list and the open post share the window half and half; drag the line between them to resize.
 
 ## Newsletters
 
@@ -176,14 +177,14 @@ Each section below shows the computer (left) and the phone (right).
 
 <p><img src="docs/shots/settings-desktop.jpg" width="74%" alt="Settings on a computer"> <img src="docs/shots/settings-phone.jpg" width="21%" alt="Settings on a phone"></p>
 
-- Settings in groups: Appearance, Reading, Library, App lock, Saving, GitHub sync, Google Drive, Storage; a search box at the top finds any setting.
+- Settings in groups: Appearance, Reading, Library, App lock, Saving, GitHub sync, Google Drive, Storage; a search box at the top finds any setting. On a computer or tablet it opens as a window from the gear at the top right.
 - Every setting is a name and one short line; the longer explanation is behind a ? on its heading. Options are drop-downs, themes a grid of swatches.
 - About has the version, the changelog, and Credits: what Waypage is built with.
 - App lock: passcode, fingerprint or face on Android, erase when forgotten.
 - Home screen widgets on Android and iOS: Keep reading, Feeds, Favourites, Collection, Highlight; app icon shortcuts.
 - The Android app updates itself and shows What's new; About › Preview builds installs a branch's build before it's released, and puts the release back.
 - Report a problem with a local error log.
-- Animations switch; motion zooms and moves, never fades.
+- Animations switch; motion zooms and moves, and only dialogs fade.
 
 ## Privacy and security
 

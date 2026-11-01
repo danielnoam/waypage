@@ -297,6 +297,9 @@ adds a line here.
   SmartArt, effects or WordArt.
 - Dictionaries live in their own IndexedDB, so they aren't moved with the
   library, synced or backed up.
+- Dialogs (Downloads, Sync, Save with options, Settings) fade in and out,
+  the one planned exception to "nothing fades" (Daniel's pick over the
+  grow and the zoom).
 
 ## Traps
 
@@ -351,6 +354,12 @@ area.
   reached reads as empty, so sync refuses to run.
 - **A Blob writes a string byte above 127 as two:** binary formats (the
   PDF writer) use plain ASCII strings or bytes.
+- **The Settings window from 700 px:** `#settingsWin` is `display:
+  contents` on a phone and a box with `contain: layout paint` above, so
+  the two screens' `position: fixed; inset: 0` fill the window. Close
+  the window before the section, or the section vanishes first.
+- **Dragging the list/post line:** iframes take `pointer-events: none`
+  while it moves (`body.resizing`), or the reader swallows the drag.
 
 ## The docs
 
