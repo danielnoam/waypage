@@ -151,7 +151,7 @@ test("a branch's build is published as a pre-release the updater never sees", ()
   const yml = fs.readFileSync(path.join(ROOT, ".github", "workflows", "android.yml"), "utf8");
   const ios = fs.readFileSync(path.join(ROOT, ".github", "workflows", "ios.yml"), "utf8");
   const sh = fs.readFileSync(path.join(ROOT, "tools", "preview-release.sh"), "utf8");
-  const tidy = fs.readFileSync(path.join(ROOT, ".github", "workflows", "preview-cleanup.yml"), "utf8");
+  const tidy = fs.readFileSync(path.join(ROOT, ".github", "workflows", "previews.yml"), "utf8");
   assert.ok(/branches: \["\*\*"\]/.test(yml) && /branches: \["\*\*"\]/.test(ios));
   assert.ok(/github\.ref != 'refs\/heads\/main'[\s\S]*preview-release\.sh create Waypage\.apk/.test(yml));
   assert.ok(/github\.ref != 'refs\/heads\/main'[\s\S]*preview-release\.sh attach Waypage\.ipa/.test(ios));

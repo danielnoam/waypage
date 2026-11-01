@@ -87,7 +87,7 @@ test/               node test/run-all.js runs every *.test.js
 design/             the design canvas's artboards, for the exact markup
 docs/PROPOSAL.md    the original architecture, storage, legal and store reasoning
 docs/shots/         the README's screenshots
-.github/workflows/  test.yml (every PR), android.yml and ios.yml (builds, releases, previews), preview-cleanup.yml
+.github/workflows/  test.yml (every PR), android.yml and ios.yml (builds, releases, previews), previews.yml
 ```
 
 ## Load order and the one scope
@@ -225,10 +225,11 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
   public releases list to offer the build; `app-build.json` carries the
   branch and commit, so a preview build knows it is one and skips the
   update check. A pre-release is never GitHub's "latest", so the
-  updater ignores it. `preview-cleanup.yml` removes the pre-release when
-  the branch or its pull request closes, or the PR gets the label
-  `no-preview`. A `docs/` branch, a PR that changes only notes (Markdown,
-  `test/`, `.claude/`) or one labelled `no-preview` gets no preview. Android installs an equal
+  updater ignores it. Only a PR labelled `preview` (both),
+  `preview-android` or `preview-ios` gets one; with `preview-ios` alone
+  the iOS workflow makes the pre-release itself. `previews.yml` runs the
+  build workflows when a label goes on and removes the pre-release when
+  it comes off, the pull request closes or the branch goes. Android installs an equal
   version code over the app, so the release goes back over a preview
   only when the branch didn't bump `APP_VERSION`.
 - **Previews in the browser (1.49.0):** the web copy's Preview builds
