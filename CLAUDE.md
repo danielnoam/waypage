@@ -39,25 +39,15 @@ borrows its stack, build workflows and native-fetch trick from.
   and IPA (`node tools/release.js x.y.z`). Daniel's own asks still ship
   as one release each; work landing in pieces goes under `## Unreleased`
   and the next release PR takes it. Check the runs went green.
-- After changing TODO.md or DONE.md in the repo, copy it over the shared
-  project folder's `waypage/TODO.md` / `waypage/DONE.md` so both match.
+- The to-do list is not in the repo. It lives only in the shared project
+  folder, `/mnt/project-files/waypage/TODO.md`: read it there, and edit it
+  there in the same turn as the change it tracks.
 
-## Working with Daniel (his standing rules, 17 Oct 2026)
+  ## Branch names
 
-These are on top of CONTRIBUTING.md, for Claude sessions only.
+- Don't use the claude/... branch the session was handed. Before the
+  first commit, make a branch named for the change: fix/<what>,
+  feature/<what> or docs/<what>, a few lowercase words with hyphens
+  (fix/drive-row, feature/kokoro-voices). Push only to that branch.
+  A thread with an open PR keeps its branch.
 
-- **Merge to main without asking** once the checks are green. Don't ask
-  "shall I merge".
-- **When he says "don't build yet" or "fixes only",** commit locally and
-  don't push (a branch push builds too) until he says build.
-- **Small asks he lists without "add to TODO", do now,** but commit
-  them on the branch and wait for his "Build" (or "Ship") before pushing
-  or opening the release PR. He said so on 1 Nov 2026 after a release
-  went out unasked. A branch push builds a preview, so hold that too.
-- **Several asks go out as one release,** or two at most when grouped;
-  don't split them into many.
-- **App stores aren't a priority.** Don't bring up store prep.
-- **After shipping,** say in a line or two what to try on the phone,
-  above all anything native that couldn't be tested here.
-- **Be direct.** Push back when an idea or plan is weak, and say what
-  was checked and what is a guess.

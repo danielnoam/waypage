@@ -25,18 +25,19 @@ which fails without `node_modules/@capacitor`.
 
 | File | What it holds |
 |---|---|
-| `ARCHITECTURE.md` | The map of the code: every file, load order, and the flows (saving, storing, reading, sync, the apps). |
+| `ARCHITECTURE.md` | The map of the code: every file, load order, the flows (saving, storing, reading, sync, the apps), the trade-offs and the traps. |
 | `docs/PROPOSAL.md` | Why there is no server, how a page is captured and stored, the legal and store rules. Read it before changing architecture. |
 | `DESIGN.md` | The design language: color tokens, type and space scales, motion, components, accessibility. |
-| `TODO.md` | What's left to do. Only that. |
-| `DONE.md` | What the app already does, one line per feature by area, with its version. |
 | `DROPPED.md` | What was decided against, and why. |
-| `NOTES.md` | Why things are the way they are, newest first. Its top section, "Rules every release keeps", is binding. |
 | `CHANGELOG.md` | Every release, in user-facing words. |
 | `design/` | The design canvas artboards, for exact markup. |
 
-Before proposing an idea, check DONE.md, TODO.md and DROPPED.md so nothing
-shipped, planned or turned down comes back.
+Before proposing an idea, check CHANGELOG.md, DROPPED.md and the open
+issues, so nothing shipped, planned or turned down comes back.
+
+**The to-do list isn't in the repo.** Daniel keeps it in his own planning
+space. To propose work or pick something up, open a GitHub issue first so
+two people don't build the same thing.
 
 ## How the code is laid out
 
@@ -86,12 +87,13 @@ Don't reopen these without talking to Daniel first.
 it sends, to whom, and what a page, file or other site could do with it.
 Use the least access (narrow tokens and scopes). Nothing leaves the device
 unless the user turned it on. Saved content stays sandboxed. Any
-trade-off is stated plainly and written in NOTES.md.
+trade-off is stated plainly and added to ARCHITECTURE.md's Trade-offs.
 
 **Every platform.** Everything works on Android and on a computer (the web
 copy), and on iOS later. A feature that can't work somewhere gets that
 platform's nearest equivalent (keys on a computer for the volume buttons,
-say). iOS-only native work goes on TODO.md's iOS release list.
+say). iOS-only native work goes on the to-do list's iOS release list (or an
+issue).
 
 **Speed.** Anything that touches lists or opening is measured with a big
 library (3,000 clips) on a slowed CPU (6x in Chrome DevTools), before and
@@ -159,36 +161,33 @@ Settings › About › Credits, with its author and licence, beside its
 licence file in the repo. People aren't listed there; the commit
 history is the record.
 
-**Don't bump the version on a feature branch.** Every branch with an
-open pull request gets a preview build (Settings › About › Preview
-builds), and the release installs back over it only while the two have
+**Don't bump the version on a feature branch.** A pull request can get
+a preview build (Settings › About › Preview builds, with the label
+`preview`), and the release installs back over it only while the two have
 the same version code. The release PR is the one that bumps
 `APP_VERSION`, with `node tools/release.js`.
 
-**"Add to TODO" means plan it, not build it.** It goes into TODO.md with
-enough detail for someone else to pick it up.
+**"Add to TODO" means plan it, not build it.** It goes on the to-do list
+with enough detail for someone else to pick it up.
 
 ## Keeping the notes files right
 
-- **TODO.md holds only what's left.** When something ships or is turned
-  down, take it out in the same change. Shipped work becomes a line in
-  DONE.md and a CHANGELOG entry; a "no" becomes a line in DROPPED.md with
-  the reason. Remove anything stale.
-- **DONE.md** gets one line per feature, under its area, with its version.
+- **Shipped work** becomes a CHANGELOG entry; a "no" becomes a line in
+  DROPPED.md with the reason. Take it off the to-do list (or close its
+  issue) at the same time.
 - **ARCHITECTURE.md** changes in the same commit as the code when a file
   is added, removed or renamed, or a flow it describes changes.
   `test/docs.test.js` fails when a source file isn't named there, so a
   missed file fails the Tests check.
-- **NOTES.md** gets an entry for anything non-obvious: a bold title with
-  the version, then why.
+- **Why** goes in the commit message and PR description, where
+  `git blame` finds it. Something that broke and could break again gets
+  a line under ARCHITECTURE.md's Traps; a trade-off gets one under
+  Trade-offs. There is no running notes file.
 - **README.md lists every feature, with pictures.** A change a person can
   see updates its README section (a short line) and retakes that
   section's screenshots with `node tools/shots.js <section>`. A new area
   gets its own section, Contents line and shot in `tools/shots.js`. Look
   at the new pictures before committing.
-- The Claude project keeps copies of TODO.md and DONE.md in its shared
-  folder (`waypage/`). Claude sessions copy them over after changing
-  either; people don't need to.
 
 ## Versions and releases
 
@@ -231,7 +230,8 @@ the first heading.
 **How a change gets in:** `main` takes only pull requests. Push a
 branch, open a PR, and merge it when the **Tests** check is green
 (`.github/workflows/test.yml` runs `node test/run-all.js` with
-Playwright on every PR and on `main`). No review is required: anyone
+Playwright on every PR and on `main`; a PR that only changes Markdown
+runs just `build.test.js` and `docs.test.js`, which read it). No review is required: anyone
 with write access merges on green, and Daniel decides who has write
 access. A PR from a fork runs the tests too, but without the repo's
 secrets, so it can't sign or publish anything.
@@ -243,9 +243,12 @@ secrets, so it can't sign or publish anything.
   new files for the next launch), version bump or not.
 - `.github/workflows/android.yml` and `ios.yml` build on every push to
   any branch. Pushes that only touch `**.md`, `test/**` or `.claude/**`
-  don't run them. A branch with an open pull request gets its build on
+  don't run them. A pull request labelled for it gets its build on
   the pre-release `preview-<branch>`, which the app's Preview builds
-  screen lists; it goes away with the branch.
+  screen lists; it goes away with the branch. Only a PR with a preview
+  label gets one: `preview` (APK and IPA), `preview-android` or
+  `preview-ios` (one, sooner). Adding the label builds it; taking it off
+  removes it.
 - On `main`, when `APP_VERSION` has no release yet and the signing secrets
   are set, the Android workflow publishes the release `app-v<version>`
   with `Waypage.apk`, and the iOS workflow attaches an unsigned

@@ -6,7 +6,7 @@
 //
 // It keeps people who pick up the phone (or use the computer) out of
 // Waypage. It doesn't encrypt the library: the files under it are the
-// phone's own app storage, or the folder you picked (NOTES.md).
+// phone's own app storage, or the folder you picked (ARCHITECTURE.md, Trade-offs).
 // Loaded after app-settings.js, before app-start.js.
 
 const LOCK_KEY = "waypage.lock";

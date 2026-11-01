@@ -1,7 +1,8 @@
 # Runs the test suite on every pull request and every push to main, so
 # "Tests" is a check main can require before a merge (CONTRIBUTING.md).
 # The app builds (android.yml, ios.yml) skip Markdown-only changes; this
-# runs on everything, since build.test.js checks CHANGELOG.md too.
+# runs on everything (Markdown-only PRs run just the Markdown tests),
+# since build.test.js checks CHANGELOG.md too.
 name: Tests
 
 on:
@@ -25,6 +26,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
+
+      # A pull request that only changes Markdown runs just the two tests
+      # that read Markdown (CHANGELOG.md, ARCHITECTURE.md): seconds, not the
+      # whole browser suite, and still the Tests check main requires.
+      - name: Markdown only?
+        id: scope
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if git diff --name-only "$BASE" HEAD | grep -qv '\.md$'; then echo "md=false" >> "$GITHUB_OUTPUT"; else echo "md=true" >> "$GITHUB_OUTPUT"; fi
 
       - uses: actions/setup-node@v4
         with:
@@ -37,8 +50,13 @@ jobs:
       # ui.test.js and drive.test.js skip themselves without Playwright;
       # here they must run, so it's installed with its Chromium.
       - name: Install Playwright
+        if: steps.scope.outputs.md != 'true'
         run: |
           npm install --no-save playwright@1.63.0
           npx playwright install --with-deps chromium
 
       - run: node test/run-all.js
+        if: steps.scope.outputs.md != 'true'
+
+      - run: node test/build.test.js && node test/docs.test.js
+        if: steps.scope.outputs.md == 'true'

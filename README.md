@@ -61,6 +61,7 @@ Each section below shows the computer (left) and the phone (right).
 - Files: EPUB, PDF, MOBI, AZW3, FB2, CBZ, Markdown, text and HTML, copied in (a clip like any other) or read from where they are. Books keep their own contents.
 - PDFs mixing Hebrew or Arabic with English keep each line's words in order.
 - Big PDFs are read a piece at a time, never whole in memory.
+- A PowerPoint deck (.pptx) is offered as a PDF: Convert redraws the slides, you save the PDF where you like, and it opens like any PDF you picked there.
 - Watched folders bring new files into a chosen collection.
 - The library can live in app storage, Documents or any folder you pick.
 
@@ -74,7 +75,7 @@ Each section below shows the computer (left) and the phone (right).
 - Pictures as small previews, full size (capped at 1600 px WebP) or links only, per clip or in Settings; or load pictures only when tapped.
 - Videos as a thumbnail and a link.
 - Web serials: save next, previous or all along a site's next-chapter links, or a contents page as its chapters. Royal Road, AO3, Scribble Hub, FanFiction.net, Blogger, WEBTOON, Tapas and Wattpad.
-- Comics and manga as image chapters, read edge to edge.
+- Comics and manga as image chapters, read edge to edge; a page that is a column of pictures is spotted as one, and Save as comic fixes a clip saved as an article. Reading one, Auto-scroll takes Narrate's place, with its own Speed, Go on to the next clip and Keep the screen on.
 - Pages built by JavaScript, drawn out of sight first; saving signed in to a site; the Internet Archive's copy when a page is gone.
 - Save linked pages from a clip, and Update from the site keeping highlights and your place.
 - Saves keep going with the app put away, wait for Wi-Fi if you like, and show in Downloads.
@@ -85,6 +86,7 @@ Each section below shows the computer (left) and the phone (right).
 ## Reader
 
 <p><img src="docs/shots/reader-desktop.jpg" width="74%" alt="Reader on a computer"> <img src="docs/shots/reader-phone.jpg" width="21%" alt="Reader on a phone"></p>
+<p><img src="docs/shots/pdf-desktop.jpg" width="74%" alt="A PDF in Night with dark pages, on a computer"> <img src="docs/shots/pdf-phone.jpg" width="21%" alt="A PDF in Night with dark pages, on a phone"></p>
 
 - Scroll or Pages, with two pages side by side on wide screens.
 - Your place is kept as the paragraph on the middle line, and synced.
@@ -94,6 +96,7 @@ Each section below shows the computer (left) and the phone (right).
 - Previous and Next, and the collection's list, inside the reader.
 - Brightness by a swipe on the edge, with Auto.
 - Volume buttons turn pages on Android; keyboard shortcuts on a computer.
+- Dark PDF pages: with a PDF open, a switch at the foot of Layout recolours its pages to a dark theme.
 
 ## Text and themes
 
@@ -187,7 +190,7 @@ Each section below shows the computer (left) and the phone (right).
 
 - No server: pages are fetched on the device.
 - Saved pages are untrusted and shown in a sandboxed frame with no scripts and a strict CSP; PDFs render in their own locked-down frame.
-- Nothing leaves the device unless you turn it on (sync, Drive backups), and Translate runs on the device. The trade-offs are written in NOTES.md.
+- Nothing leaves the device unless you turn it on (sync, Drive backups), and Translate runs on the device. The trade-offs are listed in ARCHITECTURE.md.
 
 ## Run it
 

@@ -123,6 +123,9 @@ figure .co-placeholder { border-width: 0 0 1.5px; border-radius: 0; }
    doesn't glare; comics and a PDF's pages are the page, so stay as they are. */
 html[data-co-dim] img { filter: brightness(0.8) contrast(1.05); }
 html[data-co-dim] .co-comic img, html[data-co-dim] .co-printed img { filter: none; }
+/* Dark PDF pages (1.49.0): the page's white and black take the theme's
+   background and ink (reader.js, pdfDarkFilter). Only a PDF's own pages. */
+html[data-co-pdf-dark] .co-printed img[src] { filter: url(#co-pdf-dark); }
 
 /* An image chapter (0.22.0): the panels edge to edge at phone width, one
    under the next with no gaps, no rounding. */

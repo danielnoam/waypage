@@ -741,6 +741,7 @@ body.aloud-bar-up .library, body.aloud-bar-up .screen-body { padding-bottom: cal
 /* Reading on down: the bar slides up out of the way, back on a scroll up
    or when anything in it takes focus. The status bar's strip stays. */
 .reader.bar-away .reader-bar:not(:focus-within) { transform: translateY(-100%); }
+.reader.gliding .reader-bar:not(:focus-within) { transform: none; }
 html.native .reader::before {
   content: ""; position: absolute; top: 0; left: 0; right: 0; z-index: 4;
   height: env(safe-area-inset-top); background: var(--bar);
@@ -1109,6 +1110,9 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 /* Reader settings (0.34.0): Layout, Text and Read aloud, each its own part. */
 .rc-part { display: flex; flex-direction: column; gap: var(--s-3); }
 .rc-part[hidden] { display: none; }
+/* .rc-row is display: flex, which beats the browser's [hidden] (1.49.0). */
+.rc-row[hidden] { display: none; }
+
 /* Settings > Reading (1.48.2): the one box split into Layout and Text sections; the section heads replace the parts' own. */
 .reading-controls.split { display: contents; }
 .reading-controls.split .rc-part > .overline:not(.rc-sub) { display: none; }
@@ -2493,6 +2497,8 @@ kbd {
     background: var(--preview); box-shadow: 0 0 0 1px var(--line);
   }
   .rail-thumb.in { aspect-ratio: auto; background: transparent; }
+  /* Dark PDF pages (1.49.0): the rail's small pages follow the big ones. */
+  html[data-pdf-dark] .rail-thumb[src] { filter: url(#pdf-dark); }
   .rail-page[aria-current] { color: var(--ink); font-weight: 600; }
   .rail-page[aria-current] .rail-thumb { box-shadow: 0 0 0 2px var(--accent); }
   .rail-foot { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-4) var(--s-3) 0; border-top: 1px solid var(--line); }

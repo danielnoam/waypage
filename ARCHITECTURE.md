@@ -4,8 +4,9 @@ The map of the code and the flows through it, for anyone changing it.
 Keep it current: when a file is added, removed or renamed, or a flow
 below changes, this file changes in the same commit (`test/docs.test.js`
 fails when a source file isn't named here). The rules for changes are in
-CONTRIBUTING.md; why things are the way they are is in NOTES.md; the
-original reasoning is in docs/PROPOSAL.md.
+CONTRIBUTING.md; the original reasoning is in docs/PROPOSAL.md. Why a
+line is the way it is lives in its commit and PR (`git log -S`,
+`git blame`).
 
 ## Contents
 
@@ -21,7 +22,9 @@ original reasoning is in docs/PROPOSAL.md.
 - [Versions, cache and updates](#versions-cache-and-updates)
 - [The phone apps](#the-phone-apps)
 - [Tests and screenshots](#tests-and-screenshots)
-- [Notes files](#notes-files)
+- [Trade-offs](#trade-offs)
+- [Traps](#traps)
+- [The docs](#the-docs)
 
 ## The shape
 
@@ -59,6 +62,7 @@ src/store.js        one directory per clip and library.json; IndexedDB in a brow
 src/platform.js     browser vs app: native fetch, plugins, downloads, speech, opening links
 src/files.js        EPUB, Kindle (MOBI/AZW3), FB2, CBZ, Markdown, text and HTML files
 src/pdf.js          PDFs through pdf.js in a locked-down frame
+src/pptx.js         PowerPoint decks redrawn on a canvas and written as a PDF (1.49.0)
 src/epub.js         clips as an EPUB 3 book, for e-readers and Send to Kindle
 src/feeds.js        RSS, Atom and JSON Feed, read into one shape
 src/sync.js         GitHub sync; src/sync-worker.js runs the merge off the main thread
@@ -80,13 +84,13 @@ tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-bui
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
 tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
 tools/sign-apk.sh   signs the APK with the release key in CI
-tools/preview-release.sh   puts a branch's build on its preview-<branch> pre-release
+tools/preview-release.sh   puts a labelled pull request's build on its preview-<branch> pre-release
 tools/shots.js      retakes the README's screenshots (tools/shots/demo is the demo library)
 test/               node test/run-all.js runs every *.test.js
 design/             the design canvas's artboards, for the exact markup
 docs/PROPOSAL.md    the original architecture, storage, legal and store reasoning
 docs/shots/         the README's screenshots
-.github/workflows/  test.yml (every PR), android.yml and ios.yml (builds, releases, previews), preview-cleanup.yml
+.github/workflows/  test.yml (every PR), android.yml and ios.yml (builds, releases, previews), previews.yml (preview labels: build on, remove off)
 ```
 
 ## Load order and the one scope
@@ -102,7 +106,10 @@ put one object on `window.Waypage` (`C.save`, `C.reader`, `C.store`,
 global scope**, as if they were one file. The rule that keeps it working:
 code that runs at load may only use what an earlier file, or the same
 one, declared; functions can call into any file, since nothing is tapped
-before all of them have loaded. `app-start.js` is last and starts things
+before all of them have loaded. Two shell files must never declare the
+same top-level name: the later one silently replaces the earlier for
+every caller (1.49.0 broke the Narrate switches that way), and
+`build.test.js` fails when they do. `app-start.js` is last and starts things
 up. A new shell file goes in the order in `index.html` and in `sw.js`'s
 `ASSETS`.
 
@@ -216,18 +223,31 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
   `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, alias `carryon`)
   and publishes the release `app-v<version>` when `APP_VERSION` is new.
   Without the secrets it builds a test APK and publishes nothing.
-- **Previews (1.48.0):** on any other branch with an open pull request,
-  `tools/preview-release.sh` remakes the pre-release `preview-<branch>`
+- **Previews (1.48.0, by label since 1.49.1):** on any other branch whose
+  open pull request has a preview label, `tools/preview-release.sh` remakes the pre-release `preview-<branch>`
   at the pushed commit with the APK (and the iOS workflow adds the IPA).
   Its notes start with `version:`, `branch:`, `commit:`, `pr:`, which
   Settings › About › Preview builds (`app-start.js`) reads from the
   public releases list to offer the build; `app-build.json` carries the
   branch and commit, so a preview build knows it is one and skips the
   update check. A pre-release is never GitHub's "latest", so the
-  updater ignores it. `preview-cleanup.yml` removes the pre-release when
-  the branch or its pull request closes. Android installs an equal
+  updater ignores it. The labels: `preview` (APK and IPA),
+  `preview-android` or `preview-ios` (one, sooner; with `preview-ios`
+  alone the iOS workflow makes the pre-release itself). `previews.yml`
+  runs the build workflows on the branch when a label goes on, and
+  removes the pre-release when it comes off, the pull request closes or
+  the branch goes. Android installs an equal
   version code over the app, so the release goes back over a preview
   only when the branch didn't bump `APP_VERSION`.
+- **Previews in the browser (1.49.0):** the web copy's Preview builds
+  lists the same pre-releases (repo read from the `owner.github.io/repo/`
+  address) and Open puts `{ repo, sha, title, pr }` in the cache
+  `waypage-preview`. While it's there, `sw.js` serves every file of the
+  copy from that commit on raw.githubusercontent.com with its type, kept
+  in `waypage-preview-<sha>`, and adds a "Back to the release" link
+  (`./?release`, which clears it) to `index.html`, so the way back works
+  whatever the branch's own code is. Same origin, so the library is the
+  one the browser already has, as with a preview in the app.
 - **iOS:** `.github/workflows/ios.yml` builds an unsigned `Waypage.ipa`
   on a Mac runner (`tools/ios-project.js`, `tools/ios-extensions.rb` add
   the share extension and widgets) and attaches it to the same release.
@@ -243,20 +263,107 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
 Playwright and skip when it isn't installed; `build.test.js` checks the
 bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
-every source file; `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js` and `syncbatch.test.js` test their areas in Node. The Tests workflow runs them all on every PR.
+every source file (and `build.test.js` that no two shell files share
+a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
+`sync.test.js`, `syncbatch.test.js` and `pptx.test.js` test their areas in Node. The Tests workflow runs them all on every PR; a PR that only
+changes Markdown runs just `build.test.js` and `docs.test.js`.
 
 `node tools/shots.js` retakes the README's pictures at 1280 px and 390 px
 into `docs/shots/`, from a demo library it saves through the app itself
 (`tools/shots/demo/`). `node tools/shots.js reader skim` retakes only
 those sections.
 
-## Notes files
+## Trade-offs
 
-- **TODO.md** the work still to do, and only that
-- **DONE.md** what the app already does, by area, with versions
-- **NOTES.md** why things are the way they are, newest first
+What the app gives up on purpose, said plainly. A change that adds one
+adds a line here.
+
+- Full pictures load from the web when a clip is opened online, so the
+  picture host sees the visit (Settings › Saving › Load pictures only
+  when tapped turns that off).
+- The `waypage-data` sync repo is private on GitHub, not encrypted.
+- The web copy shares `danielnoam.github.io`'s storage with every other
+  Pages site on that account, so its sync token is as safe as the least
+  safe of them.
+- Android Auto Backup stays on: Google's backup is end-to-end encrypted
+  with the screen lock, and it carries the library to a new phone.
+- App lock is a gate, not encryption: it keeps out someone holding the
+  unlocked phone, not someone with the files or developer tools.
+- Newsletters go through Kill the Newsletter, which receives and can read
+  the emails; the address and feed link are keys.
+- Translate downloads each language's model from Google once, which tells
+  Google the languages, never the words.
+- A deck (PPTX) is redrawn by `pptx.js`, an approximation: no charts,
+  SmartArt, effects or WordArt.
+- Dictionaries live in their own IndexedDB, so they aren't moved with the
+  library, synced or backed up.
+- Dialogs (Downloads, Sync, Save with options, Settings) fade in and out,
+  the one planned exception to "nothing fades" (Daniel's pick over the
+  grow and the zoom).
+
+## Traps
+
+Things that broke once and would again. Check here before touching the
+area.
+
+- **Saved HTML:** `save.js` rebuilds every element from an allowlist
+  (`ATTRS`), never copies the fetched DOM. The reader frame keeps
+  `allow-same-origin` only because it has no `allow-scripts`; the two
+  together are dangerous, and `test/save.test.js` fails if
+  `allow-scripts` appears.
+- **pdf.js frame:** opaque origin, so modules and workers can't load
+  across origins; the app posts the library's text in and the frame makes
+  its own blob: URLs. Pages draw with `intent: "print"`, because the
+  screen intent waits on requestAnimationFrame, which never runs in a
+  frame kept out of sight.
+- **Native number arguments:** read them with `getData().optLong`, not
+  `PluginCall.getLong`, which returns the default for a JS number that
+  arrives as an Integer (every read started at byte 0).
+- **`Filesystem.downloadFile` on Android ignores `recursive`:** make the
+  folder first (`platform.downloadTo` does).
+- **Plugin stand-ins in tests** must behave like the real plugin (offsets,
+  missing folders); two shipped bugs hid behind stand-ins that were
+  kinder than Android.
+- **Don't set `inert` on the library:** it restyles every card (50-70 ms
+  at 6x). `cover()` in `app-reader.js` does the job.
+- **No transform on `#libraryView`:** a moved box makes the page wider and
+  a phone grows its layout viewport, pushing the sticky bottom bar off
+  screen. Move its children. Only Playwright with `isMobile: true` shows it.
+- **Long clips use `content-visibility` chunks:** measuring anything
+  inside a skipped chunk lays it out, so a loop over
+  `getBoundingClientRect` across a book undoes the speed-up.
+- **Moving an iframe reloads it.** Wrap it where it will stay at start-up.
+- **Classic scripts share one scope:** a global function can shadow a
+  `window` method (`moveTo` had to become `moveInFolder`).
+- **History survives a WebView reload:** entries carry the launch's mark
+  and `route()` drops older ones.
+- **A background page's timers run late** (about a second each): yield
+  with a MessageChannel message, and keep timers that must fire (sleep)
+  in the native service.
+- **`display: flex` beats `[hidden]`:** a flex row that can hide needs its
+  own `[hidden]` rule.
+- **`.group` clips its overflow** for its corners, so a drop-down inside
+  sets `menu-open` on the group while it's up.
+- **Widgets (RemoteViews):** only allowed view classes inflate (a bare
+  `<View>` breaks the widget), and every id the Java hides must exist in
+  the layout.
+- **Sync:** never write over a stale sha (on 409, merge again); settle a
+  run's result without awaiting anything; update clip objects in place,
+  since the open reader and menus hold them; write the waiting list before
+  the base, or a cut-off run reads as deletions; a library that can't be
+  reached reads as empty, so sync refuses to run.
+- **A Blob writes a string byte above 127 as two:** binary formats (the
+  PDF writer) use plain ASCII strings or bytes.
+- **The Settings window from 700 px:** `#settingsWin` is `display:
+  contents` on a phone and a box with `contain: layout paint` above, so
+  the two screens' `position: fixed; inset: 0` fill the window. Close
+  the window before the section, or the section vanishes first.
+- **Dragging the list/post line:** iframes take `pointer-events: none`
+  while it moves (`body.resizing`), or the reader swallows the drag.
+
+## The docs
+
+- **CHANGELOG.md** what each version shipped, in user-facing words
 - **DROPPED.md** what was decided against, and why
-- **CHANGELOG.md** what each version shipped
 - **DESIGN.md** the design language
 - **CONTRIBUTING.md** the rules for every change and how releases work

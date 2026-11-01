@@ -538,6 +538,7 @@ function updatesGroup() {
     }
   } else {
     list.append(el("div", { class: "row" }, el("span", { class: "row-label" }, "Version"), el("span", { class: "row-value" }, APP_VERSION)));
+    if (webPreviews()) list.append(navRow("Preview builds", pv.web ? "Preview: " + previewName(pv.web) : "Try a branch before it's released", openPreviews));
   }
   list.append(navRow("Changelog", null, () => openNews()));
   return el("section", { class: "settings-section", id: "updatesSection" }, list);
@@ -553,7 +554,23 @@ function updatesGroup() {
 // a preview because Android takes an equal version code, only not a
 // lower one: a branch that raised APP_VERSION needs an uninstall first,
 // and the row says so.
-const pv = { phase: "idle", list: [], stable: null, error: "" };
+const pv = { phase: "idle", list: [], stable: null, error: "", web: null };
+// In the browser (1.49.0) a preview is opened, not installed: sw.js serves
+// the picked commit's files while the cache "waypage-preview" holds it.
+// The repo comes from the GitHub Pages address (owner.github.io/repo/).
+const PREVIEW_CACHE = "waypage-preview";
+function webRepo() {
+  const host = /^([^.]+)\.github\.io$/i.exec(location.hostname);
+  const name = location.pathname.split("/")[1];
+  return host && name ? host[1] + "/" + name : null;
+}
+const previewRepo = () => (C.platform.native ? (C.platform.build && C.platform.build.repo) || null : webRepo());
+const webPreviews = () => !C.platform.native && !!webRepo() && "caches" in window && !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+const previewName = (p) => p.title || (p.pr ? "#" + p.pr : p.branch || "preview");
+if (!C.platform.native && "caches" in window) {
+  caches.open(PREVIEW_CACHE).then((c) => c.match("./preview.json")).then((r) => (r ? r.json() : null))
+    .then((p) => { pv.web = p; }).catch(() => {});
+}
 const builtLine = (b) => (b && b.builtAt ? ", built " + whenText(new Date(b.builtAt).getTime()) : "");
 // The pre-release's notes start with "version: x.y.z", "branch:", "commit:", "pr:".
 function previewNotes(body) {
@@ -567,16 +584,18 @@ function previewNotes(body) {
 }
 function openPreviews() {
   openSection("previews", false, true);
-  if (pv.phase !== "loaded") loadPreviews();
+  loadPreviews();
 }
 async function loadPreviews() {
-  const build = await C.platform.ready;
-  if (!build || !build.repo || pv.phase === "loading") return;
+  await C.platform.ready;
+  const repo = previewRepo();
+  if (!repo || pv.phase === "loading") return;
   pv.phase = "loading";
   pv.error = "";
   paintPreviews();
+  const started = Date.now();
   try {
-    const res = await C.platform.fetchText("https://api.github.com/repos/" + build.repo + "/releases?per_page=100",
+    const res = await C.platform.fetchText("https://api.github.com/repos/" + repo + "/releases?per_page=100&t=" + Date.now(),
       { headers: { Accept: "application/vnd.github+json" } });
     if (res.status !== 200) throw new Error("HTTP " + res.status);
     const all = JSON.parse(res.text).filter((r) => r && !r.draft);
@@ -590,10 +609,13 @@ async function loadPreviews() {
         apk: assets.includes("Waypage.apk"), ipa: assets.includes("Waypage.ipa") };
     }).sort((a, b) => b.at - a.at);
     pv.phase = "loaded";
+    pv.checkedAt = Date.now();
   } catch (e) {
-    pv.phase = "failed";
+    pv.phase = pv.checkedAt ? "loaded" : "failed";
     pv.error = "Couldn't look for builds. Try again when you're online.";
   }
+  // A check that answers at once still shows its spinner for a moment.
+  await new Promise((r) => setTimeout(r, Math.max(0, 500 - (Date.now() - started))));
   paintPreviews();
 }
 function paintPreviews() {
@@ -601,21 +623,35 @@ function paintPreviews() {
 }
 // The same download and installer as an update, under the preview's own
 // name; on iPhone the pre-release's page opens, as the updater's does.
+async function openWebPreview(p) {
+  try {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k.startsWith(PREVIEW_CACHE)).map((k) => caches.delete(k)));
+    const c = await caches.open(PREVIEW_CACHE);
+    await c.put("./preview.json", new Response(JSON.stringify({ repo: webRepo(), sha: p.sha, title: p.title, pr: p.pr, branch: p.branch, tag: p.tag }),
+      { headers: { "Content-Type": "application/json" } }));
+  } catch (e) { toast("Couldn't open that build"); return; }
+  location.replace(new URL("./", location.href).href);
+}
 function installPreview(p) {
+  if (!C.platform.native) { if (p.sha) openWebPreview(p); return; }
   if (!p.apk && !C.platform.ios) { C.platform.openOutside(C.platform.releaseUrl(p.tag)); return; }
   Object.assign(upd, { phase: "available", latest: "preview of " + p.branch, tag: p.tag, key: p.tag + "-" + p.sha.slice(0, 7), notes: "", apk: null, error: "" });
   startUpdate();
 }
 function backToRelease() {
+  if (!C.platform.native) { location.replace(new URL("./?release", location.href).href); return; }
   if (!pv.stable) return;
   Object.assign(upd, { phase: "available", latest: pv.stable, tag: null, key: null, notes: "", apk: null, error: "" });
   startUpdate();
 }
 function previewsSection() {
-  const here = C.platform.previewBranch;
-  const mine = C.platform.build && C.platform.build.sha ? String(C.platform.build.sha).slice(0, 7) : null;
+  const web = !C.platform.native;
+  const here = web ? pv.web : C.platform.previewBranch;
+  const sha = web ? pv.web && pv.web.sha : C.platform.build && C.platform.build.sha;
+  const mine = sha ? String(sha).slice(0, 7) : null;
   const rows = [];
-  if (pv.phase === "idle" || pv.phase === "loading") {
+  if (!pv.checkedAt && (pv.phase === "idle" || pv.phase === "loading")) {
     rows.push(el("div", { class: "row update-row" }, el("span", { class: "spinner", "aria-hidden": "true" }), el("span", { class: "row-label" }, "Looking for builds…")));
   } else if (pv.phase === "failed") {
     rows.push(el("button", { class: "row", type: "button", onclick: loadPreviews },
@@ -625,19 +661,23 @@ function previewsSection() {
   } else {
     for (const p of pv.list) {
       const installed = !!mine && p.sha.slice(0, 7) === mine;
-      const higher = !!pv.stable && !!p.version && isNewerVersion(p.version, pv.stable);
+      const higher = !web && !!pv.stable && !!p.version && isNewerVersion(p.version, pv.stable);
       const note = p.branch + (p.at ? " · " + whenText(p.at) : "") + (p.pr ? " · #" + p.pr : "");
       const row = el("button", { class: "row update-row", type: "button", onclick: () => installPreview(p) },
         el("span", { class: "choice-text" },
           el("span", { class: "row-label" }, p.title),
           el("span", { class: "choice-note" }, note),
           higher ? el("span", { class: "choice-note warn" }, "Needs an uninstall to go back") : null),
-        installed ? el("span", { class: "row-value" }, "Installed") : el("span", { class: "btn-small", "aria-hidden": "true" }, C.platform.ios ? "Get it" : "Install"));
+        installed ? el("span", { class: "row-value" }, web ? "Open now" : "Installed") : el("span", { class: "btn-small", "aria-hidden": "true" }, web ? "Open" : C.platform.ios ? "Get it" : "Install"));
       row.disabled = installed;
       rows.push(row);
     }
   }
-  if (here && pv.phase === "loaded") {
+  if (here && web) {
+    rows.push(el("button", { class: "row", type: "button", onclick: backToRelease },
+      el("span", { class: "choice-text" }, el("span", { class: "row-label accent" }, "Back to the release"),
+        el("span", { class: "choice-note" }, "The released Waypage opens again"))));
+  } else if (here && pv.phase === "loaded") {
     const stuck = !!pv.stable && isNewerVersion(APP_VERSION, pv.stable);
     const back = el("button", { class: "row", type: "button", onclick: backToRelease },
       el("span", { class: "choice-text" },
@@ -647,12 +687,17 @@ function previewsSection() {
     back.disabled = stuck || !pv.stable;
     rows.push(back);
   }
-  const sec = section("Branches", "A preview is a build of a branch with an open pull request, before it's released. It installs over the Waypage you have and keeps your library. "
+  const sec = section("Branches", web
+    ? "A preview is a build of a pull request, before it's released. Open one and this browser runs it with the library you have; Back to the release, here or on the bar at the top, puts the released version back."
+    : "A preview is a build of a pull request, before it's released. It installs over the Waypage you have and keeps your library. "
     + "Back to the release puts the released version back, as long as the branch didn't raise the version number."
     + (C.platform.ios ? " On iPhone, Get it opens the build's page; install it with AltStore or SideStore." : ""),
     el("div", { class: "group" }, ...rows),
-    el("div", { class: "group" }, el("button", { class: "row", type: "button", onclick: loadPreviews, disabled: pv.phase === "loading" ? "" : null },
-      el("span", { class: "row-label accent" }, "Check again"))));
+    el("div", { class: "group" }, el("button", { class: "row update-row", type: "button", onclick: loadPreviews, disabled: pv.phase === "loading" ? "" : null },
+      pv.phase === "loading" && pv.checkedAt ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
+      el("span", { class: "choice-text" },
+        el("span", { class: "row-label accent" }, pv.phase === "loading" && pv.checkedAt ? "Checking…" : "Check again"),
+        pv.checkedAt && pv.phase !== "loading" ? el("span", { class: "choice-note" + (pv.error ? " warn" : ""), role: "status" }, pv.error || "Checked " + whenText(pv.checkedAt)) : null))));
   sec.id = "previewsSection";
   return sec;
 }

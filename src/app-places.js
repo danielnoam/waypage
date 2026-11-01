@@ -963,7 +963,7 @@ const KEYS = [
   ["In the library", [["↑ ↓", "Move between clips"], ["Enter", "Open"], ["X", "Pick, to act on several"], ["Shift-click", "Pick a run"],
     ["F", "Favourite"], ["E", "Export"], ["Del", "Delete"]]],
   ["Reading", [["Space  ← →", "Next or previous page"], ["J  K", "Next or previous section"], ["T", "Contents beside the text"],
-    ["S", "Narrate"], ["A", "Reader settings"], ["H", "Highlights"], ["L", "Translate this clip"], ["/", "Find in this clip"], ["+  −", "Text size"], ["O", "Open the original"], ["Esc", "Back"]]],
+    ["S", "Narrate, or auto-scroll a comic"], ["A", "Reader settings"], ["H", "Highlights"], ["L", "Translate this clip"], ["/", "Find in this clip"], ["+  −", "Text size"], ["O", "Open the original"], ["Esc", "Back"]]],
 ];
 function keysSheet() {
   return el("div", { class: "keys-sheet" },
@@ -1033,7 +1033,7 @@ function onKeys(e) {
       j: () => jumpSection(1), k: () => jumpSection(-1),
       "/": () => openFind(),
       t: () => (pinned.matches ? setReading({ rail: !readingPrefs().rail }) : !$("readerContents").hidden && toggleSheet("contents")),
-      s: () => !$("readerAloud").hidden && $("readerAloud").click(),
+      s: () => { const b = $("readerAloud").hidden ? $("readerScroll") : $("readerAloud"); if (!b.hidden) b.click(); },
       a: () => toggleSheet("reading"),
       h: () => !$("readerMarks").hidden && $("readerMarks").click(),
       l: () => !$("readerTranslate").hidden && $("readerTranslate").click(),

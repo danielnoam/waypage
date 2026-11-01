@@ -20,6 +20,56 @@ All notable changes to Carry-on. Newest first.
 ### Added
 - Keys 1 to 5 go to Library, Feeds, Newsletters, Highlights and Stats.
 
+## [1.49.1] - 2026-11-01
+
+### Changed
+- Preview builds: only a pull request labelled preview gets one
+  (preview-android or preview-ios for one platform, sooner). Adding the
+  label builds it; taking it off removes it.
+
+### Fixed
+- Settings › Reading › Narrate and the reader's Narrate and Auto-scroll
+  tabs: the switches showed their storage names and were all on (1.49.0).
+
+## [1.49.0] - 2026-11-01
+
+### Added
+- Dark PDF pages: a switch at the bottom of Aa › Layout, shown while a
+  PDF's own pages are open (not when it is shown as text). In a dark
+  theme the pages are recoloured to the theme (paper becomes its
+  background, black text its text colour) instead of staying white.
+  Photos and coloured figures turn into negatives. Off by default; Paper
+  and the other light themes keep white pages.
+- PowerPoint decks: Open a file now takes a .pptx. It asks whether to
+  convert it to a PDF; Cancel stops and opens nothing. Convert redraws the
+  slides (text, shapes, pictures, tables, theme colours), asks where to save
+  the new PDF (on Android the save screen opens in the deck's folder), and
+  adds that PDF to Files, read from where it was saved, like any PDF you
+  open. Search, Narrate and highlights work on the slides' words. Hidden
+  slides are left out. Charts and diagrams without a picture, effects and
+  animations are not drawn, and the app says how many it left out. Nothing
+  is sent anywhere, and a picture that points outside the file is never
+  loaded.
+- Manga and comics are spotted when you save them. A page with little text
+  and a column of large pictures now saves as a comic (its panels, edge to
+  edge) without picking Comic in the new-collection options.
+- Save as comic, under More on a clip that was saved as an article: fetches
+  the page again as its pictures, in the old copy's place.
+- Comics and manga have Auto-scroll where Narrate was: the page moves by
+  itself, a finger on it holds it, and lifting lets it go on. The top bar
+  stays on while it scrolls, so its button can always stop it. The Aa tab
+  shows only Speed (its own, apart from Narrate's), Go on to the next clip
+  (the next chapter starts scrolling at the end) and Keep the screen on.
+- Preview builds in the browser: Settings › About › Preview builds on
+  the web copy opens a pull request's build in place of the release,
+  with a "Back to the release" link at the top.
+
+### Fixed
+- Settings › About › Preview builds: Check again works (it was always
+  greyed out), keeps the list on screen while it looks, and says when
+  it last checked. Opening the screen always looks again.
+- A branch without an open pull request no longer gets a preview build.
+
 ## [1.48.4] - 2026-11-01
 
 ### Changed
