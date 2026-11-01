@@ -142,6 +142,7 @@ Each section below shows the computer (left) and the phone (right).
 - Checked with the app closed, with notifications per post or grouped, and quiet feeds.
 - Feeds in and out as OPML.
 - Swipe sideways to go to the next or previous feed (or address in Newsletters); the chips stay still.
+- On a computer the list and the open post share the window half and half; drag the line between them to resize.
 
 ## Newsletters
 

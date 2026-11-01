@@ -1080,6 +1080,48 @@ function onKeys(e) {
   if (act) go(act);
 }
 
+// The line between a list and the post beside it, from 1280 px (1.49.0):
+// drag it, or focus it and use the arrow keys; a double-click puts it
+// back in the middle. The share of the room is kept, so it holds when
+// the window is resized.
+{
+  const grip = $("paneGrip"), KEY = "waypage.listShare", MIN = 320, PANE_MIN = 400;
+  const sideW = () => $("sidebar").offsetWidth || 272;
+  const room = () => innerWidth - sideW();
+  let share = load(KEY, 0.5);
+  function place(f) {
+    const r = room(), w = Math.round(Math.max(MIN, Math.min(r - PANE_MIN, f * r)));
+    document.documentElement.style.setProperty("--list-w", w + "px");
+    grip.setAttribute("aria-valuenow", String(Math.round((w / r) * 100)));
+    return w / r;
+  }
+  const keep = (f) => { share = place(f); store(KEY, share); };
+  place(share);
+  addEventListener("resize", () => place(share));
+  grip.addEventListener("pointerdown", (e) => {
+    if (e.button) return;
+    e.preventDefault();
+    grip.setPointerCapture(e.pointerId);
+    grip.classList.add("dragging");
+    document.body.classList.add("resizing");
+  });
+  grip.addEventListener("pointermove", (e) => { if (grip.classList.contains("dragging")) share = place((e.clientX - sideW()) / room()); });
+  const end = () => {
+    if (!grip.classList.contains("dragging")) return;
+    grip.classList.remove("dragging");
+    document.body.classList.remove("resizing");
+    keep(share);
+  };
+  grip.addEventListener("pointerup", end);
+  grip.addEventListener("pointercancel", end);
+  grip.addEventListener("dblclick", () => keep(0.5));
+  grip.addEventListener("keydown", (e) => {
+    const d = { ArrowLeft: -0.02, ArrowRight: 0.02 }[e.key];
+    if (d) { e.preventDefault(); keep(share + d); }
+    else if (e.key === "Home" || e.key === "End") { e.preventDefault(); keep(e.key === "Home" ? 0 : 1); }
+  });
+}
+
 // Ctrl V (⌘ V) with no field to paste into saves the link, from 700 px.
 document.addEventListener("paste", (e) => {
   if (!wide.matches || typingIn(e.target) || state.open || state.menu || state.settings || state.batch) return;

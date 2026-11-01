@@ -2520,14 +2520,28 @@ kbd {
   }
   .reader.aloud .read-keys { display: none; }
 }
+.pane-grip { display: none; }
 @media (min-width: 1280px) {
-  body.pinned #libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"]) { width: 500px; border-inline-end: 1px solid var(--line); }
+  /* The list and the post beside it share the room half and half, and
+     the line between them can be dragged (1.49.0, Daniel's ask; it was a
+     500 px list). --list-w is set from the saved share in app-places.js. */
+  :root { --list-w: calc((100vw - var(--side-w)) / 2); }
+  body.pinned #libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"]) { width: var(--list-w); border-inline-end: 1px solid var(--line); }
+  body.pinned:has(#libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"])):not(:has(#readerView:not([hidden]):not([data-pane]))) .pane-grip {
+    display: block; position: fixed; top: 0; bottom: 0; left: calc(var(--side-w) + var(--list-w) - 5px); z-index: 11; width: 10px;
+    cursor: col-resize; touch-action: none;
+  }
+  .pane-grip::after { content: ""; position: absolute; top: 0; bottom: 0; left: 4px; width: 2px; background: transparent; transition: background-color 120ms linear; }
+  .pane-grip:hover::after, .pane-grip.dragging::after, .pane-grip:focus-visible::after { background: var(--accent); }
+  .pane-grip:focus-visible { outline: none; }
+  body.resizing { cursor: col-resize; user-select: none; }
+  body.resizing iframe { pointer-events: none; }
   body.pinned #libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"]) > * { padding-inline: var(--s-5); }
   body.pinned:has(#libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"])):has(#readerView[hidden]) .pane-note {
-    display: flex; position: fixed; inset: 0 0 0 calc(var(--side-w) + 500px); align-items: center; justify-content: center; margin: 0;
+    display: flex; position: fixed; inset: 0 0 0 calc(var(--side-w) + var(--list-w)); align-items: center; justify-content: center; margin: 0;
     color: var(--muted);
   }
-  #readerView[data-pane] { left: calc(var(--side-w) + 500px); box-shadow: none; }
+  #readerView[data-pane] { left: calc(var(--side-w) + var(--list-w)); box-shadow: none; }
 }
 @media (min-width: 1024px) and (pointer: fine) {
   .read-left .read-time { margin-inline-start: auto; }

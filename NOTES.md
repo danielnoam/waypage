@@ -32,6 +32,22 @@ leaves with the window rather than first. Search and Settings moved
 from the sidebar to the top bar's right end at the same time (Daniel's
 ask), so the window has one place to grow from on every big screen.
 
+**Dialogs zoom out of their button (1.49.0).** Downloads, Sync, Save
+with options and the Settings window used `popFrom`, which clips the
+box down to the button's size and uncovers it. That suits a small menu,
+but on a 400 to 1000 px box the content stood still while a rectangle
+wiped across it (Daniel: "not good"). `zoomFrom` scales the whole box
+from the button at its own proportions, about the point of the box
+nearest the button, and `zoomInto` runs it back on the quicker spring.
+Menus keep `popFrom`.
+
+**The list and post split is a share, not pixels (1.49.0).** It was a
+500 px list; Daniel asked for half and half and a line to drag. The
+share is saved (`waypage.listShare`), so the split follows the window
+when it's resized; the list keeps at least 320 px and the post 400 px.
+While dragging, iframes ignore the pointer, or the reader's page would
+swallow the drag.
+
 **Preview builds are pre-releases, one per branch (1.48.0).** The
 workflow artifact was the first idea: it needs no token either, but it
 is a zip, its link lives a minute, and it is gone after 90 days. A
