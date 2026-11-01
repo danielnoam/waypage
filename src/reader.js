@@ -1236,7 +1236,7 @@
   // page v pixels a second, glide(0) stops it. A finger on the page holds it
   // (to look back at a panel) and lifting lets it go on; onEnd() is told
   // once the bottom is reached, and the glide is over. A tap pauses it
-  // (1.49.3, Daniel's ask) until another tap or a scroll of your own.
+  // (1.50.0, Daniel's ask) until another tap or a scroll of your own.
   let glideV = 0, glideEnd = null, glideRaf = 0, glideAt = 0, glideRest = 0, touching = 0, held = false;
   function glide(v, onEnd) {
     held = false;
