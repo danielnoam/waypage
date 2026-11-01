@@ -2,7 +2,7 @@
 
 All notable changes to Carry-on. Newest first.
 
-## Unreleased
+## [1.50.2] - 2026-11-01
 
 ### Added
 - Narrate: while the voice is still being made (Kokoro at the start or
