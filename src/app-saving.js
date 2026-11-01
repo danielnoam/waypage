@@ -1941,7 +1941,7 @@ function driveSections() {
       // How often (1.46.0; it was a weekly switch), a pick row like the
       // other settings' (1.48.4; a drop-down under its name from 1.47.0).
       el("div", { class: "group" },
-        pickRow({ label: "Back up by itself", get: () => (C.drive.auto ? String(C.drive.every) : "off"),
+        pickRow({ label: "Back up by itself", cls: "drive-every", get: () => (C.drive.auto ? String(C.drive.every) : "off"),
           set: (v) => { if (v === "off") C.drive.auto = false; else { C.drive.every = Number(v); C.drive.auto = true; } renderSection(); },
           options: [...C.drive.EVERY.map((d) => ({ value: String(d), label: DRIVE_EVERY[d], note: "And whenever you ask" })),
             { value: "off", label: "Only when I ask", note: "Back up now, above" }] }))),
