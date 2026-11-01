@@ -226,7 +226,9 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
   branch and commit, so a preview build knows it is one and skips the
   update check. A pre-release is never GitHub's "latest", so the
   updater ignores it. `preview-cleanup.yml` removes the pre-release when
-  the branch or its pull request closes. Android installs an equal
+  the branch or its pull request closes, or the PR gets the label
+  `no-preview`. A `docs/` branch, a PR that changes only notes (Markdown,
+  `test/`, `.claude/`) or one labelled `no-preview` gets no preview. Android installs an equal
   version code over the app, so the release goes back over a preview
   only when the branch didn't bump `APP_VERSION`.
 - **Previews in the browser (1.49.0):** the web copy's Preview builds

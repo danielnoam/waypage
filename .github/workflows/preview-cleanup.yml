@@ -1,20 +1,20 @@
 # Removes a branch's preview pre-release (tools/preview-release.sh) when
-# the branch is deleted or its pull request closes, so previews don't pile
-# up. A fork's pull request has a read-only token here, and its branch
-# never had a preview anyway.
+# the branch is deleted, its pull request closes, or the pull request gets
+# the label no-preview, so previews don't pile up. A fork's pull request
+# has a read-only token here, and its branch never had a preview anyway.
 name: Preview cleanup
 
 on:
   delete:
   pull_request:
-    types: [closed]
+    types: [closed, labeled]
 
 permissions:
   contents: write
 
 jobs:
   remove:
-    if: github.event_name == 'pull_request' || github.event.ref_type == 'branch'
+    if: (github.event_name == 'pull_request' && (github.event.action == 'closed' || github.event.label.name == 'no-preview')) || github.event.ref_type == 'branch'
     runs-on: ubuntu-latest
     steps:
       - env:

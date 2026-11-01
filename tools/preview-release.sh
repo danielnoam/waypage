@@ -19,13 +19,22 @@ MODE="$1"
 FILE="$2"
 BRANCH="${GITHUB_REF_NAME:?}"
 TAG="preview-$(printf '%s' "$BRANCH" | tr -c 'A-Za-z0-9._-' '-')"
-PR="$(gh pr list --head "$BRANCH" --state open --json number,title --jq '.[:1][] | "\(.number)\t\(.title)"' 2>/dev/null || true)"
+# A docs/ branch (CLAUDE.md's branch names) is notes only: no preview.
+case "$BRANCH" in docs/*) echo "$BRANCH is a docs branch, so no preview"; exit 0 ;; esac
+PR="$(gh pr list --head "$BRANCH" --state open --json number,title,labels --jq '.[:1][] | "\(.number)\t\([.labels[].name] | index("no-preview") != null)\t\(.title)"' 2>/dev/null || true)"
 if [ -z "$PR" ]; then
   echo "$BRANCH has no open pull request, so no preview"
   exit 0
 fi
 NUMBER="${PR%%	*}"
-TITLE="${PR#*	}"
+REST="${PR#*	}"
+SKIP="${REST%%	*}"
+TITLE="${REST#*	}"
+# The label no-preview keeps a pull request out of Preview builds.
+if [ "$SKIP" = true ]; then
+  echo "#$NUMBER has the label no-preview, so no preview"
+  exit 0
+fi
 # A pull request that only changes notes (Markdown, tests, .claude) has
 # nothing to try, so it gets no preview (Daniel's ask, 1 Nov 2026).
 FILES="$(gh api "repos/${GITHUB_REPOSITORY:?}/pulls/$NUMBER/files" --paginate --jq '.[].filename' 2>/dev/null || echo "?")"

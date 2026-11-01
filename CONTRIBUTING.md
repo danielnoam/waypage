@@ -243,7 +243,9 @@ secrets, so it can't sign or publish anything.
   any branch. Pushes that only touch `**.md`, `test/**` or `.claude/**`
   don't run them. A branch with an open pull request gets its build on
   the pre-release `preview-<branch>`, which the app's Preview builds
-  screen lists; it goes away with the branch.
+  screen lists; it goes away with the branch. No preview for a `docs/`
+  branch, a PR that only changes Markdown, `test/` or `.claude/`, or a
+  PR with the label `no-preview` (adding it removes one already made).
 - On `main`, when `APP_VERSION` has no release yet and the signing secrets
   are set, the Android workflow publishes the release `app-v<version>`
   with `Waypage.apk`, and the iOS workflow attaches an unsigned

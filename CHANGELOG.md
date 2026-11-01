@@ -8,7 +8,8 @@ All notable changes to Carry-on. Newest first.
 - Settings › Reading › Narrate and the reader's Narrate and Auto-scroll
   tabs: the switches showed their storage names and were all on (1.49.0).
 - Preview builds: a pull request that only changes notes (Markdown,
-  tests) no longer shows up there.
+  tests), a docs/ branch, or one labelled no-preview no longer shows up
+  there; adding the label removes a preview already made.
 
 ## [1.49.0] - 2026-11-01
 
