@@ -934,6 +934,9 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 .skim-fill { display: block; height: 100%; background: var(--accent); transform: scaleX(0); transform-origin: left; }
 .skim-track[dir="rtl"] .skim-fill { transform-origin: right; }
 .skim-ticks { position: absolute; inset: 0; }
+/* Where Back goes: a short line through the rail (1.48.4). */
+.skim-from { position: absolute; top: 50%; width: 2px; height: 16px; margin-top: -8px; margin-inline-start: -1px; border-radius: 1px; background: var(--ink); }
+.skim-from[hidden] { display: none; }
 .skim-knob {
   position: absolute; top: 50%; width: 22px; height: 22px; margin-top: -11px; margin-inline-start: -11px;
   border-radius: var(--r-full); background: var(--accent); box-shadow: 0 0 0 3px var(--surface);

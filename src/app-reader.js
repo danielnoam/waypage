@@ -2483,6 +2483,12 @@ function saveLinked(urls, folder) {
   toast("They save when you're back online. They're in Downloads.");
 }
 
+// Where Back would take you, as a mark on the skim track (1.48.4).
+function paintFrom() {
+  const mark = $("skimFrom");
+  mark.hidden = !jumpFrom;
+  if (jumpFrom) mark.style.insetInlineStart = (jumpFrom.at * 100).toFixed(2) + "%";
+}
 function jumped(spot) {
   if (!jumpFrom) jumpFrom = { spot, at: C.reader.position() };
   $("jumpBack").hidden = false;
@@ -2493,6 +2499,7 @@ $("jumpBack").addEventListener("click", () => {
   closeSkim();
   jumpFrom = null;
   $("jumpBack").hidden = true;
+  paintFrom();
   if (from && state.open) { C.reader.jump(from.at, from.spot, true); voiceHere(1000); }
 });
 
@@ -2588,6 +2595,7 @@ function skimShow(at) {
 function skimPaint(at) {
   $("skimFill").style.transform = "scaleX(" + at + ")";
   $("skimKnob").style.insetInlineStart = (at * 100).toFixed(2) + "%";
+  paintFrom();
   const [a, b] = skimText(at);
   $("skimPart").textContent = b ? a : "";
   const track = $("skimTrack");
