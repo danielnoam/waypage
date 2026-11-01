@@ -2,7 +2,7 @@
 
 All notable changes to Carry-on. Newest first.
 
-## Unreleased
+## [1.48.4] - 2026-11-01
 
 ### Changed
 - Reader: while skimming, a ring on the bar marks where Back takes you.
