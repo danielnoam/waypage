@@ -2,7 +2,7 @@
 
 All notable changes to Carry-on. Newest first.
 
-## Unreleased
+## [1.49.0] - 2026-11-01
 
 ### Added
 - Dark PDF pages: a switch at the bottom of Aa › Layout, shown while a

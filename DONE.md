@@ -106,7 +106,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Google Drive backups, weekly, pause/resume, delete (1.27.0, 1.27.1, 1.31.0; iOS on TODO)
 - What syncs / What goes in spelled out, Newsletters switch (no Files switch: a copied file is a clip), files read from outside left out of backups (1.46.0)
 - Choose how often Drive backs up; a restore beats an older deletion in sync (1.46.0)
-- Drive backups with the app closed (Android), Links only, resumable and faster in the browser; GitHub sync switches for what syncs (Unreleased)
+- Drive backups with the app closed (Android), Links only, resumable and faster in the browser; GitHub sync switches for what syncs (1.47.0)
 - Back up and restore to one file, with Pause and Stop; export clips and collections as EPUB, HTML, PDF, Markdown (0.18.0, 0.25.2, 0.26.0, Unreleased)
 - Make room, Make pictures smaller, storage by collection (0.23.0, 1.9.0, 1.18.0)
 
@@ -126,4 +126,4 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Settings search: finds a setting by its name, line, heading or explanation, opens its screen and lights the row (1.48.0)
 - Compact Settings: a name and one line per row, the explanation behind a ? on the heading, options as drop-downs, themes as a swatch grid (1.48.0)
 - Credits under About: open-source code and fonts with their licences, services (1.48.0)
-- Preview builds under About: install a branch's build over the app, Back to the release (1.48.0)
+- Preview builds under About: install a branch's build over the app, Back to the release (1.48.0); in the browser too, opened in place of the release (1.49.0)
