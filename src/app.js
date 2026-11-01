@@ -77,7 +77,7 @@ function el(tag, attrs, ...children) {
     if (k === "class") node.className = v;
     else if (k === "checked") node.checked = !!v;
     else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
-    else node.setAttribute(k, v);
+    else if (v != null) node.setAttribute(k, v);
   }
   for (const c of children) if (c != null) node.append(c);
   return node;

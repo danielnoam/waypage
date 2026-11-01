@@ -228,6 +228,15 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
   the branch or its pull request closes. Android installs an equal
   version code over the app, so the release goes back over a preview
   only when the branch didn't bump `APP_VERSION`.
+- **Previews in the browser (1.49.0):** the web copy's Preview builds
+  lists the same pre-releases (repo read from the `owner.github.io/repo/`
+  address) and Open puts `{ repo, sha, title, pr }` in the cache
+  `waypage-preview`. While it's there, `sw.js` serves every file of the
+  copy from that commit on raw.githubusercontent.com with its type, kept
+  in `waypage-preview-<sha>`, and adds a "Back to the release" link
+  (`./?release`, which clears it) to `index.html`, so the way back works
+  whatever the branch's own code is. Same origin, so the library is the
+  one the browser already has, as with a preview in the app.
 - **iOS:** `.github/workflows/ios.yml` builds an unsigned `Waypage.ipa`
   on a Mac runner (`tools/ios-project.js`, `tools/ios-extensions.rb` add
   the share extension and widgets) and attaches it to the same release.

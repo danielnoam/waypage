@@ -228,7 +228,8 @@ the first heading.
 **How a change gets in:** `main` takes only pull requests. Push a
 branch, open a PR, and merge it when the **Tests** check is green
 (`.github/workflows/test.yml` runs `node test/run-all.js` with
-Playwright on every PR and on `main`). No review is required: anyone
+Playwright on every PR and on `main`; a PR that only changes Markdown
+runs just `build.test.js` and `docs.test.js`, which read it). No review is required: anyone
 with write access merges on green, and Daniel decides who has write
 access. A PR from a fork runs the tests too, but without the repo's
 secrets, so it can't sign or publish anything.
