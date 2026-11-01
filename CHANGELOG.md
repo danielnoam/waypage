@@ -2,6 +2,23 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.48.3] - 2026-11-01
+
+### Changed
+- Settings › Reading › Layout: Brightness is one row, Off / Left /
+  Right, in place of a switch and a side.
+- Settings › Reading › Text: Alignment sits above Text size, Pinch for
+  text size below Hyphenate.
+- Settings › Notifications: feeds and newsletter addresses are two
+  sections.
+- A drop-down menu closes with only a short move back toward its
+  button, not the whole way.
+
+### Fixed
+- Settings: a section after Reading's Text touched its card.
+- Animations off also stops a switch's press stretch, the ? turn and a
+  drop-down's pop; they changed in steps before.
+
 ## [1.48.2] - 2026-11-01
 
 ### Changed

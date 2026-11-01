@@ -379,11 +379,12 @@ function notesSections() {
         ] }) : null),
     phone)];
   if (!n.on) return out;
-  if (feeds.length) {
-    out.push(section("Feeds", "A feed turned off here is still checked; its posts wait in Feeds without a notification.",
-      el("div", { class: "group" }, ...[...feeds].sort((a, b) => a.title.localeCompare(b.title)).map((f) =>
-        sw(f.title, null, !feedQuiet(f), (on) => setFeedQuiet(f, !on))))));
-  }
+  // Feeds and newsletter addresses each in their own section (1.48.3).
+  const quietList = (list) => el("div", { class: "group" }, ...list.sort((a, b) => a.title.localeCompare(b.title)).map((f) =>
+    sw(f.title, null, !feedQuiet(f), (on) => setFeedQuiet(f, !on))));
+  const plain = feeds.filter((f) => !isMail(f)), mail = feeds.filter(isMail);
+  if (plain.length) out.push(section("Feeds", "A feed turned off here is still checked; its posts wait in Feeds without a notification.", quietList(plain)));
+  if (mail.length) out.push(section("Newsletters", "An address turned off here still gets its emails; they wait in Newsletters without a notification.", quietList(mail)));
   out.push(section(null, null,
     el("div", { class: "group" }, navRow("Sound and more", "In your phone's settings for Waypage", () => C.platform.feedChecks.settings()))));
   return out;
