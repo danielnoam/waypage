@@ -7,6 +7,8 @@ All notable changes to Carry-on. Newest first.
 ### Changed
 - Reader: Auto-scroll's button is a play sign pointing down, not the
   download-style arrow.
+- Auto-scroll: a tap on the page pauses it; another tap, or scrolling
+  yourself, lets it go on. Holding a finger still holds it as before.
 
 ## [1.49.1] - 2026-11-01
 

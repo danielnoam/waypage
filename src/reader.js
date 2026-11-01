@@ -1235,9 +1235,11 @@
   // Auto-scroll for an image chapter (1.49.0): glide(v, onEnd) moves the
   // page v pixels a second, glide(0) stops it. A finger on the page holds it
   // (to look back at a panel) and lifting lets it go on; onEnd() is told
-  // once the bottom is reached, and the glide is over.
-  let glideV = 0, glideEnd = null, glideRaf = 0, glideAt = 0, glideRest = 0, touching = 0;
+  // once the bottom is reached, and the glide is over. A tap pauses it
+  // (1.49.2, Daniel's ask) until another tap or a scroll of your own.
+  let glideV = 0, glideEnd = null, glideRaf = 0, glideAt = 0, glideRest = 0, touching = 0, held = false;
   function glide(v, onEnd) {
+    held = false;
     glideV = v > 0 && doc ? v : 0;
     glideEnd = glideV ? onEnd || null : null;
     cancelAnimationFrame(glideRaf);
@@ -1251,7 +1253,7 @@
       const dt = Math.min(0.25, (now - glideAt) / 1000);
       glideAt = now;
       const w = frame.contentWindow;
-      if (!touching && !pinch) {
+      if (!touching && !pinch && !held) {
         glideRest += glideV * dt;
         const whole = Math.floor(glideRest);
         if (whole) { glideRest -= whole; w.scrollBy(0, whole); }
@@ -1269,10 +1271,30 @@
   }
   function glideInput() {
     touching = 0;
+    held = false;
     const down = (e) => { touching = e.touches.length; };
     doc.addEventListener("touchstart", down, { passive: true });
     doc.addEventListener("touchend", down, { passive: true });
     doc.addEventListener("touchcancel", () => { touching = 0; }, { passive: true });
+    // A tap (finger or mouse, short and still) pauses or goes on; a drag
+    // or the wheel, your own scroll, lets it go on.
+    let tap = null;
+    doc.addEventListener("pointerdown", (e) => {
+      tap = e.isPrimary ? { x: e.clientX, y: e.clientY, at: performance.now(), moved: false } : null;
+    }, { passive: true });
+    doc.addEventListener("pointermove", (e) => {
+      if (tap && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 10) tap.moved = true;
+    }, { passive: true });
+    // The page taking a finger over to scroll cancels the pointer: a drag.
+    doc.addEventListener("pointercancel", () => { if (tap && glideV) held = false; tap = null; }, { passive: true });
+    doc.addEventListener("pointerup", () => {
+      const t = tap;
+      tap = null;
+      if (!t || !glideV || pinch) return;
+      if (t.moved) held = false;
+      else if (performance.now() - t.at < 350) held = !held;
+    }, { passive: true });
+    doc.addEventListener("wheel", (e) => { if (!e.ctrlKey) held = false; }, { passive: true });
   }
 
   // Brightness from the left edge (1.10.0): a touch that starts in the
