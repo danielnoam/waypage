@@ -95,6 +95,78 @@ already beats an older unfollow. Files read from outside never go in a
 backup at all (Daniel: a clip from a file is a clip; an outside file
 stays where it is), and older backups' ones are skipped on restore.
 
+**The top bar stays on while auto-scrolling (1.49.0).** At first it hid the
+bar when auto-scroll started and, worse, readerScrolled() hid it again on
+the first 12 px of any scroll, auto-scroll's own included, so it vanished
+a moment after a tap brought it back, with Stop in it. A `gliding` class on
+the reader (set in startGlide, cleared in stopGlide and glideEnded) now
+pins `.reader-bar` with a rule that beats the bar-away one's specificity
+(it carries `:not(:focus-within)`, so a plain `.reader.gliding .reader-bar`
+lost). bar-away still moves the bottom bar as before.
+
+**Auto-scroll for comics (1.49.0).** A comic has no text, so Narrate's
+button became Auto-scroll (`#readerScroll`, same S key) while one is open.
+Its Aa tab is `scrollControls()`: Speed, Go on to the next clip and Keep
+the screen on, the last two being Narrate's own keys, so a switch
+set in either place follows in the other. Speed has its own key
+(`waypage.scrollRate`, 0.5x to 3x of 60 px a second; the 60 is a guess to
+tune on a phone), so a quick manga doesn't speed up the voice. The loop
+lives in reader.js (`glide`): a touch holds it, lifting resumes, and the
+bottom ends it (then the next chapter starts if Go on is on, carried by
+`glide.carry` for 15 seconds). It stops on leaving the clip or the app
+going to the background. Checked in the browser; the phone's wake lock and
+the feel of the speed weren't.
+
+**Comics are guessed now, carefully (1.49.0).** save.js's old comment said
+a comic "is chosen, never guessed". readArticle now tries comicGroup
+(four panels at least, most of all the page's pictures) when Readability
+finds under 1200 characters of article, or none. A long article with many
+pictures stays an article, and a page with a few pictures finds no group.
+The wrong guess costs a clip of pictures instead of text, so More has
+"Save as comic" to redo a clip by hand (and "Update from the site" keeps
+a comic a comic, as before). Checked in the browser with `given` pages
+(6 panels: comic; 6 panels and long text: article; 2 panels: no); the
+live fetch and saving on a phone weren't run.
+
+- **A deck is redrawn, not converted (1.49.0).** Android has no PowerPoint
+  renderer, Apache POI would add about 20 MB, and a server is ruled out, so
+  `src/pptx.js` reads the zip's XML itself and draws each slide on a
+  canvas. Trade-offs, said plainly: it is an approximation (no charts or
+  SmartArt without a stand-in picture, no effects, animations or WordArt;
+  fonts the phone lacks fall back to Instrument Sans or Source Serif 4,
+  and the sheet says so). Each slide becomes a JPEG (1600 px long side,
+  quality 0.85) so a 100-slide deck holds one canvas at a time (about 45
+  ms a slide on a computer, heap flat). Words go in as an invisible text
+  layer so the PDF reader's search, Narrate and highlights work, and so
+  the clip's words aren't a blank. Right-to-left lines are stored in
+  visual order, which pdf.js turns back. Safe by construction: the XML is
+  only parsed, pictures only decoded, a relationship marked External is
+  never fetched, parts over 64 MB and decks over 600 slides are cut off.
+  The PDF is saved by the person (a save screen), not into a folder of
+  ours, so Waypage holds no wider access than that one file. The PDF is
+  written with plain ASCII strings because a Blob writes a byte above 127
+  as two, which shifted the xref table. The yield between slides is a
+  MessageChannel message: a background page's timers wait a second each.
+
+- **A hidden `.rc-row` needs its own rule (1.49.0).** `.rc-row` is
+  `display: flex`, which beats the browser's `[hidden]`, so the Dark PDF
+  pages row stayed visible in every clip. `.rc-row[hidden]` now hides it.
+  The first test only looked at a PDF; the fix has a web clip and a PDF
+  shown as text in its tests.
+
+- **Dark PDF pages are a CSS filter, not a redraw (1.49.0).** A PDF's
+  pages are JPEGs drawn white in the sandbox (src/pdf.js). Drawing them
+  dark would throw away every drawn page and rail thumbnail on each switch
+  or theme change, so the page stays as drawn and an SVG filter
+  (reader.js, pdfDarkFilter) maps each channel as ink + (bg - ink) * in:
+  white becomes the theme's --bg, black its --ink, after a 180 degree hue
+  rotation that keeps colours near their own hue. Text contrast is then the
+  theme's own pair. Trade-offs: photos and coloured figures come out as
+  negatives (as in any PDF reader's dark mode); it acts only in dark
+  themes and only for printed pages (not Show as text); a filter on every
+  shown page costs something on a huge PDF, not yet measured on a phone.
+  Nothing new crosses the sandbox or leaves the device.
+
 - **A merge is not a release unless it bumps the version (31 Oct 2026).**
   With more than one person merging, "every merge with a new version
   releases" meant two kinds of trouble: version numbers taken from

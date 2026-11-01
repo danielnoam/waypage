@@ -59,6 +59,7 @@ src/store.js        one directory per clip and library.json; IndexedDB in a brow
 src/platform.js     browser vs app: native fetch, plugins, downloads, speech, opening links
 src/files.js        EPUB, Kindle (MOBI/AZW3), FB2, CBZ, Markdown, text and HTML files
 src/pdf.js          PDFs through pdf.js in a locked-down frame
+src/pptx.js         PowerPoint decks redrawn on a canvas and written as a PDF (1.49.0)
 src/epub.js         clips as an EPUB 3 book, for e-readers and Send to Kindle
 src/feeds.js        RSS, Atom and JSON Feed, read into one shape
 src/sync.js         GitHub sync; src/sync-worker.js runs the merge off the main thread
@@ -229,6 +230,15 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
   the branch or its pull request closes. Android installs an equal
   version code over the app, so the release goes back over a preview
   only when the branch didn't bump `APP_VERSION`.
+- **Previews in the browser (1.49.0):** the web copy's Preview builds
+  lists the same pre-releases (repo read from the `owner.github.io/repo/`
+  address) and Open puts `{ repo, sha, title, pr }` in the cache
+  `waypage-preview`. While it's there, `sw.js` serves every file of the
+  copy from that commit on raw.githubusercontent.com with its type, kept
+  in `waypage-preview-<sha>`, and adds a "Back to the release" link
+  (`./?release`, which clears it) to `index.html`, so the way back works
+  whatever the branch's own code is. Same origin, so the library is the
+  one the browser already has, as with a preview in the app.
 - **iOS:** `.github/workflows/ios.yml` builds an unsigned `Waypage.ipa`
   on a Mac runner (`tools/ios-project.js`, `tools/ios-extensions.rb` add
   the share extension and widgets) and attaches it to the same release.
@@ -245,7 +255,7 @@ Playwright and skip when it isn't installed; `build.test.js` checks the
 bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
 every source file; `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js` and `syncbatch.test.js` test their areas in Node. The Tests workflow runs them all on every PR.
+`sync.test.js`, `syncbatch.test.js` and `pptx.test.js` test their areas in Node. The Tests workflow runs them all on every PR.
 
 `node tools/shots.js` retakes the README's pictures at 1280 px and 390 px
 into `docs/shots/`, from a demo library it saves through the app itself
