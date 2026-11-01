@@ -2244,6 +2244,36 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("the reader sheet's Narrate tab keeps its rows after another engine is picked, and a downloaded Kokoro has a bin", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ROOT + "test/fixtures/chapters.html");
+      await q.press("#saveUrl", "Enter");
+      await q.locator(".page-card", { hasText: "Night Crossing" }).first().click();
+      await q.locator("#readerView:not([hidden])").waitFor();
+      await q.evaluate(() => {
+        const st = { supported: true, engine: "app", use: "v019", busy: "", step: "", done: 0, total: 0, packs: [
+          { id: "v019", title: "Kokoro 0.19", note: "English", bytes: 98.5e6, ready: true, size: 1, voices: 11 }] };
+        const sp = C.platform.speech;
+        Object.defineProperty(sp, "available", { value: true });
+        Object.defineProperty(sp, "kokoro", { value: async (action) => (action ? null : JSON.parse(JSON.stringify(st))) });
+        Object.defineProperty(sp, "engines", { value: async () => ({ engines: [{ name: "g", label: "Google" }, { name: "app", label: "Kokoro" }], default: "g" }) });
+        Object.defineProperty(sp, "voices", { value: async () => [] });
+      });
+      await q.click("#readerAa");
+      await q.locator("#readingSheet .sheet-tabs .seg-face", { hasText: "Narrate" }).click();
+      const btn = q.locator("#readingSheet").getByRole("button", { name: /^Speech engine/ });
+      await btn.click();
+      await q.locator(".dropdown-menu .dropdown-item", { hasText: "Kokoro 0.19" }).click();
+      await until(q, () => /Kokoro 0\.19/.test((document.querySelector("#readingSheet [aria-label^='Speech engine']") || {}).getAttribute?.("aria-label") || ""));
+      assert.ok(await q.locator("#readingSheet").getByRole("button", { name: /^Speech engine/ }).isVisible(), "the Narrate tab emptied");
+      assert.ok(await q.locator("#readingSheet").getByRole("button", { name: "More speech engines" }).isVisible());
+      await q.locator("#readingSheet").getByRole("button", { name: "More speech engines" }).click();
+      await q.getByRole("button", { name: "Delete Kokoro 0.19" }).waitFor();
+      assert.strictEqual(await q.locator(".kokoro-slot").getByText("In use").count(), 0);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("Settings keeps its ? marks to the agreed list (1.48.2)", async () => {
       const q = await page(browser, 390);
       const agreed = ["Your fonts", "Dictionaries", "Before you go offline", "Save from your browser", "Sync with GitHub",

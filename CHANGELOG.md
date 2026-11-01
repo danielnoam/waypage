@@ -2,6 +2,25 @@
 
 All notable changes to Carry-on. Newest first.
 
+## Unreleased
+
+### Added
+- Narrate: while the voice is still being made (Kokoro at the start or
+  after a skip), a ring turns round Pause until it speaks.
+
+### Changed
+- Narrate (Kokoro): shorter pauses between paragraphs and sentences; the
+  quiet Kokoro leaves around each piece is trimmed.
+- More speech engines: a downloaded version has a bin to delete it, in
+  place of In use / Use and the Actions section; which one speaks is
+  picked in Speech engine.
+
+### Fixed
+- Picking another Kokoro version while it read closed the app.
+- Picking another speech engine in the reader's Narrate tab emptied the
+  tab until the settings were opened again, and in Settings the rows
+  jumped while they were drawn again.
+
 ## [1.50.1] - 2026-11-01
 
 ### Changed

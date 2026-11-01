@@ -325,6 +325,10 @@ area.
 - **`position: fixed` inside a sheet** counts from the sheet, not the
   screen, because `.sheet` has `will-change: transform`; `dropdown()`'s
   `fit` measures and corrects for it.
+- **Kokoro's model is freed only on its own thread** (`Kokoro.freeLater`):
+  freeing it while a piece was being made crashed the app.
+- **Narrate's "thinking"** comes from `onAudioAvailable`, not `onStart`:
+  Android calls onStart when a piece is queued to play, before any sound.
 - **Pinned download hashes:** read each one from the real file (a CI step
   can fetch GitHub release files this container can't); Kokoro 1.1 shipped
   in 1.50.0 with a wrong one and every download was refused.

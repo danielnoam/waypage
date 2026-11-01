@@ -177,7 +177,7 @@ final class Kokoro {
         Pack p = inUse(c);
         if (p == null || !supported()) return null;
         if (tts != null && loaded.equals(p.id)) return tts;
-        if (tts != null) tts.free();
+        freeLater(tts);
         tts = null;
         File d = dir(c, p);
         StringBuilder lex = new StringBuilder();
@@ -202,9 +202,17 @@ final class Kokoro {
             for (Take t : takes) t.cancelled = true;
             takes.clear();
         }
-        if (tts != null) tts.free();
+        freeLater(tts);
         tts = null;
         loaded = "";
+    }
+
+    // Freed on the thread that makes pieces, after the one it's making
+    // (cancelled, so it stops at its next sentence): freeing the model in
+    // the middle of one crashed the app, as picking another Kokoro
+    // version while it read did.
+    private static void freeLater(OfflineTts old) {
+        if (old != null) maker.execute(old::free);
     }
 
     // ---- Voices. A voice's name is kokoro-<id> (kokoro-af_heart); Narrate
@@ -342,24 +350,61 @@ final class Kokoro {
         }
     }
 
+    // Quiet the model leaves around what it says, cut to what reads well:
+    // a sentence keeps a short pause, a piece starts at once and ends
+    // briefly, since Android adds its own pause between pieces.
+    private static final float QUIET = 0.01f;
+    private static final int LEAD_MS = 30, SENTENCE_MS = 250, END_MS = 80;
+
+    private static int firstSound(float[] s) {
+        int i = 0;
+        while (i < s.length && Math.abs(s[i]) < QUIET) i++;
+        return i;
+    }
+    private static int afterSound(float[] s) {
+        int i = s.length;
+        while (i > 0 && Math.abs(s[i - 1]) < QUIET) i--;
+        return i;
+    }
+
+    private static void add(Take t, float[] s, int from, int to) {
+        if (to <= from) return;
+        byte[] pcm = new byte[(to - from) * 2];
+        for (int i = from; i < to; i++) {
+            int v = (int) (Math.max(-1f, Math.min(1f, s[i])) * 32767);
+            pcm[2 * (i - from)] = (byte) v;
+            pcm[2 * (i - from) + 1] = (byte) (v >> 8);
+        }
+        synchronized (LOCK) {
+            t.chunks.add(pcm);
+            LOCK.notifyAll();
+        }
+    }
+
     private static void make(Context c, Take t, String text, int sid, float speed, String lang) {
         OfflineTts tts = t.cancelled ? null : get(c);
         if (tts != null) {
+            final int perMs = Math.max(1, tts.sampleRate() / 1000);
+            // A sentence's trailing quiet waits for the next one: the last
+            // keeps only END_MS of it.
+            final float[][] tail = {null};
+            final boolean[] started = {false};
             try {
                 tts.generate(text, sid, speed, lang, (samples) -> {
                     if (t.cancelled) return 0;
-                    byte[] pcm = new byte[samples.length * 2];
-                    for (int i = 0; i < samples.length; i++) {
-                        int s = (int) (Math.max(-1f, Math.min(1f, samples[i])) * 32767);
-                        pcm[2 * i] = (byte) s;
-                        pcm[2 * i + 1] = (byte) (s >> 8);
-                    }
-                    synchronized (LOCK) {
-                        t.chunks.add(pcm);
-                        LOCK.notifyAll();
-                    }
+                    int from = 0;
+                    if (!started[0]) {
+                        from = Math.max(0, firstSound(samples) - LEAD_MS * perMs);
+                        if (from >= samples.length) return 1;
+                        started[0] = true;
+                    } else if (tail[0] != null) add(t, tail[0], 0, tail[0].length);
+                    int end = afterSound(samples);
+                    add(t, samples, from, end);
+                    int keep = Math.min(samples.length - end, SENTENCE_MS * perMs);
+                    tail[0] = keep > 0 ? java.util.Arrays.copyOfRange(samples, end, end + keep) : null;
                     return t.cancelled ? 0 : 1;
                 });
+                if (tail[0] != null && !t.cancelled) add(t, tail[0], 0, Math.min(tail[0].length, END_MS * perMs));
             } catch (Throwable e) {
                 t.failed = true;
             }
