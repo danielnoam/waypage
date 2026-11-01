@@ -329,7 +329,7 @@ async function updateClip(p) {
   if (state.open === p && after) { history.replaceState(readerState(meta), ""); show(meta, after); }
 }
 
-// Read as Article or Comic (1.49.2, in place of 1.49.0's Save as comic):
+// Read as Article or Comic (1.49.3, in place of 1.49.0's Save as comic):
 // a web clip is saved again that way, in the old copy's place; a file
 // already holds its pictures, so only how it's shown changes.
 async function setClipKind(p, kind) {

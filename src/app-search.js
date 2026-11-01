@@ -210,7 +210,7 @@ function dropdown(o) {
   // it opens upward when there's more room above and scrolls in itself,
   // so the box under it doesn't scroll and stay moved. On the page, a
   // menu opened low on the screen scrolls the page up instead.
-  // In a sheet too short for it (Export, 1.49.2), the menu leaves the
+  // In a sheet too short for it (Export, 1.49.3), the menu leaves the
   // sheet and drops up (or down) over the screen, the sheet left as it is.
   function fit(m) {
     let box = null, sc = null;

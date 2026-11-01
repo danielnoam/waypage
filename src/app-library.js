@@ -857,7 +857,7 @@ function pageSheet(p, where) {
   return box;
 }
 
-// Article or Comic (1.49.2): how a clip or file is read, switched here.
+// Article or Comic (1.49.3): how a clip or file is read, switched here.
 // A web clip saves again; a file only changes how it's shown. A PDF read
 // read from outside stays as it is: its printed pages are pictures.
 function kindRow(p) {
