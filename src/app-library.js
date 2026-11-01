@@ -834,7 +834,6 @@ function pageSheet(p, where) {
       tagsRow(p, draw),
       folderRow(p, draw),
       p.file ? null : picturesRow(p, draw),
-      kindRow(p),
       series.length ? el("h3", { class: "overline" }, "Series") : null,
       ...series,
       el("h3", { class: "overline" }, "More"),
@@ -847,6 +846,10 @@ function pageSheet(p, where) {
         // The page changed since (1.38.0): fetched again in its place.
         p.file || p.preview || !/^https?:/.test(p.url || "") ? null
           : menuRow("Update from the site", () => back().then(() => updateClip(p))),
+        // Save as comic, and back as an article (Daniel's ask, after
+        // 1.50.0's Article / Comic switch): a web clip saves again that way,
+        // a file only changes how it's shown.
+        kindable(p) ? menuRow(p.comic ? "Save as article" : "Save as comic", () => back().then(() => setClipKind(p, p.comic ? "article" : "comic"))) : null,
         // The original gone or changed (1.15.0): the Wayback Machine's copy.
         p.file || p.preview || p.comic || !/^https?:/.test(p.url || "") ? null
           : menuRow(p.archived ? "Find a newer archived copy" : "Use the archived copy", () => back().then(() => archiveClip(p))),
@@ -857,15 +860,10 @@ function pageSheet(p, where) {
   return box;
 }
 
-// Article or Comic (1.50.0): how a clip or file is read, switched here.
-// A web clip saves again; a file only changes how it's shown. A PDF read
-// read from outside stays as it is: its printed pages are pictures.
-function kindRow(p) {
-  if (p.preview || (p.link && p.file && p.file.kind === "pdf")) return null;
-  if (!p.file && !/^https?:/.test(p.url || "")) return null;
-  return el("div", { class: "rc-row stack" }, el("span", { class: "rc-label" }, "Read as"),
-    seg("kind-" + p.id, "Read as", [{ value: "article", label: "Article" }, { value: "comic", label: "Comic" }], p.comic ? "comic" : "article",
-      (v) => back().then(() => setClipKind(p, v))));
+// A PDF read from outside stays as it is: its printed pages are pictures.
+function kindable(p) {
+  if (p.preview || (p.link && p.file && p.file.kind === "pdf")) return false;
+  return !!p.file || /^https?:/.test(p.url || "");
 }
 
 let tagTyping = false;

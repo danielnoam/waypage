@@ -2,9 +2,11 @@
 
 All notable changes to Carry-on. Newest first.
 
-## Unreleased
+## [1.50.1] - 2026-11-01
 
 ### Changed
+- A clip's sheet: Save as comic is back under More, in place of 1.50.0's
+  Read as Article / Comic switch, and a comic has Save as article.
 - Narrate (Android): the Speech engine list names each downloaded Kokoro
   version (Kokoro 0.19, Kokoro 1.0, Kokoro 1.1), and picking one switches
   to it.

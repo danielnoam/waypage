@@ -75,7 +75,7 @@ Each section below shows the computer (left) and the phone (right).
 - Pictures as small previews, full size (capped at 1600 px WebP) or links only, per clip or in Settings; or load pictures only when tapped.
 - Videos as a thumbnail and a link.
 - Web serials: save next, previous or all along a site's next-chapter links, or a contents page as its chapters. Royal Road, AO3, Scribble Hub, FanFiction.net, Blogger, WEBTOON, Tapas and Wattpad.
-- Comics and manga as image chapters, read edge to edge; a page that is a column of pictures is spotted as one, and Save as comic fixes a clip saved as an article. Reading one, Auto-scroll takes Narrate's place, with its own Speed, Go on to the next clip and Keep the screen on.
+- Comics and manga as image chapters, read edge to edge; a page that is a column of pictures is spotted as one, and Save as comic (or Save as article) fixes a clip saved the wrong way. Reading one, Auto-scroll takes Narrate's place, with its own Speed, Go on to the next clip and Keep the screen on.
 - Pages built by JavaScript, drawn out of sight first; saving signed in to a site; the Internet Archive's copy when a page is gone.
 - Save linked pages from a clip, and Update from the site keeping highlights and your place.
 - Saves keep going with the app put away, wait for Wi-Fi if you like, and show in Downloads.
