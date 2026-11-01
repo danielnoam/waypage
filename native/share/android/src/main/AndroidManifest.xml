@@ -23,6 +23,21 @@
             android:name="io.github.danielnoam.waypage.share.SpeechService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+        <!-- Kokoro voices: Waypage's own speech engine, off until the
+             voices are downloaded in Settings (Kokoro.java turns it on). -->
+        <service
+            android:name="io.github.danielnoam.waypage.share.KokoroTtsService"
+            android:exported="true"
+            android:enabled="false"
+            android:label="Kokoro (Waypage)">
+            <intent-filter>
+                <action android:name="android.intent.action.TTS_SERVICE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech.tts"
+                android:resource="@xml/waypage_tts_engine" />
+        </service>
         <service
             android:name="io.github.danielnoam.waypage.share.DownloadService"
             android:exported="false"

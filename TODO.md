@@ -57,6 +57,10 @@ Everything iOS-only, kept for one iOS release.
   Premium voices first with a line on downloading more (Settings ›
   Accessibility › Spoken Content), and Personal Voice through
   `AVSpeechSynthesizer.requestPersonalVoiceAuthorization` (iOS 17).
+- **Kokoro voices on iOS.** Android has them since the Kokoro release
+  (sherpa-onnx library in the APK, model downloaded in Settings). iOS
+  would need sherpa-onnx's xcframework and its own player in the Speech
+  plugin (iOS apps can't add a system voice without an extension).
 - **The sleep timer, put away, on iOS.** Android's speech service keeps
   the time since 1.32.0; on iOS the page does, so with the app put away
   it waits until the app is back. A timer in the Speech plugin would do it,

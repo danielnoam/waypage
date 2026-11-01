@@ -136,6 +136,23 @@ test("android.yml patches the manifest and the updater's plugin is installed", (
   assert.ok(pkg.devDependencies["@capawesome-team/capacitor-file-opener"]);
 });
 
+// Kokoro voices: sherpa-onnx's library is fetched at one pinned,
+// checked version before Gradle runs, and the Java mirror of its JNI
+// classes says the same version (the fields must match it).
+test("the Kokoro engine library is pinned, checked and fetched before the build", () => {
+  const yml = fs.readFileSync(path.join(ROOT, ".github", "workflows", "android.yml"), "utf8");
+  const sh = fs.readFileSync(path.join(ROOT, "tools", "sherpa-lib.sh"), "utf8");
+  const mirror = fs.readFileSync(path.join(ROOT, "native", "share", "android", "src", "main", "java", "com", "k2fsa", "sherpa", "onnx", "OfflineTts.java"), "utf8");
+  const kokoro = fs.readFileSync(path.join(ROOT, "native", "share", "android", "src", "main", "java", "io", "github", "danielnoam", "waypage", "share", "Kokoro.java"), "utf8");
+  assert.ok(/bash tools\/sherpa-lib\.sh\s+- run: npx cap sync android/.test(yml));
+  const v = /^V=(\S+)$/m.exec(sh)[1];
+  assert.ok(/^SHA=[0-9a-f]{64}$/m.test(sh));
+  assert.ok(/sha256sum -c/.test(sh));
+  assert.ok(mirror.includes("Tts.kt at v" + v + "."), "OfflineTts.java mirrors a different sherpa-onnx version");
+  assert.ok(/SHA256 = "[0-9a-f]{64}"/.test(kokoro) && /MessageDigest\.getInstance\("SHA-256"\)/.test(kokoro));
+  assert.ok(/getCanonicalPath\(\)\.startsWith\(root\)/.test(kokoro), "unpacking must keep files inside the voices folder");
+});
+
 test("the updater downloads the asset the workflow publishes", () => {
   const yml = fs.readFileSync(path.join(ROOT, ".github", "workflows", "android.yml"), "utf8");
   const platform = fs.readFileSync(path.join(ROOT, "src", "platform.js"), "utf8");

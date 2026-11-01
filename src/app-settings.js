@@ -233,8 +233,51 @@ function themeGroup() {
 // sheet's tab; the voice is for the phone's language here.
 function aloudGroup() {
   if (!speech.available) return null;
+  const kokoro = el("span", { hidden: true });
+  kokoroRow(kokoro);
   return section("Narrate", null,
-    el("div", { class: "group" }, el("div", { class: "rc-list" }, aloudControls())));
+    el("div", { class: "group" }, el("div", { class: "rc-list" }, aloudControls()), kokoro));
+}
+
+// Kokoro voices (Android, arm64): a download that becomes Waypage's own
+// speech engine, picked for English when it's in. Asked again about once
+// a second while it downloads or unpacks.
+const KOKORO_IN_KEY = "waypage.kokoroIn";
+async function kokoroRow(slot, was) {
+  const s = await speech.kokoro();
+  if (!s || !slot.isConnected && was !== undefined) return;
+  const busy = s.step === "downloading" || s.step === "checking" || s.step === "unpacking";
+  const pct = s.total ? Math.min(99, Math.floor(s.done / s.total * 100)) : 0;
+  const note = s.ready ? "On this phone · " + formatSize(s.bytes)
+    : s.step === "downloading" ? "Downloading · " + pct + "%"
+    : busy ? "Unpacking…"
+    : s.step === "bad" ? "The download wasn't the right file. Try again."
+    : s.step === "failed" ? "Couldn't download. Try again."
+    : "English, 11 voices · " + formatSize(s.bytes);
+  const act = (action, done) => async () => { try { await speech.kokoro(action); } catch (e) { toast(e && e.message || "Couldn't do that. Try again."); } if (done) done(); kokoroRow(row, s); };
+  const btn = s.ready ? el("button", { class: "btn-text warn", type: "button", onclick: act("remove", () => forgetKokoro(s.engine)) }, "Remove")
+    : s.step === "downloading" ? el("button", { class: "btn-text", type: "button", onclick: act("cancel") }, "Stop")
+    : busy ? null
+    : el("button", { class: "btn-text", type: "button", onclick: act("download") }, "Download");
+  const row = el("div", { class: "row kokoro-row" },
+    el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, "Kokoro voices"), el("span", { class: "choice-note" }, note)), btn);
+  slot.replaceWith(row);
+  // Just in: English reads with it, and the Narrate rows show it.
+  if (s.ready && !load(KOKORO_IN_KEY, false)) {
+    store(KOKORO_IN_KEY, true);
+    store(ENGINE_KEY, { ...enginePicks(), en: s.engine });
+    const box = row.parentNode && row.parentNode.querySelector(".aloud-controls");
+    if (box) box.replaceWith(aloudControls());
+  }
+  if (busy) setTimeout(() => { if (row.isConnected) kokoroRow(row, s); }, 1000);
+}
+function forgetKokoro(engine) {
+  store(KOKORO_IN_KEY, false);
+  const picks = enginePicks();
+  for (const k of Object.keys(picks)) if (picks[k] === engine) delete picks[k];
+  store(ENGINE_KEY, picks);
+  const box = document.querySelector("#sectionBody .aloud-controls");
+  if (box) box.replaceWith(aloudControls());
 }
 
 // Layout and Text are two sections here (1.48.2, Daniel's ask), out of
@@ -1053,7 +1096,7 @@ function renderSettings() {
 // Each result opens its screen and lights the row up for a moment.
 const FIND_ALIASES = {
   Theme: "dark mode light mode colours night", Animations: "motion", Images: "pictures photos", Layout: "shelf list grid scroll pages margins",
-  "Text size": "font size bigger smaller", Font: "typeface", Narrate: "read aloud voice speech tts", "On mobile data": "wi-fi cellular",
+  "Text size": "font size bigger smaller", Font: "typeface", Narrate: "read aloud voice speech tts kokoro", "On mobile data": "wi-fi cellular",
   "Where your library is": "storage folder documents sd card", "App lock": "passcode pin fingerprint face biometric", Notifications: "alerts",
   "Google Drive": "backup cloud", "GitHub sync": "sync devices token", Credits: "about licence licenses open source thanks",
   Version: "update check app", Changelog: "what's new release notes", "Continue reading": "last clip resume",

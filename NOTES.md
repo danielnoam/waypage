@@ -18,6 +18,23 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+**Kokoro voices: library in the APK, model downloaded (Unreleased).**
+Daniel wanted Kokoro as an optional download, not a must-have bundle.
+The engine's library (sherpa-onnx, arm64 only, fetched pinned and
+checked by tools/sherpa-lib.sh) has to ship in the APK: downloading and
+running native code after install would be a way in for anyone who
+could swap the file. The model (kokoro-int8-en-v0_19, 98.5 MB) is the
+download, from sherpa-onnx's GitHub release, checked against its SHA-256
+before it's unpacked; nothing is sent anywhere. It becomes Waypage's own
+Android speech engine (KokoroTtsService) rather than a second player,
+so the lock screen, Bluetooth buttons, PiP and the sleep timer keep
+working unchanged; the cost is that other apps can use the engine too
+(it's listed in the phone's text-to-speech settings once downloaded).
+English only: Kokoro has no Hebrew, and v0.19 English is the smallest
+and fastest; the 8-language v1.0 is about three times the size. Each
+language picks its own engine, so Hebrew stays on Google. 32-bit and x86
+phones get no Kokoro row. iOS and the web copy have none yet.
+
 **Preview builds are pre-releases, one per branch (1.48.0).** The
 workflow artifact was the first idea: it needs no token either, but it
 is a zip, its link lives a minute, and it is gone after 90 days. A
