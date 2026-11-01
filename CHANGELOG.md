@@ -7,6 +7,9 @@ All notable changes to Carry-on. Newest first.
 ### Changed
 - Reader: Auto-scroll's button is a play sign pointing down, not the
   download-style arrow.
+- A clip's sheet (hold it in the library): Read as Article / Comic in
+  place of Save as comic, both ways. A web clip saves again that way; a
+  file (not a PDF read from outside) only changes how it's shown.
 - Auto-scroll: a tap on the page pauses it; another tap, or scrolling
   yourself, lets it go on. Holding a finger still holds it as before.
 

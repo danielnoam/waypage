@@ -329,22 +329,45 @@ async function updateClip(p) {
   if (state.open === p && after) { history.replaceState(readerState(meta), ""); show(meta, after); }
 }
 
-// Save as comic (1.49.0): a clip of a manga or comic that was read as an
-// article, saved again as its pictures, in the old copy's place.
-async function saveClipAsComic(p) {
+// Read as Article or Comic (1.49.2, in place of 1.49.0's Save as comic):
+// a web clip is saved again that way, in the old copy's place; a file
+// already holds its pictures, so only how it's shown changes.
+async function setClipKind(p, kind) {
+  if (!!p.comic === (kind === "comic")) return;
+  if (p.file) return setFileKind(p, kind);
   if (!navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
   if (state.saving.some((s) => s.again === p)) return;
-  const job = { ...newJob(p.url, p.folder), key: "again:" + p.id, again: p, mode: "full", kind: "comic" };
+  const comic = kind === "comic";
+  const job = { ...newJob(p.url, p.folder), key: "again:" + p.id, again: p, mode: comic ? "full" : p.mode, kind };
   state.saving.unshift(job);
   renderLibrary();
-  toast("Saving it as a comic…");
+  toast(comic ? "Saving it as a comic…" : "Saving it as an article…");
   const meta = await runJob(job);
-  if (!meta) { toast("Couldn't find the pictures. It's in Downloads to try once more."); return; }
-  toast("Saved as a comic.");
+  if (!meta) { toast(comic ? "Couldn't find the pictures. It's in Downloads to try once more." : "Couldn't save it again. It's in Downloads to try once more."); return; }
+  toast(comic ? "Saved as a comic." : "Saved as an article.");
   if (state.open === p) {
     const html = await C.store.readPage(meta.id).catch(() => null);
     if (html && state.open === p) { history.replaceState(readerState(meta), ""); show(meta, html); }
   }
+}
+
+async function setFileKind(p, kind) {
+  const comic = kind === "comic";
+  let html = null;
+  try { html = await C.store.readPage(p.id); } catch (e) { html = null; }
+  if (!html) { toast("Couldn't open this file. Try again."); return; }
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const root = doc.querySelector(".co-body") || doc.body;
+  root.classList.toggle("co-comic", comic);
+  if (comic) p.comic = true; else delete p.comic;
+  await C.store.writePage(p.id, "<!doctype html>" + doc.documentElement.outerHTML, p);
+  await C.store.writeIndex(state.pages);
+  renderLibrary();
+  if (state.folder) renderFolder();
+  toast(comic ? "Shown as a comic." : "Shown as an article.");
+  if (state.open !== p) return;
+  const now = await (p.link ? openLinked(p) : C.store.readPage(p.id)).catch(() => null);
+  if (now && state.open === p) show(p, now);
 }
 
 // The Wayback Machine (1.15.0): a page that's gone saved from the
