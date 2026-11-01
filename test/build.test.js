@@ -153,7 +153,7 @@ test("the Kokoro engine library is pinned, checked and fetched before the build"
   assert.ok(packs.length >= 3, "Kokoro's downloads");
   for (const p of packs) assert.ok(/\.tar\.bz2",\s*"[0-9a-f]{64}"$/.test(p), "every Kokoro download is pinned to a SHA-256: " + p.slice(0, 60));
   assert.ok(/MessageDigest\.getInstance\("SHA-256"\)/.test(kokoro));
-  assert.ok(/getCanonicalPath\(\)\.startsWith\(root\)/.test(kokoro), "unpacking must keep files inside the voices folder");
+  assert.ok(/getCanonicalPath\(\)\.startsWith\(rootPath\)/.test(kokoro), "unpacking must keep files inside the voices folder");
 });
 
 test("the updater downloads the asset the workflow publishes", () => {
