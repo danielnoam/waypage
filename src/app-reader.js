@@ -178,7 +178,7 @@ let waiting = null;
 function readerWait(p, fromHistory) {
   waiting = p.id;
   const swap = state.open && $("readerView").dataset.pane && !$("readerView").dataset.leaving;
-  if (state.open) { closeSheet(true); hideReadHere(); brightClose(); closeFind(true); state.open = null; volumeWatch(); }
+  if (state.open) { closeSheet(true); hideReadHere(); brightClose(); closeFind(true); stopGlide(); state.open = null; volumeWatch(); }
   C.reader.close();
   C.files.closeHeld();
   $("readerView").classList.add("waiting");
@@ -321,6 +321,7 @@ function show(p, html) {
   if (skim) { C.reader.settle(); skimDrop(); }
   closeSkim();
   state.open = p;
+  paintPdfDark();
   $("aloudPlay").style.visibility = "";
   // Opening counts as reading for the order of things (sort by read, the
   // sidebar, Continue reading). The place has a time of its own,
@@ -346,9 +347,13 @@ function show(p, html) {
   $("readProgress").dir = $("skimTrack").dir = p.dir || "ltr";
   $("readerContents").hidden = true;
   $("readerTranslate").hidden = true;
+  // A comic has no text to narrate: its button is Auto-scroll (1.49.0).
+  stopGlide();
+  $("readerAloud").hidden = !speech.available || !!p.comic;
+  $("readerScroll").hidden = !p.comic;
   $("readerNow").textContent = "Contents";
   $("readerContents").setAttribute("aria-label", "Contents");
-  $("readerFolder").hidden = !(p.folder && !p.preview && folderPages(p.folder).length > 1);
+  $("readerFolder").hidden =!(p.folder && !p.preview && folderPages(p.folder).length > 1);
   $("readerView").classList.remove("bar-away");
   jumpFrom = null;
   $("jumpBack").hidden = true;
@@ -390,6 +395,9 @@ function show(p, html) {
     // Reading aloud carries on across clips (1.4.0): its light and
     // player show again when its clip is the one open.
     setAloud(aloud.state, aloud.index);
+    // Auto-scroll went on from the chapter before (1.49.0).
+    if (glide.carry && Date.now() - glide.carry < 15000 && state.open === p && p.comic) startGlide();
+    glide.carry = 0;
     if (aloudAuto === "here") { aloudAuto = false; C.reader.placed().then(() => { if (state.open === p) startAloud(); }); }
     else if (aloudAuto) { aloudAuto = false; startAloud(0); }
   });
@@ -645,6 +653,35 @@ function spentSwitch() {
       } }));
 }
 
+// Dark PDF pages (1.49.0): a switch at the foot of Layout, shown while a
+// PDF's printed pages are open. In a dark theme the pages take its colours
+// (reader.js, pdfDarkFilter); in a light one there's nothing to darken.
+const PDF_DARK_KEY = "waypage.pdfDark";
+const pdfDarkOn = () => !!load(PDF_DARK_KEY, false);
+const pdfPages = () => !!(state.open && C.files.printed(state.open));
+function paintPdfDark() {
+  const root = document.documentElement;
+  const dark = pdfDarkOn() && pdfPages() && !!(themeOf(root.dataset.theme) || {}).dark;
+  root.toggleAttribute("data-pdf-dark", dark);
+  // The rail's small pages are in the app's own document, so they get a copy.
+  const css = getComputedStyle(root);
+  C.reader.pdfDarkFilter(document, "pdf-dark", dark ? css.getPropertyValue("--bg") : "", css.getPropertyValue("--ink"));
+}
+function pdfDarkSwitch() {
+  const row = el("label", { class: "rc-row switch-row pdf-dark-row" },
+    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Dark PDF pages"),
+      el("span", { class: "choice-note" }, "In a dark theme, pages take its colours")),
+    el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "pdfDark", checked: pdfDarkOn(),
+      onchange: (e) => {
+        store(PDF_DARK_KEY, e.target.checked);
+        document.querySelectorAll('input[data-pref="pdfDark"]').forEach((i) => { i.checked = e.target.checked; });
+        paintPdfDark();
+        C.reader.applyTheme();
+      } }));
+  row.hidden = !pdfPages();
+  return row;
+}
+
 // Shown only with Pages picked (1.35.1): in Scroll there's nothing to turn.
 function volumeSwitch() {
   if (!C.platform.volumeKeys.available) return null;
@@ -710,7 +747,8 @@ function showSection() {
 // The bar along the bottom fills as the page is read. The top bar slides
 // away on any scroll, up or down, and a tap brings it back; it stays at
 // the top, at the end, and while a sheet is up. Read aloud's own
-// scrolling, following the voice, leaves it as it is.
+// scrolling, following the voice, leaves it as it is; auto-scroll keeps
+// the top bar on (.gliding, 1.49.0) while bar-away moves only the bottom.
 let lastY = 0, readerY = 0;
 function readerScrolled(at, y) {
   readerY = y;
@@ -994,7 +1032,9 @@ function closeReader() {
   const player = $("aloudPlay");
   const from = aloudHere() && !$("aloudPlayer").hidden ? player.getBoundingClientRect() : null;
   if (from) player.style.visibility = "hidden";
+  stopGlide();
   state.open = null;
+  paintPdfDark();
   volumeWatch();
   showAloudBar(from);
   // The library redraws (where you got to) before the reader shrinks
@@ -1026,6 +1066,49 @@ const aloudOn = () => aloud.state === "playing" || aloud.state === "paused";
 const aloudHere = () => (aloudOn() || aloud.state === "ended") && !!state.open && state.open.id === aloud.key;
 const aloudPage = () => state.pages.find((x) => x.id === aloud.key) || null;
 let aloudAuto = false;
+
+// Auto-scroll for a comic (1.49.0), in Narrate's place: the page moves by
+// itself at Speed (its own, kept apart from the voice's) and, with Go on to
+// the next clip, the next chapter starts at the end. Keep the screen on is
+// Narrate's switch too. A finger on the page holds it (C.reader.glide).
+const SCROLL_PX = 60;
+const glide = { on: false, carry: 0 };
+const scrollRate = () => clamp(Number(load(SCROLL_RATE_KEY, 1)) || 1, RATE_MIN, RATE_MAX);
+function paintGlide() {
+  const b = $("readerScroll"), label = glide.on ? "Stop auto-scrolling" : "Auto-scroll";
+  b.setAttribute("aria-pressed", String(glide.on));
+  b.setAttribute("aria-label", label);
+  b.title = label + " (S)";
+}
+function startGlide() {
+  if (!state.open || !state.open.comic) return;
+  glide.on = true;
+  paintGlide();
+  keepAwake();
+  // The top bar stays on while it scrolls (1.49.0), so Stop is always there.
+  $("readerView").classList.add("gliding");
+  closeSkim();
+  C.reader.glide(SCROLL_PX * scrollRate(), glideEnded);
+}
+function stopGlide() {
+  if (!glide.on) return;
+  glide.on = false;
+  C.reader.glide(0);
+  $("readerView").classList.remove("gliding");
+  paintGlide();
+  keepAwake();
+}
+// At the bottom: on to the next chapter when asked, else it stops.
+function glideEnded() {
+  const p = state.open, link = p && load(GO_ON_KEY, false) && endLink(p);
+  glide.on = false;
+  $("readerView").classList.remove("gliding");
+  paintGlide();
+  keepAwake();
+  if (!link) return;
+  setTimeout(() => { if (state.open === p && !glide.on) { glide.carry = Date.now(); link.go(); } }, 800);
+}
+document.addEventListener("visibilitychange", () => { if (document.hidden) stopGlide(); });
 // Opens a clip and reads it aloud from where it was left (1.25.0).
 function aloudFrom(id) {
   if (aloud.key === id && aloud.state === "playing") { if (!state.open || state.open.id !== id) openPage(id); return; }
@@ -1563,7 +1646,7 @@ function moveAloud(d) {
 
 // With "Keep the screen on" (1.24.0), only while the voice is speaking:
 // paused or done, the phone dims as it would.
-function keepAwake() { speech.keepScreen(aloud.state === "playing" && !!load(AWAKE_KEY, false)); }
+function keepAwake() { speech.keepScreen((aloud.state === "playing" || glide.on) && !!load(AWAKE_KEY, false)); }
 
 // Picture in picture (1.25.0): while reading aloud, going home leaves a
 // small window with the clip's name, the paragraph being read and the
@@ -1810,6 +1893,7 @@ document.addEventListener("visibilitychange", async () => {
 
 $("readerAloud").hidden = !speech.available;
 $("readerAloud").addEventListener("click", () => (aloudOn() && aloudHere() ? stopAloud() : startAloud()));
+$("readerScroll").addEventListener("click", () => (glide.on ? stopGlide() : startGlide()));
 $("aloudPlay").addEventListener("click", () => {
   if (aloud.state === "playing") { setAloud("paused", aloud.index); speech.pause(); }
   else { setAloud("playing", aloud.index); speech.resume(); }
@@ -1908,18 +1992,7 @@ function aloudControls() {
     // Applied when the thumb is let go: a phone's voice restarts its sentence on each change.
     onchange: (e) => { const v = Number(e.target.value); store(RATE_KEY, v); if (aloud.state !== "stopped") speech.rate(v); } });
   speed.value = rate;
-  const check = (key, text, note, restart = true, on = false) => {
-    const input = el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!load(key, on),
-      onchange: () => {
-        store(key, input.checked);
-        if (key === GO_ON_KEY) queueNext();
-        if (key === AWAKE_KEY) keepAwake();
-        if (key === PIP_KEY) floatOut();
-        if (restart && aloud.state !== "stopped" && state.open && aloud.key === state.open.id) startAloud(blockAt(aloud.index));
-      } });
-    return el("label", { class: "rc-row switch-row" },
-      el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, text), el("span", { class: "choice-note" }, note)), input);
-  };
+  const check = switchRow;
   return el("div", { class: "aloud-controls" },
     engineSlot,
     voiceRow,
@@ -1936,6 +2009,40 @@ function aloudControls() {
     note);
 }
 const rateText = (v) => (Math.round(v * 10) / 10) + "×";
+function switchRow(key, text, note, restart = true, on = false) {
+  const input = el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!load(key, on),
+    onchange: () => {
+      store(key, input.checked);
+      if (key === GO_ON_KEY) queueNext();
+      if (key === AWAKE_KEY) keepAwake();
+      if (key === PIP_KEY) floatOut();
+      if (restart && aloud.state !== "stopped" && state.open && aloud.key === state.open.id) startAloud(blockAt(aloud.index));
+    } });
+  return el("label", { class: "rc-row switch-row" },
+    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, text), el("span", { class: "choice-note" }, note)), input);
+}
+// A comic's Narrate tab (1.49.0): only what auto-scroll uses, Speed (its
+// own), Go on to the next clip and Keep the screen on.
+function scrollControls() {
+  const rate = scrollRate();
+  const shown = el("span", { class: "rc-value" }, rateText(rate));
+  const speed = el("input", { class: "range", type: "range", min: RATE_MIN, max: RATE_MAX, step: 0.1, value: rate, "aria-label": "Speed",
+    "aria-valuetext": rateText(rate),
+    oninput: (e) => {
+      const v = Number(e.target.value);
+      shown.textContent = rateText(v);
+      e.target.setAttribute("aria-valuetext", rateText(v));
+      store(SCROLL_RATE_KEY, v);
+      if (glide.on) C.reader.glide(SCROLL_PX * v, glideEnded);
+    } });
+  speed.value = rate;
+  return el("div", { class: "aloud-controls" },
+    el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Speed", shown),
+      el("div", { class: "stepper" }, speed)),
+    switchRow(GO_ON_KEY, "Go on to the next clip", "At the end, the next chapter starts scrolling by itself.", false),
+    switchRow(AWAKE_KEY, "Keep the screen on", "While it scrolls, so you can follow along.", false));
+}
+
 
 // The same controls in the Aa sheet and in Settings. A change is applied
 // at once and every copy on screen follows it in place, so focus stays put.
@@ -1999,7 +2106,9 @@ function readingControls(withTheme) {
         onchange: (e) => setReading({ rail: e.target.checked }) })) : null,
     withTheme ? stack("Theme", seg(id + "-theme", "Theme",
       [{ value: "system", label: "Auto", swatch: autoSwatch(), auto: true }, ...themeOptions(THEMES)],
-      state.theme, (v) => { setTheme(v); syncThemeInputs(); }, "themes scroll")) : null);
+      state.theme, (v) => { setTheme(v); syncThemeInputs(); }, "themes scroll")) : null,
+    // Only in the reader's own sheet, where a PDF is open.
+    withTheme ? pdfDarkSwitch() : null);
   const text = part("text", "Text",
     row("Font", fontPick("font", "Font",
       FONTS.map((f) => ({ value: f.value, label: f.label, style: "font-family: " + f.family + ", var(--sans)" })))),
@@ -2081,15 +2190,17 @@ const SHEET_TAB_KEY = "waypage.sheetTab";
 function readerSettings() {
   const box = readingControls(true);
   const parts = [...box.querySelectorAll(".rc-part")];
-  if (speech.available) {
-    const a = aloudControls();
+  // A comic gets Auto-scroll with its three settings in Narrate's place (1.49.0).
+  const comic = !!(state.open && state.open.comic);
+  if (comic || speech.available) {
+    const a = comic ? scrollControls() : aloudControls();
     a.classList.add("rc-part");
     a.dataset.part = "aloud";
-    a.prepend(el("h2", { class: "overline" }, "Narrate"));
+    a.prepend(el("h2", { class: "overline" }, comic ? "Auto-scroll" : "Narrate"));
     box.append(a);
     parts.push(a);
   }
-  const names = { layout: "Layout", text: "Text", aloud: "Narrate" };
+  const names = { layout: "Layout", text: "Text", aloud: comic ? "Auto-scroll" : "Narrate" };
   let tab = load(SHEET_TAB_KEY, "text");
   if (!parts.some((x) => x.dataset.part === tab)) tab = "text";
   const show = (v) => {

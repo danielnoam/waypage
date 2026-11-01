@@ -53,7 +53,7 @@ const ENTRIES = [
       '                <action android:name="android.intent.action.VIEW" />\n' +
       '                <action android:name="android.intent.action.SEND" />\n' +
       '                <category android:name="android.intent.category.DEFAULT" />\n' +
-      ["application/epub+zip", "application/pdf", "text/markdown", "text/x-markdown", "text/plain", "text/html", "message/rfc822",
+      ["application/epub+zip", "application/pdf", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "text/markdown", "text/x-markdown", "text/plain", "text/html", "message/rfc822",
         "application/vnd.comicbook+zip", "application/x-cbz", "application/zip",
         "application/x-mobipocket-ebook", "application/vnd.amazon.ebook", "application/x-mobi8-ebook", "application/x-fictionbook+xml"]
         .map((t) => '                <data android:mimeType="' + t + '" />\n').join("") +

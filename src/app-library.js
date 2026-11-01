@@ -846,6 +846,9 @@ function pageSheet(p, where) {
         // The page changed since (1.38.0): fetched again in its place.
         p.file || p.preview || !/^https?:/.test(p.url || "") ? null
           : menuRow("Update from the site", () => back().then(() => updateClip(p))),
+        // A manga read as an article (1.49.0): saved again as its pictures.
+        p.file || p.preview || p.comic || !/^https?:/.test(p.url || "") ? null
+          : menuRow("Save as comic", () => back().then(() => saveClipAsComic(p))),
         // The original gone or changed (1.15.0): the Wayback Machine's copy.
         p.file || p.preview || p.comic || !/^https?:/.test(p.url || "") ? null
           : menuRow(p.archived ? "Find a newer archived copy" : "Use the archived copy", () => back().then(() => archiveClip(p))),
@@ -1543,7 +1546,7 @@ async function saveHighlights(btn) {
 // (0.31.0): a backup is restored, a clip sent as a file comes back, and
 // a book, a note, a page or a comic becomes a clip of its own. `open`
 // opens it once it's in.
-const FILE_ACCEPT = ".epub,.mobi,.azw,.azw3,.prc,.fb2,.md,.markdown,.txt,.html,.htm,.eml,.cbz,.pdf,.csv,.json,.zip,.opml,.xml,application/epub+zip,application/pdf,text/markdown,text/plain,text/html,message/rfc822,text/csv,application/json,application/zip";
+const FILE_ACCEPT = ".epub,.mobi,.azw,.azw3,.prc,.fb2,.md,.markdown,.txt,.html,.htm,.eml,.cbz,.pdf,.pptx,.csv,.json,.zip,.opml,.xml,application/epub+zip,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,text/html,message/rfc822,text/csv,application/json,application/zip";
 // The system's picker where there is one (it also grants a lasting
 // permission, for a clip that reads from the file); the browser's own
 // otherwise.
@@ -1627,11 +1630,32 @@ function askKeep(file, kind, can) {
     openMenu("file");
   });
 }
+// A PowerPoint deck can't be read as it is, so it's offered as a PDF made
+// from it (1.49.0). Resolves to true to convert, null to stop.
+function askConvert(file) {
+  return new Promise((done) => {
+    askingFile = { file, kind: "pptx", done, convert: true, answered: false };
+    openMenu("file");
+  });
+}
 function fileSheet() {
   const a = askingFile;
   if (!a) return el("div");
   const answer = (v) => { if (a.answered) return; a.answered = true; a.done(v); back(); };
   const big = formatSize(a.file.size || 0);
+  if (a.convert) {
+    return el("div", { class: "page-controls" },
+      el("div", { class: "menu-head" },
+        el("p", { class: "menu-title", dir: "auto" }, a.file.name),
+        el("p", { class: "meta" }, ["PowerPoint", big].filter(Boolean).join(" · "))),
+      el("div", { class: "group" },
+        el("button", { class: "row", type: "button", onclick: () => answer(true) },
+          el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, "Convert to PDF"),
+            el("span", { class: "choice-note" }, "Makes a PDF of the slides, which you save where you like, and opens it. The slides are redrawn, so some effects, charts and fonts may look different."))),
+        el("button", { class: "row", type: "button", onclick: () => answer(null) },
+          el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, "Cancel"),
+            el("span", { class: "choice-note" }, "Nothing is opened or saved.")))));
+  }
   return el("div", { class: "page-controls" },
     el("div", { class: "menu-head" },
       el("p", { class: "menu-title", dir: "auto" }, a.file.name),
@@ -1667,8 +1691,8 @@ addEventListener("drop", async (e) => {
 // other way this time (a copy of one read from where it is, or back).
 const hasFile = (name, size, link) => state.pages.some((p) => p.file && p.file.name === name && p.file.size === size && !p.link === !link);
 const fileLike = (name, size, link) => state.pages.find((p) => p.file && p.file.name === name && p.file.size === size && !p.link === !link);
-const FILE_KINDS_LINE = "EPUB, PDF, Markdown, text, HTML, email (.eml) and CBZ comic files";
-async function openFile(file, btn, open, ref) {
+const FILE_KINDS_LINE = "EPUB, PDF, PowerPoint, Markdown, text, HTML, email (.eml) and CBZ comic files";
+async function openFile(file, btn, open, ref, forced) {
   if (!file) return;
   const label = btn ? btn.querySelector(".row-label") : null;
   const say = (t) => { if (label) label.textContent = t; };
@@ -1693,6 +1717,11 @@ async function openFile(file, btn, open, ref) {
       return;
     }
     const kind = await C.files.kindOf(file);
+    if (kind === "pptx") {
+      if (btn) { btn.disabled = false; say("Restore or open a file"); }
+      await convertDeck(file, ref, open);
+      return;
+    }
     // Already here from the watched folder (1.1.3), copy or not.
     const inFolder = C.files.KINDS[kind] && state.pages.find((p) => p.watched && p.file && p.file.name === file.name && p.file.size === file.size);
     if (inFolder) {
@@ -1703,7 +1732,9 @@ async function openFile(file, btn, open, ref) {
       return;
     }
     let link = null;
-    if (C.files.canLink(kind) && (ref || C.platform.files.canLink)) {
+    // A PDF made from a deck was saved just now, so it isn't asked about.
+    if (forced) link = forced.ref || null;
+    else if (C.files.canLink(kind) && (ref || C.platform.files.canLink)) {
       const asked = await askKeep(file, kind, !!ref);
       if (asked == null) { if (btn) { btn.disabled = false; say("Restore"); } return; }
       link = asked ? ref : null;
@@ -1753,6 +1784,39 @@ async function openFile(file, btn, open, ref) {
   if (btn) btn.disabled = false;
   if (state.settings) renderSettings();
   if (state.section) renderSection();
+}
+
+// A deck asked about, turned into a PDF, saved where the person picks and
+// opened from there, as a PDF picked from that place would be (1.49.0).
+async function convertDeck(file, ref, open) {
+  if (!(await askConvert(file))) { if (ref) C.platform.files.release(ref); return; }
+  const run = Object.assign(startRun(null, "Converting a deck", 1), { label: file.name, files: true, now: "Converting" });
+  runChanged();
+  let made, saved;
+  try {
+    made = await C.pptx.toPdf(file, (done, total) => {
+      run.now = "Slide " + Math.min(done + 1, total) + " of " + total;
+      run.part = total ? done / total : null;
+      updateRunCard(run);
+    });
+    run.now = "Saving";
+    updateRunCard(run);
+    saved = await C.platform.saveLinked(made.blob, made.name, "application/pdf", ref);
+  } catch (e) {
+    const told = e instanceof C.files.FileError;
+    if (!told) console.error(e);
+    toast(told ? e.message : "Couldn't turn that into a PDF. Try again.");
+    return;
+  } finally {
+    run.now = null; runs.delete(run); runChanged();
+    if (ref) C.platform.files.release(ref);
+  }
+  if (saved.saved === false) { toast("Not converted: the PDF wasn't saved."); return; }
+  // No place to keep it (a browser without the save picker): it downloads,
+  // and a copy is what opens.
+  if (saved.saved === null) C.platform.download(made.name, made.blob);
+  await openFile(new File([made.blob], made.name, { type: "application/pdf" }), null, open, saved.ref, { ref: saved.ref });
+  if (made.skipped) toast(made.skipped === 1 ? "One chart or picture couldn't be drawn." : made.skipped + " charts or pictures couldn't be drawn.");
 }
 
 // A backup merged in: a file opened here, or one from Google Drive.

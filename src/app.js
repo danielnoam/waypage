@@ -65,6 +65,7 @@ const NEW_KEY = "waypage.newChapters";
 const DAILY_KEY = "waypage.checkDaily";
 const EXPORT_KEY = "waypage.exportKind";
 const RATE_KEY = "waypage.aloudRate";
+const SCROLL_RATE_KEY = "waypage.scrollRate";
 const VOICE_KEY = "waypage.aloudVoice";
 const DEVICE_KEY = "waypage.deviceName";
 
@@ -137,7 +138,7 @@ function paintTheme(choice) {
   document.documentElement.toggleAttribute("data-dim-pictures", !!(themeOf(theme) || {}).dark && load(DIM_KEY, true) !== false);
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
-  if (C.reader) C.reader.applyTheme();
+  if (C.reader) { if (typeof paintPdfDark === "function") paintPdfDark(); C.reader.applyTheme(); }
 }
 
 // A new theme is there at once (1.11.0): the cross-fade it had was a
