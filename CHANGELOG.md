@@ -2,6 +2,12 @@
 
 All notable changes to Carry-on. Newest first.
 
+## Unreleased
+
+### Changed
+- Settings › Google Drive: Back up by itself is a row like the other
+  picks, its choice at the end, not a drop-down under its name.
+
 ## [1.48.3] - 2026-11-01
 
 ### Changed
