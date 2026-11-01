@@ -191,6 +191,23 @@
     if (!g) return [{ transform: "scale(0.6)", transformOrigin: "50% 0" }, { transform: "none", transformOrigin: "50% 0" }];
     return [popAt(g, 0), popAt(g, 1)];
   }
+  // A window, dialog or panel opened from a button (1.49.0): the whole
+  // box zooms out of the button at its own proportions, content and all,
+  // and shrinks back into it. popFrom's clip only uncovered the box, which
+  // on anything big read as a cut-out rectangle wiping open (Daniel: the
+  // grow for Downloads, Sync and Save with options "is not good").
+  function zoomFrames(el, B) {
+    const P = box(el);
+    if (!B || !B.width || !P.width) return [{ transform: "scale(" + SETTLE + ")", opacity: 0 }, { opacity: 1, offset: 0.33 }, { transform: "none", opacity: 1 }];
+    const s = Math.min(1, Math.max(B.width / P.width, B.height / P.height, 0.06));
+    const bx = B.left + B.width / 2, by = B.top + B.height / 2;
+    const ox = Math.max(0, Math.min(P.width, bx - P.left)), oy = Math.max(0, Math.min(P.height, by - P.top));
+    const origin = ox + "px " + oy + "px";
+    return [{ transform: "translate(" + (bx - P.left - ox) + "px, " + (by - P.top - oy) + "px) scale(" + s + ")", transformOrigin: origin },
+      { transform: "none", transformOrigin: origin }];
+  }
+  const zoomFrom = (el, anchor) => one(el, zoomFrames(el, anchor), "sheet", true);
+  const zoomInto = (el, anchor) => one(el, back(zoomFrames(el, anchor)), "control", false);
   const popFrom = (el, anchor) => one(el, popFrames(el, anchor), "control", true);
   const popInto = (el, anchor) => one(el, back(popFrames(el, anchor)), "control", false);
   // A drop-down menu leaves by only the last stretch of its arrival,
@@ -310,6 +327,6 @@
   window.Waypage = window.Waypage || {};
   window.Waypage.motion = {
     busy, timing, reduced, still, setStill, desk, push, pop, grow, shrink, rise, sink, settle, dim, slideIn, slideOut, slideBack,
-    popFrom, popInto, popOut, edgeIn, edgeOut, morph, appear, vanish, measure, flip, ghostOut, fromPast, pageOut, pageIn, sideDrift,
+    popFrom, popInto, popOut, zoomFrom, zoomInto, edgeIn, edgeOut, morph, appear, vanish, measure, flip, ghostOut, fromPast, pageOut, pageIn, sideDrift,
   };
 })();

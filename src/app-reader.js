@@ -119,7 +119,7 @@ function pushScreen(screen) {
     showAloudBar();
     if (again) return Promise.resolve();
     const from = dialog && anchorOf(screen);
-    return dialog ? M.popFrom(screen, from && from.getBoundingClientRect()) : M.push(screen);
+    return dialog ? M.zoomFrom(screen, from && from.getBoundingClientRect()) : M.push(screen);
   }
   delete screen.dataset.dialog;
   delete screen.dataset.pane;
@@ -164,7 +164,7 @@ function openWin(screen) {
   if (again) return Promise.resolve();
   const from = gear();
   $("settingsBack").focus({ preventScroll: true });
-  return M.popFrom(win, from && from.getBoundingClientRect());
+  return M.zoomFrom(win, from && from.getBoundingClientRect());
 }
 function closeWin(screen, hide) {
   const win = $("settingsWin"), c = $("screenCatch"), n = pushes.get(screen), t = ++winTurn;
@@ -173,7 +173,7 @@ function closeWin(screen, hide) {
   cover(below(screen), false);
   cover($("sidebar"), false);
   const to = gear();
-  winGone = M.popInto(win, to && to.getBoundingClientRect()).then(() => {
+  winGone = M.zoomInto(win, to && to.getBoundingClientRect()).then(() => {
     if (pushes.get(screen) !== n || winTurn !== t) return;
     delete win.dataset.open;
     delete win.dataset.leaving;
@@ -204,7 +204,7 @@ function popScreen(screen) {
       afterSettle(() => { if (pushes.get(screen) === n) cover(under, false); });
     }
     const to = screen.dataset.dialog && anchorOf(screen);
-    return (screen.dataset.dialog ? M.popInto(screen, to && to.getBoundingClientRect()) : M.pop(screen)).then(hide).then(() => showAloudBar());
+    return (screen.dataset.dialog ? M.zoomInto(screen, to && to.getBoundingClientRect()) : M.pop(screen)).then(hide).then(() => showAloudBar());
   }
   const under = below(screen);
   screen.dataset.leaving = "1";
