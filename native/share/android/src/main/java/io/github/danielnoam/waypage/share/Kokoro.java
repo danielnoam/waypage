@@ -15,7 +15,12 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
@@ -104,8 +109,102 @@ final class Kokoro {
     }
 
     static synchronized void release() {
+        synchronized (LOCK) {
+            for (Take t : takes) t.cancelled = true;
+            takes.clear();
+        }
         if (tts != null) tts.free();
         tts = null;
+    }
+
+    // ---- Made ahead. Android lets an engine get only about half a second
+    // ahead of the speaker, and hands it the next piece only once this one
+    // is done, so Kokoro paused at every paragraph while it made the next.
+    // Narrate (SpeechService, same process) asks for the piece being read
+    // and the one after here; they're made one after another on their own
+    // thread, and the engine plays from what's made.
+
+    static final class Take {
+        final String key;
+        final long seq;
+        final List<byte[]> chunks = new ArrayList<>();
+        boolean done, failed;
+        volatile boolean cancelled;
+        Take(String key, long seq) { this.key = key; this.seq = seq; }
+    }
+    static final Object END = new Object();
+    private static final Object LOCK = new Object();
+    private static final List<Take> takes = new ArrayList<>();
+    private static long seqs;
+    private static final ExecutorService maker = Executors.newSingleThreadExecutor();
+
+    /** Narrate's speed (1.0 = normal) the way the engine gets it, as a whole percent. */
+    static float speedOf(int percent) { return Math.max(0.5f, Math.min(3f, percent / 100f)); }
+
+    static int sidFor(String voiceName, Locale l) {
+        String[] v = voice(voiceName);
+        return Integer.parseInt((v != null ? v : voiceFor(l))[1]);
+    }
+
+    /** The piece, being made or made already, else started now. */
+    static Take take(Context c, String text, int sid, float speed) {
+        String key = sid + "|" + Math.round(speed * 100) + "|" + text;
+        synchronized (LOCK) {
+            for (Take t : takes) if (t.key.equals(key) && !t.cancelled) return t;
+            Take t = new Take(key, ++seqs);
+            takes.add(t);
+            while (takes.size() > 6) takes.remove(0).cancelled = true;
+            final Context app = c.getApplicationContext();
+            maker.execute(() -> make(app, t, text, sid, speed));
+            return t;
+        }
+    }
+
+    /** The pieces asked for before this one aren't wanted any more (a skip, a new start). */
+    static void dropBefore(Take keep) {
+        synchronized (LOCK) {
+            for (Iterator<Take> it = takes.iterator(); it.hasNext(); ) {
+                Take t = it.next();
+                if (t.seq < keep.seq) { t.cancelled = true; it.remove(); }
+            }
+        }
+    }
+
+    /** Chunk i when it's made; null after a short wait without it; END when there are no more. */
+    static Object next(Take t, int i) throws InterruptedException {
+        synchronized (LOCK) {
+            if (i >= t.chunks.size() && !t.done && !t.cancelled) LOCK.wait(100);
+            if (i < t.chunks.size()) return t.chunks.get(i);
+            return t.done || t.cancelled ? END : null;
+        }
+    }
+
+    private static void make(Context c, Take t, String text, int sid, float speed) {
+        OfflineTts tts = t.cancelled ? null : get(c);
+        if (tts != null) {
+            try {
+                tts.generate(text, sid, speed, (samples) -> {
+                    if (t.cancelled) return 0;
+                    byte[] pcm = new byte[samples.length * 2];
+                    for (int i = 0; i < samples.length; i++) {
+                        int s = (int) (Math.max(-1f, Math.min(1f, samples[i])) * 32767);
+                        pcm[2 * i] = (byte) s;
+                        pcm[2 * i + 1] = (byte) (s >> 8);
+                    }
+                    synchronized (LOCK) {
+                        t.chunks.add(pcm);
+                        LOCK.notifyAll();
+                    }
+                    return t.cancelled ? 0 : 1;
+                });
+            } catch (Throwable e) {
+                t.failed = true;
+            }
+        } else t.failed = !t.cancelled;
+        synchronized (LOCK) {
+            t.done = true;
+            LOCK.notifyAll();
+        }
     }
 
     static String[] voice(String name) {

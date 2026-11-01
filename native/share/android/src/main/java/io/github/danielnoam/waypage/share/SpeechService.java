@@ -231,6 +231,7 @@ public class SpeechService extends Service {
         tts.setSpeechRate(job.rate);
         String id = generation + ":" + index;
         String text = job.items[index];
+        makeAhead(index);
         if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) {
             main.postDelayed(() -> said(id), 300);
         }
@@ -246,6 +247,14 @@ public class SpeechService extends Service {
         main.postDelayed(() -> said(id), most);
     }
 
+    // Waypage's own Kokoro engine makes a piece as soon as it's asked for
+    // here, not when Android hands it over (Kokoro.take).
+    private void makeAhead(int n) {
+        if (!getPackageName().equals(engine) || !Kokoro.ready(this)) return;
+        Locale l = job.lang != null && !job.lang.isEmpty() ? Locale.forLanguageTag(job.lang) : Locale.getDefault();
+        Kokoro.take(this, job.items[n], Kokoro.sidFor(job.voice, l), Kokoro.speedOf((int) (job.rate * 100)));
+    }
+
     // The next piece goes to the engine while this one plays, so it's
     // made by the time this one ends: a slower engine (Kokoro) paused
     // at every paragraph while it made the next.
@@ -253,6 +262,7 @@ public class SpeechService extends Service {
         int n = index + 1;
         ahead = -1;
         if (job == null || n >= job.items.length) return;
+        makeAhead(n);
         if (tts.speak(job.items[n], TextToSpeech.QUEUE_ADD, null, generation + ":" + n) == TextToSpeech.SUCCESS) ahead = n;
     }
 

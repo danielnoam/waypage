@@ -79,31 +79,31 @@ public class KokoroTtsService extends TextToSpeechService {
         CharSequence chars = r.getCharSequenceText();
         String text = chars != null ? chars.toString() : r.getText();
         if (tts == null || text == null) { cb.error(); return; }
-        String[] v = Kokoro.voice(r.getVoiceName());
-        if (v == null) v = Kokoro.voiceFor(new Locale("en", r.getCountry() == null ? "" : r.getCountry()));
-        int sid = Integer.parseInt(v[1]);
-        float speed = Math.max(0.5f, Math.min(3f, r.getSpeechRate() / 100f));
+        String country = r.getCountry() == null ? "" : r.getCountry();
+        int sid = Kokoro.sidFor(r.getVoiceName(), new Locale("en", country));
+        float speed = Kokoro.speedOf(r.getSpeechRate());
         if (cb.start(tts.sampleRate(), AudioFormat.ENCODING_PCM_16BIT, 1) != TextToSpeech.SUCCESS) return;
         if (text.trim().isEmpty()) { cb.done(); return; }
+        // Made ahead when Narrate asked for it (Kokoro.take), else now.
+        Kokoro.Take t = Kokoro.take(this, text, sid, speed);
+        Kokoro.dropBefore(t);
         final int max = Math.max(2, cb.getMaxBufferSize() & ~1);
         try {
-            tts.generate(text, sid, speed, (samples) -> {
-                if (stopped) return 0;
-                byte[] pcm = new byte[samples.length * 2];
-                for (int i = 0; i < samples.length; i++) {
-                    int s = (int) (Math.max(-1f, Math.min(1f, samples[i])) * 32767);
-                    pcm[2 * i] = (byte) s;
-                    pcm[2 * i + 1] = (byte) (s >> 8);
-                }
+            for (int i = 0; !stopped; ) {
+                Object o = Kokoro.next(t, i);
+                if (o == Kokoro.END) break;
+                if (o == null) continue;
+                byte[] pcm = (byte[]) o;
                 for (int at = 0; at < pcm.length && !stopped; at += max) {
-                    if (cb.audioAvailable(pcm, at, Math.min(max, pcm.length - at)) != TextToSpeech.SUCCESS) return 0;
+                    if (cb.audioAvailable(pcm, at, Math.min(max, pcm.length - at)) != TextToSpeech.SUCCESS) return;
                 }
-                return stopped ? 0 : 1;
-            });
-        } catch (Throwable e) {
-            cb.error();
+                i++;
+            }
+        } catch (InterruptedException e) {
             return;
         }
-        if (!stopped) cb.done();
+        if (stopped) return;
+        if (t.failed && t.chunks.isEmpty()) cb.error();
+        else cb.done();
     }
 }

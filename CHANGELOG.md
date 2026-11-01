@@ -17,8 +17,9 @@ All notable changes to Carry-on. Newest first.
   the phone's default. An engine picked before stays for every language
   until one is changed.
 - Narrate (Android) hands the phone's voice the next paragraph while
-  one is read, so a slower voice like Kokoro doesn't pause between
-  paragraphs.
+  one is read, and Kokoro starts making it right then, so it doesn't
+  pause between paragraphs (Android lets a voice get only half a second
+  ahead on its own).
 - Narrate's Speech engine list names the phone's default engine once,
   not as the default and again on its own.
 
