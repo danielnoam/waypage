@@ -21,7 +21,7 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 **Settings is a window on a big screen (1.49.0).** From 700 px it slid
 in from the right like a phone screen, but its menu ends up on the
 left, where the sidebar is, so the menu crossed the whole window to get
-there (Daniel: "comes from the wrong side"). It now grows out of the
+there (Daniel: "comes from the wrong side"). It now opens from the
 gear as a window over the dimmed library, like Downloads and Sync
 (Daniel's pick of two, the other being menu from the left and section
 from the right). The menu and section stay two screens so the phone is
@@ -32,14 +32,15 @@ leaves with the window rather than first. Search and Settings moved
 from the sidebar to the top bar's right end at the same time (Daniel's
 ask), so the window has one place to grow from on every big screen.
 
-**Dialogs zoom out of their button (1.49.0).** Downloads, Sync, Save
-with options and the Settings window used `popFrom`, which clips the
-box down to the button's size and uncovers it. That suits a small menu,
-but on a 400 to 1000 px box the content stood still while a rectangle
-wiped across it (Daniel: "not good"). `zoomFrom` scales the whole box
-from the button at its own proportions, about the point of the box
-nearest the button, and `zoomInto` runs it back on the quicker spring.
-Menus keep `popFrom`.
+**Dialogs fade in (1.49.0).** Downloads, Sync, Save with options and
+the Settings window used `popFrom`, which clips the box down to the
+button and uncovers it: on a 400 to 1000 px box the content stood still
+while a rectangle wiped across it (Daniel: "not good"). A zoom of the
+whole box out of the button was "much better", but he asked for them to
+"open normally, like a fade". `dialogIn` fades in over the first part
+of the spring as the box settles from 96%, scaled about the point
+nearest its button, and `dialogOut` fades it out quicker. This is the
+one planned fade, against the "nothing fades" rule; menus keep `popFrom`.
 
 **The list and post split is a share, not pixels (1.49.0).** It was a
 500 px list; Daniel asked for half and half and a line to drag. The

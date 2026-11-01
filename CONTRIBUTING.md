@@ -100,7 +100,10 @@ after.
 **Design.** Follow DESIGN.md: colors are tokens, sizes come from the
 scales, touch targets are 44 px, every theme passes WCAG AA
 (`test/contrast.test.js`), and every animation has a reduced-motion
-answer. **Motion has no fades:** things move or zoom.
+answer. **Motion has no fades:** things move or zoom. Dialogs and
+panels opened from a button (Settings on a big screen, Downloads, Sync,
+Save with options) are the one exception: they fade in as they settle
+(1.49.0, Daniel's pick).
 
 **Words in the UI.** Library, Clips, Files, Collections, Feeds, Tags,
 Highlights, Narrate (not "Read aloud"). "Pages" is only the reader's

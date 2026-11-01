@@ -3,8 +3,8 @@
 // stiffness 400, damping 32 for screens, sheets and cards; 600 and 40 for
 // small controls. On a desktop (1024 px and up, a mouse or trackpad) the
 // same shapes run critically damped, quicker and without overshoot.
-// Nothing fades: what comes grows out of what was tapped or in from an
-// edge, and leaves the same way. Under prefers-reduced-motion every one
+// Nothing fades but dialogs (1.49.0): what comes grows out of what was
+// tapped or in from an edge, and leaves the same way. Under prefers-reduced-motion every one
 // becomes a 120 ms fade. Nothing animates the text of a page being read,
 // and nothing waits on an animation to accept input.
 (function () {
@@ -191,23 +191,24 @@
     if (!g) return [{ transform: "scale(0.6)", transformOrigin: "50% 0" }, { transform: "none", transformOrigin: "50% 0" }];
     return [popAt(g, 0), popAt(g, 1)];
   }
-  // A window, dialog or panel opened from a button (1.49.0): the whole
-  // box zooms out of the button at its own proportions, content and all,
-  // and shrinks back into it. popFrom's clip only uncovered the box, which
-  // on anything big read as a cut-out rectangle wiping open (Daniel: the
-  // grow for Downloads, Sync and Save with options "is not good").
-  function zoomFrames(el, B) {
+  // A window, dialog or panel opened from a button (1.49.0): it fades in
+  // as it settles from 96%, leaning toward its button, and fades out the
+  // same way, a little quicker. The one place motion fades on purpose
+  // (Daniel's pick): popFrom's clip read as a cut-out wiping open, and a
+  // zoom from the button itself, whole, was better but still too much
+  // for something that just opens.
+  function fadeFrames(el, B) {
     const P = box(el);
-    if (!B || !B.width || !P.width) return [{ transform: "scale(" + SETTLE + ")", opacity: 0 }, { opacity: 1, offset: 0.33 }, { transform: "none", opacity: 1 }];
-    const s = Math.min(1, Math.max(B.width / P.width, B.height / P.height, 0.06));
-    const bx = B.left + B.width / 2, by = B.top + B.height / 2;
-    const ox = Math.max(0, Math.min(P.width, bx - P.left)), oy = Math.max(0, Math.min(P.height, by - P.top));
-    const origin = ox + "px " + oy + "px";
-    return [{ transform: "translate(" + (bx - P.left - ox) + "px, " + (by - P.top - oy) + "px) scale(" + s + ")", transformOrigin: origin },
-      { transform: "none", transformOrigin: origin }];
+    const ox = B && B.width && P.width ? Math.max(0, Math.min(P.width, B.left + B.width / 2 - P.left)) + "px" : "50%";
+    const oy = B && B.width && P.width ? Math.max(0, Math.min(P.height, B.top + B.height / 2 - P.top)) + "px" : "50%";
+    const origin = ox + " " + oy;
+    return [{ transform: "scale(0.96)", transformOrigin: origin, opacity: 0 }, { opacity: 1, offset: 0.45 }, { transform: "none", transformOrigin: origin, opacity: 1 }];
   }
-  const zoomFrom = (el, anchor) => one(el, zoomFrames(el, anchor), "sheet", true);
-  const zoomInto = (el, anchor) => one(el, back(zoomFrames(el, anchor)), "control", false);
+  const dialogIn = (el, anchor) => one(el, fadeFrames(el, anchor), "control", true);
+  const dialogOut = (el, anchor) => {
+    const f = fadeFrames(el, anchor);
+    return one(el, [f[2], { opacity: 0, offset: 0.7 }, { ...f[0], transform: "scale(0.98)", opacity: 0 }], "control", false);
+  };
   const popFrom = (el, anchor) => one(el, popFrames(el, anchor), "control", true);
   const popInto = (el, anchor) => one(el, back(popFrames(el, anchor)), "control", false);
   // A drop-down menu leaves by only the last stretch of its arrival,
@@ -327,6 +328,6 @@
   window.Waypage = window.Waypage || {};
   window.Waypage.motion = {
     busy, timing, reduced, still, setStill, desk, push, pop, grow, shrink, rise, sink, settle, dim, slideIn, slideOut, slideBack,
-    popFrom, popInto, popOut, zoomFrom, zoomInto, edgeIn, edgeOut, morph, appear, vanish, measure, flip, ghostOut, fromPast, pageOut, pageIn, sideDrift,
+    popFrom, popInto, popOut, dialogIn, dialogOut, edgeIn, edgeOut, morph, appear, vanish, measure, flip, ghostOut, fromPast, pageOut, pageIn, sideDrift,
   };
 })();

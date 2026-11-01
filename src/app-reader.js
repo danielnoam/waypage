@@ -119,7 +119,7 @@ function pushScreen(screen) {
     showAloudBar();
     if (again) return Promise.resolve();
     const from = dialog && anchorOf(screen);
-    return dialog ? M.zoomFrom(screen, from && from.getBoundingClientRect()) : M.push(screen);
+    return dialog ? M.dialogIn(screen, from && from.getBoundingClientRect()) : M.push(screen);
   }
   delete screen.dataset.dialog;
   delete screen.dataset.pane;
@@ -138,8 +138,7 @@ function pushScreen(screen) {
   return moved;
 }
 // Settings on a big screen (1.49.0): a window over the library that
-// grows out of the gear it was opened from and shrinks back into it,
-// like Downloads and Sync. Until then the whole screen slid in from the
+// fades in by the gear it was opened from, like Downloads and Sync. Until then the whole screen slid in from the
 // right and its menu crossed the window to land on the left. Its menu
 // and section are still the two screens they are on a phone, inside
 // #settingsWin, which is their box (display: contents on a phone).
@@ -164,7 +163,7 @@ function openWin(screen) {
   if (again) return Promise.resolve();
   const from = gear();
   $("settingsBack").focus({ preventScroll: true });
-  return M.zoomFrom(win, from && from.getBoundingClientRect());
+  return M.dialogIn(win, from && from.getBoundingClientRect());
 }
 function closeWin(screen, hide) {
   const win = $("settingsWin"), c = $("screenCatch"), n = pushes.get(screen), t = ++winTurn;
@@ -173,7 +172,7 @@ function closeWin(screen, hide) {
   cover(below(screen), false);
   cover($("sidebar"), false);
   const to = gear();
-  winGone = M.zoomInto(win, to && to.getBoundingClientRect()).then(() => {
+  winGone = M.dialogOut(win, to && to.getBoundingClientRect()).then(() => {
     if (pushes.get(screen) !== n || winTurn !== t) return;
     delete win.dataset.open;
     delete win.dataset.leaving;
@@ -204,7 +203,7 @@ function popScreen(screen) {
       afterSettle(() => { if (pushes.get(screen) === n) cover(under, false); });
     }
     const to = screen.dataset.dialog && anchorOf(screen);
-    return (screen.dataset.dialog ? M.zoomInto(screen, to && to.getBoundingClientRect()) : M.pop(screen)).then(hide).then(() => showAloudBar());
+    return (screen.dataset.dialog ? M.dialogOut(screen, to && to.getBoundingClientRect()) : M.pop(screen)).then(hide).then(() => showAloudBar());
   }
   const under = below(screen);
   screen.dataset.leaving = "1";
