@@ -10,6 +10,8 @@ All notable changes to Carry-on. Newest first.
 - A clip's sheet (hold it in the library): Read as Article / Comic in
   place of Save as comic, both ways. A web clip saves again that way; a
   file (not a PDF read from outside) only changes how it's shown.
+- A drop-down in a short sheet (Export as) has its whole list: the
+  sheet grows to hold it instead of cutting it off at its bottom edge.
 - Auto-scroll: a tap on the page pauses it; another tap, or scrolling
   yourself, lets it go on. Holding a finger still holds it as before.
 
