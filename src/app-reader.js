@@ -1140,9 +1140,13 @@ const langOf = (p) => ((p && p.lang) || navigator.language || "en").toLowerCase(
 const primary = (lang) => String(lang || "").toLowerCase().split(/[-_]/)[0].replace(/^iw$/, "he");
 // The speech engine (1.33.0, Android): "" for the phone's default. Each
 // engine keeps its own voice for each language.
+// One engine per language, so Kokoro can read English while
+// Hebrew stays with Google. Before, one engine for all: kept as "*".
 const ENGINE_KEY = "waypage.aloudEngine";
-const engineOf = () => String(load(ENGINE_KEY, "") || "");
-const voiceKey = (lang) => (engineOf() ? engineOf() + "|" : "") + lang;
+const enginePicks = () => { const v = load(ENGINE_KEY, ""); return v && typeof v === "object" ? v : { "*": String(v || "") }; };
+const engineOf = (lang) => { const all = enginePicks(); return String((lang in all ? all[lang] : all["*"]) || ""); };
+const engineFor = (p) => engineOf(primary(langOf(p)));
+const voiceKey = (lang) => (engineOf(lang) ? engineOf(lang) + "|" : "") + lang;
 const voiceFor = (p) => load(VOICE_KEY, {})[voiceKey(primary(langOf(p)))] || "";
 
 // From a block, or from a word in it (`spot` from a selection).
@@ -1169,7 +1173,7 @@ async function startAloud(from, spot) {
   setAloud("playing", start);
   queued = null;
   try {
-    await speech.play({ items, start, lang: p.lang || "", voice: voiceFor(p), engine: engineOf(), rate: load(RATE_KEY, 1), mix: !!load(MIX_KEY, false),
+    await speech.play({ items, start, lang: p.lang || "", voice: voiceFor(p), engine: engineFor(p), rate: load(RATE_KEY, 1), mix: !!load(MIX_KEY, false),
       key: p.id, blocks: map, ...mediaInfo(p) });
     queueNext();
   } catch (e) {
@@ -1211,7 +1215,7 @@ async function queueNext() {
   if (!texts.length) return;
   const { items, map } = pieces(texts.map((text, block) => ({ text, block })));
   queued = { key: next.id, after: p.id, map };
-  const ok = await speech.queue({ after: p.id, items, start: 0, lang: next.lang || "", voice: voiceFor(next), engine: engineOf(), mix: !!load(MIX_KEY, false),
+  const ok = await speech.queue({ after: p.id, items, start: 0, lang: next.lang || "", voice: voiceFor(next), engine: engineFor(next), mix: !!load(MIX_KEY, false),
     key: next.id, blocks: map, ...mediaInfo(next) });
   if (!ok) queued = null;
 }
@@ -1863,29 +1867,29 @@ function aloudControls() {
   // would show it through `hidden`.
   const engineSlot = el("span", { hidden: true }), moreSlot = el("span", { hidden: true });
   const engineRow = el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Speech engine"));
-  const more = el("button", { class: "btn-quiet aloud-more", type: "button", onclick: () => speech.moreVoices(engineOf()) }, "Get more voices");
+  const more = el("button", { class: "btn-quiet aloud-more", type: "button", onclick: () => speech.moreVoices(engineOf(lang)) }, "Get more voices");
   speech.engines().then(({ engines, default: def }) => {
     if (!engines.length) return;
     moreSlot.replaceWith(more);
     if (engines.length < 2) return;
     const dflt = engines.find((e) => e.name === def);
     const options = [{ value: "", label: "Phone's default" + (dflt ? " (" + dflt.label + ")" : "") }, ...engines.map((e) => ({ value: e.name, label: e.label }))];
-    const picked = engineOf();
+    const picked = engineOf(lang);
     engineRow.append(dropdown({ label: "Speech engine", cls: "field-pick font-pick", options,
       value: options.some((o) => o.value === picked) ? picked : "",
       onpick: (v) => {
-        store(ENGINE_KEY, v);
+        store(ENGINE_KEY, { ...enginePicks(), [lang]: v });
         const box = engineRow.closest(".aloud-controls");
         if (box) box.replaceWith(aloudControls());
         restart();
       } }));
     engineSlot.replaceWith(engineRow);
   });
-  speech.voices(engineOf()).then((all) => {
+  speech.voices(engineOf(lang)).then((all) => {
     const mine = all.filter((v) => primary(v.lang) === lang);
     if (!mine.length) {
       voiceRow.lastChild.replaceWith(el("span", { class: "meta" }, "Phone's default"));
-      note.textContent = "No " + name + " voice " + (engineOf() ? "in this engine" : "on this phone") + ". " + (speech.background ? "Get more voices adds one" : "Add one in the text-to-speech settings") + ", then come back.";
+      note.textContent = "No " + name + " voice " + (engineOf(lang) ? "in this engine" : "on this phone") + ". " + (speech.background ? "Get more voices adds one" : "Add one in the text-to-speech settings") + ", then come back.";
       note.hidden = false;
       return;
     }

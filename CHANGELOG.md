@@ -2,6 +2,14 @@
 
 All notable changes to Carry-on. Newest first.
 
+## Unreleased
+
+### Changed
+- Narrate (Android): the speech engine is picked for each language, so
+  an installed Kokoro engine can read English while Hebrew stays with
+  the phone's default. An engine picked before stays for every language
+  until one is changed.
+
 ## [1.48.4] - 2026-11-01
 
 ### Changed

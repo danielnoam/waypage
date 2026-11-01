@@ -266,6 +266,10 @@ public class SpeechService extends Service {
                 next.rate = job.rate;
                 job = next;
                 index = Math.max(0, Math.min(job.start, job.items.length - 1));
+                // Another language can have its own engine; the new
+                // one speaks once it has started.
+                String want = job.engine == null ? "" : job.engine;
+                if (!want.equals(engine)) { makeTts(want); return; }
                 speakCurrent();
                 return;
             }
