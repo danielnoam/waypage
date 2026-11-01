@@ -2,6 +2,12 @@
 
 All notable changes to Carry-on. Newest first.
 
+## Unreleased
+
+### Changed
+- Reader: Auto-scroll's button is a play sign pointing down, not the
+  download-style arrow.
+
 ## [1.49.1] - 2026-11-01
 
 ### Changed
