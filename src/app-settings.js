@@ -290,17 +290,16 @@ function fontsGroup() {
   const place = C.store.place.kind;
   const where = place === "documents" ? "Or put font files in Documents/Waypage/fonts on the phone. "
     : place === "folder" ? "Or put font files in a fonts folder inside " + C.store.placeName(C.store.place) + ". " : "";
-  return section("Your fonts", null,
+  const help = "Font files: .ttf, .otf, .woff or .woff2, up to 10 MB. A font stays on this device. " + where;
+  return section("Your fonts", help.trim(),
     el("div", { class: "group" },
       ...mine.map((f) => el("div", { class: "row" },
         el("span", { class: "choice-text" }, el("span", { class: "choice-label", style: "font-family: " + f.family + ", var(--sans)" }, f.label)),
         el("button", { class: "btn-text warn", type: "button", onclick: () => removeFontFile(f.user) }, "Remove"))),
       el("button", { class: "row", type: "button", onclick: () => input.click() },
         el("span", { class: "choice-text" },
-          el("span", { class: "choice-label accent" }, "Add a font"),
-          el("span", { class: "choice-note" }, ".ttf, .otf, .woff or .woff2, up to 10 MB; stays on this device"))),
-      input),
-    where ? el("p", { class: "footnote" }, where.trim()) : null);
+          el("span", { class: "choice-label accent" }, "Add a font"))),
+      input));
 }
 
 // Dictionaries (1.45.0): StarDict files, for Look up on selected words.

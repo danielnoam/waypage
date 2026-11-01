@@ -7,10 +7,11 @@ All notable changes to Carry-on. Newest first.
 ### Changed
 - Settings › Reading: Layout and Text are two sections, like Narrate.
 - Fewer ? in Settings: Theme, Auto uses, Pictures and motion, Layout,
-  Text, Narrate, Your fonts, Library's Layout and Keeping up, Import,
-  Alerts, Saving, GitHub sync's This device and Storage's By collection
-  lost explanations that only repeated their rows. The file types for a
-  font are on Add a font; This device has a line under it.
+  Text, Narrate, Library's Layout and Keeping up, Import, Alerts,
+  Saving, GitHub sync's This device and Storage's By collection lost
+  explanations that only repeated their rows. Your fonts keeps its ?,
+  with the file types and where font files can go; This device has a
+  line under it.
 
 ## [1.48.1] - 2026-10-31
 
