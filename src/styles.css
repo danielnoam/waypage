@@ -1302,6 +1302,9 @@ html { -webkit-tap-highlight-color: transparent; }
 .update-row .spinner { flex-shrink: 0; margin: 0; }
 /* A span styled as the button (the row is the button): centred like one. */
 .update-row .btn-small { display: inline-flex; align-items: center; justify-content: center; }
+/* A newer version out: the version (What's new) and Update are two buttons. */
+.update-text { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: var(--s-3); margin: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+span.update-text { cursor: default; }
 .row:disabled { cursor: default; }
 .row:disabled .row-label, .row:disabled .choice-label { color: var(--muted); }
 .warn { color: var(--warn); }

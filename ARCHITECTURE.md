@@ -55,7 +55,7 @@ src/app-saving.js   sync screen, saving several, next links and new chapters, fe
 src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestures, a feed's sheets
 src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
 src/app-lock.js     app lock: passcode (PBKDF2 hash), fingerprint or face on Android
-src/app-start.js    wiring at launch, what other apps share in, self-update, Preview builds, What's new
+src/app-start.js    wiring at launch, what other apps share in, self-update, Test builds, What's new
 src/save.js         link to saved page: fetch, Wikipedia adapter or Readability, allowlist cleaner, picture previews, video cards
 src/reader.js       a saved page in the sandboxed iframe: place, find, highlights, translation, pages mode
 src/store.js        one directory per clip and library.json; IndexedDB in a browser
@@ -84,13 +84,13 @@ tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-bui
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
 tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
 tools/sign-apk.sh   signs the APK with the release key in CI
-tools/preview-release.sh   puts a labelled pull request's build on its preview-<branch> pre-release
+tools/test-build.sh        puts a labelled pull request's build on its test-<branch> pre-release
 tools/shots.js      retakes the README's screenshots (tools/shots/demo is the demo library)
 test/               node test/run-all.js runs every *.test.js
 design/             the design canvas's artboards, for the exact markup
 docs/PROPOSAL.md    the original architecture, storage, legal and store reasoning
 docs/shots/         the README's screenshots
-.github/workflows/  test.yml (every PR), android.yml and ios.yml (builds, releases, previews), previews.yml (preview labels: build on, remove off)
+.github/workflows/  test.yml (every PR), android.yml and ios.yml (builds, releases, test builds), test-builds.yml (test labels: build on, remove off)
 ```
 
 ## Load order and the one scope
@@ -223,23 +223,23 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
   `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, alias `carryon`)
   and publishes the release `app-v<version>` when `APP_VERSION` is new.
   Without the secrets it builds a test APK and publishes nothing.
-- **Previews (1.48.0, by label since 1.49.1):** on any other branch whose
-  open pull request has a preview label, `tools/preview-release.sh` remakes the pre-release `preview-<branch>`
+- **Test builds (1.48.0 as previews, by label since 1.49.1, renamed 1.50.0):** on any other branch whose
+  open pull request has a test label, `tools/test-build.sh` remakes the pre-release `test-<branch>`
   at the pushed commit with the APK (and the iOS workflow adds the IPA).
   Its notes start with `version:`, `branch:`, `commit:`, `pr:`, which
-  Settings › About › Preview builds (`app-start.js`) reads from the
+  Settings › About › Test builds (`app-start.js`) reads from the
   public releases list to offer the build; `app-build.json` carries the
-  branch and commit, so a preview build knows it is one and skips the
+  branch and commit, so a test build knows it is one and skips the
   update check. A pre-release is never GitHub's "latest", so the
-  updater ignores it. The labels: `preview` (APK and IPA),
-  `preview-android` or `preview-ios` (one, sooner; with `preview-ios`
-  alone the iOS workflow makes the pre-release itself). `previews.yml`
+  updater ignores it. The labels: `test` (APK and IPA),
+  `test-android` or `test-ios` (one, sooner; with `test-ios`
+  alone the iOS workflow makes the pre-release itself). `test-builds.yml`
   runs the build workflows on the branch when a label goes on, and
   removes the pre-release when it comes off, the pull request closes or
   the branch goes. Android installs an equal
-  version code over the app, so the release goes back over a preview
+  version code over the app, so the release goes back over a test build
   only when the branch didn't bump `APP_VERSION`.
-- **Previews in the browser (1.49.0):** the web copy's Preview builds
+- **Test builds in the browser (1.49.0):** the web copy's Test builds
   lists the same pre-releases (repo read from the `owner.github.io/repo/`
   address) and Open puts `{ repo, sha, title, pr }` in the cache
   `waypage-preview`. While it's there, `sw.js` serves every file of the
@@ -247,7 +247,8 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
   in `waypage-preview-<sha>`, and adds a "Back to the release" link
   (`./?release`, which clears it) to `index.html`, so the way back works
   whatever the branch's own code is. Same origin, so the library is the
-  one the browser already has, as with a preview in the app.
+  one the browser already has, as with a test build in the app. (The cache keeps its
+  older name `waypage-preview`, and the app still reads `preview-` tags.)
 - **iOS:** `.github/workflows/ios.yml` builds an unsigned `Waypage.ipa`
   on a Mac runner (`tools/ios-project.js`, `tools/ios-extensions.rb` add
   the share extension and widgets) and attaches it to the same release.

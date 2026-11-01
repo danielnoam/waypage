@@ -14,11 +14,14 @@ All notable changes to Carry-on. Newest first.
   with its whole list, instead of being cut off at the sheet's edge.
 - Auto-scroll: a tap on the page pauses it; another tap, or scrolling
   yourself, lets it go on. Holding a finger still holds it as before.
-- Preview builds: a build being downloaded shows its progress on its
-  row, as About's update does (percent, Paused, Install).
+- Preview builds are now Test builds, in the app and on GitHub: the
+  labels are test, test-android and test-ios, and the pre-releases
+  test-<branch>.
+- Test builds: a build being downloaded shows its progress on its row,
+  as About's update does (percent, Paused, Install).
 - A new version's bar: View opens What's new for it, every version since
-  yours with Update on top, so you see the changes before updating.
-  About has the same as a What's new in x.y.z row.
+  yours with Update on top, so you see the changes before updating. In
+  About, tapping the version opens the same, and Update downloads it.
 
 ## [1.49.2] - 2026-11-01
 
