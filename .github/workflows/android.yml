@@ -70,10 +70,6 @@ jobs:
           node tools/android-version.js
           echo "version=$(node -p "require('./tools/build-www').appVersion()")" >> "$GITHUB_OUTPUT"
 
-      # TEMPORARY: the SHA-256 of Kokoro 1.0's archive, to pin it in Kokoro.java.
-      - name: Kokoro 1.0 archive hash (temporary)
-        run: curl -fsSL https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-multi-lang-v1_0.tar.bz2 | tee >(wc -c >&2) | sha256sum
-
       # Kokoro voices' engine (sherpa-onnx), pinned and checked.
       - name: Speech engine library
         run: bash tools/sherpa-lib.sh

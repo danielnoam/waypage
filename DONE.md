@@ -81,7 +81,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 - Keeps reading across screens, Read next / go on to the next clip, also put away on Android (1.4.0, 1.6.0, 1.23.0)
 - Keep the screen on; picture in picture; Bluetooth previous/next (1.24.0, 1.25.0, 1.26.0)
 - Sleep timer: minutes or end of clip, a moon on the player, Sleep 15 min on the lock screen (1.32.0, 1.36.0)
-- Speech engine picker and Get more voices on Android (1.33.0); one engine per language; Kokoro voices as an optional download (English, Waypage's own engine)
+- Speech engine picker and Get more voices on Android (1.33.0); one engine per language; Kokoro voices as optional downloads (0.19, 1.0, 1.1 on their own screen, Waypage's own engine)
 - Allow mixing: other apps' sound plays on under the voice (1.42.0)
 
 ## Feeds

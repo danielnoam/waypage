@@ -30,9 +30,13 @@ Android speech engine (KokoroTtsService) rather than a second player,
 so the lock screen, Bluetooth buttons, PiP and the sleep timer keep
 working unchanged; the cost is that other apps can use the engine too
 (it's listed in the phone's text-to-speech settings once downloaded).
-English only: Kokoro has no Hebrew, and v0.19 English is the smallest
-and fastest; the 8-language v1.0 is about three times the size. Each
-language picks its own engine, so Hebrew stays on Google. 32-bit and x86
+Three models to pick from (Daniel's ask): 0.19 English int8 (smallest,
+fastest), 1.0 (8 languages, the best voices, but only published full
+size, so slowest) and 1.1 int8 (the Chinese-focused release, 3 English
+voices). None has Hebrew. Each language picks its own engine, so Hebrew
+stays on Google. Android lets an engine get only half a second ahead and
+hands it the next piece only when one ends, so Narrate (same process)
+asks Kokoro for the next piece itself and it's made on its own thread. 32-bit and x86
 phones get no Kokoro row. iOS and the web copy have none yet.
 
 **Preview builds are pre-releases, one per branch (1.48.0).** The

@@ -14,7 +14,7 @@ import java.util.Locale;
 
 /**
  * Waypage's own speech engine: the downloaded Kokoro voices (Kokoro.java)
- * as an Android text-to-speech engine. Narrate's SpeechService picks it
+ * as an Android text-to-speech engine, with the voices of the pack in use. Narrate's SpeechService picks it
  * like Google's; the phone's text-to-speech settings list it too, so
  * other apps can use it. Enabled only once the voices are downloaded.
  * Each sentence is spoken as soon as it's made, not after the whole
@@ -24,16 +24,20 @@ public class KokoroTtsService extends TextToSpeechService {
     private volatile boolean stopped;
     private String[] lang = {"eng", "USA", ""};
 
-    private static boolean english(String l) {
-        return l != null && (l.equalsIgnoreCase("eng") || l.equalsIgnoreCase("en"));
+    // Languages in the pack in use (Kokoro.inUse): English for 0.19,
+    // eight for 1.0, English and Chinese for 1.1.
+    private boolean has(String l) {
+        Kokoro.Pack p = Kokoro.inUse(this);
+        if (p == null || l == null) return false;
+        for (String v : p.voices) if (Kokoro.matches(v, l)) return true;
+        return false;
     }
 
     @Override
     protected int onIsLanguageAvailable(String l, String country, String variant) {
-        if (!english(l)) return TextToSpeech.LANG_NOT_SUPPORTED;
         if (!Kokoro.ready(this)) return TextToSpeech.LANG_MISSING_DATA;
-        String c = country == null ? "" : country.toUpperCase(Locale.ROOT);
-        return c.equals("USA") || c.equals("US") || c.equals("GBR") || c.equals("GB") ? TextToSpeech.LANG_COUNTRY_AVAILABLE : TextToSpeech.LANG_AVAILABLE;
+        if (!has(l)) return TextToSpeech.LANG_NOT_SUPPORTED;
+        return country == null || country.isEmpty() ? TextToSpeech.LANG_AVAILABLE : TextToSpeech.LANG_COUNTRY_AVAILABLE;
     }
 
     @Override
@@ -42,7 +46,7 @@ public class KokoroTtsService extends TextToSpeechService {
     @Override
     protected int onLoadLanguage(String l, String country, String variant) {
         int r = onIsLanguageAvailable(l, country, variant);
-        if (r >= TextToSpeech.LANG_AVAILABLE) lang = new String[] {"eng", country == null ? "" : country, ""};
+        if (r >= TextToSpeech.LANG_AVAILABLE) lang = new String[] {l, country == null ? "" : country, ""};
         return r;
     }
 
@@ -52,15 +56,17 @@ public class KokoroTtsService extends TextToSpeechService {
     @Override
     public List<Voice> onGetVoices() {
         List<Voice> out = new ArrayList<>();
-        for (String[] v : Kokoro.VOICES) {
-            out.add(new Voice(v[0], Locale.forLanguageTag(v[2]), Voice.QUALITY_VERY_HIGH, Voice.LATENCY_NORMAL, false, new HashSet<>()));
+        Kokoro.Pack p = Kokoro.inUse(this);
+        if (p == null) return out;
+        for (String v : p.voices) {
+            out.add(new Voice(Kokoro.PREFIX + v, Locale.forLanguageTag(Kokoro.languageOf(v)), Voice.QUALITY_VERY_HIGH, Voice.LATENCY_NORMAL, false, new HashSet<>()));
         }
         return out;
     }
 
     @Override
     public int onIsValidVoiceName(String name) {
-        return Kokoro.voice(name) != null ? TextToSpeech.SUCCESS : TextToSpeech.ERROR;
+        return Kokoro.sid(this, name) >= 0 ? TextToSpeech.SUCCESS : TextToSpeech.ERROR;
     }
 
     @Override
@@ -68,8 +74,9 @@ public class KokoroTtsService extends TextToSpeechService {
 
     @Override
     public String onGetDefaultVoiceNameFor(String l, String country, String variant) {
-        if (!english(l)) return null;
-        return Kokoro.voiceFor(new Locale("en", country == null ? "" : country))[0];
+        Kokoro.Pack p = Kokoro.inUse(this);
+        if (p == null || !has(l)) return null;
+        return Kokoro.PREFIX + p.voices[Kokoro.defaultSid(this, new Locale(l, country == null ? "" : country))];
     }
 
     @Override
@@ -79,8 +86,9 @@ public class KokoroTtsService extends TextToSpeechService {
         CharSequence chars = r.getCharSequenceText();
         String text = chars != null ? chars.toString() : r.getText();
         if (tts == null || text == null) { cb.error(); return; }
+        String language = r.getLanguage() == null ? "en" : r.getLanguage();
         String country = r.getCountry() == null ? "" : r.getCountry();
-        int sid = Kokoro.sidFor(r.getVoiceName(), new Locale("en", country));
+        int sid = Kokoro.sidFor(this, r.getVoiceName(), new Locale(language, country));
         float speed = Kokoro.speedOf(r.getSpeechRate());
         if (cb.start(tts.sampleRate(), AudioFormat.ENCODING_PCM_16BIT, 1) != TextToSpeech.SUCCESS) return;
         if (text.trim().isEmpty()) { cb.done(); return; }

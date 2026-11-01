@@ -149,7 +149,10 @@ test("the Kokoro engine library is pinned, checked and fetched before the build"
   assert.ok(/^SHA=[0-9a-f]{64}$/m.test(sh));
   assert.ok(/sha256sum -c/.test(sh));
   assert.ok(mirror.includes("Tts.kt at v" + v + "."), "OfflineTts.java mirrors a different sherpa-onnx version");
-  assert.ok(/SHA256 = "[0-9a-f]{64}"/.test(kokoro) && /MessageDigest\.getInstance\("SHA-256"\)/.test(kokoro));
+  const packs = kokoro.match(/new Pack\([^;]*?\.tar\.bz2",\s*"([^"]*)"/g) || [];
+  assert.ok(packs.length >= 3, "Kokoro's downloads");
+  for (const p of packs) assert.ok(/\.tar\.bz2",\s*"[0-9a-f]{64}"$/.test(p), "every Kokoro download is pinned to a SHA-256: " + p.slice(0, 60));
+  assert.ok(/MessageDigest\.getInstance\("SHA-256"\)/.test(kokoro));
   assert.ok(/getCanonicalPath\(\)\.startsWith\(root\)/.test(kokoro), "unpacking must keep files inside the voices folder");
 });
 

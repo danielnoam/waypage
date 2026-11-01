@@ -252,7 +252,7 @@ public class SpeechService extends Service {
     private void makeAhead(int n) {
         if (!getPackageName().equals(engine) || !Kokoro.ready(this)) return;
         Locale l = job.lang != null && !job.lang.isEmpty() ? Locale.forLanguageTag(job.lang) : Locale.getDefault();
-        Kokoro.take(this, job.items[n], Kokoro.sidFor(job.voice, l), Kokoro.speedOf((int) (job.rate * 100)));
+        Kokoro.take(this, job.items[n], Kokoro.sidFor(this, job.voice, l), Kokoro.speedOf((int) (job.rate * 100)));
     }
 
     // The next piece goes to the engine while this one plays, so it's

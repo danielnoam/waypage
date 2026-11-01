@@ -1844,8 +1844,10 @@ function voiceOptions(list, saved) {
     if (order.length > 1) out.push({ head: k ? named(k) : "Other" });
     let n = 0;
     for (const v of vs) {
-      const name = /-language$/i.test(v.name) ? "Standard" : coded(v) ? "Voice " + ++n : v.name;
-      const tags = [v.gender, (v.quality || 0) >= 400 ? "natural" : "", v.online ? "online" : ""].filter(Boolean);
+      // Kokoro's (kokoro-af_heart): Heart, and f or m for female or male.
+      const k = /^kokoro-[a-z]([fm])_(.+)$/.exec(v.name);
+      const name = k ? (/^\d+$/.test(k[2]) ? "Voice " + Number(k[2]) : k[2].charAt(0).toUpperCase() + k[2].slice(1)) : /-language$/i.test(v.name) ? "Standard" : coded(v) ? "Voice " + ++n : v.name;
+      const tags = [k ? (k[1] === "f" ? "female" : "male") : v.gender, (v.quality || 0) >= 400 ? "natural" : "", v.online ? "online" : ""].filter(Boolean);
       out.push({ value: v.id, label: [name, ...tags].join(" · ") });
     }
   }

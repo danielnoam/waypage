@@ -388,10 +388,11 @@
     },
     // Kokoro voices (Android, arm64): Waypage's own speech engine, from a
     // download in Settings. null where there's no such plugin or phone.
-    async kokoro(action) {
+    // action: download / use / remove (with the pack's id), or cancel.
+    async kokoro(action, id) {
       const K = plugin("Kokoro");
       if (!K || os !== "android") return null;
-      if (action) { await K[action](); return null; }
+      if (action) { await K[action](id ? { id } : {}); return null; }
       try { const s = await K.status(); return s && s.supported ? s : null; } catch (e) { return null; }
     },
     // { items, start, lang, voice, engine, rate, title, subtitle, key }

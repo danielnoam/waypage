@@ -42,8 +42,13 @@ public final class OfflineTts {
 
     public int numSpeakers() { return getNumSpeakers(ptr); }
 
-    public GeneratedAudio generate(String text, int sid, float speed, Chunk chunk) {
-        return generateWithCallbackImpl(ptr, text, sid, speed, chunk);
+    /** `lang`: espeak-ng's voice for a multi-language model's words, or "" for its lexicons. */
+    public GeneratedAudio generate(String text, int sid, float speed, String lang, Chunk chunk) {
+        GenerationConfig g = new GenerationConfig();
+        g.sid = sid;
+        g.speed = speed;
+        if (lang != null && !lang.isEmpty()) g.extra.put("lang", lang);
+        return generateWithConfigImpl(ptr, text, g, chunk);
     }
 
     public synchronized void free() {
@@ -57,7 +62,7 @@ public final class OfflineTts {
     private native void delete(long ptr);
     private native int getSampleRate(long ptr);
     private native int getNumSpeakers(long ptr);
-    private native GeneratedAudio generateWithCallbackImpl(long ptr, String text, int sid, float speed, Object callback);
+    private native GeneratedAudio generateWithConfigImpl(long ptr, String text, GenerationConfig config, Object callback);
 }
 
 final class OfflineTtsVitsModelConfig {
@@ -105,6 +110,16 @@ final class OfflineTtsModelConfig {
     int numThreads = 1;
     boolean debug = false;
     String provider = "cpu";
+}
+
+final class GenerationConfig {
+    float silenceScale = 0.2f, speed = 1.0f;
+    int sid = 0;
+    float[] referenceAudio = null;
+    int referenceSampleRate = 0;
+    String referenceText = "";
+    int numSteps = 5;
+    java.util.Map<String, String> extra = new java.util.HashMap<>();
 }
 
 final class OfflineTtsConfig {
