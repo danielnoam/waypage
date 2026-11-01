@@ -1196,9 +1196,9 @@ function openSettings(fromHistory, at) {
 
 function closeSettings() {
   if (!state.settings) return;
-  closeSection();
-  state.settings = false;
-  popScreen($("settingsView"));
+  // In the window, the window leaves first and takes its section with it.
+  if (wide.matches) { state.settings = false; popScreen($("settingsView")); closeSection(); }
+  else { closeSection(); state.settings = false; popScreen($("settingsView")); }
   const q = $("settingsSearch");
   if (q) { q.value = ""; $("settingsSearchClear").hidden = true; }
   settingsIdx = null;
