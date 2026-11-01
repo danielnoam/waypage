@@ -1083,7 +1083,7 @@
       set: (level) => plugin("Brightness").set(level == null ? {} : { level }),
     },
     // App lock (1.38.0): the phone's fingerprint or face, native/share's
-    // AppLock plugin on Android (iOS on TODO.md's iOS list); the passcode
+    // AppLock plugin on Android (iOS later); the passcode
     // itself is checked in app-lock.js.
     lock: {
       async biometric() {
