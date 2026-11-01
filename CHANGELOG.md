@@ -14,6 +14,8 @@ All notable changes to Carry-on. Newest first.
   with its whole list, instead of being cut off at the sheet's edge.
 - Auto-scroll: a tap on the page pauses it; another tap, or scrolling
   yourself, lets it go on. Holding a finger still holds it as before.
+- Preview builds: a build being downloaded shows its progress on its
+  row, as About's update does (percent, Paused, Install).
 
 ## [1.49.2] - 2026-11-01
 

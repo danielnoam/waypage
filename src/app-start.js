@@ -389,9 +389,11 @@ function setUpd(change) {
   if (was !== upd.phase + upd.error || !("pct" in change)) {
     if (state.settings) renderSettings();
     if (state.section === "updates" && $("updatesSection")) $("updatesSection").replaceWith(updatesGroup());
+    paintPreviews();
     renderDownloads();
   } else {
     if (state.section === "updates" && $("updatesSection")) $("updatesSection").replaceWith(updatesGroup());
+    paintPreviews();
     paintUpdateCard();
   }
 }
@@ -621,6 +623,12 @@ async function loadPreviews() {
 function paintPreviews() {
   if (state.section === "previews" && $("previewsSection")) $("previewsSection").replaceWith(previewsSection());
 }
+// A preview (or the release, from Back to the release) being downloaded
+// shows it on its row as About's version row does (1.49.3, Daniel's ask):
+// the percent, Paused, Install, and a tap goes on with it.
+const fetching = (tag) => ["downloading", "paused", "ready"].includes(upd.phase) && (upd.tag || null) === tag;
+const fetchNote = () => upd.error || { downloading: "Downloading · " + upd.pct + "%", paused: "Paused at " + upd.pct + "%", ready: "Downloaded, ready to install" }[upd.phase];
+const fetchBtn = () => (upd.phase === "downloading" ? upd.pct + "%" : upd.phase === "ready" ? "Install" : "Resume");
 // The same download and installer as an update, under the preview's own
 // name; on iPhone the pre-release's page opens, as the updater's does.
 async function openWebPreview(p) {
@@ -663,12 +671,15 @@ function previewsSection() {
       const installed = !!mine && p.sha.slice(0, 7) === mine;
       const higher = !web && !!pv.stable && !!p.version && isNewerVersion(p.version, pv.stable);
       const note = p.branch + (p.at ? " · " + whenText(p.at) : "") + (p.pr ? " · #" + p.pr : "");
-      const row = el("button", { class: "row update-row", type: "button", onclick: () => installPreview(p) },
+      const going = !web && fetching(p.tag);
+      const row = el("button", { class: "row update-row" + (going ? " out" : ""), type: "button", onclick: () => (going ? startUpdate() : installPreview(p)) },
+        going && upd.phase === "downloading" ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
         el("span", { class: "choice-text" },
           el("span", { class: "row-label" }, p.title),
-          el("span", { class: "choice-note" }, note),
+          going ? el("span", { class: "choice-note " + (upd.error ? "warn" : "accent"), role: "status" }, fetchNote()) : el("span", { class: "choice-note" }, note),
           higher ? el("span", { class: "choice-note warn" }, "Needs an uninstall to go back") : null),
-        installed ? el("span", { class: "row-value" }, web ? "Open now" : "Installed") : el("span", { class: "btn-small", "aria-hidden": "true" }, web ? "Open" : C.platform.ios ? "Get it" : "Install"));
+        installed ? el("span", { class: "row-value" }, web ? "Open now" : "Installed")
+          : el("span", { class: "btn-small", "aria-hidden": "true" }, going ? fetchBtn() : web ? "Open" : C.platform.ios ? "Get it" : "Install"));
       row.disabled = installed;
       rows.push(row);
     }
@@ -679,11 +690,15 @@ function previewsSection() {
         el("span", { class: "choice-note" }, "The released Waypage opens again"))));
   } else if (here && pv.phase === "loaded") {
     const stuck = !!pv.stable && isNewerVersion(APP_VERSION, pv.stable);
-    const back = el("button", { class: "row", type: "button", onclick: backToRelease },
+    const going = fetching(null);
+    const back = el("button", { class: "row update-row" + (going ? " out" : ""), type: "button", onclick: () => (going ? startUpdate() : backToRelease()) },
+      going && upd.phase === "downloading" ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
       el("span", { class: "choice-text" },
         el("span", { class: "row-label accent" }, "Back to the release"),
-        el("span", { class: "choice-note" + (stuck ? " warn" : "") }, stuck ? "Uninstall Waypage first: this preview's " + APP_VERSION + " is above " + pv.stable
-          : pv.stable ? "Waypage " + pv.stable + " installs over this preview" : "No release found")));
+        going ? el("span", { class: "choice-note " + (upd.error ? "warn" : "accent"), role: "status" }, fetchNote())
+          : el("span", { class: "choice-note" + (stuck ? " warn" : "") }, stuck ? "Uninstall Waypage first: this preview's " + APP_VERSION + " is above " + pv.stable
+          : pv.stable ? "Waypage " + pv.stable + " installs over this preview" : "No release found")),
+      going ? el("span", { class: "btn-small", "aria-hidden": "true" }, fetchBtn()) : null);
     back.disabled = stuck || !pv.stable;
     rows.push(back);
   }
