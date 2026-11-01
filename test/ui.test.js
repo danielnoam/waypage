@@ -657,7 +657,7 @@ function zipOf(files) {
       await q.locator("#skimPrev").click();
       await until(q, () => Waypage.reader.section() === "Chapter 5: Dinner");
       // The minutes count switches from the bar.
-      await q.locator("#skimLeft").click();
+      await q.locator('#skimLeft .seg-item:has(input[value="part"])').click();
       assert.match(await q.locator("#readSection").innerText(), /min left in section/);
       await q.locator("#readSection").click();
       await q.locator("#skimBar").waitFor({ state: "hidden" });

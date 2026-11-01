@@ -935,7 +935,10 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 .skim-track[dir="rtl"] .skim-fill { transform-origin: right; }
 .skim-ticks { position: absolute; inset: 0; }
 /* Where Back goes: a short line through the rail (1.48.4). */
-.skim-from { position: absolute; top: 50%; width: 2px; height: 16px; margin-top: -8px; margin-inline-start: -1px; border-radius: 1px; background: var(--ink); }
+.skim-from {
+  position: absolute; top: 50%; width: 14px; height: 14px; margin-top: -7px; margin-inline-start: -7px;
+  border-radius: var(--r-full); border: 2px solid var(--ink); background: var(--surface); box-shadow: 0 0 0 2px var(--surface);
+}
 .skim-from[hidden] { display: none; }
 .skim-knob {
   position: absolute; top: 50%; width: 22px; height: 22px; margin-top: -11px; margin-inline-start: -11px;
@@ -943,10 +946,10 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
   transition: scale var(--spring-control-ms, 300ms) var(--spring-control, ease-out);
 }
 .reader.skimming .skim-knob { scale: 1.2; }
-.skim-left {
-  display: block; min-height: var(--tap); padding: 0 var(--s-3);
-  border: 0; background: none; color: var(--accent); font: 600 var(--fs-meta)/1 var(--sans);
-}
+.skim-left { display: flex; align-items: center; justify-content: center; gap: var(--s-3); min-height: var(--tap); padding: var(--s-1) var(--s-3) 0; }
+.skim-left-label { color: var(--muted); font: 500 var(--fs-meta)/var(--lh-meta) var(--sans); white-space: nowrap; }
+.skim-left .seg { flex: 0 1 240px; }
+.skim-left .seg-face { min-height: 30px; font-size: var(--fs-meta); }
 @keyframes skim-up { from { transform: translateY(100%); } }
 :root[data-motion="off"] .skim-bar { animation: none; }
 @media (prefers-reduced-motion: reduce) {

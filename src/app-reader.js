@@ -2603,7 +2603,22 @@ function skimPaint(at) {
   track.setAttribute("aria-valuetext", skimText(at).join(", "));
   const p = state.open, top = C.reader.parts().filter((x) => x.level === 2).length >= 2;
   $("skimLeft").hidden = !top;
-  if (top) $("skimLeft").textContent = leftIn(p) === "part" ? "Count the whole " + (isBook(p) ? "book" : "clip") : "Count this " + (isBook(p) ? "chapter" : "section");
+  if (top) paintLeft(p);
+}
+// What the minutes left count: this chapter or the whole (1.48.4; a
+// button saying "Count this section" before). Built once per open clip.
+let leftFor = null;
+function paintLeft(p) {
+  const box = $("skimLeft"), book = isBook(p), now = leftIn(p);
+  if (leftFor !== p) {
+    leftFor = p;
+    box.querySelector(".seg")?.remove();
+    box.append(seg("skim-left", "Time left for", [
+      { value: "part", label: book ? "This chapter" : "This section" },
+      { value: "clip", label: book ? "Whole book" : "Whole clip" },
+    ], now, (v) => { if (v !== leftIn(state.open)) toggleLeft(); skimPaint(C.reader.position()); }));
+  }
+  box.querySelectorAll('input[name="skim-left"]').forEach((i) => { i.checked = i.value === now; });
 }
 // The chapter at `at` and where that is: page 12 of 340, or 42%.
 function skimText(at) {
@@ -2654,7 +2669,6 @@ $("readFoot").querySelector(".read-left").addEventListener("click", (e) => {
 });
 $("skimPrev").addEventListener("click", () => skimPart($("skimTrack").dir === "rtl" ? 1 : -1));
 $("skimNext").addEventListener("click", () => skimPart($("skimTrack").dir === "rtl" ? -1 : 1));
-$("skimLeft").addEventListener("click", () => { toggleLeft(); skimPaint(C.reader.position()); });
 {
   const track = $("skimTrack");
   let down = null;
