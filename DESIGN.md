@@ -140,7 +140,15 @@ and the page shows above it.
   way. The brightness slider slides past the left edge. Checkmarks grow.
 - The picture viewer grows from the picture and shrinks back into it.
 - Settings, Appearance, Animations off (1.12.0): nothing moves or
-  eases, not even the reduced-motion fades; spinners still turn.
+  eases, not even the reduced-motion fades; spinners still turn. Since
+  1.48.3 that includes what a press does: the switch knob's stretch,
+  the ? turning and the drop-down's face pop are off too (they ran with
+  no easing and looked like a two-step jump).
+- A drop-down menu leaves by only the last quarter of its arrival, run
+  backwards and fading, gone before it reaches its button (1.48.3,
+  `popOut`); shrinking the whole way back read as the menu crawling into
+  the button. The fade is the exception to "nothing fades": a partial
+  shrink ending in a cut looked like a glitch.
 - Only `transform` and `opacity` move on screens; small menus use a
   clip-path. In scroll mode the next chapter comes up from the bottom,
   in Pages it turns sideways. `inert` on the

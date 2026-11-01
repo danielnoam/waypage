@@ -110,12 +110,45 @@ layout mode.
 change is shown or explained to Daniel (a mockup, a screenshot, a short
 write-up) and waits for his OK before it's built.
 
-**Settings say little.** A row is a name and at most one short line that
-says its state or scope. Anything longer goes in the section's help
-(`section(title, help, ...)` in `src/app-settings.js`), behind the ? on
-its heading. A pick between options is a drop-down row (`pickRow`), not
-a list of radios. Settings search reads the screens themselves, so a
-new row is found without any extra work.
+**A control shows its state, not the way to the other one.** A button
+that reads "Count this section" tells you what it will do and hides
+what is set; "Time left in: Section / Whole" shows the choice. Two
+controls for one thing (a switch and a side) become one row with every
+state in it (Off / Left / Right). (1.48.3 and 1.48.4, Daniel's asks.)
+
+**One setting, one row.** A row is a name on the left and its control
+on the right, in one line: a switch, a two- or three-way segment, or a
+drop-down (`pickRow` in `src/app-settings.js`, with the chosen option's
+few words under the name). Never a label with its control on the line
+below, never a list of radios. Related rows share a section; a screen's
+actions (Import, Edit clips, Back up, Restore) sit together under an
+**Actions** heading, after the settings.
+
+**Explain less.** A row says its name and at most one short line of
+state or scope. A section gets a ? (`section(title, help, ...)`) only
+when the help says something the rows can't: what leaves the device,
+what an action does to your data, where to get files. Appearance and
+Library have none. `test/ui.test.js` ("Settings keeps its ? marks to
+the agreed list") fails when a new ? appears; add a title there only
+when Daniel agreed to the ?. Settings search reads the screens
+themselves, so a new row is found without any extra work.
+
+**Nothing touches.** Sections, cards and a heading's ? keep their gaps
+on every screen, whatever the section is built from
+(`.settings-section` gaps in `src/styles.css`). Check at phone width.
+
+**Animations off means off.** With Settings › Appearance › Animations
+off, nothing moves at all: no easing, and no press stretch, turn or pop
+either (`:root[data-motion="off"]` in `src/styles.css`). A new animation
+gets its off rule in the same change. Motion rules are in DESIGN.md §4;
+a menu or popover leaves quickly, by a short stretch of its arrival, not
+the whole way back.
+
+**Show it before you say it's done.** A visible change gets a phone
+screenshot (every theme when colours are involved; `node tools/shots.js`
+retakes the README's), a recording for motion, and goes to Daniel
+before the release PR. Order and wording in the UI are his calls: build
+what he asked, show it, change it to his word.
 
 **Credits.** Anything vendored or bundled (code, a font) goes under
 `CREDITS.code` or `CREDITS.fonts` in `src/app-settings.js`, shown under
