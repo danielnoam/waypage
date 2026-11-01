@@ -342,10 +342,14 @@ function dictsGroup() {
   return sec;
 }
 
-// Edit clips, inside Library since 1.27.1 (it was its own menu entry).
-function editNavGroup() {
-  return section(null, null,
-    el("div", { class: "group" }, navRow("Edit clips", "Find and replace across many clips", () => openSection("edit", false, true))));
+// Library's Actions: importing from another app, then Edit clips (inside
+// Library since 1.27.1, when it was its own menu entry).
+function libraryActions() {
+  const sec = section("Actions", null,
+    el("div", { class: "group" }, ...importRow(),
+      navRow("Edit clips", "Find and replace across many clips", () => openSection("edit", false, true))));
+  sec.id = "importSection";
+  return sec;
 }
 
 // Notifications (1.30.0): the app's only ones that alert are new feed
@@ -1002,7 +1006,7 @@ const SECTIONS = {
     section("Layout", null,
       el("div", { class: "group" }, el("div", { class: "rc-list" },
         seg(LAYOUT_KEY, "Layout", LAYOUTS.map((l) => ({ value: l.value, label: l.label })), layout(), (v) => { store(LAYOUT_KEY, v); renderLibrary(); })))),
-    libraryGroup(), watchGroup(), importGroup(), editNavGroup()],
+    libraryGroup(), watchGroup(), libraryActions()],
     value: () => (LAYOUTS.find((l) => l.value === layout()) || LAYOUTS[0]).label },
   saving: { title: "Saving", build: () => [savingGroup(), readyGroup(), signedGroup(), sendGroup()],
     value: () => SETTINGS[1].options.find((o) => o.value === SETTINGS[1].get()).label },

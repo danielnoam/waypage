@@ -2085,16 +2085,14 @@ function backupGroup(more = []) {
   sec.id = "backupSection";
   return sec;
 }
-// Import, in Library since 1.47.0 (Saving from 1.12.0, Backup before): the same picker.
-function importGroup() {
+// Import, in Library since 1.47.0 (Saving from 1.12.0, Backup before): the
+// same picker. The row sits under Library's Actions with Edit clips.
+function importRow() {
   const input = el("input", { type: "file", class: "visually-hidden", tabindex: "-1", "aria-hidden": "true" });
   const open = el("button", { class: "row", type: "button", onclick: () => (C.platform.files.canLink ? pickFile() : input.click()) },
         el("span", { class: "choice-text" },
           el("span", { class: "choice-label accent" }, "Import from another app"),
           el("span", { class: "choice-note" }, "Pocket, Instapaper, Omnivore, Wallabag, Raindrop, OPML")));
   input.addEventListener("change", () => { const f = input.files[0]; input.value = ""; openFile(f, open); });
-  const sec = section("Import", null,
-    el("div", { class: "group" }, open, input));
-  sec.id = "importSection";
-  return sec;
+  return [open, input];
 }
