@@ -18,7 +18,7 @@ MODE="$1"
 FILE="$2"
 BRANCH="${GITHUB_REF_NAME:?}"
 TAG="preview-$(printf '%s' "$BRANCH" | tr -c 'A-Za-z0-9._-' '-')"
-PR="$(gh pr list --head "$BRANCH" --state open --json number,title --jq '.[0] | "\(.number)\t\(.title)"' 2>/dev/null || true)"
+PR="$(gh pr list --head "$BRANCH" --state open --json number,title --jq '.[:1][] | "\(.number)\t\(.title)"' 2>/dev/null || true)"
 if [ -z "$PR" ]; then
   echo "$BRANCH has no open pull request, so no preview"
   exit 0
