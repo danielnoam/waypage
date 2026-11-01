@@ -48,7 +48,7 @@ function route(s) {
   if (view === "reader" && s.sheet !== state.sheet) closeSheet();
   if (view === "reader" && s.sheet && state.open && state.open.id === s.page) openSheet(s.sheet, true);
   if (inSettings) { openSettings(true); if (s.section) openSection(s.section, true); }
-  if (view === "news") openNews(true);
+  if (view === "news") openNews(true, s.ahead);
   if (view === "downloads") openDownloads(true);
   if (view === "sync") openSyncPage(true);
 }
@@ -390,10 +390,12 @@ function setUpd(change) {
     if (state.settings) renderSettings();
     if (state.section === "updates" && $("updatesSection")) $("updatesSection").replaceWith(updatesGroup());
     paintPreviews();
+    paintNews();
     renderDownloads();
   } else {
     if (state.section === "updates" && $("updatesSection")) $("updatesSection").replaceWith(updatesGroup());
     paintPreviews();
+    paintNews();
     paintUpdateCard();
   }
 }
@@ -472,8 +474,8 @@ async function install() {
   }
 }
 
-// The library's bar: a newer version is out (View opens Settings at
-// About, with what it brings), or this one just arrived (What's new). × puts it away.
+// The library's bar: a newer version is out (View opens What's new for
+// it, with its Update), or this one just arrived (What's new). × puts it away.
 let barDismissed = null;
 function paintUpdateBar() {
   const bar = $("updateBar");
@@ -490,7 +492,7 @@ function paintUpdateBar() {
     : "Updated to " + APP_VERSION;
   const btn = $("updateBtn");
   btn.textContent = out ? "View" : "What's new";
-  btn.onclick = () => (out ? openSettings(false, "updates") : openNews());
+  btn.onclick = () => (out && !upd.tag ? openNews(false, true) : out ? openSettings(false, "updates") : openNews());
   $("updateClose").onclick = () => {
     barDismissed = key;
     if (fresh) justUpdated = false;
@@ -525,15 +527,9 @@ function updatesGroup() {
       downloading: "Downloading " + upd.latest + " · " + upd.pct + "%", paused: "Paused at " + upd.pct + "%", ready: "Waypage " + upd.latest + " is ready to install",
       preview: "Preview of " + preview + builtLine(C.platform.build),
     }[upd.phase];
-    const busy = upd.phase === "checking";
-    const version = el("button", { class: "row update-row" + (out ? " out" : ""), type: "button", onclick: () => (out ? startUpdate() : upd.phase === "preview" ? openPreviews() : checkForNewerApp()) },
-      busy ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
-      el("span", { class: "choice-text" },
-        el("span", { class: "row-label" }, "Version " + APP_VERSION),
-        el("span", { class: "choice-note" + (out ? " accent" : upd.phase === "failed" ? " warn" : ""), role: "status" }, status)),
-      out ? el("span", { class: "btn-small", "aria-hidden": "true" }, upd.phase === "downloading" ? upd.pct + "%" : C.platform.ios ? "Get it" : upd.phase === "ready" ? "Install" : upd.phase === "paused" ? "Resume" : "Update") : null);
-    version.disabled = busy;
+    const version = versionRow("Version " + APP_VERSION, status);
     list.append(version);
+    if (out && !upd.tag) list.append(navRow("What's new in " + upd.latest, null, () => openNews(false, true)));
     if (out && upd.error) list.append(el("div", { class: "row" }, el("span", { class: "row-label warn" }, upd.error)));
     if (C.platform.build && C.platform.build.repo) {
       list.append(navRow("Preview builds", preview ? "Back to the release is here" : "Try a branch before it's released", openPreviews));
@@ -543,15 +539,26 @@ function updatesGroup() {
     if (webPreviews()) list.append(navRow("Preview builds", pv.web ? "Preview: " + previewName(pv.web) : "Try a branch before it's released", openPreviews));
   }
   list.append(navRow("Changelog", null, () => openNews()));
-  const sec = el("section", { class: "settings-section", id: "updatesSection" }, list);
-  const coming = comingGroup();
-  if (coming) sec.append(coming);
-  return sec;
+  return el("section", { class: "settings-section", id: "updatesSection" }, list);
 }
 
-// What a newer release brings (1.49.4), under the version row before
-// updating: every version between this one and it, from that release's
-// own CHANGELOG.md, or its release notes when that doesn't load.
+// The version row: tap to check, or to update when a newer one is out.
+function versionRow(label, status) {
+  const out = UPD_OUT.includes(upd.phase);
+  const busy = upd.phase === "checking";
+  const row = el("button", { class: "row update-row" + (out ? " out" : ""), type: "button", onclick: () => (out ? startUpdate() : upd.phase === "preview" ? openPreviews() : checkForNewerApp()) },
+    busy ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
+    el("span", { class: "choice-text" },
+      el("span", { class: "row-label" }, label),
+      status ? el("span", { class: "choice-note" + (out ? " accent" : upd.phase === "failed" ? " warn" : ""), role: "status" }, status) : null),
+    out ? el("span", { class: "btn-small", "aria-hidden": "true" }, upd.phase === "downloading" ? upd.pct + "%" : C.platform.ios ? "Get it" : upd.phase === "ready" ? "Install" : upd.phase === "paused" ? "Resume" : "Update") : null);
+  row.disabled = busy;
+  return row;
+}
+
+// What a newer release brings (1.49.4): What's new opened from the bar's
+// View or About shows every version between this one and it, from that
+// release's own CHANGELOG.md, or its release notes when that doesn't load.
 const coming = { latest: null, entries: null };
 function comingEntries() {
   const latest = upd.latest;
@@ -571,20 +578,9 @@ function comingEntries() {
     .then((list) => {
       if (coming.latest !== latest) return;
       coming.entries = list.length ? list : fromNotes();
-      if (state.section === "updates" && $("updatesSection")) $("updatesSection").replaceWith(updatesGroup());
+      if (state.news === "ahead") paintNews();
     });
   return null;
-}
-function comingGroup() {
-  if (!C.platform.native || upd.tag || !UPD_OUT.includes(upd.phase) || !upd.latest) return null;
-  const entries = comingEntries();
-  return el("div", { class: "coming" },
-    el("div", { class: "section-head" }, el("h2", { class: "overline" }, entries && entries.length > 1 ? "New since " + APP_VERSION : "New in " + upd.latest)),
-    ...(entries === null ? [el("p", { class: "meta" }, "Loading…")]
-      : entries.length ? entries.map((e) => el("section", { class: "news-entry" },
-        entries.length > 1 ? el("h4", { class: "news-version coming-version" }, e.version) : null,
-        ...notesView([e])))
-      : [el("p", { class: "meta" }, "The list of changes didn't load. Changelog has it once you've updated.")]));
 }
 
 // ---- Preview builds (1.48.0) ----
@@ -802,22 +798,40 @@ async function readChangelog() {
   return changelog;
 }
 
-async function openNews(fromHistory) {
+async function openNews(fromHistory, ahead) {
   if (state.news) return;
-  state.news = true;
+  state.news = ahead ? "ahead" : true;
   const over = state.settings ? "settings" : undefined;
-  if (!fromHistory) history.pushState({ view: "news", over, section: state.section || undefined }, "");
+  if (!fromHistory) history.pushState({ view: "news", ahead: ahead || undefined, over, section: state.section || undefined }, "");
   justUpdated = false;
   paintUpdateBar();
   $("newsBody").replaceChildren(el("p", { class: "meta" }, "Loading…"));
   $("newsBody").scrollTop = 0;
   pushScreen($("newsView")).then(() => $("newsBack").focus());
+  if (ahead) { paintNews(); return; }
   const entries = await readChangelog();
-  if (!state.news) return;
+  if (state.news !== true) return;
   $("newsBody").replaceChildren(...(entries && entries.length ? entries.map((e) => el("section", { class: "news-entry" + (e.version === APP_VERSION ? " now" : "") },
     el("h2", { class: "news-version" }, e.version, e.version === APP_VERSION ? el("span", { class: "news-you" }, "You have this") : null),
     e.date ? el("p", { class: "meta" }, formatDay(e.date)) : null,
     ...notesView([e]))) : [el("p", { class: "empty-text" }, "The list of changes didn't load.")]));
+}
+
+// What's new for the version that's out, with its Update on top.
+function paintNews() {
+  if (state.news !== "ahead") return;
+  const out = UPD_OUT.includes(upd.phase) && !upd.tag && upd.latest;
+  if (!out) { $("newsBody").replaceChildren(el("p", { class: "empty-text" }, "You have the latest version.")); return; }
+  const entries = comingEntries();
+  const status = { available: "You have " + APP_VERSION, downloading: "Downloading · " + upd.pct + "%", paused: "Paused at " + upd.pct + "%", ready: "Downloaded, ready to install" }[upd.phase];
+  $("newsBody").replaceChildren(
+    el("div", { class: "group update-card news-update" }, versionRow("Waypage " + upd.latest, upd.error || status)),
+    ...(entries === null ? [el("p", { class: "meta" }, "Loading…")]
+      : entries.length ? entries.map((e) => el("section", { class: "news-entry" },
+        el("h2", { class: "news-version" }, e.version),
+        e.date ? el("p", { class: "meta" }, formatDay(e.date)) : null,
+        ...notesView([e])))
+      : [el("p", { class: "empty-text" }, "The list of changes didn't load. Changelog has it once you've updated.")]));
 }
 
 function closeNews() {
