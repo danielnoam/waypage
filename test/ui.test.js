@@ -2182,6 +2182,7 @@ function zipOf(files) {
       });
       const btn = q.locator(".kokoro-row", { hasText: "Kokoro 1.0" }).getByRole("button", { name: "Download" });
       await btn.waitFor();
+      assert.strictEqual(await q.evaluate(() => /\bnull\b/.test(document.querySelector(".kokoro-slot").textContent)), false, "\"null\" shows on the screen");
       assert.strictEqual(await btn.isDisabled(), false);
       await btn.click();
       await until(q, () => window.asked.length > 0);

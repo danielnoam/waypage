@@ -299,10 +299,11 @@ async function fillKokoro(slot) {
     if (!confirm("Remove " + p.title + "? It takes " + formatSize(p.size) + "; you can download it again.")) return;
     await act("remove", p.id, () => { if (ready.length === 1) forgetKokoro(s.engine); })();
   };
-  slot.replaceChildren(
-    section("Kokoro", null, el("div", { class: "group" }, ...rows)),
-    ready.length ? section("Actions", null, el("div", { class: "group" },
-      ...ready.map((p) => el("button", { class: "row", type: "button", onclick: remove(p) }, el("span", { class: "row-label warn" }, "Remove " + p.title))))) : null);
+  // replaceChildren writes a null out as the text "null": leave it out.
+  const parts = [section("Kokoro", null, el("div", { class: "group" }, ...rows))];
+  if (ready.length) parts.push(section("Actions", null, el("div", { class: "group" },
+    ...ready.map((p) => el("button", { class: "row", type: "button", onclick: remove(p) }, el("span", { class: "row-label warn" }, "Remove " + p.title))))));
+  slot.replaceChildren(...parts);
   if (busy) setTimeout(() => { if (slot.isConnected) again(); }, 1000);
 }
 
