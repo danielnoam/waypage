@@ -190,7 +190,7 @@ function dropdown(o) {
     face.classList.toggle("unset", empty);
     btn.setAttribute("aria-label", empty ? o.label : o.label + ": " + at.label);
   };
-  let menu = null, grown = null;
+  let menu = null;
   const outside = (e) => { if (!wrap.contains(e.target)) close(false); };
   function close(focus) {
     if (!menu) return;
@@ -203,7 +203,6 @@ function dropdown(o) {
     M.popOut(m, btn.getBoundingClientRect()).then(() => {
       m.remove();
       if (g && !menu) g.classList.remove("menu-open");
-      if (grown && !menu) { grown.el.style.minHeight = grown.was; grown = null; }
     });
     if (focus) btn.focus();
   }
@@ -211,25 +210,24 @@ function dropdown(o) {
   // it opens upward when there's more room above and scrolls in itself,
   // so the box under it doesn't scroll and stay moved. On the page, a
   // menu opened low on the screen scrolls the page up instead.
-  // A short sheet (Export, 1.49.2) grows taller to hold the menu, as far
-  // as the screen allows, instead of squeezing it under its bottom edge.
+  // In a sheet too short for it (Export, 1.49.2), the menu leaves the
+  // sheet and drops up (or down) over the screen, the sheet left as it is.
   function fit(m) {
     let box = null, sc = null;
     for (let p = wrap.parentElement; p && p !== document.body; p = p.parentElement) {
       if (/auto|scroll/.test(getComputedStyle(p).overflowY)) { sc = p; box = p.getBoundingClientRect(); break; }
     }
     if (!box) { m.scrollIntoView({ block: "nearest" }); return false; }
-    let b = btn.getBoundingClientRect();
-    const gap = 8, need = m.scrollHeight;
-    const room = (r) => Math.max(Math.min(box.bottom, innerHeight) - r.bottom, r.top - Math.max(box.top, 0)) - gap;
-    if (need > room(b) && sc.closest(".sheet")) {
-      const extra = Math.min(need - room(b), innerHeight * 0.85 - box.height);
-      if (extra > 0) {
-        if (!grown) grown = { el: sc, was: sc.style.minHeight };
-        sc.style.minHeight = (box.height + extra) + "px";
-        box = sc.getBoundingClientRect();
-        b = btn.getBoundingClientRect();
-      }
+    const b = btn.getBoundingClientRect(), gap = 8, need = m.scrollHeight;
+    const roomIn = Math.max(Math.min(box.bottom, innerHeight) - b.bottom, b.top - Math.max(box.top, 0)) - gap;
+    if (need > roomIn && sc.closest(".sheet")) {
+      const w = m.getBoundingClientRect(), upRoom = b.top - gap * 2, downRoom = innerHeight - b.bottom - gap * 2;
+      const up = need > downRoom && upRoom > downRoom;
+      Object.assign(m.style, { position: "fixed", left: w.left + "px", width: w.width + "px", right: "auto",
+        top: up ? "auto" : b.bottom + gap + "px", bottom: up ? innerHeight - b.top + gap + "px" : "auto" });
+      if (need > (up ? upRoom : downRoom)) m.style.maxHeight = (up ? upRoom : downRoom) + "px";
+      m.classList.toggle("up", up);
+      return up;
     }
     const below = Math.min(box.bottom, innerHeight) - b.bottom - gap;
     const above = b.top - Math.max(box.top, 0) - gap;
