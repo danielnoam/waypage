@@ -2093,7 +2093,7 @@ function importGroup() {
           el("span", { class: "choice-label accent" }, "Import from another app"),
           el("span", { class: "choice-note" }, "Pocket, Instapaper, Omnivore, Wallabag, Raindrop, OPML")));
   input.addEventListener("change", () => { const f = input.files[0]; input.value = ""; openFile(f, open); });
-  const sec = section("Import", "Pick the file the other app exported: Pocket's or Raindrop's CSV, Instapaper's HTML page, Wallabag's JSON or CSV, Omnivore's zip, a browser's bookmarks file, or another RSS reader's OPML for its feeds. Each link is saved as a clip.",
+  const sec = section("Import", null,
     el("div", { class: "group" }, open, input));
   sec.id = "importSection";
   return sec;

@@ -170,7 +170,7 @@ function sendGroup() {
 // The two picture switches in one section (1.48.0): big ones made
 // smaller as they're saved, and pictures held back online.
 function savingGroup() {
-  return section("Saving", SETTINGS[1].help + " Make full images smaller keeps full images and comics no wider than 1600 px, in a smaller format: usually a quarter of the size, still sharp on a phone; Storage has the same for clips already saved. Full-size and linked pictures come from their sites, which can see when you read; Load only when tapped keeps that from happening until you tap one, while previews saved on the phone always show."
+  return section("Saving", null,
       + (C.platform.knowsConnection ? " On Wait for Wi-Fi, saves wait in Downloads until you're on Wi-Fi, and feeds, new chapters and missing pictures are checked then too." : ""),
     el("div", { class: "group" },
       pickRow(SETTINGS[1]),
@@ -199,7 +199,7 @@ function dataRow(key, verb, anyNote, wifiNote, middle) {
 function autoGroup() {
   const a = autoThemes();
   const row = (text, control) => el("div", { class: "rc-row stack" }, el("span", { class: "rc-label" }, text), control);
-  const box = section("Auto uses", "Which theme Auto shows when your phone is in light mode, and which in dark mode.",
+  const box = section("Auto uses", null,
     el("div", { class: "group" },
       el("div", { class: "rc-list" },
         row("When your phone is light", seg("auto-light", "Light theme for Auto", themeOptions(THEMES.filter((t) => !t.dark), true), a.light,
@@ -214,7 +214,7 @@ function autoGroup() {
 // Animations (1.12.0): off, nothing moves at all, for a slow phone or
 // for anyone who'd rather things just change.
 function looksGroup() {
-  return section("Pictures and motion", "Dim pictures softens them in Night, Black, Dusk and Solarized Dark; tap one to see it in full. With Animations off, screens, menus and pages change at once, with no movement. Your phone's Reduce motion setting is followed either way.",
+  return section("Pictures and motion", null,
     el("div", { class: "group" },
       switchRow("Dim pictures in dark themes", "Tap a picture to see it in full", load(DIM_KEY, true) !== false, (on) => { store(DIM_KEY, on); paintTheme(state.theme); }),
       switchRow("Animations", "Off: everything changes at once", !M.still(), (on) => { store(MOTION_KEY, on); M.setStill(!on); })));
@@ -223,8 +223,7 @@ function looksGroup() {
 // Themes as a grid of swatches (1.48.0), two rows instead of ten.
 function themeGroup() {
   const g = SETTINGS[0];
-  const light = THEMES.filter((t) => !t.dark).map((t) => t.label).join(", ");
-  return section("Theme", "Auto follows your phone, switching between the light and dark themes picked under it. Light: " + light + "; High contrast is black on white for bright sun. Dark: Night for a dim cabin, Black for OLED screens' batteries, Dusk warm and soft for bedtime, and Solarized Dark.",
+  return section("Theme", null,
     el("div", { class: "group" },
       el("div", { class: "rc-list" },
         seg(THEME_KEY, "Theme", g.options.map((o) => ({ value: o.value, label: o.label, swatch: o.swatch, auto: o.auto })), g.get(), (v) => g.set(v), "themes grid five theme-grid"))));
@@ -234,15 +233,24 @@ function themeGroup() {
 // sheet's tab; the voice is for the phone's language here.
 function aloudGroup() {
   if (!speech.available) return null;
-  return section("Narrate", "The voice for the phone's language, its speed, and what Narrate reads and does at the end of a clip. The same controls sit in the reader's Aa sheet.",
+  return section("Narrate", null,
     el("div", { class: "group" }, el("div", { class: "rc-list" }, aloudControls())));
 }
 
+// Layout and Text are two sections here (1.48.2, Daniel's ask), out of
+// the one box readingControls makes, which stays their common parent so
+// syncReadingControls still finds every control in it.
 function readingGroup() {
-  return section("Layout and text", "The same controls as the reader's Aa sheet, behind the gear while you read: how a clip is laid out and how its text is set. The line at the top shows your choices.",
-    el("div", { class: "group" },
+  const box = readingControls(false);
+  const part = (name) => box.querySelector('.rc-part[data-part="' + name + '"]');
+  const layout = part("layout"), text = part("text");
+  box.classList.add("split");
+  box.replaceChildren(
+    section("Layout", null, el("div", { class: "group" }, el("div", { class: "rc-list" }, layout))),
+    section("Text", null, el("div", { class: "group" },
       el("p", { class: "reading-sample" }, "The page is the product. Everything else gets out of its way."),
-      readingControls(false)));
+      el("div", { class: "rc-list" }, text))));
+  return box;
 }
 
 // Your own fonts (1.33.0): add a font file, or take one away. A .ttf,
@@ -282,14 +290,17 @@ function fontsGroup() {
   const place = C.store.place.kind;
   const where = place === "documents" ? "Or put font files in Documents/Waypage/fonts on the phone. "
     : place === "folder" ? "Or put font files in a fonts folder inside " + C.store.placeName(C.store.place) + ". " : "";
-  return section("Your fonts", where + "A font you add stays on this device and shows under Font with the others. Hebrew still uses the Hebrew font. A .ttf, .otf, .woff or .woff2 up to 10 MB.",
+  return section("Your fonts", null,
     el("div", { class: "group" },
       ...mine.map((f) => el("div", { class: "row" },
         el("span", { class: "choice-text" }, el("span", { class: "choice-label", style: "font-family: " + f.family + ", var(--sans)" }, f.label)),
         el("button", { class: "btn-text warn", type: "button", onclick: () => removeFontFile(f.user) }, "Remove"))),
       el("button", { class: "row", type: "button", onclick: () => input.click() },
-        el("span", { class: "row-label accent" }, "Add a font")),
-      input));
+        el("span", { class: "choice-text" },
+          el("span", { class: "choice-label accent" }, "Add a font"),
+          el("span", { class: "choice-note" }, ".ttf, .otf, .woff or .woff2, up to 10 MB; stays on this device"))),
+      input),
+    where ? el("p", { class: "footnote" }, where.trim()) : null);
 }
 
 // Dictionaries (1.45.0): StarDict files, for Look up on selected words.
@@ -351,7 +362,7 @@ function notesSections() {
     el("input", { class: "switch", type: "checkbox", role: "switch", checked: on, onchange: (e) => set(e.target.checked) }));
   const phone = el("p", { class: "footnote warn", hidden: true }, "Your phone has Waypage's notifications turned off. Turn them on in its settings.");
   C.platform.feedChecks.allowed().then((ok) => { if (ok === false && notesPrefs().on) phone.hidden = false; });
-  const out = [section("Alerts", "Waypage's only alerts: new posts from the feeds you follow, found while the app is closed. Each post on its own shows a post's title and the start of what it says, grouped by feed, with a Save button; All together is one notification saying how many new posts there are and from which feeds." + (C.platform.os === "android" ? " Saving, sync and Narrate show a quiet notification while they run, which Android needs to keep them going with the app put away; those aren't alerts and can't be turned off here." : ""),
+  const out = [section("Alerts", null,
     el("div", { class: "group" },
       sw("Notifications", "New posts from feeds you follow", n.on, (on) => {
         if (on) askToNotify = true;
@@ -379,7 +390,7 @@ const notesValue = () => { const n = notesPrefs(); return n.on ? (n.posts === "e
 function libraryGroup() {
   const input = el("input", { class: "switch", type: "checkbox", role: "switch", checked: load(CONTINUE_KEY, true),
     onchange: (e) => { store(CONTINUE_KEY, e.target.checked); renderLibrary(); } });
-  return section("Keeping up", "Continue reading keeps the clip you read last at the top of the library. New chapters are looked for once a day when you're online, for collections saved with Save next; the library's own check looks right away.",
+  return section("Keeping up", null,
     el("div", { class: "group" },
       el("label", { class: "row" },
         el("span", { class: "choice-text" },
@@ -434,7 +445,7 @@ function storageGroup() {
       el("span", { class: "row-chev", "aria-hidden": "true" }, "›"));
     list.append(head, pages);
   }
-  const sec = section("By collection", "Every collection with its size, biggest first, and the clips in no collection as one more group. Open one to see its clips by size; tap a clip to read it. To delete a clip, press and hold it in the library.", list);
+  const sec = section("By collection", null, list);
   sec.prepend(el("p", { class: "storage-total" }, formatSize(totalBytes()) + (n ? " · " + countLine(n) : "")));
   return sec;
 }
@@ -989,7 +1000,7 @@ const SECTIONS = {
   reading: { title: "Reading", build: () => [readingGroup(), fontsGroup(), dictsGroup(), aloudGroup()],
     value: () => { const r = readingPrefs(); return (FONTS.find((f) => f.value === r.font) || FONTS[0]).label + " · " + r.size + " px"; } },
   library: { title: "Library", build: () => [
-    section("Layout", LAYOUTS.map((l) => l.label + ": " + l.note.toLowerCase()).join(". ") + ".",
+    section("Layout", null,
       el("div", { class: "group" }, el("div", { class: "rc-list" },
         seg(LAYOUT_KEY, "Layout", LAYOUTS.map((l) => ({ value: l.value, label: l.label })), layout(), (v) => { store(LAYOUT_KEY, v); renderLibrary(); })))),
     libraryGroup(), watchGroup(), importGroup(), editNavGroup()],

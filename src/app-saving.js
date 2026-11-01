@@ -376,13 +376,14 @@ function syncsList() {
         { value: "places", label: "Places and reading time only", note: "Clips, tags and collections wait for Wi-Fi" })));
 }
 function syncWhat() {
-  return section("This device", "The name shows on your other devices when this one read a clip further.",
+  return section("This device", null,
     el("div", { class: "group" },
       el("div", { class: "rc-list" },
         el("div", { class: "rc-row stack" }, el("label", { class: "rc-label", for: "deviceName" }, "This device's name"),
           el("input", { class: "feed-input", id: "deviceName", type: "text", maxlength: "40", autocomplete: "off",
             value: load(DEVICE_KEY, ""), placeholder: guessedName().replace(/^./, (c) => c.toUpperCase()),
-            onchange: (e) => store(DEVICE_KEY, e.target.value.trim().slice(0, 40)) })))));
+            onchange: (e) => store(DEVICE_KEY, e.target.value.trim().slice(0, 40)) })))),
+    el("p", { class: "footnote" }, "Shows on your other devices when this one read a clip further."));
 }
 // The setup link points at the web copy: inside the app this page is at
 // https://localhost, which no other device can open. The app's scanner
