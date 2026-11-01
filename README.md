@@ -135,7 +135,7 @@ Each section below shows the computer (left) and the phone (right).
 - Goes on to the next clip; keeps the screen on if you like; picture in picture; Bluetooth previous and next.
 - Sleep timer from the moon on the player, and Sleep 15 min on the lock screen.
 - Speech engine picker and Get more voices on Android; Allow mixing with other apps' sound.
-- Waypage voices on Android: download one of three Kokoro models and pick a speech engine per language.
+- More speech engines on Android: Kokoro, one of three models to download, and pick a speech engine per language.
 
 ## Feeds
 

@@ -5,8 +5,8 @@ All notable changes to Carry-on. Newest first.
 ## Unreleased
 
 ### Added
-- Narrate (Android): Kokoro voices. Waypage voices, under Get more
-  voices, is a screen of three downloads: Kokoro 0.19 (English,
+- Narrate (Android): Kokoro voices. More speech engines, under Get
+  more voices, has three downloads: Kokoro 0.19 (English,
   11 voices, about 99 MB, fastest), 1.0 (8 languages, 53 voices, about
   350 MB, the best voices) and 1.1 (English and Chinese, 103 voices,
   140 MB). One is in use at a time; they become a speech engine of the

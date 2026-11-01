@@ -2010,7 +2010,7 @@ function aloudControls() {
   speech.kokoro().then((k) => {
     if (!k) return;
     kokoroSlot.replaceWith(el("button", { class: "btn-quiet aloud-more", type: "button",
-      onclick: () => { if (state.settings) openSection("kokoro", false, true); else { closeSheet(); openSettings(false, "kokoro"); } } }, "Waypage voices"));
+      onclick: () => { if (state.settings) openSection("kokoro", false, true); else { closeSheet(); openSettings(false, "kokoro"); } } }, "More speech engines"));
   });
   speech.engines().then(({ engines, default: def }) => {
     if (!engines.length) return;

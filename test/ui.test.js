@@ -2169,7 +2169,7 @@ function zipOf(files) {
     });
 
     // CONTRIBUTING "Explain less": a ? only where Daniel agreed to one.
-    await test("Waypage voices (Kokoro): Download starts the one pressed, and is pressable when nothing else is downloading", async () => {
+    await test("More speech engines (Kokoro): Download starts the one pressed, and is pressable when nothing else is downloading", async () => {
       const q = await page(browser, 390);
       await q.evaluate(() => {
         window.asked = [];

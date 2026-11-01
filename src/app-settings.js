@@ -300,7 +300,7 @@ async function fillKokoro(slot) {
     await act("remove", p.id, () => { if (ready.length === 1) forgetKokoro(s.engine); })();
   };
   slot.replaceChildren(
-    section("Voices", null, el("div", { class: "group" }, ...rows)),
+    section("Kokoro", null, el("div", { class: "group" }, ...rows)),
     ready.length ? section("Actions", null, el("div", { class: "group" },
       ...ready.map((p) => el("button", { class: "row", type: "button", onclick: remove(p) }, el("span", { class: "row-label warn" }, "Remove " + p.title))))) : null);
   if (busy) setTimeout(() => { if (slot.isConnected) again(); }, 1000);
@@ -1084,7 +1084,7 @@ const SECTIONS = {
   drive: { title: "Google Drive", build: driveSections, value: driveValue },
   notifications: { title: "Notifications", build: notesSections, value: notesValue },
   edit: { title: "Edit clips", build: editGroup, value: () => "", parent: "library" },
-  kokoro: { title: "Waypage voices", build: kokoroSections, value: () => "", parent: "reading" },
+  kokoro: { title: "More speech engines", build: kokoroSections, value: () => "", parent: "reading" },
   storage: { title: "Storage", build: () => [placeGroup(), storageGroup(), browserStorageGroup(), backupGroup(roomRows())], value: () => formatSize(totalBytes()) },
   updates: { title: "About", build: () => [updatesGroup(), aboutGroup()], value: () => (updateOut() ? upd.latest + " is out" : APP_VERSION) },
   previews: { title: "Preview builds", build: () => previewsSections(), value: () => "", parent: "updates" },

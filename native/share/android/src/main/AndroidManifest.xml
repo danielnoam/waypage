@@ -29,7 +29,7 @@
             android:name="io.github.danielnoam.waypage.share.KokoroTtsService"
             android:exported="true"
             android:enabled="false"
-            android:label="Kokoro (Waypage)">
+            android:label="Kokoro">
             <intent-filter>
                 <action android:name="android.intent.action.TTS_SERVICE" />
                 <category android:name="android.intent.category.DEFAULT" />
