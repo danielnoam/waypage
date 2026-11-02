@@ -85,7 +85,7 @@ async function phone(browser) {
         assert.ok(e.about, e.name + " has a line about it");
         assert.ok(!urls.has(e.url), e.name + " isn't listed twice");
         urls.add(e.url);
-        if (e.kind === "newsletter" && !e.feed) assert.ok(e.signup, e.name + " has a sign-up page");
+        if (e.kind === "newsletter") assert.ok(e.signup, e.name + " has a sign-up page");
       }
     });
 
@@ -125,6 +125,7 @@ async function phone(browser) {
       await p.locator("#discover .dz-book").first().waitFor();
       assert.strictEqual(await p.locator("#placeTitle").textContent(), "Discover");
       assert.ok(await p.locator("#discover .dz-row").count() > 20);
+      assert.deepStrictEqual(await p.locator("#discover .section-head .overline").allTextContents(), ["Royal Road", "Feeds", "Newsletters"]);
       assert.strictEqual(await p.locator("#saveUrl").getAttribute("placeholder"), "Search Royal Road, or paste a site");
       // A site: the Add a feed sheet, its address filled in.
       await p.locator('#discover .dz-row:has-text("Quanta Magazine") .post-save').click();
@@ -158,6 +159,8 @@ async function phone(browser) {
       await p.locator('#discover .chip:has-text("Newsletters")').click();
       assert.strictEqual(await p.locator("#discover .dz-book").count(), 0, "no stories under Newsletters");
       assert.ok(await p.locator('#discover .dz-row:has-text("Quanta")').count() === 0);
+      assert.ok(await p.locator('#discover .dz-row:has-text("Slow Boring")').count() === 0, "a newsletter with a feed is under Feeds, not Newsletters");
+      assert.ok(await p.locator('#discover .dz-row:has-text("Money Stuff")').count() === 1);
       await p.locator('#discover .chip:has-text("Science")').click();
       assert.ok(await p.locator('#discover .dz-row:has-text("Quanta")').count() === 1);
       await p.fill("#saveUrl", "moth");
@@ -165,6 +168,53 @@ async function phone(browser) {
       await p.locator('#discover .section-head:has-text("Royal Road · moth")').waitFor();
       assert.ok((await p.evaluate(() => window.asked)).some((u) => u.endsWith("/fictions/search?title=moth")));
       assert.strictEqual(await p.locator("#discover .dz-book").count(), 2);
+      await ctx.close();
+    });
+
+    await test("when Royal Road's page has no stories, Discover says why and shows no stray text", async () => {
+      const { ctx, p } = await phone(browser);
+      await p.evaluate(() => { Waypage.platform.fetchText = async (url) => ({ status: 200, url, text: "<html><head><title>Just a moment...</title></head><body></body></html>" }); goPlace("discover"); });
+      await p.locator("#discover .dz-src.warn").waitFor();
+      const text = await p.locator("#discover").textContent();
+      await ctx.close();
+      assert.ok(!/null|undefined/.test(text), "no null or undefined in the page");
+      assert.match(text, /no stories were found/);
+      assert.match(text, /Just a moment/);
+    });
+
+    await test("turned away by Cloudflare, Royal Road's list is read through the hidden browser", async () => {
+      const { ctx, p } = await phone(browser);
+      await p.evaluate((list) => {
+        const P = Waypage.platform;
+        P.fetchText = async (url) => ({ status: 403, url, text: "<html><head><title>Just a moment...</title></head></html>" });
+        Object.defineProperty(P, "canRender", { get: () => true, configurable: true });
+        window.drawn = [];
+        P.render = async (url) => { window.drawn.push(url); return { text: list, url }; };
+        goPlace("discover");
+      }, fixture("rr-list.html"));
+      await p.locator("#discover .dz-book").first().waitFor();
+      assert.deepStrictEqual(await p.evaluate(() => window.drawn), ["https://www.royalroad.com/fictions/rising-stars"]);
+      assert.strictEqual(await p.locator("#discover .dz-book").count(), 2);
+      await ctx.close();
+    });
+
+    await test("a swipe moves to the next chip, as in Feeds", async () => {
+      const { ctx, p } = await phone(browser);
+      await p.evaluate(() => goPlace("discover"));
+      await p.locator("#discover .dz-row").first().waitFor();
+      const swipe = async (x0, x1) => p.evaluate(([a, b]) => {
+        const root = document.getElementById("discover");
+        const row = root.querySelector(".section-head");
+        const r = row.getBoundingClientRect(), y = r.top + 20;
+        const t = (x) => new Touch({ identifier: 1, target: row, clientX: x, clientY: y });
+        row.dispatchEvent(new TouchEvent("touchstart", { touches: [t(a)], changedTouches: [t(a)], bubbles: true }));
+        for (let i = 1; i <= 6; i++) row.dispatchEvent(new TouchEvent("touchmove", { touches: [t(a + (b - a) * i / 6)], changedTouches: [t(a + (b - a) * i / 6)], bubbles: true }));
+        row.dispatchEvent(new TouchEvent("touchend", { touches: [], changedTouches: [t(b)], bubbles: true }));
+      }, [x0, x1]);
+      await swipe(320, 40);
+      await p.waitForFunction(() => document.querySelector("#discover .chip.on").textContent === "Stories");
+      await swipe(40, 320);
+      await p.waitForFunction(() => document.querySelector("#discover .chip.on").textContent === "All");
       await ctx.close();
     });
 

@@ -1321,7 +1321,8 @@ function swipeFeeds(root) {
   root.addEventListener("touchstart", (e) => {
     const t = e.touches[0];
     go = e.touches.length === 1 && t.clientX > EDGE && !state.feedPick && !state.side && !state.menu && chips().length > 1
-      && !e.target.closest(".filters, input, textarea") ? { x: t.clientX, y: t.clientY, on: false, dx: 0, t: e.timeStamp } : null;
+      // Discover's covers scroll sideways on their own.
+      && !e.target.closest(".filters, input, textarea, .dz-covers") ? { x: t.clientX, y: t.clientY, on: false, dx: 0, t: e.timeStamp } : null;
   }, { passive: true });
   root.addEventListener("touchmove", (e) => {
     if (!go) return;

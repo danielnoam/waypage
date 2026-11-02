@@ -2705,11 +2705,6 @@ html.locked body > :not(.lock-view):not(script) { visibility: hidden !important;
 .dz-bm { font-size: 12px; line-height: 16px; color: var(--muted); }
 .dz-src { margin-top: var(--s-2); }
 .dz-about { font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--ink); }
-.post-meta .dz-tag {
-  display: inline-block; margin-inline-end: 6px; padding: 0 6px; border: 1px solid var(--line); border-radius: var(--r-full);
-  font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted);
-}
-.post-meta .dz-tag.feed { color: var(--ok); border-color: currentColor; }
 .post-saved.dz-on { display: inline-flex; align-items: center; gap: 4px; }
 .post-saved.dz-on .side-icon { color: inherit; }
 .dz-foot { margin-top: var(--s-5); }

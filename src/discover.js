@@ -22,7 +22,7 @@
 
   // ---- The hand-picked list ----
 
-  const KINDS = ["site", "newsletter"];
+  const KINDS = ["feed", "newsletter"];
   const httpUrl = (u) => { try { const x = new URL(String(u || "")); return /^https?:$/.test(x.protocol) ? x.href : ""; } catch (e) { return ""; } };
   // Only well-formed entries get through, whichever copy they came from.
   function clean(raw) {
@@ -31,7 +31,7 @@
     const entries = raw.entries.filter((e) => e && KINDS.includes(e.kind) && typeof e.name === "string" && httpUrl(e.url))
       .map((e) => ({
         kind: e.kind, name: e.name.slice(0, 80), about: String(e.about || "").slice(0, 160), topic: String(e.topic || ""),
-        url: httpUrl(e.url), feed: e.kind === "newsletter" ? e.feed !== false : true,
+        url: httpUrl(e.url),
         feedUrl: typeof e.feed === "string" ? httpUrl(e.feed) : "", signup: httpUrl(e.signup),
       }));
     return entries.length ? { topics, entries } : null;
@@ -121,25 +121,41 @@
   // The last list read stays for offline, with when it was read.
   const rrCache = () => read(RR_KEY, {});
   function rrSaved(key) { return rrCache()[key] || null; }
+  // Royal Road sits behind Cloudflare, which turns a plain request away
+  // with a "Just a moment..." page (403) whatever it says it is. The
+  // hidden browser (Android's PageRender) passes that check as a browser
+  // would and waits for the real page; it's tried when the plain request
+  // fails or comes back with no stories.
+  const challenged = (res) => res.status === 403 || res.status === 503 || /<title>\s*Just a moment/i.test(res.text || "");
+  async function rrStories(url) {
+    let res = null, items = [];
+    try {
+      res = await C.platform.fetchText(url);
+      if (res.status === 200 && !challenged(res)) items = parseList(res.text, res.url || url);
+    } catch (e) { if (!C.platform.canRender) throw e; }
+    if (!items.length && C.platform.canRender) {
+      const drawn = await C.platform.render(url, {});
+      if (drawn) { res = { status: 200, url: drawn.url, text: drawn.text }; items = parseList(drawn.text, drawn.url || url); }
+    }
+    if (items.length) return items;
+    if (res && res.status !== 200) throw new Error("HTTP " + res.status);
+    const title = res && /<title>([^<]{0,60})/i.exec(res.text || "");
+    throw new Error("no stories (" + (res ? res.text.length : 0) + " characters" + (title ? ', titled "' + title[1].trim() + '"' : "") + ")");
+  }
+
   async function rrRead(key, force) {
     const def = RR_LISTS.find((l) => l.key === key) || RR_LISTS[0];
     const had = rrSaved(def.key);
     if (!force && had && Date.now() - had.at < FRESH) return had;
-    const res = await C.platform.fetchText(RR + def.path);
-    if (res.status !== 200) throw new Error("HTTP " + res.status);
-    const items = parseList(res.text, res.url || RR + def.path);
-    if (!items.length) throw new Error("no stories");
-    const got = { at: Date.now(), items };
+    const got = { at: Date.now(), items: await rrStories(RR + def.path) };
     const all = rrCache();
     all[def.key] = got;
     keep(RR_KEY, all);
     return got;
   }
   async function rrSearch(words) {
-    const url = RR + "/fictions/search?title=" + encodeURIComponent(String(words || "").trim());
-    const res = await C.platform.fetchText(url);
-    if (res.status !== 200) throw new Error("HTTP " + res.status);
-    return parseList(res.text, res.url || url);
+    try { return await rrStories(RR + "/fictions/search?title=" + encodeURIComponent(String(words || "").trim())); }
+    catch (e) { if (/^no stories/.test(e.message) && !/Just a moment/.test(e.message)) return []; throw e; }
   }
 
   C.discover = { list, refresh, fromSource, clean, isStory, storyId, parseList, rrLists: RR_LISTS, rrSaved, rrRead, rrSearch };

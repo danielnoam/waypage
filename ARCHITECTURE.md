@@ -316,7 +316,9 @@ adds a line here.
 - Newsletters go through Kill the Newsletter, which receives and can read
   the emails; the address and feed link are keys.
 - Discover reads Royal Road's list and search pages as a browser would
-  (Royal Road sees the visit, as it does for saving a chapter), and the
+  (Royal Road sees the visit, as it does for saving a chapter). Cloudflare
+  turns a plain request away there, so on Android the hidden browser
+  (PageRender) reads them, which takes a few seconds; and the
   phone fetches the hand-picked list from raw.githubusercontent.com twice
   a day, which GitHub sees. Royal Road's markup is scraped, so a change
   there leaves the last list read until the parser is fixed.

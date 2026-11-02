@@ -1,9 +1,9 @@
 // Waypage: Discover, a place to browse new things to follow (src/discover.js
-// holds the sources). It adds nothing of its own: a site or a newsletter
-// with a feed goes to the Add a feed sheet, a Royal Road story is saved as
-// a collection (its chapter list, which then follows new chapters), and an
-// email-only newsletter gets an address from Newsletters and its sign-up
-// page. See app.js for the order these files load in.
+// holds the sources). It adds nothing of its own: a feed (a site, or a
+// newsletter that has one) goes to the Add a feed sheet, a Royal Road story
+// is saved as a collection (its chapter list, which then follows new
+// chapters), and a newsletter (email only, Daniel: "Newsletters" means the
+// app's own) gets an address from Newsletters and its sign-up page. See app.js for the order these files load in.
 
 // The chip picked: all, stories, sites, newsletters or a topic.
 let dzPick = "all";
@@ -13,7 +13,7 @@ const dz = { busy: false, error: "", found: null, searching: false };
 // The phone reads Royal Road itself; the web copy can once its fetch
 // proxy is set (canReadPages, the Worker's PR), and not before.
 const dzCanRead = () => ("canReadPages" in C.platform ? C.platform.canReadPages : C.platform.canFetchPages);
-const DZ_KINDS = [["all", "All"], ["stories", "Stories"], ["sites", "Sites"], ["newsletters", "Newsletters"]];
+const DZ_KINDS = [["all", "All"], ["stories", "Stories"], ["feeds", "Feeds"], ["newsletters", "Newsletters"]];
 const dzHost = (u) => { try { return new URL(u).hostname.toLowerCase().replace(/^www\./, ""); } catch (e) { return ""; } };
 
 // Followed already: a feed from the same site (its page or its feed).
@@ -39,15 +39,15 @@ function renderDiscover() {
   const show = (k) => dzPick === "all" || dzPick === k || (topic && k !== "stories");
   if (show("stories") && (!topic || topic === "Fiction")) nodes.push(...dzStories());
   const pick = (kind) => entries.filter((e) => e.kind === kind && (!topic || e.topic === topic));
-  if (show("sites") && pick("site").length) {
-    nodes.push(sectionHead("Sites"), el("div", { class: "group feed-group" }, ...pick("site").map(dzRow)));
+  if (show("feeds") && pick("feed").length) {
+    nodes.push(sectionHead("Feeds"), el("div", { class: "group feed-group" }, ...pick("feed").map(dzRow)));
   }
   if (show("newsletters") && pick("newsletter").length) {
     nodes.push(sectionHead("Newsletters"), el("div", { class: "group feed-group" }, ...pick("newsletter").map(dzRow)));
   }
   nodes.push(el("p", { class: "footnote dz-foot" }, "Picked by hand. ",
     el("button", { class: "btn-text dz-suggest", type: "button", onclick: () => C.platform.openOutside("https://github.com/danielnoam/waypage/issues/new?title=" + encodeURIComponent("Discover: ")) }, "Suggest one on GitHub")));
-  root.replaceChildren(...nodes);
+  root.replaceChildren(...nodes.filter(Boolean));
   const chips = root.querySelector(".feed-chips");
   if (chips) chips.scrollLeft = scrollX;
 }
@@ -55,16 +55,15 @@ function renderDiscover() {
 function dzRow(e) {
   const on = dzFollowing(e);
   const add = () => dzAdd(e);
-  const tag = e.kind === "newsletter" ? el("span", { class: "dz-tag" + (e.feed ? " feed" : "") }, e.feed ? "Feed" : "Email") : null;
   return el("div", { class: "post dz-row", "data-key": "dz:" + e.url },
     el("button", { class: "post-open", type: "button", "aria-label": e.name + (on ? ", following" : ""), onclick: on ? () => dzOpenFollowed(e) : add }),
     feedMark({ url: e.url, link: e.url, title: e.name }),
     el("span", { class: "post-body" },
       el("span", { class: "post-title", dir: "auto" }, e.name),
       e.about ? el("span", { class: "dz-about", dir: "auto" }, e.about) : null,
-      el("span", { class: "post-meta" }, tag, dzHost(e.url))),
+      el("span", { class: "post-meta" }, dzHost(e.url))),
     on ? el("span", { class: "post-saved dz-on" }, dzIcon("check"), "Following")
-      : el("button", { class: "post-act post-save", type: "button", "aria-label": (e.kind === "newsletter" && !e.feed ? "Sign up to " : "Follow ") + e.name, onclick: add }, dzIcon("plus")));
+      : el("button", { class: "post-act post-save", type: "button", "aria-label": (e.kind === "newsletter" ? "Sign up to " : "Follow ") + e.name, onclick: add }, dzIcon("plus")));
 }
 
 function dzOpenFollowed(e) {
@@ -74,7 +73,7 @@ function dzOpenFollowed(e) {
 }
 
 function dzAdd(e) {
-  if (e.kind === "newsletter" && !e.feed) { openMenu("signup", e); return; }
+  if (e.kind === "newsletter") { openMenu("signup", e); return; }
   openMenu("addFeed", { url: e.feedUrl || e.url });
 }
 
@@ -142,9 +141,18 @@ async function dzReadRR(force) {
   dz.error = "";
   if (state.place === "discover") renderDiscover();
   try { await C.discover.rrRead(def.key, force); }
-  catch (e) { dz.error = had ? "Couldn't reach Royal Road. This is the list from " + whenText(had.at) + "." : "Couldn't read Royal Road's list just now. Pull down to try again."; }
+  catch (e) { dz.error = (had ? "Couldn't reach Royal Road. This is the list from " + whenText(had.at) + "." : "Couldn't read Royal Road's list just now. Pull down to try again.") + " (" + dzWhy(e) + ")"; }
   dz.busy = false;
   if (state.place === "discover") renderDiscover();
+}
+
+// Why Royal Road failed, in a few words, so a phone report says it.
+function dzWhy(e) {
+  const m = String((e && e.message) || e || "");
+  if (/^HTTP 403|^HTTP 503/.test(m)) return m + ": Royal Road turned the app away";
+  if (/^HTTP /.test(m)) return m;
+  if (/no stories/.test(m)) return "the page came back, but no stories were found in it " + (m.match(/\(.*\)/) || [""])[0];
+  return m.slice(0, 80) || "no answer";
 }
 
 async function dzSearch(words) {
@@ -155,7 +163,7 @@ async function dzSearch(words) {
   dzPick = "stories";
   toast("Searching Royal Road…");
   try { dz.found = { words, items: await C.discover.rrSearch(words), error: "" }; }
-  catch (e) { dz.found = { words, items: [], error: "Couldn't reach Royal Road. Try again in a while." }; }
+  catch (e) { dz.found = { words, items: [], error: "Couldn't reach Royal Road. Try again in a while. (" + dzWhy(e) + ")" }; }
   dz.searching = false;
   if (state.place === "discover") { renderDiscover(); scrollTo(0, 0); }
 }
