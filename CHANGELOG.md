@@ -2,6 +2,15 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.52.1] - 2026-11-02
+
+### Fixed
+- Pages: the side margin no longer grows as you move through a clip, most
+  of all when dragging the skim slider far. On phones whose screen width
+  isn't a whole number of pixels, every page turn left the text a little
+  further off, so the margin crept wider and the text ran to the edge.
+  The last page also sat 20 px to the left; it is centred now.
+
 ## [1.52.0] - 2026-11-02
 
 ### Added

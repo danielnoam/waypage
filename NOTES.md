@@ -18,6 +18,20 @@ Moved here from TODO.md (11 Oct 2026), which now lists only open work.
 
 ## Entries
 
+**Pages step by the frame's real width, not `innerWidth` (1.52.1).** A
+phone's width in CSS px isn't a whole number (1080 px at 2.625x is
+411.43) and `innerWidth` is. The columns repeat at the real width, so
+turning by `innerWidth` left the text 0.4 px further off each page: 17 px
+by page 40, ~85 px by page 200, which read as the side margin growing
+while dragging the skim slider. `width()` in `src/reader.js` is now the
+html element's own width, and `relayout` sizes the column from it so a
+column and its gap are exactly one page. Found with a copy of the CSS in
+headless Chromium at `--force-device-scale-factor=2.625` and `2.75`; a
+desktop browser at 1x never shows it. The last column also ends one side
+short of a whole page, so the last page couldn't be scrolled to and sat
+20 px off: `#co-end`, a 1 px speck at the end of the last page, makes the
+clip a whole number of pages wide.
+
 **Preview builds are pre-releases, one per branch (1.48.0).** The
 workflow artifact was the first idea: it needs no token either, but it
 is a zip, its link lives a minute, and it is gone after 90 days. A
