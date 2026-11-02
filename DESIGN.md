@@ -232,7 +232,8 @@ and the page shows above it.
   each card's top end (24 px, a 2 px muted ring), filled with the accent
   and a tick once picked, and the card's border turns accent. A bar over
   the top: Cancel, "3 pages picked", Select all (or Pick none), accent
-  text buttons. A bar along the bottom: Tags, Collection, Mark read (or
+  text buttons; in a collection a ⋯ after them opens Read, Unread and
+  Previous. A bar along the bottom: Tags, Collection, Mark read (or
   unread), Delete (warn), icon over label, 56 px, dimmed until something
   is picked.
 - **Library sheet (Now):** a long press (or right-click) on a page: the

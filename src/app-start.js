@@ -103,6 +103,7 @@ const topBar = $("topBar");
 addEventListener("scroll", () => topBar.classList.toggle("scrolled", scrollY > 0), { passive: true });
 $("selectCancel").addEventListener("click", () => history.back());
 $("selectAll").addEventListener("click", () => (state.feedPick ? pickAllPosts() : selectAll()));
+$("selectMore").addEventListener("click", openSelectMenu);
 $("selOpen").addEventListener("click", openPickedPosts);
 $("selSave").addEventListener("click", savePickedPosts);
 $("selTags").addEventListener("click", () => openMenu("tags"));
