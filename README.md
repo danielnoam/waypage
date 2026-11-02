@@ -72,6 +72,7 @@ Each section below shows the computer (left) and the phone (right).
 - Paste, drop or share a link; Ctrl V saves on a computer.
 - Save with options: several links at once, a file, article or comic, a collection and tags.
 - Wikipedia through its REST API, with its licence line; Readability for everything else.
+- Discussions whole: Reddit, Hacker News, Stack Overflow and the other Stack Exchange sites, and GitHub issues and pull requests, with who said what and replies indented. A GitHub code file as code, a repo as its README.
 - Pictures as small previews, full size (capped at 1600 px WebP) or links only, per clip or in Settings; or load pictures only when tapped.
 - Videos as a thumbnail and a link.
 - Web serials: save next, previous or all along a site's next-chapter links, or a contents page as its chapters. Royal Road, AO3, Scribble Hub, FanFiction.net, Blogger, WEBTOON, Tapas and Wattpad.

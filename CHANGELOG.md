@@ -4,6 +4,20 @@ All notable changes to Carry-on. Newest first.
 
 ## Unreleased
 
+### Added
+- Discussions save whole. A Reddit post keeps its picture or text and its
+  comment tree, best first; a Hacker News story keeps its link and every
+  comment in HN's order; a Stack Overflow question (and Super User, Server
+  Fault, Ask Ubuntu and the other Stack Exchange sites) keeps the accepted
+  answer and the best others, five in all, with a link to the rest; a
+  GitHub issue or pull request keeps every comment. Each comment shows who
+  wrote it, its points and date, with replies indented under it.
+- A GitHub code file saves as the code itself, and a GitHub repo as its
+  README, named after the repo.
+
+### Changed
+- Code blocks in clips have tighter lines.
+
 ### Fixed
 - PDFs: a pinch zoom landed off the spot under your fingers, further off
   the deeper into the PDF you were (a quarter of a page by page 25). It

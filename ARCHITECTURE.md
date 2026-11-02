@@ -124,8 +124,12 @@ up. A new shell file goes in the order in `index.html` and in `sw.js`'s
    taken once it settles. Signed-in sites are saved through the `SignIn`
    plugin's WebView. When a page is gone, the Internet Archive's copy.
 2. **Pick the article**: Wikipedia through `/api/rest_v1/page/html/{title}`
-   with a User-Agent naming the app; everything else through Mozilla
-   Readability.
+   with a User-Agent naming the app; a site in `save.js`'s `SITES` list by
+   its own rule (fiction and comics sites; Reddit from the post's `.json`;
+   Hacker News and Stack Exchange from the page as threads; GitHub issues
+   and pull requests from the API, code files from their raw copy, a repo
+   as its README); everything else through Mozilla Readability. A
+   discussion keeps its `co-thread`/`co-comment` classes for reader.css.
 3. **Clean** to an allowlist of tags and attributes: no scripts, iframes,
    forms, handlers or tracking pixels. Lazy images resolve to one URL.
 4. **Pictures** become a local preview (about 480 px wide) plus the full
@@ -261,8 +265,10 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
 ## Tests and screenshots
 
 `node test/run-all.js` runs every `test/*.test.js` in its own process.
-`ui.test.js` and `drive.test.js` drive the app in Chromium with
-Playwright and skip when it isn't installed; `build.test.js` checks the
+`ui.test.js`, `drive.test.js` and `sites.test.js` drive the app in
+Chromium with Playwright and skip when it isn't installed (`sites.test.js`
+saves the discussion and code sites from their answers saved in
+`test/fixtures/sites/`, with nothing going out); `build.test.js` checks the
 bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
