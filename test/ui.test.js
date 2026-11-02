@@ -531,19 +531,15 @@ function zipOf(files) {
         // Settings' copy shows and sets the defaults.
         const box = readingControls(false);
         out.settings = box.querySelector('.range[data-pref="size"]').value;
-        out.settingsScope = box.querySelectorAll(".rc-scope").length;
+        out.settingsScope = box.querySelectorAll(".scope-pick").length;
         // The Aa sheet's Layout and Text start with the switch.
-        out.sheet = readingControls(true).querySelectorAll(".rc-scope").length;
+        out.sheet = readingControls(true).querySelectorAll(".scope-pick").length;
         setScope("all");
         await wait();
         out.back = [readingScope(state.open), readingPrefs().size, readingPrefs().layout, frameSize()];
         document.querySelector("#toast .toast-act").click();
         await wait();
         out.undone = [readingScope(state.open), readingPrefs().size];
-        useEverywhere();
-        await wait();
-        out.everywhere = [readingScope(state.open), readingPrefs(null).size];
-        document.querySelector("#toast .toast-act").click();
         setScope("all");
         await wait();
         out.after = [readingScope(state.open), readingPrefs(null).size, readingPrefs().layout];
@@ -557,7 +553,6 @@ function zipOf(files) {
       assert.strictEqual(got.sheet, 2);
       assert.deepStrictEqual(got.back, ["all", u, "scroll", u + "px"]);
       assert.deepStrictEqual(got.undone, ["clip", u + 4]);
-      assert.deepStrictEqual(got.everywhere, ["all", u + 4]);
       assert.deepStrictEqual(got.after, ["all", u, "scroll"]);
     });
 

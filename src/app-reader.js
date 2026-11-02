@@ -2171,19 +2171,15 @@ function slider(label, min, max, step, onvalue, pref) {
 const TEXT_PREFS = ["font", "hebrew", "size", "weight", "align", "hyphens", "spacing", "letters", "words", "paras"];
 const prefsOf = (o, keys) => Object.fromEntries(keys.map((k) => [k, o[k]]));
 
-// Settings per clip (Unreleased): which settings the open clip uses, at
-// the top of the Aa sheet's Layout and Text. Use everywhere makes them
-// the defaults.
-function scopeRow(name) {
+// Settings per clip (Unreleased): one row at the top of the Aa sheet's
+// Layout and Text, where the open clip's settings come from.
+function scopeRow() {
   const p = state.open;
-  const opts = [{ value: "clip", label: isBook(p) ? "This book" : "This clip" }];
-  if (p.folder) opts.push({ value: "set", label: "Collection" });
-  opts.push({ value: "all", label: "Everywhere" });
-  return el("div", { class: "rc-scope" },
-    el("div", { class: "rc-scope-head" },
-      el("span", { class: "rc-label" }, "Settings for", el("span", { class: "rc-value", "data-scope-note": "", dir: "auto" })),
-      el("button", { class: "btn-quiet", type: "button", "data-use-everywhere": "", onclick: useEverywhere }, "Use everywhere")),
-    seg(name + "-scope", "Settings for", opts, readingScope(p), setScope, "scope-seg"));
+  const d = dropdown({ label: "Applies to", cls: "field-pick font-pick scope-pick", value: readingScope(p), onpick: setScope, options: [
+    { value: "all", label: "Everywhere" },
+    { value: "clip", label: isBook(p) ? "This book" : "This clip" },
+    ...(p.folder ? [{ value: "set", label: "This collection" }] : [])] });
+  return el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Applies to"), d);
 }
 
 let readingGroups = 0;
@@ -2208,7 +2204,7 @@ function readingControls(withTheme) {
     return d;
   };
   const layout = part("layout", "Layout",
-    scoped ? scopeRow(id + "-layout") : null,
+    scoped ? scopeRow() : null,
     row("Show as", seg(id + "-layout", "Show as", [
       { value: "scroll", label: "Scroll" }, { value: "pages", label: "Pages" },
     ], r.layout, (v) => set({ layout: v }))),
@@ -2216,8 +2212,6 @@ function readingControls(withTheme) {
     row("Margins", seg(id + "-margins", "Margins", [
       { value: "narrow", label: "Narrow" }, { value: "normal", label: "Normal" }, { value: "wide", label: "Wide" },
     ], r.margins, (v) => set({ margins: v }))),
-    // What's under the line is the same for every clip.
-    scoped ? el("div", { class: "rc-rule", role: "separator" }) : null,
     ...(brightSwitch(id) || []),
     // Under Layout since 1.47.0: it adds a line to the page, not to the type.
     row("Time left in", seg(id + "-leftIn", "Time left in", [
@@ -2240,7 +2234,7 @@ function readingControls(withTheme) {
     // Only in the reader's own sheet, where a PDF is open.
     withTheme ? pdfDarkSwitch() : null);
   const text = part("text", "Text",
-    scoped ? scopeRow(id + "-text") : null,
+    scoped ? scopeRow() : null,
     row("Font", fontPick("font", "Font",
       FONTS.map((f) => ({ value: f.value, label: f.label, style: "font-family: " + f.family + ", var(--sans)" })))),
     row("Hebrew", fontPick("hebrew", "Hebrew font",
@@ -2286,11 +2280,7 @@ function syncReadingControls(box) {
   const p = "all" in box.dataset ? null : state.open;
   const r = readingPrefs(p);
   const scope = readingScope(p);
-  box.querySelectorAll(".rc-scope").forEach((n) => {
-    n.querySelectorAll("input").forEach((i) => { i.checked = i.value === scope; });
-    n.querySelector("[data-scope-note]").textContent = scope === "clip" ? p.title : scope === "set" ? p.folder : "Same as in Settings";
-    n.querySelector("[data-use-everywhere]").hidden = scope === "all";
-  });
+  box.querySelectorAll(".scope-pick").forEach((d) => d.set(scope));
   box.querySelectorAll(".volume-row").forEach((n) => { n.style.display = r.layout === "pages" ? "" : "none"; });
   const shown = {
     size: r.size + " px", spacing: r.spacing.toFixed(2),
@@ -2313,7 +2303,7 @@ function syncReadingControls(box) {
   for (const k of ["layout", "margins", "spread"]) {
     box.querySelectorAll('input[name$="-' + k + '"]').forEach((i) => { i.checked = i.value === r[k]; });
   }
-  box.querySelectorAll(".font-pick").forEach((d) => d.set(r[d.dataset.pref]));
+  box.querySelectorAll(".font-pick[data-pref]").forEach((d) => d.set(r[d.dataset.pref]));
   // Reset text leaves the layout as it is.
   box.querySelector(".reset").disabled = TEXT_PREFS.every((k) => r[k] === READING_DEFAULT[k]);
 }

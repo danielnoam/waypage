@@ -210,24 +210,6 @@ function setScope(to) {
   const lost = from === "clip" ? "This " + clipWord(p) + "'s own settings" : from === "set" && to === "all" ? "The collection's own settings" : "";
   if (lost && to !== "clip") toast(lost + " are gone.", "Undo", () => { const w = readingPrefs(); store(READING_FOR_KEY, JSON.parse(before)); readingChanged(w, {}); });
 }
-// Use everywhere: these become the defaults and the clip and its
-// collection drop their own.
-function useEverywhere() {
-  const p = state.open;
-  if (!ownable(p)) return;
-  const was = readingPrefs(), f = readingFor(), before = [load(READING_KEY, {}), JSON.stringify(f)];
-  store(READING_KEY, { ...readingPrefs(null), ...ownPart(was) });
-  delete f.clips[p.id];
-  if (p.folder) delete f.sets[p.folder];
-  store(READING_FOR_KEY, f);
-  readingChanged(was, {});
-  toast("These are your settings everywhere now.", "Undo", () => {
-    const w = readingPrefs();
-    store(READING_KEY, before[0]);
-    store(READING_FOR_KEY, JSON.parse(before[1]));
-    readingChanged(w, {});
-  });
-}
 const clipWord = (p) => (p && p.file ? "book" : "clip");
 // A collection renamed keeps its settings; clips and collections that
 // are gone lose theirs (at start).
