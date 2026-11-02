@@ -244,11 +244,57 @@
   const fpBrowse = (sort, genre, page) => fpStories(fpBrowseUrl(sort, genre, page));
   const fpSearch = (words) => fpStories(FP + "/search/?keywords=" + encodeURIComponent(String(words || "").trim()) + "&ready=1&type=story");
 
+  // FictionPress's first page for All's Sites row, kept like Royal Road's.
+  const FP_KEY = "waypage.discover.fp";
+  const fpSaved = () => read(FP_KEY, null);
+  async function fpRead(force) {
+    const had = fpSaved();
+    if (!force && had && Date.now() - had.at < FRESH) return had;
+    const got = { at: Date.now(), items: await fpBrowse("4", "Fantasy", 1) };
+    keep(FP_KEY, got);
+    return got;
+  }
+
+  // A web serial's chapters, from its table of contents. WordPress serials
+  // list each arc or volume in a list of its own, so the general contents
+  // reader (one list, the best) got one arc. Here every link in the post's
+  // body counts, in page order. A contents page built by script is read
+  // again in the hidden browser.
+  const NOT_CHAPTER = /\/(category|tag|author|feed|wp-content|wp-admin|wp-login|comments)\b|[?&](share|replytocom)=|\.(jpe?g|png|gif|webp|pdf)$/i;
+  function serialLinks(html, at) {
+    const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
+    const box = doc.querySelector(".entry-content, .post-content, .page-content, article .content, article, main") || doc.body;
+    const host = (u) => u.hostname.replace(/^www\./, "");
+    const page = new URL(at);
+    const seen = new Set(), links = [];
+    if (box) for (const a of box.querySelectorAll("a[href]")) {
+      if (!text(a)) continue;
+      let u;
+      try { u = new URL(a.getAttribute("href"), at); } catch (e) { continue; }
+      u.hash = "";
+      if (!/^https?:$/.test(u.protocol) || host(u) !== host(page) || u.pathname.replace(/\/$/, "") === page.pathname.replace(/\/$/, "") || u.pathname === "/" || NOT_CHAPTER.test(u.href)) continue;
+      if (!seen.has(u.href)) { seen.add(u.href); links.push(u.href); }
+    }
+    const og = doc.querySelector('meta[property="og:site_name"]');
+    return { title: (og && og.content.trim()) || text(doc.querySelector("title")).replace(/\s*[|–-].*$/, ""), links };
+  }
+  async function serialChapters(url) {
+    let res = null;
+    try { res = await C.platform.fetchText(url); } catch (e) { if (!C.platform.canRender) throw e; }
+    let got = res && res.status === 200 && !challenged(res) ? serialLinks(res.text, res.url || url) : { title: "", links: [] };
+    if (got.links.length < 5 && C.platform.canRender) {
+      const drawn = await C.platform.render(url, {});
+      if (drawn) { const again = serialLinks(drawn.text, drawn.url || url); if (again.links.length > got.links.length) got = again; }
+    }
+    if (!got.links.length && res && res.status !== 200) throw new Error("HTTP " + res.status);
+    return got;
+  }
+
   // The story sites Sites browses, each with its lists and genres.
   const SOURCES = [
     { key: "rr", label: "Royal Road", lists: RR_LISTS, genres: RR_GENRES, anyGenre: true, browse: (k, g, p) => rrBrowse(k, g, p), search: (w) => rrSearch(w) },
     { key: "fp", label: "FictionPress", lists: FP_SORTS, genres: FP_GENRES, anyGenre: false, browse: fpBrowse, search: fpSearch },
   ];
 
-  C.discover = { list, refresh, fromSource, clean, isStory, storyId, parseList, rrLists: RR_LISTS, rrGenres: RR_GENRES, rrSaved, rrRead, rrSearch, rrBrowse, rrBrowseUrl, parseFP, fpBrowseUrl, sources: SOURCES };
+  C.discover = { list, refresh, fromSource, clean, isStory, storyId, parseList, rrLists: RR_LISTS, rrGenres: RR_GENRES, rrSaved, rrRead, rrSearch, rrBrowse, rrBrowseUrl, parseFP, fpBrowseUrl, fpSaved, fpRead, serialLinks, serialChapters, sources: SOURCES };
 })();

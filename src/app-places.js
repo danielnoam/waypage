@@ -1312,7 +1312,8 @@ function swipeFeeds(root) {
   let go = null;
   const chips = () => [...root.querySelectorAll(".feed-chips .chip")];
   // The chips stay put; what's under them slides (Daniel, 1.45.6).
-  const parts = () => [...root.children].filter((x) => !x.classList.contains("feed-chips"));
+  // Discover's search and chips sit in one box at the top; it stays too.
+  const parts = () => [...root.children].filter((x) => !x.classList.contains("feed-chips") && !x.querySelector(".feed-chips"));
   const move = (t) => parts().forEach((x) => { x.style.transform = t; });
   const play = (frames, timing) => parts().map((x) => x.animate(frames, timing));
   const neighbour = (d) => {
@@ -1322,8 +1323,8 @@ function swipeFeeds(root) {
   root.addEventListener("touchstart", (e) => {
     const t = e.touches[0];
     go = e.touches.length === 1 && t.clientX > EDGE && !state.feedPick && !state.side && !state.menu && chips().length > 1
-      // Discover's covers scroll sideways on their own.
-      && !e.target.closest(".filters, input, textarea, .dz-covers") ? { x: t.clientX, y: t.clientY, on: false, dx: 0, t: e.timeStamp } : null;
+      // Discover's row of covers scrolls sideways on its own; its grid doesn't.
+      && !e.target.closest(".filters, input, textarea, .dz-covers:not(.dz-grid)") ? { x: t.clientX, y: t.clientY, on: false, dx: 0, t: e.timeStamp } : null;
   }, { passive: true });
   root.addEventListener("touchmove", (e) => {
     if (!go) return;

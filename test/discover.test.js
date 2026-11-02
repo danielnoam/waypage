@@ -124,13 +124,13 @@ async function phone(browser) {
       await p.locator("#discover .dz-book").first().waitFor();
       assert.strictEqual(await p.locator("#placeTitle").textContent(), "Discover");
       assert.ok(await p.locator("#discover .dz-row").count() > 20);
-      assert.deepStrictEqual((await p.locator("#discover .section-head .overline").allTextContents()).map((t) => t.replace("›", "")), ["Royal Road", "Feeds", "Newsletters"]);
+      assert.deepStrictEqual((await p.locator("#discover .section-head .overline").allTextContents()).map((t) => t.replace("›", "")), ["Sites", "Feeds", "Newsletters"]);
       assert.ok(!(await p.locator("#saveForm").isVisible()), "no field at the bottom");
       assert.strictEqual(await p.locator("#discover .dz-search input").getAttribute("placeholder"), "Search Discover");
       // A site: the Add a feed sheet, its address filled in.
       await p.locator('#discover .dz-row:has-text("Quanta Magazine") .post-save').click();
       await p.locator('#menuSheet[data-kind="addFeed"]:not([hidden])').waitFor();
-      assert.strictEqual(await p.locator("#menuSheet .feed-input").inputValue(), "https://www.quantamagazine.org/");
+      assert.strictEqual(await p.locator("#menuSheet .feed-input").inputValue(), "https://www.quantamagazine.org/feed/");
       await p.evaluate(() => history.back());
       await p.waitForFunction(() => !state.menu);
       // An email-only newsletter: the sign-up sheet.
@@ -201,8 +201,8 @@ async function phone(browser) {
         goPlace("discover");
       }, fixture("rr-list.html"));
       await p.locator("#discover .dz-book").first().waitFor();
-      assert.deepStrictEqual(await p.evaluate(() => window.drawn), ["https://www.royalroad.com/fictions/rising-stars"]);
-      assert.strictEqual(await p.locator("#discover .dz-book").count(), 2);
+      assert.strictEqual(await p.evaluate(() => window.drawn[0]), "https://www.royalroad.com/fictions/rising-stars");
+      assert.strictEqual(await p.locator('#discover .dz-book:has-text("Royal Road")').count(), 2);
       await ctx.close();
     });
 
@@ -210,7 +210,7 @@ async function phone(browser) {
       const { ctx, p } = await phone(browser);
       await p.evaluate(() => goPlace("discover"));
       await p.locator("#discover .dz-book").first().waitFor();
-      await p.locator('#discover .section-link:has-text("Royal Road")').click();
+      await p.locator('#discover .section-link:has-text("Sites")').click();
       await p.locator("#discover .dz-grid .dz-book").first().waitFor();
       assert.strictEqual(await p.locator("#discover .chip.on").textContent(), "Sites");
       assert.strictEqual(await p.locator("#discover .dz-row").count(), 0, "only stories under Sites");
@@ -245,6 +245,20 @@ async function phone(browser) {
       await ctx.close();
     });
 
+    await test("All's Sites row mixes the story sites; a web serial's whole contents page is read", async () => {
+      const { ctx, p } = await phone(browser);
+      await p.evaluate((fp) => { const P = Waypage.platform, rr = P.fetchText; P.fetchText = async (url) => (/fictionpress/.test(url) ? { status: 200, url, text: fp } : rr(url)); goPlace("discover"); }, fixture("fp-list.html"));
+      await p.locator('#discover .dz-book:has-text("FictionPress")').first().waitFor();
+      const metas = await p.locator("#discover .dz-covers .dz-bm").allTextContents();
+      assert.deepStrictEqual(metas.slice(0, 3).map((m) => m.split(" · ")[0]), ["Royal Road", "FictionPress", "Web serial"]);
+      // Two arcs in two lists: both, in order, and not the blog's own links.
+      const got = await p.evaluate(() => Waypage.discover.serialLinks('<html><head><meta property="og:site_name" content="Worm"></head><body><nav><a href="/about/">About</a></nav><div class="entry-content"><p>Arc 1</p><ul><li><a href="/2011/06/11/gestation-1-1/">1.1</a></li><li><a href="/2011/06/14/gestation-1-2/">1.2</a></li></ul><p>Arc 2</p><ul><li><a href="/2011/06/25/insinuation-2-1/">2.1</a></li><li><a href="https://parahumans.wordpress.com/2011/06/28/insinuation-2-2/#more">2.2</a></li></ul><a href="/category/stories-arcs-1-10/">Arcs</a><a href="https://twitter.com/x">Share</a></div></body></html>', "https://parahumans.wordpress.com/table-of-contents/"));
+      await ctx.close();
+      assert.strictEqual(got.title, "Worm");
+      assert.deepStrictEqual(got.links, ["https://parahumans.wordpress.com/2011/06/11/gestation-1-1/", "https://parahumans.wordpress.com/2011/06/14/gestation-1-2/",
+        "https://parahumans.wordpress.com/2011/06/25/insinuation-2-1/", "https://parahumans.wordpress.com/2011/06/28/insinuation-2-2/"]);
+    });
+
     await test("FictionPress's list rows read as stories", async () => {
       const { ctx, p } = await phone(browser);
       const got = await p.evaluate((html) => Waypage.discover.parseFP(html, "https://www.fictionpress.com/fiction/Fantasy/"), fixture("fp-list.html"));
@@ -261,19 +275,30 @@ async function phone(browser) {
       const { ctx, p } = await phone(browser);
       await p.evaluate(() => goPlace("discover"));
       await p.locator("#discover .dz-row").first().waitFor();
-      const swipe = async (x0, x1) => p.evaluate(([a, b]) => {
+      const swipe = async (x0, x1, on, hold) => p.evaluate(([a, b, on, hold]) => {
         const root = document.getElementById("discover");
-        const row = root.querySelector(".dz-tools, .section-head");
+        const row = root.querySelector(on || ".dz-tools, .section-head");
         const r = row.getBoundingClientRect(), y = r.top + 20;
         const t = (x) => new Touch({ identifier: 1, target: row, clientX: x, clientY: y });
         row.dispatchEvent(new TouchEvent("touchstart", { touches: [t(a)], changedTouches: [t(a)], bubbles: true }));
         for (let i = 1; i <= 6; i++) row.dispatchEvent(new TouchEvent("touchmove", { touches: [t(a + (b - a) * i / 6)], changedTouches: [t(a + (b - a) * i / 6)], bubbles: true }));
+        if (hold) return { head: root.querySelector(".dz-head").style.transform, body: root.querySelector(".dz-body").style.transform };
         row.dispatchEvent(new TouchEvent("touchend", { touches: [], changedTouches: [t(b)], bubbles: true }));
-      }, [x0, x1]);
+      }, [x0, x1, on, hold]);
+      // Mid-swipe the list slides; the search field and chips stay.
+      const mid = await swipe(320, 200, null, true);
+      assert.strictEqual(mid.head, "");
+      assert.match(mid.body, /translateX/);
+      await p.evaluate(() => document.querySelector("#discover .section-head").dispatchEvent(new TouchEvent("touchend", { touches: [], changedTouches: [], bubbles: true })));
+      await p.waitForTimeout(400);
       await swipe(320, 40);
       await p.waitForFunction(() => document.querySelector("#discover .chip.on").textContent === "Sites");
+      // Over Sites' grid of covers too.
+      await p.locator("#discover .dz-grid .dz-book").first().waitFor();
+      await swipe(320, 40, "#discover .dz-grid .dz-book");
+      await p.waitForFunction(() => document.querySelector("#discover .chip.on").textContent === "Feeds");
       await swipe(40, 320);
-      await p.waitForFunction(() => document.querySelector("#discover .chip.on").textContent === "All");
+      await p.waitForFunction(() => document.querySelector("#discover .chip.on").textContent === "Sites");
       await ctx.close();
     });
 

@@ -24,7 +24,7 @@ function dzFollowing(e) {
 }
 // A story saved already: a collection read from its page.
 function dzSavedStory(s) {
-  return allFolders().some((n) => { const src = folderSource(folderPages(n)); return src && C.discover.storyId(src) === s.id; });
+  return allFolders().some((n) => { const src = folderSource(folderPages(n)); return src && (s.serial ? sameUrl(src, s.url) : C.discover.storyId(src) === s.id); });
 }
 
 // The search field at the top searches what's shown: the picked lists as
@@ -145,22 +145,29 @@ function dzStories() {
       f.busy ? el("p", { class: "footnote dz-src" }, "Searching " + f.label + "…")
         : f.items.length ? dzCovers(f.items) : el("p", { class: "footnote" + (f.error ? " warn" : "") }, f.error || "No stories with that in their title.")];
   }
+  // A few from each site, taken in turn (Daniel: "Sites", then some from
+  // different sites); the heading opens Sites to browse them all.
   const q = dzQ().toLowerCase();
   const def = C.discover.rrLists.find((l) => l.key === dzList) || C.discover.rrLists[0];
-  const got = C.discover.rrSaved(def.key);
-  const pickList = dropdown({ label: "Royal Road list", cls: "dz-list-pick", value: def.key,
-    options: C.discover.rrLists.map((l) => ({ value: l.key, label: l.label })),
-    onpick: (v) => { dzList = v; store("waypage.discover.rrList", v); dz.error = ""; renderDiscover(); dzReadRR(); } });
-  const line = dz.busy ? "Reading Royal Road…" : dz.error ? dz.error
-    : got ? "From royalroad.com, " + whenText(got.at) : navigator.onLine ? "" : "Royal Road's lists show when you're online.";
+  const got = C.discover.rrSaved(def.key), fp = C.discover.fpSaved();
+  const rows = [got ? got.items.map((s) => ({ ...s, site: "Royal Road" })) : [], fp ? fp.items : [], dzSerials()]
+    .map((list) => list.filter((s) => !q || s.title.toLowerCase().includes(q)));
+  const items = [];
+  for (let i = 0; items.length < 18 && rows.some((r) => r[i]); i++) rows.forEach((r) => { if (r[i] && items.length < 18) items.push(r[i]); });
+  const line = dz.busy ? "Reading Royal Road and FictionPress…" : dz.error ? dz.error : navigator.onLine || items.length ? "" : "Story sites show when you're online.";
   const head = el("div", { class: "section-head wide" },
     el("h2", { class: "overline" }, el("button", { class: "section-link", type: "button", onclick: () => dzShowSites() },
-      "Royal Road", el("span", { class: "section-chev", "aria-hidden": "true" }, "›"))), pickList);
-  const items = got ? got.items.filter((s) => !q || s.title.toLowerCase().includes(q)) : [];
+      "Sites", el("span", { class: "section-chev", "aria-hidden": "true" }, "›"))));
   return [head,
-    items.length ? dzCovers(items) : null,
+    items.length ? dzCovers(items, false, true) : null,
     dzAsk(rr),
     line ? el("p", { class: "footnote dz-src" + (dz.error && !dz.busy ? " warn" : "") }, line) : null];
+}
+
+// The hand-picked web serials as stories.
+function dzSerials() {
+  return C.discover.list().entries.filter((e) => e.kind === "serial")
+    .map((e) => ({ id: "serial:" + e.url, url: e.url, title: e.name, about: e.about, site: "Web serial", serial: true, tags: [], chapters: 0, cover: "" }));
 }
 
 function dzShowSites() {
@@ -242,14 +249,14 @@ function dzGrid() {
 function dzSerialRow(e) {
   const on = allFolders().some((n) => { const src = folderSource(folderPages(n)); return src && sameUrl(src, e.url); });
   return el("div", { class: "post dz-row", "data-key": "dz:" + e.url },
-    el("button", { class: "post-open", type: "button", "aria-label": e.name, onclick: () => dzSaveStory({ url: e.url, title: e.name }) }),
+    el("button", { class: "post-open", type: "button", "aria-label": e.name, onclick: () => dzSaveStory({ url: e.url, title: e.name, serial: true }) }),
     feedMark({ url: e.url, link: e.url, title: e.name }),
     el("span", { class: "post-body" },
       el("span", { class: "post-title", dir: "auto" }, e.name),
       e.about ? el("span", { class: "dz-about", dir: "auto" }, e.about) : null,
       el("span", { class: "post-meta" }, dzHost(e.url))),
     on ? el("span", { class: "post-saved dz-on" }, dzIcon("check"), "Saved")
-      : el("button", { class: "post-act post-save", type: "button", "aria-label": "Save " + e.name, onclick: () => dzSaveStory({ url: e.url, title: e.name }) }, dzIcon("plus")));
+      : el("button", { class: "post-act post-save", type: "button", "aria-label": "Save " + e.name, onclick: () => dzSaveStory({ url: e.url, title: e.name, serial: true }) }, dzIcon("plus")));
 }
 
 // A story to the library: its chapter list, to check and save as a
@@ -258,7 +265,7 @@ async function dzSaveStory(s) {
   if (!navigator.onLine) { toast("You're offline. Save it when you're back online."); return; }
   toast("Finding its chapters…");
   try {
-    const found = await C.save.findChapters(s.url);
+    const found = s.serial ? await C.discover.serialChapters(s.url) : await C.save.findChapters(s.url);
     if (!found.links.length) { savePage(s.url); return; }
     openBatch(found.links.join("\n"), false, folderName(found.title || s.title), s.url);
   } catch (e) { toast(e instanceof C.save.SaveError ? e.message : "Couldn't read its chapters. Try again."); }
@@ -290,7 +297,7 @@ async function dzMore() {
   if (state.place === "discover") renderDiscover();
 }
 
-function dzCovers(items, grid) {
+function dzCovers(items, grid, sites) {
   return el("div", { class: grid ? "dz-covers dz-grid" : "dz-covers", role: "list" }, ...items.map((s) => {
     const saved = dzSavedStory(s);
     const art = el("span", { class: "dz-cover", "aria-hidden": "true" }, el("span", { class: "dz-cover-t", dir: "auto" }, s.title));
@@ -300,7 +307,7 @@ function dzCovers(items, grid) {
       img.addEventListener("error", () => img.remove());
       art.prepend(img);
     }
-    const meta = [s.tags[0], s.chapters ? s.chapters + " ch." : ""].filter(Boolean).join(" · ");
+    const meta = [sites ? s.site || "Royal Road" : s.tags[0], s.chapters ? s.chapters + " ch." : ""].filter(Boolean).join(" · ");
     return el("button", { class: "dz-book", type: "button", role: "listitem", "data-key": "rr:" + s.id,
       "aria-label": s.title + (saved ? ", in your library" : ""), onclick: () => openMenu("story", s) },
       el("span", { class: "dz-art" }, art, el("span", { class: "dz-mark" + (saved ? " on" : "") }, dzIcon(saved ? "check" : "plus", 16))),
@@ -312,14 +319,18 @@ function dzCovers(items, grid) {
 async function dzReadRR(force) {
   if (!dzCanRead() || dz.busy || dz.found) return;
   const def = C.discover.rrLists.find((l) => l.key === dzList) || C.discover.rrLists[0];
-  const had = C.discover.rrSaved(def.key);
-  if (!force && had && Date.now() - had.at < 36e5) return;
+  const had = C.discover.rrSaved(def.key), hadFp = C.discover.fpSaved();
+  const fresh = (x) => x && Date.now() - x.at < 36e5;
+  if (!force && fresh(had) && fresh(hadFp)) return;
   if (!navigator.onLine) return;
   dz.busy = true;
   dz.error = "";
   if (state.place === "discover") renderDiscover();
-  try { await C.discover.rrRead(def.key, force); }
-  catch (e) { dz.error = (had ? "Couldn't reach Royal Road. This is the list from " + whenText(had.at) + "." : "Couldn't read Royal Road's list just now. Pull down to try again.") + " (" + dzWhy(e) + ")"; }
+  // One after the other: both may need the hidden browser.
+  let rrErr = null;
+  try { await C.discover.rrRead(def.key, force); } catch (e) { rrErr = e; }
+  try { await C.discover.fpRead(force); } catch (e) { /* the row shows the others */ }
+  if (rrErr) dz.error = (had ? "Couldn't reach Royal Road. This is the list from " + whenText(had.at) + "." : "Couldn't read Royal Road's list just now. Pull down to try again.") + " (" + dzWhy(rrErr) + ")";
   dz.busy = false;
   if (state.place === "discover") renderDiscover();
 }
@@ -370,7 +381,7 @@ function storySheet() {
   }
   const facts = [s.chapters ? s.chapters + (s.chapters === 1 ? " chapter" : " chapters") : "", s.followers ? s.followers.toLocaleString() + " following" : ""].filter(Boolean).join(" · ");
   const rated = [s.rating ? "★ " + s.rating.toFixed(1) : "", s.tags.join(", ")].filter(Boolean).join(" · ");
-  const site = s.site || "Royal Road";
+  const site = s.serial ? dzHost(s.url) : s.site || "Royal Road";
   const save = el("button", { class: "btn-primary", type: "button", onclick: async () => { await back(); dzSaveStory(s); } },
     saved ? "Save it again" : "Save as a collection");
   return el("div", { class: "page-controls dz-story" },
