@@ -343,6 +343,10 @@ adds a line here.
 Things that broke once and would again. Check here before touching the
 area.
 
+- **Cloudflare's browser check (Royal Road, Nov 2026):** the phone's plain
+  fetch gets a 403 or 503 "Just a moment" page. `get` in save.js spots
+  it and asks the hidden browser (`C.platform.render`) instead; every
+  chapter of a series pays that slower path. The web copy can't.
 - **Android TTS engines get only ~0.5 s ahead:** the framework hands an
   engine the next piece only when one ends, so Kokoro paused between
   paragraphs. `SpeechService.makeAhead` asks `Kokoro.take` for the next

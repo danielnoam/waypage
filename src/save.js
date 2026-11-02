@@ -1627,6 +1627,12 @@
     let res;
     try {
       res = await C.platform.fetchText(url, { headers });
+      // Cloudflare's browser check (Royal Road, 2026) turns the phone's
+      // plain fetch away with a 403 or 503; the hidden browser passes it.
+      if ((res.status === 403 || res.status === 503) && C.platform.canRender && challengePage(res.text)) {
+        const drawn = await C.platform.render(url, {});
+        if (drawn && !challengePage(drawn.text)) res = { status: 200, url: drawn.url, text: drawn.text };
+      }
     } catch (e) {
       if (/time(d)?\s?out/i.test((e && e.message) || "")) throw new SaveError("The site didn't answer. Try again, or later on a better connection.", true);
       throw new SaveError(C.platform.canFetchPages
@@ -1736,6 +1742,10 @@
   }
 
   const CHECK_TITLE = /^(just a moment|attention required|access denied|are you a robot)/i;
+  const challengePage = (html) => {
+    const t = String(html || "").match(/<title[^>]*>([^<]*)/i);
+    return (t && CHECK_TITLE.test(t[1].trim())) || /challenge-platform|cf-chl-|cf_chl_/i.test(String(html || "").slice(0, 20000));
+  };
 
   // Reads the article out of a page's HTML, or with `comic` its pictures.
   // null when there isn't enough text (or no pictures), or the page is a
