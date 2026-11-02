@@ -1614,13 +1614,13 @@ function paintPlace() {
   // The bottom field follows a feed in Feeds, makes a newsletter address
   // in Newsletters (1.43.1), searches Royal Road or follows a site in
   // Discover, and saves a link elsewhere.
-  $("saveUrl").placeholder = feedsOn ? "Paste a site or feed to follow" : mailOn ? "Name a new address" : findOn ? "Search Royal Road, or paste a site" : "Paste a link to save";
-  $("saveUrl").inputMode = mailOn || findOn ? "text" : "url";
+  $("saveUrl").placeholder = feedsOn ? "Paste a site or feed to follow" : mailOn ? "Name a new address" : "Paste a link to save";
+  $("saveUrl").inputMode = mailOn ? "text" : "url";
   $("saveUrl").autocapitalize = mailOn ? "sentences" : "off";
-  $("saveUrl").enterKeyHint = findOn ? "search" : "go";
+  $("saveUrl").enterKeyHint = "go";
   if (mailOn) $("saveUrl").maxLength = 32; else $("saveUrl").removeAttribute("maxlength");
-  document.querySelector('label[for="saveUrl"]').textContent = feedsOn ? "Site or feed" : mailOn ? "New address's name" : findOn ? "Royal Road search, or a site" : "Page link";
-  $("saveForm").querySelector(".btn-primary").textContent = feedsOn ? "Follow" : mailOn ? "Make" : findOn ? "Find" : "Save";
+  document.querySelector('label[for="saveUrl"]').textContent = feedsOn ? "Site or feed" : mailOn ? "New address's name" : "Page link";
+  $("saveForm").querySelector(".btn-primary").textContent = feedsOn ? "Follow" : mailOn ? "Make" : "Save";
   $("severalBtn").hidden = feedsOn || mailOn || findOn;
   if (feedsOn || mailOn || marksOn || readOn || findOn) { if (state.query) clearSearch(); }
   if (feedsOn) renderFeeds();

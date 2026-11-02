@@ -6,7 +6,9 @@
 // kind: "feed" (followed in Feeds; a homepage is enough, its feed is found;
 //       a Substack-style newsletter with a feed is a feed too), or
 //       "newsletter" (email only, so it goes to the app's Newsletters:
-//       "signup" is the page to sign up on).
+//       "signup" is the page to sign up on), or
+//       "serial" (a story posted on its own site, most on WordPress, shown
+//       under Sites; "url" is its table of contents, saved as a collection).
 window.Waypage = window.Waypage || {};
 window.Waypage.discoverList =
 // LIST START
@@ -43,6 +45,13 @@ window.Waypage.discoverList =
     { "kind": "feed", "name": "One Useful Thing", "about": "What AI is actually good for, tried out.", "url": "https://www.oneusefulthing.org/" },
     { "kind": "feed", "name": "Platformer", "about": "Big tech and how it's run.", "url": "https://www.platformer.news/" },
     { "kind": "feed", "name": "Garbage Day", "about": "What happened on the internet this week.", "url": "https://www.garbageday.email/" },
+    { "kind": "serial", "name": "The Wandering Inn", "about": "A long, cosy and sometimes brutal fantasy about an inn.", "url": "https://wanderinginn.com/table-of-contents/" },
+    { "kind": "serial", "name": "Worm", "about": "A bullied teenager with a bug-control power, and a dark superhero world.", "url": "https://parahumans.wordpress.com/table-of-contents/" },
+    { "kind": "serial", "name": "Ward", "about": "Worm's sequel, after the end of the world.", "url": "https://www.parahumans.net/table-of-contents/" },
+    { "kind": "serial", "name": "Pale", "about": "Three young witches keep the peace in a small town.", "url": "https://palewebserial.wordpress.com/table-of-contents/" },
+    { "kind": "serial", "name": "Pact", "about": "An inheritance with a demon-sized debt attached.", "url": "https://pactwebserial.wordpress.com/table-of-contents/" },
+    { "kind": "serial", "name": "A Practical Guide to Evil", "about": "An orphan joins the villains to change the empire from inside.", "url": "https://practicalguidetoevil.wordpress.com/table-of-contents/" },
+    { "kind": "serial", "name": "Katalepsis", "about": "Cosmic horror and a slow romance at a British university.", "url": "https://katalepsis.net/table-of-contents/" },
     { "kind": "newsletter", "name": "Money Stuff", "about": "Finance, explained and made funny.", "url": "https://www.bloomberg.com/opinion/authors/ARbTQlRLRjE/matthew-s-levine", "signup": "https://www.bloomberg.com/account/newsletters/money-stuff" },
     { "kind": "newsletter", "name": "Morning Brew", "about": "Business news for the morning, short.", "url": "https://www.morningbrew.com/", "signup": "https://www.morningbrew.com/daily/subscribe" },
     { "kind": "newsletter", "name": "1440", "about": "The day's news in five minutes, without a side.", "url": "https://join1440.com/", "signup": "https://join1440.com/" }

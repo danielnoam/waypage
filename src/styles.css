@@ -1991,7 +1991,7 @@ span.update-text { cursor: default; }
 .side-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .side-cover:not(:has(img)) { display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
 .save-form .icon-btn[hidden] { display: none; }
-:is([data-place="feeds"], [data-place="newsletters"], [data-place="discover"]) .save-form .btn-primary { border-radius: var(--r-md); }
+:is([data-place="feeds"], [data-place="newsletters"]) .save-form .btn-primary { border-radius: var(--r-md); }
 
 /* A feed's mark: its site's icon, or first letter, on the preview tint. */
 .feed-mark {
@@ -2672,8 +2672,12 @@ html.locked body > :not(.lock-view):not(script) { visibility: hidden !important;
 .lock-next:disabled { background: var(--line); color: var(--muted); cursor: default; }
 
 /* ---- Discover ---- */
-[data-place="discover"] .save-link-icon { display: none; }
-[data-place="discover"] .save-form input { padding-inline-start: 14px; }
+[data-place="discover"] .save-form { display: none; }
+[data-place="discover"] .save-bar:not(:has(.update-bar:not([hidden]))) { display: none; }
+.dz-head, .dz-body { display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
+.dz-search { margin-top: var(--s-1); }
+.dz-ask { align-self: flex-start; margin-top: var(--s-2); }
+.dz-none { margin-top: var(--s-4); }
 .discover .section-head .dropdown { margin-inline-end: calc(-1 * var(--s-2)); }
 .discover .section-head .dropdown-btn { border: 0; background: transparent; color: var(--accent); font-weight: 600; min-height: var(--tap); padding: 0 var(--s-2); }
 .dz-covers {
@@ -2723,3 +2727,12 @@ html.locked body > :not(.lock-view):not(script) { visibility: hidden !important;
   margin: 0; padding: var(--s-3); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg);
   font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--ink); word-break: break-all;
 }
+.dz-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: var(--s-4) var(--s-3);
+  overflow: visible; margin: var(--s-3) 0 0; padding: 0;
+}
+.dz-grid .dz-book { width: auto; min-width: 0; }
+.dz-grid .dz-cover { width: 100%; height: auto; aspect-ratio: 2 / 3; }
+.dz-tools { display: flex; gap: var(--s-2); flex-wrap: wrap; margin-top: var(--s-2); }
+.dz-tools .dropdown { flex: 1 1 140px; min-width: 0; }
+.dz-more { display: block; width: 100%; margin-top: var(--s-4); color: var(--accent); font-weight: 600; }

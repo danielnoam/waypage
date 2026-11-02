@@ -124,8 +124,9 @@ async function phone(browser) {
       await p.locator("#discover .dz-book").first().waitFor();
       assert.strictEqual(await p.locator("#placeTitle").textContent(), "Discover");
       assert.ok(await p.locator("#discover .dz-row").count() > 20);
-      assert.deepStrictEqual(await p.locator("#discover .section-head .overline").allTextContents(), ["Royal Road", "Feeds", "Newsletters"]);
-      assert.strictEqual(await p.locator("#saveUrl").getAttribute("placeholder"), "Search Royal Road, or paste a site");
+      assert.deepStrictEqual((await p.locator("#discover .section-head .overline").allTextContents()).map((t) => t.replace("›", "")), ["Royal Road", "Feeds", "Newsletters"]);
+      assert.ok(!(await p.locator("#saveForm").isVisible()), "no field at the bottom");
+      assert.strictEqual(await p.locator("#discover .dz-search input").getAttribute("placeholder"), "Search Discover");
       // A site: the Add a feed sheet, its address filled in.
       await p.locator('#discover .dz-row:has-text("Quanta Magazine") .post-save').click();
       await p.locator('#menuSheet[data-kind="addFeed"]:not([hidden])').waitFor();
@@ -148,7 +149,7 @@ async function phone(browser) {
       await ctx.close();
     });
 
-    await test("a following site says so; chips narrow the list; words search Royal Road", async () => {
+    await test("a following site says so; chips narrow the list; the top field searches what's shown", async () => {
       const { ctx, p } = await phone(browser);
       await p.evaluate(() => {
         feeds.push({ url: "https://aeon.co/feed.rss", title: "Aeon", link: "https://aeon.co/", days: 7, mode: "show", items: [] });
@@ -164,8 +165,14 @@ async function phone(browser) {
       await p.locator('#discover .chip:has-text("Feeds")').click();
       assert.ok(await p.locator('#discover .dz-row:has-text("Quanta")').count() === 1);
       assert.deepStrictEqual(await p.locator("#discover .chip").allTextContents(), ["All", "Sites", "Feeds", "Newsletters"]);
-      await p.fill("#saveUrl", "moth");
-      await p.press("#saveUrl", "Enter");
+      // Under Feeds the field narrows the feeds as you type.
+      await p.fill("#discover .dz-search input", "quanta");
+      assert.strictEqual(await p.locator("#discover .dz-row").count(), 1);
+      assert.strictEqual(await p.locator("#discover .dz-search input").getAttribute("placeholder"), "Search feeds");
+      // Under All, Enter asks Royal Road too.
+      await p.locator('#discover .chip:has-text("All")').click();
+      await p.fill("#discover .dz-search input", "moth");
+      await p.press("#discover .dz-search input", "Enter");
       await p.locator('#discover .section-head:has-text("Royal Road · moth")').waitFor();
       assert.ok((await p.evaluate(() => window.asked)).some((u) => u.endsWith("/fictions/search?title=moth")));
       assert.strictEqual(await p.locator("#discover .dz-book").count(), 2);
@@ -199,13 +206,64 @@ async function phone(browser) {
       await ctx.close();
     });
 
+    await test("Royal Road's heading opens Sites: a grid with lists, genres and more pages", async () => {
+      const { ctx, p } = await phone(browser);
+      await p.evaluate(() => goPlace("discover"));
+      await p.locator("#discover .dz-book").first().waitFor();
+      await p.locator('#discover .section-link:has-text("Royal Road")').click();
+      await p.locator("#discover .dz-grid .dz-book").first().waitFor();
+      assert.strictEqual(await p.locator("#discover .chip.on").textContent(), "Sites");
+      assert.strictEqual(await p.locator("#discover .dz-row").count(), 0, "only stories under Sites");
+      // Page 2 is the same fixture: nothing new, so the list says it's all.
+      await p.locator("#discover .dz-more").click();
+      await p.locator('#discover .footnote:has-text("all of them")').waitFor();
+      let asked = await p.evaluate(() => window.asked);
+      assert.ok(asked.some((u) => u === "https://www.royalroad.com/fictions/rising-stars?page=2"), asked.join(" "));
+      // A genre reads Royal Road's search with that tag.
+      await p.locator("#discover .dz-tools .dropdown").nth(2).locator(".dropdown-btn").click();
+      await p.locator('[role="option"]:has-text("Horror")').click();
+      await p.locator("#discover .dz-grid .dz-book").first().waitFor();
+      asked = await p.evaluate(() => window.asked);
+      assert.ok(asked.some((u) => /\/fictions\/search\?tagsAdd=horror&orderBy=popularity$/.test(u)), asked.join(" "));
+      // FictionPress: its own lists by category.
+      await p.evaluate((fp) => { const P = Waypage.platform, rr = P.fetchText; P.fetchText = async (url) => (/fictionpress/.test(url) ? (window.asked.push(url), { status: 200, url, text: fp }) : rr(url)); }, fixture("fp-list.html"));
+      await p.locator("#discover .dz-tools .dropdown").first().locator(".dropdown-btn").click();
+      await p.locator('[role="option"]:has-text("FictionPress")').click();
+      await p.locator('#discover .dz-grid .dz-book:has-text("The Salt Road")').waitFor();
+      asked = await p.evaluate(() => window.asked);
+      assert.ok(asked.some((u) => u.startsWith("https://www.fictionpress.com/fiction/Fantasy/")), asked.join(" "));
+      await p.locator('#discover .dz-book:has-text("The Salt Road")').click();
+      assert.match(await p.locator("#menuSheet").textContent(), /34 chapters[\s\S]*FictionPress|FictionPress[\s\S]*34 chapters/);
+      await p.evaluate(() => history.back());
+      await p.waitForFunction(() => !state.menu);
+      // Web serials: the hand-picked ones, narrowed by the field.
+      await p.locator("#discover .dz-tools .dropdown").first().locator(".dropdown-btn").click();
+      await p.locator('[role="option"]:has-text("Web serials")').click();
+      assert.ok(await p.locator("#discover .dz-serials .dz-row").count() >= 5);
+      await p.fill("#discover .dz-search input", "katalepsis");
+      assert.strictEqual(await p.locator("#discover .dz-serials .dz-row").count(), 1);
+      await ctx.close();
+    });
+
+    await test("FictionPress's list rows read as stories", async () => {
+      const { ctx, p } = await phone(browser);
+      const got = await p.evaluate((html) => Waypage.discover.parseFP(html, "https://www.fictionpress.com/fiction/Fantasy/"), fixture("fp-list.html"));
+      await ctx.close();
+      assert.strictEqual(got.length, 2);
+      assert.deepStrictEqual([got[0].id, got[0].url, got[0].title, got[0].chapters, got[0].followers], ["fp3001", "https://www.fictionpress.com/s/3001/1/", "The Salt Road", 34, 1204]);
+      assert.deepStrictEqual(got[0].tags, ["Fantasy", "Adventure"]);
+      assert.strictEqual(got[0].cover, "https://www.fictionpress.com/image/101/75/");
+      assert.match(got[0].about, /^Two couriers/);
+      assert.strictEqual(got[1].cover, "");
+    });
+
     await test("a swipe moves to the next chip, as in Feeds", async () => {
       const { ctx, p } = await phone(browser);
       await p.evaluate(() => goPlace("discover"));
       await p.locator("#discover .dz-row").first().waitFor();
       const swipe = async (x0, x1) => p.evaluate(([a, b]) => {
         const root = document.getElementById("discover");
-        const row = root.querySelector(".section-head");
+        const row = root.querySelector(".dz-tools, .section-head");
         const r = row.getBoundingClientRect(), y = r.top + 20;
         const t = (x) => new Touch({ identifier: 1, target: row, clientX: x, clientY: y });
         row.dispatchEvent(new TouchEvent("touchstart", { touches: [t(a)], changedTouches: [t(a)], bubbles: true }));

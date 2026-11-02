@@ -13,16 +13,29 @@
     { key: "best", label: "Best rated", path: "/fictions/best-rated" },
     { key: "trending", label: "Trending", path: "/fictions/trending" },
     { key: "weekly", label: "Popular this week", path: "/fictions/weekly-popular" },
+    { key: "active", label: "Ongoing", path: "/fictions/active-popular" },
+    { key: "complete", label: "Complete", path: "/fictions/complete" },
+    { key: "latest", label: "Latest updates", path: "/fictions/latest-updates" },
+    { key: "new", label: "New releases", path: "/fictions/new" },
   ];
+  // Browsing by genre goes through Royal Road's search (its tag and its
+  // order), since the lists above take no genre.
+  const RR_GENRES = [
+    ["fantasy", "Fantasy"], ["sci_fi", "Sci-fi"], ["litrpg", "LitRPG"], ["progression", "Progression"],
+    ["action", "Action"], ["adventure", "Adventure"], ["comedy", "Comedy"], ["drama", "Drama"],
+    ["horror", "Horror"], ["mystery", "Mystery"], ["romance", "Romance"], ["psychological", "Psychological"],
+    ["portal_fantasy", "Portal fantasy"], ["slice_of_life", "Slice of life"], ["post_apocalyptic", "Post-apocalyptic"],
+  ].map(([key, label]) => ({ key, label }));
+  const ORDER = { best: "rating", latest: "last_update", new: "release_date" };
   const FRESH = 60 * 60 * 1000;
-  const MAX = 30;
+  const MAX = 40;
 
   const read = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } };
   const keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* full */ } };
 
   // ---- The hand-picked list ----
 
-  const KINDS = ["feed", "newsletter"];
+  const KINDS = ["feed", "newsletter", "serial"];
   const httpUrl = (u) => { try { const x = new URL(String(u || "")); return /^https?:$/.test(x.protocol) ? x.href : ""; } catch (e) { return ""; } };
   // Only well-formed entries get through, whichever copy they came from.
   function clean(raw) {
@@ -68,7 +81,15 @@
   const text = (n) => (n ? n.textContent.replace(/\s+/g, " ").trim() : "");
   const num = (s) => { const m = /([\d,]+)/.exec(s || ""); return m ? parseInt(m[1].replace(/,/g, ""), 10) : 0; };
   const FICTION = /^\/fiction\/(\d+)(?:\/[^/?#]*)?\/?$/;
-  const storyId = (url) => { try { const u = new URL(url, RR); return /(^|\.)royalroadl?\.com$/i.test(u.hostname) ? (FICTION.exec(u.pathname) || [])[1] || "" : ""; } catch (e) { return ""; } };
+  // A story's id: Royal Road's number, or "fp" and FictionPress's.
+  const storyId = (url) => {
+    try {
+      const u = new URL(url, RR);
+      if (/(^|\.)royalroadl?\.com$/i.test(u.hostname)) return (FICTION.exec(u.pathname) || [])[1] || "";
+      if (/(^|\.)fictionpress\.com$/i.test(u.hostname)) { const m = /^\/s\/(\d+)/.exec(u.pathname); return m ? "fp" + m[1] : ""; }
+      return "";
+    } catch (e) { return ""; }
+  };
   const isStory = (url) => !!storyId(url);
 
   // A list or search page as stories. Royal Road's markup isn't promised
@@ -157,5 +178,77 @@
     catch (e) { if (/^no stories/.test(e.message) && !/Just a moment/.test(e.message)) return []; throw e; }
   }
 
-  C.discover = { list, refresh, fromSource, clean, isStory, storyId, parseList, rrLists: RR_LISTS, rrSaved, rrRead, rrSearch };
+  // One page of a list (page 1, 2, ...), or of a genre in that list's
+  // order. Royal Road gives about 20 a page.
+  function rrBrowseUrl(key, genre, page) {
+    const def = RR_LISTS.find((l) => l.key === key) || RR_LISTS[0];
+    const u = genre
+      ? new URL(RR + "/fictions/search?tagsAdd=" + encodeURIComponent(genre) + "&orderBy=" + (ORDER[def.key] || "popularity") + (def.key === "complete" ? "&status=COMPLETED" : ""))
+      : new URL(RR + def.path);
+    if (page > 1) u.searchParams.set("page", String(page));
+    return u.href;
+  }
+  const rrBrowse = (key, genre, page) => rrStories(rrBrowseUrl(key, genre, page));
+
+  // ---- FictionPress ----
+  // Browsed by category (it has no list across them), in one of its sort
+  // orders; a page is 25 stories, each a div.z-list with its meta line
+  // ("Rated: T - English - Fantasy - Chapters: 12 - Words: ...").
+  const FP = "https://www.fictionpress.com";
+  const FP_SORTS = [
+    { key: "4", label: "Most favourited" }, { key: "5", label: "Most followed" },
+    { key: "1", label: "Updated" }, { key: "2", label: "New" }, { key: "3", label: "Most reviewed" },
+  ];
+  const FP_GENRES = ["Fantasy", "Sci-Fi", "Romance", "Adventure", "Horror", "Mystery", "Humor", "Drama", "Thriller", "Supernatural", "Young Adult", "General"]
+    .map((g) => ({ key: g.replace(/ /g, "-"), label: g === "Sci-Fi" ? "Sci-fi" : g === "Young Adult" ? "Young adult" : g }));
+  function parseFP(html, base) {
+    const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
+    const out = [];
+    for (const row of doc.querySelectorAll(".z-list")) {
+      const a = row.querySelector("a.stitle, a[href^='/s/']");
+      const m = a && /^\/s\/(\d+)/.exec(new URL(a.getAttribute("href"), base || FP).pathname);
+      if (!m) continue;
+      const img = row.querySelector("img.cimage, img");
+      const src = img && (img.getAttribute("data-original") || img.getAttribute("src") || "");
+      const meta = text(row.querySelector(".z-padtop2, .xgray"));
+      const parts = meta.split(/\s+-\s+/);
+      const desc = row.querySelector(".z-indent");
+      const about = desc ? text(desc).replace(meta, "").trim() : "";
+      out.push({
+        id: "fp" + m[1], url: FP + "/s/" + m[1] + "/1/", site: "FictionPress", title: text(a).slice(0, 120),
+        cover: src && !/\/static\//.test(src) ? httpUrl(new URL(src, FP).href) : "",
+        tags: (parts[2] && !/:/.test(parts[2]) ? parts[2].split("/") : []).slice(0, 3),
+        chapters: num((/Chapters:\s*([\d,]+)/.exec(meta) || [])[1]), followers: num((/Follows:\s*([\d,]+)/.exec(meta) || [])[1]),
+        rating: 0, about: about.slice(0, 600),
+      });
+      if (out.length >= MAX) break;
+    }
+    return out;
+  }
+  async function fpStories(url) {
+    let res = null, items = [];
+    try {
+      res = await C.platform.fetchText(url);
+      if (res.status === 200 && !challenged(res)) items = parseFP(res.text, res.url || url);
+    } catch (e) { if (!C.platform.canRender) throw e; }
+    if (!items.length && C.platform.canRender) {
+      const drawn = await C.platform.render(url, {});
+      if (drawn) { res = { status: 200, url: drawn.url, text: drawn.text }; items = parseFP(drawn.text, drawn.url || url); }
+    }
+    if (items.length) return items;
+    if (res && res.status !== 200) throw new Error("HTTP " + res.status);
+    const title = res && /<title>([^<]{0,60})/i.exec(res.text || "");
+    throw new Error("no stories (" + (res ? res.text.length : 0) + " characters" + (title ? ', titled "' + title[1].trim() + '"' : "") + ")");
+  }
+  const fpBrowseUrl = (sort, genre, page) => FP + "/fiction/" + (genre || "Fantasy") + "/?&srt=" + (sort || "4") + "&lan=1&r=10" + (page > 1 ? "&p=" + page : "");
+  const fpBrowse = (sort, genre, page) => fpStories(fpBrowseUrl(sort, genre, page));
+  const fpSearch = (words) => fpStories(FP + "/search/?keywords=" + encodeURIComponent(String(words || "").trim()) + "&ready=1&type=story");
+
+  // The story sites Sites browses, each with its lists and genres.
+  const SOURCES = [
+    { key: "rr", label: "Royal Road", lists: RR_LISTS, genres: RR_GENRES, anyGenre: true, browse: (k, g, p) => rrBrowse(k, g, p), search: (w) => rrSearch(w) },
+    { key: "fp", label: "FictionPress", lists: FP_SORTS, genres: FP_GENRES, anyGenre: false, browse: fpBrowse, search: fpSearch },
+  ];
+
+  C.discover = { list, refresh, fromSource, clean, isStory, storyId, parseList, rrLists: RR_LISTS, rrGenres: RR_GENRES, rrSaved, rrRead, rrSearch, rrBrowse, rrBrowseUrl, parseFP, fpBrowseUrl, sources: SOURCES };
 })();
