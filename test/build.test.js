@@ -83,7 +83,38 @@ test("tools/release.js bumps the three places and dates the Unreleased entry", (
   assert.ok(fs.readFileSync(path.join(dir, "sw.js"), "utf8").includes("waypage-v8"));
   const log = fs.readFileSync(path.join(dir, "CHANGELOG.md"), "utf8");
   assert.ok(log.startsWith("# Changelog\n\n## [1.3.0] - 2026-02-02\n\n### Added\n- A thing.\n"));
-  assert.throws(() => bump("1.4.0", { root: dir }), /no '## Unreleased'/);
+  assert.throws(() => bump("1.4.0", { root: dir }), /nothing to release/);
+});
+
+test("tools/release.js writes the entry from changes/ and deletes the notes", () => {
+  const { bump } = require("../tools/release.js");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "waypage-release-"));
+  fs.mkdirSync(path.join(dir, "src"));
+  fs.mkdirSync(path.join(dir, "changes"));
+  fs.writeFileSync(path.join(dir, "src", "app.js"), 'const APP_VERSION = "1.2.3";\n');
+  fs.writeFileSync(path.join(dir, "index.html"), '<script src="src/app.js?v=1.2.3"></script>\n');
+  fs.writeFileSync(path.join(dir, "sw.js"), 'const CACHE = "waypage-v7";\n');
+  fs.writeFileSync(path.join(dir, "CHANGELOG.md"), "# Changelog\n\nIntro.\n\n## Unreleased\n\n### Fixed\n- From before.\n\n## [1.2.3] - 2026-01-01\n\n### Fixed\n- Old.\n");
+  fs.writeFileSync(path.join(dir, "changes", "README.md"), "How to write a note.\n");
+  fs.writeFileSync(path.join(dir, "changes", "fix-b.md"), "### Fixed\n- Bee, over\n  two lines.\n");
+  fs.writeFileSync(path.join(dir, "changes", "feature-a.md"), "### Added\n- Ay.\n\n### Fixed\n- Ay fix.\n");
+  const r = bump("1.3.0", { root: dir, date: "2026-02-02" });
+  assert.strictEqual(r.notes, 2);
+  const log = fs.readFileSync(path.join(dir, "CHANGELOG.md"), "utf8");
+  assert.strictEqual(log, "# Changelog\n\nIntro.\n\n## [1.3.0] - 2026-02-02\n\n### Added\n- Ay.\n\n### Fixed\n- From before.\n- Ay fix.\n- Bee, over\n  two lines.\n\n## [1.2.3] - 2026-01-01\n\n### Fixed\n- Old.\n");
+  assert.deepStrictEqual(fs.readdirSync(path.join(dir, "changes")), ["README.md"]);
+});
+
+// A branch's notes go in changes/<branch>.md, never in CHANGELOG.md, so
+// two branches don't clash; release.js reads them, and fails on a heading
+// it doesn't know, so a bad one is caught here instead.
+test("every note in changes/ uses the CHANGELOG's headings", () => {
+  const { mergeNotes } = require("../tools/release.js");
+  const dir = path.join(ROOT, "changes");
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith(".md") && x !== "README.md")) {
+    const text = fs.readFileSync(path.join(dir, f), "utf8");
+    assert.ok(mergeNotes([text]), f + " has no '- ' lines under a ### heading");
+  }
 });
 
 test("every ?v= in index.html is APP_VERSION", () => {

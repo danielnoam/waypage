@@ -37,8 +37,9 @@ borrows its stack, build workflows and native-fetch trick from.
 - `main` is production and takes only pull requests. A merge refreshes
   the web copy; only a merge with a new `APP_VERSION` publishes the APK
   and IPA (`node tools/release.js x.y.z`). Daniel's own asks still ship
-  as one release each; work landing in pieces goes under `## Unreleased`
-  and the next release PR takes it. Check the runs went green.
+  as one release each; work landing in pieces writes its lines to
+  `changes/<branch>.md` (never CHANGELOG.md) and the next release PR
+  takes it. Check the runs went green.
 - The to-do list is not in the repo. It lives only in the shared project
   folder, `/mnt/project-files/waypage/TODO.md`: read it there, and edit it
   there in the same turn as the change it tracks.
