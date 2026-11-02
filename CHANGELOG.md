@@ -5,12 +5,25 @@ All notable changes to Carry-on. Newest first.
 ## Unreleased
 
 ### Added
-- Settings per clip, per collection and per book. At the top of the Aa
-  sheet's Layout and Text, "Applies to" picks Everywhere, This clip (This
-  book for a file) or This collection; a change then stays there. Font,
-  size, spacing, alignment, margins and Scroll or Pages can differ; the
-  theme and Narrate stay the same for all. They're kept on this device,
-  like the settings in Settings.
+- Discussions save whole. A Reddit post keeps its picture or text and its
+  comment tree, best first; a Hacker News story keeps its link and every
+  comment in HN's order; a Stack Overflow question (and Super User, Server
+  Fault, Ask Ubuntu and the other Stack Exchange sites) keeps the accepted
+  answer and the best others, five in all, with a link to the rest; a
+  GitHub issue or pull request keeps every comment. Each comment shows who
+  wrote it, its points and date, with replies indented under it.
+- A GitHub code file saves as the code itself, and a GitHub repo as its
+  README, named after the repo.
+- More discussions save whole: a topic on any Discourse forum (the Rust,
+  Python, Home Assistant and Obsidian forums and thousands more), a
+  Bluesky or Mastodon post with its replies (an author's own thread reads
+  as one post), and a Lobsters story with its comments.
+- An arXiv link saves the whole paper from its web version, formulas as
+  their LaTeX, instead of only the abstract. A paper without one still
+  saves its abstract page.
+
+### Changed
+- Code blocks in clips have tighter lines.
 
 ### Fixed
 - PDFs: a pinch zoom landed off the spot under your fingers, further off

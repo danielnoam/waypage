@@ -877,7 +877,8 @@ function paintRail() {
   const link = /^https?:/.test(p.url || "") ? el("button", { class: "rail-original", type: "button", onclick: () => C.platform.openOutside(p.url) }) : null;
   if (link) link.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>Read the original';
   fill($("railFoot"),
-    p.licence === "wikipedia" ? el("p", { class: "rail-licence" }, "Text from Wikipedia, CC BY-SA 4.0, by Wikipedia contributors.") : null, link);
+    p.licence === "wikipedia" ? el("p", { class: "rail-licence" }, "Text from Wikipedia, CC BY-SA 4.0, by Wikipedia contributors.")
+      : p.licence === "stackexchange" ? el("p", { class: "rail-licence" }, "Text from " + p.site + ", CC BY-SA, by the people named in it.") : null, link);
   railNow();
 }
 function railNow() {
