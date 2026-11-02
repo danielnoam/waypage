@@ -752,10 +752,16 @@
     // new to it are saved again from their links, here.
     const links = !!cfg.links;
     const byId = new Map(before.map((p) => [p.id, p]));
+    // Every clip that has been in the library during this run. One of them
+    // missing now was deleted here meanwhile: it stays deleted, and the
+    // next sync sends that, rather than this one putting it back.
+    const been = new Set(before.map((p) => p.id));
+    const goneHere = (id, live) => been.has(id) && !live.some((p) => p.id === id);
     // What came down so far goes into the library every few pages, so a
     // run cut off part way keeps them (1.13.0).
     const settleSome = async (some, final) => {
       const live = getPages();
+      for (const p of live) been.add(p.id);
       const out = [], took = new Set();
       for (const p of live) {
         const d = some.get(p.id);
@@ -765,7 +771,7 @@
           else out.push(p);
         } else if (d) { out.push(d); took.add(p.id); }
       }
-      for (const [id, d] of some) if (d && !live.some((p) => p.id === id)) { out.push(d); took.add(id); }
+      for (const [id, d] of some) if (d && !been.has(id)) { out.push(d); took.add(id); been.add(id); }
       out.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
       if (!final) { await setPages(out); return took; }
       const kept = new Set(out.map((p) => p.id));
@@ -1014,6 +1020,7 @@
         else { const next = placeOnly(have, m); if (next) decided.set(m.id, next); }
         continue;
       }
+      if (have && goneHere(m.id, getPages())) continue;
       if (have) await C.store.removePage(m.id);
       const got = await incoming(html, m);
       const meta = { ...m, missing: got.missing };
