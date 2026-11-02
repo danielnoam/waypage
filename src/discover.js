@@ -27,14 +27,13 @@
   // Only well-formed entries get through, whichever copy they came from.
   function clean(raw) {
     if (!raw || !Array.isArray(raw.entries)) return null;
-    const topics = Array.isArray(raw.topics) ? raw.topics.filter((t) => typeof t === "string" && t).slice(0, 12) : [];
     const entries = raw.entries.filter((e) => e && KINDS.includes(e.kind) && typeof e.name === "string" && httpUrl(e.url))
       .map((e) => ({
-        kind: e.kind, name: e.name.slice(0, 80), about: String(e.about || "").slice(0, 160), topic: String(e.topic || ""),
+        kind: e.kind, name: e.name.slice(0, 80), about: String(e.about || "").slice(0, 160),
         url: httpUrl(e.url),
         feedUrl: typeof e.feed === "string" ? httpUrl(e.feed) : "", signup: httpUrl(e.signup),
       }));
-    return entries.length ? { topics, entries } : null;
+    return entries.length ? { entries } : null;
   }
   // The strict JSON between the markers of discover-list.js.
   function fromSource(text) {
@@ -45,7 +44,7 @@
   // A copy read from GitHub (main, so the newest) wins over the bundled one.
   function list() {
     const got = read(LIST_KEY, null);
-    return (got && clean(got.list)) || clean(C.discoverList) || { topics: [], entries: [] };
+    return (got && clean(got.list)) || clean(C.discoverList) || { entries: [] };
   }
   let refreshing = null;
   function refresh(repo) {

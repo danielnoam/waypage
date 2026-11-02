@@ -5,7 +5,8 @@
 // chapters), and a newsletter (email only, Daniel: "Newsletters" means the
 // app's own) gets an address from Newsletters and its sign-up page. See app.js for the order these files load in.
 
-// The chip picked: all, stories, sites, newsletters or a topic.
+// The chip picked: all, stories (shown as Sites: Royal Road), feeds or
+// newsletters (Daniel: no topic chips).
 let dzPick = "all";
 let dzList = load("waypage.discover.rrList", "rising");
 // Royal Road as last read: { at, items } per list, or an error line.
@@ -13,7 +14,7 @@ const dz = { busy: false, error: "", found: null, searching: false };
 // The phone reads Royal Road itself; the web copy can once its fetch
 // proxy is set (canReadPages, the Worker's PR), and not before.
 const dzCanRead = () => ("canReadPages" in C.platform ? C.platform.canReadPages : C.platform.canFetchPages);
-const DZ_KINDS = [["all", "All"], ["stories", "Stories"], ["feeds", "Feeds"], ["newsletters", "Newsletters"]];
+const DZ_KINDS = [["all", "All"], ["stories", "Sites"], ["feeds", "Feeds"], ["newsletters", "Newsletters"]];
 const dzHost = (u) => { try { return new URL(u).hostname.toLowerCase().replace(/^www\./, ""); } catch (e) { return ""; } };
 
 // Followed already: a feed from the same site (its page or its feed).
@@ -28,17 +29,16 @@ function dzSavedStory(s) {
 
 function renderDiscover() {
   const root = $("discover");
-  const { topics, entries } = C.discover.list();
+  const { entries } = C.discover.list();
   const chipsAt = root.querySelector(".feed-chips");
   const scrollX = chipsAt ? chipsAt.scrollLeft : 0;
   const chip = (key, label) => el("button", { class: "chip" + (dzPick === key ? " on" : ""), type: "button", "aria-pressed": String(dzPick === key),
     "data-key": "chip:" + key, onclick: () => { dzPick = key; renderDiscover(); } }, el("span", { class: "chip-label" }, label));
   const nodes = [el("div", { class: "chips filters feed-chips", role: "group", "aria-label": "Show" },
-    ...DZ_KINDS.map(([k, l]) => chip(k, l)), ...topics.map((t) => chip("#" + t, t)))];
-  const topic = dzPick.startsWith("#") ? dzPick.slice(1) : null;
-  const show = (k) => dzPick === "all" || dzPick === k || (topic && k !== "stories");
-  if (show("stories") && (!topic || topic === "Fiction")) nodes.push(...dzStories());
-  const pick = (kind) => entries.filter((e) => e.kind === kind && (!topic || e.topic === topic));
+    ...DZ_KINDS.map(([k, l]) => chip(k, l)))];
+  const show = (k) => dzPick === "all" || dzPick === k;
+  if (show("stories")) nodes.push(...dzStories());
+  const pick = (kind) => entries.filter((e) => e.kind === kind);
   if (show("feeds") && pick("feed").length) {
     nodes.push(sectionHead("Feeds"), el("div", { class: "group feed-group" }, ...pick("feed").map(dzRow)));
   }
@@ -221,7 +221,8 @@ function storySheet() {
 function signupSheet() {
   const e = state.menu.page;
   const boxes = mailBoxes();
-  let picked = boxes[0] || null;
+  // A new address by default (Daniel), one per newsletter.
+  let picked = null;
   const addr = el("p", { class: "dz-addr" });
   const chips = el("div", { class: "chips" });
   const go = el("button", { class: "btn-primary", type: "button" });

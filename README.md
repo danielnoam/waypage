@@ -162,7 +162,7 @@ Each section below shows the computer (left) and the phone (right).
 
 <p><img src="docs/shots/discover-desktop.jpg" width="74%" alt="Discover on a computer"> <img src="docs/shots/discover-phone.jpg" width="21%" alt="Discover on a phone"></p>
 
-- Browse feeds, newsletters and Royal Road stories to follow, by kind or topic, and add one with a tap; swipe to move between the chips.
+- Browse feeds, newsletters and Royal Road stories to follow, by kind (Sites, Feeds, Newsletters), and add one with a tap; swipe to move between the chips.
 - A feed goes to Feeds, a story saves as a collection that gets its new chapters, and a newsletter (by email) copies your Newsletters address and opens its sign-up page.
 - Royal Road's Rising stars, Best rated, Trending and Popular this week, and a search, on the phone.
 

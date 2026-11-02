@@ -81,7 +81,6 @@ async function phone(browser) {
       assert.strictEqual(got.parsed.entries.length, got.raw, "no entry was dropped as malformed");
       const urls = new Set();
       for (const e of got.parsed.entries) {
-        assert.ok(got.parsed.topics.includes(e.topic), e.name + " has a listed topic");
         assert.ok(e.about, e.name + " has a line about it");
         assert.ok(!urls.has(e.url), e.name + " isn't listed twice");
         urls.add(e.url);
@@ -137,6 +136,7 @@ async function phone(browser) {
       await p.locator('#discover .dz-row:has-text("Money Stuff") .post-save').click();
       await p.locator('#menuSheet[data-kind="signup"]:not([hidden])').waitFor();
       assert.match(await p.locator("#menuSheet").textContent(), /Comes by email only/);
+      assert.strictEqual(await p.locator('#menuSheet .chip.on').textContent(), "New address", "a new address is picked first");
       await p.evaluate(() => history.back());
       await p.waitForFunction(() => !state.menu);
       // A story: its sheet, then Save opens its chapters to check.
@@ -161,8 +161,9 @@ async function phone(browser) {
       assert.ok(await p.locator('#discover .dz-row:has-text("Quanta")').count() === 0);
       assert.ok(await p.locator('#discover .dz-row:has-text("Slow Boring")').count() === 0, "a newsletter with a feed is under Feeds, not Newsletters");
       assert.ok(await p.locator('#discover .dz-row:has-text("Money Stuff")').count() === 1);
-      await p.locator('#discover .chip:has-text("Science")').click();
+      await p.locator('#discover .chip:has-text("Feeds")').click();
       assert.ok(await p.locator('#discover .dz-row:has-text("Quanta")').count() === 1);
+      assert.deepStrictEqual(await p.locator("#discover .chip").allTextContents(), ["All", "Sites", "Feeds", "Newsletters"]);
       await p.fill("#saveUrl", "moth");
       await p.press("#saveUrl", "Enter");
       await p.locator('#discover .section-head:has-text("Royal Road · moth")').waitFor();
@@ -212,7 +213,7 @@ async function phone(browser) {
         row.dispatchEvent(new TouchEvent("touchend", { touches: [], changedTouches: [t(b)], bubbles: true }));
       }, [x0, x1]);
       await swipe(320, 40);
-      await p.waitForFunction(() => document.querySelector("#discover .chip.on").textContent === "Stories");
+      await p.waitForFunction(() => document.querySelector("#discover .chip.on").textContent === "Sites");
       await swipe(40, 320);
       await p.waitForFunction(() => document.querySelector("#discover .chip.on").textContent === "All");
       await ctx.close();
@@ -226,7 +227,7 @@ async function phone(browser) {
       await p.evaluate(() => goPlace("discover"));
       await p.locator("#discover .dz-row").first().waitFor();
       assert.strictEqual(await p.locator("#discover .dz-book").count(), 0);
-      await p.locator('#discover .chip:has-text("Stories")').click();
+      await p.locator('#discover .chip:has-text("Sites")').click();
       assert.match(await p.locator("#discover").textContent(), /on your phone/);
       await ctx.close();
     });
