@@ -169,6 +169,21 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       assert.ok(meta.minutes >= 5, "the answers are long: " + meta.minutes);
     });
 
+    await test("Reddit: the post's picture, then the comment tree, best first", async () => {
+      const { meta, html, asked } = await saveWith(browser, "https://www.reddit.com/r/starcitizen/comments/1xlzyn3/olli_says_hes_departing_from_cig/", [
+        ["https://www.reddit.com/comments/1xlzyn3/.json?raw_json=1", "reddit-post.json"],
+      ]);
+      assert.strictEqual(meta.title, "Olli says he's departing from CIG");
+      assert.strictEqual(meta.site, "Reddit");
+      assert.ok(meta.byline.startsWith("r/starcitizen · u/"), meta.byline);
+      assert.ok(!asked.some((u) => u.startsWith("https://www.reddit.com/r/")), "the page itself isn't fetched");
+      assert.ok(/<img[^>]*>/.test(html.slice(0, html.indexOf("co-thread"))), "the picture above the comments");
+      assert.ok(count(html, /class="co-comment"/g) > 100, "comments: " + count(html, /class="co-comment"/g));
+      assert.ok(count(html, /class="co-replies"/g) > 20, "replies nested");
+      assert.ok(!/&lt;div class="md"/.test(html), "comment HTML isn't shown as text");
+      assert.ok(/class="co-who"><strong>u\/[^<]+<\/strong> · [\d,]+ points?/.test(html), "who and points over each comment");
+    });
+
   } finally {
     await browser.close();
     server.kill();

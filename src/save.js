@@ -951,6 +951,9 @@
     }
     return redditPage(data, url);
   }
+  // Without raw_json=1 (a page saved by hand) Reddit escapes its HTML once more.
+  const redditHtml = (h) => (h && /^&lt;/.test(h) ? unescape(h) : h || "");
+  const amp = (u) => String(u || "").replace(/&amp;/g, "&");
   function redditPage(data, url) {
     const post = data && data[0] && data[0].data && data[0].data.children[0] && data[0].data.children[0].data;
     if (!post) return null;
@@ -962,16 +965,16 @@
       return {
         who: d.author === "[deleted]" ? "" : "u/" + d.author, label: d.is_submitter ? "OP" : "",
         points: d.score_hidden ? "" : points(d.score, "point"), at: (d.created_utc || 0) * 1000,
-        html: d.body_html || "<p>[deleted]</p>", replies,
+        html: redditHtml(d.body_html) || "<p>[deleted]</p>", replies,
       };
     };
     const comments = ((data[1] && data[1].data && data[1].data.children) || []).filter((c) => c.kind === "t1" && !c.data.stickied).map(one).filter(Boolean);
     return {
       url: self, title: (post.title || "").trim(), site: "Reddit",
-      byline: [post.subreddit_name_prefixed, post.author && post.author !== "[deleted]" ? "u/" + post.author : ""].filter(Boolean).join(" · "),
+      byline: [post.subreddit_name_prefixed, post.author && post.author !== "[deleted]" ? "u/" + post.author : "", points(post.score, "point")].filter(Boolean).join(" · "),
       body: discussion({
         lead: redditMedia(post, self),
-        post: { who: post.author === "[deleted]" ? "" : "u/" + post.author, points: points(post.score, "point"), at: (post.created_utc || 0) * 1000, html: post.selftext_html || "" },
+        post: { html: redditHtml(post.selftext_html) },
         comments, heading: "Comments",
       }),
       base: self, licence: null, lang: "", dir: "", next: "", prev: "",
@@ -984,11 +987,11 @@
     if (p.is_gallery && p.media_metadata && p.gallery_data) {
       return p.gallery_data.items.map((it) => {
         const m = p.media_metadata[it.media_id];
-        const src = m && m.s && (m.s.u || m.s.gif);
+        const src = m && m.s && amp(m.s.u || m.s.gif);
         return src ? '<figure><img src="' + esc(src) + '" alt="">' + (it.caption ? "<figcaption>" + esc(it.caption) + "</figcaption>" : "") + "</figure>" : "";
       }).join("");
     }
-    const shot = p.preview && p.preview.images && p.preview.images[0] && p.preview.images[0].source && p.preview.images[0].source.url;
+    const shot = p.preview && p.preview.images && p.preview.images[0] && p.preview.images[0].source && amp(p.preview.images[0].source.url);
     if (p.is_video || (p.domain || "").startsWith("v.redd.it")) return '<video data-co-link="' + esc(self) + '" data-co-site="Reddit"' + (shot ? ' poster="' + esc(shot) + '"' : "") + ' title="' + esc(p.title) + '"></video>';
     if (youtubeId(p.url || "")) return '<iframe src="' + esc(p.url) + '" title="' + esc(p.title) + '"></iframe>';
     if (p.post_hint === "image" || /^https:\/\/i\.redd\.it\//.test(p.url || "")) return '<img src="' + esc(p.url) + '" alt="">';
