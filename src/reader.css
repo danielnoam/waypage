@@ -176,6 +176,19 @@ html.co-spread .co-printed img + img { margin-top: 0; }
 }
 .co-cut a { display: block; margin-top: var(--s-2); color: var(--accent); font-weight: 600; }
 
+/* A discussion (Reddit, Hacker News, GitHub, Stack Exchange): who said it
+   over each comment, replies indented under a line. Past four levels the
+   indent stops growing, so a deep thread still fits a phone. */
+.co-thread { margin-top: var(--s-4); }
+.co-comment { margin: 0 0 var(--s-5); }
+.co-comment > :last-child, .co-replies > .co-comment:last-child { margin-bottom: 0; }
+.co-who { margin: 0 0 var(--s-1); font: 400 var(--fs-meta)/var(--lh-meta) var(--sans); color: var(--muted); }
+.co-who strong { font-weight: 600; color: var(--ink); }
+.co-accepted > .co-who { color: var(--accent); }
+.co-replies { margin: var(--s-4) 0 0; padding-inline-start: var(--s-3); border-inline-start: 2px solid var(--line); }
+.co-replies .co-replies .co-replies .co-replies .co-replies { padding-inline-start: 0; border-inline-start: 0; }
+.co-replies .co-comment { margin-bottom: var(--s-4); }
+
 /* A clip's translation (1.42.0): under each block's own words, quieter,
    and not selectable, so a highlight is always made in the original. */
 .co-tr {
