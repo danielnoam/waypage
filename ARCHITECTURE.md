@@ -126,9 +126,12 @@ up. A new shell file goes in the order in `index.html` and in `sw.js`'s
 2. **Pick the article**: Wikipedia through `/api/rest_v1/page/html/{title}`
    with a User-Agent naming the app; a site in `save.js`'s `SITES` list by
    its own rule (fiction and comics sites; Reddit from the post's `.json`;
-   Hacker News and Stack Exchange from the page as threads; GitHub issues
-   and pull requests from the API, code files from their raw copy, a repo
-   as its README); everything else through Mozilla Readability. A
+   Hacker News from the page; Stack Exchange, Lobsters, Bluesky and
+   Mastodon (any server, by the address's shape) from their APIs; a
+   Discourse forum, known by its page's generator tag, from the topic's
+   .json; GitHub issues and pull requests from the API, code files from
+   their raw copy, a repo as its README; an arXiv paper from its HTML
+   version); everything else through Mozilla Readability. A
    discussion keeps its `co-thread`/`co-comment` classes for reader.css.
 3. **Clean** to an allowlist of tags and attributes: no scripts, iframes,
    forms, handlers or tracking pixels. Lazy images resolve to one URL.

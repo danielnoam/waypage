@@ -184,6 +184,74 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       assert.ok(/class="co-who"><strong>u\/[^<]+<\/strong> · [\d,]+ points?/.test(html), "who and points over each comment");
     });
 
+    await test("Discourse: a forum known by its page saves the topic's posts from its JSON", async () => {
+      const page = "https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341";
+      const { meta, html } = await saveWith(browser, page, [
+        ["https://users.rust-lang.org/t/143341.json", "discourse-topic.json"],
+        [page, "discourse-topic.html"],
+      ]);
+      assert.strictEqual(meta.title, "“Official” way to read the raw bytes of a `struct` I didn’t define");
+      assert.strictEqual(meta.site, "users.rust-lang.org");
+      assert.strictEqual(count(html, /class="co-comment"/g), 39);
+      assert.ok(/<h2[^>]*>Replies \(39\)<\/h2>/.test(html));
+      assert.ok(!/\d+×\d+ [\d.]+ [KM]B/.test(plain(html)), "no picture size captions");
+    });
+
+    await test("Bluesky: the post and its replies, from the public API", async () => {
+      const { meta, html } = await saveWith(browser, "https://bsky.app/profile/bsky.app/post/3l6oveex3ii2l", [
+        ["https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle", "bsky-handle.json"],
+        ["https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread", "bsky-thread.json"],
+      ]);
+      assert.strictEqual(meta.site, "Bluesky");
+      assert.ok(meta.title.startsWith("👋 Bluesky is an open social network"), meta.title);
+      assert.ok(meta.title.length <= 81, "a post's title is its first words");
+      assert.ok(meta.byline.includes("@bsky.app"), meta.byline);
+      assert.ok(count(html, /class="co-comment"/g) >= 10, "replies: " + count(html, /class="co-comment"/g));
+    });
+
+    await test("Mastodon: any server's post, known by its address, with the replies as a tree", async () => {
+      const { meta, html } = await saveWith(browser, "https://mastodon.social/@Gargron/117547414168269934", [
+        ["https://mastodon.social/api/v1/statuses/117547414168269934/context", "mastodon-context.json"],
+        ["https://mastodon.social/api/v1/statuses/117547414168269934", "mastodon-status.json"],
+      ]);
+      assert.strictEqual(meta.site, "mastodon.social");
+      assert.ok(meta.byline.includes("@Gargron"), meta.byline);
+      assert.strictEqual(count(html, /class="co-comment"/g), 20);
+      assert.ok(count(html, /class="co-replies"/g) >= 1, "replies to replies nested");
+    });
+
+    await test("arXiv: an abstract link saves the paper's own web version, formulas as LaTeX", async () => {
+      const { meta, html } = await saveWith(browser, "https://arxiv.org/abs/1706.03762", [
+        ["https://arxiv.org/html/1706.03762", "arxiv-html.html"],
+        ["https://arxiv.org/abs/1706.03762", "arxiv-abs.html"],
+      ]);
+      assert.strictEqual(meta.title, "Attention Is All You Need");
+      assert.strictEqual(meta.site, "arXiv");
+      assert.strictEqual(meta.url, "https://arxiv.org/abs/1706.03762");
+      assert.ok(meta.byline.startsWith("Ashish Vaswani"), meta.byline);
+      assert.ok(meta.minutes > 15, "the whole paper: " + meta.minutes);
+      assert.ok(/softmax/.test(html) && /<code>[^<]*\\/.test(html), "formulas as LaTeX");
+    });
+
+    await test("arXiv: a paper with no web version is its abstract page, as before", async () => {
+      const { meta } = await saveWith(browser, "https://arxiv.org/abs/hep-th/9711200", [
+        ["https://arxiv.org/html/hep-th/9711200", null],
+        ["https://arxiv.org/abs/hep-th/9711200", "arxiv-old-abs.html"],
+      ]);
+      assert.ok(/Large N Limit/.test(meta.title), meta.title);
+    });
+
+    await test("Lobsters: the story link and the comment tree", async () => {
+      const { meta, html } = await saveWith(browser, "https://lobste.rs/s/lt44rt/introducing_kwi_new_kde", [
+        ["https://lobste.rs/s/lt44rt.json", "lobsters-story.json"],
+      ]);
+      assert.strictEqual(meta.title, "Introducing Kwi, a new KDE terminal emulator");
+      assert.strictEqual(meta.site, "Lobsters");
+      assert.ok(count(html, /class="co-comment"/g) >= 45, "comments: " + count(html, /class="co-comment"/g));
+      assert.ok(count(html, /class="co-replies"/g) > 3);
+      assert.ok(/The article, on /.test(html));
+    });
+
   } finally {
     await browser.close();
     server.kill();
