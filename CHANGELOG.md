@@ -2,7 +2,7 @@
 
 All notable changes to Carry-on. Newest first.
 
-## Unreleased
+## [1.51.0] - 2026-11-02
 
 ### Added
 - Discussions save whole. A Reddit post keeps its picture or text and its
@@ -21,6 +21,12 @@ All notable changes to Carry-on. Newest first.
 - An arXiv link saves the whole paper from its web version, formulas as
   their LaTeX, instead of only the abstract. A paper without one still
   saves its abstract page.
+- Settings per clip, per collection and per book. At the top of the Aa
+  sheet's Layout and Text, "Applies to" picks Everywhere, This clip (This
+  book for a file) or This collection; a change then stays there. Font,
+  size, spacing, alignment, margins and Scroll or Pages can differ; the
+  theme and Narrate stay the same for all. They're kept on this device,
+  like the settings in Settings.
 
 ### Changed
 - Code blocks in clips have tighter lines.
