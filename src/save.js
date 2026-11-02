@@ -798,6 +798,7 @@
     {
       name: "Stack Exchange",
       host: /(^|\.)(stackoverflow\.com|stackexchange\.com|superuser\.com|serverfault\.com|askubuntu\.com|mathoverflow\.net|stackapps\.com)$/i,
+      build: stackThread,
       chapter: (doc, url) => (/^\/questions\/\d+/.test(new URL(url).pathname) ? stackQuestion(doc, url) : null),
     },
   ];
@@ -844,7 +845,7 @@
     const body = doc.body;
     if (lead) body.append(htmlBits(doc, lead));
     if (post) {
-      body.append(whoLine(doc, post));
+      if (post.who) body.append(whoLine(doc, post));
       body.append(htmlBits(doc, post.html));
     }
     if (comments.length) {
@@ -922,7 +923,7 @@
     const segs = path.split("/");
     return {
       url, title: decodeURIComponent(segs[segs.length - 1]), site: "GitHub",
-      byline: owner + "/" + repo + " · " + segs.slice(1).map(decodeURIComponent).join("/"),
+      byline: [owner + "/" + repo].concat(segs.length > 2 ? [segs.slice(1, -1).map(decodeURIComponent).join("/")] : []).join(" · "),
       body: doc.body, base: url, licence: null, lang: "", dir: "", next: "", prev: "",
     };
   }
@@ -939,8 +940,16 @@
     let id = (u.pathname.match(/\/comments\/([a-z0-9]+)/i) || [])[1];
     if (!id && /(^|\.)redd\.it$/i.test(u.hostname)) id = (u.pathname.match(/^\/([a-z0-9]+)\/?$/i) || [])[1];
     if (!id) return null;
-    const got = await getJson("https://www.reddit.com/comments/" + id + "/.json?raw_json=1&limit=500");
-    return redditPage(got.data, url);
+    const api = "https://www.reddit.com/comments/" + id + "/.json?raw_json=1&limit=500";
+    let data;
+    try { data = (await getJson(api)).data; } catch (e) {
+      // Reddit turns away much that isn't a browser; the hidden browser
+      // (Android) asks again as one, and the answer is the JSON as text.
+      const drawn = C.platform.canRender ? await C.platform.render(api, {}) : null;
+      if (!drawn) throw e;
+      try { data = JSON.parse(parse(drawn.text, api).body.textContent); } catch (x) { throw e; }
+    }
+    return redditPage(data, url);
   }
   function redditPage(data, url) {
     const post = data && data[0] && data[0].data && data[0].data.children[0] && data[0].data.children[0].data;
@@ -1019,12 +1028,12 @@
     const top = story.querySelector(".toptext");
     const link = titleA && absolute(titleA.getAttribute("href"), url);
     const content = discussion({
-      lead: link && !/^https:\/\/news\.ycombinator\.com\/item/.test(link) ? linkLine(link) : "",
-      post: { who: user ? text(user) : "", points: score ? text(score) : "", at: hnTime(sub && sub.querySelector(".age")), html: top ? top.innerHTML : "" },
+      lead: link && !/^https:\/\/news\.ycombinator\.com\/item/.test(link) ? linkLine(link, "The article, on " + siteName(link)) : "",
+      post: { html: top ? hnBody(top) : "" },
       comments: prune(roots), heading: "Comments",
       more: doc.querySelector("a.morelink") ? linkLine(url, "More comments on Hacker News") : "",
     });
-    return { content, siteName: "Hacker News", title: titleA ? text(titleA) : "", byline: "", next: "", prev: "" };
+    return { content, siteName: "Hacker News", title: titleA ? text(titleA) : "", byline: [user ? text(user) : "", score ? text(score) : ""].filter(Boolean).join(" · "), next: "", prev: "" };
   }
   // A comment's text without the reply link HN puts inside it. Its first
   // paragraph is bare text before the first <p>.
@@ -1041,6 +1050,47 @@
   // most five in all, none voted below zero), from the page. Their text is
   // CC BY-SA, so each keeps its author and the clip says so at the foot.
   const TOP_ANSWERS = 5;
+  // Through Stack Exchange's API first: the sites put a browser check in
+  // front of their pages for anything that isn't a browser, the API
+  // doesn't (300 requests a day for each address without a key; a save
+  // takes two). The page is the fallback.
+  const unescape = (s) => new DOMParser().parseFromString(String(s || ""), "text/html").body.textContent;
+  async function stackThread(url) {
+    const u = new URL(url);
+    const id = (u.pathname.match(/^\/(?:questions|q)\/(\d+)/) || [])[1];
+    if (!id) return null;
+    const api = "https://api.stackexchange.com/2.3/questions/" + id;
+    const site = "site=" + encodeURIComponent(u.hostname.replace(/^www\./, "")) + "&filter=withbody";
+    const q = (await getJson(api + "?" + site)).data;
+    const a = (await getJson(api + "/answers?" + site + "&sort=votes&order=desc&pagesize=30")).data;
+    return stackPage(q, a, url);
+  }
+  function stackPage(q, a, url) {
+    const question = q && q.items && q.items[0];
+    if (!question) return null;
+    const as = (p, label) => ({
+      who: unescape(p.owner && p.owner.display_name), label, points: points(p.score, "vote"), at: (p.creation_date || 0) * 1000,
+      html: p.body || "", score: p.score || 0, accepted: !!p.is_accepted, replies: [],
+    });
+    const answers = ((a && a.items) || []).map((x) => as(x, x.is_accepted ? "Accepted answer" : ""));
+    const host = new URL(question.link || url).hostname;
+    return stackResult(as(question, ""), answers, question.answer_count || answers.length, unescape(question.title), STACK_NAMES[host] || host, question.link || url);
+  }
+  const STACK_NAMES = { "stackoverflow.com": "Stack Overflow", "superuser.com": "Super User", "serverfault.com": "Server Fault", "askubuntu.com": "Ask Ubuntu", "mathoverflow.net": "MathOverflow" };
+  // The accepted answer, then the best of the rest.
+  function stackResult(question, answers, total, title, site, url) {
+    const accepted = answers.filter((x) => x.accepted);
+    const rest = answers.filter((x) => !x.accepted && x.score >= 0).sort((x, y) => y.score - x.score);
+    const picked = accepted.concat(rest).slice(0, TOP_ANSWERS);
+    return {
+      url, title, site, byline: [question.who, question.points].filter(Boolean).join(" · "),
+      body: discussion({
+        post: { html: question.html }, comments: picked, heading: "Answers",
+        more: total > picked.length ? linkLine(url, (total - picked.length) + " more answers on " + site) : "",
+      }),
+      base: url, licence: "stackexchange", lang: "", dir: "", next: "", prev: "",
+    };
+  }
   function stackPost(node, label) {
     const body = node.querySelector(".js-post-body, .post-text");
     if (!body) return null;
@@ -1062,17 +1112,12 @@
     const answers = [...doc.querySelectorAll("#answers .answer, .answer")]
       .map((a) => stackPost(a, a.matches(".accepted-answer, [itemprop='acceptedAnswer']") ? "Accepted answer" : ""))
       .filter(Boolean);
-    const accepted = answers.filter((a) => a.accepted);
-    const rest = answers.filter((a) => !a.accepted && a.score >= 0).sort((a, b) => b.score - a.score);
-    const picked = accepted.concat(rest).slice(0, TOP_ANSWERS);
-    const site = ((doc.querySelector('meta[property="og:site_name"]') || {}).content || "").trim() || siteName(url);
-    const content = discussion({
-      post: question, comments: picked, heading: "Answers",
-      more: answers.length > picked.length ? linkLine(url, (answers.length - picked.length) + " more answers on " + site) : "",
-    });
+    const host = new URL(url).hostname.replace(/^www\./, "");
     const h = doc.querySelector("#question-header h1, h1[itemprop='name'], h1");
-    return { content, siteName: site, title: h ? text(h) : "", byline: "", licence: "stackexchange", next: "", prev: "" };
+    const got = stackResult(question, answers, answers.length, h ? text(h) : "", STACK_NAMES[host] || host, url);
+    return { content: got.body, siteName: got.site, title: got.title, byline: got.byline, licence: got.licence, next: "", prev: "" };
   }
+
 
   // Every episode on a WEBTOON series' list, oldest first: page after
   // page (&page=2…) until one adds nothing new.
@@ -1905,7 +1950,7 @@
     link.textContent = "Read the original";
     if (!meta.file) foot.append(meta.licence === "wikipedia"
       ? "Text from Wikipedia, CC BY-SA 4.0, by Wikipedia contributors. "
-      : meta.licence === "stackexchange" ? "Text from " + meta.site + ", CC BY-SA, by the people named above. "
+      : meta.licence === "stackexchange" ? "Text from " + meta.site + ", CC BY-SA, by the people named above. Saved on " + formatDate(meta.savedAt) + ". "
       : meta.archived ? "Saved from the Internet Archive's copy of " + meta.site + " from " + formatDate(meta.archived) + ". "
         : "Saved from " + meta.site + " on " + formatDate(meta.savedAt) + ". ", link);
     const doc = out.implementation.createHTMLDocument(meta.title);

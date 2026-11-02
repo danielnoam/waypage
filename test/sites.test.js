@@ -97,7 +97,7 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
         ["https://raw.githubusercontent.com/danielnoam/waypage/main/server.js", "github-server.js.txt"],
       ]);
       assert.strictEqual(meta.title, "server.js");
-      assert.strictEqual(meta.byline, "danielnoam/waypage · server.js");
+      assert.strictEqual(meta.byline, "danielnoam/waypage");
       assert.ok(!asked.some((u) => u.startsWith("https://github.com/danielnoam/waypage/blob/")), "the page itself isn't fetched");
       assert.strictEqual(count(html, /<pre>/g), 1);
       assert.ok(plain(html).includes("createServer"), "the code is there");
@@ -120,6 +120,55 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       ]);
       assert.strictEqual(meta.site, "GitHub");
     });
+    await test("Hacker News: the story link and every comment, nested in HN's order", async () => {
+      const { meta, html } = await saveWith(browser, "https://news.ycombinator.com/item?id=50331957", [
+        ["https://news.ycombinator.com/item?id=50331957", "hn-item.html"],
+      ]);
+      assert.strictEqual(meta.title, "Bones may release proteins that slow aging and extend life span");
+      assert.strictEqual(meta.site, "Hacker News");
+      assert.ok(count(html, /class="co-comment"/g) >= 85, "about 89 comments, a few may be deleted: " + count(html, /class="co-comment"/g));
+      assert.ok(count(html, /class="co-replies"/g) > 10, "replies nested");
+      const first = html.indexOf("<strong>Qem</strong>");
+      assert.ok(first > 0 && first === html.indexOf('class="co-who"><strong>', html.indexOf("co-thread")) + 'class="co-who">'.length, "HN's top comment comes first");
+      assert.ok(!/>reply</.test(html), "no reply links");
+      assert.ok(!/>next</.test(html) && meta.next === "", "no next-chapter guess from HN's own 'next' links");
+    });
+
+    await test("Hacker News: an Ask HN keeps its question's text", async () => {
+      const { meta, html } = await saveWith(browser, "https://news.ycombinator.com/item?id=50306776", [
+        ["https://news.ycombinator.com/item?id=50306776", "hn-ask.html"],
+      ]);
+      assert.ok(meta.title.startsWith("Ask HN: What's it like working at Google nowadays?"), meta.title);
+      const thread = html.indexOf("co-thread");
+      assert.ok(plain(html.slice(0, thread)).trim().length > 200, "the question's text above the comments");
+    });
+
+    await test("Stack Overflow: the question, the accepted answer first, then the best, five in all", async () => {
+      const { meta, html } = await saveWith(browser, "https://stackoverflow.com/questions/1642028/what-is-the-operator-in-c-c", [
+        [/^https:\/\/api\.stackexchange\.com\/2\.3\/questions\/1642028\/answers\?site=stackoverflow\.com&/, "se-a-other.json"],
+        [/^https:\/\/api\.stackexchange\.com\/2\.3\/questions\/1642028\?site=stackoverflow\.com&/, "se-q-other.json"],
+      ]);
+      assert.strictEqual(meta.title, "What is the '-->' operator in C/C++?");
+      assert.strictEqual(meta.site, "Stack Overflow");
+      assert.strictEqual(meta.licence, "stackexchange");
+      assert.strictEqual(count(html, /class="co-comment( co-accepted)?"/g), 5);
+      assert.ok(/<article class="co-comment co-accepted"><p class="co-who"><strong>Charles Salvia<\/strong> · Accepted answer · 9,981 votes/.test(html), "the accepted answer, named, first");
+      assert.ok(html.indexOf("Charles Salvia") < html.indexOf("unsynchronized"), "then by votes");
+      assert.ok(/21 more answers on Stack Overflow/.test(html));
+      assert.ok(/CC BY-SA, by the people named above/.test(html), "the licence line");
+      assert.ok(/<pre><code>/.test(html), "code blocks kept");
+    });
+
+    await test("Stack Overflow: a browser check in front of the page doesn't matter, the API answers", async () => {
+      const { meta } = await saveWith(browser, "https://stackoverflow.com/questions/11227809/why-is-processing-a-sorted-array-faster-than-processing-an-unsorted-array", [
+        [/^https:\/\/api\.stackexchange\.com\/2\.3\/questions\/11227809\/answers\?/, "se-a-sorted.json"],
+        [/^https:\/\/api\.stackexchange\.com\/2\.3\/questions\/11227809\?/, "se-q-sorted.json"],
+        ["https://stackoverflow.com/", "so-challenge.html"],
+      ]);
+      assert.strictEqual(meta.title, "Why is conditional processing of a sorted array faster than of an unsorted array?");
+      assert.ok(meta.minutes >= 5, "the answers are long: " + meta.minutes);
+    });
+
   } finally {
     await browser.close();
     server.kill();

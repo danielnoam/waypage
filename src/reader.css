@@ -48,7 +48,7 @@ sup, sub { line-height: 0; }
 sup a { text-decoration: none; }
 hr { border: 0; border-top: 1px solid var(--line); margin: var(--s-5) 0; }
 pre, code, kbd, samp { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.85em; }
-pre { overflow-x: auto; padding: var(--s-3); border-radius: var(--r-sm); background: var(--surface); border: 1px solid var(--line); }
+pre { overflow-x: auto; padding: var(--s-3); border-radius: var(--r-sm); background: var(--surface); border: 1px solid var(--line); line-height: 1.45; }
 
 table {
   display: block; overflow-x: auto; max-width: 100%;
