@@ -172,7 +172,7 @@ with enough detail for someone else to pick it up.
 
 ## Keeping the notes files right
 
-- **Shipped work** becomes a CHANGELOG entry; a "no" becomes a line in
+- **Shipped work** becomes a note in `changes/` (see below); a "no" becomes a line in
   DROPPED.md with the reason. Take it off the to-do list (or close its
   issue) at the same time.
 - **ARCHITECTURE.md** changes in the same commit as the code when a file
@@ -198,16 +198,18 @@ pull request land on `main`:
   Android workflow publishes `app-v<version>` with the APK, iOS attaches
   the IPA, and every phone's updater offers it. Use this for a change
   that should reach phones on its own (a fix, a small ask).
-- **A PR that doesn't** just lands. Its CHANGELOG lines go under a
-  `## Unreleased` heading at the top of CHANGELOG.md, and it ships with
-  the next release. Use this for work in progress, big features landing
+- **A PR that doesn't** just lands. Its lines go in its own file,
+  `changes/<branch>.md` (`feature/more-sites` → `feature-more-sites.md`),
+  never in CHANGELOG.md, so two branches never clash there. It ships
+  with the next release. Use this for work in progress, big features landing
   in pieces, and anything another person's change should go out with.
 
 **To release what has gathered:** on an up-to-date branch run
 `node tools/release.js 1.46.0` (new feature: minor; fix or tweak: patch;
 a saved-page format old versions can't read: major, and always above the
 latest release, since the updater ignores lower numbers). It bumps the
-three version places and turns `## Unreleased` into `## [1.46.0] - date`.
+three version places, folds every `changes/*.md` note into one
+`## [1.46.0] - date` entry in CHANGELOG.md and deletes the notes.
 Look at the diff, commit it as "Release 1.46.0", open the PR, merge on
 green.
 
@@ -221,11 +223,11 @@ green.
    `sw.js`'s `ASSETS`, which is the list that goes into the apps; the
    build fails if `index.html` loads a file it lacks.
 
-CHANGELOG.md entries are `### Added` / `Changed` / `Fixed` / `Removed`,
-in user-facing words; the release workflow copies the entry into the
-GitHub release notes. `test/build.test.js` checks that the newest
-numbered entry is `APP_VERSION` and that `## Unreleased`, if present, is
-the first heading.
+Notes and CHANGELOG.md entries use `### Added` / `Changed` / `Fixed` /
+`Removed`, in user-facing words; the release workflow copies the entry
+into the GitHub release notes. Only a release PR edits CHANGELOG.md.
+`test/build.test.js` checks that the newest numbered entry is
+`APP_VERSION` and that every note in `changes/` uses those headings.
 
 **How a change gets in:** `main` takes only pull requests. Push a
 branch, open a PR, and merge it when the **Tests** check is green
