@@ -739,6 +739,10 @@
       .map((el) => ({ el, text: speechText(el) })).filter((b) => /[\p{L}\p{N}]/u.test(b.text));
     return blocks.map((b) => b.text);
   }
+  // Pictures with nothing to read but the clip's head (a scan, a PDF's
+  // printed pages): Narrate would read only the title.
+  const wordless = () => !!doc && comic && ![...doc.body.querySelectorAll(BLOCKS + ", .co-run")]
+    .some((el) => !el.closest(SKIP + ", .co-comic, " + EDGES) && /[\p{L}\p{N}]/u.test(el.textContent));
   // The blocks of a clip that isn't open, from its saved HTML (1.23.0):
   // Read aloud going on to the next clip while the app is put away, where
   // the reader can't draw it. The same blocks the open clip would have.
@@ -1178,21 +1182,38 @@
     const r = root.getBoundingClientRect();
     return { x: r.left + w.scrollX, y: r.top + w.scrollY, w };
   }
-  // Lays the chapter out at `s` times its width, keeping the content that
-  // was at page point (px, py) under screen point (mx, my).
-  function setZoom(s, mx, my, px, py) {
+  // The page or panel under screen point (x, y), and where on it as
+  // fractions of its size: what a zoom keeps under the fingers. Working
+  // from the page, not from the chapter's corner, keeps the gaps between
+  // a PDF's pages from moving the spot further off the deeper you are.
+  function pageAt(root, x, y) {
+    const hit = doc.elementFromPoint(x, y);
+    const el = hit && hit.closest && hit.closest("img, .co-placeholder");
+    if (!el || !root.contains(el)) return null;
+    const r = el.getBoundingClientRect();
+    return r.width && r.height ? { el, fx: (x - r.left) / r.width, fy: (y - r.top) / r.height } : null;
+  }
+  // Lays the chapter out at `s` times its width, keeping the spot `at`
+  // (pageAt) under screen point (mx, my); without one, the content that
+  // was at page point (px, py).
+  function setZoom(s, mx, my, px, py, at) {
     const root = comicRoot();
     if (!root) return;
     const { x: ox, y: oy, w } = origin(root);
-    if (px == null) { px = w.scrollX + mx; py = w.scrollY + my; }
+    root.style.transformOrigin = "";
+    root.style.willChange = "";
+    if (px == null) { px = w.scrollX + mx; py = w.scrollY + my; at = at || pageAt(root, mx, my); }
     s = Math.min(ZOOM_MAX, Math.max(1, s));
     if (s < 1.05) s = 1;
     const base = root.offsetWidth / zoom;
     const q = s / zoom;
     zoom = s;
-    root.style.transformOrigin = "";
     root.style.width = s === 1 ? "" : Math.round(base * s) + "px";
-    w.scrollTo(ox + (px - ox) * q - mx, oy + (py - oy) * q - my);
+    root.style.setProperty("--co-zoom", String(s));
+    if (at && at.el.isConnected) {
+      const r = at.el.getBoundingClientRect();
+      w.scrollTo(w.scrollX + r.left + at.fx * r.width - mx, w.scrollY + r.top + at.fy * r.height - my);
+    } else w.scrollTo(ox + (px - ox) * q - mx, oy + (py - oy) * q - my);
   }
   function zoomInput() {
     doc.addEventListener("touchstart", (e) => {
@@ -1202,8 +1223,12 @@
       const { x: ox, y: oy, w } = origin(root);
       const mx = (a.clientX + b.clientX) / 2, my = (a.clientY + b.clientY) / 2;
       pinch = { root, d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), from: zoom, s: zoom, mx, my, x: mx, y: my,
-        px: w.scrollX + mx, py: w.scrollY + my, ox, oy };
+        px: w.scrollX + mx, py: w.scrollY + my, ox, oy, sx: w.scrollX, sy: w.scrollY, at: pageAt(root, mx, my) };
       root.style.transformOrigin = (pinch.px - ox) + "px " + (pinch.py - oy) + "px";
+      // Its own layer while the fingers are down, so each move is the
+      // compositor scaling what's drawn, not every page painted again
+      // (and filtered, with Dark PDF pages) at the new size.
+      root.style.willChange = "transform";
       if (tapTimer) { clearTimeout(tapTimer); tapTimer = 0; }
       e.preventDefault();
     }, { passive: false });
@@ -1214,14 +1239,18 @@
       pinch.s = Math.min(ZOOM_MAX, Math.max(1, pinch.from * d / pinch.d));
       pinch.x = (a.clientX + b.clientX) / 2;
       pinch.y = (a.clientY + b.clientY) / 2;
-      pinch.root.style.transform = "translate(" + (pinch.x - pinch.mx) + "px," + (pinch.y - pinch.my) + "px) scale(" + (pinch.s / pinch.from) + ")";
-      e.preventDefault();
+      // A first finger that was already scrolling keeps the page moving
+      // (its moves can't be held back once a scroll starts): the scroll
+      // since the pinch began is put back, so the spot stays under the fingers.
+      const w = frame.contentWindow;
+      pinch.root.style.transform = "translate(" + (pinch.x - pinch.mx + w.scrollX - pinch.sx) + "px," + (pinch.y - pinch.my + w.scrollY - pinch.sy) + "px) scale(" + (pinch.s / pinch.from) + ")";
+      if (e.cancelable) e.preventDefault();
     }, { passive: false });
     const done = (e) => {
       if (!pinch || e.touches.length >= 2) return;
       const p = pinch;
       pinch = null;
-      setZoom(p.s, p.x, p.y, p.px, p.py);
+      setZoom(p.s, p.x, p.y, p.px, p.py, p.at);
     };
     doc.addEventListener("touchend", done);
     doc.addEventListener("touchcancel", done);
@@ -1680,5 +1709,5 @@
       return line;
     }));
   }
-  C.reader = { pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
+  C.reader = { pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
 })();

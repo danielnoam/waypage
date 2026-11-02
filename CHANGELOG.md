@@ -5,6 +5,14 @@ All notable changes to Carry-on. Newest first.
 ## Unreleased
 
 ### Fixed
+- PDFs: a pinch zoom landed off the spot under your fingers, further off
+  the deeper into the PDF you were (a quarter of a page by page 25). It
+  now stays put, also when one finger was already scrolling.
+- PDFs: pinch zoom is smoother, above all with Dark PDF pages on, and a
+  zoom no longer draws the pages on screen again at the same sharpness.
+- A PDF shown as its pages had Narrate, which read only its title. It has
+  Auto-scroll in its place, as a comic does; Show as text brings Narrate
+  back.
 - A clip deleted while a sync was running came straight back when the
   sync finished, so it had to be deleted twice. It now stays deleted,
   and the next sync deletes it on your other devices.

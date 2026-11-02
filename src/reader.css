@@ -137,10 +137,10 @@ html[data-co-pdf-dark] .co-printed img[src] { filter: url(#co-pdf-dark); }
 .co-comic img[data-in]:not([width]) { aspect-ratio: 2 / 3; }
 .co-comic .co-placeholder { margin: 0; border-radius: 0; }
 /* A PDF's printed pages (1.1.3): a gap shows where one page ends. */
-.co-printed img + img { margin-top: var(--s-2); }
+.co-printed img + img { margin-top: calc(var(--s-2) * var(--co-zoom, 1)); }
 /* Two side by side on a wide window (1.5.0). */
 html.co-spread body:has(.co-printed) { max-width: 76rem; }
-html.co-spread .co-printed { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); margin: 0; }
+html.co-spread .co-printed { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--s-3) * var(--co-zoom, 1)); margin: 0; }
 html.co-spread .co-printed img + img { margin-top: 0; }
 
 /* Your time in the clip (1.39.0), under its very last thing. */
