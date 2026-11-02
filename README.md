@@ -24,6 +24,7 @@ Each section below shows the computer (left) and the phone (right).
 - [Narrate](#narrate)
 - [Feeds](#feeds)
 - [Newsletters](#newsletters)
+- [Discover](#discover)
 - [Stats](#stats)
 - [Sync and backup](#sync-and-backup)
 - [Settings and the app](#settings-and-the-app)
@@ -156,6 +157,14 @@ Each section below shows the computer (left) and the phone (right).
 
 - Make an email address (through Kill the Newsletter) and subscribe with it; emails arrive here and save as clips.
 - Several addresses, unread dots, Copy address, and Confirm for subscription emails.
+
+## Discover
+
+<p><img src="docs/shots/discover-desktop.jpg" width="74%" alt="Discover on a computer"> <img src="docs/shots/discover-phone.jpg" width="21%" alt="Discover on a phone"></p>
+
+- Browse sites, newsletters and Royal Road stories to follow, by kind or topic, and add one with a tap.
+- A site goes to Feeds, a story saves as a collection that gets its new chapters, and an email-only newsletter copies your Newsletters address and opens its sign-up page.
+- Royal Road's Rising stars, Best rated, Trending and Popular this week, and a search, on the phone.
 
 ## Stats
 

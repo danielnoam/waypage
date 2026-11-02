@@ -53,6 +53,7 @@ src/app-reader.js   moving between screens; the reader around the page: brightne
 src/app-library.js  tags, collections, a clip's sheet, multi-select, export, import, watched folders
 src/app-saving.js   sync screen, saving several, next links and new chapters, feeds, home-screen widgets
 src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestures, a feed's sheets
+src/app-discover.js the Discover place: the list, Royal Road's covers, the story and sign-up sheets
 src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
 src/app-lock.js     app lock: passcode (PBKDF2 hash), fingerprint or face on Android
 src/app-start.js    wiring at launch, what other apps share in, self-update, Test builds, What's new
@@ -65,6 +66,8 @@ src/pdf.js          PDFs through pdf.js in a locked-down frame
 src/pptx.js         PowerPoint decks redrawn on a canvas and written as a PDF (1.49.0)
 src/epub.js         clips as an EPUB 3 book, for e-readers and Send to Kindle
 src/feeds.js        RSS, Atom and JSON Feed, read into one shape
+src/discover.js     Discover's sources: the hand-picked list, Royal Road's lists and search
+src/discover-list.js  the hand-picked list itself (strict JSON between markers, refreshed from GitHub)
 src/sync.js         GitHub sync; src/sync-worker.js runs the merge off the main thread
 src/drive.js        Google Drive backups
 src/backup.js       one-file backups and exports
@@ -277,10 +280,11 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
 ## Tests and screenshots
 
 `node test/run-all.js` runs every `test/*.test.js` in its own process.
-`ui.test.js`, `drive.test.js` and `sites.test.js` drive the app in
-Chromium with Playwright and skip when it isn't installed (`sites.test.js`
-saves the discussion and code sites from their answers saved in
-`test/fixtures/sites/`, with nothing going out); `build.test.js` checks the
+`ui.test.js`, `drive.test.js`, `sites.test.js` and `discover.test.js`
+drive the app in Chromium with Playwright and skip when it isn't installed
+(`sites.test.js` saves the discussion and code sites from their answers
+saved in `test/fixtures/sites/`, with nothing going out; `discover.test.js`
+reads Royal Road's lists from hand-made pages in `test/fixtures/discover/`); `build.test.js` checks the
 bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
@@ -311,6 +315,11 @@ adds a line here.
   unlocked phone, not someone with the files or developer tools.
 - Newsletters go through Kill the Newsletter, which receives and can read
   the emails; the address and feed link are keys.
+- Discover reads Royal Road's list and search pages as a browser would
+  (Royal Road sees the visit, as it does for saving a chapter), and the
+  phone fetches the hand-picked list from raw.githubusercontent.com twice
+  a day, which GitHub sees. Royal Road's markup is scraped, so a change
+  there leaves the last list read until the parser is fixed.
 - Translate downloads each language's model from Google once, which tells
   Google the languages, never the words.
 - A deck (PPTX) is redrawn by `pptx.js`, an approximation: no charts,

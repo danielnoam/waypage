@@ -1,0 +1,2 @@
+### Added
+- Discover, in the sidebar: browse sites, newsletters and Royal Road stories to follow, by kind or topic, and add one with a tap. A site opens Add a feed, a story saves as a collection that gets its new chapters, and an email-only newsletter copies your Newsletters address and opens its sign-up page. Royal Road's Rising stars, Best rated, Trending and Popular this week, and a search from the bottom field, on the phone.

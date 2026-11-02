@@ -150,6 +150,13 @@ $("saveForm").addEventListener("submit", (e) => {
     openMenu("addFeed", { url: typed });
     return;
   }
+  if (state.place === "discover") {
+    const typed = $("saveUrl").value;
+    $("saveUrl").value = "";
+    $("saveUrl").blur();
+    discoverField(typed);
+    return;
+  }
   if (state.place === "newsletters") {
     const name = cleanTag($("saveUrl").value);
     $("saveUrl").blur();

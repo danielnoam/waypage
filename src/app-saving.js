@@ -1200,7 +1200,7 @@ const mailAddress = (f) => (f.url.match(MAIL_FEED) || [])[1] + "@" + KTN;
 // "Please confirm your subscription": a Confirm button, not a clip.
 const CONFIRM = /\b(confirm|verify|activate|validate)|opt[- ]?in/i;
 const isConfirm = (it) => CONFIRM.test((it && it.title) || "");
-state.place = ["feeds", "newsletters", "highlights", "reading"].includes(load(PLACE_KEY, "library")) ? load(PLACE_KEY, "library") : "library";
+state.place = ["feeds", "newsletters", "highlights", "reading", "discover"].includes(load(PLACE_KEY, "library")) ? load(PLACE_KEY, "library") : "library";
 // The feed picked in the river (its url), or null for all of them.
 state.feed = null;
 state.side = false;
@@ -1590,6 +1590,7 @@ function saveFeedPosts(list) {
 function paintFeeds() {
   if (state.place === "feeds") renderFeeds();
   if (state.place === "newsletters") renderNewsletters();
+  if (state.place === "discover") renderDiscover();
   if (sideShown()) renderSide();
   if (state.menu && state.menu.kind === "feed") redrawMenu();
 }
@@ -1600,28 +1601,33 @@ function paintPlace() {
   const mailOn = state.place === "newsletters";
   const marksOn = state.place === "highlights";
   const readOn = state.place === "reading";
-  $("placeTitle").textContent = feedsOn ? "Feeds" : mailOn ? "Newsletters" : marksOn ? "Highlights" : readOn ? "Stats" : "Library";
+  const findOn = state.place === "discover";
+  $("placeTitle").textContent = feedsOn ? "Feeds" : mailOn ? "Newsletters" : marksOn ? "Highlights" : readOn ? "Stats" : findOn ? "Discover" : "Library";
   $("libraryView").dataset.place = state.place;
-  $("library").hidden = feedsOn || mailOn || marksOn || readOn;
+  $("library").hidden = feedsOn || mailOn || marksOn || readOn || findOn;
   $("feeds").hidden = !feedsOn;
   $("newsletters").hidden = !mailOn;
   $("highlights").hidden = !marksOn;
   $("reading").hidden = !readOn;
+  $("discover").hidden = !findOn;
   $("paneNote").textContent = marksOn ? "Pick a highlight to read it here" : readOn ? "Pick a clip to read it here" : mailOn ? "Pick an email to read it here" : "Pick a post to read it here";
   // The bottom field follows a feed in Feeds, makes a newsletter address
-  // in Newsletters (1.43.1), and saves a link elsewhere.
-  $("saveUrl").placeholder = feedsOn ? "Paste a site or feed to follow" : mailOn ? "Name a new address" : "Paste a link to save";
-  $("saveUrl").inputMode = mailOn ? "text" : "url";
+  // in Newsletters (1.43.1), searches Royal Road or follows a site in
+  // Discover, and saves a link elsewhere.
+  $("saveUrl").placeholder = feedsOn ? "Paste a site or feed to follow" : mailOn ? "Name a new address" : findOn ? "Search Royal Road, or paste a site" : "Paste a link to save";
+  $("saveUrl").inputMode = mailOn || findOn ? "text" : "url";
   $("saveUrl").autocapitalize = mailOn ? "sentences" : "off";
+  $("saveUrl").enterKeyHint = findOn ? "search" : "go";
   if (mailOn) $("saveUrl").maxLength = 32; else $("saveUrl").removeAttribute("maxlength");
-  document.querySelector('label[for="saveUrl"]').textContent = feedsOn ? "Site or feed" : mailOn ? "New address's name" : "Page link";
-  $("saveForm").querySelector(".btn-primary").textContent = feedsOn ? "Follow" : mailOn ? "Make" : "Save";
-  $("severalBtn").hidden = feedsOn || mailOn;
-  if (feedsOn || mailOn || marksOn || readOn) { if (state.query) clearSearch(); }
+  document.querySelector('label[for="saveUrl"]').textContent = feedsOn ? "Site or feed" : mailOn ? "New address's name" : findOn ? "Royal Road search, or a site" : "Page link";
+  $("saveForm").querySelector(".btn-primary").textContent = feedsOn ? "Follow" : mailOn ? "Make" : findOn ? "Find" : "Save";
+  $("severalBtn").hidden = feedsOn || mailOn || findOn;
+  if (feedsOn || mailOn || marksOn || readOn || findOn) { if (state.query) clearSearch(); }
   if (feedsOn) renderFeeds();
   else if (mailOn) renderNewsletters();
   else if (marksOn) renderHighlights();
   else if (readOn) renderReading();
+  else if (findOn) openDiscover();
   else renderLibrary();
 }
 
