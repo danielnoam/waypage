@@ -2034,6 +2034,95 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a pinch deep in a linked PDF keeps the spot under the fingers, gaps and all", async () => {
+      const maker = await browser.newPage();
+      let html = "<style>@page{size:A4;margin:0} div{height:297mm;box-sizing:border-box;padding:40px;font:28px sans-serif;page-break-after:always}</style>";
+      for (let i = 1; i <= 30; i++) html += "<div>" + ("Page " + i + " words. ").repeat(40) + "</div>";
+      await maker.setContent(html);
+      const bytes = [...await maker.pdf({ format: "A4" })];
+      await maker.close();
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      const bring = (b) => {
+        const file = new File([new Uint8Array(b)], "deep.pdf", { type: "application/pdf" });
+        window.Waypage.platform.files.blob = async () => file;
+        return file;
+      };
+      const id = await q.evaluate(async ([b, f]) => {
+        const file = eval(f)(b);
+        const meta = await window.Waypage.files.bring(file, "pdf", { has: () => false, link: "content://docs/deep.pdf" });
+        await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
+        return meta.id;
+      }, [bytes, String(bring)]);
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(([b, f]) => { eval(f)(b); }, [bytes, String(bring)]);
+      await q.evaluate((i) => openPage(i), id);
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      await q.evaluate(() => { const d = document.getElementById("readerFrame").contentDocument; d.defaultView.scrollTo(0, d.querySelector("img[data-page='25']").offsetTop - 100); });
+      await q.waitForTimeout(400);
+      const fr = await q.evaluate(() => { const r = document.getElementById("readerFrame").getBoundingClientRect(); return [r.left, r.top]; });
+      const x = 250, y = 450;
+      const under = () => q.evaluate(([x, y]) => {
+        const d = document.getElementById("readerFrame").contentDocument;
+        const img = d.elementFromPoint(x, y).closest("img"), r = img.getBoundingClientRect();
+        return { page: img.getAttribute("data-page"), fx: Math.round((x - r.left) / r.width * 100), fy: Math.round((y - r.top) / r.height * 100) };
+      }, [x, y]);
+      const before = await under();
+      const cdp = await ctx.newCDPSession(q);
+      const pts = (d) => [{ x: fr[0] + x - d, y: fr[1] + y, id: 0 }, { x: fr[0] + x + d, y: fr[1] + y, id: 1 }];
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: pts(40) });
+      for (let i = 1; i <= 10; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: pts(40 + i * 6) });
+      const mid = await q.evaluate(() => getComputedStyle(document.getElementById("readerFrame").contentDocument.querySelector(".co-comic")).willChange);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await q.waitForTimeout(500);
+      const after = await under();
+      const root = await q.evaluate(() => { const c = document.getElementById("readerFrame").contentDocument.querySelector(".co-comic"); return { width: c.style.width, will: c.style.willChange }; });
+      assert.ok(parseInt(root.width, 10) > 800, JSON.stringify(root));
+      assert.strictEqual(mid, "transform", "the pinch has its own layer");
+      assert.strictEqual(root.will, "", "and lets it go after");
+      // Before, the gaps between pages didn't grow with the zoom: by page 25
+      // the spot was a quarter of a page off.
+      assert.deepStrictEqual(after, before, JSON.stringify({ before, after }));
+      const errors = q.errors ? q.errors : [];
+      assert.deepStrictEqual(errors, []);
+      await ctx.close();
+    });
+
+    await test("a PDF shown as its printed pages has Auto-scroll, not a Narrate that reads just its title; as text, Narrate", async () => {
+      const q = await page(browser, 390);
+      const bytes = [...pdfBytes()];
+      const bring = (b) => {
+        const file = new File([new Uint8Array(b)], "pages.pdf", { type: "application/pdf" });
+        window.Waypage.platform.files.blob = async () => file;
+        return file;
+      };
+      const id = await q.evaluate(async ([b, f]) => {
+        const meta = await window.Waypage.files.bring(eval(f)(b), "pdf", { has: () => false, link: "content://docs/pages.pdf" });
+        await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
+        return meta.id;
+      }, [bytes, String(bring)]);
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(([b, f]) => { eval(f)(b); speech.available = true; }, [bytes, String(bring)]);
+      await q.evaluate((i) => openPage(i), id);
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      await until(q, () => !document.getElementById("readerScroll").hidden);
+      const shown = () => q.evaluate(() => ({ aloud: !document.getElementById("readerAloud").hidden, scroll: !document.getElementById("readerScroll").hidden }));
+      assert.deepStrictEqual(await shown(), { aloud: false, scroll: true });
+      // Show as text, from the reader's sheet.
+      await q.click("#readerAa");
+      await q.evaluate(() => switchView(state.open, "reader"));
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open && state.open.view === "text");
+      await until(q, () => !document.getElementById("readerAloud").hidden);
+      assert.deepStrictEqual(await shown(), { aloud: true, scroll: false });
+      const errors = q.errors.filter((e) => !/serviceWorker/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("the Dark PDF pages switch is hidden in a web clip's Layout, where .rc-row's flex must not beat [hidden] (1.49.0)", async () => {
       const q = await page(browser, 390);
       await q.fill("#saveUrl", ARTICLE);

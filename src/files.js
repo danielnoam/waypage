@@ -1071,7 +1071,11 @@
           const r = img.getBoundingClientRect();
           const away = r.bottom < 0 ? -r.bottom : r.top > tall ? r.top - tall : 0;
           const n = img.getAttribute("data-page");
-          const want = Math.min(2400, Math.max(200, Math.round((r.width || win.innerWidth || 400) * dpr)));
+          // Its laid-out width (a pinch under way scales the rect, not the
+          // page), and never past the 2x pdf.js draws at most (pdf.js,
+          // drawOne): a zoom asking for more drew the same page again.
+          const most = 2 * (Number(img.getAttribute("width")) || 1200);
+          const want = Math.min(2400, most, Math.max(200, Math.round((img.offsetWidth || win.innerWidth || 400) * dpr)));
           const has = h.urls.get(n);
           if (has && away > tall * 6) {
             URL.revokeObjectURL(has.url);

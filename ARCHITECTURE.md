@@ -345,6 +345,12 @@ area.
   its own blob: URLs. Pages draw with `intent: "print"`, because the
   screen intent waits on requestAnimationFrame, which never runs in a
   frame kept out of sight.
+- **Zooming printed pages:** keep the spot by the page under the fingers
+  (reader.js `pageAt`), not by the chapter's corner, and scale anything
+  between pages with `--co-zoom`: a fixed gap put the spot a quarter page
+  off by page 25. pdf.js draws at 2x at most, so asking for wider redraws
+  the same page; and drawing wider costs about 0.5 s a page at 6x CPU, on
+  the reader's own thread.
 - **Native number arguments:** read them with `getData().optLong`, not
   `PluginCall.getLong`, which returns the default for a JS number that
   arrives as an Integer (every read started at byte 0).

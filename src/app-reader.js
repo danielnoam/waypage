@@ -400,8 +400,8 @@ function show(p, html) {
   $("readerTranslate").hidden = true;
   // A comic has no text to narrate: its button is Auto-scroll (1.49.0).
   stopGlide();
-  $("readerAloud").hidden = !speech.available || !!p.comic;
-  $("readerScroll").hidden = !p.comic;
+  wordless = false;
+  narrateOrScroll(p);
   $("readerNow").textContent = "Contents";
   $("readerContents").setAttribute("aria-label", "Contents");
   $("readerFolder").hidden =!(p.folder && !p.preview && folderPages(p.folder).length > 1);
@@ -441,13 +441,15 @@ function show(p, html) {
     paintMarks(p);
     loadTranslation(p);
     $("readerContents").hidden = C.reader.headings().length < 2;
+    wordless = C.reader.wordless();
+    narrateOrScroll(p);
     showSection();
     fitRail();
     // Reading aloud carries on across clips (1.4.0): its light and
     // player show again when its clip is the one open.
     setAloud(aloud.state, aloud.index);
     // Auto-scroll went on from the chapter before (1.49.0).
-    if (glide.carry && Date.now() - glide.carry < 15000 && state.open === p && p.comic) startGlide();
+    if (glide.carry && Date.now() - glide.carry < 15000 && state.open === p && pictureBook()) startGlide();
     glide.carry = 0;
     if (aloudAuto === "here") { aloudAuto = false; C.reader.placed().then(() => { if (state.open === p) startAloud(); }); }
     else if (aloudAuto) { aloudAuto = false; startAloud(0); }
@@ -1124,6 +1126,15 @@ let aloudAuto = false;
 // Narrate's switch too. A finger on the page holds it (C.reader.glide).
 const SCROLL_PX = 60;
 const glide = { on: false, carry: 0 };
+// A scan or a PDF's printed pages with no words of their own is a comic
+// here too: Narrate would read only the title.
+let wordless = false;
+const pictureBook = () => !!state.open && (!!state.open.comic || wordless);
+function narrateOrScroll(p) {
+  const pics = !!p.comic || wordless;
+  $("readerAloud").hidden = !speech.available || pics;
+  $("readerScroll").hidden = !pics;
+}
 const scrollRate = () => clamp(Number(load(SCROLL_RATE_KEY, 1)) || 1, RATE_MIN, RATE_MAX);
 function paintGlide() {
   const b = $("readerScroll"), label = glide.on ? "Stop auto-scrolling" : "Auto-scroll";
@@ -1132,7 +1143,7 @@ function paintGlide() {
   b.title = label + " (S)";
 }
 function startGlide() {
-  if (!state.open || !state.open.comic) return;
+  if (!pictureBook()) return;
   glide.on = true;
   paintGlide();
   keepAwake();
@@ -2285,7 +2296,7 @@ function readerSettings() {
   const box = readingControls(true);
   const parts = [...box.querySelectorAll(".rc-part")];
   // A comic gets Auto-scroll with its three settings in Narrate's place (1.49.0).
-  const comic = !!(state.open && state.open.comic);
+  const comic = pictureBook();
   if (comic || speech.available) {
     const a = comic ? scrollControls() : aloudControls();
     a.classList.add("rc-part");
