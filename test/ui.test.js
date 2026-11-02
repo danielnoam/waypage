@@ -518,6 +518,49 @@ function zipOf(files) {
       await p.evaluate(() => document.getElementById("readerView").classList.remove("bar-away"));
     });
 
+    await test("a clip can keep its own text settings; Settings keeps the defaults (settings per clip)", async () => {
+      const got = await p.evaluate(async () => {
+        const wait = () => new Promise((r) => setTimeout(r, 100));
+        const frameSize = () => getComputedStyle(document.getElementById("readerFrame").contentDocument.documentElement).getPropertyValue("--reader-fs").trim();
+        const usual = readingPrefs(null).size;
+        const out = { start: readingScope(state.open) };
+        setScope("clip");
+        setReading({ size: usual + 4, layout: "pages" });
+        await wait();
+        out.own = [readingScope(state.open), readingPrefs().size, readingPrefs(null).size, readingPrefs(null).layout, frameSize()];
+        // Settings' copy shows and sets the defaults.
+        const box = readingControls(false);
+        out.settings = box.querySelector('.range[data-pref="size"]').value;
+        out.settingsScope = box.querySelectorAll(".rc-scope").length;
+        // The Aa sheet's Layout and Text start with the switch.
+        out.sheet = readingControls(true).querySelectorAll(".rc-scope").length;
+        setScope("all");
+        await wait();
+        out.back = [readingScope(state.open), readingPrefs().size, readingPrefs().layout, frameSize()];
+        document.querySelector("#toast .toast-act").click();
+        await wait();
+        out.undone = [readingScope(state.open), readingPrefs().size];
+        useEverywhere();
+        await wait();
+        out.everywhere = [readingScope(state.open), readingPrefs(null).size];
+        document.querySelector("#toast .toast-act").click();
+        setScope("all");
+        await wait();
+        out.after = [readingScope(state.open), readingPrefs(null).size, readingPrefs().layout];
+        return { usual, ...out };
+      });
+      const u = got.usual;
+      assert.strictEqual(got.start, "all");
+      assert.deepStrictEqual(got.own, ["clip", u + 4, u, "scroll", u + 4 + "px"]);
+      assert.strictEqual(Number(got.settings), u, "Settings showed the clip's size");
+      assert.strictEqual(got.settingsScope, 0);
+      assert.strictEqual(got.sheet, 2);
+      assert.deepStrictEqual(got.back, ["all", u, "scroll", u + "px"]);
+      assert.deepStrictEqual(got.undone, ["clip", u + 4]);
+      assert.deepStrictEqual(got.everywhere, ["all", u + 4]);
+      assert.deepStrictEqual(got.after, ["all", u, "scroll"]);
+    });
+
     await test("alignment and letter, word and paragraph spacing reach the clip (1.19.0)", async () => {
       const got = await p.evaluate(async () => {
         setReading({ align: "justify", letters: 0.05, words: 0.2, paras: 2 });

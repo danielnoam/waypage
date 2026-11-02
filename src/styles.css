@@ -1128,6 +1128,13 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 .reading-controls.split .rc-part > .overline:not(.rc-sub) { display: none; }
 .rc-part > .overline { margin: var(--s-2) 0 calc(-1 * var(--s-1)) var(--s-1); }
 .reader-settings { display: flex; flex-direction: column; gap: var(--s-4); }
+/* Settings per clip: which settings the open clip uses, over a line. */
+.rc-scope { display: flex; flex-direction: column; gap: var(--s-2); padding-bottom: var(--s-4); margin-bottom: var(--s-1); border-bottom: 1px solid var(--line); }
+.rc-scope-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--tap); }
+.rc-scope-head .rc-label { width: auto; min-width: 0; }
+.rc-scope-head .rc-value { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-scope-head .btn-quiet[hidden] { display: none; }
+.rc-rule { border-top: 1px solid var(--line); margin: var(--s-1) 0; }
 .reader-settings .rc-part > .overline { display: none; }
 .reader-settings .rc-part > .overline.rc-sub { display: block; }
 .rc-part > .overline.rc-sub { margin-top: var(--s-4); }

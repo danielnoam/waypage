@@ -1146,6 +1146,7 @@ async function renameFolder(raw) {
   const clash = allFolders().find((n) => sameTag(n, name) && !sameTag(n, old));
   if (clash) { toast("There's already a collection called " + clash + "."); return false; }
   for (const p of folderPages(old)) p.folder = name;
+  renameReadingSet(old, name);
   C.platform.widgets.renamed(old, name);
   const entry = newFor(old);
   if (entry && !sameTag(old, name)) { setNewFor(name, entry); setNewFor(old, null); }

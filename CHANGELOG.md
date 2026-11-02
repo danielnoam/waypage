@@ -4,6 +4,14 @@ All notable changes to Carry-on. Newest first.
 
 ## Unreleased
 
+### Added
+- Settings per clip, per collection and per book. At the top of the Aa
+  sheet's Layout and Text, "Settings for" picks This clip (This book for
+  a file), Collection or Everywhere; a change then stays there. Font,
+  size, spacing, alignment, margins and Scroll or Pages can differ; the
+  theme and Narrate stay the same for all. Use everywhere makes a clip's
+  settings the default. They're kept on this device, like the defaults.
+
 ### Fixed
 - PDFs: a pinch zoom landed off the spot under your fingers, further off
   the deeper into the PDF you were (a quarter of a page by page 25). It
