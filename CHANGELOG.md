@@ -2,7 +2,7 @@
 
 All notable changes to Carry-on. Newest first.
 
-## Unreleased
+## [1.52.0] - 2026-11-02
 
 ### Added
 - Picking clips in a collection: a ⋯ beside Select all with Read,
