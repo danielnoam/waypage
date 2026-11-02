@@ -166,7 +166,7 @@
     try {
       res = await C.platform.fetchText(url, { headers: { Accept: ACCEPT } });
     } catch (e) {
-      throw new FeedError(C.platform.canFetchPages
+      throw new FeedError(C.platform.canReadPages
         ? "Couldn't reach " + siteOf(url) + ". Check the address, or try again when you're online."
         : "This browser can't reach " + siteOf(url) + ". Follow the feed in Waypage on your phone.");
     }

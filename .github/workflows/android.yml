@@ -7,7 +7,7 @@ name: Android app
 on:
   push:
     branches: ["**"]
-    paths-ignore: ["**.md", "test/**", ".claude/**"]
+    paths-ignore: ["**.md", "test/**", ".claude/**", "worker/**", ".github/workflows/worker.yml"]
   workflow_dispatch:
 
 permissions:

@@ -391,7 +391,7 @@ async function previewPost(f, it) {
   let got;
   try { got = await C.save.preview(it.url); }
   catch (e) {
-    toast(e instanceof C.save.SaveError ? e.message : C.platform.canFetchPages
+    toast(e instanceof C.save.SaveError ? e.message : C.platform.canReadPages
       ? "Couldn't open that post. Try the browser button." : "This browser can't reach that site. Try the browser button.");
     return;
   } finally { previewing = null; }
