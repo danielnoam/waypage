@@ -1080,7 +1080,12 @@
   // ---- Pages ----
 
   const rtl = () => !!doc && getComputedStyle(doc.body).direction === "rtl";
-  const width = () => frame.contentWindow.innerWidth;
+  // The frame's real width, which a phone's isn't a whole number of px
+  // (1080 px at 2.625x is 411.43), where innerWidth is. The columns repeat
+  // at the real one, so stepping a page by innerWidth slid the text 0.4 px
+  // further off each page: a margin growing as you went, and far in a long
+  // clip (1.52.1).
+  const width = () => doc.documentElement.getBoundingClientRect().width || frame.contentWindow.innerWidth;
   const pages = () => Math.max(1, Math.round(doc.documentElement.scrollWidth / width()));
   // While a turn runs, the page is the one it's going to, so quick taps add up.
   const page = () => (turning ? turning.to : Math.round(Math.abs(frame.contentWindow.scrollX) / width()));
@@ -1156,7 +1161,17 @@
     root.style.setProperty("--co-col", col + "px");
     root.style.setProperty("--co-side", side + "px");
     root.style.setProperty("--co-gap", 2 * side + "px");
+    // The last column ends short of a whole screen (no side after it), so
+    // the last page couldn't be scrolled to and sat a side's width off.
+    // A speck at the end of the last page makes the clip a whole number of
+    // pages wide.
+    const end = doc.getElementById("co-end") || doc.createElement("i");
+    end.id = "co-end";
+    end.style.cssText = "position:absolute;top:0;width:1px;height:1px;visibility:hidden;pointer-events:none;left:auto;right:auto";
+    end.style[rtl() ? "right" : "left"] = "0px";
+    if (!end.parentNode) doc.body.append(end);
     const n = pages();
+    end.style[rtl() ? "right" : "left"] = (n * w - 1) + "px";
     goPage(Math.round(keep * (n - 1)), true);
   }
 
@@ -1417,6 +1432,8 @@
     lazy(!paged);
     if (paged) relayout(at);
     else {
+      const end = doc.getElementById("co-end");
+      if (end) end.remove();
       const w = frame.contentWindow;
       w.scrollTo(0, at * (doc.documentElement.scrollHeight - w.innerHeight));
     }
