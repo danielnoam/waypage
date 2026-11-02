@@ -14,6 +14,13 @@ All notable changes to Carry-on. Newest first.
   wrote it, its points and date, with replies indented under it.
 - A GitHub code file saves as the code itself, and a GitHub repo as its
   README, named after the repo.
+- More discussions save whole: a topic on any Discourse forum (the Rust,
+  Python, Home Assistant and Obsidian forums and thousands more), a
+  Bluesky or Mastodon post with its replies (an author's own thread reads
+  as one post), and a Lobsters story with its comments.
+- An arXiv link saves the whole paper from its web version, formulas as
+  their LaTeX, instead of only the abstract. A paper without one still
+  saves its abstract page.
 
 ### Changed
 - Code blocks in clips have tighter lines.
