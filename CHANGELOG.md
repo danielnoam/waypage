@@ -2,6 +2,13 @@
 
 All notable changes to Carry-on. Newest first.
 
+## Unreleased
+
+### Fixed
+- A clip deleted while a sync was running came straight back when the
+  sync finished, so it had to be deleted twice. It now stays deleted,
+  and the next sync deletes it on your other devices.
+
 ## [1.50.2] - 2026-11-01
 
 ### Added

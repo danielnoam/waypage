@@ -267,7 +267,7 @@ bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js` and `pptx.test.js` test their areas in Node. The Tests workflow runs them all on every PR; a PR that only
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js` and `pptx.test.js` test their areas in Node. The Tests workflow runs them all on every PR; a PR that only
 changes Markdown runs just `build.test.js` and `docs.test.js`.
 
 `node tools/shots.js` retakes the README's pictures at 1280 px and 390 px
@@ -380,7 +380,9 @@ area.
   run's result without awaiting anything; update clip objects in place,
   since the open reader and menus hold them; write the waiting list before
   the base, or a cut-off run reads as deletions; a library that can't be
-  reached reads as empty, so sync refuses to run.
+  reached reads as empty, so sync refuses to run; a clip that was in the
+  library during a run and isn't at a settle was deleted meanwhile, and
+  the settle must not put it back (`syncdelete.test.js`).
 - **A Blob writes a string byte above 127 as two:** binary formats (the
   PDF writer) use plain ASCII strings or bytes.
 - **The Settings window from 700 px:** `#settingsWin` is `display:
