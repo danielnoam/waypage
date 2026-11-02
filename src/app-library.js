@@ -742,6 +742,7 @@ const ICONS = {
   tag: '<path d="M3 12V4h8l9 9-8 8z"/><circle cx="7.5" cy="8.5" r="1.2"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
   star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.7l5.9-.9z"/>',
   mark: '<path d="M14.5 4.5l5 5L11 18H6v-5z"/><path d="M4 21h16"/>',
   translate: '<path d="M4 5h9M8.5 3v2M11 5c-1 4-3.5 7-7 8.5M6.5 8.5c1.2 2 3 3.5 5 4.5"/><path d="M13 21l4-9 4 9M14.5 18h5"/>',
@@ -969,6 +970,7 @@ function tapPages(ids, open) {
 function startSelect(ids, fromHistory) {
   if (state.select) return;
   state.select = new Set(ids || []);
+  lastTap = ids && ids.length ? ids : null;
   if (!fromHistory) history.pushState({ view: "select", folder: state.folder || undefined }, "");
   $("selectHead").hidden = false;
   $("selectBar").hidden = false;
@@ -982,6 +984,7 @@ function startSelect(ids, fromHistory) {
 function endSelect() {
   if (!state.select) return;
   state.select = null;
+  closeSelectMenu(true);
   for (const [id, edge] of [["selectHead", "top"], ["selectBar", "bottom"]]) M.edgeOut($(id), edge).then(() => { if (!state.select) $(id).hidden = true; });
   renderLibrary();
   if (state.folder) renderFolder();
@@ -1009,6 +1012,7 @@ function paintPicks() {
   const scope = state.folder ? folderPages(state.folder) : onScreen;
   $("selectCount").textContent = list.length ? countLine(list.length) + " picked" : "Pick clips";
   $("selectAll").textContent = scope.length && scope.every((p) => state.select.has(p.id)) ? "Pick none" : "Select all";
+  $("selectMore").hidden = !state.folder;
   $("selReadLabel").textContent = list.length && list.every((p) => p.finished) ? "Mark unread" : "Mark read";
   for (const id of ["selTags", "selFolder", "selRead", "selEdit", "selDelete"]) $(id).disabled = !list.length;
 }
@@ -1018,6 +1022,74 @@ function selectAll() {
   const all = scope.every((p) => state.select.has(p.id));
   for (const p of scope) all ? state.select.delete(p.id) : state.select.add(p.id);
   paintPicks();
+}
+
+// The ⋯ beside Select all, in a collection: Read and Unread pick exactly
+// those clips; Previous adds every clip above the latest one picked.
+function pickWhere(test) {
+  state.select = new Set(folderPages(state.folder).filter(test).map((p) => p.id));
+  lastTap = null;
+  paintPicks();
+}
+
+function pickAbove() {
+  const nodes = [...listNow().querySelectorAll("[data-ids]")];
+  const ids = (n) => n.dataset.ids.split(",");
+  const isPicked = (n) => ids(n).every((id) => state.select.has(id));
+  let at = lastTap ? nodes.findIndex((n) => n.dataset.ids === lastTap.join(",")) : -1;
+  if (at < 0 || !isPicked(nodes[at])) at = nodes.findLastIndex(isPicked);
+  if (at < 0) return;
+  for (const n of nodes.slice(0, at)) for (const id of ids(n)) state.select.add(id);
+  paintPicks();
+}
+
+function openSelectMenu() {
+  if ($("selectPop")) { closeSelectMenu(); return; }
+  const scope = folderPages(state.folder);
+  const item = (icon, label, onclick, disabled) => {
+    const b = el("button", { class: "pop-item", type: "button", role: "menuitem", tabindex: "-1",
+      onclick: () => { closeSelectMenu(true); onclick(); } },
+      el("span", { class: "pop-icon", "aria-hidden": "true" }), el("span", { class: "pop-label" }, label));
+    b.firstChild.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS[icon] + "</svg>";
+    b.disabled = !!disabled;
+    return b;
+  };
+  const pop = el("div", { class: "pop-menu", id: "selectPop", role: "menu", "aria-label": "More picks" },
+    item("check", "Read", () => pickWhere((p) => p.finished), !scope.some((p) => p.finished)),
+    item("select", "Unread", () => pickWhere((p) => !p.finished), !scope.some((p) => !p.finished)),
+    item("up", "Previous", pickAbove, !picked().length));
+  const more = $("selectMore"), at = more.getBoundingClientRect();
+  pop.style.top = at.bottom + 4 + "px";
+  pop.style.right = Math.max(8, innerWidth - at.right) + "px";
+  document.body.append(pop);
+  more.setAttribute("aria-expanded", "true");
+  M.popFrom(pop, at);
+  const items = () => [...pop.querySelectorAll(".pop-item:not(:disabled)")];
+  if (items()[0]) items()[0].focus();
+  pop.addEventListener("keydown", (e) => {
+    const all = items(), i = all.indexOf(document.activeElement);
+    const to = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: all.length - 1 }[e.key];
+    if (to !== undefined && all.length) { e.preventDefault(); all[(to + all.length) % all.length].focus(); }
+    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeSelectMenu(); }
+    else if (e.key === "Tab") closeSelectMenu(true);
+  });
+  setTimeout(() => addEventListener("pointerdown", outsideSelectMenu, true));
+}
+
+function outsideSelectMenu(e) {
+  const pop = $("selectPop");
+  if (pop && !pop.contains(e.target) && !$("selectMore").contains(e.target)) closeSelectMenu(true);
+}
+
+function closeSelectMenu(away) {
+  const pop = $("selectPop");
+  removeEventListener("pointerdown", outsideSelectMenu, true);
+  if (!pop) return;
+  pop.removeAttribute("id");
+  pop.style.pointerEvents = "none";
+  $("selectMore").setAttribute("aria-expanded", "false");
+  M.popInto(pop, $("selectMore").getBoundingClientRect()).then(() => pop.remove());
+  if (!away) $("selectMore").focus();
 }
 
 async function markRead(list, read) {

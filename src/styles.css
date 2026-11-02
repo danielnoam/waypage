@@ -2387,7 +2387,7 @@ kbd {
   /* Picking several: one bar at the top, the actions at its end. */
   .select-head {
     top: var(--s-4); left: calc(var(--lib-left) + var(--lib-pad)); right: var(--lib-pad);
-    height: 52px; padding: 0 var(--s-2); justify-content: flex-start; gap: var(--s-4);
+    height: 52px; padding: 0 var(--s-2); justify-content: flex-start; gap: var(--s-2);
     background: var(--bar); border: 0; border-radius: var(--r-md);
   }
   .select-count { flex: none; }

@@ -8,8 +8,8 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="src/fonts.css?v=1.51.0">
-  <link rel="stylesheet" href="src/styles.css?v=1.51.0">
+  <link rel="stylesheet" href="src/fonts.css?v=1.52.0">
+  <link rel="stylesheet" href="src/styles.css?v=1.52.0">
 </head>
 <body>
   <div class="app" id="libraryView">
@@ -308,6 +308,9 @@
     <button class="btn-text" id="selectCancel" type="button">Cancel</button>
     <p class="select-count" id="selectCount" role="status"></p>
     <button class="btn-text" id="selectAll" type="button">Select all</button>
+    <button class="icon-btn" id="selectMore" type="button" aria-label="More picks" aria-haspopup="menu" aria-expanded="false" hidden>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg>
+    </button>
   </div>
   <div class="select-bar" id="selectBar" role="toolbar" aria-label="Selected clips" hidden>
     <button class="select-act" id="selTags" type="button"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12V4h8l9 9-8 8z"></path><circle cx="7.5" cy="8.5" r="1.2"></circle></svg>Tags</button>
@@ -377,37 +380,37 @@
     </div>
   </section>
 
-  <script src="src/platform.js?v=1.51.0"></script>
-  <script src="src/motion.js?v=1.51.0"></script>
-  <script src="src/vendor/Readability.js?v=1.51.0"></script>
-  <script src="src/store.js?v=1.51.0"></script>
-  <script src="src/save.js?v=1.51.0"></script>
-  <script src="src/feeds.js?v=1.51.0"></script>
-  <script src="src/backup.js?v=1.51.0"></script>
-  <script src="src/imports.js?v=1.51.0"></script>
-  <script src="src/dict.js?v=1.51.0"></script>
-  <script src="src/sync.js?v=1.51.0"></script>
-  <script src="src/drive.js?v=1.51.0"></script>
-  <script src="src/qr.js?v=1.51.0"></script>
-  <script src="src/stats.js?v=1.51.0"></script>
-  <script src="src/epub.js?v=1.51.0"></script>
-  <script src="src/files.js?v=1.51.0"></script>
-  <script src="src/pdf.js?v=1.51.0"></script>
-  <script src="src/pptx.js?v=1.51.0"></script>
-  <script src="src/reader.js?v=1.51.0"></script>
-  <script src="src/app.js?v=1.51.0"></script>
-  <script src="src/app-reading.js?v=1.51.0"></script>
-  <script src="src/app-cards.js?v=1.51.0"></script>
-  <script src="src/app-downloads.js?v=1.51.0"></script>
-  <script src="src/app-search.js?v=1.51.0"></script>
-  <script src="src/app-draw.js?v=1.51.0"></script>
-  <script src="src/app-jobs.js?v=1.51.0"></script>
-  <script src="src/app-reader.js?v=1.51.0"></script>
-  <script src="src/app-library.js?v=1.51.0"></script>
-  <script src="src/app-saving.js?v=1.51.0"></script>
-  <script src="src/app-places.js?v=1.51.0"></script>
-  <script src="src/app-settings.js?v=1.51.0"></script>
-  <script src="src/app-lock.js?v=1.51.0"></script>
-  <script src="src/app-start.js?v=1.51.0"></script>
+  <script src="src/platform.js?v=1.52.0"></script>
+  <script src="src/motion.js?v=1.52.0"></script>
+  <script src="src/vendor/Readability.js?v=1.52.0"></script>
+  <script src="src/store.js?v=1.52.0"></script>
+  <script src="src/save.js?v=1.52.0"></script>
+  <script src="src/feeds.js?v=1.52.0"></script>
+  <script src="src/backup.js?v=1.52.0"></script>
+  <script src="src/imports.js?v=1.52.0"></script>
+  <script src="src/dict.js?v=1.52.0"></script>
+  <script src="src/sync.js?v=1.52.0"></script>
+  <script src="src/drive.js?v=1.52.0"></script>
+  <script src="src/qr.js?v=1.52.0"></script>
+  <script src="src/stats.js?v=1.52.0"></script>
+  <script src="src/epub.js?v=1.52.0"></script>
+  <script src="src/files.js?v=1.52.0"></script>
+  <script src="src/pdf.js?v=1.52.0"></script>
+  <script src="src/pptx.js?v=1.52.0"></script>
+  <script src="src/reader.js?v=1.52.0"></script>
+  <script src="src/app.js?v=1.52.0"></script>
+  <script src="src/app-reading.js?v=1.52.0"></script>
+  <script src="src/app-cards.js?v=1.52.0"></script>
+  <script src="src/app-downloads.js?v=1.52.0"></script>
+  <script src="src/app-search.js?v=1.52.0"></script>
+  <script src="src/app-draw.js?v=1.52.0"></script>
+  <script src="src/app-jobs.js?v=1.52.0"></script>
+  <script src="src/app-reader.js?v=1.52.0"></script>
+  <script src="src/app-library.js?v=1.52.0"></script>
+  <script src="src/app-saving.js?v=1.52.0"></script>
+  <script src="src/app-places.js?v=1.52.0"></script>
+  <script src="src/app-settings.js?v=1.52.0"></script>
+  <script src="src/app-lock.js?v=1.52.0"></script>
+  <script src="src/app-start.js?v=1.52.0"></script>
 </body>
 </html>
