@@ -298,6 +298,7 @@ Promise.all([C.platform.ready, firstIndex]).then(([, [pages]]) => {
   }
   state.pages = Array.isArray(pages) ? pages : [];
   loaded = true;
+  pruneReadingFor(state.pages);
   setTimeout(() => oneEach().then((n) => { if (n) toast("Removed " + (n === 1 ? "a clip that was" : n + " clips that were") + " saved twice."); }), 1200);
   if (history.state && history.state.view) history.replaceState(null, "");
   paintPlace();

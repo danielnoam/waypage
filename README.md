@@ -107,6 +107,7 @@ Each section below shows the computer (left) and the phone (right).
 - Themes: Paper, Sepia, Slate, Solarized, High contrast, Night, Black, Dusk and Solarized Dark, or Auto to follow the device.
 - Ten reading fonts, four Hebrew ones, and your own.
 - Size (or pinch), weight, line and letter spacing, margins, alignment, hyphenation.
+- Any of them, and Scroll or Pages, per clip, per collection or per book.
 - Dim pictures in dark themes.
 
 ## Skim

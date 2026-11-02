@@ -167,6 +167,15 @@ Pages mode, Narrate's sentence tracking) is done from the app's document
 on the frame's DOM. The reading place is the paragraph on the middle
 line, with its own timestamp so sync can merge it.
 
+The reading look (`readingPrefs(p)` in `app-reading.js`) is Settings'
+defaults, then the clip's collection's own, then the clip's own, for
+the text settings, margins and Scroll or Pages only. The own ones are
+in `waypage.readingFor` on this device (not synced or backed up); a
+collection's follow a rename, and ones for clips or collections that
+are gone are dropped at start. Settings' copy of the controls always
+sets the defaults; the Aa sheet's sets wherever the open clip's come
+from.
+
 ## Files: EPUB, PDF, comics
 
 `files.js` opens a person's own files: EPUB, MOBI/AZW3 (foliate-js),

@@ -338,14 +338,14 @@ async function addFontFile(file) {
   try { await new FontFace("Waypage check", bytes).load(); } catch (e) { toast("That font didn't load. Try another file."); return; }
   try { await C.store.addFont(name, bytes); } catch (e) { toast("Couldn't keep the font. Try again."); return; }
   await loadUserFonts();
-  setReading({ font: "user:" + name });
+  setReading({ font: "user:" + name }, true);
   if (state.section === "reading") renderSection();
   toast("Added " + name.replace(FONT_EXT, "") + ". It's your reading font now.");
 }
 async function removeFontFile(name) {
   if (!confirm("Remove the font " + name.replace(FONT_EXT, "") + "?")) return;
   try { await C.store.removeFont(name); } catch (e) { toast("Couldn't remove it. Try again."); return; }
-  if (readingPrefs().font === "user:" + name) setReading({ font: READING_DEFAULT.font });
+  if (readingPrefs(null).font === "user:" + name) setReading({ font: READING_DEFAULT.font }, true);
   await loadUserFonts();
   if (state.section === "reading") renderSection();
 }
@@ -1070,7 +1070,7 @@ const SECTIONS = {
   appearance: { title: "Appearance", build: () => [themeGroup(), autoGroup(), looksGroup()],
     value: () => themeName(state.theme) },
   reading: { title: "Reading", build: () => [readingGroup(), fontsGroup(), dictsGroup(), aloudGroup()],
-    value: () => { const r = readingPrefs(); return (FONTS.find((f) => f.value === r.font) || FONTS[0]).label + " · " + r.size + " px"; } },
+    value: () => { const r = readingPrefs(null); return (FONTS.find((f) => f.value === r.font) || FONTS[0]).label + " · " + r.size + " px"; } },
   library: { title: "Library", build: () => [
     section("Layout", null,
       el("div", { class: "group" }, el("div", { class: "rc-list" },

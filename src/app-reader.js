@@ -372,6 +372,7 @@ function show(p, html) {
   if (skim) { C.reader.settle(); skimDrop(); }
   closeSkim();
   state.open = p;
+  paintReading(false);
   paintPdfDark();
   $("aloudPlay").style.visibility = "";
   // Opening counts as reading for the order of things (sort by read, the
@@ -1088,6 +1089,7 @@ function closeReader() {
   if (from) player.style.visibility = "hidden";
   stopGlide();
   state.open = null;
+  paintReading(false);
   paintPdfDark();
   volumeWatch();
   showAloudBar(from);
@@ -2170,30 +2172,47 @@ function slider(label, min, max, step, onvalue, pref) {
 const TEXT_PREFS = ["font", "hebrew", "size", "weight", "align", "hyphens", "spacing", "letters", "words", "paras"];
 const prefsOf = (o, keys) => Object.fromEntries(keys.map((k) => [k, o[k]]));
 
+// Settings per clip (Unreleased): one row at the top of the Aa sheet's
+// Layout and Text, where the open clip's settings come from.
+function scopeRow() {
+  const p = state.open;
+  const d = dropdown({ label: "Applies to", cls: "field-pick font-pick scope-pick", value: readingScope(p), onpick: setScope, options: [
+    { value: "all", label: "Everywhere" },
+    { value: "clip", label: isBook(p) ? "This book" : "This clip" },
+    ...(p.folder ? [{ value: "set", label: "This collection" }] : [])] });
+  return el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Applies to"), d);
+}
+
 let readingGroups = 0;
 function readingControls(withTheme) {
-  const r = readingPrefs();
+  // Settings' own copy always sets the defaults; the Aa sheet sets
+  // wherever the open clip's settings come from.
+  const all = !withTheme;
+  const r = readingPrefs(all ? null : state.open);
   const id = "rc" + ++readingGroups;
+  const set = (change) => setReading(change, all);
+  const scoped = !all && ownable(state.open);
   const label = (text, key) => el("span", { class: "rc-label" }, text, key ? el("span", { class: "rc-value", "data-value": key }) : null);
   const row = (text, control, key) => el("div", { class: "rc-row" }, label(text, key), control);
   const stack = (text, control) => el("div", { class: "rc-row stack" }, label(text), control);
-  const nudge = (d) => setReading({ size: clamp(readingPrefs().size + d, SIZE_MIN, SIZE_MAX) });
+  const nudge = (d) => set({ size: clamp(readingPrefs(all ? null : state.open).size + d, SIZE_MIN, SIZE_MAX) });
   const part = (name, title, ...rows) => el("div", { class: "rc-part", "data-part": name },
     el("h2", { class: "overline" }, title), ...rows);
   // Fonts are drop-downs (0.34.0), each name set in its own face.
   const fontPick = (pref, label, options) => {
-    const d = dropdown({ label, cls: "field-pick font-pick", options, value: r[pref], onpick: (v) => setReading({ [pref]: v }) });
+    const d = dropdown({ label, cls: "field-pick font-pick", options, value: r[pref], onpick: (v) => set({ [pref]: v }) });
     d.dataset.pref = pref;
     return d;
   };
   const layout = part("layout", "Layout",
+    scoped ? scopeRow() : null,
     row("Show as", seg(id + "-layout", "Show as", [
       { value: "scroll", label: "Scroll" }, { value: "pages", label: "Pages" },
-    ], r.layout, (v) => setReading({ layout: v }))),
+    ], r.layout, (v) => set({ layout: v }))),
     volumeSwitch(),
     row("Margins", seg(id + "-margins", "Margins", [
       { value: "narrow", label: "Narrow" }, { value: "normal", label: "Normal" }, { value: "wide", label: "Wide" },
-    ], r.margins, (v) => setReading({ margins: v }))),
+    ], r.margins, (v) => set({ margins: v }))),
     ...(brightSwitch(id) || []),
     // Under Layout since 1.47.0: it adds a line to the page, not to the type.
     row("Time left in", seg(id + "-leftIn", "Time left in", [
@@ -2204,18 +2223,19 @@ function readingControls(withTheme) {
     // beside the text.
     wide.matches ? stack("Pages on a wide window", seg(id + "-spread", "Pages on a wide window", [
       { value: "one", label: "One" }, { value: "two", label: "Two" }, { value: "auto", label: "Auto" },
-    ], r.spread, (v) => setReading({ spread: v }))) : null,
+    ], r.spread, (v) => set({ spread: v }))) : null,
     wide.matches ? el("label", { class: "rc-row switch-row" },
       el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Contents beside the text"),
         el("span", { class: "choice-note" }, "On windows 1024 px and wider")),
       el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "rail", checked: r.rail,
-        onchange: (e) => setReading({ rail: e.target.checked }) })) : null,
+        onchange: (e) => set({ rail: e.target.checked }) })) : null,
     withTheme ? stack("Theme", seg(id + "-theme", "Theme",
       [{ value: "system", label: "Auto", swatch: autoSwatch(), auto: true }, ...themeOptions(THEMES)],
       state.theme, (v) => { setTheme(v); syncThemeInputs(); }, "themes scroll")) : null,
     // Only in the reader's own sheet, where a PDF is open.
     withTheme ? pdfDarkSwitch() : null);
   const text = part("text", "Text",
+    scoped ? scopeRow() : null,
     row("Font", fontPick("font", "Font",
       FONTS.map((f) => ({ value: f.value, label: f.label, style: "font-family: " + f.family + ", var(--sans)" })))),
     row("Hebrew", fontPick("hebrew", "Hebrew font",
@@ -2224,27 +2244,28 @@ function readingControls(withTheme) {
     row("Alignment", fontPick("align", "Alignment", ALIGNS)),
     row("Text size", el("div", { class: "stepper" },
       el("button", { class: "step-btn small", type: "button", "data-step": "-1", "aria-label": "Smaller text", onclick: () => nudge(-1) }, "A"),
-      slider("Text size", SIZE_MIN, SIZE_MAX, 1, (v) => setReading({ size: v }), "size"),
+      slider("Text size", SIZE_MIN, SIZE_MAX, 1, (v) => set({ size: v }), "size"),
       el("button", { class: "step-btn large", type: "button", "data-step": "1", "aria-label": "Larger text", onclick: () => nudge(1) }, "A")), "size"),
     // Text weight (1.45.0), for thin fonts on a dark theme or a dim
     // screen. Fonts made only as regular and bold go in one step.
     row("Weight", el("div", { class: "stepper" },
-      slider("Text weight", SPACES.weight.min, SPACES.weight.max, SPACES.weight.step, (v) => setReading({ weight: v }), "weight")), "weight"),
+      slider("Text weight", SPACES.weight.min, SPACES.weight.max, SPACES.weight.step, (v) => set({ weight: v }), "weight")), "weight"),
     el("label", { class: "rc-row switch-row" },
       el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Hyphenate"),
         el("span", { class: "choice-note" }, "Breaks long words at the line's end, in the clip's language")),
       el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "hyphens", checked: r.hyphens,
-        onchange: (e) => setReading({ hyphens: e.target.checked }) })),
+        onchange: (e) => set({ hyphens: e.target.checked }) })),
     pinchSwitch(),
     // Spacing (1.19.0), headed on its own so the labels stay one word.
     el("h2", { class: "overline rc-sub" }, "Spacing"),
     row("Lines", el("div", { class: "stepper" },
-      slider("Line spacing", SPACING_MIN, SPACING_MAX, 0.05, (v) => setReading({ spacing: v }), "spacing")), "spacing"),
+      slider("Line spacing", SPACING_MIN, SPACING_MAX, 0.05, (v) => set({ spacing: v }), "spacing")), "spacing"),
     ...[["letters", "Letters", "Letter spacing"], ["words", "Words", "Word spacing"], ["paras", "Paragraphs", "Paragraph spacing"]].map(([k, name, aria]) =>
       row(name, el("div", { class: "stepper" },
-        slider(aria, SPACES[k].min, SPACES[k].max, SPACES[k].step, (v) => setReading({ [k]: v }), k)), k)),
-    el("button", { class: "btn-quiet reset", type: "button", onclick: () => setReading(prefsOf(READING_DEFAULT, TEXT_PREFS)) }, "Reset text"));
+        slider(aria, SPACES[k].min, SPACES[k].max, SPACES[k].step, (v) => set({ [k]: v }), k)), k)),
+    el("button", { class: "btn-quiet reset", type: "button", onclick: () => set(prefsOf(READING_DEFAULT, TEXT_PREFS)) }, "Reset text"));
   const box = el("div", { class: "reading-controls" }, layout, text);
+  if (all) box.dataset.all = "";
   syncReadingControls(box);
   requestAnimationFrame(() => box.querySelectorAll(".seg.scroll").forEach(showPicked));
   return box;
@@ -2257,7 +2278,10 @@ function showPicked(row) {
 }
 
 function syncReadingControls(box) {
-  const r = readingPrefs();
+  const p = "all" in box.dataset ? null : state.open;
+  const r = readingPrefs(p);
+  const scope = readingScope(p);
+  box.querySelectorAll(".scope-pick").forEach((d) => d.set(scope));
   box.querySelectorAll(".volume-row").forEach((n) => { n.style.display = r.layout === "pages" ? "" : "none"; });
   const shown = {
     size: r.size + " px", spacing: r.spacing.toFixed(2),
@@ -2280,7 +2304,7 @@ function syncReadingControls(box) {
   for (const k of ["layout", "margins", "spread"]) {
     box.querySelectorAll('input[name$="-' + k + '"]').forEach((i) => { i.checked = i.value === r[k]; });
   }
-  box.querySelectorAll(".font-pick").forEach((d) => d.set(r[d.dataset.pref]));
+  box.querySelectorAll(".font-pick[data-pref]").forEach((d) => d.set(r[d.dataset.pref]));
   // Reset text leaves the layout as it is.
   box.querySelector(".reset").disabled = TEXT_PREFS.every((k) => r[k] === READING_DEFAULT[k]);
 }
