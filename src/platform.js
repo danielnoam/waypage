@@ -148,7 +148,14 @@
   const PROXY_URL = "https://waypage-fetch.danielnoam1999.workers.dev/";
   const PROXY = native ? "" : PROXY_URL;
   const DIRECT = /^(api\.github\.com|raw\.githubusercontent\.com)$/i;
-  const hostOf = (url) => { try { return new URL(url).hostname; } catch (e) { return ""; } };
+  // This site itself and the computer it runs on (the dev server, the
+  // tests) are fetched directly too; the proxy refuses local addresses.
+  function direct(url) {
+    try {
+      const u = new URL(url, location.href);
+      return u.origin === location.origin || DIRECT.test(u.hostname) || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(u.hostname);
+    } catch (e) { return true; }
+  }
 
   // A page's HTML as text, plus the final URL after redirects. Throws a
   // TypeError on a network failure, like fetch does, so callers handle both
@@ -170,7 +177,7 @@
       return { status: res.status, url: res.url || url, text: body };
     }
     delete headers["User-Agent"];
-    if (!PROXY || DIRECT.test(hostOf(url))) {
+    if (!PROXY || direct(url)) {
       const res = await deadline(fetch(url, { headers }), PAGE_TIMEOUT);
       return { status: res.status, url: res.url || url, text: await res.text() };
     }
