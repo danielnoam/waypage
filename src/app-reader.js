@@ -373,7 +373,7 @@ function show(p, html) {
   closeSkim();
   state.open = p;
   paintReading(false);
-  paintPdfDark();
+  paintTheme();
   $("aloudPlay").style.visibility = "";
   // Opening counts as reading for the order of things (sort by read, the
   // sidebar, Continue reading). The place has a time of its own,
@@ -1090,7 +1090,7 @@ function closeReader() {
   stopGlide();
   state.open = null;
   paintReading(false);
-  paintPdfDark();
+  paintTheme();
   volumeWatch();
   showAloudBar(from);
   // The library redraws (where you got to) before the reader shrinks
@@ -2231,7 +2231,7 @@ function readingControls(withTheme) {
         onchange: (e) => set({ rail: e.target.checked }) })) : null,
     withTheme ? stack("Theme", seg(id + "-theme", "Theme",
       [{ value: "system", label: "Auto", swatch: autoSwatch(), auto: true }, ...themeOptions(THEMES)],
-      state.theme, (v) => { setTheme(v); syncThemeInputs(); }, "themes scroll")) : null,
+      readerThemeOn() ? state.readerTheme : state.theme, (v) => { (readerThemeOn() ? setReaderTheme : setTheme)(v); syncThemeInputs(); }, "themes scroll")) : null,
     // Only in the reader's own sheet, where a PDF is open.
     withTheme ? pdfDarkSwitch() : null);
   const text = part("text", "Text",
@@ -2311,7 +2311,9 @@ function syncReadingControls(box) {
 
 // The theme lives in two places (Aa and Settings); keep both radios true.
 function syncThemeInputs() {
-  document.querySelectorAll('input[name$="-theme"], input[name="' + THEME_KEY + '"]').forEach((i) => { i.checked = i.value === state.theme; });
+  const inReader = readerThemeOn() ? state.readerTheme : state.theme;
+  document.querySelectorAll('input[name$="-theme"]').forEach((i) => { i.checked = i.value === inReader; });
+  document.querySelectorAll('input[name="' + THEME_KEY + '"]').forEach((i) => { i.checked = i.value === state.theme; });
 }
 
 // The reader's settings (0.34.0): Layout, Text and Read aloud, one at a

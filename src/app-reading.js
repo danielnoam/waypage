@@ -230,4 +230,4 @@ function pruneReadingFor(pages) {
 }
 paintReading();
 if (C.reader) C.reader.setSpread(readingPrefs().spread);
-if (darkQuery && darkQuery.addEventListener) darkQuery.addEventListener("change", () => { if (state.theme === "system") paintTheme("system"); });
+if (darkQuery && darkQuery.addEventListener) darkQuery.addEventListener("change", () => paintTheme());
