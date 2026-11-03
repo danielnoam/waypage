@@ -219,7 +219,7 @@ function readerThemeGroup() {
   pick.hidden = !readerThemeOn();
   return section(null, null,
     el("div", { class: "group" },
-      switchRow("Its own theme in the reader", "Inside clips and files", readerThemeOn(), (on) => {
+      switchRow("Its own theme in the reader", null, readerThemeOn(), (on) => {
         setReaderTheme(on ? state.theme : "same");
         pick.hidden = !on;
         pick.querySelectorAll("input").forEach((i) => { i.checked = i.value === state.theme; });
