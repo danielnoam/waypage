@@ -2,6 +2,18 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.52.0] - 2026-11-03
+
+### Added
+- Discover, in the sidebar: browse feeds, newsletters and Royal Road stories to follow, by kind (Sites for Royal Road, Feeds, Newsletters), and add one with a tap; swipe to move between the chips. A feed opens Add a feed, a story saves as a collection that gets its new chapters, and a newsletter (one that comes by email) copies your Newsletters address and opens its sign-up page. On the phone, Sites browses Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON and Tapas as a grid, by list and genre (or fandom, or tag), page after page, plus hand-picked web serials (Worm, The Wandering Inn and more), saved whole; All shows a few from each, and "Sites" opens them. The search field at the top searches what's shown: the lists as you type, and the story site itself when you press search.
+- The web copy can save pages and follow feeds from most sites, through Waypage's own fetch proxy, which stores nothing. The phone app still fetches everything itself.
+
+### Fixed
+- Following a site whose page turns the app away (an error 403) still finds its feed, at the usual feed addresses.
+- Royal Road saves again on Android. It started asking for a browser check, so Waypage now reads it through its hidden browser instead of failing.
+- In a browser on a big screen, Changelog and What's new open inside the Settings window, beside its menu, instead of covering the whole screen.
+- GitHub sync and Storage in the Settings window read top to bottom in one column again; they were split into two side by side columns, so the sync steps read out of order.
+
 ## [1.51.0] - 2026-11-02
 
 ### Added
