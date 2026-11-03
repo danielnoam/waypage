@@ -201,7 +201,7 @@ null rather than for a platform. The native plugins live in
 `native/share/` and are built into the apps by the workflows; nothing in
 `src/` imports them.
 
-In a browser, `fetchText` sends pages through the fetch proxy in
+In a browser, `fetchText` sends other sites' pages through the fetch proxy in
 `worker/` (`PROXY_URL` in `platform.js`; empty means straight `fetch`,
 which CORS blocks for most sites). It answers only the web copy's origin,
 GET only, public addresses only, and stores nothing; `canReadPages` says

@@ -48,12 +48,16 @@ async function saveWith(browser, url, answers) {
   const p = await ctx.newPage();
   const asked = [];
   await ctx.route((u) => !u.href.startsWith(ROOT), (route) => {
-    const u = route.request().url();
+    // The web copy asks the fetch proxy (worker/) for a page; it's
+    // answered as the page's site would, the way the proxy passes it on.
+    const raw = new URL(route.request().url());
+    const u = /\.workers\.dev$/.test(raw.hostname) && raw.searchParams.get("url") || raw.href;
     asked.push(u);
+    const cors = { "access-control-allow-origin": "*", "access-control-expose-headers": "X-Final-Url", "x-final-url": u };
     const hit = answers.find(([t]) => (typeof t === "string" ? u.startsWith(t) : t.test(u)));
-    if (!hit || !hit[1]) return route.fulfill({ status: 404, body: "", headers: { "access-control-allow-origin": "*" } });
+    if (!hit || !hit[1]) return route.fulfill({ status: 404, body: "", headers: cors });
     const type = /\.json$/.test(hit[1]) ? "application/json" : /\.txt$/.test(hit[1]) ? "text/plain" : "text/html";
-    route.fulfill({ status: 200, body: fixture(hit[1]), headers: { "content-type": type + "; charset=utf-8", "access-control-allow-origin": "*" } });
+    route.fulfill({ status: 200, body: fixture(hit[1]), headers: { "content-type": type + "; charset=utf-8", ...cors } });
   });
   await p.goto(ROOT);
   await p.waitForFunction(() => window.Waypage && window.Waypage.save && window.Waypage.store);
