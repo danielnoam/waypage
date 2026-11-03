@@ -11,9 +11,10 @@ let dzPick = "all";
 let dzList = load("waypage.discover.rrList", "rising");
 // Royal Road as last read: { at, items } per list, or an error line.
 const dz = { busy: false, error: "", found: null };
-// The phone reads Royal Road itself; the web copy can once its fetch
-// proxy is set (canReadPages, the Worker's PR), and not before.
-const dzCanRead = () => ("canReadPages" in C.platform ? C.platform.canReadPages : C.platform.canFetchPages);
+// Only the phone reads the story sites: most sit behind Cloudflare's or
+// their own bot checks, which turn the web copy's fetch proxy away (Royal
+// Road refuses it outright), and the phone passes them in its hidden browser.
+const dzCanRead = () => C.platform.canFetchPages;
 const DZ_KINDS = [["all", "All"], ["stories", "Sites"], ["feeds", "Feeds"], ["newsletters", "Newsletters"]];
 const dzHost = (u) => { try { return new URL(u).hostname.toLowerCase().replace(/^www\./, ""); } catch (e) { return ""; } };
 
@@ -149,12 +150,12 @@ function dzStories() {
   // different sites); the heading opens Sites to browse them all.
   const q = dzQ().toLowerCase();
   const def = C.discover.rrLists.find((l) => l.key === dzList) || C.discover.rrLists[0];
-  const got = C.discover.rrSaved(def.key), fp = C.discover.fpSaved();
-  const rows = [got ? got.items.map((s) => ({ ...s, site: "Royal Road" })) : [], fp ? fp.items : [], dzSerials()]
+  const got = C.discover.rrSaved(def.key), first = DZ_FIRST.map((k) => C.discover.firstSaved(k));
+  const rows = [got ? got.items.map((s) => ({ ...s, site: "Royal Road" })) : [], ...first.map((x) => (x ? x.items : [])), dzSerials()]
     .map((list) => list.filter((s) => !q || s.title.toLowerCase().includes(q)));
   const items = [];
   for (let i = 0; items.length < 18 && rows.some((r) => r[i]); i++) rows.forEach((r) => { if (r[i] && items.length < 18) items.push(r[i]); });
-  const line = dz.busy ? "Reading Royal Road and FictionPress…" : dz.error ? dz.error : navigator.onLine || items.length ? "" : "Story sites show when you're online.";
+  const line = dz.busy ? "Reading the story sites…" : dz.error ? dz.error : navigator.onLine || items.length ? "" : "Story sites show when you're online.";
   const head = el("div", { class: "section-head wide" },
     el("h2", { class: "overline" }, el("button", { class: "section-link", type: "button", onclick: () => dzShowSites() },
       "Sites", el("span", { class: "section-chev", "aria-hidden": "true" }, "›"))));
@@ -164,6 +165,9 @@ function dzStories() {
     line ? el("p", { class: "footnote dz-src" + (dz.error && !dz.busy ? " warn" : "") }, line) : null];
 }
 
+// The sites All's row takes a few from besides Royal Road: ones that answer
+// quickly (each one read is a page load, some through the hidden browser).
+const DZ_FIRST = ["fp", "wp"];
 // The hand-picked web serials as stories.
 function dzSerials() {
   return C.discover.list().entries.filter((e) => e.kind === "serial")
@@ -229,14 +233,14 @@ function dzGrid() {
   };
   const lists = dropdown({ label: src.label + " list", cls: "field-pick dz-pick", value: g.key,
     options: src.lists.map((l) => ({ value: l.key, label: l.label })), onpick: (v) => keep({ key: v }) });
-  const genres = dropdown({ label: "Genre", cls: "field-pick dz-pick", value: g.genre,
-    options: [...(src.anyGenre ? [{ value: "", label: "Every genre" }] : []), ...src.genres.map((x) => ({ value: x.key, label: x.label }))],
-    onpick: (v) => keep({ genre: v }) });
+  const genres = src.genres.length ? dropdown({ label: src.genreLabel || "Genre", cls: "field-pick dz-pick", value: g.genre,
+    options: [...(src.anyGenre ? [{ value: "", label: src.genreLabel ? "Every " + src.genreLabel.toLowerCase() : "Every genre" }] : []), ...src.genres.map((x) => ({ value: x.key, label: x.label }))],
+    onpick: (v) => keep({ genre: v }) }) : null;
   const line = g.busy ? (g.page ? "Reading more…" : "Reading " + src.label + "…") : g.error;
   const q = dzQ().toLowerCase();
   const shown = g.items.filter((s) => !q || s.title.toLowerCase().includes(q));
   return [
-    el("div", { class: "dz-tools" }, sources, lists, genres),
+    el("div", { class: "dz-tools" }, sources, src.lists.length > 1 ? lists : null, genres),
     dzAsk(src),
     shown.length ? dzCovers(shown, true) : null,
     line ? el("p", { class: "footnote dz-src" + (g.error && !g.busy ? " warn" : "") }, line) : null,
@@ -275,7 +279,7 @@ async function dzSaveStory(s) {
 async function dzMore() {
   const g = dz.grid;
   if (g.busy || g.done) return;
-  if (!navigator.onLine) { g.error = "Royal Road's lists show when you're online."; renderDiscover(); return; }
+  if (!navigator.onLine) { g.error = "Story sites show when you're online."; renderDiscover(); return; }
   g.busy = true;
   g.error = "";
   renderDiscover();
@@ -319,9 +323,9 @@ function dzCovers(items, grid, sites) {
 async function dzReadRR(force) {
   if (!dzCanRead() || dz.busy || dz.found) return;
   const def = C.discover.rrLists.find((l) => l.key === dzList) || C.discover.rrLists[0];
-  const had = C.discover.rrSaved(def.key), hadFp = C.discover.fpSaved();
+  const had = C.discover.rrSaved(def.key);
   const fresh = (x) => x && Date.now() - x.at < 36e5;
-  if (!force && fresh(had) && fresh(hadFp)) return;
+  if (!force && fresh(had) && DZ_FIRST.every((k) => fresh(C.discover.firstSaved(k)))) return;
   if (!navigator.onLine) return;
   dz.busy = true;
   dz.error = "";
@@ -329,7 +333,7 @@ async function dzReadRR(force) {
   // One after the other: both may need the hidden browser.
   let rrErr = null;
   try { await C.discover.rrRead(def.key, force); } catch (e) { rrErr = e; }
-  try { await C.discover.fpRead(force); } catch (e) { /* the row shows the others */ }
+  for (const k of DZ_FIRST) { try { await C.discover.firstRead(k, force); } catch (e) { /* the row shows the others */ } }
   if (rrErr) dz.error = (had ? "Couldn't reach Royal Road. This is the list from " + whenText(had.at) + "." : "Couldn't read Royal Road's list just now. Pull down to try again.") + " (" + dzWhy(rrErr) + ")";
   dz.busy = false;
   if (state.place === "discover") renderDiscover();
@@ -338,7 +342,7 @@ async function dzReadRR(force) {
 // Why Royal Road failed, in a few words, so a phone report says it.
 function dzWhy(e) {
   const m = String((e && e.message) || e || "");
-  if (/^HTTP 403|^HTTP 503/.test(m)) return m + ": Royal Road turned the app away";
+  if (/^HTTP (403|418|503)/.test(m)) return m + ": the site turned the app away";
   if (/^HTTP /.test(m)) return m;
   if (/no stories/.test(m)) return "the page came back, but no stories were found in it " + (m.match(/\(.*\)/) || [""])[0];
   return m.slice(0, 80) || "no answer";
@@ -379,7 +383,8 @@ function storySheet() {
     img.addEventListener("error", () => img.remove());
     cover.prepend(img);
   }
-  const facts = [s.chapters ? s.chapters + (s.chapters === 1 ? " chapter" : " chapters") : "", s.followers ? s.followers.toLocaleString() + " following" : ""].filter(Boolean).join(" · ");
+  const parts = C.discover.sources.some((x) => x.comics && x.label === s.site) ? ["episode", "episodes"] : ["chapter", "chapters"];
+  const facts = [s.chapters ? s.chapters + " " + parts[s.chapters === 1 ? 0 : 1] : "", s.followers ? s.followers.toLocaleString() + " following" : "", s.stat || ""].filter(Boolean).join(" · ");
   const rated = [s.rating ? "★ " + s.rating.toFixed(1) : "", s.tags.join(", ")].filter(Boolean).join(" · ");
   const site = s.serial ? dzHost(s.url) : s.site || "Royal Road";
   const save = el("button", { class: "btn-primary", type: "button", onclick: async () => { await back(); dzSaveStory(s); } },
@@ -388,7 +393,7 @@ function storySheet() {
     el("div", { class: "dz-sheethead" }, cover,
       el("div", { class: "dz-sheet-text" },
         el("h2", { class: "menu-title dz-sheet-title", dir: "auto" }, s.title),
-        el("p", { class: "meta" }, site),
+        el("p", { class: "meta" }, site + (s.by ? " · " + s.by : "")),
         facts ? el("p", { class: "meta" }, facts) : null,
         rated ? el("p", { class: "meta" }, rated) : null)),
     s.about ? el("p", { class: "dz-blurb", dir: "auto" }, s.about) : null,

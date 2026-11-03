@@ -259,6 +259,45 @@ async function phone(browser) {
         "https://parahumans.wordpress.com/2011/06/25/insinuation-2-1/", "https://parahumans.wordpress.com/2011/06/28/insinuation-2-2/"]);
     });
 
+    await test("every story site's pages read as stories", async () => {
+      const { ctx, p } = await phone(browser);
+      const got = await p.evaluate((f) => {
+        const D = Waypage.discover, pick = (l) => l.map((s) => [s.id, s.url, s.title, s.chapters, !!s.cover, s.tags.join("/"), s.stat || ""]);
+        return {
+          wp: pick(D.parseWattpad(f.wp)),
+          wtRank: pick(D.parseWebtoon(f.wtRank, "https://m.webtoons.com/en/ranking")),
+          wtRankAction: D.parseWebtoon(f.wtRank, "https://m.webtoons.com/en/ranking", "ACTION").map((s) => s.title),
+          wtGenre: D.parseWebtoon(f.wtGenre, "https://m.webtoons.com/en/genres/fantasy").map((s) => [s.title, s.about.slice(0, 12)]),
+          tapas: pick(D.parseTapas(f.tapas, "https://m.tapas.io/search")),
+          ao3: pick(D.parseAO3(f.ao3, "https://archiveofourown.org/works")),
+          ao3By: D.parseAO3(f.ao3)[0].by,
+          sh: pick(D.parseSH(f.sh, "https://www.scribblehub.com/series-ranking/")),
+          ffn: pick(D.parseFFN(f.fp.replace(/fictionpress/g, "fanfiction"), "https://www.fanfiction.net/book/Harry-Potter/")),
+          ids: ["https://www.wattpad.com/story/26327373-x", "https://archiveofourown.org/works/1001/chapters/9", "https://m.webtoons.com/en/fantasy/osora/list?title_no=6202",
+            "https://tapas.io/series/JetDragon/info", "https://www.scribblehub.com/series/501/the-slow-tower/", "https://www.fanfiction.net/s/42/3/x"].map(D.storyId),
+        };
+      }, { wp: fixture("wp-search.json"), wtRank: fixture("wt-rank.html"), wtGenre: fixture("wt-genre.html"), tapas: fixture("tapas-search.html"),
+        ao3: fixture("ao3-works.html"), sh: fixture("sh-list.html"), fp: fixture("fp-list.html") });
+      await ctx.close();
+      if (process.env.DUMP) console.log(JSON.stringify(got, null, 1));
+      assert.deepStrictEqual(got.wp[0], ["wp26327373", "https://www.wattpad.com/story/26327373-the-dragon-and-the-princess", "The Dragon and the Princess", 34, true, "betrayal/complete/danger", "619K reads"]);
+      assert.strictEqual(got.wp.length, 3);
+      assert.deepStrictEqual(got.wtRank.map((s) => s[2]), ["Jungle Juice", "Who Made Me a Princess", got.wtRank[2][2]]);
+      assert.deepStrictEqual(got.wtRank[0].slice(0, 2), ["wt2480", "https://www.webtoons.com/en/action/jungle-juice/list?title_no=2480"]);
+      assert.ok(got.wtRank.every((s) => s[4]), "covers");
+      assert.deepStrictEqual(got.wtRankAction, ["Jungle Juice"]);
+      assert.deepStrictEqual(got.wtGenre[0], ["Osora", "Prince Osora"]);
+      assert.strictEqual(got.tapas.length, 3);
+      assert.deepStrictEqual(got.tapas[0].slice(0, 3), ["tpdragonvsdragon", "https://tapas.io/series/DragonvsDragon", "Dragon vs. Dragon"]);
+      assert.deepStrictEqual(got.ao3, [["ao31001", "https://archiveofourown.org/works/1001", "The Cartographer's Oath", 27, false, "Original Work/Fantasy/Maps", "4,812 kudos"],
+        ["ao31002", "https://archiveofourown.org/works/1002", "Low Tide", 1, false, "", "90 kudos"]]);
+      assert.strictEqual(got.ao3By, "ink");
+      assert.deepStrictEqual(got.sh, [["sh501", "https://www.scribblehub.com/series/501/the-slow-tower/", "The Slow Tower", 88, true, "Fantasy/Isekai", ""],
+        ["sh502", "https://www.scribblehub.com/series/502/salt/", "Salt", 0, false, "", ""]]);
+      assert.deepStrictEqual(got.ffn[0].slice(0, 3), ["ffn3001", "https://www.fanfiction.net/s/3001/1/", "The Salt Road"]);
+      assert.deepStrictEqual(got.ids, ["wp26327373", "ao31001", "wt6202", "tpjetdragon", "sh501", "ffn42"]);
+    });
+
     await test("FictionPress's list rows read as stories", async () => {
       const { ctx, p } = await phone(browser);
       const got = await p.evaluate((html) => Waypage.discover.parseFP(html, "https://www.fictionpress.com/fiction/Fantasy/"), fixture("fp-list.html"));

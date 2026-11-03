@@ -164,7 +164,7 @@ Each section below shows the computer (left) and the phone (right).
 
 - Browse feeds, newsletters and Royal Road stories to follow, by kind (Sites, Feeds, Newsletters), and add one with a tap; swipe to move between the chips.
 - A feed goes to Feeds, a story saves as a collection that gets its new chapters, and a newsletter (by email) copies your Newsletters address and opens its sign-up page.
-- On the phone, Sites browses Royal Road and FictionPress as a grid by list and genre, page after page, plus hand-picked web serials.
+- On the phone, Sites browses Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON and Tapas as a grid by list and genre, page after page, plus hand-picked web serials.
 - The search at the top searches what's shown: the lists as you type, a story site when you press search.
 
 ## Stats

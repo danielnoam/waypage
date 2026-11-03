@@ -66,7 +66,7 @@ src/pdf.js          PDFs through pdf.js in a locked-down frame
 src/pptx.js         PowerPoint decks redrawn on a canvas and written as a PDF (1.49.0)
 src/epub.js         clips as an EPUB 3 book, for e-readers and Send to Kindle
 src/feeds.js        RSS, Atom and JSON Feed, read into one shape
-src/discover.js     Discover's sources: the hand-picked list, Royal Road's and FictionPress's lists and search
+src/discover.js     Discover's sources: the hand-picked list, and the story sites' lists and search (Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON, Tapas)
 src/discover-list.js  the hand-picked list itself (strict JSON between markers, refreshed from GitHub)
 src/sync.js         GitHub sync; src/sync-worker.js runs the merge off the main thread
 src/drive.js        Google Drive backups
@@ -284,7 +284,7 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
 drive the app in Chromium with Playwright and skip when it isn't installed
 (`sites.test.js` saves the discussion and code sites from their answers
 saved in `test/fixtures/sites/`, with nothing going out; `discover.test.js`
-reads Royal Road's and FictionPress's lists from hand-made pages in `test/fixtures/discover/`); `build.test.js` checks the
+reads the story sites' lists from hand-made pages and pages cut from WEBTOON, Tapas and Wattpad in `test/fixtures/discover/`); `build.test.js` checks the
 bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
@@ -315,12 +315,14 @@ adds a line here.
   unlocked phone, not someone with the files or developer tools.
 - Newsletters go through Kill the Newsletter, which receives and can read
   the emails; the address and feed link are keys.
-- Discover reads Royal Road's and FictionPress's list and search pages as a browser would
+- Discover reads the story sites' list and search pages (Wattpad's JSON API) as a browser would
   (Royal Road sees the visit, as it does for saving a chapter). Cloudflare
   turns a plain request away there, so on Android the hidden browser
   (PageRender) reads them, which takes a few seconds; and the
   phone fetches the hand-picked list from raw.githubusercontent.com twice
-  a day, which GitHub sees. Both sites' markup is scraped, so a change
+  a day, which GitHub sees. Their markup is scraped (Scribble Hub's, AO3's and FanFiction.net's
+  were never seen from here: Cloudflare or AO3's own check blocks every
+  plain fetch; only the phone's hidden browser gets them), so a change
   there leaves the last list read until the parser is fixed.
 - Translate downloads each language's model from Google once, which tells
   Google the languages, never the words.

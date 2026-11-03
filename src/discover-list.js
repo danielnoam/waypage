@@ -50,6 +50,8 @@ window.Waypage.discoverList =
     { "kind": "serial", "name": "Pact", "about": "An inheritance with a demon-sized debt attached.", "url": "https://pactwebserial.wordpress.com/table-of-contents/" },
     { "kind": "serial", "name": "A Practical Guide to Evil", "about": "An orphan joins the villains to change the empire from inside.", "url": "https://practicalguidetoevil.wordpress.com/table-of-contents/" },
     { "kind": "serial", "name": "Katalepsis", "about": "Cosmic horror and a slow romance at a British university.", "url": "https://katalepsis.net/table-of-contents/" },
+    { "kind": "serial", "name": "The Gods Are Bastards", "about": "A magic school, a fallen god and a world on the edge of an industrial age.", "url": "https://tiraas.net/table-of-contents/" },
+    { "kind": "serial", "name": "Unsong", "about": "The Bible is literally true and the world runs on the names of God.", "url": "https://unsongbook.com/" },
     { "kind": "newsletter", "name": "Money Stuff", "about": "Finance, explained and made funny.", "url": "https://www.bloomberg.com/opinion/authors/ARbTQlRLRjE/matthew-s-levine", "signup": "https://www.bloomberg.com/account/newsletters/money-stuff" },
     { "kind": "newsletter", "name": "Morning Brew", "about": "Business news for the morning, short.", "url": "https://www.morningbrew.com/", "signup": "https://www.morningbrew.com/daily/subscribe" },
     { "kind": "newsletter", "name": "1440", "about": "The day's news in five minutes, without a side.", "url": "https://join1440.com/", "signup": "https://join1440.com/" }
