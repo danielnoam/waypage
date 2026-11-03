@@ -516,6 +516,8 @@ html.native .screen-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
 
 :is(.settings-section, .reading-controls.split) + .settings-section { margin-top: var(--s-6); }
 /* Two cards in one section (a list and its action, say) stand apart (1.48.1). */
+/* The reader's own theme sits close under Theme, with no heading. */
+.settings-section + .settings-section.reader-theme-sec { margin-top: var(--s-3); }
 .settings-section > .group + .group, .settings-section > :is(.footnote, .warn-note, textarea, .report-field) + .group { margin-top: var(--s-3); }
 .overline {
   margin: 0 0 var(--s-2) var(--s-1);

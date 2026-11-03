@@ -217,7 +217,7 @@ function readerThemeGroup() {
     seg("reader-theme", "Theme in the reader", [{ value: "system", label: "Auto", swatch: autoSwatch(), auto: true }, ...themeOptions(THEMES)],
       readerThemeOn() ? state.readerTheme : state.theme, (v) => { setReaderTheme(v); syncThemeInputs(); }, "themes grid five theme-grid")));
   pick.hidden = !readerThemeOn();
-  return section(null, null,
+  const sec = section(null, null,
     el("div", { class: "group" },
       switchRow("Its own theme in the reader", null, readerThemeOn(), (on) => {
         setReaderTheme(on ? state.theme : "same");
@@ -226,6 +226,8 @@ function readerThemeGroup() {
         syncThemeInputs();
       })),
     pick);
+  sec.classList.add("reader-theme-sec");
+  return sec;
 }
 
 // Animations (1.12.0): off, nothing moves at all, for a slow phone or
