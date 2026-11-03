@@ -1088,6 +1088,8 @@ const SECTIONS = {
   updates: { title: "About", build: () => [updatesGroup(), aboutGroup()], value: () => (updateOut() ? upd.latest + " is out" : APP_VERSION) },
   previews: { title: "Test builds", build: () => previewsSections(), value: () => "", parent: "updates" },
   credits: { title: "Credits", build: creditsSections, value: () => "", parent: "updates" },
+  news: { title: "Changelog", build: () => newsSections(), value: () => "", parent: "updates" },
+  ahead: { title: "What's new", build: () => aheadSections(), value: () => "", parent: "updates" },
   report: { title: "Report a problem", build: () => [reportGroup()], value: () => { const n = C.platform.log.list().length; return n ? n + (n === 1 ? " note" : " notes") : ""; } },
 };
 
@@ -1130,7 +1132,7 @@ const FIND_ALIASES = {
 };
 let settingsIdx = null;
 const settingsQuery = () => { const i = $("settingsSearch"); return i ? i.value.trim() : ""; };
-const menuKeys = () => Object.keys(SECTIONS).filter((k) => !((k === "notifications" || k === "previews") && !C.platform.native) && !(k === "drive" && !C.drive.available) && !(k === "lock" && !lockCan()));
+const menuKeys = () => Object.keys(SECTIONS).filter((k) => k !== "news" && k !== "ahead" && !((k === "notifications" || k === "previews") && !C.platform.native) && !(k === "drive" && !C.drive.available) && !(k === "lock" && !lockCan()));
 const text = (n) => (n ? n.textContent.replace(/\s+/g, " ").trim() : "");
 function settingsIndex() {
   if (settingsIdx) return settingsIdx;

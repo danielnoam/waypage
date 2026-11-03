@@ -582,7 +582,7 @@ function comingEntries() {
     .then((list) => {
       if (coming.latest !== latest) return;
       coming.entries = list.length ? list : fromNotes();
-      if (state.news === "ahead") paintNews();
+      paintNews();
     });
   return null;
 }
@@ -789,53 +789,80 @@ function notesView(entries) {
     el("ul", { class: "news-list" }, ...sec.items.map((t) => el("li", null, t))))));
 }
 
-let changelog = null;
-async function readChangelog() {
-  if (changelog) return changelog;
-  try {
-    const res = await fetch("CHANGELOG.md?v=" + APP_VERSION);
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    changelog = changelogEntries(await res.text());
-  } catch (e) {
-    changelog = null;
+let changelog = null, changelogLoad = null;
+function readChangelog() {
+  if (!changelogLoad || (!changelog && changelogLoad.settled)) {
+    const load = fetch("CHANGELOG.md?v=" + APP_VERSION)
+      .then((res) => { if (!res.ok) throw new Error("HTTP " + res.status); return res.text(); })
+      .then((md) => (changelog = changelogEntries(md)))
+      .catch(() => (changelog = null))
+      .finally(() => { load.settled = true; });
+    changelogLoad = load;
   }
-  return changelog;
+  return changelogLoad;
 }
 
-async function openNews(fromHistory, ahead) {
-  if (state.news) return;
-  state.news = ahead ? "ahead" : true;
-  const over = state.settings ? "settings" : undefined;
-  if (!fromHistory) history.pushState({ view: "news", ahead: ahead || undefined, over, section: state.section || undefined }, "");
-  justUpdated = false;
-  paintUpdateBar();
-  $("newsBody").replaceChildren(el("p", { class: "meta" }, "Loading…"));
-  $("newsBody").scrollTop = 0;
-  pushScreen($("newsView")).then(() => $("newsBack").focus());
-  if (ahead) { paintNews(); return; }
-  const entries = await readChangelog();
-  if (state.news !== true) return;
-  $("newsBody").replaceChildren(...(entries && entries.length ? entries.map((e) => el("section", { class: "news-entry" + (e.version === APP_VERSION ? " now" : "") },
+function changelogView() {
+  if (!changelog && !(changelogLoad && changelogLoad.settled)) return [el("p", { class: "meta" }, "Loading…")];
+  return changelog && changelog.length ? changelog.map((e) => el("section", { class: "news-entry" + (e.version === APP_VERSION ? " now" : "") },
     el("h2", { class: "news-version" }, e.version, e.version === APP_VERSION ? el("span", { class: "news-you" }, "You have this") : null),
     e.date ? el("p", { class: "meta" }, formatDay(e.date)) : null,
-    ...notesView([e]))) : [el("p", { class: "empty-text" }, "The list of changes didn't load.")]));
+    ...notesView([e]))) : [el("p", { class: "empty-text" }, "The list of changes didn't load.")];
 }
 
 // What's new for the version that's out, with its Update on top.
-function paintNews() {
-  if (state.news !== "ahead") return;
+function aheadView() {
   const out = UPD_OUT.includes(upd.phase) && !upd.tag && upd.latest;
-  if (!out) { $("newsBody").replaceChildren(el("p", { class: "empty-text" }, "You have the latest version.")); return; }
+  if (!out) return [el("p", { class: "empty-text" }, "You have the latest version.")];
   const entries = comingEntries();
   const status = { available: "You have " + APP_VERSION, downloading: "Downloading · " + upd.pct + "%", paused: "Paused at " + upd.pct + "%", ready: "Downloaded, ready to install" }[upd.phase];
-  $("newsBody").replaceChildren(
+  return [
     el("div", { class: "group update-card news-update" }, versionRow("Waypage " + upd.latest, upd.error || status)),
     ...(entries === null ? [el("p", { class: "meta" }, "Loading…")]
       : entries.length ? entries.map((e) => el("section", { class: "news-entry" },
         el("h2", { class: "news-version" }, e.version),
         e.date ? el("p", { class: "meta" }, formatDay(e.date)) : null,
         ...notesView([e])))
-      : [el("p", { class: "empty-text" }, "The list of changes didn't load. Changelog has it once you've updated.")]));
+      : [el("p", { class: "empty-text" }, "The list of changes didn't load. Changelog has it once you've updated.")])];
+}
+
+// On a big screen (after 1.51.0, Daniel's ask) the changelog and What's new
+// are pages in Settings' window, beside its menu, like Credits; only a
+// phone pushes them as a screen of their own.
+const repaintChangelog = () => { if (state.section === "news") renderSection(); };
+function newsSections() {
+  if (!changelogLoad) readChangelog().then(repaintChangelog);
+  return [el("section", { class: "settings-section news-page" }, ...changelogView())];
+}
+const aheadSections = () => [el("section", { class: "settings-section news-page" }, ...aheadView())];
+
+async function openNews(fromHistory, ahead) {
+  if (state.news) return;
+  justUpdated = false;
+  paintUpdateBar();
+  if (wide.matches && !fromHistory) {
+    const key = ahead ? "ahead" : "news";
+    if (!ahead) readChangelog().then(repaintChangelog);
+    if (state.section === key) return;
+    if (state.settings) openSection(key, false, true);
+    else openSettings(false, key);
+    return;
+  }
+  state.news = ahead ? "ahead" : true;
+  const over = state.settings ? "settings" : undefined;
+  if (!fromHistory) history.pushState({ view: "news", ahead: ahead || undefined, over, section: state.section || undefined }, "");
+  $("newsBody").replaceChildren(el("p", { class: "meta" }, "Loading…"));
+  $("newsBody").scrollTop = 0;
+  pushScreen($("newsView")).then(() => $("newsBack").focus());
+  if (ahead) { paintNews(); return; }
+  await readChangelog();
+  if (state.news !== true) return;
+  $("newsBody").replaceChildren(...changelogView());
+}
+
+function paintNews() {
+  if (state.section === "ahead") renderSection();
+  if (state.news === "ahead") $("newsBody").replaceChildren(...aheadView());
 }
 
 function closeNews() {

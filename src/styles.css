@@ -2530,10 +2530,6 @@ kbd {
   .aloud-bar.docked { width: calc(var(--side-w) - 2 * var(--s-4)); cursor: default; }
   body.aloud-docked .side-gap { min-height: calc(var(--s-9) + var(--s-2)); }
 
-  /* Storage and Sync have room for two columns. */
-  #sectionBody:is([data-key="storage"], [data-key="sync"]) > * { max-width: 62rem; }
-  #sectionBody:is([data-key="storage"], [data-key="sync"]) { column-count: 2; column-gap: var(--s-6); }
-  #sectionBody:is([data-key="storage"], [data-key="sync"]) > .settings-section { break-inside: avoid; margin: 0 0 var(--s-6); display: inline-block; width: 100%; }
 }
 @media (min-width: 1024px) and (pointer: fine) {
   .read-keys {
