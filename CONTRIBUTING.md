@@ -64,9 +64,10 @@ Don't reopen these without talking to Daniel first.
 
 - **No server for the phone app.** Pages and images are fetched on the
   device with CapacitorHttp and `Filesystem.downloadFile`, which CORS
-  doesn't apply to. A server would only exist for a desktop browser
-  version; if it ever does, it is stateless, authenticated, rate-limited
-  and stores nothing.
+  doesn't apply to. The one server is the web copy's fetch proxy
+  (`worker/`, a Cloudflare Worker): stateless, stores nothing, answers
+  only the web copy's origin, rate-limited per IP. Anything added to it
+  keeps those four.
 - **Saved HTML is untrusted.** It is rendered in a sandboxed iframe with no
   `allow-scripts` and a strict CSP, never in the app's own document: a
   script there could reach the Capacitor plugins. Anything new that

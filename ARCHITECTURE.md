@@ -31,7 +31,9 @@ line is the way it is lives in its commit and PR (`git log -S`,
 Plain HTML, CSS and JS, no build step, no runtime dependencies. The same
 files are served as a static site (the web copy on GitHub Pages) and
 bundled as-is into Android and iOS apps by Capacitor. There is no server:
-every fetch happens on the device. Saved pages are untrusted and are only
+every fetch happens on the device. The one exception is the web copy, which
+fetches pages through a stateless proxy (`worker/`), since a browser can't
+read most sites itself. Saved pages are untrusted and are only
 ever shown inside a sandboxed iframe.
 
 ## Layout
@@ -79,6 +81,7 @@ src/fonts.css       the bundled fonts (src/fonts/)
 src/vendor/         Readability, pdf.js, foliate-js's MOBI reader, each with its licence
 assets/             icon and splash sources for the apps
 icons/, icon.svg    app icons
+worker/             the web copy's fetch proxy, a Cloudflare Worker (worker.js, wrangler.toml, README.md has the setup)
 native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
 tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-build.json
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
@@ -91,7 +94,7 @@ test/               node test/run-all.js runs every *.test.js
 design/             the design canvas's artboards, for the exact markup
 docs/PROPOSAL.md    the original architecture, storage, legal and store reasoning
 docs/shots/         the README's screenshots
-.github/workflows/  test.yml (every PR), android.yml and ios.yml (builds, releases, test builds), test-builds.yml (test labels: build on, remove off)
+.github/workflows/  test.yml (every PR), android.yml and ios.yml (builds, releases, test builds), test-builds.yml (test labels: build on, remove off), worker.yml (deploys worker/ to Cloudflare)
 ```
 
 ## Load order and the one scope
@@ -195,6 +198,14 @@ null rather than for a platform. The native plugins live in
 `native/share/` and are built into the apps by the workflows; nothing in
 `src/` imports them.
 
+In a browser, `fetchText` sends pages through the fetch proxy in
+`worker/` (`PROXY_URL` in `platform.js`; empty means straight `fetch`,
+which CORS blocks for most sites). It answers only the web copy's origin,
+GET only, public addresses only, and stores nothing; `canReadPages` says
+whether a copy can read pages at all, `canFetchPages` whether it can do
+everything natively (posting forms, downloading pictures). Pictures in the
+web copy stay links, as before.
+
 ## Sync and backups
 
 - **GitHub sync** (`sync.js`): the library kept level with a private
@@ -285,7 +296,7 @@ bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js` and `pptx.test.js` test their areas in Node. The Tests workflow runs them all on every PR; a PR that only
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js` and `pptx.test.js` test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
 changes Markdown runs just `build.test.js` and `docs.test.js`.
 
 `node tools/shots.js` retakes the README's pictures at 1280 px and 390 px
@@ -323,6 +334,11 @@ adds a line here.
   before unpacking. It is a real Android speech engine (`KokoroTtsService`),
   so the lock screen, PiP and sleep timer work unchanged, but other apps
   can use it too. 32-bit and x86 phones, iOS and the web copy get none.
+- The web copy reads pages through the fetch proxy (`worker/`), so
+  Cloudflare sees which addresses a browser user saves (not the app's).
+  It only answers the web copy's origin, but the Origin header binds only
+  browsers: a script can fake it, and a public web copy can't hold a
+  secret. The per-IP rate limit and the free plan's daily cap bound that.
 - Dialogs (Downloads, Sync, Save with options, Settings) fade in and out,
   the one planned exception to "nothing fades" (Daniel's pick over the
   grow and the zoom).

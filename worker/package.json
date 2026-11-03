@@ -1,0 +1,6 @@
+{
+  "name": "waypage-fetch",
+  "private": true,
+  "type": "module",
+  "description": "The web copy's fetch proxy (Cloudflare Worker). No dependencies; deployed with wrangler by .github/workflows/worker.yml."
+}

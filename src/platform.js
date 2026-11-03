@@ -140,6 +140,16 @@
     ]).finally(() => clearTimeout(timer));
   }
 
+  // The web copy's fetch proxy (worker/, a Cloudflare Worker): a browser
+  // can't read most sites itself (CORS), so its page fetches go through it.
+  // It stores nothing and answers only this site's origin. Empty until it's
+  // deployed, and never used by the app. Sites that allow any origin (the
+  // GitHub API the updater and Test builds read) are fetched directly.
+  const PROXY_URL = "";
+  const PROXY = native ? "" : PROXY_URL;
+  const DIRECT = /^(api\.github\.com|raw\.githubusercontent\.com)$/i;
+  const hostOf = (url) => { try { return new URL(url).hostname; } catch (e) { return ""; } };
+
   // A page's HTML as text, plus the final URL after redirects. Throws a
   // TypeError on a network failure, like fetch does, so callers handle both
   // homes the same way.
@@ -160,8 +170,16 @@
       return { status: res.status, url: res.url || url, text: body };
     }
     delete headers["User-Agent"];
-    const res = await deadline(fetch(url, { headers }), PAGE_TIMEOUT);
-    return { status: res.status, url: res.url || url, text: await res.text() };
+    if (!PROXY || DIRECT.test(hostOf(url))) {
+      const res = await deadline(fetch(url, { headers }), PAGE_TIMEOUT);
+      return { status: res.status, url: res.url || url, text: await res.text() };
+    }
+    const q = new URLSearchParams({ url, accept: headers.Accept });
+    if (opts.headers && opts.headers["User-Agent"]) q.set("ua", opts.headers["User-Agent"]);
+    const res = await deadline(fetch(PROXY + "?" + q, { credentials: "omit" }), PAGE_TIMEOUT);
+    const refused = res.headers.get("X-Proxy-Error");
+    if (refused && res.status !== 429) throw new TypeError("Failed to fetch (" + refused + ")");
+    return { status: res.status, url: res.headers.get("X-Final-Url") || url, text: await res.text() };
   }
 
   // A form sent to a site (1.43.0, making or deleting a newsletter
@@ -1077,6 +1095,9 @@
     // Whether this copy can fetch any page itself (the app) or is limited by
     // CORS (a browser).
     get canFetchPages() { return !!plugin("CapacitorHttp"); },
+    // Whether this copy can read a page at all: the app itself, or a
+    // browser through the fetch proxy. Neither can post forms there.
+    get canReadPages() { return !!plugin("CapacitorHttp") || !!PROXY; },
     // Whether the connection is a metered one, mobile data (1.4.1): the
     // WebView says on Android, native/share's Connection plugin on iOS
     // (1.6.0); a browser says nothing, so nothing waits there.

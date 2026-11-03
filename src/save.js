@@ -1629,9 +1629,9 @@
       res = await C.platform.fetchText(url, { headers });
     } catch (e) {
       if (/time(d)?\s?out/i.test((e && e.message) || "")) throw new SaveError("The site didn't answer. Try again, or later on a better connection.", true);
-      throw new SaveError(C.platform.canFetchPages
+      throw new SaveError(C.platform.canReadPages
         ? "Couldn't reach this page. Check the link, or try again when you're online."
-        : "This browser can't reach that site directly. Save it in Waypage on your phone, then bring it here with a backup.", C.platform.canFetchPages);
+        : "This browser can't reach that site directly. Save it in Waypage on your phone, then bring it here with a backup.", C.platform.canReadPages);
     }
     if (res.status === 429) throw new SaveError("The site asked to slow down. Try again in a few minutes.");
     if (res.status === 404 || res.status === 410) throw new SaveError("That page doesn't exist any more. Check the link.", false, true);
