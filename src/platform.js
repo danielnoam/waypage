@@ -145,7 +145,7 @@
   // It stores nothing and answers only this site's origin. Empty until it's
   // deployed, and never used by the app. Sites that allow any origin (the
   // GitHub API the updater and Test builds read) are fetched directly.
-  const PROXY_URL = "";
+  const PROXY_URL = "https://waypage-fetch.danielnoam1999.workers.dev/";
   const PROXY = native ? "" : PROXY_URL;
   const DIRECT = /^(api\.github\.com|raw\.githubusercontent\.com)$/i;
   const hostOf = (url) => { try { return new URL(url).hostname; } catch (e) { return ""; } };

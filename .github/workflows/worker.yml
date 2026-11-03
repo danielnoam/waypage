@@ -43,3 +43,25 @@ jobs:
             exit 0
           fi
           npx --yes wrangler@4.151.2 deploy
+
+      # The live worker, from outside: the web copy gets pages through it,
+      # anyone else (a fork, no origin) is refused, and so are private
+      # addresses. The sites' answers are printed, not required, since a
+      # site can block Cloudflare's addresses.
+      - name: Check the live worker
+        env:
+          W: https://waypage-fetch.danielnoam1999.workers.dev/
+        run: |
+          code() { curl -s -o /dev/null -w "%{http_code}" "$@"; }
+          HOME_ORIGIN="Origin: https://danielnoam.github.io"
+          ok=$(code -H "$HOME_ORIGIN" "$W?url=https://example.com/")
+          fork=$(code -H "Origin: https://someone.github.io" "$W?url=https://example.com/")
+          none=$(code "$W?url=https://example.com/")
+          meta=$(code -H "$HOME_ORIGIN" "$W?url=http://169.254.169.254/")
+          post=$(code -X POST -H "$HOME_ORIGIN" "$W?url=https://example.com/")
+          echo "web copy $ok, fork $fork, no origin $none, metadata address $meta, POST $post"
+          curl -s -o /dev/null -D - -H "$HOME_ORIGIN" "$W?url=http://wikipedia.org/" | grep -iE "^HTTP|^x-final-url"
+          for u in https://en.wikipedia.org/wiki/Boeing_747 https://www.royalroad.com/fictions/best-rated "https://www.royalroad.com/fictions/search?title=mother" https://www.bbc.com/news https://www.ynet.co.il/; do
+            echo "$(code -H "$HOME_ORIGIN" "$W?url=$(node -p 'encodeURIComponent(process.argv[1])' "$u")") $u"
+          done
+          [ "$ok" = 200 ] && [ "$fork" = 403 ] && [ "$none" = 403 ] && [ "$meta" = 403 ] && [ "$post" = 405 ]

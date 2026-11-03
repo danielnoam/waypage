@@ -42,7 +42,8 @@ What it does and doesn't do:
    Workers & Pages overview, right side).
 4. Run the **Worker** workflow (Actions › Worker › Run workflow). After
    that it deploys by itself whenever `worker/` changes on main.
-5. Put the address in `PROXY_URL` in `src/platform.js`.
+5. Put the address in `PROXY_URL` in `src/platform.js`, and in the
+   workflow's "Check the live worker" step.
 
 Or deploy by hand from this folder: `npx wrangler@4.151.2 login`, then
 `npx wrangler@4.151.2 deploy`.
