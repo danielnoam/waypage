@@ -432,10 +432,9 @@
   const wtSearch = (words) => found(stories(WT + "/en/search?keyword=" + encodeURIComponent(String(words || "").trim()), parseWebtoon));
 
   // ---- Tapas ----
-  // Comics and novels. Its search page lists series (li[data-href]); its
-  // browse pages build themselves, so they come through the hidden browser.
+  // Comics and novels. Its search page lists series (li[data-href]).
   const TAPAS = "https://tapas.io";
-  const TAPAS_LISTS = [{ key: "COMICS", label: "Popular comics", path: "/comics?sortType=POPULAR" }, { key: "NOVELS", label: "Popular novels", path: "/novels?sortType=POPULAR" }];
+  const TAPAS_LISTS = [{ key: "COMICS", label: "Comics" }, { key: "NOVELS", label: "Novels" }];
   const TAPAS_CARD = { key: "tp", site: "Tapas", id: (u) => (/tapas\.io$/i.test(u.hostname) && (/^\/series\/([^/?#]+)\/?(info)?\/?$/.exec(u.pathname) || [])[1] || "").toLowerCase(),
     url: (u) => TAPAS + "/series/" + /^\/series\/([^/?#]+)/.exec(u.pathname)[1], title: ".title", tags: ".genre" };
   const parseTapas = (html, base) => parseCards(html, base || TAPAS, TAPAS_CARD);
@@ -508,8 +507,11 @@
       browse: (k, g, p) => stories(wpBrowseUrl(k, g, p), parseWattpad), search: wpSearch },
     { key: "wt", label: "WEBTOON", comics: true, once: true, lists: WT_LISTS, genres: WT_GENRES, anyGenre: true,
       browse: (k, g, p) => (p > 1 ? Promise.resolve([]) : stories(wtBrowseUrl(k, g), (h, b) => parseWebtoon(h, b, g))), search: wtSearch },
-    { key: "tp", label: "Tapas", comics: true, once: true, lists: TAPAS_LISTS, genres: [], anyGenre: true,
-      browse: (k, g, p) => { tapasKind = k || "COMICS"; return p > 1 ? Promise.resolve([]) : stories(TAPAS + (TAPAS_LISTS.find((l) => l.key === k) || TAPAS_LISTS[0]).path, parseTapas); }, search: tapasSearch },
+    // Tapas's browse pages draw their cards with no links to read (seen on
+    // the phone, Nov 2026), so it's search only; its list picks comics or
+    // novels for the search.
+    { key: "tp", label: "Tapas", comics: true, once: true, searchOnly: true, lists: TAPAS_LISTS, genres: [], anyGenre: true,
+      browse: (k) => { tapasKind = k || "COMICS"; return Promise.resolve([]); }, search: tapasSearch },
   ];
 
   C.discover = { list, refresh, fromSource, clean, isStory, storyId, parseList, rrLists: RR_LISTS, rrGenres: RR_GENRES, rrSaved, rrRead, rrSearch, rrBrowse, rrBrowseUrl, parseFP, parseFFN, parseAO3, parseSH, parseWattpad, parseWebtoon, parseTapas, fpBrowseUrl, ffnBrowseUrl, ao3BrowseUrl, wpBrowseUrl, firstSaved, firstRead, fpSaved, fpRead, serialLinks, serialChapters, sources: SOURCES };
