@@ -211,12 +211,31 @@ function autoGroup() {
   return box;
 }
 
+// The reader's own theme (Daniel's ask): off, the reader takes the app's.
+function readerThemeGroup() {
+  const pick = el("div", { class: "group reader-theme-pick" }, el("div", { class: "rc-list" },
+    seg("reader-theme", "Theme in the reader", [{ value: "system", label: "Auto", swatch: autoSwatch(), auto: true }, ...themeOptions(THEMES)],
+      readerThemeOn() ? state.readerTheme : state.theme, (v) => { setReaderTheme(v); syncThemeInputs(); }, "themes grid five theme-grid")));
+  pick.hidden = !readerThemeOn();
+  const sec = section(null, null,
+    el("div", { class: "group" },
+      switchRow("Its own theme in the reader", null, readerThemeOn(), (on) => {
+        setReaderTheme(on ? state.theme : "same");
+        pick.hidden = !on;
+        pick.querySelectorAll("input").forEach((i) => { i.checked = i.value === state.theme; });
+        syncThemeInputs();
+      })),
+    pick);
+  sec.classList.add("reader-theme-sec");
+  return sec;
+}
+
 // Animations (1.12.0): off, nothing moves at all, for a slow phone or
 // for anyone who'd rather things just change.
 function looksGroup() {
   return section("Pictures and motion", null,
     el("div", { class: "group" },
-      switchRow("Dim pictures in dark themes", "Tap a picture to see it in full", load(DIM_KEY, true) !== false, (on) => { store(DIM_KEY, on); paintTheme(state.theme); }),
+      switchRow("Dim pictures in dark themes", "Tap a picture to see it in full", load(DIM_KEY, true) !== false, (on) => { store(DIM_KEY, on); paintTheme(); }),
       switchRow("Animations", "Off: everything changes at once", !M.still(), (on) => { store(MOTION_KEY, on); M.setStill(!on); })));
 }
 
@@ -1067,7 +1086,7 @@ const updateOut = () => UPD_OUT.includes(upd.phase) && upd.latest;
 // Settings sorted by what you came to change (1.12.0): how it looks,
 // how you read, the library; then saving, sync and storage; then About.
 const SECTIONS = {
-  appearance: { title: "Appearance", build: () => [themeGroup(), autoGroup(), looksGroup()],
+  appearance: { title: "Appearance", build: () => [themeGroup(), autoGroup(), readerThemeGroup(), looksGroup()],
     value: () => themeName(state.theme) },
   reading: { title: "Reading", build: () => [readingGroup(), fontsGroup(), dictsGroup(), aloudGroup()],
     value: () => { const r = readingPrefs(null); return (FONTS.find((f) => f.value === r.font) || FONTS[0]).label + " · " + r.size + " px"; } },
@@ -1257,6 +1276,7 @@ function openSettings(fromHistory, at) {
   // With room for the section beside the menu, the first one is open.
   if (wide.matches && !at && !fromHistory) at = "appearance";
   state.settings = true;
+  if (state.open) paintTheme();
   renderSettings();
   if (!fromHistory) history.pushState({ view: "settings" }, "");
   $("settingsBody").scrollTop = 0;
@@ -1270,6 +1290,7 @@ function closeSettings() {
   // In the window, the window leaves first and takes its section with it.
   if (wide.matches) { state.settings = false; popScreen($("settingsView")); closeSection(); }
   else { closeSection(); state.settings = false; popScreen($("settingsView")); }
+  if (state.open) paintTheme();
   const q = $("settingsSearch");
   if (q) { q.value = ""; $("settingsSearchClear").hidden = true; }
   settingsIdx = null;

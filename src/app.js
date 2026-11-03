@@ -43,6 +43,8 @@ const THEMES = [
 const themeOf = (v) => THEMES.find((t) => t.value === v);
 const THEME_KEY = "waypage.theme";
 const AUTO_KEY = "waypage.themeAuto";
+// A theme of its own for the reader (Daniel's ask), or "same" as the app.
+const READER_THEME_KEY = "waypage.readerTheme";
 const IMAGES_KEY = "waypage.images";
 // On mobile data (1.4.1): "any" saves and syncs as always, "wifi" waits.
 const DATA_SAVE_KEY = "waypage.saveOnData";
@@ -124,7 +126,7 @@ const themeName = (choice) => (themeOf(choice) ? themeOf(choice).label : "Auto")
 
 function setAutoTheme(change) {
   store(AUTO_KEY, { ...autoThemes(), ...change });
-  if (state.theme === "system") paintTheme("system");
+  paintTheme();
   document.querySelectorAll(".swatch.auto").forEach((sw) => sw.replaceWith(swatch(autoSwatch(), "auto")));
 }
 const autoSwatch = () => { const a = autoThemes(); return [a.light, a.dark]; };
@@ -132,8 +134,11 @@ const autoSwatch = () => { const a = autoThemes(); return [a.light, a.dark]; };
 // Pictures toned down in the dark themes (1.32.0), a switch in
 // Appearance, on by default; the picture viewer shows them in full.
 const DIM_KEY = "waypage.dimPictures";
-function paintTheme(choice) {
-  const theme = resolveTheme(choice);
+// The reader's own theme shows while a clip is open, not over Settings.
+const readerThemeOn = () => state.readerTheme !== "same";
+const shownTheme = () => (state.open && !state.settings && readerThemeOn() ? state.readerTheme : state.theme);
+function paintTheme() {
+  const theme = resolveTheme(shownTheme());
   document.documentElement.dataset.theme = theme;
   document.documentElement.toggleAttribute("data-dim-pictures", !!(themeOf(theme) || {}).dark && load(DIM_KEY, true) !== false);
   const meta = document.querySelector('meta[name="theme-color"]');
@@ -146,11 +151,17 @@ function paintTheme(choice) {
 function setTheme(choice) {
   state.theme = choice;
   store(THEME_KEY, choice);
-  paintTheme(choice);
+  paintTheme();
+}
+function setReaderTheme(choice) {
+  state.readerTheme = choice;
+  store(READER_THEME_KEY, choice);
+  paintTheme();
 }
 
 const state = {
   theme: load(THEME_KEY, "system"),
+  readerTheme: load(READER_THEME_KEY, "same"),
   // Library index entries: the meta each saved page's meta.json holds.
   pages: [],
   // Saves in flight: { key, url, site, done, total }.
@@ -188,4 +199,4 @@ const state = {
   // Settings' screen up over its menu: "appearance", "saving", "storage" or "updates" (About).
   section: null,
 };
-paintTheme(state.theme);
+paintTheme();

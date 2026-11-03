@@ -1821,6 +1821,37 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("the reader can have a theme of its own", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const c = { id: "rt1", url: "https://example.com/rt1", title: "Theme test", site: "example.com", savedAt: 1000, minutes: 1, mode: "links", at: 0 };
+        await window.Waypage.store.writeIndex([c]);
+        await window.Waypage.store.writePage("rt1", "<!doctype html><html><body><h1>Theme test</h1><p>Words.</p></body></html>", c);
+        setTheme("paper");
+        setReaderTheme("night");
+      });
+      await q.reload();
+      await q.locator(".page-card").first().waitFor();
+      const at = () => q.evaluate(() => document.documentElement.dataset.theme);
+      assert.strictEqual(await at(), "paper", "the library keeps the app's theme");
+      await q.evaluate(() => openPage("rt1"));
+      await q.locator("#readerView:not([hidden])").waitFor();
+      assert.strictEqual(await at(), "night", "the reader takes its own");
+      await q.evaluate(() => openSettings());
+      assert.strictEqual(await at(), "paper", "Settings over the reader shows the app's");
+      await q.evaluate(() => closeSettings());
+      assert.strictEqual(await at(), "night");
+      await q.evaluate(() => closeReader());
+      await q.locator("#readerView").waitFor({ state: "hidden" });
+      assert.strictEqual(await at(), "paper");
+      await q.evaluate(() => setReaderTheme("same"));
+      await q.evaluate(() => openPage("rt1"));
+      await q.locator("#readerView:not([hidden])").waitFor();
+      assert.strictEqual(await at(), "paper", "off, the reader takes the app's");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("reading on to the next chapter doesn't flash the read-aloud card (1.26.3)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
