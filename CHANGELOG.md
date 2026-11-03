@@ -2,6 +2,20 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.52.1] - 2026-11-03
+
+### Added
+- The reader can have a theme of its own: Settings › Appearance, "Its own theme in the reader". The library, Feeds and Settings keep the app's theme; the theme in the reader's Aa sheet then changes the reader's.
+- The app's version shows in small text at the bottom of the sidebar.
+
+### Changed
+- Discover: Tapas is search only. Its lists don't give the app anything to read; pick Comics or Novels and search.
+
+### Fixed
+- Discover: FanFiction.net and FictionPress lists show their stories again when the phone gets their mobile site (it said "no stories were found" for most fandoms and categories).
+- Discover: WEBTOON's covers show (it only serves them to a visit from its own site, so the phone downloads each once).
+- On a test build, tapping the version in About checks for a newer release instead of opening Test builds.
+
 ## [1.52.0] - 2026-11-03
 
 ### Added
