@@ -252,6 +252,25 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       assert.ok(/The article, on /.test(html));
     });
 
+    await test("Royal Road behind Cloudflare's browser check: read through the hidden browser", async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      const p = await ctx.newPage();
+      await p.goto(ROOT);
+      await p.waitForFunction(() => window.Waypage && window.Waypage.save);
+      const found = await p.evaluate(() => {
+        const P = Waypage.platform;
+        P.fetchText = async (url) => ({ status: 403, url, text: "<html><head><title>Just a moment...</title></head></html>" });
+        Object.defineProperty(P, "canRender", { get: () => true, configurable: true });
+        window.drawn = [];
+        const rows = Array.from({ length: 8 }, (_, i) => '<tr class="chapter-row"><td><a href="/fiction/1/s/chapter/' + (i + 1) + '/c">Chapter ' + (i + 1) + "</a></td></tr>").join("");
+        P.render = async (url) => { window.drawn.push(url); return { url, text: "<html><head><title>A Story | Royal Road</title></head><body><h1>A Story</h1><table id=\"chapters\"><tbody>" + rows + "</tbody></table></body></html>" }; };
+        return Waypage.save.findChapters("https://www.royalroad.com/fiction/1/a-story");
+      });
+      assert.strictEqual(found.links.length, 8);
+      assert.deepStrictEqual(await p.evaluate(() => window.drawn), ["https://www.royalroad.com/fiction/1/a-story"]);
+      await ctx.close();
+    });
+
   } finally {
     await browser.close();
     server.kill();

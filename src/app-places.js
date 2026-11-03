@@ -796,7 +796,7 @@ function renderSide() {
   const inMarks = state.place === "highlights";
   const latest = (f) => Math.max(0, ...f.items.map(postAt));
   const big = wide.matches;
-  const inLib = !inFeeds && !inMarks && state.place !== "reading" && state.place !== "newsletters";
+  const inLib = !inFeeds && !inMarks && !["reading", "newsletters", "discover"].includes(state.place);
   const inLibrary = inLib && !state.part && !state.folder && state.filter !== "favourites";
   const favs = sideFavourites();
   const hasFolders = allFolders().length > 0;
@@ -826,6 +826,8 @@ function renderSide() {
     ...sideFold("newsletters", item(sideSvg("mail"), "Newsletters", state.place === "newsletters" && !state.feed, freshMail ? el("span", { class: "side-pill" }, freshMail + " new") : null,
       () => goPlace("newsletters")), sideBoxes(mails).map(({ f, fresh: n }) =>
       withFeed(item(mailMark(f), f.title, state.place === "newsletters" && state.feed === f.url, count(n), () => goPlace("newsletters", f.url), "side-sub"), f))),
+    // Discover: new things to follow, last of the places you follow from.
+    item(sideSvg("discover"), "Discover", state.place === "discover", null, () => goPlace("discover")),
     // Every highlight in the library (1.8.0), a place of its own.
     item(sideSvg("marks"), "Highlights", inMarks, null, () => goPlace("highlights")),
     item(sideSvg("reading"), "Stats", state.place === "reading", null, () => goPlace("reading")),
@@ -856,6 +858,7 @@ const SIDE_SVG = {
   marks: ICONS.mark,
   reading: '<path d="M5 20V12M10 20V6M15 20v-9M20 20V9"/>',
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+  discover: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
 };
 function sideSvg(name) {
   const box = el("span", { class: "side-icon", "aria-hidden": "true" });
@@ -958,8 +961,8 @@ function fitWidth() {
 // the reader's page come here through reader.js.
 const KEYS = [
   ["Anywhere", [["/", "Search the library"], [(/Mac/.test(navigator.platform) && navigator.maxTouchPoints < 2 ? "⌘" : "Ctrl") + " V", "Save a copied link"],
-    ["1  2  3  4  5", "Library, Feeds, Newsletters, Highlights, Stats"], ["G then L", "Go to the library"],
-    ["G then F", "Go to Feeds"], ["G then N", "Go to Newsletters"], ["G then H", "Go to Highlights"], ["G then S", "Go to Stats"], ["D", "Downloads"], [",", "Settings"], ["?", "These shortcuts"]]],
+    ["1  2  3  4  5  6", "Library, Feeds, Newsletters, Highlights, Stats, Discover"], ["G then L", "Go to the library"],
+    ["G then F", "Go to Feeds"], ["G then N", "Go to Newsletters"], ["G then H", "Go to Highlights"], ["G then S", "Go to Stats"], ["G then E", "Go to Discover"], ["D", "Downloads"], [",", "Settings"], ["?", "These shortcuts"]]],
   ["In the library", [["↑ ↓", "Move between clips"], ["Enter", "Open"], ["X", "Pick, to act on several"], ["Shift-click", "Pick a run"],
     ["F", "Favourite"], ["E", "Export"], ["Del", "Delete"]]],
   ["Reading", [["Space  ← →", "Next or previous page"], ["J  K", "Next or previous section"], ["T", "Contents beside the text"],
@@ -977,7 +980,7 @@ function keysSheet() {
 
 const typingIn = (t) => !!(t && t.closest && t.closest("input, textarea, select, [contenteditable]"));
 // The card or collection with focus, in the list on screen.
-const listNow = () => (state.folder ? $("folderBody") : state.place === "feeds" ? $("feeds") : state.place === "newsletters" ? $("newsletters") : state.place === "highlights" ? $("highlights") : state.place === "reading" ? $("reading") : $("library"));
+const listNow = () => (state.folder ? $("folderBody") : state.place === "feeds" ? $("feeds") : state.place === "newsletters" ? $("newsletters") : state.place === "highlights" ? $("highlights") : state.place === "reading" ? $("reading") : state.place === "discover" ? $("discover") : $("library"));
 const focusedNode = () => { const a = document.activeElement; return a && a.closest && listNow().contains(a) ? a.closest("[data-ids]") : null; };
 const focusedPage = () => {
   const n = focusedNode();
@@ -1003,7 +1006,7 @@ function jumpSection(d) {
 }
 
 let gAt = 0;
-const PLACE_KEYS = ["library", "feeds", "newsletters", "highlights", "reading"];
+const PLACE_KEYS = ["library", "feeds", "newsletters", "highlights", "reading", "discover"];
 function onKeys(e) {
   if (e.defaultPrevented || e.isComposing) return;
   const k = e.key, inFrame = e.target && e.target.ownerDocument !== document;
@@ -1053,7 +1056,7 @@ function onKeys(e) {
   }
   if (Date.now() - gAt < 1200) {
     gAt = 0;
-    const to = { l: "library", f: "feeds", n: "newsletters", h: "highlights", s: "reading", r: "reading" }[k.toLowerCase()];
+    const to = { l: "library", f: "feeds", n: "newsletters", h: "highlights", s: "reading", r: "reading", e: "discover" }[k.toLowerCase()];
     if (to) go(() => goPlace(to));
     return;
   }
@@ -1064,6 +1067,7 @@ function onKeys(e) {
     ...Object.fromEntries(PLACE_KEYS.map((to, i) => [String(i + 1), () => (state.folder ? toLibrary() : Promise.resolve()).then(() => goPlace(to))])),
     "/": () => (state.folder ? toLibrary() : Promise.resolve()).then(() => {
       if (state.place === "highlights") { $("highlights").querySelector(".hl-search input").focus(); return; }
+      if (state.place === "discover") { $("discover").querySelector(".dz-search input").focus(); return; }
       return (["feeds", "reading"].includes(state.place) ? goPlace("library") : Promise.resolve()).then(openSearch);
     }),
     d: () => openDownloads(),
@@ -1308,7 +1312,8 @@ function swipeFeeds(root) {
   let go = null;
   const chips = () => [...root.querySelectorAll(".feed-chips .chip")];
   // The chips stay put; what's under them slides (Daniel, 1.45.6).
-  const parts = () => [...root.children].filter((x) => !x.classList.contains("feed-chips"));
+  // Discover's search and chips sit in one box at the top; it stays too.
+  const parts = () => [...root.children].filter((x) => !x.classList.contains("feed-chips") && !x.querySelector(".feed-chips"));
   const move = (t) => parts().forEach((x) => { x.style.transform = t; });
   const play = (frames, timing) => parts().map((x) => x.animate(frames, timing));
   const neighbour = (d) => {
@@ -1318,7 +1323,8 @@ function swipeFeeds(root) {
   root.addEventListener("touchstart", (e) => {
     const t = e.touches[0];
     go = e.touches.length === 1 && t.clientX > EDGE && !state.feedPick && !state.side && !state.menu && chips().length > 1
-      && !e.target.closest(".filters, input, textarea") ? { x: t.clientX, y: t.clientY, on: false, dx: 0, t: e.timeStamp } : null;
+      // Discover's row of covers scrolls sideways on its own; its grid doesn't.
+      && !e.target.closest(".filters, input, textarea, .dz-covers:not(.dz-grid)") ? { x: t.clientX, y: t.clientY, on: false, dx: 0, t: e.timeStamp } : null;
   }, { passive: true });
   root.addEventListener("touchmove", (e) => {
     if (!go) return;
@@ -1399,6 +1405,7 @@ function pullToCheck(root) {
     // A pull also looks for a newer Waypage (0.34.0); the bar says so.
     const app = checkForNewerApp().catch(() => {});
     if (state.place === "feeds" || state.place === "newsletters") { Promise.all([checkNow(picked || null), app]).finally(done); return; }
+    if (state.place === "discover") { Promise.all([dzReadRR(true), app]).finally(done); return; }
     // And in the library, in the watched folder (1.1.0).
     Promise.all([pullChapters(app), lookInFolder(false)]).finally(done);
   }, { passive: true });

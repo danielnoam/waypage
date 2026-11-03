@@ -74,6 +74,7 @@ holdFeeds($("sidebar"));
 swipeToSide($("libraryView"));
 swipeFeeds($("feeds"));
 swipeFeeds($("newsletters"));
+swipeFeeds($("discover"));
 dragSide();
 pullToCheck($("libraryView"));
 $("sideCatch").addEventListener("click", () => history.back());

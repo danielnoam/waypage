@@ -55,6 +55,7 @@ src/app-reader.js   moving between screens; the reader around the page: brightne
 src/app-library.js  tags, collections, a clip's sheet, multi-select, export, import, watched folders
 src/app-saving.js   sync screen, saving several, next links and new chapters, feeds, home-screen widgets
 src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestures, a feed's sheets
+src/app-discover.js the Discover place: the list, its search, the Sites grid, the story and sign-up sheets
 src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
 src/app-lock.js     app lock: passcode (PBKDF2 hash), fingerprint or face on Android
 src/app-start.js    wiring at launch, what other apps share in, self-update, Test builds, What's new
@@ -67,6 +68,8 @@ src/pdf.js          PDFs through pdf.js in a locked-down frame
 src/pptx.js         PowerPoint decks redrawn on a canvas and written as a PDF (1.49.0)
 src/epub.js         clips as an EPUB 3 book, for e-readers and Send to Kindle
 src/feeds.js        RSS, Atom and JSON Feed, read into one shape
+src/discover.js     Discover's sources: the hand-picked list, and the story sites' lists and search (Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON, Tapas)
+src/discover-list.js  the hand-picked list itself (strict JSON between markers, refreshed from GitHub)
 src/sync.js         GitHub sync; src/sync-worker.js runs the merge off the main thread
 src/drive.js        Google Drive backups
 src/backup.js       one-file backups and exports
@@ -288,10 +291,11 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
 ## Tests and screenshots
 
 `node test/run-all.js` runs every `test/*.test.js` in its own process.
-`ui.test.js`, `drive.test.js` and `sites.test.js` drive the app in
-Chromium with Playwright and skip when it isn't installed (`sites.test.js`
-saves the discussion and code sites from their answers saved in
-`test/fixtures/sites/`, with nothing going out); `build.test.js` checks the
+`ui.test.js`, `drive.test.js`, `sites.test.js` and `discover.test.js`
+drive the app in Chromium with Playwright and skip when it isn't installed
+(`sites.test.js` saves the discussion and code sites from their answers
+saved in `test/fixtures/sites/`, with nothing going out; `discover.test.js`
+reads the story sites' lists from hand-made pages and pages cut from WEBTOON, Tapas and Wattpad in `test/fixtures/discover/`); `build.test.js` checks the
 bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
@@ -322,6 +326,15 @@ adds a line here.
   unlocked phone, not someone with the files or developer tools.
 - Newsletters go through Kill the Newsletter, which receives and can read
   the emails; the address and feed link are keys.
+- Discover reads the story sites' list and search pages (Wattpad's JSON API) as a browser would
+  (Royal Road sees the visit, as it does for saving a chapter). Cloudflare
+  turns a plain request away there, so on Android the hidden browser
+  (PageRender) reads them, which takes a few seconds; and the
+  phone fetches the hand-picked list from raw.githubusercontent.com twice
+  a day, which GitHub sees. Their markup is scraped (Scribble Hub's, AO3's and FanFiction.net's
+  were never seen from here: Cloudflare or AO3's own check blocks every
+  plain fetch; only the phone's hidden browser gets them), so a change
+  there leaves the last list read until the parser is fixed.
 - Translate downloads each language's model from Google once, which tells
   Google the languages, never the words.
 - A deck (PPTX) is redrawn by `pptx.js`, an approximation: no charts,
@@ -348,6 +361,10 @@ adds a line here.
 Things that broke once and would again. Check here before touching the
 area.
 
+- **Cloudflare's browser check (Royal Road, Nov 2026):** the phone's plain
+  fetch gets a 403 or 503 "Just a moment" page. `get` in save.js spots
+  it and asks the hidden browser (`C.platform.render`) instead; every
+  chapter of a series pays that slower path. The web copy can't.
 - **Android TTS engines get only ~0.5 s ahead:** the framework hands an
   engine the next piece only when one ends, so Kokoro paused between
   paragraphs. `SpeechService.makeAhead` asks `Kokoro.take` for the next
