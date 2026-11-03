@@ -1964,6 +1964,7 @@ span.update-text { cursor: default; }
   font: 600 var(--fs-meta)/var(--lh-meta) var(--sans);
 }
 .side-space { flex-shrink: 0; height: var(--s-5); }
+.side-version { flex-shrink: 0; margin: auto var(--s-5) 0; padding-top: var(--s-5); color: var(--muted); font: var(--fs-meta)/var(--lh-meta) var(--sans); font-variant-numeric: tabular-nums; }
 .side-sub { min-height: var(--tap); margin-inline-start: calc(var(--s-2) + var(--s-4)); font-size: var(--fs-label); }
 .side-sub .side-icon { color: var(--accent); }
 /* A heading with its fold arrow is one item (1.45.5): the arrow sits
@@ -2289,6 +2290,7 @@ span.update-text { cursor: default; }
   .side-tags { display: flex; flex-wrap: wrap; gap: var(--s-2); padding: 0 var(--s-3); }
   .side-tag { min-height: 32px; }
   .side-gap { flex: 1; min-height: var(--s-4); }
+  .side-version { margin: 0 var(--s-3); padding-top: 0; }
 }
 @media (min-width: 700px) and (pointer: fine) {
   .side-item { min-height: 40px; }
@@ -2528,7 +2530,7 @@ kbd {
 
   /* Feeds at 1280 px: the river in a column, the post beside it. */
   .aloud-bar.docked { width: calc(var(--side-w) - 2 * var(--s-4)); cursor: default; }
-  body.aloud-docked .side-gap { min-height: calc(var(--s-9) + var(--s-2)); }
+  body.aloud-docked .side-version { margin-bottom: calc(var(--s-9) + var(--s-2)); }
 
 }
 @media (min-width: 1024px) and (pointer: fine) {
