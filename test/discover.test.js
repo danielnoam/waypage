@@ -1,0 +1,361 @@
+// Discover: the hand-picked list, Royal Road's lists read from hand-made
+// pages (test/fixtures/discover/), and the place itself in a phone-sized
+// browser with the phone's fetch stood in for. `node test/discover.test.js`.
+// Needs Playwright, like ui.test.js.
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+const { spawn } = require("child_process");
+
+function playwright() {
+  const tries = ["playwright", "/opt/node-tools/node_modules/playwright"];
+  if (process.env.PLAYWRIGHT_MODULE) tries.unshift(process.env.PLAYWRIGHT_MODULE);
+  for (const t of tries) { try { return require(t); } catch (e) { /* next */ } }
+  return null;
+}
+const pw = playwright();
+if (!pw) {
+  console.log("  skip - Playwright isn't installed here (set PLAYWRIGHT_MODULE to its path)");
+  process.exit(0);
+}
+
+const PORT = 5800 + Math.floor(Math.random() * 500);
+const ROOT = "http://localhost:" + PORT + "/";
+const fixture = (name) => fs.readFileSync(path.join(__dirname, "fixtures", "discover", name), "utf8");
+const SOURCE = fs.readFileSync(path.join(__dirname, "..", "src", "discover-list.js"), "utf8");
+
+let passed = 0;
+async function test(name, fn) {
+  if (process.env.ONLY && !name.includes(process.env.ONLY)) return;
+  try { await fn(); passed++; console.log("  ok - " + name); }
+  catch (e) { console.error("  FAIL - " + name); console.error("    " + String(e.message).split("\n").slice(0, 4).join("\n    ")); process.exitCode = 1; }
+}
+
+function startServer() {
+  const child = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], { env: { ...process.env, PORT: String(PORT) }, stdio: "ignore" });
+  return new Promise((resolve, reject) => {
+    const t0 = Date.now();
+    const poll = () => fetch(ROOT).then(() => resolve(child), () => (Date.now() - t0 > 5000 ? reject(new Error("server didn't start")) : setTimeout(poll, 100)));
+    poll();
+  });
+}
+
+// A phone: page fetches answered from the fixtures (Royal Road) instead
+// of the network, as CapacitorHttp would.
+async function phone(browser) {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
+  await ctx.route((u) => !u.href.startsWith(ROOT), (r) => r.fulfill({ status: 404, body: "" }));
+  const p = await ctx.newPage();
+  await p.goto(ROOT);
+  await p.waitForFunction(() => window.Waypage && window.Waypage.discover && typeof goPlace === "function");
+  await p.evaluate(([list, search]) => {
+    const P = window.Waypage.platform;
+    Object.defineProperty(P, "canFetchPages", { get: () => true });
+    Object.defineProperty(P, "canReadPages", { get: () => true, configurable: true });
+    window.asked = [];
+    P.fetchText = async (url) => {
+      window.asked.push(url);
+      return { status: 200, url, text: /search\?title=/.test(url) ? search : list };
+    };
+  }, [fixture("rr-list.html"), fixture("rr-bare.html")]);
+  return { ctx, p };
+}
+
+(async () => {
+  const server = await startServer();
+  const browser = await pw.chromium.launch();
+  try {
+    await test("the hand-picked list is strict JSON between its markers, and every entry is whole", async () => {
+      const ctx = await browser.newContext();
+      const p = await ctx.newPage();
+      await p.goto(ROOT);
+      await p.waitForFunction(() => window.Waypage && window.Waypage.discover);
+      const got = await p.evaluate((src) => {
+        const D = window.Waypage.discover;
+        const parsed = D.fromSource(src), bundled = D.clean(window.Waypage.discoverList);
+        return { parsed, raw: window.Waypage.discoverList.entries.length, same: JSON.stringify(parsed) === JSON.stringify(bundled) };
+      }, SOURCE);
+      await ctx.close();
+      assert.ok(got.parsed, "fromSource read the file");
+      assert.ok(got.same, "the markers hold the same list the script sets");
+      assert.strictEqual(got.parsed.entries.length, got.raw, "no entry was dropped as malformed");
+      const urls = new Set();
+      for (const e of got.parsed.entries) {
+        assert.ok(e.about, e.name + " has a line about it");
+        assert.ok(!urls.has(e.url), e.name + " isn't listed twice");
+        urls.add(e.url);
+        if (e.kind === "newsletter") assert.ok(e.signup, e.name + " has a sign-up page");
+      }
+    });
+
+    await test("Royal Road's list rows read as stories, with cover, tags, chapters and rating", async () => {
+      const { ctx, p } = await phone(browser);
+      const items = await p.evaluate((html) => window.Waypage.discover.parseList(html, "https://www.royalroad.com/fictions/rising-stars"), fixture("rr-list.html"));
+      await ctx.close();
+      assert.strictEqual(items.length, 2);
+      const [a, b] = items;
+      assert.strictEqual(a.title, "The Ninth Lantern");
+      assert.strictEqual(a.url, "https://www.royalroad.com/fiction/101/the-ninth-lantern");
+      assert.strictEqual(a.cover, "https://www.royalroad.com/img/covers/101.jpg");
+      assert.deepStrictEqual(a.tags, ["LitRPG", "Progression"]);
+      assert.strictEqual(a.chapters, 212);
+      assert.strictEqual(a.followers, 1234);
+      assert.strictEqual(a.rating, 4.72);
+      assert.match(a.about, /ninth lantern/);
+      assert.strictEqual(b.title, "Salt and Static", "a chapter link in the row doesn't become its title");
+      assert.strictEqual(b.chapters, 64);
+    });
+
+    await test("with none of Royal Road's classes, a story is still its link and title", async () => {
+      const { ctx, p } = await phone(browser);
+      const items = await p.evaluate((html) => window.Waypage.discover.parseList(html, "https://www.royalroad.com/fictions/search"), fixture("rr-bare.html"));
+      const ids = await p.evaluate(() => ["https://www.royalroad.com/fiction/12/x", "https://royalroad.com/fiction/12", "https://www.royalroad.com/fiction/12/x/chapter/3/y", "https://example.com/fiction/12"].map(window.Waypage.discover.isStory));
+      await ctx.close();
+      assert.deepStrictEqual(items.map((s) => s.title), ["Moth Season", "A Quiet Siege"]);
+      assert.strictEqual(items[0].cover, "https://www.royalroad.com/c/303.png");
+      assert.strictEqual(items[0].chapters, 33);
+      assert.strictEqual(items[1].cover, "", "a row with no picture has no cover");
+      assert.deepStrictEqual(ids, [true, true, false, false]);
+    });
+
+    await test("Discover lists sites, newsletters and Royal Road; + opens the sheet that adds it", async () => {
+      const { ctx, p } = await phone(browser);
+      await p.evaluate(() => goPlace("discover"));
+      await p.locator("#discover .dz-book").first().waitFor();
+      assert.strictEqual(await p.locator("#placeTitle").textContent(), "Discover");
+      assert.ok(await p.locator("#discover .dz-row").count() > 20);
+      assert.deepStrictEqual((await p.locator("#discover .section-head .overline").allTextContents()).map((t) => t.replace("›", "")), ["Sites", "Feeds", "Newsletters"]);
+      assert.ok(!(await p.locator("#saveForm").isVisible()), "no field at the bottom");
+      assert.strictEqual(await p.locator("#discover .dz-search input").getAttribute("placeholder"), "Search Discover");
+      // A site: the Add a feed sheet, its address filled in.
+      await p.locator('#discover .dz-row:has-text("Quanta Magazine") .post-save').click();
+      await p.locator('#menuSheet[data-kind="addFeed"]:not([hidden])').waitFor();
+      assert.strictEqual(await p.locator("#menuSheet .feed-input").inputValue(), "https://www.quantamagazine.org/feed/");
+      await p.evaluate(() => history.back());
+      await p.waitForFunction(() => !state.menu);
+      // An email-only newsletter: the sign-up sheet.
+      await p.locator('#discover .dz-row:has-text("Money Stuff") .post-save').click();
+      await p.locator('#menuSheet[data-kind="signup"]:not([hidden])').waitFor();
+      assert.match(await p.locator("#menuSheet").textContent(), /Comes by email only/);
+      assert.strictEqual(await p.locator('#menuSheet .chip.on').textContent(), "New address", "a new address is picked first");
+      await p.evaluate(() => history.back());
+      await p.waitForFunction(() => !state.menu);
+      // A story: its sheet, then Save opens its chapters to check.
+      await p.locator('#discover .dz-book:has-text("The Ninth Lantern")').click();
+      await p.locator('#menuSheet[data-kind="story"]:not([hidden])').waitFor();
+      const sheet = await p.locator("#menuSheet").textContent();
+      assert.match(sheet, /212 chapters/);
+      assert.match(sheet, /Save as a collection/);
+      await ctx.close();
+    });
+
+    await test("a following site says so; chips narrow the list; the top field searches what's shown", async () => {
+      const { ctx, p } = await phone(browser);
+      await p.evaluate(() => {
+        feeds.push({ url: "https://aeon.co/feed.rss", title: "Aeon", link: "https://aeon.co/", days: 7, mode: "show", items: [] });
+        goPlace("discover");
+      });
+      await p.locator("#discover .dz-row").first().waitFor();
+      assert.match(await p.locator('#discover .dz-row:has-text("Aeon")').textContent(), /Following/);
+      await p.locator('#discover .chip:has-text("Newsletters")').click();
+      assert.strictEqual(await p.locator("#discover .dz-book").count(), 0, "no stories under Newsletters");
+      assert.ok(await p.locator('#discover .dz-row:has-text("Quanta")').count() === 0);
+      assert.ok(await p.locator('#discover .dz-row:has-text("Slow Boring")').count() === 0, "a newsletter with a feed is under Feeds, not Newsletters");
+      assert.ok(await p.locator('#discover .dz-row:has-text("Money Stuff")').count() === 1);
+      await p.locator('#discover .chip:has-text("Feeds")').click();
+      assert.ok(await p.locator('#discover .dz-row:has-text("Quanta")').count() === 1);
+      assert.deepStrictEqual(await p.locator("#discover .chip").allTextContents(), ["All", "Sites", "Feeds", "Newsletters"]);
+      // Under Feeds the field narrows the feeds as you type.
+      await p.fill("#discover .dz-search input", "quanta");
+      assert.strictEqual(await p.locator("#discover .dz-row").count(), 1);
+      assert.strictEqual(await p.locator("#discover .dz-search input").getAttribute("placeholder"), "Search feeds");
+      // Under All, Enter asks Royal Road too.
+      await p.locator('#discover .chip:has-text("All")').click();
+      await p.fill("#discover .dz-search input", "moth");
+      await p.press("#discover .dz-search input", "Enter");
+      await p.locator('#discover .section-head:has-text("Royal Road · moth")').waitFor();
+      assert.ok((await p.evaluate(() => window.asked)).some((u) => u.endsWith("/fictions/search?title=moth")));
+      assert.strictEqual(await p.locator("#discover .dz-book").count(), 2);
+      await ctx.close();
+    });
+
+    await test("when Royal Road's page has no stories, Discover says why and shows no stray text", async () => {
+      const { ctx, p } = await phone(browser);
+      await p.evaluate(() => { Waypage.platform.fetchText = async (url) => ({ status: 200, url, text: "<html><head><title>Just a moment...</title></head><body></body></html>" }); goPlace("discover"); });
+      await p.locator("#discover .dz-src.warn").waitFor();
+      const text = await p.locator("#discover").textContent();
+      await ctx.close();
+      assert.ok(!/null|undefined/.test(text), "no null or undefined in the page");
+      assert.match(text, /no stories were found/);
+      assert.match(text, /Just a moment/);
+    });
+
+    await test("turned away by Cloudflare, Royal Road's list is read through the hidden browser", async () => {
+      const { ctx, p } = await phone(browser);
+      await p.evaluate((list) => {
+        const P = Waypage.platform;
+        P.fetchText = async (url) => ({ status: 403, url, text: "<html><head><title>Just a moment...</title></head></html>" });
+        Object.defineProperty(P, "canRender", { get: () => true, configurable: true });
+        window.drawn = [];
+        P.render = async (url) => { window.drawn.push(url); return { text: list, url }; };
+        goPlace("discover");
+      }, fixture("rr-list.html"));
+      await p.locator("#discover .dz-book").first().waitFor();
+      assert.strictEqual(await p.evaluate(() => window.drawn[0]), "https://www.royalroad.com/fictions/rising-stars");
+      assert.strictEqual(await p.locator('#discover .dz-book:has-text("Royal Road")').count(), 2);
+      await ctx.close();
+    });
+
+    await test("Royal Road's heading opens Sites: a grid with lists, genres and more pages", async () => {
+      const { ctx, p } = await phone(browser);
+      await p.evaluate(() => goPlace("discover"));
+      await p.locator("#discover .dz-book").first().waitFor();
+      await p.locator('#discover .section-link:has-text("Sites")').click();
+      await p.locator("#discover .dz-grid .dz-book").first().waitFor();
+      assert.strictEqual(await p.locator("#discover .chip.on").textContent(), "Sites");
+      assert.strictEqual(await p.locator("#discover .dz-row").count(), 0, "only stories under Sites");
+      // Page 2 is the same fixture: nothing new, so the list says it's all.
+      await p.locator("#discover .dz-more").click();
+      await p.locator('#discover .footnote:has-text("all of them")').waitFor();
+      let asked = await p.evaluate(() => window.asked);
+      assert.ok(asked.some((u) => u === "https://www.royalroad.com/fictions/rising-stars?page=2"), asked.join(" "));
+      // A genre reads Royal Road's search with that tag.
+      await p.locator("#discover .dz-tools .dropdown").nth(2).locator(".dropdown-btn").click();
+      await p.locator('[role="option"]:has-text("Horror")').click();
+      await p.locator("#discover .dz-grid .dz-book").first().waitFor();
+      asked = await p.evaluate(() => window.asked);
+      assert.ok(asked.some((u) => /\/fictions\/search\?tagsAdd=horror&orderBy=popularity$/.test(u)), asked.join(" "));
+      // FictionPress: its own lists by category.
+      await p.evaluate((fp) => { const P = Waypage.platform, rr = P.fetchText; P.fetchText = async (url) => (/fictionpress/.test(url) ? (window.asked.push(url), { status: 200, url, text: fp }) : rr(url)); }, fixture("fp-list.html"));
+      await p.locator("#discover .dz-tools .dropdown").first().locator(".dropdown-btn").click();
+      await p.locator('[role="option"]:has-text("FictionPress")').click();
+      await p.locator('#discover .dz-grid .dz-book:has-text("The Salt Road")').waitFor();
+      asked = await p.evaluate(() => window.asked);
+      assert.ok(asked.some((u) => u.startsWith("https://www.fictionpress.com/fiction/Fantasy/")), asked.join(" "));
+      await p.locator('#discover .dz-book:has-text("The Salt Road")').click();
+      assert.match(await p.locator("#menuSheet").textContent(), /34 chapters[\s\S]*FictionPress|FictionPress[\s\S]*34 chapters/);
+      await p.evaluate(() => history.back());
+      await p.waitForFunction(() => !state.menu);
+      // Web serials: the hand-picked ones, narrowed by the field.
+      await p.locator("#discover .dz-tools .dropdown").first().locator(".dropdown-btn").click();
+      await p.locator('[role="option"]:has-text("Web serials")').click();
+      assert.ok(await p.locator("#discover .dz-serials .dz-row").count() >= 5);
+      await p.fill("#discover .dz-search input", "katalepsis");
+      assert.strictEqual(await p.locator("#discover .dz-serials .dz-row").count(), 1);
+      await ctx.close();
+    });
+
+    await test("All's Sites row mixes the story sites; a web serial's whole contents page is read", async () => {
+      const { ctx, p } = await phone(browser);
+      await p.evaluate((fp) => { const P = Waypage.platform, rr = P.fetchText; P.fetchText = async (url) => (/fictionpress/.test(url) ? { status: 200, url, text: fp } : rr(url)); goPlace("discover"); }, fixture("fp-list.html"));
+      await p.locator('#discover .dz-book:has-text("FictionPress")').first().waitFor();
+      const metas = await p.locator("#discover .dz-covers .dz-bm").allTextContents();
+      assert.deepStrictEqual(metas.slice(0, 3).map((m) => m.split(" · ")[0]), ["Royal Road", "FictionPress", "Web serial"]);
+      // Two arcs in two lists: both, in order, and not the blog's own links.
+      const got = await p.evaluate(() => Waypage.discover.serialLinks('<html><head><meta property="og:site_name" content="Worm"></head><body><nav><a href="/about/">About</a></nav><div class="entry-content"><p>Arc 1</p><ul><li><a href="/2011/06/11/gestation-1-1/">1.1</a></li><li><a href="/2011/06/14/gestation-1-2/">1.2</a></li></ul><p>Arc 2</p><ul><li><a href="/2011/06/25/insinuation-2-1/">2.1</a></li><li><a href="https://parahumans.wordpress.com/2011/06/28/insinuation-2-2/#more">2.2</a></li></ul><a href="/category/stories-arcs-1-10/">Arcs</a><a href="https://twitter.com/x">Share</a></div></body></html>', "https://parahumans.wordpress.com/table-of-contents/"));
+      await ctx.close();
+      assert.strictEqual(got.title, "Worm");
+      assert.deepStrictEqual(got.links, ["https://parahumans.wordpress.com/2011/06/11/gestation-1-1/", "https://parahumans.wordpress.com/2011/06/14/gestation-1-2/",
+        "https://parahumans.wordpress.com/2011/06/25/insinuation-2-1/", "https://parahumans.wordpress.com/2011/06/28/insinuation-2-2/"]);
+    });
+
+    await test("every story site's pages read as stories", async () => {
+      const { ctx, p } = await phone(browser);
+      const got = await p.evaluate((f) => {
+        const D = Waypage.discover, pick = (l) => l.map((s) => [s.id, s.url, s.title, s.chapters, !!s.cover, s.tags.join("/"), s.stat || ""]);
+        return {
+          wp: pick(D.parseWattpad(f.wp)),
+          wtRank: pick(D.parseWebtoon(f.wtRank, "https://m.webtoons.com/en/ranking")),
+          wtRankAction: D.parseWebtoon(f.wtRank, "https://m.webtoons.com/en/ranking", "ACTION").map((s) => s.title),
+          wtGenre: D.parseWebtoon(f.wtGenre, "https://m.webtoons.com/en/genres/fantasy").map((s) => [s.title, s.about.slice(0, 12)]),
+          tapas: pick(D.parseTapas(f.tapas, "https://m.tapas.io/search")),
+          ao3: pick(D.parseAO3(f.ao3, "https://archiveofourown.org/works")),
+          ao3By: D.parseAO3(f.ao3)[0].by,
+          sh: pick(D.parseSH(f.sh, "https://www.scribblehub.com/series-ranking/")),
+          ffn: pick(D.parseFFN(f.fp.replace(/fictionpress/g, "fanfiction"), "https://www.fanfiction.net/book/Harry-Potter/")),
+          ids: ["https://www.wattpad.com/story/26327373-x", "https://archiveofourown.org/works/1001/chapters/9", "https://m.webtoons.com/en/fantasy/osora/list?title_no=6202",
+            "https://tapas.io/series/JetDragon/info", "https://www.scribblehub.com/series/501/the-slow-tower/", "https://www.fanfiction.net/s/42/3/x"].map(D.storyId),
+        };
+      }, { wp: fixture("wp-search.json"), wtRank: fixture("wt-rank.html"), wtGenre: fixture("wt-genre.html"), tapas: fixture("tapas-search.html"),
+        ao3: fixture("ao3-works.html"), sh: fixture("sh-list.html"), fp: fixture("fp-list.html") });
+      await ctx.close();
+      if (process.env.DUMP) console.log(JSON.stringify(got, null, 1));
+      assert.deepStrictEqual(got.wp[0], ["wp26327373", "https://www.wattpad.com/story/26327373-the-dragon-and-the-princess", "The Dragon and the Princess", 34, true, "betrayal/complete/danger", "619K reads"]);
+      assert.strictEqual(got.wp.length, 3);
+      assert.deepStrictEqual(got.wtRank.map((s) => s[2]), ["Jungle Juice", "Who Made Me a Princess", got.wtRank[2][2]]);
+      assert.deepStrictEqual(got.wtRank[0].slice(0, 2), ["wt2480", "https://www.webtoons.com/en/action/jungle-juice/list?title_no=2480"]);
+      assert.ok(got.wtRank.every((s) => s[4]), "covers");
+      assert.deepStrictEqual(got.wtRankAction, ["Jungle Juice"]);
+      assert.deepStrictEqual(got.wtGenre[0], ["Osora", "Prince Osora"]);
+      assert.strictEqual(got.tapas.length, 3);
+      assert.deepStrictEqual(got.tapas[0].slice(0, 3), ["tpdragonvsdragon", "https://tapas.io/series/DragonvsDragon", "Dragon vs. Dragon"]);
+      assert.deepStrictEqual(got.ao3, [["ao31001", "https://archiveofourown.org/works/1001", "The Cartographer's Oath", 27, false, "Original Work/Fantasy/Maps", "4,812 kudos"],
+        ["ao31002", "https://archiveofourown.org/works/1002", "Low Tide", 1, false, "", "90 kudos"]]);
+      assert.strictEqual(got.ao3By, "ink");
+      assert.deepStrictEqual(got.sh, [["sh501", "https://www.scribblehub.com/series/501/the-slow-tower/", "The Slow Tower", 88, true, "Fantasy/Isekai", ""],
+        ["sh502", "https://www.scribblehub.com/series/502/salt/", "Salt", 0, false, "", ""]]);
+      assert.deepStrictEqual(got.ffn[0].slice(0, 3), ["ffn3001", "https://www.fanfiction.net/s/3001/1/", "The Salt Road"]);
+      assert.deepStrictEqual(got.ids, ["wp26327373", "ao31001", "wt6202", "tpjetdragon", "sh501", "ffn42"]);
+    });
+
+    await test("FictionPress's list rows read as stories", async () => {
+      const { ctx, p } = await phone(browser);
+      const got = await p.evaluate((html) => Waypage.discover.parseFP(html, "https://www.fictionpress.com/fiction/Fantasy/"), fixture("fp-list.html"));
+      await ctx.close();
+      assert.strictEqual(got.length, 2);
+      assert.deepStrictEqual([got[0].id, got[0].url, got[0].title, got[0].chapters, got[0].followers], ["fp3001", "https://www.fictionpress.com/s/3001/1/", "The Salt Road", 34, 1204]);
+      assert.deepStrictEqual(got[0].tags, ["Fantasy", "Adventure"]);
+      assert.strictEqual(got[0].cover, "https://www.fictionpress.com/image/101/75/");
+      assert.match(got[0].about, /^Two couriers/);
+      assert.strictEqual(got[1].cover, "");
+    });
+
+    await test("a swipe moves to the next chip, as in Feeds", async () => {
+      const { ctx, p } = await phone(browser);
+      await p.evaluate(() => goPlace("discover"));
+      await p.locator("#discover .dz-row").first().waitFor();
+      const swipe = async (x0, x1, on, hold) => p.evaluate(([a, b, on, hold]) => {
+        const root = document.getElementById("discover");
+        const row = root.querySelector(on || ".dz-tools, .section-head");
+        const r = row.getBoundingClientRect(), y = r.top + 20;
+        const t = (x) => new Touch({ identifier: 1, target: row, clientX: x, clientY: y });
+        row.dispatchEvent(new TouchEvent("touchstart", { touches: [t(a)], changedTouches: [t(a)], bubbles: true }));
+        for (let i = 1; i <= 6; i++) row.dispatchEvent(new TouchEvent("touchmove", { touches: [t(a + (b - a) * i / 6)], changedTouches: [t(a + (b - a) * i / 6)], bubbles: true }));
+        if (hold) return { head: root.querySelector(".dz-head").style.transform, body: root.querySelector(".dz-body").style.transform };
+        row.dispatchEvent(new TouchEvent("touchend", { touches: [], changedTouches: [t(b)], bubbles: true }));
+      }, [x0, x1, on, hold]);
+      // Mid-swipe the list slides; the search field and chips stay.
+      const mid = await swipe(320, 200, null, true);
+      assert.strictEqual(mid.head, "");
+      assert.match(mid.body, /translateX/);
+      await p.evaluate(() => document.querySelector("#discover .section-head").dispatchEvent(new TouchEvent("touchend", { touches: [], changedTouches: [], bubbles: true })));
+      await p.waitForTimeout(400);
+      await swipe(320, 40);
+      await p.waitForFunction(() => document.querySelector("#discover .chip.on").textContent === "Sites");
+      // Over Sites' grid of covers too.
+      await p.locator("#discover .dz-grid .dz-book").first().waitFor();
+      await swipe(320, 40, "#discover .dz-grid .dz-book");
+      await p.waitForFunction(() => document.querySelector("#discover .chip.on").textContent === "Feeds");
+      await swipe(40, 320);
+      await p.waitForFunction(() => document.querySelector("#discover .chip.on").textContent === "Sites");
+      await ctx.close();
+    });
+
+    await test("the web copy hides Royal Road and says where it works", async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      const p = await ctx.newPage();
+      await p.goto(ROOT);
+      await p.waitForFunction(() => typeof goPlace === "function" && window.Waypage.discover);
+      await p.evaluate(() => goPlace("discover"));
+      await p.locator("#discover .dz-row").first().waitFor();
+      assert.strictEqual(await p.locator("#discover .dz-book").count(), 0);
+      await p.locator('#discover .chip:has-text("Sites")').click();
+      assert.match(await p.locator("#discover").textContent(), /on your phone/);
+      await ctx.close();
+    });
+  } finally {
+    await browser.close();
+    server.kill();
+  }
+  console.log(passed + " passed");
+})();

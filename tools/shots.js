@@ -219,6 +219,19 @@ const SHOTS = {
   },
   async feeds(p) { await home(p); await p.evaluate(() => goPlace("feeds")); await p.locator("#feeds .post").first().waitFor(); },
   async newsletters(p) { await home(p); await p.evaluate(() => goPlace("newsletters")); },
+  // Royal Road's list as the phone would read it, drawn from the demo pictures.
+  async discover(p) {
+    await home(p);
+    await p.evaluate((img) => {
+      const S = [["The Cartographer's Daughter", "serial", "Fantasy", 48], ["Night Ferry", "tides", "Mystery", 58], ["Keepers of the Light", "lighthouse", "Sci-fi", 64], ["The Long Way Round", "map", "Adventure", 141], ["Fox Country", "fox", "Horror", 33]];
+      const html = S.map(([t, i, tag, ch], n) => '<div class="fiction-list-item"><img data-type="cover" src="' + img + i + '.jpg"><h2 class="fiction-title"><a href="/fiction/' + (100 + n) + '/x">' + t + '</a></h2><a class="fiction-tag">' + tag + "</a><span>" + ch + " Chapters</span></div>").join("");
+      Object.defineProperty(Waypage.platform, "canFetchPages", { get: () => true });
+      Object.defineProperty(Waypage.platform, "canReadPages", { get: () => true, configurable: true });
+      Waypage.platform.fetchText = async (url) => ({ status: 200, url, text: html });
+      goPlace("discover");
+    }, DEMO + "img/");
+    await p.locator("#discover .dz-cover.has-img").first().waitFor();
+  },
   async stats(p) { await home(p); await p.evaluate(() => goPlace("reading")); await p.waitForSelector(".rs-total"); },
   async sync(p) { await home(p); await p.evaluate(() => openSyncPage()); await p.locator("#syncView:not([hidden])").waitFor(); },
   async settings(p) { await home(p); await p.evaluate(() => openSettings()); await p.locator("#settingsView:not([hidden])").waitFor(); },

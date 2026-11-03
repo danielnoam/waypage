@@ -180,7 +180,10 @@
   async function findFeed(input) {
     const start = http(/^https?:\/\//i.test(input) ? input : "https://" + String(input || "").trim());
     if (!start) throw new FeedError("That doesn't look like an address. Paste the site's or its feed's.");
-    const res = await get(start);
+    // A site that turns the app's visit away (Cloudflare's browser check,
+    // 403) often still serves its feed: the usual paths are tried anyway.
+    let res;
+    try { res = await get(start); } catch (e) { if (!/\((403|503)\)/.test(e.message)) throw e; res = { url: start, text: "", refused: e }; }
     const at = res.url || start;
     const direct = parseFeed(res.text, at);
     if (direct) return { url: at, feed: direct };
@@ -194,6 +197,7 @@
         if (feed) return { url: r.url || u, feed };
       } catch (e) { /* the next one */ }
     }
+    if (res.refused) throw res.refused;
     throw new FeedError("Couldn't find a feed on " + siteOf(at) + ". Paste the feed's own address if the site shows one.");
   }
 
