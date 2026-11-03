@@ -402,14 +402,15 @@ function setUpd(change) {
   }
 }
 
-async function checkForNewerApp() {
+async function checkForNewerApp(byHand) {
   const build = await C.platform.ready;
   if (!C.platform.native || !build || !build.repo) return;
   if (["checking", "downloading", "paused"].includes(upd.phase)) return;
   C.platform.clearOldUpdates(APP_VERSION, isNewerVersion);
-  // A test build isn't offered the release it came from; Preview
-  // builds has Back to the release.
-  if (C.platform.previewBranch) { setUpd({ phase: "preview" }); return; }
+  // A test build checks for a release only when its version is tapped
+  // (Daniel's ask): on its own it says it's a test build, and Test builds
+  // has Back to the release.
+  if (C.platform.previewBranch && !byHand) { setUpd({ phase: "preview" }); return; }
   setUpd({ phase: "checking" });
   try {
     const res = await C.platform.fetchText("https://api.github.com/repos/" + build.repo + "/releases/latest",
@@ -524,7 +525,7 @@ function updatesGroup() {
     const out = UPD_OUT.includes(upd.phase);
     const preview = C.platform.previewBranch;
     const status = {
-      idle: "Tap to check for updates", checking: "Checking…", current: "You have the latest version",
+      idle: "Tap to check for updates", checking: "Checking…", current: preview ? "No release is newer than this test build" : "You have the latest version",
       failed: upd.error, available: "Waypage " + upd.latest + " is out",
       downloading: "Downloading " + upd.latest + " · " + upd.pct + "%", paused: "Paused at " + upd.pct + "%", ready: "Waypage " + upd.latest + " is ready to install",
       preview: "Test build of " + preview + builtLine(C.platform.build),
@@ -552,7 +553,7 @@ function versionRow(label, status, open) {
       el("span", { class: "row-label" }, label),
       status ? el("span", { class: "choice-note" + (out ? " accent" : upd.phase === "failed" ? " warn" : ""), role: "status" }, status) : null)];
   if (!out) {
-    const row = el("button", { class: "row update-row", type: "button", onclick: () => (upd.phase === "preview" ? openPreviews() : checkForNewerApp()) }, ...text);
+    const row = el("button", { class: "row update-row", type: "button", onclick: () => checkForNewerApp(true) }, ...text);
     row.disabled = busy;
     return row;
   }
