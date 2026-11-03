@@ -2401,6 +2401,31 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("The changelog is a page in Settings' window on a big screen, its own screen on a phone", async () => {
+      const q = await page(browser, 1280);
+      await q.click("#settingsBtn");
+      await q.locator("#settingsView .nav-row", { hasText: "About" }).click();
+      await q.locator("#sectionBody .nav-row", { hasText: "Changelog" }).click();
+      await q.waitForSelector("#settingsWin #sectionBody .news-entry");
+      assert.strictEqual(await q.textContent("#sectionTitle"), "Changelog");
+      assert.strictEqual(await q.isHidden("#newsView"), true);
+      assert.strictEqual(await q.isVisible("#settingsWin"), true);
+      await q.goBack();
+      await q.waitForFunction(() => document.querySelector("#sectionTitle").textContent === "About");
+      assert.strictEqual(await q.isVisible("#settingsWin"), true);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+
+      const p = await page(browser, 390);
+      await p.click("#settingsBtn");
+      await p.locator(".nav-row", { hasText: "About" }).click();
+      await p.locator("#sectionBody .nav-row", { hasText: "Changelog" }).click();
+      await p.waitForSelector("#newsBody .news-entry");
+      assert.strictEqual(await p.isVisible("#newsView"), true);
+      assert.deepStrictEqual(p.errors, [], p.errors.join(" | "));
+      await p.context().close();
+    });
+
     await test("Settings keeps its ? marks to the agreed list (1.48.2)", async () => {
       const q = await page(browser, 390);
       const agreed = ["Your fonts", "Dictionaries", "Before you go offline", "Save from your browser", "Sync with GitHub",
