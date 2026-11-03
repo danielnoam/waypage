@@ -62,6 +62,7 @@ jobs:
           echo "web copy $ok, fork $fork, no origin $none, metadata address $meta, POST $post"
           curl -s -o /dev/null -D - -H "$HOME_ORIGIN" "$W?url=http://wikipedia.org/" | grep -iE "^HTTP|^x-final-url"
           for u in https://en.wikipedia.org/wiki/Boeing_747 https://www.royalroad.com/fictions/best-rated "https://www.royalroad.com/fictions/search?title=mother" https://www.bbc.com/news https://www.ynet.co.il/; do
-            echo "$(code -H "$HOME_ORIGIN" "$W?url=$(node -p 'encodeURIComponent(process.argv[1])' "$u")") $u"
+            h=$(curl -s -o /dev/null -D - -H "$HOME_ORIGIN" "$W?url=$(node -p 'encodeURIComponent(process.argv[1])' "$u")")
+            echo "$(echo "$h" | head -1 | cut -d' ' -f2) $u $(echo "$h" | grep -i '^x-proxy-error' | tr -d '\r')$(echo "$h" | grep -i '^server:' | tr -d '\r')"
           done
           [ "$ok" = 200 ] && [ "$fork" = 403 ] && [ "$none" = 403 ] && [ "$meta" = 403 ] && [ "$post" = 405 ]
