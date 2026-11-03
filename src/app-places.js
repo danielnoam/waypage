@@ -833,7 +833,8 @@ function renderSide() {
     item(sideSvg("reading"), "Stats", state.place === "reading", null, () => goPlace("reading")),
     // On a big screen the sidebar carries the rest (1.5.0): the tags,
     // and Settings at its foot. Feeds are added from the Feeds place.
-    ...(big ? sideMore() : []));
+    ...(big ? sideMore() : []),
+    el("p", { class: "side-version" }, "Version " + APP_VERSION));
 }
 
 function sideMore() {

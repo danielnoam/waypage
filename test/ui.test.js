@@ -892,6 +892,7 @@ function zipOf(files) {
       const labels = await q.locator("#sidebar .side-item .side-label").allTextContents();
       assert.deepStrictEqual(labels.slice(0, 5), ["Library", "Trips", "Clip 3", "Collections", "Clips"], labels.join(", "));
       assert.ok(!labels.includes("Unloved") && !labels.includes("Files"), labels.join(", "));
+      assert.strictEqual(await q.locator("#sidebar > .side-version").last().textContent(), "Version " + await q.evaluate(() => APP_VERSION), "the sidebar ends with the app version");
       await q.locator("#sidebar .side-item", { hasText: "Collections" }).click();
       await q.locator("#sidebar").waitFor({ state: "hidden" });
       await until(q, () => document.querySelectorAll(".library .tile, .library [data-name]").length > 0 && !document.querySelector(".library .page-card:not([data-name])"));
