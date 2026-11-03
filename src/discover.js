@@ -175,7 +175,9 @@
     if (items.length) return items;
     if (res && res.status !== 200) throw new Error("HTTP " + res.status);
     const title = res && /<title>([^<]{0,60})/i.exec(res.text || "");
-    throw new Error("no stories (" + (res ? res.text.length : 0) + " characters" + (title ? ', titled "' + title[1].trim() + '"' : "") + ")");
+    // How many links it had, to tell a wrong reader from an empty page.
+    const links = res ? (res.text.match(/<a\b/gi) || []).length : 0;
+    throw new Error("no stories (" + (res ? res.text.length : 0) + " characters, " + links + " links" + (title ? ', titled "' + title[1].trim() + '"' : "") + ")");
   }
   const rrStories = (url) => stories(url, parseList);
   // A search with no results is an empty list, not an error.
@@ -246,6 +248,34 @@
         tags: (g >= 0 ? parts[g].split("/") : []).slice(0, 3),
         chapters: num((/Chapters:\s*([\d,]+)/.exec(meta) || [])[1]), followers: num((/Follows:\s*([\d,]+)/.exec(meta) || [])[1]),
         rating: 0, about: about.slice(0, 600),
+      });
+      if (out.length >= MAX) break;
+    }
+    if (out.length) return out;
+    // The phone's hidden browser can get the mobile site (m.), whose rows
+    // aren't div.z-list: there a story is its /s/123/1/ link and the block
+    // around it, its facts read from that block's words.
+    const seen = new Set();
+    for (const a of doc.querySelectorAll("a[href*='/s/']")) {
+      let u;
+      try { u = new URL(a.getAttribute("href"), base || origin); } catch (e) { continue; }
+      const m = /^\/s\/(\d+)\/1\b/.exec(u.pathname) || /^\/s\/(\d+)\/?$/.exec(u.pathname);
+      const t = text(a);
+      if (!m || seen.has(m[1]) || !t || /^(\d+|next|prev|»|«|>|<)$/i.test(t)) continue;
+      seen.add(m[1]);
+      let box = a.parentElement;
+      while (box && box.parentElement && box.parentElement !== doc.body
+        && new Set([...box.parentElement.querySelectorAll("a[href*='/s/']")].map((x) => (/\/s\/(\d+)/.exec(x.getAttribute("href") || "") || [])[1]).filter(Boolean)).size === 1) box = box.parentElement;
+      const all = text(box);
+      const img = box && box.querySelector("img");
+      const src = img && (img.getAttribute("data-original") || img.getAttribute("src") || "");
+      const g = all.split(/\s+-\s+/).find((x) => /^[A-Z][\w-]*(\/[A-Z][\w-]*)*$/.test(x.trim()) && !/^(English|Rated|Complete)$/.test(x.trim()));
+      out.push({
+        id: key + m[1], url: origin + "/s/" + m[1] + "/1/", site, title: t.slice(0, 120),
+        cover: src && !/\/static\//.test(src) ? httpUrl(new URL(src, origin).href) : "",
+        tags: g ? g.trim().split("/").slice(0, 3) : [],
+        chapters: num((/(?:Chapters|chapters):\s*([\d,]+)/.exec(all) || [])[1]), followers: num((/Follows:\s*([\d,]+)/.exec(all) || [])[1]),
+        rating: 0, about: all.replace(t, "").replace(/\b(Rated|Fiction Rated):[\s\S]*$/, "").replace(/^\s*by\s+\S+\s*/, "").replace(/^[»›>\s]+/, "").trim().slice(0, 600),
       });
       if (out.length >= MAX) break;
     }

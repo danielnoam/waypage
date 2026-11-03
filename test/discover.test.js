@@ -298,6 +298,15 @@ async function phone(browser) {
       assert.deepStrictEqual(got.ids, ["wp26327373", "ao31001", "wt6202", "tpjetdragon", "sh501", "ffn42"]);
     });
 
+    await test("FictionPress's mobile site (no div.z-list) reads as stories too", async () => {
+      const { ctx, p } = await phone(browser);
+      const got = await p.evaluate((html) => Waypage.discover.parseFP(html, "https://m.fictionpress.com/fiction/Fantasy/"), fixture("fp-mobile.html"));
+      await ctx.close();
+      assert.deepStrictEqual(got.map((s) => [s.id, s.url, s.title, s.chapters, s.followers, s.tags.join("/")]),
+        [["fp4001", "https://www.fictionpress.com/s/4001/1/", "Glass Harbour", 22, 310, "Fantasy/Mystery"], ["fp4002", "https://www.fictionpress.com/s/4002/1/", "Ash", 3, 0, "Fantasy"]]);
+      assert.match(got[0].about, /^A town built on a frozen sea/);
+    });
+
     await test("FictionPress's list rows read as stories", async () => {
       const { ctx, p } = await phone(browser);
       const got = await p.evaluate((html) => Waypage.discover.parseFP(html, "https://www.fictionpress.com/fiction/Fantasy/"), fixture("fp-list.html"));
