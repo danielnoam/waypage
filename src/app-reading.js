@@ -86,7 +86,7 @@ const HEBREW = [
   { value: "heebo", label: "Heebo", family: '"Heebo"' },
 ];
 const MARGINS = { narrow: ["var(--s-3)", "44rem"], normal: ["20px", "38rem"], wide: ["var(--s-7)", "32rem"] };
-const READING_DEFAULT = { size: 19, spacing: 1.6, letters: 0, words: 0, paras: 1, weight: 400, hyphens: true, font: "serif", hebrew: "auto", margins: "normal", align: "auto", layout: "scroll", spread: "auto", rail: true };
+const READING_DEFAULT = { size: 19, spacing: 1.6, letters: 0, words: 0, paras: 1, weight: 400, hyphens: true, font: "serif", hebrew: "auto", margins: "normal", align: "auto", layout: "scroll", spread: "auto", rail: true, comicLayout: "scroll", wide: "split" };
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 // Text alignment (1.19.0). "auto" leaves the clip or file as it came.
@@ -100,7 +100,7 @@ const ALIGNS = [
 // the text looks and Show as; the theme, Narrate and the rest stay one
 // for all. Kept on this device, like the defaults.
 const READING_FOR_KEY = "waypage.readingFor";
-const OWN_PREFS = ["font", "hebrew", "size", "weight", "align", "hyphens", "spacing", "letters", "words", "paras", "layout", "margins"];
+const OWN_PREFS = ["font", "hebrew", "size", "weight", "align", "hyphens", "spacing", "letters", "words", "paras", "layout", "margins", "comicLayout"];
 function readingFor() {
   const o = load(READING_FOR_KEY, {});
   return { clips: o.clips || {}, sets: o.sets || {} };
@@ -135,11 +135,17 @@ function readingPrefs(p = state.open) {
   if (!MARGINS[r.margins]) r.margins = READING_DEFAULT.margins;
   if (!ALIGNS.some((a) => a.value === r.align)) r.align = READING_DEFAULT.align;
   if (r.layout !== "pages") r.layout = "scroll";
+  // Comics have their own Show as (Unreleased), Scroll unless picked.
+  if (r.comicLayout !== "pages") r.comicLayout = "scroll";
+  if (r.wide !== "whole") r.wide = "split";
   if (!["one", "two", "auto"].includes(r.spread)) r.spread = "auto";
   r.rail = r.rail !== false;
   r.hyphens = r.hyphens !== false;
   return r;
 }
+
+// Whether a clip shows as Pages: a comic by its own setting.
+const pagesOn = (p = state.open, r = readingPrefs(p)) => (p && p.comic ? r.comicLayout : r.layout) === "pages";
 
 function fontStack(r) {
   const f = FONTS.find((x) => x.value === r.font);
@@ -184,7 +190,8 @@ function setReading(change, everywhere) {
 }
 function readingChanged(was, change) {
   paintReading();
-  if (C.reader && state.open && readingPrefs().layout !== was.layout) { C.reader.setPaged(readingPrefs().layout === "pages"); volumeWatch(); }
+  if (C.reader && state.open && pagesOn() !== pagesOn(state.open, was)) { C.reader.setPaged(pagesOn()); volumeWatch(); narrateOrScroll(state.open); }
+  if (C.reader && "wide" in change) C.reader.setWide(readingPrefs().wide);
   if (C.reader && "spread" in change) C.reader.setSpread(readingPrefs().spread);
   if ("rail" in change) fitRail();
   document.querySelectorAll(".reading-controls").forEach(syncReadingControls);

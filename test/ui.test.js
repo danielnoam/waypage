@@ -178,6 +178,25 @@ function fb2Bytes() {
   const cp = "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя";
   return Buffer.from([...xml].map((c) => (cp.includes(c) ? 0xc0 + cp.indexOf(c) : c.charCodeAt(0))));
 }
+// A grey PNG of w by h, for comic pages of a real shape.
+function pngOf(w, h) {
+  const zlib = require("zlib");
+  const crcTable = [...Array(256)].map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = (b) => { let c = 0xffffffff; for (const x of b) c = crcTable[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (type, data) => { const l = Buffer.alloc(4); l.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([l, td, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 0;
+  const raw = Buffer.alloc((w + 1) * h, 0x99); for (let y = 0; y < h; y++) raw[y * (w + 1)] = 0;
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+}
+// A manga volume (Unreleased, from Kavita): a cover, four pages and a
+// two-page spread third, its ComicInfo naming the series, the volume and
+// right to left.
+function mangaBytes(n) {
+  const page = pngOf(60, 90), spread = pngOf(120, 90);
+  return zipOf([["001.png", page], ["002.png", page], ["003.png", spread], ["004.png", page], ["005.png", page], ["006.png", page],
+    ["ComicInfo.xml", '<?xml version="1.0"?><ComicInfo><Series>Night Ferry</Series><Number>' + n + "</Number><Title>Volume " + n + "</Title><Manga>YesAndRightToLeft</Manga></ComicInfo>"]]);
+}
+
 // A stored zip of [name, text or Buffer] pairs.
 function zipOf(files) {
   const crcTable = [...Array(256)].map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
@@ -2935,6 +2954,53 @@ function zipOf(files) {
       assert.ok(await q.evaluate(() => /Saved/.test(document.querySelector("#newsletters .feed-group").textContent)));
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
+    });
+
+    await test("a comic's series and number file it in order, an EPUB's series too (Unreleased)", async () => {
+      const q = await page(browser, 390);
+      // Copied in, not asked about (Chrome can read a file from where it is).
+      const add = (b, name) => q.evaluate(async ([b, name]) => { askKeep = async () => false; await openFile(new File([new Uint8Array(b)], name), null, false); }, [b, name]);
+      await add([...mangaBytes(2)], "v2.cbz");
+      await add([...mangaBytes(1)], "v1.cbz");
+      const opf = EPUB_FILES[2][1].replace("<dc:language>en</dc:language>", '<dc:language>en</dc:language><meta name="calibre:series" content="Long Voyage"/><meta name="calibre:series_index" content="3"/>');
+      await add([...zipOf([EPUB_FILES[0], EPUB_FILES[1], ["OEBPS/book.opf", opf], ...EPUB_FILES.slice(3)])], "plain.epub");
+      const got = await q.evaluate(() => ({ ferry: folderPages("Night Ferry").map((p) => [p.title, p.volume, p.manga]), voyage: folderPages("Long Voyage").map((p) => [p.title, p.volume]) }));
+      assert.deepStrictEqual(got.ferry, [["Volume 1", 1, true], ["Volume 2", 2, true]]);
+      assert.deepStrictEqual(got.voyage, [["Plain Chapters", 3]]);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a comic in Pages: a page a screen, a manga turns right to left, a spread in halves, two up on a wide window (Unreleased)", async () => {
+      for (const width of [390, 1280]) {
+        const q = await page(browser, width);
+        await q.evaluate(async (b) => { askKeep = async () => false; await openFile(new File([new Uint8Array(b)], "v1.cbz"), null, false); }, [...mangaBytes(1)]);
+        await q.evaluate(() => setReading({ comicLayout: "pages" }));
+        await q.evaluate(() => openPage(state.pages[0].id));
+        await until(q, () => C.reader.paged && !!C.reader.pageInfo());
+        await q.waitForTimeout(300);
+        const info = () => q.evaluate(() => ({ ...C.reader.pageInfo(), x: document.getElementById("readerFrame").contentWindow.scrollX, dir: getComputedStyle(document.getElementById("readerFrame").contentDocument.body).direction }));
+        let i = await info();
+        assert.strictEqual(i.dir, "rtl", "a manga turns right to left");
+        // Phone: cover, page, the spread in two halves, three pages. Wide: cover, two, spread, two, one.
+        assert.strictEqual(i.pages, width < 700 ? 7 : 5);
+        const box = await q.locator("#readerFrame").boundingBox();
+        await q.mouse.click(box.x + 10 + (width < 700 ? 0 : 60), box.y + box.height / 2);
+        await q.waitForTimeout(700);
+        i = await info();
+        assert.strictEqual(i.page, 2, "the left side is next in a manga");
+        assert.ok(i.x < 0);
+        await q.evaluate(() => setTurn("ltr"));
+        await q.waitForTimeout(300);
+        i = await info();
+        assert.strictEqual(i.dir, "ltr");
+        assert.strictEqual(i.page, 2, "still on the same page");
+        assert.strictEqual(await q.evaluate(() => state.open.turn), "ltr");
+        await q.evaluate(() => setReading({ comicLayout: "scroll" }));
+        assert.strictEqual(await q.evaluate(() => C.reader.paged), false);
+        assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+        await q.context().close();
+      }
     });
 
     for (const width of [390, 1280]) {

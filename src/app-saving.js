@@ -11,7 +11,7 @@
 const PICTURES_KEY = "waypage.syncPictures";
 let syncTimer = null, syncQueue = load(PICTURES_KEY, null) || [], fetchingPictures = false;
 const keepQueue = () => store(PICTURES_KEY, syncQueue.length ? [...new Set(syncQueue)] : null);
-const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks"];
+const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "turn", "fav", "favAt", "folderFav", "folderFavAt", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks"];
 // While a run of saves is on, sync waits longer (1.2.0): each sync is a
 // merge of the whole library, and one after every page landing was a
 // stutter every few seconds.

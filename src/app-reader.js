@@ -426,7 +426,9 @@ function show(p, html) {
     onTap: toggleBar,
     onMark: openMark,
     onSelect: showReadHere,
-    pages: readingPrefs().layout === "pages",
+    pages: pagesOn(p),
+    turn: turnOf(p),
+    wide: readingPrefs().wide,
     top: () => $("readerView").querySelector(".reader-bar").offsetHeight,
     bottom: () => $("readFoot").offsetHeight,
     onKey: onKeys,
@@ -748,8 +750,20 @@ function volumeSwitch() {
         document.querySelectorAll('input[data-pref="volumePages"]').forEach((i) => { i.checked = e.target.checked; });
         volumeWatch();
       } }));
-  row.style.display = readingPrefs().layout === "pages" ? "" : "none";
+  row.style.display = pagesOn() ? "" : "none";
   return row;
+}
+
+// Which way a comic's pages turn in Pages (Unreleased): right to left for
+// a manga, as its ComicInfo says, unless picked otherwise for this comic.
+const turnOf = (p) => (p && (p.turn === "rtl" || p.turn === "ltr") ? p.turn : p && p.manga ? "rtl" : "ltr");
+async function setTurn(v) {
+  const p = state.open;
+  if (!p) return;
+  if (v === (p.manga ? "rtl" : "ltr")) delete p.turn; else p.turn = v;
+  C.reader.setPicsDir(v);
+  await C.store.writeIndex(state.pages);
+  syncSoon();
 }
 
 function pinchSwitch() {
@@ -1136,7 +1150,10 @@ const pictureBook = () => !!state.open && (!!state.open.comic || wordless);
 function narrateOrScroll(p) {
   const pics = !!p.comic || wordless;
   $("readerAloud").hidden = !speech.available || pics;
-  $("readerScroll").hidden = !pics;
+  // A comic in Pages turns rather than scrolls.
+  const turned = !!p.comic && pagesOn(p);
+  if (turned && glide.on) stopGlide();
+  $("readerScroll").hidden = !pics || turned;
 }
 const scrollRate = () => clamp(Number(load(SCROLL_RATE_KEY, 1)) || 1, RATE_MIN, RATE_MAX);
 function paintGlide() {
@@ -2204,18 +2221,35 @@ function readingControls(withTheme) {
     d.dataset.pref = pref;
     return d;
   };
+  // A comic in the reader's sheet (Unreleased) has its own Show as, which
+  // way its pages turn and what a spread does; margins and time left don't
+  // touch its pages.
+  const comic = withTheme && !!state.open && !!state.open.comic;
+  const note = (text) => el("span", { class: "choice-note rc-note" }, text);
   const layout = part("layout", "Layout",
     scoped ? scopeRow() : null,
-    row("Show as", seg(id + "-layout", "Show as", [
+    comic ? row("Show as", seg(id + "-comicLayout", "Show as", [
       { value: "scroll", label: "Scroll" }, { value: "pages", label: "Pages" },
-    ], r.layout, (v) => set({ layout: v }))),
+    ], r.comicLayout, (v) => set({ comicLayout: v })))
+      : row("Show as", seg(id + "-layout", "Show as", [
+        { value: "scroll", label: "Scroll" }, { value: "pages", label: "Pages" },
+      ], r.layout, (v) => set({ layout: v }))),
+    comic ? el("div", { class: "comic-rows" },
+      row("Turn pages", seg(id + "-turn", "Turn pages", [
+        { value: "ltr", label: "Left to right" }, { value: "rtl", label: "Right to left" },
+      ], turnOf(state.open), setTurn)),
+      state.open.manga ? note("This comic says it’s manga, read right to left") : null,
+      row("Wide pages", seg(id + "-wide", "Wide pages", [
+        { value: "split", label: "Split" }, { value: "whole", label: "Whole" },
+      ], r.wide, (v) => set({ wide: v }))),
+      note("A two-page spread on one screen: in halves, or whole")) : null,
     volumeSwitch(),
-    row("Margins", seg(id + "-margins", "Margins", [
+    comic ? null : row("Margins", seg(id + "-margins", "Margins", [
       { value: "narrow", label: "Narrow" }, { value: "normal", label: "Normal" }, { value: "wide", label: "Wide" },
     ], r.margins, (v) => set({ margins: v }))),
     ...(brightSwitch(id) || []),
     // Under Layout since 1.47.0: it adds a line to the page, not to the type.
-    row("Time left in", seg(id + "-leftIn", "Time left in", [
+    comic ? null : row("Time left in", seg(id + "-leftIn", "Time left in", [
       { value: "part", label: "Section" }, { value: "clip", label: "Whole" },
     ], leftIn(state.open), setLeftIn)),
     spentSwitch(),
@@ -2282,7 +2316,7 @@ function syncReadingControls(box) {
   const r = readingPrefs(p);
   const scope = readingScope(p);
   box.querySelectorAll(".scope-pick").forEach((d) => d.set(scope));
-  box.querySelectorAll(".volume-row").forEach((n) => { n.style.display = r.layout === "pages" ? "" : "none"; });
+  box.querySelectorAll(".volume-row").forEach((n) => { n.style.display = (p ? pagesOn(p, r) : r.layout === "pages") ? "" : "none"; });
   const shown = {
     size: r.size + " px", spacing: r.spacing.toFixed(2),
     letters: r.letters ? (r.letters > 0 ? "+" : "") + r.letters.toFixed(2) + " em" : "Normal",
@@ -2301,7 +2335,8 @@ function syncReadingControls(box) {
   const rail = box.querySelector('[data-pref="rail"]');
   if (rail) rail.checked = r.rail;
   box.querySelector('[data-pref="hyphens"]').checked = r.hyphens;
-  for (const k of ["layout", "margins", "spread"]) {
+  box.querySelectorAll(".comic-rows").forEach((n) => { n.hidden = !(p && pagesOn(p, r)); });
+  for (const k of ["layout", "margins", "spread", "comicLayout", "wide"]) {
     box.querySelectorAll('input[name$="-' + k + '"]').forEach((i) => { i.checked = i.value === r[k]; });
   }
   box.querySelectorAll(".font-pick[data-pref]").forEach((d) => d.set(r[d.dataset.pref]));

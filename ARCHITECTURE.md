@@ -191,6 +191,14 @@ read from where they are (shown under Files, not synced). PDFs go through
 (`src/pdf.js` is the bridge, `src/vendor/pdf.min.mjs` and its worker the library); large
 linked PDFs are read in ranges.
 
+A comic in Pages (reader.js `picsLayout`) is a flex row of its pages, each
+sized in px to a screen or half of one, so the text's own turning
+(`goPage`, `pages()`, the swipe, keys and thirds) works unchanged; a manga
+is `dir="rtl"` on the body. Comics have their own Show as (`comicLayout`)
+and a clip's `turn` overrides the ComicInfo `manga` flag. A file naming its
+series gets `series` and `volume`, and `fileSeries` (app-library.js) puts it
+into that collection in volume order.
+
 ## Browser versus app
 
 `platform.js` is the only file that asks where it runs. It exposes the
@@ -360,6 +368,10 @@ adds a line here.
 
 Things that broke once and would again. Check here before touching the
 area.
+
+- **`isPaged()` is true for a comic in Pages** (since comic Pages): code
+  that means text columns checks `comic` too (relayout branches to
+  picsLayout, chunkUp and text pinch skip comics).
 
 - **Cloudflare's browser check (Royal Road, Nov 2026):** the phone's plain
   fetch gets a 403 or 503 "Just a moment" page. `get` in save.js spots
