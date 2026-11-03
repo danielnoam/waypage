@@ -183,7 +183,28 @@
     return {
       body: book, pics, cover, title: first("title"), byline: creators.join(", "), lang: first("language"),
       dir: spineEl && spineEl.getAttribute("page-progression-direction") === "rtl" ? "rtl" : "",
+      series: bookSeries(opf),
     };
+  }
+
+  // The series a book is part of (Unreleased): calibre's series and index,
+  // or EPUB 3's belongs-to-collection with its group-position. A
+  // collection that names itself a set rather than a series is left out.
+  function bookSeries(opf) {
+    const cal = opf.querySelector('meta[name="calibre:series"]');
+    const name = cal && (cal.getAttribute("content") || "").trim();
+    if (name) {
+      const i = opf.querySelector('meta[name="calibre:series_index"]');
+      return { name, n: parseFloat(i ? i.getAttribute("content") : "") };
+    }
+    const refines = [...opf.querySelectorAll("meta[refines]")];
+    for (const c of opf.querySelectorAll('meta[property="belongs-to-collection"]')) {
+      const id = c.getAttribute("id");
+      const of = (prop) => ((id && refines.find((r) => r.getAttribute("refines") === "#" + id && r.getAttribute("property") === prop)) || {}).textContent || "";
+      if ((of("collection-type").trim() || "series") !== "series" || !c.textContent.trim()) continue;
+      return { name: c.textContent.replace(/\s+/g, " ").trim(), n: parseFloat(of("group-position")) };
+    }
+    return null;
   }
 
   // The book's own table of contents (1.27.2), as [{ title, path, frag,
@@ -744,13 +765,17 @@
     const entries = await B().zipEntries(file);
     const names = [...entries.keys()].filter((n) => PICTURE.test(n) && !/(^|\/)(__MACOSX|\.)/.test(n)).sort(naturally);
     if (!names.length) throw new FileError("There are no pictures in this comic.");
-    let title = "";
+    let title = "", series = null, manga = false;
     const info = [...entries.keys()].find((n) => /(^|\/)ComicInfo\.xml$/i.test(n));
     if (info) {
       try {
         const x = new DOMParser().parseFromString(decode(await B().zipRead(file, entries.get(info))), "application/xml");
         const get = (t) => ((x.getElementsByTagName(t)[0] || {}).textContent || "").trim();
         title = get("Title") || [get("Series"), get("Number") && "#" + get("Number")].filter(Boolean).join(" ");
+        // Its series and number file it with the rest (Unreleased, from
+        // Kavita); Manga "YesAndRightToLeft" turns its pages right to left.
+        if (get("Series")) series = { name: get("Series"), n: parseFloat(get("Number") || get("Volume")) };
+        manga = get("Manga") === "YesAndRightToLeft";
       } catch (e) { title = ""; }
     }
     const root = out.createElement("div");
@@ -761,7 +786,7 @@
       root.append(img);
       return { img, at: n, read: () => B().zipRead(file, entries.get(n)) };
     });
-    return { root, panels, title: title || baseName(name) };
+    return { root, panels, title: title || baseName(name), series, manga };
   }
 
   // ---- PDF ----
@@ -1216,7 +1241,7 @@
         if (onProgress) onProgress(i + 1, got.panels.length, "pictures");
       }
       if (!pics.n) throw new FileError("There are no pictures in this comic Waypage can show.");
-      return { root: got.root, title: got.title };
+      return { root: got.root, title: got.title, series: got.series, manga: got.manga };
     }
     let got;
     if (kind === "pdf") return fromPdf(file, out, onProgress, pics);
@@ -1255,7 +1280,7 @@
       await pics.put(x.img, x.bytes, x.type, x.cover, x.at);
       if (onProgress) onProgress(i + 1, list.length, "pictures");
     }
-    return { root, title: got.title, byline: got.byline, lang: got.lang, dir: got.dir };
+    return { root, title: got.title, byline: got.byline, lang: got.lang, dir: got.dir, series: got.series };
   }
 
   // Makes a clip of `file`, `kind` from kindOf. `link` is the lasting
@@ -1288,6 +1313,11 @@
       file: { name: file.name.slice(0, 200), kind, ext, size: file.size },
     };
     if (kind === "cbz" || got.scan) meta.comic = true;
+    if (got.manga) meta.manga = true;
+    if (got.series && got.series.name) {
+      meta.series = got.series.name.replace(/\s+/g, " ").trim().slice(0, 200);
+      if (Number.isFinite(got.series.n)) meta.volume = got.series.n;
+    }
     // The lasting permission is this device's own: it never syncs, and
     // never goes in a backup another device might read.
     if (link) meta.link = link;

@@ -1122,6 +1122,10 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 /* Reader settings (0.34.0): Layout, Text and Read aloud, each its own part. */
 .rc-part { display: flex; flex-direction: column; gap: var(--s-3); }
 .rc-part[hidden] { display: none; }
+/* A comic's own Layout rows (Unreleased), a note under a row at its end. */
+.comic-rows { display: flex; flex-direction: column; gap: var(--s-3); }
+.comic-rows[hidden] { display: none; }
+.rc-note { margin-top: calc(var(--s-2) * -1); text-align: end; }
 /* .rc-row is display: flex, which beats the browser's [hidden] (1.49.0). */
 .rc-row[hidden] { display: none; }
 

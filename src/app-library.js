@@ -109,6 +109,24 @@ function folderNext(list) {
   return i < 0 ? list[0] : list[i];
 }
 
+// A book or comic that names its series (Unreleased, from Kavita: CBZ
+// ComicInfo, an EPUB's series) goes into that series' collection, or the
+// one it's already going into, before the first volume numbered after it,
+// so the collection reads 1, 2, 3 however they were added.
+function fileSeries(p) {
+  const name = p.folder || (p.series && cleanTag(p.series) ? folderName(p.series) : "");
+  if (!name) return;
+  const list = folderPages(name).filter((q) => q !== p);
+  if (!p.folder) { p.folder = name; joinFav(p, name); }
+  p.folderAt = Date.now();
+  const n = Number(p.volume);
+  if (!Number.isFinite(n) || p.volume == null) return;
+  const i = list.findIndex((q) => q.volume != null && Number.isFinite(Number(q.volume)) && Number(q.volume) > n);
+  if (i < 0) return;
+  const at = (q) => q.folderAt || q.savedAt || 0;
+  p.folderAt = i > 0 ? (at(list[i - 1]) + at(list[i])) / 2 : at(list[i]) - 1000;
+}
+
 async function setFolder(p, name) {
   const clean = name && cleanTag(name);
   if (clean) {
@@ -1774,11 +1792,12 @@ async function openFile(file, btn, open, ref, forced) {
         const had = open && kind !== "clip" && fileLike(file.name, file.size, link);
         if (had) openPage(had.id);
       } else {
+        fileSeries(meta);
         state.pages.unshift(meta);
         await C.store.writeIndex(state.pages);
         await loadThumbs();
         C.store.keepStored();
-        toast("Added “" + meta.title + "”");
+        toast("Added “" + meta.title + "”" + (meta.folder ? " to " + meta.folder : ""));
         if (open) openPage(meta.id);
       }
     }
@@ -1983,6 +2002,7 @@ async function lookInOne(w, said, scan) {
         // The collection picked for the folder (1.28.0), else its subfolder's name.
         const dir = w.into || f.path.split("/").slice(-2, -1)[0];
         if (dir) { meta.folder = folderName(dir); meta.folderAt = Date.now(); }
+        fileSeries(meta);
         state.pages.unshift(meta);
         await C.store.writeIndex(state.pages);
         added++;

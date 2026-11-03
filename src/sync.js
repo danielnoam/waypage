@@ -31,11 +31,11 @@
   // Fields that come with the page's text, so the copy saved last wins
   // them all together.
   const CONTENT = ["url", "title", "site", "byline", "licence", "savedAt", "minutes", "lang", "dir", "mode", "images",
-    "comic", "next", "prev", "requested", "series", "source", "file", "cut", "archived", "editedAt"];
+    "comic", "manga", "volume", "next", "prev", "requested", "series", "source", "file", "cut", "archived", "editedAt"];
   // Every field an index entry can carry through a backup or sync
   // (backup.cleanMeta); anything else on a page stays on its device.
   const SYNCED = new Set(["id", "url", "title", "site", "byline", "licence", "savedAt", "minutes", "lang", "dir", "mode", "images",
-    "at", "finished", "readAt", "readOn", "placeAt", "spot", "comic", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "file", "marks", "cut", "archived", "editedAt"]);
+    "at", "finished", "readAt", "readOn", "placeAt", "spot", "comic", "manga", "volume", "turn", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "file", "marks", "cut", "archived", "editedAt"]);
   // Where the reader is, which goes with whichever device moved it last:
   // placeAt (1.30.2), or readAt on entries from before it. Opening a clip
   // stamps readAt alone, so a device that opened one at an older place

@@ -17,10 +17,14 @@
 
   let frame = null, doc = null, scrollTimer = null, scrollFrame = 0, topSpace = null, bottomSpace = null;
   // Pages (0.29.0): the text in columns a screen wide, turned instead of
-  // scrolled. `paged` is the reader's choice; a comic chapter always
-  // scrolls.
+  // scrolled. `paged` is the reader's choice. A comic in Pages (Unreleased,
+  // from Kavita) is a row of its pages, one a screen (picsLayout).
   let paged = false, comic = false;
-  const isPaged = () => paged && !comic && !!doc;
+  const isPaged = () => paged && !!doc;
+  const picsPaged = () => isPaged() && comic;
+  // A comic's way of turning ("rtl" for manga) and what a two-page spread
+  // does on one screen: "split" in halves, or "whole".
+  let picsDir = "ltr", wideMode = "split";
   // The "Next" link this file adds at the end of a page in a folder; only
   // that element (not a look-alike in the page) moves on.
   let nextLink = null, onNext = null, prevLink = null, onPrev = null, onImage = null, onTap = null, onMark = null;
@@ -224,6 +228,22 @@
     const held = onTapOnly && navigator.onLine && e.target.closest && e.target.closest(".co-placeholder");
     if (held && boxes.has(held)) { e.preventDefault(); loadHeld(boxes.get(held)); return; }
     const img = e.target.closest && e.target.closest("img");
+    if (img && img.closest(".co-comic") && picsPaged()) {
+      // Pages: a side third turns, the middle shows the bar, a double tap
+      // opens the page in the viewer to zoom.
+      const w = frame.contentWindow.innerWidth, x = e.clientX;
+      e.preventDefault();
+      if (tapTimer) {
+        clearTimeout(tapTimer);
+        tapTimer = 0;
+        if (onImage) onImage(imageInfo(picsAt(x) || img));
+        return;
+      }
+      if (x < w * 0.3) { turn(rtl() ? 1 : -1); return; }
+      if (x > w * 0.7) { turn(rtl() ? -1 : 1); return; }
+      tapTimer = setTimeout(() => { tapTimer = 0; if (onTap) onTap(); }, 280);
+      return;
+    }
     if (img && img.closest(".co-comic")) {
       if (tapTimer) {
         clearTimeout(tapTimer);
@@ -549,11 +569,14 @@
   // comic. Its pages, the one at the top of the screen, and a jump to one,
   // for the rail of pages beside it.
   const printed = () => (doc ? [...doc.querySelectorAll(".co-comic > img")] : []);
+  // The page under x on the screen shown now (Pages).
+  const picsAt = (x) => printed().find((img) => { const r = img.getBoundingClientRect(); return r.left <= x && r.right >= x && r.right > 0 && r.left < width(); }) || null;
   function printedPages() {
     return printed().map((img, i) => ({ n: i + 1, page: Number(img.getAttribute("data-page")) || 0,
       src: /^(blob|data:image\/(?!svg)|https?|capacitor|file)/.test(img.getAttribute("src") || "") ? img.src : "" }));
   }
   function printedNow() {
+    if (picsPaged()) { const p = page(), i = printed().findIndex((img) => pageOf(img) === p); return i < 0 ? 1 : i + 1; }
     const edge = (topSpace ? topSpace() : 0) + 24;
     let cur = 1;
     for (const [i, img] of printed().entries()) {
@@ -566,6 +589,7 @@
     const img = printed()[n - 1];
     if (!img || !frame) return;
     const w = frame.contentWindow;
+    if (picsPaged()) { goPage(pageOf(img)); return; }
     w.scrollTo(w.scrollX, img.getBoundingClientRect().top + w.scrollY - (topSpace ? topSpace() : 0) - 8);
   }
 
@@ -1143,6 +1167,7 @@
   // allows, centred, so a column and its gap are one screen. Two-up, each
   // half of the screen is laid out the same way.
   function relayout(at) {
+    if (comic) { picsLayout(at); return; }
     const root = doc.documentElement;
     const keep = at == null ? position() : at;
     const probe = doc.createElement("div");
@@ -1164,6 +1189,68 @@
     goPage(Math.round(keep * (n - 1)), true);
   }
 
+  // A comic in Pages: its pages in a row, each as wide as a screen and
+  // fitted into it. Two-up, a page is half a screen, its edge against the
+  // spine; the cover and a two-page spread take the whole screen, a spread
+  // starting on a new screen. On one screen a spread is two screens wide
+  // with Wide pages on Split, so it's read in halves. Turning is the text's
+  // own (goPage), so swipes, taps, keys and the volume keys all work.
+  function picsLayout(at) {
+    const root = doc.documentElement, w = width();
+    // Each page keeps out from under the bars, as text pages do.
+    const top = topSpace ? topSpace() : 0, bottom = bottomSpace ? bottomSpace() : 0;
+    const h = Math.max(200, frame.contentWindow.innerHeight - top - bottom);
+    const keepImg = at == null ? printed().find((img) => pageOf(img) === page()) : null;
+    const keep = at == null ? position() : at;
+    const two = twoUp(w), unit = two ? w / 2 : w, back = picsDir === "rtl";
+    root.classList.add("co-pics");
+    root.classList.toggle("co-two", two);
+    let pos = 0;
+    for (const [i, img] of printed().entries()) {
+      const nw = img.naturalWidth || Number(img.getAttribute("width")) || 2;
+      const nh = img.naturalHeight || Number(img.getAttribute("height")) || 3;
+      const wide = nw > nh * 1.15;
+      img.dataset.coWide = wide ? "1" : "";
+      let span = 1, skip = 0, hug = "center";
+      if (two) {
+        if (i === 0 || wide) { span = 2; skip = pos % 2; }
+        else hug = (pos % 2 === 0) !== back ? "right" : "left";
+      } else if (wide && wideMode === "split") span = 2;
+      img.style.marginInlineStart = skip ? unit + "px" : "";
+      img.style.width = span * unit + "px";
+      img.style.height = h + "px";
+      img.style.objectPosition = hug + " center";
+      pos += skip + span;
+    }
+    const per = two ? 2 : 1;
+    root.style.setProperty("--co-tail", ((per - pos % per) % per) * unit + "px");
+    root.style.setProperty("--co-screen", w + "px");
+    if (keepImg) goPage(pageOf(keepImg), true);
+    else goPage(Math.round(keep * (pages() - 1)), true);
+  }
+  // A page whose size wasn't known until it loaded lays the row out again
+  // only when it turns out to be a spread.
+  function picsLoaded(e) {
+    const img = e.target;
+    if (!picsPaged() || !img || img.tagName !== "IMG" || !img.closest(".co-comic")) return;
+    if ((img.naturalWidth > img.naturalHeight * 1.15) !== (img.dataset.coWide === "1")) picsLayout();
+  }
+  function setPicsDir(v) {
+    v = v === "rtl" ? "rtl" : "ltr";
+    if (v === picsDir) return;
+    picsDir = v;
+    if (doc && comic) picsDirApply();
+  }
+  function picsDirApply() {
+    const at = picsPaged() ? position() : null;
+    if (picsPaged()) doc.body.setAttribute("dir", picsDir); else doc.body.removeAttribute("dir");
+    if (at != null) picsLayout(at);
+  }
+  function setWide(v) {
+    wideMode = v === "whole" ? "whole" : "split";
+    if (picsPaged()) picsLayout();
+  }
+
   // ---- Zoom on an image chapter (1.2.2) ----
   // Printed pages and panels zoom in place, as in a PDF viewer: a pinch
   // scales the chapter under the fingers and, once the fingers lift, the
@@ -1173,7 +1260,7 @@
   // the same on a desktop.
   const ZOOM_MAX = 4;
   let zoom = 1, pinch = null;
-  const comicRoot = () => (doc && comic ? doc.querySelector(".co-comic") : null);
+  const comicRoot = () => (doc && comic && !paged ? doc.querySelector(".co-comic") : null);
   // The chapter's top left corner in the page's own coordinates, with any
   // transform taken off it first.
   function origin(root) {
@@ -1217,6 +1304,13 @@
   }
   function zoomInput() {
     doc.addEventListener("touchstart", (e) => {
+      // In Pages the page is opened in the viewer to zoom, as a double tap does.
+      if (e.touches.length === 2 && picsPaged()) {
+        const [a, b] = e.touches;
+        const img = picsAt((a.clientX + b.clientX) / 2);
+        if (img && onImage) { e.preventDefault(); onImage(imageInfo(img)); }
+        return;
+      }
       if (e.touches.length !== 2 || !comicRoot()) { if (e.touches.length !== 2) pinch = null; return; }
       const root = comicRoot();
       const [a, b] = e.touches;
@@ -1372,7 +1466,7 @@
     const span = (e) => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
     doc.addEventListener("touchstart", (e) => {
       p0 = null;
-      if (e.touches.length !== 2 || comicRoot() || !onPinch || !onPinch.on()) return;
+      if (e.touches.length !== 2 || comic || !onPinch || !onPinch.on()) return;
       const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
       const el = !isPaged() && anchors.find((a) => a.getBoundingClientRect().bottom > my);
       const r = el && el.getBoundingClientRect();
@@ -1395,7 +1489,7 @@
     doc.addEventListener("touchend", done);
     doc.addEventListener("touchcancel", done);
     // Safari's own page zoom, which would take the pinch first.
-    doc.addEventListener("gesturestart", (e) => { if (!comicRoot() && onPinch && onPinch.on()) e.preventDefault(); });
+    doc.addEventListener("gesturestart", (e) => { if (!comic && onPinch && onPinch.on()) e.preventDefault(); });
   }
 
   // Turns pages with a swipe and the arrow keys. The page can't scroll on
@@ -1463,7 +1557,8 @@
   function setPaged(on) {
     const at = doc ? position() : 0;
     paged = !!on;
-    if (!doc || comic) return;
+    if (!doc) return;
+    if (comic) { picsPaging(at); return; }
     doc.documentElement.classList.toggle("co-paged", paged);
     lazy(!paged);
     if (paged) relayout(at);
@@ -1473,13 +1568,27 @@
     }
   }
 
+  // A comic between Scroll and Pages, kept on the same page.
+  function picsPaging(at) {
+    const root = doc.documentElement, w = frame.contentWindow;
+    const keep = root.classList.contains("co-pics") ? printed().find((img) => pageOf(img) === page())
+      : printed().find((img) => img.getBoundingClientRect().bottom > w.innerHeight / 2);
+    root.classList.toggle("co-paged", paged);
+    root.classList.toggle("co-pics", paged);
+    if (paged) { doc.body.setAttribute("dir", picsDir); picsLayout(at); if (keep) goPage(pageOf(keep), true); return; }
+    doc.body.removeAttribute("dir");
+    root.classList.remove("co-two");
+    for (const img of printed()) { img.style.cssText = ""; delete img.dataset.coWide; }
+    if (keep) keep.scrollIntoView(); else w.scrollTo(0, at * (root.scrollHeight - w.innerHeight));
+  }
+
   // Renders `html` (a page.html) into `iframe`, scrolled to `at` (0 to 1),
   // and reports the position as the reader scrolls: onScroll(at, y) every
   // frame, onPosition(at) once it stops. Resolves once it's shown.
   // `next` ({ over, title, go }) adds a link to the next page at the end;
   // `top` () gives the height the bar covers; onImage(info) opens a tapped
   // image.
-  function open(iframe, html, meta, { at = 0, spot: spotAt = "", onPosition, onScroll, next, prev, top, onImage: image, onTap: tap, onMark: mark, onSelect, pages: asPages, bottom, onKey, onEdge: edge, onPinch: pinchTo, onLink: link, onNote: note, onJump: jumped, spotWords: wordsAt, end } = {}) {
+  function open(iframe, html, meta, { at = 0, spot: spotAt = "", onPosition, onScroll, next, prev, top, onImage: image, onTap: tap, onMark: mark, onSelect, pages: asPages, turn: turnWay, wide: wideWay, bottom, onKey, onEdge: edge, onPinch: pinchTo, onLink: link, onNote: note, onJump: jumped, spotWords: wordsAt, end } = {}) {
     // The clip before tells where it was left before this one comes in.
     settle();
     tell = onPosition ? () => onPosition(position(), spot()) : null;
@@ -1488,6 +1597,8 @@
     turning = null;
     paged = !!asPages;
     comic = false;
+    picsDir = turnWay === "rtl" ? "rtl" : "ltr";
+    wideMode = wideWay === "whole" ? "whole" : "split";
     zoom = 1;
     pinch = null;
     blocks = [];
@@ -1566,6 +1677,8 @@
         wrapLoose();
         comic = !!doc.querySelector(".co-comic");
         if (isPaged()) doc.documentElement.classList.add("co-paged");
+        if (picsPaged()) { doc.documentElement.classList.add("co-pics"); doc.body.setAttribute("dir", picsDir); }
+        if (comic) doc.addEventListener("load", picsLoaded, true);
         chunkUp();
         pagedInput();
         zoomInput();
@@ -1709,5 +1822,5 @@
       return line;
     }));
   }
-  C.reader = { pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
+  C.reader = { pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
 })();

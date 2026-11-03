@@ -245,3 +245,12 @@ html.co-paged img { max-height: calc(100vh - var(--co-top, 0px) - var(--s-5) - v
 html.co-paged figure img { width: auto; }
 html.co-paged figure, html.co-paged .co-next, html.co-paged .co-placeholder, html.co-paged tr { break-inside: avoid; }
 html.co-paged h1, html.co-paged h2, html.co-paged h3 { break-after: avoid; }
+/* A comic in Pages (Unreleased): its pages in a row, one a screen, sized
+   by reader.js (picsLayout); the title and the rest are left out, the
+   next clip's link has a screen of its own at the end. */
+html.co-paged.co-pics body { display: flex; width: max-content; height: 100%; padding: var(--co-top, 0px) 0 0; columns: auto; column-width: auto; }
+html.co-paged.co-pics body > :not(.co-comic):not(.co-next), html.co-paged.co-pics .co-next.co-before { display: none; }
+html.co-paged.co-pics .co-comic { display: flex; flex: none; align-self: flex-start; margin: 0; }
+html.co-paged.co-pics .co-comic img { flex: none; max-width: none; max-height: none; margin-block: 0; object-fit: contain; background: none; }
+html.co-paged.co-pics .co-comic::after { content: ""; flex: none; width: var(--co-tail, 0px); }
+html.co-paged.co-pics .co-next { flex: none; box-sizing: border-box; width: var(--co-screen, 100vw); margin: 0; padding: 0 var(--s-5); align-self: center; }
