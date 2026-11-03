@@ -218,6 +218,13 @@ function dzGrid() {
         : f.items.length ? dzCovers(f.items, true) : el("p", { class: "footnote" + (f.error ? " warn" : "") }, f.error || "No stories with that in their title.")];
   }
   const g = dz.grid;
+  if (src.searchOnly) {
+    if (src.browse) src.browse(g.key, "", 0);
+    const lists = dropdown({ label: src.label + " list", cls: "field-pick dz-pick", value: g.key,
+      options: src.lists.map((l) => ({ value: l.key, label: l.label })), onpick: (v) => { store("waypage.discover.pick." + dzSource, { key: v }); dz.grid = { ...dzGrid0(), key: v }; renderDiscover(); } });
+    return [el("div", { class: "dz-tools" }, sources, lists), dzAsk(src),
+      el("p", { class: "footnote dz-src" }, src.label + " shows its lists only in its own app. Search it with the field above.")];
+  }
   if (!g.page && !g.busy && !g.error) {
     // Royal Road's first page of a list is the one the row keeps.
     const had = src.key === "rr" && !g.genre && C.discover.rrSaved(g.key);
@@ -308,7 +315,7 @@ function dzCovers(items, grid, sites) {
     if (s.cover) {
       const img = el("img", { src: s.cover, alt: "", loading: "lazy", referrerpolicy: "no-referrer" });
       img.addEventListener("load", () => art.classList.add("has-img"));
-      img.addEventListener("error", () => img.remove());
+      img.addEventListener("error", () => dzCoverAgain(img, s));
       art.prepend(img);
     }
     const meta = [sites ? s.site || "Royal Road" : s.tags[0], s.chapters ? s.chapters + " ch." : ""].filter(Boolean).join(" · ");
@@ -318,6 +325,19 @@ function dzCovers(items, grid, sites) {
       el("span", { class: "dz-bt", dir: "auto" }, s.title),
       meta ? el("span", { class: "dz-bm" }, meta) : null);
   }));
+}
+
+// A cover that won't load in the page: WEBTOON's (and some others') come
+// only to a visit from their own site, so the phone downloads it once
+// with that site as its Referer, into the cache, and shows that copy.
+async function dzCoverAgain(img, s) {
+  if (img.dataset.again || !C.platform.downloadTo || !s.cover) { img.remove(); return; }
+  img.dataset.again = "1";
+  try {
+    const name = "discover-covers/" + String(s.id || "").replace(/[^a-z0-9_-]/gi, "_") + ".jpg";
+    const src = await C.platform.downloadTo(s.cover, name, s.url, "CACHE");
+    if (src) img.src = src; else img.remove();
+  } catch (e) { img.remove(); }
 }
 
 async function dzReadRR(force) {
@@ -380,7 +400,7 @@ function storySheet() {
   if (s.cover) {
     const img = el("img", { src: s.cover, alt: "", referrerpolicy: "no-referrer" });
     img.addEventListener("load", () => cover.classList.add("has-img"));
-    img.addEventListener("error", () => img.remove());
+    img.addEventListener("error", () => dzCoverAgain(img, s));
     cover.prepend(img);
   }
   const parts = C.discover.sources.some((x) => x.comics && x.label === s.site) ? ["episode", "episodes"] : ["chapter", "chapters"];
