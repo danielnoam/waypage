@@ -213,19 +213,19 @@ function autoGroup() {
 
 // The reader's own theme (Daniel's ask): off, the reader takes the app's.
 function readerThemeGroup() {
-  const pick = el("div", { class: "rc-list reader-theme-pick" },
+  const pick = el("div", { class: "group reader-theme-pick" }, el("div", { class: "rc-list" },
     seg("reader-theme", "Theme in the reader", [{ value: "system", label: "Auto", swatch: autoSwatch(), auto: true }, ...themeOptions(THEMES)],
-      readerThemeOn() ? state.readerTheme : state.theme, (v) => { setReaderTheme(v); syncThemeInputs(); }, "themes grid five theme-grid"));
+      readerThemeOn() ? state.readerTheme : state.theme, (v) => { setReaderTheme(v); syncThemeInputs(); }, "themes grid five theme-grid")));
   pick.hidden = !readerThemeOn();
-  return section("Reader", null,
+  return section(null, null,
     el("div", { class: "group" },
       switchRow("Its own theme in the reader", "Inside clips and files", readerThemeOn(), (on) => {
         setReaderTheme(on ? state.theme : "same");
         pick.hidden = !on;
         pick.querySelectorAll("input").forEach((i) => { i.checked = i.value === state.theme; });
         syncThemeInputs();
-      }),
-      pick));
+      })),
+    pick);
 }
 
 // Animations (1.12.0): off, nothing moves at all, for a slow phone or
