@@ -56,6 +56,11 @@ These are on top of CONTRIBUTING.md, for Claude sessions only.
   went out unasked. A branch push builds a preview, so hold that too.
 - **Several asks go out as one release,** or two at most when grouped;
   don't split them into many.
+- **Don't wait for iOS before a release is done** (4 Nov 2026). Merge on a
+  green Tests check and report the release as shipped once Android's run
+  has published it. The iOS run attaches the IPA later (it can take a
+  while); check it afterwards and say if it fails, but never hold a
+  merge or the report for it.
 - **App stores aren't a priority.** Don't bring up store prep.
 - **After shipping,** say in a line or two what to try on the phone,
   above all anything native that couldn't be tested here.
