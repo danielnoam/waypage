@@ -2256,6 +2256,11 @@ function openSheet(kind, fromHistory) {
     sheet.style.left = left ? Math.max(8, at.left - box.left) + "px" : "";
     sheet.style.right = left ? "" : Math.max(8, box.right - at.right) + "px";
     M.popFrom(sheet, at);
+  } else if (wide.matches) {
+    // A link, note or look-up has no button to hang under: the middle (1.52.2).
+    sheet.dataset.pop = "center";
+    sheet.style.top = sheet.style.left = sheet.style.right = "";
+    M.rise(sheet);
   } else {
     delete sheet.dataset.pop;
     sheet.style.top = sheet.style.left = sheet.style.right = "";
