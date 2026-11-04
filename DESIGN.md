@@ -235,7 +235,10 @@ and the page shows above it.
   text buttons; in a collection a ⋯ after them opens Read, Unread and
   Previous. A bar along the bottom: Tags, Collection, Mark read (or
   unread), Delete (warn), icon over label, 56 px, dimmed until something
-  is picked.
+  is picked. From 1280 px wide the two bars become one at the top, the
+  actions at its end; narrower (a tablet) keeps the two, since one line
+  can't hold them all (1.52.2). The reader's link, note and look-up sheets
+  have no button to hang under, so from 700 px they open in the middle.
 - **Library sheet (Now):** a long press (or right-click) on a page: the
   sheet from the bottom over a `--scrim` dim, with the page's title and
   facts, then the same groups as ⋯ plus Open first and Select under More.
