@@ -13,7 +13,7 @@
 // app-cards, app-downloads, app-search, app-draw, app-jobs, app-reader,
 // app-library, app-saving, app-places, app-settings, app-lock, and
 // app-start, which runs last and starts things up.
-const APP_VERSION = "1.52.2";
+const APP_VERSION = "1.53.0";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
@@ -44,6 +44,10 @@ const themeOf = (v) => THEMES.find((t) => t.value === v);
 const THEME_KEY = "waypage.theme";
 const AUTO_KEY = "waypage.themeAuto";
 const IMAGES_KEY = "waypage.images";
+// Pictures for feeds (1.53.0): when Images is Full, feeds can have their own
+// choice; a feed you follow starts with it, and its own menu still wins.
+const FEED_IMAGES_KEY = "waypage.feedImages";
+const feedImages = () => { const m = load(IMAGES_KEY, "previews"); return m === "full" ? load(FEED_IMAGES_KEY, "full") : m; };
 // On mobile data (1.4.1): "any" saves and syncs as always, "wifi" waits.
 const DATA_SAVE_KEY = "waypage.saveOnData";
 const DATA_SYNC_KEY = "waypage.syncOnData";

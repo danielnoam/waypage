@@ -9,6 +9,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 
 - Paste or share a link to save it; Wikipedia through its REST API (0.2.0, share 0.3.0, iPhone share 1.6.0)
 - Pictures as small previews, full size or links, per clip or in Settings; full ones capped at 1600 px WebP (0.2.0, 0.17.0, 0.30.2, 1.18.0)
+- Images for feeds: with Images on Full, a separate pick sets the starting pictures for feeds you follow later (1.53.0)
 - Videos as a thumbnail and a link (0.2.0)
 - Save several links at once, and a web novel's contents page as its chapters (0.9.0, 0.21.0)
 - Save next / previous / All along a site's next-chapter links (0.10.0, 0.20.0)
@@ -79,7 +80,7 @@ release ships a feature, it gets a line here and leaves TODO.md.
 ## Narrate (was Read aloud until 1.42.0)
 
 - Phone's own voices, offline, screen off, lock-screen controls; Read from here (0.27.0, 0.27.1)
-- Voice per language, speed 0.5x to 3x, read footnotes switch (0.27.0, 0.34.0)
+- Voice per language, speed 0.5x to 4x, read footnotes switch (0.27.0, 0.34.0, 1.53.0)
 - Keeps reading across screens, Read next / go on to the next clip, also put away on Android (1.4.0, 1.6.0, 1.23.0)
 - Keep the screen on; picture in picture; Bluetooth previous/next (1.24.0, 1.25.0, 1.26.0)
 - Sleep timer: minutes or end of clip, a moon on the player, Sleep 15 min on the lock screen (1.32.0, 1.36.0)

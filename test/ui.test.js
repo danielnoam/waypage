@@ -2206,6 +2206,43 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("Saving shows Images for feeds only while Images is Full images, and new feeds start with it (1.53.0)", async () => {
+      const q = await page(browser, 390);
+      const got = await q.evaluate(async () => {
+        window.Waypage.platform.native = true;
+        localStorage.setItem("waypage.images", "previews");
+        openSettings();
+        openSection("saving");
+        const wait = () => new Promise((r) => setTimeout(r, 300));
+        await wait();
+        const shown = () => [...document.querySelectorAll("#sectionBody .pick-row")].some((r) => r.textContent.includes("Images for feeds"));
+        const out = { before: shown(), feedsOnPreviews: feedImages() };
+        const pick = async (row, text) => {
+          row.querySelector(".dropdown-btn").click();
+          await wait();
+          [...document.querySelectorAll("#sectionBody .dropdown-item")].find((b) => b.textContent.includes(text)).click();
+          await wait();
+        };
+        await pick(document.querySelector("#sectionBody .pick-row"), "Full images");
+        out.afterFull = shown();
+        out.feedsDefault = feedImages();
+        const rows = [...document.querySelectorAll("#sectionBody .pick-row")];
+        await pick(rows.find((r) => r.textContent.includes("Images for feeds")), "Links only");
+        out.feedsLinks = feedImages();
+        out.clips = JSON.parse(localStorage.getItem("waypage.images"));
+        return out;
+      });
+      assert.deepStrictEqual(got, { before: false, feedsOnPreviews: "previews", afterFull: true, feedsDefault: "full", feedsLinks: "links", clips: "full" });
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Speed goes up to 4× for Narrate and auto-scroll (1.53.0)", async () => {
+      const q = await page(browser, 390);
+      assert.strictEqual(await q.evaluate(() => RATE_MAX), 4);
+      await q.context().close();
+    });
+
     await test("the section being read names the Contents button; the bottom shows minutes left, the page in Pages, and the percent (1.37.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
