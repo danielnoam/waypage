@@ -1240,6 +1240,44 @@ html { -webkit-tap-highlight-color: transparent; }
   .select-act, .btn-text, .dropdown-btn):active { transform: none; }
 }
 
+/* A mouse hovering (1.50): what a click would open answers before the
+   click. Boxed cards and tiles lift a little and their edge warms toward
+   the accent; rows (Shelf, One list) take a rounded tint and their cover
+   grows; covers (Shelf, Grid) rise on their own. Bar buttons and sidebar
+   rows tint and grow a touch. Only for a mouse, so a finger never leaves
+   a card stuck lifted. Transform and colour only, nothing reflows, so a
+   3000-clip library stays smooth. A click settles it. Rows keep inside
+   their box: content-visibility clips anything past it. */
+@media (hover: hover) and (pointer: fine) {
+  :is([data-layout="shelf"], [data-layout="list"]) .page-card:not(.continue),
+  [data-layout="list"] .library > .tile { --lift: 1; }
+  :is([data-layout="shelf"], [data-layout="grid"]) .tile { --lift: 1; --hover-fill: none; }
+  .card:not(.saving):hover, .tile:hover {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+    background-image: var(--hover-fill, linear-gradient(var(--press), var(--press)));
+  }
+  :is([data-layout="shelf"], [data-layout="list"]) .page-card:not(.continue):not(.saving):hover,
+  [data-layout="list"] .library > .tile:hover { border-radius: var(--r-md); background-image: linear-gradient(var(--press), var(--press)); }
+  :is(.top-bar, .screen-bar, .reader-bar) .icon-btn:hover:not(:disabled) { background-color: var(--press); }
+  .side-item:hover, .side-fold:hover { background-image: linear-gradient(var(--press), var(--press)); }
+}
+/* The lift moves, so reduced motion and Animations off keep only the tint. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .card-thumb, .tile-thumb, .side-icon, .side-cover { transition: transform var(--spring-control-ms, 300ms) var(--spring-control, ease-out); }
+  /* A row's cover grows away from its edge: past it, content-visibility clips it. */
+  :is([data-layout="shelf"], [data-layout="list"]) :is(.page-card:not(.continue) .card-thumb, .library > .tile .tile-thumb) { transform-origin: 0 50%; }
+  [dir="rtl"] :is([data-layout="shelf"], [data-layout="list"]) :is(.page-card:not(.continue) .card-thumb, .library > .tile .tile-thumb) { transform-origin: 100% 50%; }
+  :root:not([data-motion="off"]) .card:not(.saving):hover { transform: scale(var(--lift, 1.012)); }
+  :root:not([data-motion="off"]) .tile:hover { transform: scale(var(--lift, 1.03)); }
+  :root:not([data-motion="off"]) :is([data-layout="shelf"], [data-layout="list"]) .page-card:not(.continue):not(.saving):hover .card-thumb,
+  :root:not([data-motion="off"]) [data-layout="list"] .library > .tile:hover .tile-thumb { transform: scale(1.05); }
+  :root:not([data-motion="off"]) :is([data-layout="shelf"], [data-layout="grid"]) .tile:hover .tile-thumb { transform: translateY(-3px) scale(1.03); }
+  :root:not([data-motion="off"]) :is(.top-bar, .screen-bar, .reader-bar) .icon-btn:hover:not(:disabled) { transform: scale(1.06); }
+  :root:not([data-motion="off"]) .side-item:hover :is(.side-icon, .side-cover) { transform: scale(1.12); }
+  :root:not([data-motion="off"]) :is(.card:not(.saving), .tile, :is(.top-bar, .screen-bar, .reader-bar) .icon-btn):hover:active,
+  :root:not([data-motion="off"]) :is(.card, .tile):hover:active :is(.card-thumb, .tile-thumb) { transform: none; }
+}
+
 /* The shadow of a panel growing into a screen (motion.js grow, 1.11.0):
    the screen shows through a clip the panel's size, and this draws the
    panel's edge and shadow around it. */
@@ -1984,6 +2022,14 @@ span.update-text { cursor: default; }
   border: 0; border-radius: var(--r-md); background: transparent; color: var(--muted); cursor: pointer;
 }
 .side-fold:active { background: var(--press); }
+/* Pressing or hovering the heading lights the whole row, arrow and all
+   (1.50); the arrow alone lights only itself. */
+.side-row .side-item:active { background: transparent; }
+.side-row:has(> .side-item:active) { background-image: linear-gradient(var(--press), var(--press)); }
+@media (hover: hover) and (pointer: fine) {
+  .side-row .side-item:hover { background-image: none; }
+  .side-row:has(> .side-item:hover) { background-image: linear-gradient(var(--press), var(--press)); }
+}
 .side-fold svg { transition: transform var(--spring-control-ms, 300ms) var(--spring-control, ease-out); }
 .side-fold[aria-expanded="false"] svg { transform: rotate(-90deg); }
 .side-fold[aria-expanded="false"]:dir(rtl) svg { transform: rotate(90deg); }
