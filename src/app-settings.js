@@ -21,8 +21,21 @@ const SETTINGS = [
     key: IMAGES_KEY,
     label: "Images",
     get: () => load(IMAGES_KEY, "previews"),
-    set: (v) => { store(IMAGES_KEY, v); toast("New saves use " + v.replace("previews", "previews and links").replace("full", "full images").replace("links", "links only") + "."); },
+    set: (v) => { store(IMAGES_KEY, v); toast("New saves use " + v.replace("previews", "previews and links").replace("full", "full images").replace("links", "links only") + "."); if (state.section) renderSection(); },
     help: "For clips saved from now on; a clip's own menu changes its pictures later. A preview is about 30 KB and the full picture loads from its site when you're online. Full images are about 150 KB each and suit maps and diagrams. Links only keeps no pictures on the phone.",
+    options: [
+      { value: "previews", label: "Previews and links", note: "Small previews; the full picture online" },
+      { value: "full", label: "Full images", note: "Sharp offline, about five times the size" },
+      { value: "links", label: "Links only", note: "Pictures only when you're online" },
+    ],
+  },
+  // Only shown while Images is Full images (1.53.0): the starting choice
+  // for feeds you follow from then on; a feed's own menu still wins.
+  {
+    key: FEED_IMAGES_KEY,
+    label: "Images for feeds",
+    get: () => load(FEED_IMAGES_KEY, "full"),
+    set: (v) => { store(FEED_IMAGES_KEY, v); toast("New feeds use " + v.replace("previews", "previews and links").replace("full", "full images").replace("links", "links only") + "."); },
     options: [
       { value: "previews", label: "Previews and links", note: "Small previews; the full picture online" },
       { value: "full", label: "Full images", note: "Sharp offline, about five times the size" },
@@ -171,9 +184,9 @@ function sendGroup() {
 // smaller as they're saved, and pictures held back online.
 function savingGroup() {
   return section("Saving", null,
-      + (C.platform.knowsConnection ? " On Wait for Wi-Fi, saves wait in Downloads until you're on Wi-Fi, and feeds, new chapters and missing pictures are checked then too." : ""),
     el("div", { class: "group" },
       pickRow(SETTINGS[1]),
+      C.platform.native && load(IMAGES_KEY, "previews") === "full" ? pickRow(SETTINGS[2]) : null,
       switchRow("Make full images smaller", "No wider than 1600 px", C.save.compress, (on) => { store(COMPRESS_KEY, on); C.save.compress = on; }),
       switchRow("Load pictures only when tapped", "Online, nothing loads until you tap it", load(TAP_PICTURES_KEY, false), (on) => { store(TAP_PICTURES_KEY, on); C.reader.tapPictures = on; }),
       dataRow(DATA_SAVE_KEY, "Save", "On any connection", "Saves wait in Downloads until then")));
@@ -1052,7 +1065,7 @@ function renderSettings() {
 // opens, and dropped when they close, so it says what the screens say.
 // Each result opens its screen and lights the row up for a moment.
 const FIND_ALIASES = {
-  Theme: "dark mode light mode colours night", Animations: "motion", Images: "pictures photos", Layout: "shelf list grid scroll pages margins",
+  Theme: "dark mode light mode colours night", Animations: "motion", Images: "pictures photos", "Images for feeds": "pictures photos feed follow", Layout: "shelf list grid scroll pages margins",
   "Text size": "font size bigger smaller", Font: "typeface", Narrate: "read aloud voice speech tts", "On mobile data": "wi-fi cellular",
   "Where your library is": "storage folder documents sd card", "App lock": "passcode pin fingerprint face biometric", Notifications: "alerts",
   "Google Drive": "backup cloud", "GitHub sync": "sync devices token", Credits: "about licence licenses open source thanks",

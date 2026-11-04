@@ -1116,8 +1116,8 @@ function aloudFrom(id) {
   aloudAuto = "here";
   openPage(id);
 }
-// Speed is a slider since 0.34.0, from half to three times.
-const RATE_MIN = 0.5, RATE_MAX = 3;
+// Speed is a slider since 0.34.0, from half to four times (1.53.0).
+const RATE_MIN = 0.5, RATE_MAX = 4;
 const FOOTNOTES_KEY = "waypage.aloudFootnotes";
 const EDGES_KEY = "waypage.aloudSkipEdges";
 // Read next by itself at the end of a clip (1.6.0), when there's a next.
