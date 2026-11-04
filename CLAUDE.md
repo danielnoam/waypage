@@ -59,5 +59,16 @@ These are on top of CONTRIBUTING.md, for Claude sessions only.
 - **App stores aren't a priority.** Don't bring up store prep.
 - **After shipping,** say in a line or two what to try on the phone,
   above all anything native that couldn't be tested here.
+- **Only omri-ehud/waypage.** Every build, push and PR goes to that repo
+  (`origin`, or `--repo omri-ehud/waypage` with `gh`), never
+  danielnoam/waypage or any other repo.
+- **Cloud sessions** (Claude app) push only `claude/*` branches, never
+  main, and open no PR unless asked. Those pushes don't build (the
+  workflows ignore `claude/**`). On "Build", run
+  `gh workflow run android.yml --ref <branch> --repo omri-ehud/waypage`,
+  and the same for `ios.yml`. A cloud session can't reach the shared
+  project folder or the phone: pull its branch locally, check it, copy
+  TODO.md/DONE.md, then ship. Good for work `node --test` can check; keep
+  UI, releases and upstream syncs local.
 - **Be direct.** Push back when an idea or plan is weak, and say what
   was checked and what is a guess.
