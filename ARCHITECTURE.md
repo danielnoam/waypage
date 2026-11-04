@@ -372,6 +372,11 @@ area.
 - **`isPaged()` is true for a comic in Pages** (since comic Pages): code
   that means text columns checks `comic` too (relayout branches to
   picsLayout, chunkUp and text pinch skip comics).
+- **Library cards clip what leaves their box:** `content-visibility: auto`
+  on `.library > .page-card` paints only inside the card, so a hover
+  tint or a grown cover reaching past its edge is cut off (the hover
+  rows keep inside and grow covers from their inner edge). Hover
+  styles are only under `(hover: hover) and (pointer: fine)`.
 
 - **Cloudflare's browser check (Royal Road, Nov 2026):** the phone's plain
   fetch gets a 403 or 503 "Just a moment" page. `get` in save.js spots
