@@ -2,6 +2,18 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.53.0] - 2026-11-04
+
+### Added
+- Images for feeds: in Settings, Saving, when Images is on Full images, a
+  second pick sets the pictures for feeds you follow from then on
+  (previews, full images or links only). A feed's own menu still changes
+  that feed.
+
+### Changed
+- Speed for Narrate and auto-scroll now goes up to 4×, not 3×. On iPhone
+  the voice itself tops out at about 2×; auto-scroll goes the whole way.
+
 ## [1.52.2] - 2026-11-04
 
 ### Fixed

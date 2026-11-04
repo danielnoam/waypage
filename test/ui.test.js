@@ -2229,7 +2229,7 @@ function zipOf(files) {
         const rows = [...document.querySelectorAll("#sectionBody .pick-row")];
         await pick(rows.find((r) => r.textContent.includes("Images for feeds")), "Links only");
         out.feedsLinks = feedImages();
-        out.clips = localStorage.getItem("waypage.images");
+        out.clips = JSON.parse(localStorage.getItem("waypage.images"));
         return out;
       });
       assert.deepStrictEqual(got, { before: false, feedsOnPreviews: "previews", afterFull: true, feedsDefault: "full", feedsLinks: "links", clips: "full" });
