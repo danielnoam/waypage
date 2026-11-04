@@ -2279,6 +2279,29 @@ html { -webkit-tap-highlight-color: transparent; }
   .side-sub { min-height: 40px; }
 }
 
+@media (min-width: 1280px) {
+  /* Picking several: one bar at the top, the actions at its end. Only where
+     it all fits on one line (1.52.2): a tablet keeps the phone's two bars. */
+  .select-head {
+    top: calc(var(--s-4) + env(safe-area-inset-top)); left: calc(var(--lib-left) + var(--lib-pad)); right: var(--lib-pad);
+    height: 52px; padding: 0 var(--s-2); justify-content: flex-start; gap: var(--s-2);
+    background: var(--bar); border: 0; border-radius: var(--r-md);
+  }
+  .select-count { flex: none; }
+  .select-bar {
+    top: calc(var(--s-4) + 4px + env(safe-area-inset-top)); bottom: auto; left: auto; right: calc(var(--lib-pad) + 4px);
+    height: 44px; padding: 0; gap: var(--s-2); background: transparent; border: 0; justify-content: flex-end;
+  }
+  .select-act {
+    flex: none; max-width: none; min-height: 44px; flex-direction: row; gap: var(--s-2); padding: 0 var(--s-4);
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
+    font-size: var(--fs-label); line-height: var(--lh-label); font-weight: 600;
+  }
+  .select-act svg { width: 18px; height: 18px; }
+  .selecting .library, .selecting .screen-body { padding-bottom: var(--s-5); }
+  .selecting .top-bar { visibility: hidden; }
+}
+
 @media (min-width: 1024px) {
   :root { --gutter: var(--s-7); }
   /* The pinned sidebar: under every screen, beside the library. */
@@ -2357,6 +2380,8 @@ kbd {
     box-shadow: 0 12px 40px var(--shadow);
   }
   .reader .sheet-body { max-height: calc(100dvh - 140px); margin: 0 calc(-1 * var(--s-4)); padding: 0 var(--s-4) var(--s-1); }
+  /* A link, note or look-up opens from the text, with no button to hang under: the middle (1.52.2). */
+  .reader .sheet[data-pop="center"] { inset: 0; margin: auto; height: fit-content; max-height: calc(100% - 2 * var(--s-5)); }
   .reader-name {
     display: flex; align-items: baseline; gap: var(--s-2); min-width: 0; margin: 0 0 0 var(--s-2);
     overflow: hidden; white-space: nowrap;
@@ -2383,26 +2408,6 @@ kbd {
   .screen[data-dialog] .bar-title { grid-column: 1 / 3; grid-row: 1; text-align: start; padding-inline-start: var(--s-2); font-size: var(--fs-card); }
   .screen[data-dialog] .bar-spacer { display: none; }
   .screen[data-dialog="panel"] .screen-body { padding-bottom: var(--s-4); }
-
-  /* Picking several: one bar at the top, the actions at its end. */
-  .select-head {
-    top: var(--s-4); left: calc(var(--lib-left) + var(--lib-pad)); right: var(--lib-pad);
-    height: 52px; padding: 0 var(--s-2); justify-content: flex-start; gap: var(--s-2);
-    background: var(--bar); border: 0; border-radius: var(--r-md);
-  }
-  .select-count { flex: none; }
-  .select-bar {
-    top: calc(var(--s-4) + 4px); bottom: auto; left: auto; right: calc(var(--lib-pad) + 4px);
-    height: 44px; padding: 0; gap: var(--s-2); background: transparent; border: 0; justify-content: flex-end;
-  }
-  .select-act {
-    flex: none; max-width: none; min-height: 44px; flex-direction: row; gap: var(--s-2); padding: 0 var(--s-4);
-    background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
-    font-size: var(--fs-label); line-height: var(--lh-label); font-weight: 600;
-  }
-  .select-act svg { width: 18px; height: 18px; }
-  .selecting .library, .selecting .screen-body { padding-bottom: var(--s-5); }
-  .selecting .top-bar { visibility: hidden; }
 
   /* Settings: the menu as its own sidebar, the section beside it. */
   :root { --settings-w: 300px; }

@@ -2,6 +2,16 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.52.2] - 2026-11-04
+
+### Fixed
+- Tablets: a link, note or look-up opened from the text now appears in the
+  middle of the screen, not in the top-left corner.
+- Tablets: picking several clips no longer draws Tags, Collection, Mark
+  read, Edit and Delete over Cancel and Select all. Under 1280 px wide the
+  actions sit in a bar along the bottom, as on a phone; the one bar at the
+  top stays on wider screens.
+
 ## [1.52.1] - 2026-11-02
 
 ### Fixed
