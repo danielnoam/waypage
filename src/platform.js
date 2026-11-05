@@ -140,6 +140,23 @@
     ]).finally(() => clearTimeout(timer));
   }
 
+  // The web copy's fetch proxy (worker/, a Cloudflare Worker): a browser
+  // can't read most sites itself (CORS), so its page fetches go through it.
+  // It stores nothing and answers only this site's origin. Empty until it's
+  // deployed, and never used by the app. Sites that allow any origin (the
+  // GitHub API the updater and Test builds read) are fetched directly.
+  const PROXY_URL = "https://waypage-fetch.danielnoam1999.workers.dev/";
+  const PROXY = native ? "" : PROXY_URL;
+  const DIRECT = /^(api\.github\.com|raw\.githubusercontent\.com)$/i;
+  // This site itself and the computer it runs on (the dev server, the
+  // tests) are fetched directly too; the proxy refuses local addresses.
+  function direct(url) {
+    try {
+      const u = new URL(url, location.href);
+      return u.origin === location.origin || DIRECT.test(u.hostname) || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(u.hostname);
+    } catch (e) { return true; }
+  }
+
   // A page's HTML as text, plus the final URL after redirects. Throws a
   // TypeError on a network failure, like fetch does, so callers handle both
   // homes the same way.
@@ -160,8 +177,16 @@
       return { status: res.status, url: res.url || url, text: body };
     }
     delete headers["User-Agent"];
-    const res = await deadline(fetch(url, { headers }), PAGE_TIMEOUT);
-    return { status: res.status, url: res.url || url, text: await res.text() };
+    if (!PROXY || direct(url)) {
+      const res = await deadline(fetch(url, { headers }), PAGE_TIMEOUT);
+      return { status: res.status, url: res.url || url, text: await res.text() };
+    }
+    const q = new URLSearchParams({ url, accept: headers.Accept });
+    if (opts.headers && opts.headers["User-Agent"]) q.set("ua", opts.headers["User-Agent"]);
+    const res = await deadline(fetch(PROXY + "?" + q, { credentials: "omit" }), PAGE_TIMEOUT);
+    const refused = res.headers.get("X-Proxy-Error");
+    if (refused && res.status !== 429) throw new TypeError("Failed to fetch (" + refused + ")");
+    return { status: res.status, url: res.headers.get("X-Final-Url") || url, text: await res.text() };
   }
 
   // A form sent to a site (1.43.0, making or deleting a newsletter
@@ -385,6 +410,15 @@
       const S = plugin("Speech");
       if (!S || os !== "android") return false;
       try { await S.moreVoices(engine ? { engine } : {}); return true; } catch (e) { return false; }
+    },
+    // Kokoro voices (Android, arm64): Waypage's own speech engine, from a
+    // download in Settings. null where there's no such plugin or phone.
+    // action: download / use / remove (with the pack's id), or cancel.
+    async kokoro(action, id) {
+      const K = plugin("Kokoro");
+      if (!K || os !== "android") return null;
+      if (action) { await K[action](id ? { id } : {}); return null; }
+      try { const s = await K.status(); return s && s.supported ? s : null; } catch (e) { return null; }
     },
     // { items, start, lang, voice, engine, rate, title, subtitle, key }
     async play(o) {
@@ -654,7 +688,7 @@
     return !!(res && res.saved);
   }
 
-  // A file the app made (a deck turned into a PDF, 1.47.0) saved where
+  // A file the app made (a deck turned into a PDF, 1.49.0) saved where
   // the person picks, with a lasting permission so a clip can read from
   // it. `near` is a file whose folder the picker opens in. Resolves to
   // { saved, ref }: ref is null when the place can't be held on to (no
@@ -748,8 +782,8 @@
   // Since 1.23.0 it comes through Downloads' own fetch, which goes on
   // with the app put away and can pause and pick up where it stopped: a
   // pause rejects with code "PAUSED". Older builds use Filesystem.
-  // A preview build (1.48.0) comes from the pre-release `tag` instead,
-  // and `version` is then its file's name part (preview-<branch>-<sha>).
+  // A test build (1.48.0) comes from the pre-release `tag` instead,
+  // and `version` is then its file's name part (test-<branch>-<sha>).
   async function downloadUpdate(version, onProgress, file = "Waypage.apk", tag = "app-v" + version) {
     const FS = plugin("Filesystem");
     if (os !== "android" || !FS || !plugin("FileOpener") || !repo()) return null;
@@ -796,7 +830,7 @@
       for (const f of files || []) {
         const name = typeof f === "string" ? f : f.name;
         const m = /^Waypage-(\d+\.\d+\.\d+)\.apk(\.part)?$/.exec(name || "");
-        const p = /^Waypage-preview-.*-([0-9a-f]{7})\.apk(\.part)?$/.exec(name || "");
+        const p = /^Waypage-(?:test|preview)-.*-([0-9a-f]{7})\.apk(\.part)?$/.exec(name || "");
         if ((m && !isNewer(m[1], currentVersion)) || (p && p[1] === here)) await FS.deleteFile({ path: name, directory: "CACHE" });
       }
     } catch (e) { /* nothing to tidy */ }
@@ -1068,6 +1102,9 @@
     // Whether this copy can fetch any page itself (the app) or is limited by
     // CORS (a browser).
     get canFetchPages() { return !!plugin("CapacitorHttp"); },
+    // Whether this copy can read a page at all: the app itself, or a
+    // browser through the fetch proxy. Neither can post forms there.
+    get canReadPages() { return !!plugin("CapacitorHttp") || !!PROXY; },
     // Whether the connection is a metered one, mobile data (1.4.1): the
     // WebView says on Android, native/share's Connection plugin on iOS
     // (1.6.0); a browser says nothing, so nothing waits there.
@@ -1083,7 +1120,7 @@
       set: (level) => plugin("Brightness").set(level == null ? {} : { level }),
     },
     // App lock (1.38.0): the phone's fingerprint or face, native/share's
-    // AppLock plugin on Android (iOS on TODO.md's iOS list); the passcode
+    // AppLock plugin on Android (iOS later); the passcode
     // itself is checked in app-lock.js.
     lock: {
       async biometric() {

@@ -37,10 +37,20 @@ borrows its stack, build workflows and native-fetch trick from.
 - `main` is production and takes only pull requests. A merge refreshes
   the web copy; only a merge with a new `APP_VERSION` publishes the APK
   and IPA (`node tools/release.js x.y.z`). Daniel's own asks still ship
-  as one release each; work landing in pieces goes under `## Unreleased`
-  and the next release PR takes it. Check the runs went green.
-- After changing TODO.md or DONE.md in the repo, copy it over the shared
-  project folder's `waypage/TODO.md` / `waypage/DONE.md` so both match.
+  as one release each; work landing in pieces writes its lines to
+  `changes/<branch>.md` (never CHANGELOG.md) and the next release PR
+  takes it. Check the runs went green.
+- The to-do list is not in the repo. It lives only in the shared project
+  folder, `/mnt/project-files/waypage/TODO.md`: read it there, and edit it
+  there in the same turn as the change it tracks.
+
+  ## Branch names
+
+- Don't use the claude/... branch the session was handed. Before the
+  first commit, make a branch named for the change: fix/<what>,
+  feature/<what> or docs/<what>, a few lowercase words with hyphens
+  (fix/drive-row, feature/kokoro-voices). Push only to that branch.
+  A thread with an open PR keeps its branch.
 
 ## Working with Daniel (his standing rules, 17 Oct 2026)
 
@@ -73,7 +83,7 @@ These are on top of CONTRIBUTING.md, for Claude sessions only.
   `gh workflow run android.yml --ref <branch> --repo omri-ehud/waypage`,
   and the same for `ios.yml`. A cloud session can't reach the shared
   project folder or the phone: pull its branch locally, check it, copy
-  TODO.md/DONE.md, then ship. Good for work `node --test` can check; keep
+  then ship. Good for work `node --test` can check; keep
   UI, releases and upstream syncs local.
 - **Be direct.** Push back when an idea or plan is weak, and say what
   was checked and what is a guess.

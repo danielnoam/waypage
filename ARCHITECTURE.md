@@ -4,8 +4,9 @@ The map of the code and the flows through it, for anyone changing it.
 Keep it current: when a file is added, removed or renamed, or a flow
 below changes, this file changes in the same commit (`test/docs.test.js`
 fails when a source file isn't named here). The rules for changes are in
-CONTRIBUTING.md; why things are the way they are is in NOTES.md; the
-original reasoning is in docs/PROPOSAL.md.
+CONTRIBUTING.md; the original reasoning is in docs/PROPOSAL.md. Why a
+line is the way it is lives in its commit and PR (`git log -S`,
+`git blame`).
 
 ## Contents
 
@@ -21,14 +22,18 @@ original reasoning is in docs/PROPOSAL.md.
 - [Versions, cache and updates](#versions-cache-and-updates)
 - [The phone apps](#the-phone-apps)
 - [Tests and screenshots](#tests-and-screenshots)
-- [Notes files](#notes-files)
+- [Trade-offs](#trade-offs)
+- [Traps](#traps)
+- [The docs](#the-docs)
 
 ## The shape
 
 Plain HTML, CSS and JS, no build step, no runtime dependencies. The same
 files are served as a static site (the web copy on GitHub Pages) and
 bundled as-is into Android and iOS apps by Capacitor. There is no server:
-every fetch happens on the device. Saved pages are untrusted and are only
+every fetch happens on the device. The one exception is the web copy, which
+fetches pages through a stateless proxy (`worker/`), since a browser can't
+read most sites itself. Saved pages are untrusted and are only
 ever shown inside a sandboxed iframe.
 
 ## Layout
@@ -50,18 +55,21 @@ src/app-reader.js   moving between screens; the reader around the page: brightne
 src/app-library.js  tags, collections, a clip's sheet, multi-select, export, import, watched folders
 src/app-saving.js   sync screen, saving several, next links and new chapters, feeds, home-screen widgets
 src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestures, a feed's sheets
+src/app-discover.js the Discover place: the list, its search, the Sites grid, the story and sign-up sheets
 src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
 src/app-lock.js     app lock: passcode (PBKDF2 hash), fingerprint or face on Android
-src/app-start.js    wiring at launch, what other apps share in, self-update, Preview builds, What's new
+src/app-start.js    wiring at launch, what other apps share in, self-update, Test builds, What's new
 src/save.js         link to saved page: fetch, Wikipedia adapter or Readability, allowlist cleaner, picture previews, video cards
 src/reader.js       a saved page in the sandboxed iframe: place, find, highlights, translation, pages mode
 src/store.js        one directory per clip and library.json; IndexedDB in a browser
 src/platform.js     browser vs app: native fetch, plugins, downloads, speech, opening links
 src/files.js        EPUB, Kindle (MOBI/AZW3), FB2, CBZ, Markdown, text and HTML files
 src/pdf.js          PDFs through pdf.js in a locked-down frame
-src/pptx.js         PowerPoint decks redrawn on a canvas and written as a PDF (1.47.0)
+src/pptx.js         PowerPoint decks redrawn on a canvas and written as a PDF (1.49.0)
 src/epub.js         clips as an EPUB 3 book, for e-readers and Send to Kindle
 src/feeds.js        RSS, Atom and JSON Feed, read into one shape
+src/discover.js     Discover's sources: the hand-picked list, and the story sites' lists and search (Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON, Tapas)
+src/discover-list.js  the hand-picked list itself (strict JSON between markers, refreshed from GitHub)
 src/sync.js         GitHub sync; src/sync-worker.js runs the merge off the main thread
 src/drive.js        Google Drive backups
 src/backup.js       one-file backups and exports
@@ -76,18 +84,20 @@ src/fonts.css       the bundled fonts (src/fonts/)
 src/vendor/         Readability, pdf.js, foliate-js's MOBI reader, each with its licence
 assets/             icon and splash sources for the apps
 icons/, icon.svg    app icons
-native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Brightness, AppLock, PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
+worker/             the web copy's fetch proxy, a Cloudflare Worker (worker.js, wrangler.toml, README.md has the setup)
+native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
 tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-build.json
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
 tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
 tools/sign-apk.sh   signs the APK with the release key in CI
-tools/preview-release.sh   puts a branch's build on its preview-<branch> pre-release
+tools/sherpa-lib.sh   fetches sherpa-onnx's arm64 library (Kokoro voices) into the Android build, pinned and checked
+tools/test-build.sh        puts a labelled pull request's build on its test-<branch> pre-release
 tools/shots.js      retakes the README's screenshots (tools/shots/demo is the demo library)
 test/               node test/run-all.js runs every *.test.js
 design/             the design canvas's artboards, for the exact markup
 docs/PROPOSAL.md    the original architecture, storage, legal and store reasoning
 docs/shots/         the README's screenshots
-.github/workflows/  test.yml (every PR), android.yml and ios.yml (builds, releases, previews), preview-cleanup.yml
+.github/workflows/  test.yml (every PR), android.yml and ios.yml (builds, releases, test builds), test-builds.yml (test labels: build on, remove off), worker.yml (deploys worker/ to Cloudflare)
 ```
 
 ## Load order and the one scope
@@ -103,7 +113,10 @@ put one object on `window.Waypage` (`C.save`, `C.reader`, `C.store`,
 global scope**, as if they were one file. The rule that keeps it working:
 code that runs at load may only use what an earlier file, or the same
 one, declared; functions can call into any file, since nothing is tapped
-before all of them have loaded. `app-start.js` is last and starts things
+before all of them have loaded. Two shell files must never declare the
+same top-level name: the later one silently replaces the earlier for
+every caller (1.49.0 broke the Narrate switches that way), and
+`build.test.js` fails when they do. `app-start.js` is last and starts things
 up. A new shell file goes in the order in `index.html` and in `sw.js`'s
 `ASSETS`.
 
@@ -117,8 +130,15 @@ up. A new shell file goes in the order in `index.html` and in `sw.js`'s
    taken once it settles. Signed-in sites are saved through the `SignIn`
    plugin's WebView. When a page is gone, the Internet Archive's copy.
 2. **Pick the article**: Wikipedia through `/api/rest_v1/page/html/{title}`
-   with a User-Agent naming the app; everything else through Mozilla
-   Readability.
+   with a User-Agent naming the app; a site in `save.js`'s `SITES` list by
+   its own rule (fiction and comics sites; Reddit from the post's `.json`;
+   Hacker News from the page; Stack Exchange, Lobsters, Bluesky and
+   Mastodon (any server, by the address's shape) from their APIs; a
+   Discourse forum, known by its page's generator tag, from the topic's
+   .json; GitHub issues and pull requests from the API, code files from
+   their raw copy, a repo as its README; an arXiv paper from its HTML
+   version); everything else through Mozilla Readability. A
+   discussion keeps its `co-thread`/`co-comment` classes for reader.css.
 3. **Clean** to an allowlist of tags and attributes: no scripts, iframes,
    forms, handlers or tracking pixels. Lazy images resolve to one URL.
 4. **Pictures** become a local preview (about 480 px wide) plus the full
@@ -153,6 +173,15 @@ Pages mode, Narrate's sentence tracking) is done from the app's document
 on the frame's DOM. The reading place is the paragraph on the middle
 line, with its own timestamp so sync can merge it.
 
+The reading look (`readingPrefs(p)` in `app-reading.js`) is Settings'
+defaults, then the clip's collection's own, then the clip's own, for
+the text settings, margins and Scroll or Pages only. The own ones are
+in `waypage.readingFor` on this device (not synced or backed up); a
+collection's follow a rename, and ones for clips or collections that
+are gone are dropped at start. Settings' copy of the controls always
+sets the defaults; the Aa sheet's sets wherever the open clip's come
+from.
+
 ## Files: EPUB, PDF, comics
 
 `files.js` opens a person's own files: EPUB, MOBI/AZW3 (foliate-js),
@@ -161,6 +190,14 @@ read from where they are (shown under Files, not synced). PDFs go through
 `pdf.js` in its own iframe with `allow-scripts` but no access to the app
 (`src/pdf.js` is the bridge, `src/vendor/pdf.min.mjs` and its worker the library); large
 linked PDFs are read in ranges.
+
+A comic in Pages (reader.js `picsLayout`) is a flex row of its pages, each
+sized in px to a screen or half of one, so the text's own turning
+(`goPage`, `pages()`, the swipe, keys and thirds) works unchanged; a manga
+is `dir="rtl"` on the body. Comics have their own Show as (`comicLayout`)
+and a clip's `turn` overrides the ComicInfo `manga` flag. A file naming its
+series gets `series` and `volume`, and `fileSeries` (app-library.js) puts it
+into that collection in volume order.
 
 ## Browser versus app
 
@@ -171,6 +208,14 @@ each has its nearest equivalent or returns null, and features check for
 null rather than for a platform. The native plugins live in
 `native/share/` and are built into the apps by the workflows; nothing in
 `src/` imports them.
+
+In a browser, `fetchText` sends other sites' pages through the fetch proxy in
+`worker/` (`PROXY_URL` in `platform.js`; empty means straight `fetch`,
+which CORS blocks for most sites). It answers only the web copy's origin,
+GET only, public addresses only, and stores nothing; `canReadPages` says
+whether a copy can read pages at all, `canFetchPages` whether it can do
+everything natively (posting forms, downloading pictures). Pictures in the
+web copy stay links, as before.
 
 ## Sync and backups
 
@@ -217,18 +262,32 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
   `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, alias `carryon`)
   and publishes the release `app-v<version>` when `APP_VERSION` is new.
   Without the secrets it builds a test APK and publishes nothing.
-- **Previews (1.48.0):** on any other branch with an open pull request,
-  `tools/preview-release.sh` remakes the pre-release `preview-<branch>`
+- **Test builds (1.48.0 as previews, by label since 1.49.1, renamed 1.50.0):** on any other branch whose
+  open pull request has a test label, `tools/test-build.sh` remakes the pre-release `test-<branch>`
   at the pushed commit with the APK (and the iOS workflow adds the IPA).
   Its notes start with `version:`, `branch:`, `commit:`, `pr:`, which
-  Settings › About › Preview builds (`app-start.js`) reads from the
+  Settings › About › Test builds (`app-start.js`) reads from the
   public releases list to offer the build; `app-build.json` carries the
-  branch and commit, so a preview build knows it is one and skips the
+  branch and commit, so a test build knows it is one and skips the
   update check. A pre-release is never GitHub's "latest", so the
-  updater ignores it. `preview-cleanup.yml` removes the pre-release when
-  the branch or its pull request closes. Android installs an equal
-  version code over the app, so the release goes back over a preview
+  updater ignores it. The labels: `test` (APK and IPA),
+  `test-android` or `test-ios` (one, sooner; with `test-ios`
+  alone the iOS workflow makes the pre-release itself). `test-builds.yml`
+  runs the build workflows on the branch when a label goes on, and
+  removes the pre-release when it comes off, the pull request closes or
+  the branch goes. Android installs an equal
+  version code over the app, so the release goes back over a test build
   only when the branch didn't bump `APP_VERSION`.
+- **Test builds in the browser (1.49.0):** the web copy's Test builds
+  lists the same pre-releases (repo read from the `owner.github.io/repo/`
+  address) and Open puts `{ repo, sha, title, pr }` in the cache
+  `waypage-preview`. While it's there, `sw.js` serves every file of the
+  copy from that commit on raw.githubusercontent.com with its type, kept
+  in `waypage-preview-<sha>`, and adds a "Back to the release" link
+  (`./?release`, which clears it) to `index.html`, so the way back works
+  whatever the branch's own code is. Same origin, so the library is the
+  one the browser already has, as with a test build in the app. (The cache keeps its
+  older name `waypage-preview`, and the app still reads `preview-` tags.)
 - **iOS:** `.github/workflows/ios.yml` builds an unsigned `Waypage.ipa`
   on a Mac runner (`tools/ios-project.js`, `tools/ios-extensions.rb` add
   the share extension and widgets) and attaches it to the same release.
@@ -240,24 +299,176 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
 ## Tests and screenshots
 
 `node test/run-all.js` runs every `test/*.test.js` in its own process.
-`ui.test.js` and `drive.test.js` drive the app in Chromium with
-Playwright and skip when it isn't installed; `build.test.js` checks the
+`ui.test.js`, `drive.test.js`, `sites.test.js` and `discover.test.js`
+drive the app in Chromium with Playwright and skip when it isn't installed
+(`sites.test.js` saves the discussion and code sites from their answers
+saved in `test/fixtures/sites/`, with nothing going out; `discover.test.js`
+reads the story sites' lists from hand-made pages and pages cut from WEBTOON, Tapas and Wattpad in `test/fixtures/discover/`); `build.test.js` checks the
 bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
-every source file; `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js` and `pptx.test.js` test their areas in Node. The Tests workflow runs them all on every PR.
+every source file (and `build.test.js` that no two shell files share
+a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js` and `pptx.test.js` test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
+changes Markdown runs just `build.test.js` and `docs.test.js`.
 
 `node tools/shots.js` retakes the README's pictures at 1280 px and 390 px
 into `docs/shots/`, from a demo library it saves through the app itself
 (`tools/shots/demo/`). `node tools/shots.js reader skim` retakes only
 those sections.
 
-## Notes files
+## Trade-offs
 
-- **TODO.md** the work still to do, and only that
-- **DONE.md** what the app already does, by area, with versions
-- **NOTES.md** why things are the way they are, newest first
+What the app gives up on purpose, said plainly. A change that adds one
+adds a line here.
+
+- Full pictures load from the web when a clip is opened online, so the
+  picture host sees the visit (Settings › Saving › Load pictures only
+  when tapped turns that off).
+- The `waypage-data` sync repo is private on GitHub, not encrypted.
+- The web copy shares `danielnoam.github.io`'s storage with every other
+  Pages site on that account, so its sync token is as safe as the least
+  safe of them.
+- Android Auto Backup stays on: Google's backup is end-to-end encrypted
+  with the screen lock, and it carries the library to a new phone.
+- App lock is a gate, not encryption: it keeps out someone holding the
+  unlocked phone, not someone with the files or developer tools.
+- Newsletters go through Kill the Newsletter, which receives and can read
+  the emails; the address and feed link are keys.
+- Discover reads the story sites' list and search pages (Wattpad's JSON API) as a browser would
+  (Royal Road sees the visit, as it does for saving a chapter). Cloudflare
+  turns a plain request away there, so on Android the hidden browser
+  (PageRender) reads them, which takes a few seconds; and the
+  phone fetches the hand-picked list from raw.githubusercontent.com twice
+  a day, which GitHub sees. Their markup is scraped (Scribble Hub's, AO3's and FanFiction.net's
+  were never seen from here: Cloudflare or AO3's own check blocks every
+  plain fetch; only the phone's hidden browser gets them), so a change
+  there leaves the last list read until the parser is fixed.
+- Translate downloads each language's model from Google once, which tells
+  Google the languages, never the words.
+- A deck (PPTX) is redrawn by `pptx.js`, an approximation: no charts,
+  SmartArt, effects or WordArt.
+- Dictionaries live in their own IndexedDB, so they aren't moved with the
+  library, synced or backed up.
+- Kokoro voices: the engine library (sherpa-onnx, arm64 only) ships in the
+  APK, since running downloaded native code would let anyone who swaps the
+  file in; only the model is downloaded, and checked against its SHA-256
+  before unpacking. It is a real Android speech engine (`KokoroTtsService`),
+  so the lock screen, PiP and sleep timer work unchanged, but other apps
+  can use it too. 32-bit and x86 phones, iOS and the web copy get none.
+- The web copy reads pages through the fetch proxy (`worker/`), so
+  Cloudflare sees which addresses a browser user saves (not the app's).
+  It only answers the web copy's origin, but the Origin header binds only
+  browsers: a script can fake it, and a public web copy can't hold a
+  secret. The per-IP rate limit and the free plan's daily cap bound that.
+- Dialogs (Downloads, Sync, Save with options, Settings) fade in and out,
+  the one planned exception to "nothing fades" (Daniel's pick over the
+  grow and the zoom).
+
+## Traps
+
+Things that broke once and would again. Check here before touching the
+area.
+
+- **`isPaged()` is true for a comic in Pages** (since comic Pages): code
+  that means text columns checks `comic` too (relayout branches to
+  picsLayout, chunkUp and text pinch skip comics).
+- **Library cards clip what leaves their box:** `content-visibility: auto`
+  on `.library > .page-card` paints only inside the card, so a hover
+  tint or a grown cover reaching past its edge is cut off (the hover
+  rows keep inside and grow covers from their inner edge). Hover
+  styles are only under `(hover: hover) and (pointer: fine)`.
+
+- **Cloudflare's browser check (Royal Road, Nov 2026):** the phone's plain
+  fetch gets a 403 or 503 "Just a moment" page. `get` in save.js spots
+  it and asks the hidden browser (`C.platform.render`) instead; every
+  chapter of a series pays that slower path. The web copy can't.
+- **Android TTS engines get only ~0.5 s ahead:** the framework hands an
+  engine the next piece only when one ends, so Kokoro paused between
+  paragraphs. `SpeechService.makeAhead` asks `Kokoro.take` for the next
+  piece, made on its own thread.
+- **`el()` attributes:** `disabled: false` still disables a button (it's
+  set as an attribute); pass `null`.
+- **`replaceChildren`/`append` write a `null` out as the text "null":**
+  leave a missing part out of the list rather than passing null.
+- **`position: fixed` inside a sheet** counts from the sheet, not the
+  screen, because `.sheet` has `will-change: transform`; `dropdown()`'s
+  `fit` measures and corrects for it.
+- **Kokoro's model is freed only on its own thread** (`Kokoro.freeLater`):
+  freeing it while a piece was being made crashed the app.
+- **Narrate's "thinking"** comes from `onAudioAvailable`, not `onStart`:
+  Android calls onStart when a piece is queued to play, before any sound.
+- **Pinned download hashes:** read each one from the real file (a CI step
+  can fetch GitHub release files this container can't); Kokoro 1.1 shipped
+  in 1.50.0 with a wrong one and every download was refused.
+- **A build without `KokoroTtsService`** (main before Kokoro) resets its
+  enabled state; `KokoroPlugin.load` puts it back on the list at start.
+
+- **Saved HTML:** `save.js` rebuilds every element from an allowlist
+  (`ATTRS`), never copies the fetched DOM. The reader frame keeps
+  `allow-same-origin` only because it has no `allow-scripts`; the two
+  together are dangerous, and `test/save.test.js` fails if
+  `allow-scripts` appears.
+- **pdf.js frame:** opaque origin, so modules and workers can't load
+  across origins; the app posts the library's text in and the frame makes
+  its own blob: URLs. Pages draw with `intent: "print"`, because the
+  screen intent waits on requestAnimationFrame, which never runs in a
+  frame kept out of sight.
+- **Zooming printed pages:** keep the spot by the page under the fingers
+  (reader.js `pageAt`), not by the chapter's corner, and scale anything
+  between pages with `--co-zoom`: a fixed gap put the spot a quarter page
+  off by page 25. pdf.js draws at 2x at most, so asking for wider redraws
+  the same page; and drawing wider costs about 0.5 s a page at 6x CPU, on
+  the reader's own thread.
+- **Native number arguments:** read them with `getData().optLong`, not
+  `PluginCall.getLong`, which returns the default for a JS number that
+  arrives as an Integer (every read started at byte 0).
+- **`Filesystem.downloadFile` on Android ignores `recursive`:** make the
+  folder first (`platform.downloadTo` does).
+- **Plugin stand-ins in tests** must behave like the real plugin (offsets,
+  missing folders); two shipped bugs hid behind stand-ins that were
+  kinder than Android.
+- **Don't set `inert` on the library:** it restyles every card (50-70 ms
+  at 6x). `cover()` in `app-reader.js` does the job.
+- **No transform on `#libraryView`:** a moved box makes the page wider and
+  a phone grows its layout viewport, pushing the sticky bottom bar off
+  screen. Move its children. Only Playwright with `isMobile: true` shows it.
+- **Long clips use `content-visibility` chunks:** measuring anything
+  inside a skipped chunk lays it out, so a loop over
+  `getBoundingClientRect` across a book undoes the speed-up.
+- **Moving an iframe reloads it.** Wrap it where it will stay at start-up.
+- **Classic scripts share one scope:** a global function can shadow a
+  `window` method (`moveTo` had to become `moveInFolder`).
+- **History survives a WebView reload:** entries carry the launch's mark
+  and `route()` drops older ones.
+- **A background page's timers run late** (about a second each): yield
+  with a MessageChannel message, and keep timers that must fire (sleep)
+  in the native service.
+- **`display: flex` beats `[hidden]`:** a flex row that can hide needs its
+  own `[hidden]` rule.
+- **`.group` clips its overflow** for its corners, so a drop-down inside
+  sets `menu-open` on the group while it's up.
+- **Widgets (RemoteViews):** only allowed view classes inflate (a bare
+  `<View>` breaks the widget), and every id the Java hides must exist in
+  the layout.
+- **Sync:** never write over a stale sha (on 409, merge again); settle a
+  run's result without awaiting anything; update clip objects in place,
+  since the open reader and menus hold them; write the waiting list before
+  the base, or a cut-off run reads as deletions; a library that can't be
+  reached reads as empty, so sync refuses to run; a clip that was in the
+  library during a run and isn't at a settle was deleted meanwhile, and
+  the settle must not put it back (`syncdelete.test.js`).
+- **A Blob writes a string byte above 127 as two:** binary formats (the
+  PDF writer) use plain ASCII strings or bytes.
+- **The Settings window from 700 px:** `#settingsWin` is `display:
+  contents` on a phone and a box with `contain: layout paint` above, so
+  the two screens' `position: fixed; inset: 0` fill the window. Close
+  the window before the section, or the section vanishes first.
+- **Dragging the list/post line:** iframes take `pointer-events: none`
+  while it moves (`body.resizing`), or the reader swallows the drag.
+
+## The docs
+
+- **CHANGELOG.md** what each version shipped, in user-facing words
 - **DROPPED.md** what was decided against, and why
-- **CHANGELOG.md** what each version shipped
 - **DESIGN.md** the design language
 - **CONTRIBUTING.md** the rules for every change and how releases work

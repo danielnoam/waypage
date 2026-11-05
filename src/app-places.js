@@ -391,7 +391,7 @@ async function previewPost(f, it) {
   let got;
   try { got = await C.save.preview(it.url); }
   catch (e) {
-    toast(e instanceof C.save.SaveError ? e.message : C.platform.canFetchPages
+    toast(e instanceof C.save.SaveError ? e.message : C.platform.canReadPages
       ? "Couldn't open that post. Try the browser button." : "This browser can't reach that site. Try the browser button.");
     return;
   } finally { previewing = null; }
@@ -796,15 +796,13 @@ function renderSide() {
   const inMarks = state.place === "highlights";
   const latest = (f) => Math.max(0, ...f.items.map(postAt));
   const big = wide.matches;
-  const inLib = !inFeeds && !inMarks && state.place !== "reading" && state.place !== "newsletters";
+  const inLib = !inFeeds && !inMarks && !["reading", "newsletters", "discover"].includes(state.place);
   const inLibrary = inLib && !state.part && !state.folder && state.filter !== "favourites";
   const favs = sideFavourites();
   const hasFolders = allFolders().length > 0;
   fill($("sidebar"),
     el("div", { class: "side-head" },
-      el("p", { class: "side-title" }, "Waypage"),
-      big && inLib ? el("button", { class: "icon-btn side-search", type: "button", "aria-label": "Search", title: "Search (/)",
-        onclick: () => (pinned.matches ? toLibrary() : back()).then(() => { if (state.place !== "library") goPlace("library"); openSearch(); }) }, sideSvg("search")) : null),
+      el("p", { class: "side-title" }, "Waypage")),
     // From inside Collections, Clips, a collection or the favourites
     // (1.20.0), Library steps all the way back to the library itself.
     ...sideFold("library", item(feedIcon("library"), "Library", inLibrary, null, () =>
@@ -828,17 +826,19 @@ function renderSide() {
     ...sideFold("newsletters", item(sideSvg("mail"), "Newsletters", state.place === "newsletters" && !state.feed, freshMail ? el("span", { class: "side-pill" }, freshMail + " new") : null,
       () => goPlace("newsletters")), sideBoxes(mails).map(({ f, fresh: n }) =>
       withFeed(item(mailMark(f), f.title, state.place === "newsletters" && state.feed === f.url, count(n), () => goPlace("newsletters", f.url), "side-sub"), f))),
+    // Discover: new things to follow, last of the places you follow from.
+    item(sideSvg("discover"), "Discover", state.place === "discover", null, () => goPlace("discover")),
     // Every highlight in the library (1.8.0), a place of its own.
     item(sideSvg("marks"), "Highlights", inMarks, null, () => goPlace("highlights")),
     item(sideSvg("reading"), "Stats", state.place === "reading", null, () => goPlace("reading")),
     // On a big screen the sidebar carries the rest (1.5.0): the tags,
     // and Settings at its foot. Feeds are added from the Feeds place.
-    ...(big ? sideMore() : []));
+    ...(big ? sideMore() : []),
+    el("p", { class: "side-version" }, "Version " + APP_VERSION));
 }
 
 function sideMore() {
   const tags = allTags().slice(0, 12);
-  const leave = () => (state.side ? back() : Promise.resolve());
   return [
     tags.length ? el("div", { class: "side-space", "aria-hidden": "true" }) : null,
     tags.length ? el("p", { class: "side-over" }, "Tags") : null,
@@ -848,18 +848,18 @@ function sideMore() {
         onclick: () => goPlace("library").then(() => setFilter(on ? "all" : "#" + t)) }, "#" + t);
       return b;
     })) : null,
+    // Search and Settings live at the top bar's right end, as on a phone
+    // (1.49.0, Daniel's ask), not in the sidebar. The gap keeps room for
+    // the docked Narrate player.
     el("span", { class: "side-gap", "aria-hidden": "true" }),
-    el("button", { class: "side-item side-settings", type: "button", onclick: () => leave().then(() => openSettings()) },
-      sideSvg("settings"), el("span", { class: "side-label" }, "Settings")),
   ];
 }
 
 const SIDE_SVG = {
-  search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
   marks: ICONS.mark,
   reading: '<path d="M5 20V12M10 20V6M15 20v-9M20 20V9"/>',
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
-  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  discover: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
 };
 function sideSvg(name) {
   const box = el("span", { class: "side-icon", "aria-hidden": "true" });
@@ -961,8 +961,9 @@ function fitWidth() {
 // rest of the app has letters too, listed behind "?". Keys pressed in
 // the reader's page come here through reader.js.
 const KEYS = [
-  ["Anywhere", [["/", "Search the library"], [(/Mac/.test(navigator.platform) && navigator.maxTouchPoints < 2 ? "⌘" : "Ctrl") + " V", "Save a copied link"], ["G then L", "Go to the library"],
-    ["G then F", "Go to Feeds"], ["G then N", "Go to Newsletters"], ["G then H", "Go to Highlights"], ["G then S", "Go to Stats"], ["D", "Downloads"], [",", "Settings"], ["?", "These shortcuts"]]],
+  ["Anywhere", [["/", "Search the library"], [(/Mac/.test(navigator.platform) && navigator.maxTouchPoints < 2 ? "⌘" : "Ctrl") + " V", "Save a copied link"],
+    ["1  2  3  4  5  6", "Library, Feeds, Newsletters, Highlights, Stats, Discover"], ["G then L", "Go to the library"],
+    ["G then F", "Go to Feeds"], ["G then N", "Go to Newsletters"], ["G then H", "Go to Highlights"], ["G then S", "Go to Stats"], ["G then E", "Go to Discover"], ["D", "Downloads"], [",", "Settings"], ["?", "These shortcuts"]]],
   ["In the library", [["↑ ↓", "Move between clips"], ["Enter", "Open"], ["X", "Pick, to act on several"], ["Shift-click", "Pick a run"],
     ["F", "Favourite"], ["E", "Export"], ["Del", "Delete"]]],
   ["Reading", [["Space  ← →", "Next or previous page"], ["J  K", "Next or previous section"], ["T", "Contents beside the text"],
@@ -980,7 +981,7 @@ function keysSheet() {
 
 const typingIn = (t) => !!(t && t.closest && t.closest("input, textarea, select, [contenteditable]"));
 // The card or collection with focus, in the list on screen.
-const listNow = () => (state.folder ? $("folderBody") : state.place === "feeds" ? $("feeds") : state.place === "newsletters" ? $("newsletters") : state.place === "highlights" ? $("highlights") : state.place === "reading" ? $("reading") : $("library"));
+const listNow = () => (state.folder ? $("folderBody") : state.place === "feeds" ? $("feeds") : state.place === "newsletters" ? $("newsletters") : state.place === "highlights" ? $("highlights") : state.place === "reading" ? $("reading") : state.place === "discover" ? $("discover") : $("library"));
 const focusedNode = () => { const a = document.activeElement; return a && a.closest && listNow().contains(a) ? a.closest("[data-ids]") : null; };
 const focusedPage = () => {
   const n = focusedNode();
@@ -1006,6 +1007,7 @@ function jumpSection(d) {
 }
 
 let gAt = 0;
+const PLACE_KEYS = ["library", "feeds", "newsletters", "highlights", "reading", "discover"];
 function onKeys(e) {
   if (e.defaultPrevented || e.isComposing) return;
   const k = e.key, inFrame = e.target && e.target.ownerDocument !== document;
@@ -1055,15 +1057,18 @@ function onKeys(e) {
   }
   if (Date.now() - gAt < 1200) {
     gAt = 0;
-    const to = { l: "library", f: "feeds", n: "newsletters", h: "highlights", s: "reading", r: "reading" }[k.toLowerCase()];
+    const to = { l: "library", f: "feeds", n: "newsletters", h: "highlights", s: "reading", r: "reading", e: "discover" }[k.toLowerCase()];
     if (to) go(() => goPlace(to));
     return;
   }
   const p = focusedPage(), node = focusedNode();
   const acts = {
     g: () => { gAt = Date.now(); },
+    // 1 to 5: the sidebar's places, in its order (1.49.0).
+    ...Object.fromEntries(PLACE_KEYS.map((to, i) => [String(i + 1), () => (state.folder ? toLibrary() : Promise.resolve()).then(() => goPlace(to))])),
     "/": () => (state.folder ? toLibrary() : Promise.resolve()).then(() => {
       if (state.place === "highlights") { $("highlights").querySelector(".hl-search input").focus(); return; }
+      if (state.place === "discover") { $("discover").querySelector(".dz-search input").focus(); return; }
       return (["feeds", "reading"].includes(state.place) ? goPlace("library") : Promise.resolve()).then(openSearch);
     }),
     d: () => openDownloads(),
@@ -1078,6 +1083,48 @@ function onKeys(e) {
   };
   const act = acts[k.length === 1 ? k.toLowerCase() : k];
   if (act) go(act);
+}
+
+// The line between a list and the post beside it, from 1280 px (1.49.0):
+// drag it, or focus it and use the arrow keys; a double-click puts it
+// back in the middle. The share of the room is kept, so it holds when
+// the window is resized.
+{
+  const grip = $("paneGrip"), KEY = "waypage.listShare", MIN = 320, PANE_MIN = 400;
+  const sideW = () => $("sidebar").offsetWidth || 272;
+  const room = () => innerWidth - sideW();
+  let share = load(KEY, 0.5);
+  function place(f) {
+    const r = room(), w = Math.round(Math.max(MIN, Math.min(r - PANE_MIN, f * r)));
+    document.documentElement.style.setProperty("--list-w", w + "px");
+    grip.setAttribute("aria-valuenow", String(Math.round((w / r) * 100)));
+    return w / r;
+  }
+  const keep = (f) => { share = place(f); store(KEY, share); };
+  place(share);
+  addEventListener("resize", () => place(share));
+  grip.addEventListener("pointerdown", (e) => {
+    if (e.button) return;
+    e.preventDefault();
+    grip.setPointerCapture(e.pointerId);
+    grip.classList.add("dragging");
+    document.body.classList.add("resizing");
+  });
+  grip.addEventListener("pointermove", (e) => { if (grip.classList.contains("dragging")) share = place((e.clientX - sideW()) / room()); });
+  const end = () => {
+    if (!grip.classList.contains("dragging")) return;
+    grip.classList.remove("dragging");
+    document.body.classList.remove("resizing");
+    keep(share);
+  };
+  grip.addEventListener("pointerup", end);
+  grip.addEventListener("pointercancel", end);
+  grip.addEventListener("dblclick", () => keep(0.5));
+  grip.addEventListener("keydown", (e) => {
+    const d = { ArrowLeft: -0.02, ArrowRight: 0.02 }[e.key];
+    if (d) { e.preventDefault(); keep(share + d); }
+    else if (e.key === "Home" || e.key === "End") { e.preventDefault(); keep(e.key === "Home" ? 0 : 1); }
+  });
 }
 
 // Ctrl V (⌘ V) with no field to paste into saves the link, from 700 px.
@@ -1266,7 +1313,8 @@ function swipeFeeds(root) {
   let go = null;
   const chips = () => [...root.querySelectorAll(".feed-chips .chip")];
   // The chips stay put; what's under them slides (Daniel, 1.45.6).
-  const parts = () => [...root.children].filter((x) => !x.classList.contains("feed-chips"));
+  // Discover's search and chips sit in one box at the top; it stays too.
+  const parts = () => [...root.children].filter((x) => !x.classList.contains("feed-chips") && !x.querySelector(".feed-chips"));
   const move = (t) => parts().forEach((x) => { x.style.transform = t; });
   const play = (frames, timing) => parts().map((x) => x.animate(frames, timing));
   const neighbour = (d) => {
@@ -1276,7 +1324,8 @@ function swipeFeeds(root) {
   root.addEventListener("touchstart", (e) => {
     const t = e.touches[0];
     go = e.touches.length === 1 && t.clientX > EDGE && !state.feedPick && !state.side && !state.menu && chips().length > 1
-      && !e.target.closest(".filters, input, textarea") ? { x: t.clientX, y: t.clientY, on: false, dx: 0, t: e.timeStamp } : null;
+      // Discover's row of covers scrolls sideways on its own; its grid doesn't.
+      && !e.target.closest(".filters, input, textarea, .dz-covers:not(.dz-grid)") ? { x: t.clientX, y: t.clientY, on: false, dx: 0, t: e.timeStamp } : null;
   }, { passive: true });
   root.addEventListener("touchmove", (e) => {
     if (!go) return;
@@ -1357,6 +1406,7 @@ function pullToCheck(root) {
     // A pull also looks for a newer Waypage (0.34.0); the bar says so.
     const app = checkForNewerApp().catch(() => {});
     if (state.place === "feeds" || state.place === "newsletters") { Promise.all([checkNow(picked || null), app]).finally(done); return; }
+    if (state.place === "discover") { Promise.all([dzReadRR(true), app]).finally(done); return; }
     // And in the library, in the watched folder (1.1.0).
     Promise.all([pullChapters(app), lookInFolder(false)]).finally(done);
   }, { passive: true });

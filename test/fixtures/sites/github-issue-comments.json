@@ -1,0 +1,48 @@
+[
+  {
+    "url": "https://api.github.com/repos/danielnoam/waypage/issues/comments/6547834073",
+    "html_url": "https://github.com/danielnoam/waypage/pull/182#issuecomment-6547834073",
+    "issue_url": "https://api.github.com/repos/danielnoam/waypage/issues/182",
+    "id": 6547834073,
+    "node_id": "IC_kwDOU4mQLc8AAAABhkgE2Q",
+    "user": {
+      "login": "omri-ehud",
+      "id": 48688550,
+      "node_id": "MDQ6VXNlcjQ4Njg4NTUw",
+      "avatar_url": "https://avatars.githubusercontent.com/u/48688550?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/omri-ehud",
+      "html_url": "https://github.com/omri-ehud",
+      "followers_url": "https://api.github.com/users/omri-ehud/followers",
+      "following_url": "https://api.github.com/users/omri-ehud/following{/other_user}",
+      "gists_url": "https://api.github.com/users/omri-ehud/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/omri-ehud/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/omri-ehud/subscriptions",
+      "organizations_url": "https://api.github.com/users/omri-ehud/orgs",
+      "repos_url": "https://api.github.com/users/omri-ehud/repos",
+      "events_url": "https://api.github.com/users/omri-ehud/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/omri-ehud/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "created_at": "2026-10-31T19:04:10Z",
+    "updated_at": "2026-10-31T19:04:10Z",
+    "body_html": "<p dir=\"auto\">Opened here by mistake; this was meant for a fork. Closing.</p>",
+    "author_association": "COLLABORATOR",
+    "reactions": {
+      "url": "https://api.github.com/repos/danielnoam/waypage/issues/comments/6547834073/reactions",
+      "total_count": 0,
+      "+1": 0,
+      "-1": 0,
+      "laugh": 0,
+      "hooray": 0,
+      "confused": 0,
+      "heart": 0,
+      "rocket": 0,
+      "eyes": 0
+    },
+    "performed_via_github_app": null,
+    "minimized": null
+  }
+]

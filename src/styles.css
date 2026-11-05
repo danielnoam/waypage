@@ -302,7 +302,7 @@ html.native .top-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top));
   margin: 0;
   font: 700 var(--fs-screen)/var(--lh-screen) var(--serif);
 }
-.top-actions { display: flex; gap: var(--s-1); flex-shrink: 0; }
+.top-actions { display: flex; gap: var(--s-1); flex-shrink: 0; margin-inline-start: auto; }
 .top-actions [hidden] { display: none; }
 .meta { margin: var(--s-1) 0 0; font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--muted); }
 
@@ -483,6 +483,8 @@ a.btn-small { text-decoration: none; white-space: nowrap; display: inline-flex; 
 }
 @keyframes breathe { 50% { opacity: 0.35; } }
 
+/* Settings' two screens; a box of their own only on a big screen. */
+.settings-win { display: contents; }
 .screen {
   position: fixed; inset: 0; z-index: 10;
   display: flex; flex-direction: column;
@@ -514,6 +516,8 @@ html.native .screen-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
 
 :is(.settings-section, .reading-controls.split) + .settings-section { margin-top: var(--s-6); }
 /* Two cards in one section (a list and its action, say) stand apart (1.48.1). */
+/* The reader's own theme sits close under Theme, with no heading. */
+.settings-section + .settings-section.reader-theme-sec { margin-top: var(--s-3); }
 .settings-section > .group + .group, .settings-section > :is(.footnote, .warn-note, textarea, .report-field) + .group { margin-top: var(--s-3); }
 .overline {
   margin: 0 0 var(--s-2) var(--s-1);
@@ -558,7 +562,7 @@ html.native .screen-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
 .drive-row { padding: 0; padding-inline-end: var(--s-1); gap: 0; cursor: default; }
 .drive-row:active { background-image: none; }
 .drive-pick { flex: 1; min-width: 0; padding-inline-end: var(--s-2); }
-.drive-delete:hover { color: var(--warn); }
+.drive-delete:hover, .kokoro-delete:hover { color: var(--warn); }
 /* Under a watched folder, the collection its new files go into (1.28.0). */
 .watch-into { gap: var(--s-3); }
 .watch-into .row-label { flex: none; color: var(--muted); font-size: var(--fs-label); }
@@ -605,6 +609,16 @@ html.native .reader-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
 .aloud-sleep-left:empty { display: none; }
 .aloud-play .aloud-play-icon, .aloud-play.paused .aloud-pause-icon { display: none; }
 .aloud-play.paused .aloud-play-icon { display: block; }
+/* Thinking: the engine is still making the piece it's on (a slow voice
+   like Kokoro, at the start or after a skip). A ring turns round Pause
+   until the voice starts; shown only past a quarter second. */
+.aloud-player .aloud-play { position: relative; overflow: visible; }
+.aloud-play.thinking::after { content: ""; position: absolute; inset: -5px; border-radius: var(--r-full); pointer-events: none;
+  border: 2.5px solid color-mix(in srgb, var(--accent) 22%, transparent); border-top-color: var(--accent);
+  animation: spin 0.9s linear infinite, think-in 0.2s ease-out; }
+@keyframes think-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .aloud-play.thinking::after { animation-duration: 2.4s, 0.2s; } }
+:root[data-motion="off"] .aloud-play.thinking::after { animation: none; }
 /* Even room above and below the buttons (1.24.2): 2px above sat them on
    the bar's top edge, most of all over a phone's gesture area. */
 .reader.aloud .read-left { align-items: center; padding-top: var(--s-2); padding-bottom: calc(var(--s-2) + env(safe-area-inset-bottom)); }
@@ -1108,7 +1122,11 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 /* Reader settings (0.34.0): Layout, Text and Read aloud, each its own part. */
 .rc-part { display: flex; flex-direction: column; gap: var(--s-3); }
 .rc-part[hidden] { display: none; }
-/* .rc-row is display: flex, which beats the browser's [hidden] (1.46.1). */
+/* A comic's own Layout rows (Unreleased), a note under a row at its end. */
+.comic-rows { display: flex; flex-direction: column; gap: var(--s-3); }
+.comic-rows[hidden] { display: none; }
+.rc-note { margin-top: calc(var(--s-2) * -1); text-align: end; }
+/* .rc-row is display: flex, which beats the browser's [hidden] (1.49.0). */
 .rc-row[hidden] { display: none; }
 
 /* Settings > Reading (1.48.2): the one box split into Layout and Text sections; the section heads replace the parts' own. */
@@ -1222,6 +1240,44 @@ html { -webkit-tap-highlight-color: transparent; }
   .select-act, .btn-text, .dropdown-btn):active { transform: none; }
 }
 
+/* A mouse hovering (1.50): what a click would open answers before the
+   click. Boxed cards and tiles lift a little and their edge warms toward
+   the accent; rows (Shelf, One list) take a rounded tint and their cover
+   grows; covers (Shelf, Grid) rise on their own. Bar buttons and sidebar
+   rows tint and grow a touch. Only for a mouse, so a finger never leaves
+   a card stuck lifted. Transform and colour only, nothing reflows, so a
+   3000-clip library stays smooth. A click settles it. Rows keep inside
+   their box: content-visibility clips anything past it. */
+@media (hover: hover) and (pointer: fine) {
+  :is([data-layout="shelf"], [data-layout="list"]) .page-card:not(.continue),
+  [data-layout="list"] .library > .tile { --lift: 1; }
+  :is([data-layout="shelf"], [data-layout="grid"]) .tile { --lift: 1; --hover-fill: none; }
+  .card:not(.saving):hover, .tile:hover {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+    background-image: var(--hover-fill, linear-gradient(var(--press), var(--press)));
+  }
+  :is([data-layout="shelf"], [data-layout="list"]) .page-card:not(.continue):not(.saving):hover,
+  [data-layout="list"] .library > .tile:hover { border-radius: var(--r-md); background-image: linear-gradient(var(--press), var(--press)); }
+  :is(.top-bar, .screen-bar, .reader-bar) .icon-btn:hover:not(:disabled) { background-color: var(--press); }
+  .side-item:hover, .side-fold:hover { background-image: linear-gradient(var(--press), var(--press)); }
+}
+/* The lift moves, so reduced motion and Animations off keep only the tint. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .card-thumb, .tile-thumb, .side-icon, .side-cover { transition: transform var(--spring-control-ms, 300ms) var(--spring-control, ease-out); }
+  /* A row's cover grows away from its edge: past it, content-visibility clips it. */
+  :is([data-layout="shelf"], [data-layout="list"]) :is(.page-card:not(.continue) .card-thumb, .library > .tile .tile-thumb) { transform-origin: 0 50%; }
+  [dir="rtl"] :is([data-layout="shelf"], [data-layout="list"]) :is(.page-card:not(.continue) .card-thumb, .library > .tile .tile-thumb) { transform-origin: 100% 50%; }
+  :root:not([data-motion="off"]) .card:not(.saving):hover { transform: scale(var(--lift, 1.012)); }
+  :root:not([data-motion="off"]) .tile:hover { transform: scale(var(--lift, 1.03)); }
+  :root:not([data-motion="off"]) :is([data-layout="shelf"], [data-layout="list"]) .page-card:not(.continue):not(.saving):hover .card-thumb,
+  :root:not([data-motion="off"]) [data-layout="list"] .library > .tile:hover .tile-thumb { transform: scale(1.05); }
+  :root:not([data-motion="off"]) :is([data-layout="shelf"], [data-layout="grid"]) .tile:hover .tile-thumb { transform: translateY(-3px) scale(1.03); }
+  :root:not([data-motion="off"]) :is(.top-bar, .screen-bar, .reader-bar) .icon-btn:hover:not(:disabled) { transform: scale(1.06); }
+  :root:not([data-motion="off"]) .side-item:hover :is(.side-icon, .side-cover) { transform: scale(1.12); }
+  :root:not([data-motion="off"]) :is(.card:not(.saving), .tile, :is(.top-bar, .screen-bar, .reader-bar) .icon-btn):hover:active,
+  :root:not([data-motion="off"]) :is(.card, .tile):hover:active :is(.card-thumb, .tile-thumb) { transform: none; }
+}
+
 /* The shadow of a panel growing into a screen (motion.js grow, 1.11.0):
    the screen shows through a clip the panel's size, and this draws the
    panel's edge and shadow around it. */
@@ -1300,6 +1356,9 @@ html { -webkit-tap-highlight-color: transparent; }
 .update-row .spinner { flex-shrink: 0; margin: 0; }
 /* A span styled as the button (the row is the button): centred like one. */
 .update-row .btn-small { display: inline-flex; align-items: center; justify-content: center; }
+/* A newer version out: the version (What's new) and Update are two buttons. */
+.update-text { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: var(--s-3); margin: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+span.update-text { cursor: default; }
 .row:disabled { cursor: default; }
 .row:disabled .row-label, .row:disabled .choice-label { color: var(--muted); }
 .warn { color: var(--warn); }
@@ -1576,6 +1635,7 @@ html { -webkit-tap-highlight-color: transparent; }
 .settings-section > .section-lead { margin-bottom: var(--s-5); }
 .drive-done { margin: 0; padding: var(--s-8) var(--s-5); text-align: center; color: var(--ink); font-size: var(--fs-meta); }
 .update-card { border-color: var(--accent); }
+.news-update { margin-bottom: var(--s-6); }
 
 
 /* 0.19.1: the filters between Folders and the pages, and a switch. */
@@ -1907,6 +1967,8 @@ html { -webkit-tap-highlight-color: transparent; }
 .storage-pages > .saved-view { border-top: 1px solid var(--line); padding-inline-start: var(--s-6); }
 .storage-pages > .saved-view + .row { border-top: 1px solid var(--line); }
 .choice-note.warn { color: var(--warn); }
+/* The Kokoro voices screen fills in once the phone answers. */
+.kokoro-slot { display: contents; }
 
 /* ---- 0.27.12: the browser release ---- */
 .empty-open { margin-top: var(--s-4); }
@@ -1914,7 +1976,7 @@ html { -webkit-tap-highlight-color: transparent; }
 
 /* ---- 0.28.0: the sidebar and Feeds ---- */
 .library[hidden], .feeds[hidden], .highlights[hidden], .reading[hidden] { display: none; }
-:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"], [data-place="reading"]) :is(.top, #searchBtn) { display: none; }
+:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"], [data-place="reading"], [data-place="discover"]) :is(.top, #searchBtn) { display: none; }
 
 .side-catch { z-index: 17; }
 .sidebar {
@@ -1946,6 +2008,7 @@ html { -webkit-tap-highlight-color: transparent; }
   font: 600 var(--fs-meta)/var(--lh-meta) var(--sans);
 }
 .side-space { flex-shrink: 0; height: var(--s-5); }
+.side-version { flex-shrink: 0; margin: auto var(--s-5) 0; padding-top: var(--s-5); color: var(--muted); font: var(--fs-meta)/var(--lh-meta) var(--sans); font-variant-numeric: tabular-nums; }
 .side-sub { min-height: var(--tap); margin-inline-start: calc(var(--s-2) + var(--s-4)); font-size: var(--fs-label); }
 .side-sub .side-icon { color: var(--accent); }
 /* A heading with its fold arrow is one item (1.45.5): the arrow sits
@@ -1959,6 +2022,14 @@ html { -webkit-tap-highlight-color: transparent; }
   border: 0; border-radius: var(--r-md); background: transparent; color: var(--muted); cursor: pointer;
 }
 .side-fold:active { background: var(--press); }
+/* Pressing or hovering the heading lights the whole row, arrow and all
+   (1.50); the arrow alone lights only itself. */
+.side-row .side-item:active { background: transparent; }
+.side-row:has(> .side-item:active) { background-image: linear-gradient(var(--press), var(--press)); }
+@media (hover: hover) and (pointer: fine) {
+  .side-row .side-item:hover { background-image: none; }
+  .side-row:has(> .side-item:hover) { background-image: linear-gradient(var(--press), var(--press)); }
+}
 .side-fold svg { transition: transform var(--spring-control-ms, 300ms) var(--spring-control, ease-out); }
 .side-fold[aria-expanded="false"] svg { transform: rotate(-90deg); }
 .side-fold[aria-expanded="false"]:dir(rtl) svg { transform: rotate(90deg); }
@@ -2244,8 +2315,8 @@ html { -webkit-tap-highlight-color: transparent; }
   .lib-head .meta { margin: 0; flex: 1; min-width: 0; }
   .lib-head .lib-tools { margin: 0 calc(-1 * var(--s-2)) 0 0; align-self: center; gap: var(--s-4); }
   .top { padding-bottom: var(--s-3); }
-  :is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"]) .top { display: block; }
-  :is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"]) :is(.top > :not(.lib-head), .lib-head > :not(.screen-title)) { display: none; }
+  :is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"], [data-place="discover"]) .top { display: block; }
+  :is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"], [data-place="discover"]) :is(.top > :not(.lib-head), .lib-head > :not(.screen-title)) { display: none; }
 
   /* Two columns of clips; Continue reading, collections and section
      heads take the whole width. */
@@ -2264,7 +2335,6 @@ html { -webkit-tap-highlight-color: transparent; }
   .sidebar { width: min(var(--side-w), 85vw); padding: calc(var(--s-5) + env(safe-area-inset-top)) var(--s-4) calc(var(--s-4) + env(safe-area-inset-bottom)); }
   .side-head { display: flex; align-items: center; justify-content: space-between; margin: 0 0 var(--s-4) var(--s-3); }
   .side-head .side-title { margin: 0; }
-  .side-search { color: var(--muted); }
   .side-item { margin: 0; }
   .side-row { margin: 0; }
   .side-sub { margin-inline-start: var(--s-4); }
@@ -2272,7 +2342,7 @@ html { -webkit-tap-highlight-color: transparent; }
   .side-tags { display: flex; flex-wrap: wrap; gap: var(--s-2); padding: 0 var(--s-3); }
   .side-tag { min-height: 32px; }
   .side-gap { flex: 1; min-height: var(--s-4); }
-  .side-settings .side-icon { color: var(--muted); }
+  .side-version { margin: 0 var(--s-3); padding-top: 0; }
 }
 @media (min-width: 700px) and (pointer: fine) {
   .side-item { min-height: 40px; }
@@ -2311,7 +2381,7 @@ html { -webkit-tap-highlight-color: transparent; }
   }
   body.pinned { --lib-left: var(--side-w); --lib-pad: max(var(--gutter), calc((100vw - var(--side-w) - var(--content-max)) / 2)); }
   body.pinned #libraryView { margin-inline-start: var(--side-w); }
-  body.pinned .menu-btn, body.pinned #searchBtn, body.pinned #settingsBtn { display: none; }
+  body.pinned .menu-btn { display: none; }
   body.pinned .side-catch { display: none; }
   /* A collection opens beside the sidebar; the reader and Settings cover
      everything. */
@@ -2439,6 +2509,24 @@ kbd {
   #sectionView .bar-title { text-align: start; font: 700 var(--fs-screen)/var(--lh-screen) var(--serif); }
   #sectionView .screen-body { padding: var(--s-5) var(--s-7) var(--s-8); }
   #sectionView .screen-body > * { margin-left: 0; max-width: 42rem; }
+
+  /* Settings' window (1.49.0): the menu and section inside a box over the
+     library, grown from the gear (openWin in app-reader.js). The box
+     contains them, so their inset: 0 fills it. */
+  .settings-win {
+    display: block; position: fixed; inset: 0; z-index: 13; margin: auto;
+    width: min(65rem, calc(100vw - 2 * var(--s-5))); height: min(46rem, calc(100dvh - 2 * var(--s-6)));
+    background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-lg);
+    box-shadow: 0 24px 64px var(--shadow); overflow: hidden; contain: layout paint;
+  }
+  .settings-win:not([data-open]) { display: none; }
+  .settings-win > .screen { box-shadow: none; }
+  #newsView { z-index: 14; }
+}
+@media (min-width: 700px) and (max-width: 1023px) {
+  .settings-win { --settings-w: 240px; }
+  #sectionView .screen-bar { padding: var(--s-5) var(--s-5) 0; }
+  #sectionView .screen-body { padding: var(--s-4) var(--s-5) var(--s-7); }
 }
 @media (min-width: 700px) and (pointer: fine) {
   .menu-sheet .sheet-row, .reader .sheet .row { min-height: 40px; }
@@ -2484,7 +2572,7 @@ kbd {
     background: var(--preview); box-shadow: 0 0 0 1px var(--line);
   }
   .rail-thumb.in { aspect-ratio: auto; background: transparent; }
-  /* Dark PDF pages (1.46.0): the rail's small pages follow the big ones. */
+  /* Dark PDF pages (1.49.0): the rail's small pages follow the big ones. */
   html[data-pdf-dark] .rail-thumb[src] { filter: url(#pdf-dark); }
   .rail-page[aria-current] { color: var(--ink); font-weight: 600; }
   .rail-page[aria-current] .rail-thumb { box-shadow: 0 0 0 2px var(--accent); }
@@ -2499,12 +2587,8 @@ kbd {
 
   /* Feeds at 1280 px: the river in a column, the post beside it. */
   .aloud-bar.docked { width: calc(var(--side-w) - 2 * var(--s-4)); cursor: default; }
-  body.aloud-docked .side-gap { min-height: calc(var(--s-9) + var(--s-2)); }
+  body.aloud-docked .side-version { margin-bottom: calc(var(--s-9) + var(--s-2)); }
 
-  /* Storage and Sync have room for two columns. */
-  #sectionBody:is([data-key="storage"], [data-key="sync"]) > * { max-width: 62rem; }
-  #sectionBody:is([data-key="storage"], [data-key="sync"]) { column-count: 2; column-gap: var(--s-6); }
-  #sectionBody:is([data-key="storage"], [data-key="sync"]) > .settings-section { break-inside: avoid; margin: 0 0 var(--s-6); display: inline-block; width: 100%; }
 }
 @media (min-width: 1024px) and (pointer: fine) {
   .read-keys {
@@ -2513,14 +2597,28 @@ kbd {
   }
   .reader.aloud .read-keys { display: none; }
 }
+.pane-grip { display: none; }
 @media (min-width: 1280px) {
-  body.pinned #libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"]) { width: 500px; border-inline-end: 1px solid var(--line); }
+  /* The list and the post beside it share the room half and half, and
+     the line between them can be dragged (1.49.0, Daniel's ask; it was a
+     500 px list). --list-w is set from the saved share in app-places.js. */
+  :root { --list-w: calc((100vw - var(--side-w)) / 2); }
+  body.pinned #libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"]) { width: var(--list-w); border-inline-end: 1px solid var(--line); }
+  body.pinned:has(#libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"])):not(:has(#readerView:not([hidden]):not([data-pane]))) .pane-grip {
+    display: block; position: fixed; top: 0; bottom: 0; left: calc(var(--side-w) + var(--list-w) - 5px); z-index: 11; width: 10px;
+    cursor: col-resize; touch-action: none;
+  }
+  .pane-grip::after { content: ""; position: absolute; top: 0; bottom: 0; left: 4px; width: 2px; background: transparent; transition: background-color 120ms linear; }
+  .pane-grip:hover::after, .pane-grip.dragging::after, .pane-grip:focus-visible::after { background: var(--accent); }
+  .pane-grip:focus-visible { outline: none; }
+  body.resizing { cursor: col-resize; user-select: none; }
+  body.resizing iframe { pointer-events: none; }
   body.pinned #libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"]) > * { padding-inline: var(--s-5); }
   body.pinned:has(#libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"])):has(#readerView[hidden]) .pane-note {
-    display: flex; position: fixed; inset: 0 0 0 calc(var(--side-w) + 500px); align-items: center; justify-content: center; margin: 0;
+    display: flex; position: fixed; inset: 0 0 0 calc(var(--side-w) + var(--list-w)); align-items: center; justify-content: center; margin: 0;
     color: var(--muted);
   }
-  #readerView[data-pane] { left: calc(var(--side-w) + 500px); box-shadow: none; }
+  #readerView[data-pane] { left: calc(var(--side-w) + var(--list-w)); box-shadow: none; }
 }
 @media (min-width: 1024px) and (pointer: fine) {
   .read-left .read-time { margin-inline-start: auto; }
@@ -2627,3 +2725,69 @@ html.locked body > :not(.lock-view):not(script) { visibility: hidden !important;
 @media (prefers-reduced-motion: reduce) { .lock-dots.shake { animation: none; } .lock-key, .lock-dot { transition: none; } }
 .lock-view:focus { outline: none; }
 .lock-next:disabled { background: var(--line); color: var(--muted); cursor: default; }
+
+/* ---- Discover ---- */
+[data-place="discover"] .save-form { display: none; }
+[data-place="discover"] .save-bar:not(:has(.update-bar:not([hidden]))) { display: none; }
+.dz-head, .dz-body { display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
+.dz-search { margin-top: var(--s-1); }
+.dz-ask { align-self: flex-start; margin-top: var(--s-2); }
+.dz-none { margin-top: var(--s-4); }
+.discover .section-head .dropdown { margin-inline-end: calc(-1 * var(--s-2)); }
+.discover .section-head .dropdown-btn { border: 0; background: transparent; color: var(--accent); font-weight: 600; min-height: var(--tap); padding: 0 var(--s-2); }
+.dz-covers {
+  display: flex; gap: var(--s-3); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain;
+  margin: 0 calc(-1 * var(--s-4)); padding: 0 var(--s-4) var(--s-1); scroll-padding-inline: var(--s-4);
+}
+.dz-covers::-webkit-scrollbar { display: none; }
+.dz-book {
+  flex: none; width: 112px; display: flex; flex-direction: column; gap: 2px; padding: 0; text-align: start;
+  border: 0; background: transparent; color: var(--ink); font: inherit; cursor: pointer;
+}
+.dz-art { position: relative; display: block; }
+.dz-cover {
+  position: relative; display: flex; align-items: flex-end; overflow: hidden;
+  width: 112px; height: 160px; padding: var(--s-2); border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--preview); color: var(--ink); font: 700 15px/1.15 var(--serif);
+}
+.dz-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.dz-cover.has-img .dz-cover-t { visibility: hidden; }
+.dz-cover-t { position: relative; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.dz-book:active .dz-cover { filter: brightness(0.94); }
+.dz-mark {
+  position: absolute; top: 6px; inset-inline-end: 6px; width: 32px; height: 32px; border-radius: var(--r-full);
+  display: grid; place-items: center; background: var(--surface); color: var(--accent); border: 1px solid var(--line);
+}
+.dz-mark.on { color: var(--ok); }
+.dz-mark .side-icon { color: inherit; }
+.dz-bt { margin-top: var(--s-1); font-size: var(--fs-meta); line-height: var(--lh-meta); font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.dz-bm { font-size: 12px; line-height: 16px; color: var(--muted); }
+.dz-src { margin-top: var(--s-2); }
+.dz-about { font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--ink); }
+.post-saved.dz-on { display: inline-flex; align-items: center; gap: 4px; }
+.post-saved.dz-on .side-icon { color: inherit; }
+.dz-foot { margin-top: var(--s-5); }
+.dz-suggest { font-size: inherit; min-height: 0; padding: 0; }
+.dz-sheethead { display: flex; gap: var(--s-4); align-items: flex-start; }
+.dz-sheethead .feed-mark { flex: none; }
+.dz-sheet-cover { flex: none; width: 88px; height: 126px; font-size: 13px; }
+.dz-sheet-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dz-sheet-text .meta { margin: 0; }
+.dz-sheet-title { margin: 0 0 var(--s-1); text-align: start; }
+.dz-blurb { margin: 0; font-size: 15px; line-height: 22px; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.dz-story .btn-quiet { display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: var(--accent); }
+.dz-story .footnote, .dz-signup .footnote { margin-top: 0; }
+.dz-ok { color: var(--ok); }
+.dz-addr {
+  margin: 0; padding: var(--s-3); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg);
+  font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--ink); word-break: break-all;
+}
+.dz-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: var(--s-4) var(--s-3);
+  overflow: visible; margin: var(--s-3) 0 0; padding: 0;
+}
+.dz-grid .dz-book { width: auto; min-width: 0; }
+.dz-grid .dz-cover { width: 100%; height: auto; aspect-ratio: 2 / 3; }
+.dz-tools { display: flex; gap: var(--s-2); flex-wrap: wrap; margin-top: var(--s-2); }
+.dz-tools .dropdown { flex: 1 1 140px; min-width: 0; }
+.dz-more { display: block; width: 100%; margin-top: var(--s-4); color: var(--accent); font-weight: 600; }

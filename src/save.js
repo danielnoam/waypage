@@ -28,6 +28,8 @@
     "textarea option label nav svg math canvas audio video picture source track map area link meta base head title dialog").split(" "));
   const ATTRS = { a: ["href"], img: ["alt", "width", "height"], td: ["colspan", "rowspan"], th: ["colspan", "rowspan", "scope"], ol: ["start"], time: ["datetime"], abbr: ["title"] };
   const GLOBAL_ATTRS = ["id", "lang", "dir"];
+  // The classes a discussion's markup keeps through rebuild() (reader.css).
+  const THREAD_CLASS = /^co-(thread|comment|accepted|replies|who)$/;
 
   // ---- Pure helpers (test/save.test.js) ----
 
@@ -754,7 +756,673 @@
         };
       },
     },
+    // Discussions and code: a post with its comments, a question with its
+    // answers, a code file as code. `build` reads the site's own data
+    // (JSON or the raw file) before any page is fetched; null, or any
+    // failure, falls back to reading the page.
+    {
+      name: "GitHub",
+      host: /^(www\.)?github\.com$/i,
+      build(url) {
+        const m = new URL(url).pathname.match(/^\/([^/]+)\/([^/]+)\/(issues|pull|blob)\/(.+)$/);
+        if (!m) return null;
+        if (m[3] === "blob") return githubFile(m[1], m[2], m[4], url);
+        const n = m[4].match(/^(\d+)(\/|$)/);
+        return n ? githubIssue(m[1], m[2], n[1], url) : null;
+      },
+      // A repo's README (or a Markdown file) as GitHub draws it, without the
+      // file list around it.
+      chapter(doc, url) {
+        const parts = new URL(url).pathname.split("/").filter(Boolean);
+        if (parts.length < 2 || (parts.length > 2 && !/^(tree|blob)$/.test(parts[2]))) return null;
+        const body = doc.querySelector("article.markdown-body");
+        if (!body) return null;
+        const content = doc.createElement("div");
+        content.append(body.cloneNode(true));
+        const repo = parts[0] + "/" + parts[1];
+        const desc = ((doc.querySelector('meta[name="description"]') || {}).content || "").replace(/\s*Contribute to \S+ development by creating an account on GitHub\.\s*$/, "").trim();
+        const file = parts[2] === "blob" ? parts[parts.length - 1] : "";
+        return { content, siteName: "GitHub", title: file || repo, byline: file ? repo : desc.replace(/^[^:]*:\s*/, ""), next: "", prev: "" };
+      },
+    },
+    {
+      name: "Reddit",
+      host: /(^|\.)(reddit\.com|redd\.it)$/i,
+      build: redditThread,
+    },
+    {
+      name: "Hacker News",
+      host: /^news\.ycombinator\.com$/i,
+      chapter: (doc, url) => (/^\/item$/.test(new URL(url).pathname) ? hnThread(doc, url) : null),
+    },
+    {
+      name: "Lobsters",
+      host: /^lobste\.rs$/i,
+      build: lobstersThread,
+    },
+    {
+      name: "Bluesky",
+      host: /^(www\.)?bsky\.app$/i,
+      build: blueskyThread,
+    },
+    {
+      name: "arXiv",
+      host: /^(www\.)?arxiv\.org$/i,
+      build: arxivPaper,
+      chapter: (doc, url) => (/^\/html\//.test(new URL(url).pathname) ? arxivHtml(doc, url) : null),
+    },
+    {
+      name: "Mastodon",
+      path: /^\/(@[^/]+|users\/[^/]+\/statuses)\/\d+\/?$/,
+      build: mastodonThread,
+    },
+    {
+      name: "Stack Exchange",
+      host: /(^|\.)(stackoverflow\.com|stackexchange\.com|superuser\.com|serverfault\.com|askubuntu\.com|mathoverflow\.net|stackapps\.com)$/i,
+      build: stackThread,
+      chapter: (doc, url) => (/^\/questions\/\d+/.test(new URL(url).pathname) ? stackQuestion(doc, url) : null),
+    },
   ];
+
+  // ---- Discussions ----
+
+  // A post and its comments as plain markup the reader styles by its co-
+  // classes (reader.css): who said it, what they said, replies inside.
+  // Bodies are the sites' HTML, cleaned by rebuild() like any page.
+  // A comment is { who, label, points, at (ms), html, replies }.
+  function htmlBits(doc, html) {
+    const frag = doc.createDocumentFragment();
+    const from = new DOMParser().parseFromString(String(html || ""), "text/html").body;
+    for (const n of [...from.childNodes]) frag.append(doc.importNode(n, true));
+    return frag;
+  }
+  function whoLine(doc, c) {
+    const p = doc.createElement("p");
+    p.className = "co-who";
+    const name = doc.createElement("strong");
+    name.textContent = c.who || "[deleted]";
+    p.append(name);
+    for (const bit of [c.label, c.points, c.at ? formatDate(c.at) : ""]) if (bit) p.append(" · " + bit);
+    return p;
+  }
+  function commentEl(doc, c) {
+    const box = doc.createElement("article");
+    box.className = c.accepted ? "co-comment co-accepted" : "co-comment";
+    box.append(whoLine(doc, c), htmlBits(doc, c.html));
+    if (c.replies && c.replies.length) {
+      const more = doc.createElement("div");
+      more.className = "co-replies";
+      for (const r of c.replies) more.append(commentEl(doc, r));
+      box.append(more);
+    }
+    return box;
+  }
+  const countAll = (list) => list.reduce((n, c) => n + 1 + countAll(c.replies || []), 0);
+  const points = (n, word) => (typeof n === "number" ? n.toLocaleString("en") + " " + word + (n === 1 ? "" : "s") : "");
+  // `post` is { who, label, points, at, html } or null, `lead` extra
+  // markup above it (a link, a picture); `heading` names the replies.
+  function discussion({ lead, post, comments, heading, more }) {
+    const doc = document.implementation.createHTMLDocument("");
+    const body = doc.body;
+    if (lead) body.append(htmlBits(doc, lead));
+    if (post) {
+      if (post.who) body.append(whoLine(doc, post));
+      body.append(htmlBits(doc, post.html));
+    }
+    if (comments.length) {
+      const h = doc.createElement("h2");
+      h.textContent = heading + " (" + countAll(comments).toLocaleString("en") + ")";
+      const thread = doc.createElement("section");
+      thread.className = "co-thread";
+      for (const c of comments) thread.append(commentEl(doc, c));
+      body.append(h, thread);
+    }
+    if (more) body.append(htmlBits(doc, more));
+    return body;
+  }
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const linkLine = (href, label) => '<p><a href="' + esc(href) + '">' + esc(label || siteName(href) || href) + "</a></p>";
+
+  async function getJson(url, headers) {
+    const res = await get(url, { Accept: "application/json", ...headers });
+    try { return { url: res.url || url, data: JSON.parse(res.text) }; }
+    catch (e) { throw new SaveError("The site's answer couldn't be read. Try again later.", true); }
+  }
+
+  // ---- GitHub ----
+
+  const GITHUB_API = "https://api.github.com/repos/";
+  const GITHUB_HTML = { Accept: "application/vnd.github.html+json" };
+  // An issue or pull request with its comments, oldest first, from the
+  // API (60 requests an hour without signing in, so a thread of up to
+  // 300 comments takes at most four). Review comments on a pull
+  // request's code aren't included.
+  async function githubIssue(owner, repo, n, url) {
+    const base = GITHUB_API + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/issues/" + n;
+    const issue = (await getJson(base, GITHUB_HTML)).data;
+    const list = [];
+    for (let page = 1; page <= 3 && list.length < issue.comments; page++) {
+      const got = (await getJson(base + "/comments?per_page=100&page=" + page, GITHUB_HTML)).data;
+      if (!Array.isArray(got) || !got.length) break;
+      list.push(...got);
+    }
+    return githubPage(owner, repo, issue, list, url);
+  }
+  function githubPage(owner, repo, issue, list, url) {
+    const as = (c) => ({ who: c.user && c.user.login, at: Date.parse(c.created_at) || 0, html: c.body_html || "" });
+    const comments = list.map(as);
+    const kind = issue.pull_request ? (issue.pull_request.merged_at ? "merged" : issue.state === "open" ? "open" : "closed") : issue.state;
+    const more = issue.comments > list.length
+      ? linkLine(issue.html_url || url, (issue.comments - list.length) + " more comments on GitHub") : "";
+    return {
+      url: issue.html_url || url, title: (issue.title || "").trim() + " #" + issue.number, site: "GitHub",
+      byline: owner + "/" + repo + " · " + (issue.pull_request ? "Pull request" : "Issue") + ", " + kind,
+      body: discussion({ post: as(issue), comments, heading: "Comments", more }), base: url,
+      licence: null, lang: "", dir: "", next: "", prev: "",
+    };
+  }
+
+  // A code file as one block of code, from its raw copy. Markdown and the
+  // like stay with the page (GitHub draws them; chapter() above), and so
+  // do pictures and anything that isn't text.
+  const CODE_MAX = 400000;
+  async function githubFile(owner, repo, rest, url) {
+    const path = rest.split(/[?#]/)[0];
+    if (/\.(md|markdown|mdx|rst|adoc|org|textile|ipynb|png|jpe?g|gif|webp|svg|pdf|zip|ico)$/i.test(path)) return null;
+    const res = await get("https://raw.githubusercontent.com/" + owner + "/" + repo + "/" + path, { Accept: "text/plain" });
+    return githubCode(owner, repo, path, res.text, url);
+  }
+  function githubCode(owner, repo, path, code, url) {
+    if (/\u0000/.test(code.slice(0, 8000))) return null;
+    const doc = document.implementation.createHTMLDocument("");
+    const pre = doc.createElement("pre");
+    const el = doc.createElement("code");
+    el.textContent = code.length > CODE_MAX ? code.slice(0, CODE_MAX) : code;
+    pre.append(el);
+    doc.body.append(pre);
+    if (code.length > CODE_MAX) doc.body.append(htmlBits(doc, linkLine(url, "The rest of the file is on GitHub")));
+    const segs = path.split("/");
+    return {
+      url, title: decodeURIComponent(segs[segs.length - 1]), site: "GitHub",
+      byline: [owner + "/" + repo].concat(segs.length > 2 ? [segs.slice(1, -1).map(decodeURIComponent).join("/")] : []).join(" · "),
+      body: doc.body, base: url, licence: null, lang: "", dir: "", next: "", prev: "",
+    };
+  }
+
+  // ---- Reddit ----
+
+  // A post and its comment tree from the post's .json (Reddit's own
+  // answer for the page, best comments first). Replies Reddit holds back
+  // ("12 more replies") stay on Reddit. A share link (/s/…) is followed
+  // to the post first.
+  async function redditThread(url) {
+    let u = new URL(url);
+    if (/^\/r\/[^/]+\/s\//.test(u.pathname)) u = new URL((await get(url)).url || url);
+    let id = (u.pathname.match(/\/comments\/([a-z0-9]+)/i) || [])[1];
+    if (!id && /(^|\.)redd\.it$/i.test(u.hostname)) id = (u.pathname.match(/^\/([a-z0-9]+)\/?$/i) || [])[1];
+    if (!id) return null;
+    const api = "https://www.reddit.com/comments/" + id + "/.json?raw_json=1&limit=500";
+    let data;
+    try { data = (await getJson(api)).data; } catch (e) {
+      // Reddit turns away much that isn't a browser; the hidden browser
+      // (Android) asks again as one, and the answer is the JSON as text.
+      const drawn = C.platform.canRender ? await C.platform.render(api, {}) : null;
+      if (!drawn) throw e;
+      try { data = JSON.parse(parse(drawn.text, api).body.textContent); } catch (x) { throw e; }
+    }
+    return redditPage(data, url);
+  }
+  // Without raw_json=1 (a page saved by hand) Reddit escapes its HTML once more.
+  const redditHtml = (h) => (h && /^&lt;/.test(h) ? unescape(h) : h || "");
+  const amp = (u) => String(u || "").replace(/&amp;/g, "&");
+  function redditPage(data, url) {
+    const post = data && data[0] && data[0].data && data[0].data.children[0] && data[0].data.children[0].data;
+    if (!post) return null;
+    const self = "https://www.reddit.com" + post.permalink;
+    const one = (c) => {
+      const d = c.data;
+      const replies = d.replies && d.replies.data ? d.replies.data.children.filter((r) => r.kind === "t1").map(one).filter(Boolean) : [];
+      if ((d.author === "[deleted]" || !d.body_html) && !replies.length) return null;
+      return {
+        who: d.author === "[deleted]" ? "" : "u/" + d.author, label: d.is_submitter ? "OP" : "",
+        points: d.score_hidden ? "" : points(d.score, "point"), at: (d.created_utc || 0) * 1000,
+        html: redditHtml(d.body_html) || "<p>[deleted]</p>", replies,
+      };
+    };
+    const comments = ((data[1] && data[1].data && data[1].data.children) || []).filter((c) => c.kind === "t1" && !c.data.stickied).map(one).filter(Boolean);
+    return {
+      url: self, title: (post.title || "").trim(), site: "Reddit",
+      byline: [post.subreddit_name_prefixed, post.author && post.author !== "[deleted]" ? "u/" + post.author : "", points(post.score, "point")].filter(Boolean).join(" · "),
+      body: discussion({
+        lead: redditMedia(post, self),
+        post: { html: redditHtml(post.selftext_html) },
+        comments, heading: "Comments",
+      }),
+      base: self, licence: null, lang: "", dir: "", next: "", prev: "",
+    };
+  }
+  // What a post that isn't only text carries: its pictures, a video card,
+  // or the page it links to.
+  function redditMedia(post, self) {
+    const p = post.crosspost_parent_list && post.crosspost_parent_list[0] ? post.crosspost_parent_list[0] : post;
+    if (p.is_gallery && p.media_metadata && p.gallery_data) {
+      return p.gallery_data.items.map((it) => {
+        const m = p.media_metadata[it.media_id];
+        const src = m && m.s && amp(m.s.u || m.s.gif);
+        return src ? '<figure><img src="' + esc(src) + '" alt="">' + (it.caption ? "<figcaption>" + esc(it.caption) + "</figcaption>" : "") + "</figure>" : "";
+      }).join("");
+    }
+    const shot = p.preview && p.preview.images && p.preview.images[0] && p.preview.images[0].source && amp(p.preview.images[0].source.url);
+    if (p.is_video || (p.domain || "").startsWith("v.redd.it")) return '<video data-co-link="' + esc(self) + '" data-co-site="Reddit"' + (shot ? ' poster="' + esc(shot) + '"' : "") + ' title="' + esc(p.title) + '"></video>';
+    if (youtubeId(p.url || "")) return '<iframe src="' + esc(p.url) + '" title="' + esc(p.title) + '"></iframe>';
+    if (p.post_hint === "image" || /^https:\/\/i\.redd\.it\//.test(p.url || "")) return '<img src="' + esc(p.url) + '" alt="">';
+    if (!p.is_self && p.url && !/^https?:\/\/(www\.)?reddit\.com\//.test(p.url)) return linkLine(p.url);
+    return "";
+  }
+
+  // ---- Hacker News ----
+
+  // The story (its link, or an Ask HN's text) and the comments in HN's
+  // own order, from the item page: each comment row says how deep it
+  // sits, which turns the flat list back into a tree.
+  const hnTime = (node) => {
+    const t = node && node.getAttribute("title");
+    const unix = t && t.match(/\s(\d{9,})$/);
+    return unix ? unix[1] * 1000 : (t && Date.parse(t.split(" ")[0] + "Z")) || 0;
+  };
+  function hnThread(doc, url) {
+    const story = doc.querySelector(".fatitem");
+    if (!story) return null;
+    const titleA = story.querySelector(".titleline > a");
+    const sub = story.querySelector(".subline, .subtext");
+    const score = sub && sub.querySelector(".score");
+    const user = sub && sub.querySelector(".hnuser");
+    const roots = [];
+    const stack = [];
+    for (const row of doc.querySelectorAll("tr.athing.comtr")) {
+      const depth = parseInt((row.querySelector("td.ind") || { getAttribute: () => "0" }).getAttribute("indent"), 10) || 0;
+      const body = row.querySelector(".commtext");
+      const who = row.querySelector(".hnuser");
+      const c = { who: who ? text(who) : "", at: hnTime(row.querySelector(".age")), html: body ? hnBody(body) : "<p>[deleted]</p>", replies: [] };
+      stack.length = Math.min(stack.length, depth);
+      (stack.length ? stack[stack.length - 1].replies : roots).push(c);
+      stack.push(c);
+    }
+    const prune = (list) => list.filter((c) => { c.replies = prune(c.replies); return c.who || c.replies.length; });
+    const top = story.querySelector(".toptext");
+    const link = titleA && absolute(titleA.getAttribute("href"), url);
+    const content = discussion({
+      lead: link && !/^https:\/\/news\.ycombinator\.com\/item/.test(link) ? linkLine(link, "The article, on " + siteName(link)) : "",
+      post: { html: top ? hnBody(top) : "" },
+      comments: prune(roots), heading: "Comments",
+      more: doc.querySelector("a.morelink") ? linkLine(url, "More comments on Hacker News") : "",
+    });
+    return { content, siteName: "Hacker News", title: titleA ? text(titleA) : "", byline: [user ? text(user) : "", score ? text(score) : ""].filter(Boolean).join(" · "), next: "", prev: "" };
+  }
+  // A comment's text without the reply link HN puts inside it. Its first
+  // paragraph is bare text before the first <p>.
+  function hnBody(node) {
+    const copy = node.cloneNode(true);
+    copy.querySelectorAll(".reply").forEach((n) => n.remove());
+    const html = copy.innerHTML.trim();
+    return /^<p>/i.test(html) ? html : "<p>" + html.replace(/<p>/i, "</p><p>");
+  }
+
+  // ---- Lobsters ----
+
+  // The story (its link, or its text) and the comments from the story's
+  // .json, in the site's order; each comment says how deep it sits.
+  async function lobstersThread(url) {
+    const id = (new URL(url).pathname.match(/^\/s\/([a-z0-9]+)/i) || [])[1];
+    if (!id) return null;
+    return lobstersPage((await getJson("https://lobste.rs/s/" + id + ".json")).data, url);
+  }
+  const userName = (u) => (u && typeof u === "object" ? u.username : u) || "";
+  function lobstersPage(story, url) {
+    if (!story || !story.title) return null;
+    const roots = [], stack = [];
+    for (const c of story.comments || []) {
+      const depth = Math.max(0, (c.depth != null ? c.depth : (c.indent_level || 1) - 1) | 0);
+      const node = {
+        who: c.is_deleted || c.is_moderated ? "" : userName(c.commenting_user), points: points(c.score, "point"),
+        at: Date.parse(c.created_at) || 0, html: c.is_deleted ? "<p>[deleted]</p>" : c.comment || "", replies: [],
+      };
+      stack.length = Math.min(stack.length, depth);
+      (stack.length ? stack[stack.length - 1].replies : roots).push(node);
+      stack.push(node);
+    }
+    const link = story.url && !/^https:\/\/lobste\.rs\//.test(story.url) ? story.url : "";
+    const self = story.short_id_url || url;
+    return {
+      url: self, title: story.title.trim(), site: "Lobsters",
+      byline: [userName(story.submitter_user), points(story.score, "point"), (story.tags || []).join(", ")].filter(Boolean).join(" · "),
+      body: discussion({ lead: link ? linkLine(link, "The article, on " + siteName(link)) : "", post: { html: story.description || "" }, comments: roots, heading: "Comments" }),
+      base: self, licence: null, lang: "", dir: "", next: "", prev: "",
+    };
+  }
+
+  // ---- Discourse forums ----
+
+  // Thousands of forums run Discourse, and say so in a meta tag. A topic's
+  // posts come from its .json, first twenty at once and the rest twenty at
+  // a time by id, up to 200; the thread is flat, oldest first, as the
+  // forum shows it.
+  const DISCOURSE = /<meta\s+name=["']generator["']\s+content=["']Discourse/i;
+  const DISCOURSE_MAX = 200;
+  async function discourseThread(url) {
+    const u = new URL(url);
+    const m = u.pathname.match(/^(.*?)\/t\/(?:[^/]+\/)?(\d+)/);
+    if (!m) return null;
+    const base = u.origin + m[1];
+    const topic = (await getJson(base + "/t/" + m[2] + ".json")).data;
+    const have = new Set(((topic.post_stream && topic.post_stream.posts) || []).map((p) => p.id));
+    const posts = [...(topic.post_stream.posts || [])];
+    const want = ((topic.post_stream && topic.post_stream.stream) || []).filter((id) => !have.has(id)).slice(0, DISCOURSE_MAX - posts.length);
+    for (let i = 0; i < want.length; i += 20) {
+      const q = want.slice(i, i + 20).map((id) => "post_ids[]=" + id).join("&");
+      try { posts.push(...((await getJson(base + "/t/" + m[2] + "/posts.json?" + q)).data.post_stream.posts || [])); } catch (e) { break; }
+    }
+    return discoursePage(topic, posts, base, url);
+  }
+  function discoursePage(topic, posts, base, url) {
+    if (!topic || !topic.title || !posts.length) return null;
+    posts.sort((a, b) => a.post_number - b.post_number);
+    const as = (p) => ({
+      who: p.name && p.name !== p.username ? p.name + " (" + p.username + ")" : p.username,
+      points: likes(p), at: Date.parse(p.created_at) || 0, html: discourseCooked(p.cooked), replies: [],
+    });
+    const first = posts[0].post_number === 1 ? posts.shift() : null;
+    const self = base + "/t/" + (topic.slug || "topic") + "/" + topic.id;
+    const total = topic.posts_count || posts.length + 1;
+    const more = total > posts.length + (first ? 1 : 0) ? linkLine(self, (total - posts.length - (first ? 1 : 0)) + " more replies on the forum") : "";
+    const forum = siteName(base);
+    return {
+      url: self, title: (topic.fancy_title ? unescape(topic.fancy_title) : topic.title).trim(), site: forum,
+      byline: first ? [as(first).who, as(first).at ? formatDate(as(first).at) : ""].filter(Boolean).join(" · ") : "",
+      body: discussion({ post: first ? { html: as(first).html } : null, comments: posts.map(as), heading: "Replies", more }),
+      base: self, licence: null, lang: "", dir: "", next: "", prev: "",
+    };
+  }
+  const likes = (p) => {
+    const n = p.like_count != null ? p.like_count : ((p.actions_summary || []).find((a) => a.id === 2) || {}).count;
+    return n ? points(n, "like") : "";
+  };
+  // A post's HTML without the picture captions Discourse adds ("image
+  // 1920×1080 120 KB") and with the full picture where it links one.
+  function discourseCooked(html) {
+    const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
+    doc.querySelectorAll(".lightbox-wrapper .meta, .onebox .source .site-icon").forEach((n) => n.remove());
+    doc.querySelectorAll("a.lightbox").forEach((a) => {
+      const img = a.querySelector("img");
+      if (!img) return;
+      if (a.getAttribute("href") && !img.getAttribute("srcset")) img.setAttribute("srcset", a.getAttribute("href") + " 1600w, " + img.getAttribute("src") + " 480w");
+      a.replaceWith(img);
+    });
+    return doc.body.innerHTML;
+  }
+
+  // ---- Mastodon ----
+
+  // A post (and the author's own replies under it, read as one thread)
+  // with the replies to it as a tree, from the server's API: any Mastodon
+  // server, known by the address (/@name/123). Other servers' replies come
+  // as that server knows them.
+  async function mastodonThread(url) {
+    const u = new URL(url);
+    const id = u.pathname.match(/(\d+)\/?$/)[1];
+    const api = u.origin + "/api/v1/statuses/" + id;
+    const status = (await getJson(api)).data;
+    const ctx = (await getJson(api + "/context")).data;
+    return mastodonPage(status, ctx, url);
+  }
+  function mastodonPage(status, ctx, url) {
+    if (!status || !status.account || (status.content == null && !status.reblog)) return null;
+    const root = status.reblog || status;
+    const kids = new Map();
+    for (const d of (ctx && ctx.descendants) || []) {
+      if (!kids.has(d.in_reply_to_id)) kids.set(d.in_reply_to_id, []);
+      kids.get(d.in_reply_to_id).push(d);
+    }
+    const body = (st) => (st.spoiler_text ? "<p><strong>" + esc(st.spoiler_text) + "</strong></p>" : "") + mastodonText(st.content) + mastodonMedia(st) + mastodonQuote(st);
+    // The author's own chain under the post continues it.
+    let html = body(root), at = root;
+    for (;;) {
+      const next = (kids.get(at.id) || []).find((k) => k.account && k.account.id === root.account.id);
+      if (!next) break;
+      html += body(next);
+      kids.set(at.id, (kids.get(at.id) || []).filter((k) => k !== next));
+      at = next;
+    }
+    const tree = (st) => (kids.get(st.id) || []).map((k) => ({
+      who: k.account.display_name ? k.account.display_name + " (@" + k.account.acct + ")" : "@" + k.account.acct,
+      points: k.favourites_count ? points(k.favourites_count, "favourite") : "", at: Date.parse(k.created_at) || 0,
+      html: body(k), replies: tree(k),
+    }));
+    // Replies to every part of the author's chain belong to the thread.
+    const comments = [];
+    for (let st = root; st; st = [...((ctx && ctx.descendants) || [])].find((d) => d.in_reply_to_id === st.id && d.account.id === root.account.id)) comments.push(...tree(st));
+    const a = root.account;
+    const words = new DOMParser().parseFromString(mastodonText(root.content), "text/html").body;
+    const text = [...words.children].map((n) => n.textContent).join(" ") || words.textContent;
+    return {
+      url: root.url || url, title: shortTitle(root.spoiler_text || text) || "Post by @" + a.acct, site: siteName(root.url || url),
+      byline: (a.display_name ? a.display_name + " · " : "") + "@" + a.acct + (root.created_at ? " · " + formatDate(Date.parse(root.created_at)) : ""),
+      body: discussion({ post: { html }, comments, heading: "Replies" }),
+      base: root.url || url, licence: null, lang: root.language || "", dir: "", next: "", prev: "",
+    };
+  }
+  // A quote post's "RE: link" line goes; the quoted post is shown instead.
+  const mastodonText = (html) => String(html || "").replace(/<p class="quote-inline">[\s\S]*?<\/p>/, "");
+  function mastodonQuote(st) {
+    const q = st.quote && st.quote.quoted_status;
+    if (!q || !q.account) return "";
+    return "<blockquote><p><strong>" + esc(q.account.display_name || "@" + q.account.acct) + "</strong></p>" + mastodonText(q.content) + mastodonMedia(q) + "</blockquote>";
+  }
+  function mastodonMedia(st) {
+    return (st.media_attachments || []).map((m) => {
+      if (m.type === "image") return '<figure><img src="' + esc(m.url) + '" alt="' + esc(m.description || "") + '"></figure>';
+      if (m.type === "video" || m.type === "gifv") return '<video data-co-link="' + esc(st.url || m.url) + '" data-co-site="' + esc(siteName(st.url || m.url)) + '" poster="' + esc(m.preview_url || "") + '" title="' + esc(m.description || "Video") + '"></video>';
+      return "";
+    }).join("") + (st.card && st.card.url && !(st.media_attachments || []).length ? linkLine(st.card.url, st.card.title || siteName(st.card.url)) : "");
+  }
+  // A post has no title; its first words stand in, cut at a word.
+  function shortTitle(text) {
+    const t = String(text || "").replace(/\s+/g, " ").trim();
+    if (t.length <= 80) return t;
+    return t.slice(0, 80).replace(/\s+\S*$/, "") + "…";
+  }
+
+  // ---- Bluesky ----
+
+  // A post with the author's own replies under it read as one thread, then
+  // the other replies as a tree, from Bluesky's public API (no account).
+  const BSKY = "https://public.api.bsky.app/xrpc/";
+  async function blueskyThread(url) {
+    const m = new URL(url).pathname.match(/^\/profile\/([^/]+)\/post\/([a-z0-9]+)/i);
+    if (!m) return null;
+    let did = decodeURIComponent(m[1]);
+    if (!did.startsWith("did:")) did = (await getJson(BSKY + "com.atproto.identity.resolveHandle?handle=" + encodeURIComponent(did))).data.did;
+    const uri = "at://" + did + "/app.bsky.feed.post/" + m[2];
+    const got = (await getJson(BSKY + "app.bsky.feed.getPostThread?uri=" + encodeURIComponent(uri) + "&depth=10&parentHeight=0")).data;
+    return blueskyPage(got, url);
+  }
+  function blueskyPage(data, url) {
+    const t = data && data.thread;
+    if (!t || !t.post) return null;
+    const a = t.post.author;
+    const isPost = (r) => r && r.post && r.$type !== "app.bsky.feed.defs#notFoundPost" && r.$type !== "app.bsky.feed.defs#blockedPost";
+    let html = bskyBody(t.post), at = t;
+    const extra = [];
+    for (;;) {
+      const next = (at.replies || []).filter(isPost).sort((x, y) => Date.parse(x.post.indexedAt) - Date.parse(y.post.indexedAt)).find((r) => r.post.author.did === a.did);
+      if (!next) break;
+      html += bskyBody(next.post);
+      extra.push(...(at.replies || []).filter((r) => r !== next));
+      at = next;
+    }
+    const tree = (list) => (list || []).filter(isPost).map((r) => ({
+      who: r.post.author.displayName ? r.post.author.displayName + " (@" + r.post.author.handle + ")" : "@" + r.post.author.handle,
+      points: r.post.likeCount ? points(r.post.likeCount, "like") : "", at: Date.parse(r.post.record && r.post.record.createdAt) || 0,
+      html: bskyBody(r.post), replies: tree(r.replies),
+    }));
+    const self = "https://bsky.app/profile/" + a.handle + "/post/" + t.post.uri.split("/").pop();
+    return {
+      url: self, title: shortTitle(t.post.record && t.post.record.text) || "Post by @" + a.handle, site: "Bluesky",
+      byline: (a.displayName ? a.displayName + " · " : "") + "@" + a.handle + " · " + formatDate(Date.parse(t.post.record && t.post.record.createdAt) || Date.now()),
+      body: discussion({ post: { html }, comments: tree(extra.concat(at.replies || [])), heading: "Replies" }),
+      base: self, licence: null, lang: ((t.post.record && t.post.record.langs) || [])[0] || "", dir: "", next: "", prev: "",
+    };
+  }
+  // A post's text with its links (facets count UTF-8 bytes), then its
+  // pictures, video card, link card or quoted post.
+  function bskyBody(post) {
+    const rec = post.record || {};
+    const bytes = new TextEncoder().encode(rec.text || "");
+    const dec = new TextDecoder();
+    const links = (rec.facets || []).map((f) => {
+      const feat = (f.features || [])[0] || {};
+      const href = feat.uri || (feat.did ? "https://bsky.app/profile/" + feat.did : feat.tag ? "https://bsky.app/hashtag/" + encodeURIComponent(feat.tag) : "");
+      return href && f.index ? { start: f.index.byteStart, end: f.index.byteEnd, href } : null;
+    }).filter(Boolean).sort((x, y) => x.start - y.start);
+    let out = "", pos = 0;
+    for (const l of links) {
+      if (l.start < pos || l.end > bytes.length) continue;
+      out += esc(dec.decode(bytes.slice(pos, l.start))) + '<a href="' + esc(l.href) + '">' + esc(dec.decode(bytes.slice(l.start, l.end))) + "</a>";
+      pos = l.end;
+    }
+    out += esc(dec.decode(bytes.slice(pos)));
+    const paras = out.split(/\n{2,}/).map((p) => "<p>" + p.replace(/\n/g, "<br>") + "</p>").join("");
+    return paras + bskyEmbed(post.embed);
+  }
+  function bskyEmbed(e) {
+    if (!e) return "";
+    const type = e.$type || "";
+    if (type.startsWith("app.bsky.embed.images")) return (e.images || []).map((i) => '<figure><img src="' + esc(i.fullsize || i.thumb) + '" alt="' + esc(i.alt || "") + '"></figure>').join("");
+    if (type.startsWith("app.bsky.embed.video")) return '<video data-co-link="' + esc(e.playlist || "") + '" data-co-site="Bluesky" poster="' + esc(e.thumbnail || "") + '" title="' + esc(e.alt || "Video") + '"></video>';
+    if (type.startsWith("app.bsky.embed.external") && e.external) return linkLine(e.external.uri, e.external.title || siteName(e.external.uri));
+    if (type.startsWith("app.bsky.embed.recordWithMedia")) return bskyEmbed(e.media) + bskyEmbed(e.record);
+    if (type.startsWith("app.bsky.embed.record") && e.record) {
+      const r = e.record.record || e.record;
+      if (!r.author || !r.value) return "";
+      return "<blockquote><p><strong>" + esc(r.author.displayName || "@" + r.author.handle) + "</strong></p>" + bskyBody({ record: r.value }) + "</blockquote>";
+    }
+    return "";
+  }
+
+  // ---- arXiv ----
+
+  // A paper's own web version (arxiv.org/html/…, most papers since late
+  // 2023) instead of the page about it; the paper's address stays the
+  // abstract page. A paper without one is the abstract page, as before.
+  async function arxivPaper(url) {
+    const m = new URL(url).pathname.match(/^\/(?:abs|pdf)\/(.+?)(?:\.pdf)?\/?$/);
+    if (!m) return null;
+    const id = m[1];
+    let got;
+    try { got = await fromAnyPage("https://arxiv.org/html/" + id, null, false, true); } catch (e) { return null; }
+    if (!got || !/^https:\/\/arxiv\.org\/html\//.test(got.url)) return null;
+    got.url = "https://arxiv.org/abs/" + id;
+    return got;
+  }
+  // The paper itself, its formulas kept as their LaTeX (the reader has no
+  // MathML), without the page's own menus and notes.
+  function arxivHtml(doc) {
+    const paper = doc.querySelector("article.ltx_document, .ltx_page_content");
+    if (!paper) return null;
+    const copy = paper.cloneNode(true);
+    copy.querySelectorAll("math").forEach((m) => {
+      const tex = m.getAttribute("alttext") || m.textContent;
+      const c = doc.createElement(m.getAttribute("display") === "block" ? "pre" : "code");
+      c.textContent = tex;
+      m.replaceWith(c);
+    });
+    copy.querySelectorAll(".ltx_page_header, .ltx_page_footer, .ltx_authors, .ltx_title_document, .ltx_note_outer, .ltx_role_footnote > .ltx_note_outer, button, .ltx_tag_bibitem").forEach((n) => n.remove());
+    const title = doc.querySelector(".ltx_title_document");
+    const authors = [...doc.querySelectorAll(".ltx_authors .ltx_personname")].map((n) => {
+      const c = n.cloneNode(true);
+      c.querySelectorAll(".ltx_note, sup").forEach((x) => x.remove());
+      return text(c).split(/\s{2,}|\n/)[0];
+    }).filter(Boolean);
+    return {
+      content: copy, siteName: "arXiv", title: title ? text(title) : "",
+      byline: authors.length > 4 ? authors.slice(0, 3).join(", ") + " and others" : authors.join(", "), next: "", prev: "",
+    };
+  }
+
+  // ---- Stack Overflow and the other Stack Exchange sites ----
+
+  // The question, then the accepted answer and the best of the rest (at
+  // most five in all, none voted below zero), from the page. Their text is
+  // CC BY-SA, so each keeps its author and the clip says so at the foot.
+  const TOP_ANSWERS = 5;
+  // Through Stack Exchange's API first: the sites put a browser check in
+  // front of their pages for anything that isn't a browser, the API
+  // doesn't (300 requests a day for each address without a key; a save
+  // takes two). The page is the fallback.
+  const unescape = (s) => new DOMParser().parseFromString(String(s || ""), "text/html").body.textContent;
+  async function stackThread(url) {
+    const u = new URL(url);
+    const id = (u.pathname.match(/^\/(?:questions|q)\/(\d+)/) || [])[1];
+    if (!id) return null;
+    const api = "https://api.stackexchange.com/2.3/questions/" + id;
+    const site = "site=" + encodeURIComponent(u.hostname.replace(/^www\./, "")) + "&filter=withbody";
+    const q = (await getJson(api + "?" + site)).data;
+    const a = (await getJson(api + "/answers?" + site + "&sort=votes&order=desc&pagesize=30")).data;
+    return stackPage(q, a, url);
+  }
+  function stackPage(q, a, url) {
+    const question = q && q.items && q.items[0];
+    if (!question) return null;
+    const as = (p, label) => ({
+      who: unescape(p.owner && p.owner.display_name), label, points: points(p.score, "vote"), at: (p.creation_date || 0) * 1000,
+      html: p.body || "", score: p.score || 0, accepted: !!p.is_accepted, replies: [],
+    });
+    const answers = ((a && a.items) || []).map((x) => as(x, x.is_accepted ? "Accepted answer" : ""));
+    const host = new URL(question.link || url).hostname;
+    return stackResult(as(question, ""), answers, question.answer_count || answers.length, unescape(question.title), STACK_NAMES[host] || host, question.link || url);
+  }
+  const STACK_NAMES = { "stackoverflow.com": "Stack Overflow", "superuser.com": "Super User", "serverfault.com": "Server Fault", "askubuntu.com": "Ask Ubuntu", "mathoverflow.net": "MathOverflow" };
+  // The accepted answer, then the best of the rest.
+  function stackResult(question, answers, total, title, site, url) {
+    const accepted = answers.filter((x) => x.accepted);
+    const rest = answers.filter((x) => !x.accepted && x.score >= 0).sort((x, y) => y.score - x.score);
+    const picked = accepted.concat(rest).slice(0, TOP_ANSWERS);
+    return {
+      url, title, site, byline: [question.who, question.points].filter(Boolean).join(" · "),
+      body: discussion({
+        post: { html: question.html }, comments: picked, heading: "Answers",
+        more: total > picked.length ? linkLine(url, (total - picked.length) + " more answers on " + site) : "",
+      }),
+      base: url, licence: "stackexchange", lang: "", dir: "", next: "", prev: "",
+    };
+  }
+  function stackPost(node, label) {
+    const body = node.querySelector(".js-post-body, .post-text");
+    if (!body) return null;
+    const sigs = [...node.querySelectorAll(".post-signature")];
+    const sig = node.querySelector(".post-signature.owner") || sigs[sigs.length - 1];
+    const who = sig && sig.querySelector(".user-details a, .user-details [itemprop='name'], .user-details");
+    const time = sig && sig.querySelector(".relativetime, [title]");
+    const score = parseInt(node.getAttribute("data-score") || (node.querySelector(".js-vote-count") || { getAttribute: () => "" }).getAttribute("data-value"), 10);
+    return {
+      who: who ? text(who).split(/\s{2,}|\n/)[0] : "", label, points: isNaN(score) ? "" : points(score, "vote"),
+      at: (time && Date.parse((time.getAttribute("title") || "").replace(" ", "T").replace(/Z?$/, "Z"))) || 0, html: body.innerHTML,
+      score: isNaN(score) ? 0 : score, accepted: label === "Accepted answer", replies: [],
+    };
+  }
+  function stackQuestion(doc, url) {
+    const q = doc.querySelector("#question, .question");
+    const question = q && stackPost(q, "");
+    if (!question) return null;
+    const answers = [...doc.querySelectorAll("#answers .answer, .answer")]
+      .map((a) => stackPost(a, a.matches(".accepted-answer, [itemprop='acceptedAnswer']") ? "Accepted answer" : ""))
+      .filter(Boolean);
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    const h = doc.querySelector("#question-header h1, h1[itemprop='name'], h1");
+    const got = stackResult(question, answers, answers.length, h ? text(h) : "", STACK_NAMES[host] || host, url);
+    return { content: got.body, siteName: got.site, title: got.title, byline: got.byline, licence: got.licence, next: "", prev: "" };
+  }
+
 
   // Every episode on a WEBTOON series' list, oldest first: page after
   // page (&page=2…) until one adds nothing new.
@@ -922,10 +1590,12 @@
     };
   }
 
+  // A rule with `path` instead of `host` is for software that runs on many
+  // sites (Mastodon), told by the shape of the address.
   function siteRule(url) {
-    let host;
-    try { host = new URL(url).hostname; } catch (e) { return null; }
-    return SITES.find((s) => s.host.test(host)) || null;
+    let u;
+    try { u = new URL(url); } catch (e) { return null; }
+    return SITES.find((s) => s.host && s.host.test(u.hostname)) || SITES.find((s) => s.path && s.path.test(u.pathname)) || null;
   }
 
   function siteName(url) {
@@ -957,11 +1627,18 @@
     let res;
     try {
       res = await C.platform.fetchText(url, { headers });
+      // Cloudflare's browser check (Royal Road, 2026) turns the phone's
+      // plain fetch away with a 403 or 503, AO3's own with a 418; the
+      // hidden browser passes them.
+      if ((res.status === 403 || res.status === 418 || res.status === 503) && C.platform.canRender && challengePage(res.text)) {
+        const drawn = await C.platform.render(url, {});
+        if (drawn && !challengePage(drawn.text)) res = { status: 200, url: drawn.url, text: drawn.text };
+      }
     } catch (e) {
       if (/time(d)?\s?out/i.test((e && e.message) || "")) throw new SaveError("The site didn't answer. Try again, or later on a better connection.", true);
-      throw new SaveError(C.platform.canFetchPages
+      throw new SaveError(C.platform.canReadPages
         ? "Couldn't reach this page. Check the link, or try again when you're online."
-        : "This browser can't reach that site directly. Save it in Waypage on your phone, then bring it here with a backup.", C.platform.canFetchPages);
+        : "This browser can't reach that site directly. Save it in Waypage on your phone, then bring it here with a backup.", C.platform.canReadPages);
     }
     if (res.status === 429) throw new SaveError("The site asked to slow down. Try again in a few minutes.");
     if (res.status === 404 || res.status === 410) throw new SaveError("That page doesn't exist any more. Check the link.", false, true);
@@ -1065,7 +1742,11 @@
     return [artist, text(licence)].filter(Boolean).join(", ");
   }
 
-  const CHECK_TITLE = /^(just a moment|attention required|access denied|are you a robot)/i;
+  const CHECK_TITLE = /^(just a moment|attention required|access denied|are you a robot|request temporarily denied)/i;
+  const challengePage = (html) => {
+    const t = String(html || "").match(/<title[^>]*>([^<]*)/i);
+    return (t && CHECK_TITLE.test(t[1].trim())) || /challenge-platform|cf-chl-|cf_chl_/i.test(String(html || "").slice(0, 20000));
+  };
 
   // Reads the article out of a page's HTML, or with `comic` its pictures.
   // null when there isn't enough text (or no pictures), or the page is a
@@ -1092,7 +1773,7 @@
       if (own.prev !== undefined) prev = own.prev;
       const t = own.content.textContent;
       const article = { content: own.content.innerHTML, title: own.title, byline: own.byline, siteName: own.siteName || site.name, textContent: t, lang: "", dir: "" };
-      return { doc, docTitle, headline: own.title || headline, next, prev, article, series: own.series || "" };
+      return { doc, docTitle, headline: own.title || headline, next, prev, article, series: own.series || "", licence: own.licence || null };
     }
     if (comic) {
       let panels = comicPanels(doc, finalUrl);
@@ -1140,9 +1821,20 @@
   async function fromAnyPage(url, onDrawing, comic, asPage, given) {
     const site = siteRule(url);
     if (given) asPage = true;
+    if (site && site.build && !given && !comic) {
+      let built = null;
+      try { built = await site.build(url); } catch (e) { built = null; }
+      if (built) return built;
+    }
     const res = given ? { status: 200, url: given.url, text: given.html }
       : await get(site && site.fetch ? site.fetch(url) : url, site && site.headers);
     let finalUrl = res.url || url;
+    // A Discourse forum topic, known by its page, reads its own JSON.
+    if (!site && !given && !comic && DISCOURSE.test(res.text)) {
+      let built = null;
+      try { built = await discourseThread(finalUrl); } catch (e) { built = null; }
+      if (built) return built;
+    }
     if (site && site.clean) finalUrl = site.clean(finalUrl);
     if (isArchive(finalUrl)) res.text = unWayback(res.text);
     // Some sites keep comics and novels at the same addresses (Tapas).
@@ -1206,14 +1898,14 @@
         lang: (doc.documentElement.getAttribute("lang") || "").trim(), dir: "", next, prev, icon: siteIcon(doc, finalUrl),
       };
     }
-    const { doc, docTitle, headline, next, prev, article, series } = got;
+    const { doc, docTitle, headline, next, prev, article, series, licence } = got;
     const body = new DOMParser().parseFromString(article.content, "text/html").body;
     return {
       url: finalUrl, series: series || "",
       title: (headline.trim() || article.title || docTitle || siteName(finalUrl)).trim().replace(/\s+/g, " "),
       site: (article.siteName || siteName(finalUrl)).trim(),
       byline: (article.byline || "").trim(),
-      body, base: finalUrl, licence: null,
+      body, base: finalUrl, licence: licence || null,
       lang: (doc.documentElement.getAttribute("lang") || article.lang || "").trim(),
       dir: article.dir === "rtl" || textDir(doc, article.textContent) === "rtl" ? "rtl" : "",
       next, prev, icon: siteIcon(doc, finalUrl), cut: cutShort(html, article.textContent),
@@ -1373,6 +2065,8 @@
           if (v == null || a === "href") continue;
           el.setAttribute(a, v);
         }
+        const cls = (node.getAttribute("class") || "").split(/\s+/).filter((c) => THREAD_CLASS.test(c));
+        if (cls.length) el.className = cls.join(" ");
         if (tag === "a") {
           const raw = node.getAttribute("href") || "";
           const abs = raw.startsWith("#") ? null : absolute(raw, base);
@@ -1416,7 +2110,7 @@
   // and attributes Waypage itself writes. Images keep only a data: picture
   // or an https link; anything else a hand-edited file carries is dropped.
   // Resolves to { root, images } with the data: pictures to write out.
-  const CO_CLASS = /^co-(body|comic|video|play|video-title|video-note|credit|missing)$/;
+  const CO_CLASS = /^co-(body|comic|video|play|video-title|video-note|credit|missing|thread|comment|accepted|replies|who)$/;
   const DATA_IMAGE = /^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=\s]+$/i;
   function cleanSaved(body, out) {
     const images = [];
@@ -1580,6 +2274,7 @@
     link.textContent = "Read the original";
     if (!meta.file) foot.append(meta.licence === "wikipedia"
       ? "Text from Wikipedia, CC BY-SA 4.0, by Wikipedia contributors. "
+      : meta.licence === "stackexchange" ? "Text from " + meta.site + ", CC BY-SA, by the people named above. Saved on " + formatDate(meta.savedAt) + ". "
       : meta.archived ? "Saved from the Internet Archive's copy of " + meta.site + " from " + formatDate(meta.archived) + ". "
         : "Saved from " + meta.site + " on " + formatDate(meta.savedAt) + ". ", link);
     const doc = out.implementation.createHTMLDocument(meta.title);

@@ -1,4 +1,4 @@
-// A PowerPoint deck as a PDF (1.47.0), the parts that need no browser:
+// A PowerPoint deck as a PDF (1.49.0), the parts that need no browser:
 // `node test/pptx.test.js`. Drawing the slides needs a canvas, which the
 // browser run (test/ui.test.js) covers, words and all.
 const assert = require("assert");

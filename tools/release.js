@@ -2,8 +2,10 @@
 //
 // A version lives in three places (CONTRIBUTING.md, "Versions and
 // releases"): APP_VERSION in src/app.js, the ?v= on index.html's tags and
-// CACHE in sw.js. This bumps all three and turns CHANGELOG.md's
-// "## Unreleased" section into "## [1.46.0] - <today>". Nothing is
+// CACHE in sw.js. This bumps all three and writes CHANGELOG.md's
+// "## [1.46.0] - <today>" entry from the notes in changes/ (one file per
+// pull request, so branches never clash over CHANGELOG.md), plus any
+// older "## Unreleased" section, then deletes those files. Nothing is
 // committed: look at the diff, then commit and open the release PR. A
 // merge with the new version publishes the APK and IPA (android.yml).
 const fs = require("fs");
@@ -32,14 +34,46 @@ function bump(version, { root = ROOT, date = new Date().toISOString().slice(0, 1
   if (!cache) throw new Error("sw.js has no CACHE");
   write("sw.js", sw.replace(cache[0], 'const CACHE = "waypage-v' + (Number(cache[1]) + 1) + '"'));
 
-  const log = read("CHANGELOG.md");
+  let log = read("CHANGELOG.md");
   const heading = /^## Unreleased[^\n]*\n/m;
-  if (!heading.test(log)) throw new Error("CHANGELOG.md has no '## Unreleased' section: nothing to release");
-  const body = log.split(heading)[1].split(/^## /m)[0];
-  if (!/^(###|-)/m.test(body)) throw new Error("CHANGELOG.md's Unreleased section is empty");
-  write("CHANGELOG.md", log.replace(heading, "## [" + version + "] - " + date + "\n"));
+  const texts = [];
+  if (heading.test(log)) {
+    texts.push(log.split(heading)[1].split(/^## /m)[0]);
+    log = log.replace(/^## Unreleased[^\n]*\n[\s\S]*?(?=^## |(?![\s\S]))/m, "");
+  }
+  const dir = path.join(root, "changes");
+  const notes = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith(".md") && f !== "README.md").sort() : [];
+  for (const f of notes) texts.push(fs.readFileSync(path.join(dir, f), "utf8"));
+  const entry = mergeNotes(texts);
+  if (!entry) throw new Error("nothing to release: no notes in changes/ and no '## Unreleased' in CHANGELOG.md");
+  const first = log.search(/^## /m);
+  const at = first < 0 ? log.length : first;
+  write("CHANGELOG.md", log.slice(0, at).replace(/\n*$/, "\n\n") + "## [" + version + "] - " + date + "\n\n" + entry + "\n" + log.slice(at));
+  for (const f of notes) fs.unlinkSync(path.join(dir, f));
 
-  return { was, version, cache: "waypage-v" + (Number(cache[1]) + 1), tags };
+  return { was, version, cache: "waypage-v" + (Number(cache[1]) + 1), tags, notes: notes.length };
+}
+
+// Notes ("### Added" and its "- " lines, and so on) merged under one
+// heading each, in the CHANGELOG's order; a line that runs on to the next
+// is kept with its item.
+const SECTIONS = ["Added", "Changed", "Fixed", "Removed"];
+function mergeNotes(texts) {
+  const got = new Map(SECTIONS.map((s) => [s, []]));
+  for (const t of texts) {
+    let cur = null;
+    for (const line of t.split("\n")) {
+      const h = line.match(/^###\s+(.+?)\s*$/);
+      if (h) {
+        if (!got.has(h[1])) throw new Error("unknown heading '### " + h[1] + "' (use " + SECTIONS.join(", ") + ")");
+        cur = got.get(h[1]);
+        continue;
+      }
+      if (/^- /.test(line)) { if (!cur) throw new Error("a note line comes before any ### heading: " + line); cur.push(line); }
+      else if (/^\s+\S/.test(line) && cur && cur.length) cur[cur.length - 1] += "\n" + line;
+    }
+  }
+  return SECTIONS.filter((s) => got.get(s).length).map((s) => "### " + s + "\n" + got.get(s).join("\n") + "\n").join("\n");
 }
 
 const newer = (a, b) => {
@@ -50,7 +84,7 @@ const newer = (a, b) => {
 
 if (require.main === module) {
   const r = bump(process.argv[2] || "");
-  console.log(r.was + " -> " + r.version + ": src/app.js, " + r.tags + " tags in index.html, sw.js " + r.cache + ", CHANGELOG.md dated. Now commit and open the release PR.");
+  console.log(r.was + " -> " + r.version + ": src/app.js, " + r.tags + " tags in index.html, sw.js " + r.cache + ", CHANGELOG.md written from " + r.notes + " notes in changes/. Now commit and open the release PR.");
 }
 
-module.exports = { bump, newer };
+module.exports = { bump, newer, mergeNotes };

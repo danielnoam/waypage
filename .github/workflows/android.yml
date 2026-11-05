@@ -1,14 +1,14 @@
 # Builds the Android app from the same files GitHub Pages serves, and
 # publishes it as a release when APP_VERSION is new. Any other branch with
-# an open pull request gets a preview pre-release instead (1.48.0,
-# tools/preview-release.sh). From LifeLog's android.yml, without its widgets.
+# an open pull request gets a test build pre-release instead (1.48.0,
+# tools/test-build.sh). From LifeLog's android.yml, without its widgets.
 name: Android app
 
 on:
   push:
     # claude/** (cloud sessions) build only on request: workflow_dispatch.
     branches-ignore: ["claude/**"]
-    paths-ignore: ["**.md", "test/**", ".claude/**"]
+    paths-ignore: ["**.md", "test/**", ".claude/**", "worker/**", ".github/workflows/worker.yml"]
   workflow_dispatch:
 
 permissions:
@@ -71,6 +71,10 @@ jobs:
           node tools/android-version.js
           echo "version=$(node -p "require('./tools/build-www').appVersion()")" >> "$GITHUB_OUTPUT"
 
+      # Kokoro voices' engine (sherpa-onnx), pinned and checked.
+      - name: Speech engine library
+        run: bash tools/sherpa-lib.sh
+
       - run: npx cap sync android
 
       - name: Build
@@ -114,11 +118,11 @@ jobs:
           gh release create "app-v$V" Waypage.apk --title "Waypage $V" --notes-file notes.md
 
       # Any other branch with an open pull request: the APK goes on the
-      # pre-release preview-<branch>, remade on every push, which Settings
-      # › About › Preview builds lists. Never "latest", so never an update.
-      - name: Publish the preview
+      # pre-release test-<branch>, remade on every push, which Settings
+      # › About › Test builds lists. Never "latest", so never an update.
+      - name: Publish the test build
         if: github.ref != 'refs/heads/main' && steps.sign.outputs.signed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           V: ${{ steps.v.outputs.version }}
-        run: bash tools/preview-release.sh create Waypage.apk
+        run: bash tools/test-build.sh create Waypage.apk

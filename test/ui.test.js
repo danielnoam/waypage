@@ -178,6 +178,25 @@ function fb2Bytes() {
   const cp = "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя";
   return Buffer.from([...xml].map((c) => (cp.includes(c) ? 0xc0 + cp.indexOf(c) : c.charCodeAt(0))));
 }
+// A grey PNG of w by h, for comic pages of a real shape.
+function pngOf(w, h) {
+  const zlib = require("zlib");
+  const crcTable = [...Array(256)].map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = (b) => { let c = 0xffffffff; for (const x of b) c = crcTable[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (type, data) => { const l = Buffer.alloc(4); l.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([l, td, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 0;
+  const raw = Buffer.alloc((w + 1) * h, 0x99); for (let y = 0; y < h; y++) raw[y * (w + 1)] = 0;
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+}
+// A manga volume (Unreleased, from Kavita): a cover, four pages and a
+// two-page spread third, its ComicInfo naming the series, the volume and
+// right to left.
+function mangaBytes(n) {
+  const page = pngOf(60, 90), spread = pngOf(120, 90);
+  return zipOf([["001.png", page], ["002.png", page], ["003.png", spread], ["004.png", page], ["005.png", page], ["006.png", page],
+    ["ComicInfo.xml", '<?xml version="1.0"?><ComicInfo><Series>Night Ferry</Series><Number>' + n + "</Number><Title>Volume " + n + "</Title><Manga>YesAndRightToLeft</Manga></ComicInfo>"]]);
+}
+
 // A stored zip of [name, text or Buffer] pairs.
 function zipOf(files) {
   const crcTable = [...Array(256)].map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
@@ -518,6 +537,44 @@ function zipOf(files) {
       await p.evaluate(() => document.getElementById("readerView").classList.remove("bar-away"));
     });
 
+    await test("a clip can keep its own text settings; Settings keeps the defaults (settings per clip)", async () => {
+      const got = await p.evaluate(async () => {
+        const wait = () => new Promise((r) => setTimeout(r, 100));
+        const frameSize = () => getComputedStyle(document.getElementById("readerFrame").contentDocument.documentElement).getPropertyValue("--reader-fs").trim();
+        const usual = readingPrefs(null).size;
+        const out = { start: readingScope(state.open) };
+        setScope("clip");
+        setReading({ size: usual + 4, layout: "pages" });
+        await wait();
+        out.own = [readingScope(state.open), readingPrefs().size, readingPrefs(null).size, readingPrefs(null).layout, frameSize()];
+        // Settings' copy shows and sets the defaults.
+        const box = readingControls(false);
+        out.settings = box.querySelector('.range[data-pref="size"]').value;
+        out.settingsScope = box.querySelectorAll(".scope-pick").length;
+        // The Aa sheet's Layout and Text start with the switch.
+        out.sheet = readingControls(true).querySelectorAll(".scope-pick").length;
+        setScope("all");
+        await wait();
+        out.back = [readingScope(state.open), readingPrefs().size, readingPrefs().layout, frameSize()];
+        document.querySelector("#toast .toast-act").click();
+        await wait();
+        out.undone = [readingScope(state.open), readingPrefs().size];
+        setScope("all");
+        await wait();
+        out.after = [readingScope(state.open), readingPrefs(null).size, readingPrefs().layout];
+        return { usual, ...out };
+      });
+      const u = got.usual;
+      assert.strictEqual(got.start, "all");
+      assert.deepStrictEqual(got.own, ["clip", u + 4, u, "scroll", u + 4 + "px"]);
+      assert.strictEqual(Number(got.settings), u, "Settings showed the clip's size");
+      assert.strictEqual(got.settingsScope, 0);
+      assert.strictEqual(got.sheet, 2);
+      assert.deepStrictEqual(got.back, ["all", u, "scroll", u + "px"]);
+      assert.deepStrictEqual(got.undone, ["clip", u + 4]);
+      assert.deepStrictEqual(got.after, ["all", u, "scroll"]);
+    });
+
     await test("alignment and letter, word and paragraph spacing reach the clip (1.19.0)", async () => {
       const got = await p.evaluate(async () => {
         setReading({ align: "justify", letters: 0.05, words: 0.2, paras: 2 });
@@ -854,6 +911,7 @@ function zipOf(files) {
       const labels = await q.locator("#sidebar .side-item .side-label").allTextContents();
       assert.deepStrictEqual(labels.slice(0, 5), ["Library", "Trips", "Clip 3", "Collections", "Clips"], labels.join(", "));
       assert.ok(!labels.includes("Unloved") && !labels.includes("Files"), labels.join(", "));
+      assert.strictEqual(await q.locator("#sidebar > .side-version").last().textContent(), "Version " + await q.evaluate(() => APP_VERSION), "the sidebar ends with the app version");
       await q.locator("#sidebar .side-item", { hasText: "Collections" }).click();
       await q.locator("#sidebar").waitFor({ state: "hidden" });
       await until(q, () => document.querySelectorAll(".library .tile, .library [data-name]").length > 0 && !document.querySelector(".library .page-card:not([data-name])"));
@@ -1782,6 +1840,37 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("the reader can have a theme of its own", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const c = { id: "rt1", url: "https://example.com/rt1", title: "Theme test", site: "example.com", savedAt: 1000, minutes: 1, mode: "links", at: 0 };
+        await window.Waypage.store.writeIndex([c]);
+        await window.Waypage.store.writePage("rt1", "<!doctype html><html><body><h1>Theme test</h1><p>Words.</p></body></html>", c);
+        setTheme("paper");
+        setReaderTheme("night");
+      });
+      await q.reload();
+      await q.locator(".page-card").first().waitFor();
+      const at = () => q.evaluate(() => document.documentElement.dataset.theme);
+      assert.strictEqual(await at(), "paper", "the library keeps the app's theme");
+      await q.evaluate(() => openPage("rt1"));
+      await q.locator("#readerView:not([hidden])").waitFor();
+      assert.strictEqual(await at(), "night", "the reader takes its own");
+      await q.evaluate(() => openSettings());
+      assert.strictEqual(await at(), "paper", "Settings over the reader shows the app's");
+      await q.evaluate(() => closeSettings());
+      assert.strictEqual(await at(), "night");
+      await q.evaluate(() => closeReader());
+      await q.locator("#readerView").waitFor({ state: "hidden" });
+      assert.strictEqual(await at(), "paper");
+      await q.evaluate(() => setReaderTheme("same"));
+      await q.evaluate(() => openPage("rt1"));
+      await q.locator("#readerView:not([hidden])").waitFor();
+      assert.strictEqual(await at(), "paper", "off, the reader takes the app's");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("reading on to the next chapter doesn't flash the read-aloud card (1.26.3)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
@@ -1945,7 +2034,7 @@ function zipOf(files) {
       await q.context().close();
     });
 
-    await test("dark PDF pages map white to the theme's background and black to its ink, in a dark theme only (1.46.0)", async () => {
+    await test("dark PDF pages map white to the theme's background and black to its ink, in a dark theme only (1.49.0)", async () => {
       const q = await page(browser, 390);
       const got = await q.evaluate(() => {
         const root = document.documentElement;
@@ -1983,7 +2072,7 @@ function zipOf(files) {
       await q.context().close();
     });
 
-    await test("a linked PDF's pages go dark from the Layout switch, which only a PDF's own sheet has (1.46.0)", async () => {
+    await test("a linked PDF's pages go dark from the Layout switch, which only a PDF's own sheet has (1.49.0)", async () => {
       const q = await page(browser, 390);
       const bytes = [...pdfBytes()];
       const id = await q.evaluate(async (b) => {
@@ -2023,7 +2112,7 @@ function zipOf(files) {
       assert.strictEqual((await frame()).svg, false);
       await q.evaluate(() => setTheme("night"));
       await until(q, () => document.getElementById("readerFrame").contentDocument.documentElement.hasAttribute("data-co-pdf-dark"));
-      // Show as text has no printed pages to darken, so no switch (1.46.1).
+      // Show as text has no printed pages to darken, so no switch (1.49.0).
       await q.evaluate(() => switchView(state.open, "reader"));
       await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open && state.open.view === "text");
       await q.click("#readerAa");
@@ -2034,7 +2123,96 @@ function zipOf(files) {
       await q.context().close();
     });
 
-    await test("the Dark PDF pages switch is hidden in a web clip's Layout, where .rc-row's flex must not beat [hidden] (1.46.1)", async () => {
+    await test("a pinch deep in a linked PDF keeps the spot under the fingers, gaps and all", async () => {
+      const maker = await browser.newPage();
+      let html = "<style>@page{size:A4;margin:0} div{height:297mm;box-sizing:border-box;padding:40px;font:28px sans-serif;page-break-after:always}</style>";
+      for (let i = 1; i <= 30; i++) html += "<div>" + ("Page " + i + " words. ").repeat(40) + "</div>";
+      await maker.setContent(html);
+      const bytes = [...await maker.pdf({ format: "A4" })];
+      await maker.close();
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      const bring = (b) => {
+        const file = new File([new Uint8Array(b)], "deep.pdf", { type: "application/pdf" });
+        window.Waypage.platform.files.blob = async () => file;
+        return file;
+      };
+      const id = await q.evaluate(async ([b, f]) => {
+        const file = eval(f)(b);
+        const meta = await window.Waypage.files.bring(file, "pdf", { has: () => false, link: "content://docs/deep.pdf" });
+        await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
+        return meta.id;
+      }, [bytes, String(bring)]);
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(([b, f]) => { eval(f)(b); }, [bytes, String(bring)]);
+      await q.evaluate((i) => openPage(i), id);
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      await q.evaluate(() => { const d = document.getElementById("readerFrame").contentDocument; d.defaultView.scrollTo(0, d.querySelector("img[data-page='25']").offsetTop - 100); });
+      await q.waitForTimeout(400);
+      const fr = await q.evaluate(() => { const r = document.getElementById("readerFrame").getBoundingClientRect(); return [r.left, r.top]; });
+      const x = 250, y = 450;
+      const under = () => q.evaluate(([x, y]) => {
+        const d = document.getElementById("readerFrame").contentDocument;
+        const img = d.elementFromPoint(x, y).closest("img"), r = img.getBoundingClientRect();
+        return { page: img.getAttribute("data-page"), fx: Math.round((x - r.left) / r.width * 100), fy: Math.round((y - r.top) / r.height * 100) };
+      }, [x, y]);
+      const before = await under();
+      const cdp = await ctx.newCDPSession(q);
+      const pts = (d) => [{ x: fr[0] + x - d, y: fr[1] + y, id: 0 }, { x: fr[0] + x + d, y: fr[1] + y, id: 1 }];
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: pts(40) });
+      for (let i = 1; i <= 10; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: pts(40 + i * 6) });
+      const mid = await q.evaluate(() => getComputedStyle(document.getElementById("readerFrame").contentDocument.querySelector(".co-comic")).willChange);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await q.waitForTimeout(500);
+      const after = await under();
+      const root = await q.evaluate(() => { const c = document.getElementById("readerFrame").contentDocument.querySelector(".co-comic"); return { width: c.style.width, will: c.style.willChange }; });
+      assert.ok(parseInt(root.width, 10) > 800, JSON.stringify(root));
+      assert.strictEqual(mid, "transform", "the pinch has its own layer");
+      assert.strictEqual(root.will, "", "and lets it go after");
+      // Before, the gaps between pages didn't grow with the zoom: by page 25
+      // the spot was a quarter of a page off.
+      assert.deepStrictEqual(after, before, JSON.stringify({ before, after }));
+      const errors = q.errors ? q.errors : [];
+      assert.deepStrictEqual(errors, []);
+      await ctx.close();
+    });
+
+    await test("a PDF shown as its printed pages has Auto-scroll, not a Narrate that reads just its title; as text, Narrate", async () => {
+      const q = await page(browser, 390);
+      const bytes = [...pdfBytes()];
+      const bring = (b) => {
+        const file = new File([new Uint8Array(b)], "pages.pdf", { type: "application/pdf" });
+        window.Waypage.platform.files.blob = async () => file;
+        return file;
+      };
+      const id = await q.evaluate(async ([b, f]) => {
+        const meta = await window.Waypage.files.bring(eval(f)(b), "pdf", { has: () => false, link: "content://docs/pages.pdf" });
+        await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
+        return meta.id;
+      }, [bytes, String(bring)]);
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(([b, f]) => { eval(f)(b); speech.available = true; }, [bytes, String(bring)]);
+      await q.evaluate((i) => openPage(i), id);
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      await until(q, () => !document.getElementById("readerScroll").hidden);
+      const shown = () => q.evaluate(() => ({ aloud: !document.getElementById("readerAloud").hidden, scroll: !document.getElementById("readerScroll").hidden }));
+      assert.deepStrictEqual(await shown(), { aloud: false, scroll: true });
+      // Show as text, from the reader's sheet.
+      await q.click("#readerAa");
+      await q.evaluate(() => switchView(state.open, "reader"));
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open && state.open.view === "text");
+      await until(q, () => !document.getElementById("readerAloud").hidden);
+      assert.deepStrictEqual(await shown(), { aloud: true, scroll: false });
+      const errors = q.errors.filter((e) => !/serviceWorker/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("the Dark PDF pages switch is hidden in a web clip's Layout, where .rc-row's flex must not beat [hidden] (1.49.0)", async () => {
       const q = await page(browser, 390);
       await q.fill("#saveUrl", ARTICLE);
       await q.press("#saveUrl", "Enter");
@@ -2049,7 +2227,7 @@ function zipOf(files) {
       await q.context().close();
     });
 
-    await test("a PowerPoint deck becomes a PDF with its words, asking first, and Cancel stops (1.47.0)", async () => {
+    await test("a PowerPoint deck becomes a PDF with its words, asking first, and Cancel stops (1.49.0)", async () => {
       const q = await page(browser, 390);
       const asked = [];
       q.on("request", (r) => asked.push(r.url()));
@@ -2169,6 +2347,136 @@ function zipOf(files) {
     });
 
     // CONTRIBUTING "Explain less": a ? only where Daniel agreed to one.
+    await test("More speech engines (Kokoro): Download starts the one pressed, and is pressable when nothing else is downloading", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(() => {
+        window.asked = [];
+        const st = { supported: true, engine: "app", use: "", busy: "", step: "", done: 0, total: 0, packs: [
+          { id: "v019", title: "Kokoro 0.19", note: "English", bytes: 98.5e6, ready: false, size: 0, voices: 11 },
+          { id: "v10", title: "Kokoro 1.0", note: "8 languages", bytes: 350e6, ready: false, size: 0, voices: 53 }] };
+        Object.defineProperty(C.platform.speech, "kokoro", { value: async (action, id) => { if (action) window.asked.push(action + " " + id); return action ? null : JSON.parse(JSON.stringify(st)); } });
+        openSettings();
+        openSection("kokoro");
+      });
+      const btn = q.locator(".kokoro-row", { hasText: "Kokoro 1.0" }).getByRole("button", { name: "Download" });
+      await btn.waitFor();
+      assert.strictEqual(await q.evaluate(() => /\bnull\b/.test(document.querySelector(".kokoro-slot").textContent)), false, "\"null\" shows on the screen");
+      assert.strictEqual(await btn.isDisabled(), false);
+      await btn.click();
+      await until(q, () => window.asked.length > 0);
+      assert.deepStrictEqual(await q.evaluate(() => window.asked), ["download v10"]);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a drop-down too long for its sheet opens right at its button, and one at a time", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ROOT + "test/fixtures/chapters.html");
+      await q.press("#saveUrl", "Enter");
+      await q.locator(".page-card", { hasText: "Night Crossing" }).first().click();
+      await q.locator("#readerView:not([hidden])").waitFor();
+      await q.click("#readerAa");
+      await q.locator("#readingSheet .sheet-tabs .seg-face", { hasText: "Text" }).click();
+      await q.evaluate(() => {
+        const make = (id) => { const d = dropdown({ label: id, options: Array.from({ length: 30 }, (_, i) => ({ value: "v" + i, label: "Voice " + i })), value: "v0", onpick() {} }); d.id = id; return d; };
+        document.querySelector('#readingSheet .rc-part:not([hidden])').prepend(make("ddA"), make("ddB"));
+      });
+      await q.locator("#ddA .dropdown-btn").click();
+      await q.waitForTimeout(400);
+      const at = await q.evaluate(() => { const b = document.querySelector("#ddA .dropdown-btn").getBoundingClientRect(), m = document.querySelector("#ddA .dropdown-menu").getBoundingClientRect(); return [b.top, b.bottom, m.top, m.bottom]; });
+      assert.ok((at[2] >= at[1] && at[2] - at[1] < 20) || (at[3] <= at[0] && at[0] - at[3] < 20), "the menu isn't at its button: " + at.map(Math.round).join(","));
+      assert.ok(at[3] <= 844 && at[2] >= 0, "the menu runs off the screen");
+      await q.evaluate(() => document.querySelector("#ddB .dropdown-btn").click());
+      await q.waitForTimeout(400);
+      assert.deepStrictEqual(await q.evaluate(() => [...document.querySelectorAll(".dropdown-menu")].filter((m) => m.style.pointerEvents !== "none").map((m) => m.parentElement.id)), ["ddB"]);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Speech engine lists each downloaded Kokoro version, and picking one puts it in use", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(() => {
+        window.asked = [];
+        const st = { supported: true, engine: "app", use: "v019", busy: "", step: "", done: 0, total: 0, packs: [
+          { id: "v019", title: "Kokoro 0.19", note: "English", bytes: 98.5e6, ready: true, size: 1, voices: 11 },
+          { id: "v10", title: "Kokoro 1.0", note: "8 languages", bytes: 350e6, ready: true, size: 1, voices: 53 },
+          { id: "v11", title: "Kokoro 1.1", note: "English and Chinese", bytes: 140e6, ready: false, size: 0, voices: 103 }] };
+        const sp = C.platform.speech;
+        Object.defineProperty(sp, "kokoro", { value: async (action, id) => { if (action) { window.asked.push(action + " " + id); if (action === "use") st.use = id; return null; } return JSON.parse(JSON.stringify(st)); } });
+        Object.defineProperty(sp, "engines", { value: async () => ({ engines: [{ name: "g", label: "Google" }, { name: "app", label: "Kokoro" }], default: "g" }) });
+        Object.defineProperty(sp, "voices", { value: async () => [] });
+        openSettings();
+        openSection("reading");
+      });
+      const btn = q.getByRole("button", { name: /^Speech engine/ });
+      await btn.waitFor();
+      await btn.click();
+      const names = await q.locator(".dropdown-menu .dropdown-item").allInnerTexts();
+      assert.deepStrictEqual(names.map((x) => x.trim()), ["Phone's default (Google)", "Kokoro 0.19", "Kokoro 1.0"]);
+      await q.locator(".dropdown-menu .dropdown-item", { hasText: "Kokoro 1.0" }).click();
+      await until(q, () => window.asked.length > 0);
+      assert.deepStrictEqual(await q.evaluate(() => window.asked), ["use v10"]);
+      await until(q, () => Object.values(JSON.parse(localStorage.getItem("waypage.aloudEngine") || "{}")).includes("app"));
+      await until(q, () => /Kokoro 1\.0/.test(document.querySelector("[aria-label^='Speech engine']").getAttribute("aria-label")));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("the reader sheet's Narrate tab keeps its rows after another engine is picked, and a downloaded Kokoro has a bin", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ROOT + "test/fixtures/chapters.html");
+      await q.press("#saveUrl", "Enter");
+      await q.locator(".page-card", { hasText: "Night Crossing" }).first().click();
+      await q.locator("#readerView:not([hidden])").waitFor();
+      await q.evaluate(() => {
+        const st = { supported: true, engine: "app", use: "v019", busy: "", step: "", done: 0, total: 0, packs: [
+          { id: "v019", title: "Kokoro 0.19", note: "English", bytes: 98.5e6, ready: true, size: 1, voices: 11 }] };
+        const sp = C.platform.speech;
+        Object.defineProperty(sp, "available", { value: true });
+        Object.defineProperty(sp, "kokoro", { value: async (action) => (action ? null : JSON.parse(JSON.stringify(st))) });
+        Object.defineProperty(sp, "engines", { value: async () => ({ engines: [{ name: "g", label: "Google" }, { name: "app", label: "Kokoro" }], default: "g" }) });
+        Object.defineProperty(sp, "voices", { value: async () => [] });
+      });
+      await q.click("#readerAa");
+      await q.locator("#readingSheet .sheet-tabs .seg-face", { hasText: "Narrate" }).click();
+      const btn = q.locator("#readingSheet").getByRole("button", { name: /^Speech engine/ });
+      await btn.click();
+      await q.locator(".dropdown-menu .dropdown-item", { hasText: "Kokoro 0.19" }).click();
+      await until(q, () => /Kokoro 0\.19/.test((document.querySelector("#readingSheet [aria-label^='Speech engine']") || {}).getAttribute?.("aria-label") || ""));
+      assert.ok(await q.locator("#readingSheet").getByRole("button", { name: /^Speech engine/ }).isVisible(), "the Narrate tab emptied");
+      assert.ok(await q.locator("#readingSheet").getByRole("button", { name: "More speech engines" }).isVisible());
+      await q.locator("#readingSheet").getByRole("button", { name: "More speech engines" }).click();
+      await q.getByRole("button", { name: "Delete Kokoro 0.19" }).waitFor();
+      assert.strictEqual(await q.locator(".kokoro-slot").getByText("In use").count(), 0);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("The changelog is a page in Settings' window on a big screen, its own screen on a phone", async () => {
+      const q = await page(browser, 1280);
+      await q.click("#settingsBtn");
+      await q.locator("#settingsView .nav-row", { hasText: "About" }).click();
+      await q.locator("#sectionBody .nav-row", { hasText: "Changelog" }).click();
+      await q.waitForSelector("#settingsWin #sectionBody .news-entry");
+      assert.strictEqual(await q.textContent("#sectionTitle"), "Changelog");
+      assert.strictEqual(await q.isHidden("#newsView"), true);
+      assert.strictEqual(await q.isVisible("#settingsWin"), true);
+      await q.goBack();
+      await q.waitForFunction(() => document.querySelector("#sectionTitle").textContent === "About");
+      assert.strictEqual(await q.isVisible("#settingsWin"), true);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+
+      const p = await page(browser, 390);
+      await p.click("#settingsBtn");
+      await p.locator(".nav-row", { hasText: "About" }).click();
+      await p.locator("#sectionBody .nav-row", { hasText: "Changelog" }).click();
+      await p.waitForSelector("#newsBody .news-entry");
+      assert.strictEqual(await p.isVisible("#newsView"), true);
+      assert.deepStrictEqual(p.errors, [], p.errors.join(" | "));
+      await p.context().close();
+    });
+
     await test("Settings keeps its ? marks to the agreed list (1.48.2)", async () => {
       const q = await page(browser, 390);
       const agreed = ["Your fonts", "Dictionaries", "Before you go offline", "Save from your browser", "Sync with GitHub",
@@ -2683,6 +2991,53 @@ function zipOf(files) {
       assert.ok(await q.evaluate(() => /Saved/.test(document.querySelector("#newsletters .feed-group").textContent)));
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
+    });
+
+    await test("a comic's series and number file it in order, an EPUB's series too (Unreleased)", async () => {
+      const q = await page(browser, 390);
+      // Copied in, not asked about (Chrome can read a file from where it is).
+      const add = (b, name) => q.evaluate(async ([b, name]) => { askKeep = async () => false; await openFile(new File([new Uint8Array(b)], name), null, false); }, [b, name]);
+      await add([...mangaBytes(2)], "v2.cbz");
+      await add([...mangaBytes(1)], "v1.cbz");
+      const opf = EPUB_FILES[2][1].replace("<dc:language>en</dc:language>", '<dc:language>en</dc:language><meta name="calibre:series" content="Long Voyage"/><meta name="calibre:series_index" content="3"/>');
+      await add([...zipOf([EPUB_FILES[0], EPUB_FILES[1], ["OEBPS/book.opf", opf], ...EPUB_FILES.slice(3)])], "plain.epub");
+      const got = await q.evaluate(() => ({ ferry: folderPages("Night Ferry").map((p) => [p.title, p.volume, p.manga]), voyage: folderPages("Long Voyage").map((p) => [p.title, p.volume]) }));
+      assert.deepStrictEqual(got.ferry, [["Volume 1", 1, true], ["Volume 2", 2, true]]);
+      assert.deepStrictEqual(got.voyage, [["Plain Chapters", 3]]);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a comic in Pages: a page a screen, a manga turns right to left, a spread in halves, two up on a wide window (Unreleased)", async () => {
+      for (const width of [390, 1280]) {
+        const q = await page(browser, width);
+        await q.evaluate(async (b) => { askKeep = async () => false; await openFile(new File([new Uint8Array(b)], "v1.cbz"), null, false); }, [...mangaBytes(1)]);
+        await q.evaluate(() => setReading({ comicLayout: "pages" }));
+        await q.evaluate(() => openPage(state.pages[0].id));
+        await until(q, () => C.reader.paged && !!C.reader.pageInfo());
+        await q.waitForTimeout(300);
+        const info = () => q.evaluate(() => ({ ...C.reader.pageInfo(), x: document.getElementById("readerFrame").contentWindow.scrollX, dir: getComputedStyle(document.getElementById("readerFrame").contentDocument.body).direction }));
+        let i = await info();
+        assert.strictEqual(i.dir, "rtl", "a manga turns right to left");
+        // Phone: cover, page, the spread in two halves, three pages. Wide: cover, two, spread, two, one.
+        assert.strictEqual(i.pages, width < 700 ? 7 : 5);
+        const box = await q.locator("#readerFrame").boundingBox();
+        await q.mouse.click(box.x + 10 + (width < 700 ? 0 : 60), box.y + box.height / 2);
+        await q.waitForTimeout(700);
+        i = await info();
+        assert.strictEqual(i.page, 2, "the left side is next in a manga");
+        assert.ok(i.x < 0);
+        await q.evaluate(() => setTurn("ltr"));
+        await q.waitForTimeout(300);
+        i = await info();
+        assert.strictEqual(i.dir, "ltr");
+        assert.strictEqual(i.page, 2, "still on the same page");
+        assert.strictEqual(await q.evaluate(() => state.open.turn), "ltr");
+        await q.evaluate(() => setReading({ comicLayout: "scroll" }));
+        assert.strictEqual(await q.evaluate(() => C.reader.paged), false);
+        assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+        await q.context().close();
+      }
     });
 
     for (const width of [390, 1280]) {

@@ -109,6 +109,24 @@ function folderNext(list) {
   return i < 0 ? list[0] : list[i];
 }
 
+// A book or comic that names its series (Unreleased, from Kavita: CBZ
+// ComicInfo, an EPUB's series) goes into that series' collection, or the
+// one it's already going into, before the first volume numbered after it,
+// so the collection reads 1, 2, 3 however they were added.
+function fileSeries(p) {
+  const name = p.folder || (p.series && cleanTag(p.series) ? folderName(p.series) : "");
+  if (!name) return;
+  const list = folderPages(name).filter((q) => q !== p);
+  if (!p.folder) { p.folder = name; joinFav(p, name); }
+  p.folderAt = Date.now();
+  const n = Number(p.volume);
+  if (!Number.isFinite(n) || p.volume == null) return;
+  const i = list.findIndex((q) => q.volume != null && Number.isFinite(Number(q.volume)) && Number(q.volume) > n);
+  if (i < 0) return;
+  const at = (q) => q.folderAt || q.savedAt || 0;
+  p.folderAt = i > 0 ? (at(list[i - 1]) + at(list[i])) / 2 : at(list[i]) - 1000;
+}
+
 async function setFolder(p, name) {
   const clean = name && cleanTag(name);
   if (clean) {
@@ -847,9 +865,10 @@ function pageSheet(p, where) {
         // The page changed since (1.38.0): fetched again in its place.
         p.file || p.preview || !/^https?:/.test(p.url || "") ? null
           : menuRow("Update from the site", () => back().then(() => updateClip(p))),
-        // A manga read as an article (1.49.0): saved again as its pictures.
-        p.file || p.preview || p.comic || !/^https?:/.test(p.url || "") ? null
-          : menuRow("Save as comic", () => back().then(() => saveClipAsComic(p))),
+        // Save as comic, and back as an article (Daniel's ask, after
+        // 1.50.0's Article / Comic switch): a web clip saves again that way,
+        // a file only changes how it's shown.
+        kindable(p) ? menuRow(p.comic ? "Save as article" : "Save as comic", () => back().then(() => setClipKind(p, p.comic ? "article" : "comic"))) : null,
         // The original gone or changed (1.15.0): the Wayback Machine's copy.
         p.file || p.preview || p.comic || !/^https?:/.test(p.url || "") ? null
           : menuRow(p.archived ? "Find a newer archived copy" : "Use the archived copy", () => back().then(() => archiveClip(p))),
@@ -858,6 +877,12 @@ function pageSheet(p, where) {
   };
   draw();
   return box;
+}
+
+// A PDF read from outside stays as it is: its printed pages are pictures.
+function kindable(p) {
+  if (p.preview || (p.link && p.file && p.file.kind === "pdf")) return false;
+  return !!p.file || /^https?:/.test(p.url || "");
 }
 
 let tagTyping = false;
@@ -1703,7 +1728,7 @@ function askKeep(file, kind, can) {
   });
 }
 // A PowerPoint deck can't be read as it is, so it's offered as a PDF made
-// from it (1.47.0). Resolves to true to convert, null to stop.
+// from it (1.49.0). Resolves to true to convert, null to stop.
 function askConvert(file) {
   return new Promise((done) => {
     askingFile = { file, kind: "pptx", done, convert: true, answered: false };
@@ -1839,11 +1864,12 @@ async function openFile(file, btn, open, ref, forced) {
         const had = open && kind !== "clip" && fileLike(file.name, file.size, link);
         if (had) openPage(had.id);
       } else {
+        fileSeries(meta);
         state.pages.unshift(meta);
         await C.store.writeIndex(state.pages);
         await loadThumbs();
         C.store.keepStored();
-        toast("Added “" + meta.title + "”");
+        toast("Added “" + meta.title + "”" + (meta.folder ? " to " + meta.folder : ""));
         if (open) openPage(meta.id);
       }
     }
@@ -1859,7 +1885,7 @@ async function openFile(file, btn, open, ref, forced) {
 }
 
 // A deck asked about, turned into a PDF, saved where the person picks and
-// opened from there, as a PDF picked from that place would be (1.47.0).
+// opened from there, as a PDF picked from that place would be (1.49.0).
 async function convertDeck(file, ref, open) {
   if (!(await askConvert(file))) { if (ref) C.platform.files.release(ref); return; }
   const run = Object.assign(startRun(null, "Converting a deck", 1), { label: file.name, files: true, now: "Converting" });
@@ -2048,6 +2074,7 @@ async function lookInOne(w, said, scan) {
         // The collection picked for the folder (1.28.0), else its subfolder's name.
         const dir = w.into || f.path.split("/").slice(-2, -1)[0];
         if (dir) { meta.folder = folderName(dir); meta.folderAt = Date.now(); }
+        fileSeries(meta);
         state.pages.unshift(meta);
         await C.store.writeIndex(state.pages);
         added++;

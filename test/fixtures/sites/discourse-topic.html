@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>&quot;Official&quot; way to read the raw bytes of a `struct` I didn&#39;t define - code review - The Rust Programming Language Forum</title>
+    <meta name="description" content="I am writing a client library for a bespoke local RPC protocol. The service implementation is not under my control, so I can&#39;t change the protocol.  Inconveniently, the protocol packet format embeds libc::sockaddr_* stru…">
+    <meta name="generator" content="Discourse 2026.11.0-latest - https://github.com/discourse/discourse version fda60103f6db3ab23431062a930735eff857152d">
+<link rel="icon" type="image/vnd.microsoft.icon" href="https://us1.discourse-cdn.com/flex019/uploads/rust_lang/optimized/2X/e/e011218794dba02ebb2b368fd9b831f5585caffe_2_32x32.ico">
+<link rel="apple-touch-icon" type="image/png" href="https://us1.discourse-cdn.com/flex019/uploads/rust_lang/optimized/2X/8/83e41956eccfd67ad6ff76f15a2c22e58db31d4f_2_180x180.svg">
+<meta name="theme-color" media="all" content="#fff">
+
+<meta name="color-scheme" content="light">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
+<link rel="canonical" href="https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341" />
+
+<meta name="discourse-track-view-session-id" content="9N5ITIDwz608qW5gojd9nS2zVhz5ibdp">
+  <link rel="search" type="application/opensearchdescription+xml" href="https://users.rust-lang.org/opensearch.xml" title="The Rust Programming Language Forum Search">
+
+    
+    <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/color_definitions_light-default_-1_1_eccdf5a3753815ef5bf6ea6f09a5801816d2c48a.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" class="light-scheme"/>
+
+<link href="https://sea1.discourse-cdn.com/flex019/stylesheets/common_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="common"  />
+
+
+
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/automation_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="automation"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/boards_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="boards"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/checklist_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="checklist"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-ai_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="discourse-ai"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-assign_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="discourse-assign"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-cakeday_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="discourse-cakeday"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-data-explorer_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="discourse-data-explorer"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-details_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="discourse-details"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-events_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="discourse-events"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-github_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="discourse-github"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-lazy-videos_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="discourse-lazy-videos"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-local-dates_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="discourse-local-dates"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-narrative-bot_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="discourse-narrative-bot"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-policy_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="discourse-policy"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-presence_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="discourse-presence"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-solved_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="discourse-solved"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-templates_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="discourse-templates"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-topic-voting_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="discourse-topic-voting"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-user-notes_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="discourse-user-notes"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-workflows_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="discourse-workflows"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/footnote_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="footnote"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/hosted-site_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="hosted-site"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/poll_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="poll"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/spoiler-alert_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="spoiler-alert"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-ai_mobile_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="(width < 40rem)" rel="stylesheet" data-target="discourse-ai_mobile"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-assign_mobile_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="(width < 40rem)" rel="stylesheet" data-target="discourse-assign_mobile"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-events_mobile_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="(width < 40rem)" rel="stylesheet" data-target="discourse-events_mobile"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-ai_desktop_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="(width >= 40rem)" rel="stylesheet" data-target="discourse-ai_desktop"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/discourse-events_desktop_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="(width >= 40rem)" rel="stylesheet" data-target="discourse-events_desktop"  />
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/poll_desktop_c74a0887ad0f6820a58e8a7de6814d072e0bae2b.css?__ws=users.rust-lang.org" media="(width >= 40rem)" rel="stylesheet" data-target="poll_desktop"  />
+
+  <link href="https://sea1.discourse-cdn.com/flex019/stylesheets/common_theme_53_e5ca284baa350f31bd78de8c28e67e510a5f20a3.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="common_theme" data-theme-id="53" data-theme-name="mobile composer preview"/>
+<link href="https://sea1.discourse-cdn.com/flex019/stylesheets/common_theme_51_a0374996037639adc3c064bf8d8e206926dbd4e4.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="common_theme" data-theme-id="51" data-theme-name="social share"/>
+<link href="https://sea1.discourse-cdn.com/flex019/stylesheets/common_theme_46_6d865c9612597520808b9bbbfb95cf3810c934b9.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="common_theme" data-theme-id="46" data-theme-name="hide (empty) ai settings tab"/>
+<link href="https://sea1.discourse-cdn.com/flex019/stylesheets/common_theme_37_b3a0dc39ac7a857a4a3efc7905d23b39a9168d2c.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="common_theme" data-theme-id="37" data-theme-name="limit footnote height"/>
+<link href="https://sea1.discourse-cdn.com/flex019/stylesheets/common_theme_52_c4a415337237d7064ec9f4beb546e46394ea59b4.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="common_theme" data-theme-id="52" data-theme-name="social share max-width adjust and reorder"/>
+<link href="https://sea1.discourse-cdn.com/flex019/stylesheets/common_theme_1_6d22d34c29b89ab25028989f6a8ca526bfa5e512.css?__ws=users.rust-lang.org" media="all" rel="stylesheet" data-target="common_theme" data-theme-id="1" data-theme-name="default"/>
+  
+  
+
+    
+    
+        <link rel="alternate nofollow" type="application/rss+xml" title="RSS feed of &#39;&quot;Official&quot; way to read the raw bytes of a `struct` I didn&#39;t define&#39;" href="https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341.rss" />
+    <meta property="og:site_name" content="The Rust Programming Language Forum" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="og:image" content="https://us1.discourse-cdn.com/flex019/uploads/rust_lang/original/2X/8/83e41956eccfd67ad6ff76f15a2c22e58db31d4f.svg" />
+<meta property="og:url" content="https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341" />
+<meta name="twitter:url" content="https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341" />
+<meta property="og:title" content="&quot;Official&quot; way to read the raw bytes of a `struct` I didn&#39;t define" />
+<meta name="twitter:title" content="&quot;Official&quot; way to read the raw bytes of a `struct` I didn&#39;t define" />
+<meta property="og:description" content="I am writing a client library for a bespoke local RPC protocol. The service implementation is not under my control, so I can&#39;t change the protocol.  Inconveniently, the protocol packet format embeds libc::sockaddr_* structs directly in each message; the message format looks something like this  #[repr(C)] union PacketAddr {     sin: libc::sockaddr_in,     sin6: libc::sockaddr_in6,     ss: libc::sockaddr_storage, }  #[repr(C)] struct Packet {     packet_len: u32,     proto_ver: u32,     msg_type:..." />
+<meta name="twitter:description" content="I am writing a client library for a bespoke local RPC protocol. The service implementation is not under my control, so I can&#39;t change the protocol.  Inconveniently, the protocol packet format embeds libc::sockaddr_* structs directly in each message; the message format looks something like this  #[repr(C)] union PacketAddr {     sin: libc::sockaddr_in,     sin6: libc::sockaddr_in6,     ss: libc::sockaddr_storage, }  #[repr(C)] struct Packet {     packet_len: u32,     proto_ver: u32,     msg_type:..." />
+<meta property="og:article:section" content="code review" />
+<meta property="og:article:section:color" content="008ec2" />
+<meta name="twitter:label1" value="Reading time" />
+<meta name="twitter:data1" value="10 mins 🕑" />
+<meta name="twitter:label2" value="Likes" />
+<meta name="twitter:data2" value="24 ❤" />
+<meta property="article:published_time" content="2026-10-29T12:35:41+00:00" />
+<meta property="og:ignore_canonical" content="true" />
+
+        <link rel="next" href="/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341?page=2">
+
+    <link rel="alternate" type="text/markdown" href="https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341.md">
+    
+<script type="application/ld+json">{"@context":"http://schema.org","@type":"QAPage","name":"\"Official\" way to read the raw bytes of a `struct` I didn't define","datePublished":"2026-10-29T12:35:40.943Z","mainEntity":{"@type":"Question","answerCount":19,"author":{"@type":"Person","name":"zackw","url":"https://users.rust-lang.org/u/zackw"},"dateModified":"2026-10-29T12:35:41.063Z","datePublished":"2026-10-29T12:35:40.943Z","name":"\"Official\" way to read the raw bytes of a `struct` I didn't define","text":"I am writing a client library for a bespoke local RPC protocol. The service implementation is not under my control, so I can\u0026#39;t change the protocol.  Inconveniently, the protocol packet format embeds libc::sockaddr_* structs directly in each message; the message format looks something like this\n\n#[re\u0026hellip;","upvoteCount":0,"suggestedAnswer":[{"@type":"Answer","author":{"@type":"Person","name":"nerditation","url":"https://users.rust-lang.org/u/nerditation"},"dateModified":"2026-10-29T12:52:17.593Z","datePublished":"2026-10-29T12:52:17.557Z","text":"creating a slice reference \u0026amp;[u8] to padding bytes is UB, unless you wrap it in MaybeUninit, such as \u0026amp;[MaybeUninit\u0026lt;u8\u0026gt;].\n\nalternatively, you can use a raw pointer *const u8 plus the length, instead of slice reference \u0026amp;[u8]. raw pointers doesn\u0026#39;t have the validity requirement, and is ok to be passed to\u0026hellip;","upvoteCount":2,"url":"https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/2"},{"@type":"Answer","author":{"@type":"Person","name":"robofinch","url":"https://users.rust-lang.org/u/robofinch"},"dateModified":"2026-10-29T13:15:27.127Z","datePublished":"2026-10-29T13:15:27.100Z","text":"What about manually adding padding, like\n\nconst PADDED_LEN: usize = /* maximum of the three sizes */;\n\n#[repr(C)]\n\nstruct PaddedSockAddrIn {\n\npub data: libc::sockaddr_in,\n\npub padding: [u8; { PADDED_LEN - size_of::\u0026lt;libc::sockaddr_in\u0026gt;() }],\n\n}\n\n// and so on\n\nThen, assuming the libc::sockaddr_* ty\u0026hellip;","upvoteCount":1,"url":"https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/3"},{"@type":"Answer","author":{"@type":"Person","name":"robofinch","url":"https://users.rust-lang.org/u/robofinch"},"dateModified":"2026-10-29T13:20:43.449Z","datePublished":"2026-10-29T13:20:43.419Z","text":"For 3: “u8 has no invalid states” is false. Bytes in Rust’s Abstract Machine look something like\n\nenum AbstractByte {\n\nUninit,\n\nInit(u8, Option\u0026lt;PointerProvenance\u0026gt;),\n\n}\n\nand valid states (more precisely, valid “representations”) of u8s are abstract bytes matching AbstractByte::Init(_, None).","upvoteCount":0,"url":"https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/4"},{"@type":"Answer","author":{"@type":"Person","name":"MusicalNinjaDad","url":"https://users.rust-lang.org/u/MusicalNinjaDad"},"dateModified":"2026-10-29T13:20:48.473Z","datePublished":"2026-10-29T13:20:48.449Z","text":"Would the following not work and be a touch safer?\n\nVec with capacity packet_len\n\npush 1st 4 fields\n\nunsafe slice from raw parts addr \u0026amp; copy into Vec\n\nunsafe slice from raw parts annotation \u0026amp; copy into Vec","upvoteCount":0,"url":"https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/5"},{"@type":"Answer","author":{"@type":"Person","name":"zackw","url":"https://users.rust-lang.org/u/zackw"},"dateModified":"2026-10-29T15:26:23.936Z","datePublished":"2026-10-29T15:26:23.897Z","text":"[image] nerditation:\n\ncreating a slice reference \u0026amp;[u8] to padding bytes is UB\n\n[image] robofinch:\n\n“u8 has no invalid states” is false\n\nThat\u0026#39;s the issue I was trying to cover with \u0026quot;Caller is responsible for ensuring ... sa is fully initialized including padding\u0026quot;.  It is probably the most l\u0026hellip;","upvoteCount":0,"url":"https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/6"},{"@type":"Answer","author":{"@type":"Person","name":"MusicalNinjaDad","url":"https://users.rust-lang.org/u/MusicalNinjaDad"},"dateModified":"2026-10-29T19:15:45.117Z","datePublished":"2026-10-29T15:46:29.702Z","text":"[image] zackw:\n\n[image] MusicalNinjaDad:\n\nWould the following not work and be a touch safer?\n\nVec with capacity packet_len\n\npush 1st 4 fields\n\nunsafe slice from raw parts addr \u0026amp; copy into Vec\n\nunsafe slice from raw parts annotation \u0026amp; copy into Vec\n\nThat is indeed what I am doing: sockaddr_as_b\u0026hellip;","upvoteCount":0,"url":"https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/7"},{"@type":"Answer","author":{"@type":"Person","name":"kpreid","url":"https://users.rust-lang.org/u/kpreid"},"dateModified":"2026-10-29T15:50:23.746Z","datePublished":"2026-10-29T15:50:23.715Z","text":"[image] zackw:\n\nThat\u0026#39;s the issue I was trying to cover with \u0026quot;Caller is responsible for ensuring ... sa is fully initialized including padding\u0026quot;. ... But I am 100% stuck with \u0026quot;the format of this field is whatever libc::sockaddr_in{,6} is on this target\u0026quot;, so \u0026quot;better ideas\u0026quot; somehow have to involve kn\u0026hellip;","upvoteCount":3,"url":"https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/8"},{"@type":"Answer","author":{"@type":"Person","name":"zackw","url":"https://users.rust-lang.org/u/zackw"},"dateModified":"2026-10-29T15:59:46.042Z","datePublished":"2026-10-29T15:59:45.978Z","text":"[image] kpreid:\n\nEvery write operation that uses the struct type as a whole is allowed to write uninit to padding areas, even if it\u0026#39;s a move from a location where the padding was initialized. So, you cannot do this without knowing field offsets or knowing there is no padding.\n\nUgh. The most com\u0026hellip;","upvoteCount":0,"url":"https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/9"},{"@type":"Answer","author":{"@type":"Person","name":"increasing","url":"https://users.rust-lang.org/u/increasing"},"dateModified":"2026-10-29T16:33:03.049Z","datePublished":"2026-10-29T16:33:03.015Z","text":"I think you will need to know which bytes are padding and which ones are not. If you do know that then you can first copy the struct into a MaybeUninit buffer, then zero the padding and then copy it into the output.\n\nIf you did not care about the value of the padding bytes on the wire you could have\u0026hellip;","upvoteCount":0,"url":"https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/10"},{"@type":"Answer","author":{"@type":"Person","name":"chrefr","url":"https://users.rust-lang.org/u/chrefr"},"dateModified":"2026-10-29T16:55:12.219Z","datePublished":"2026-10-29T16:55:12.197Z","text":"If you cannot guarantee it has a deterministic layout and no padding bytes, you just cannot.","upvoteCount":0,"url":"https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/11"},{"@type":"Answer","author":{"@type":"Person","name":"zackw","url":"https://users.rust-lang.org/u/zackw"},"dateModified":"2026-10-29T17:07:53.498Z","datePublished":"2026-10-29T17:07:53.463Z","text":"[image] increasing:\n\nI think you will need to know which bytes are padding and which ones are not.\n\nPlease understand that this is the part I need help with.\n\nJust to illustrate the problem, this is the definition of struct sockaddr_in from the Linux kernel\u0026#39;s UAPI headers (after erasing a bunch\u0026hellip;","upvoteCount":0,"url":"https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/12"},{"@type":"Answer","author":{"@type":"Person","name":"zackw","url":"https://users.rust-lang.org/u/zackw"},"dateModified":"2026-10-29T17:17:12.922Z","datePublished":"2026-10-29T17:17:12.900Z","text":"I can guarantee a deterministic layout, but not no padding, and more importantly, I can\u0026#39;t guarantee a target-independent layout.  If the layout were target-independent I could just copy all of the fields to the right locations and be done.","upvoteCount":0,"url":"https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/13"},{"@type":"Answer","author":{"@type":"Person","name":"Vorpal","url":"https://users.rust-lang.org/u/Vorpal"},"dateModified":"2026-10-29T19:54:17.142Z","datePublished":"2026-10-29T19:54:17.106Z","text":"[image] zackw:\n\nUgh. The most common implementations should avoid having any padding but I do not know that for sure. I feel like \u0026quot;allowed to write uninit to padding areas even if...\u0026quot; is a bad rule in general\n\nI believe there are at least two reasons for this:\n\nBeing able to pass the struct fi\u0026hellip;","upvoteCount":0,"url":"https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/14"},{"@type":"Answer","author":{"@type":"Person","name":"MusicalNinjaDad","url":"https://users.rust-lang.org/u/MusicalNinjaDad"},"dateModified":"2026-10-29T20:14:32.737Z","datePublished":"2026-10-29T20:14:32.696Z","text":"Could you x-y this? If I understand correctly:\n\nyou receive a Paket over the wire as an \u0026amp;[u8] and at this point you have a guarantee that any padding is \\0\n\nthe problem comes that as soon as this is interpreted as a Packet future moves invalidate that padding guarantee\n\nWhat would break if you inter\u0026hellip;","upvoteCount":0,"url":"https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/15"},{"@type":"Answer","author":{"@type":"Person","name":"farnz","url":"https://users.rust-lang.org/u/farnz"},"dateModified":"2026-10-29T20:38:44.230Z","datePublished":"2026-10-29T20:38:44.206Z","text":"I believe the problem is the other way round - the need is to build a Packet to send to another binary on the same host (so libc::sockaddr_in et al have the same definition), and the question boils down to \u0026quot;how do I convert PacketAddr to [u8; std::mem::size_of::\u0026lt;PacketAddr\u0026gt;] soundly\u0026quot;?","upvoteCount":0,"url":"https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/16"},{"@type":"Answer","author":{"@type":"Person","name":"zackw","url":"https://users.rust-lang.org/u/zackw"},"dateModified":"2026-10-29T22:04:08.169Z","datePublished":"2026-10-29T22:04:08.118Z","text":"[image] MusicalNinjaDad:\n\nCould you x-y this? If I understand correctly:\n\nyou receive a Paket over the wire as an \u0026amp;[u8] and at this point you have a guarantee that any padding is \\0\n\n[image] farnz:\n\nI believe the problem is the other way round - the need is to build a Packet to send to anot\u0026hellip;","upvoteCount":2,"url":"https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/17"},{"@type":"Answer","author":{"@type":"Person","name":"zackw","url":"https://users.rust-lang.org/u/zackw"},"dateModified":"2026-10-29T22:16:10.726Z","datePublished":"2026-10-29T22:16:10.696Z","text":"[image] Vorpal:\n\n... sticking entirely to MaybeUninit or raw pointers is the way to go ...\n\nI don\u0026#39;t think either MaybeUninit or raw pointers will actually help, because I need the entire packet to be fully initialized by the time I feed it to \u003ca href=\"https://pubs.opengroup.org/onlinepubs/9699919799/functions/send.html\" rel=\"noopener nofollow ugc\"\u003esend\u003c/a\u003e. If I used a copy method that copied uninitiali\u0026hellip;","upvoteCount":0,"url":"https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/18"},{"@type":"Answer","author":{"@type":"Person","name":"robofinch","url":"https://users.rust-lang.org/u/robofinch"},"dateModified":"2026-10-30T03:32:27.149Z","datePublished":"2026-10-30T03:32:27.122Z","text":"Given that both of those definitions from Linux and NetBSD have no padding (assuming that an int is at most twice the size of a short which is at most twice the size of a char, and likewise for their alignments, as should be the case in sane C environments), is the problem that you can’t guarantee t\u0026hellip;","upvoteCount":3,"url":"https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/19"},{"@type":"Answer","author":{"@type":"Person","name":"farnz","url":"https://users.rust-lang.org/u/farnz"},"dateModified":"2026-10-30T08:47:02.625Z","datePublished":"2026-10-30T08:47:02.594Z","text":"Given that this is effectively an FFI boundary, maybe make use of the fact that reading padding bytes is defined in C as returning an arbitrary byte value that can change on every read?\n\nSomething along the lines of (rigorously untested and may not compile):\n\nfn packet_addr_to_byte_array(pa: PacketA\u0026hellip;","upvoteCount":0,"url":"https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/20"}]}}</script>
+  </head>
+  <body class="crawler ">
+    
+    <header>
+  <a href="/">The Rust Programming Language Forum</a>
+</header>
+
+    <div id="main-outlet" class="wrap" role="main">
+        <div id="topic-title">
+    <h1>
+      <a href="/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341">&quot;Official&quot; way to read the raw bytes of a `struct` I didn&#39;t define</a>
+    </h1>
+
+      <div class="topic-category" itemscope itemtype="http://schema.org/BreadcrumbList">
+          <span itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
+            <a href="/c/code-review/11" class="badge-wrapper bullet" itemprop="item">
+              <span class='badge-category-bg' style='background-color: #008ec2'></span>
+              <span class='badge-category clear-badge'>
+                <span class='category-name' itemprop='name'>code review</span>
+              </span>
+            </a>
+            <meta itemprop="position" content="1" />
+          </span>
+      </div>
+
+  </div>
+
+  
+
+    <div itemscope="itemscope" itemtype="https://schema.org/QAPage">
+      <meta itemprop='name' content='&quot;Official&quot; way to read the raw bytes of a `struct` I didn&#39;t define'>
+      <link itemprop='url' href='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341'>
+      <meta itemprop='datePublished' content='2026-10-29T12:35:40Z'>
+      <meta itemprop='keywords' content=''>
+
+      
+
+        <div itemprop="mainEntity" itemscope="itemscope" itemtype="https://schema.org/Question">
+          <meta itemprop='answerCount' content='19'><meta itemprop='datePublished' content='2026-10-29T12:35:40Z'><meta itemprop='name' content='&quot;Official&quot; way to read the raw bytes of a `struct` I didn&#39;t define'><meta itemprop='upvoteCount' content='0'>
+
+
+          <div id='post_1' data-qa-question="true" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/zackw'><span itemprop="name">zackw</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/zackw'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time  datetime='2026-10-29T12:35:41Z' class='post-time'>
+                    October 29, 2026, 12:35pm
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-29T12:35:41Z'>
+              <span itemprop="position">1</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <p>I am writing a client library for a bespoke local RPC protocol. The service implementation is not under my control, so I can't change the protocol.  Inconveniently, the protocol packet format embeds <code>libc::sockaddr_*</code> structs directly in each message; the message format looks something like this</p>
+<pre data-code-wrap="rust"><code class="lang-rust">#[repr(C)]
+union PacketAddr {
+    sin: libc::sockaddr_in,
+    sin6: libc::sockaddr_in6,
+    ss: libc::sockaddr_storage,
+}
+
+#[repr(C)]
+struct Packet {
+    packet_len: u32,
+    proto_ver: u32,
+    msg_type: u32,
+    addr_len: u32, 
+    addr: PacketAddr,
+    annotation: [u8],
+};
+</code></pre>
+<p>(The <code>addr_len</code> field tells you <em>which field</em> of the <code>PacketAddr</code> union is live but does <em>not</em> control where <code>annotation</code> starts; <code>addr</code> is always the full size of the union, zero-padded internally if necessary.  <code>annotation</code> runs from that point to the end of the packet as defined by <code>packet_len</code>.)</p>
+<p>Now, in order to talk this protocol over a local communication channel, one must somehow go from the above struct definition to a <code>&amp;[u8]</code> that can be passed to <code>libc::send</code>.  The <em>problem</em> is, the fields of <code>sockaddr_*</code> are not fully pinned down by any standard and in practice <em>do</em> vary between Unixes (N.B. this software is never going to support Windows), so I cannot copy addresses (along with the rest of the packet) field by field into a <code>Cursor&lt;Vec&lt;u8&gt;&gt;</code>, which is what I would usually do.</p>
+<p><code>zerocopy</code>'s <code>IntoBytes</code> trait would be just the ticket, but I cannot use it because of the orphan rule (I'm not allowed to <code>#[derive(IntoBytes)]</code> for <code>sockaddr_in</code> because neither of those is defined by my crate).</p>
+<p>Instead I came up with this hack:</p>
+<pre data-code-wrap="rust"><code class="lang-rust">/// Coerce an arbitrary type S (presumably some kind of struct sockaddr_XX)
+/// to a &amp;[u8] slice covering its bytes.
+unsafe fn sockaddr_as_bytes&lt;S&gt;(sa: &amp;S) -&gt; &amp;[u8] {
+    // SAFETY: This fabricates an &amp;[u8] slice that covers `sa`
+    // exactly.  Each byte of the slice is valid for read because `sa`
+    // itself was valid for read.  &amp;[u8] cannot be misaligned and u8
+    // has no invalid states.  Caller is responsible for ensuring S
+    // has a fixed layout and `sa` is fully initialized including padding.
+    unsafe {
+        slice::from_raw_parts(sa as *const S as *const u8, mem::size_of::&lt;S&gt;())
+    }
+}
+</code></pre>
+<p>... which is basically what zerocopy's <code>IntoBytes</code> would do for me, but with fewer safety rails. It works, but I don't feel particularly good about it.</p>
+<p>So the <em>questions</em> I have are:</p>
+<ol>
+<li>Is there a more "official" way to do the above? That is, did I miss something in <code>std::mem</code> or <code>std::ptr</code> that encapsulates at least <em>some</em> of the unsafety?</li>
+<li>Is there a way to subvert the orphan rule so I <em>can</em> use zerocopy?  Or is there some other third-party crate that would be helpful?</li>
+<li>Supposing I'm stuck with the unsafe hack, is my understanding of what needs to be true for the function to be OK to use (as encapsulated by the safety comment) accurate? Did I miss anything important?</li>
+</ol>
+            </div>
+
+
+
+            
+
+
+          </div>
+          <div id='post_2' itemprop="suggestedAnswer" itemscope="itemscope" itemtype="https://schema.org/Answer" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/nerditation'><span itemprop="name">nerditation</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/nerditation'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time itemprop="datePublished" datetime='2026-10-29T12:52:17Z' class='post-time'>
+                    October 29, 2026, 12:52pm
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-29T12:52:17Z'>
+              <span itemprop="position">2</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <p>creating a slice reference <code>&amp;[u8]</code> to padding bytes is UB, unless you wrap it in <code>MaybeUninit</code>, such as <code>&amp;[MaybeUninit&lt;u8&gt;]</code>.</p>
+<p>alternatively, you can use a raw pointer <code>*const u8</code> plus the length, instead of slice reference <code>&amp;[u8]</code>. raw pointers doesn't have the validity requirement, and is ok to be passed to ffi functions such as <code>libc::send()</code>, but make sure you don't dereference the raw pointer in rust.</p>
+<p>for this particular use case,</p>
+            </div>
+
+
+
+            
+
+<meta itemprop='upvoteCount' content='2'><meta itemprop='url' content='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/2'>
+          </div>
+          <div id='post_3' itemprop="suggestedAnswer" itemscope="itemscope" itemtype="https://schema.org/Answer" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/robofinch'><span itemprop="name">robofinch</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/robofinch'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time itemprop="datePublished" datetime='2026-10-29T13:15:27Z' class='post-time'>
+                    October 29, 2026,  1:15pm
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-29T13:15:27Z'>
+              <span itemprop="position">3</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <p>What about manually adding padding, like</p>
+<pre data-code-wrap="rust"><code class="lang-rust">const PADDED_LEN: usize = /* maximum of the three sizes */;
+
+#[repr(C)]
+struct PaddedSockAddrIn {
+    pub data: libc::sockaddr_in,
+    pub padding: [u8; { PADDED_LEN - size_of::&lt;libc::sockaddr_in&gt;() }],
+}
+
+// and so on
+</code></pre>
+<p>Then, assuming the <code>libc::sockaddr_*</code> types consist entirely of plain-old-bytes (no uninit or pointers), one could fearlessly use <code>mem::transmute&lt;PacketAddr, [u8: PADDED_LEN]&gt;(_)</code> (or cast the references, or whatever) as both the input and output type would have no safety or validity invariants beyond being <code>PADDED_LEN</code>-many pointer-provenance-free initialized bytes.</p>
+            </div>
+
+
+
+            
+
+<meta itemprop='upvoteCount' content='1'><meta itemprop='url' content='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/3'>
+          </div>
+          <div id='post_4' itemprop="suggestedAnswer" itemscope="itemscope" itemtype="https://schema.org/Answer" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/robofinch'><span itemprop="name">robofinch</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/robofinch'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time itemprop="datePublished" datetime='2026-10-29T13:20:43Z' class='post-time'>
+                    October 29, 2026,  1:20pm
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-29T13:20:43Z'>
+              <span itemprop="position">4</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <p>For 3: “<code>u8</code> has no invalid states” is false. Bytes in Rust’s Abstract Machine look something like</p>
+<pre data-code-wrap="rust"><code class="lang-rust">enum AbstractByte {
+    Uninit,
+    Init(u8, Option&lt;PointerProvenance&gt;),
+}
+</code></pre>
+<p>and valid states (more precisely, valid “representations”) of <code>u8</code>s are abstract bytes matching <code>AbstractByte::Init(_, None)</code>.</p>
+            </div>
+
+
+
+            
+
+<meta itemprop='upvoteCount' content='0'><meta itemprop='url' content='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/4'>
+          </div>
+          <div id='post_5' itemprop="suggestedAnswer" itemscope="itemscope" itemtype="https://schema.org/Answer" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/MusicalNinjaDad'><span itemprop="name">MusicalNinjaDad</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/MusicalNinjaDad'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time itemprop="datePublished" datetime='2026-10-29T13:20:48Z' class='post-time'>
+                    October 29, 2026,  1:20pm
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-29T13:20:48Z'>
+              <span itemprop="position">5</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <p>Would the following not work and be a touch safer?</p>
+<ol>
+<li>Vec with capacity packet_len</li>
+<li>push 1st 4 fields</li>
+<li>unsafe slice from raw parts addr &amp; copy into Vec</li>
+<li>unsafe slice from raw parts annotation &amp; copy into Vec</li>
+</ol>
+            </div>
+
+
+
+            
+
+<meta itemprop='upvoteCount' content='0'><meta itemprop='url' content='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/5'>
+          </div>
+          <div id='post_6' itemprop="suggestedAnswer" itemscope="itemscope" itemtype="https://schema.org/Answer" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/zackw'><span itemprop="name">zackw</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/zackw'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time itemprop="datePublished" datetime='2026-10-29T15:26:23Z' class='post-time'>
+                    October 29, 2026,  3:26pm
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-29T15:26:23Z'>
+              <span itemprop="position">6</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <aside class="quote no-group" data-username="nerditation" data-post="2" data-topic="143341">
+<div class="title">
+<div class="quote-controls"></div>
+<img alt="" width="24" height="24" src="https://avatars.discourse-cdn.com/v4/letter/n/e79b87/48.png" class="avatar"> nerditation:</div>
+<blockquote>
+<p>creating a slice reference <code>&amp;[u8]</code> to padding bytes is UB</p>
+</blockquote>
+</aside>
+<aside class="quote no-group" data-username="robofinch" data-post="4" data-topic="143341">
+<div class="title">
+<div class="quote-controls"></div>
+<img alt="" width="24" height="24" src="https://sea1.discourse-cdn.com/flex019/user_avatar/users.rust-lang.org/robofinch/48/49287_2.png" class="avatar"> robofinch:</div>
+<blockquote>
+<p>“<code>u8</code> has no invalid states” is false</p>
+</blockquote>
+</aside>
+<p>That's the issue I was trying to cover with "Caller is responsible for ensuring ... <code>sa</code> is fully initialized including padding".  It is probably the most likely real-world problem considering I currently have to trust that either there <em>is</em> no padding, or the conversion chain from <code>std::net::SockAddrV4</code> to <code>nix::SockaddrIn</code> to <code>libc::sockaddr_in</code> fully initializes every byte including padding; I'm very open to better ideas here.  (But I am 100% stuck with "the format of this field is whatever <code>libc::sockaddr_in{,6}</code> is on this target", so "better ideas" somehow have to involve knowing all the fields of those structures.  I can imagine terrible bindgen hacks but I would prefer not to make bindgen a dependency of the main library (using it in tests would be fine though).</p>
+<aside class="quote no-group" data-username="MusicalNinjaDad" data-post="5" data-topic="143341" data-full="true">
+<div class="title">
+<div class="quote-controls"></div>
+<img alt="" width="24" height="24" src="https://sea1.discourse-cdn.com/flex019/user_avatar/users.rust-lang.org/musicalninjadad/48/41229_2.png" class="avatar"> MusicalNinjaDad:</div>
+<blockquote>
+<p>Would the following not work and be a touch safer?</p>
+<ol>
+<li>Vec with capacity packet_len</li>
+<li>push 1st 4 fields</li>
+<li>unsafe slice from raw parts addr &amp; copy into Vec</li>
+<li>unsafe slice from raw parts annotation &amp; copy into Vec</li>
+</ol>
+</blockquote>
+</aside>
+<p>That is indeed what I am doing: <code>sockaddr_as_bytes</code> is applied only to the socket address structs, not to the whole packet.  (The annotation is a string, so there's no need for unsafe for that part.)</p>
+            </div>
+
+
+
+            
+
+<meta itemprop='upvoteCount' content='0'><meta itemprop='url' content='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/6'>
+          </div>
+          <div id='post_7' itemprop="suggestedAnswer" itemscope="itemscope" itemtype="https://schema.org/Answer" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/MusicalNinjaDad'><span itemprop="name">MusicalNinjaDad</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/MusicalNinjaDad'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time itemprop="datePublished" datetime='2026-10-29T15:46:29Z' class='post-time'>
+                    October 29, 2026,  3:46pm
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-29T19:15:45Z'>
+              <span itemprop="position">7</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <aside class="quote no-group quote-modified" data-username="zackw" data-post="6" data-topic="143341">
+<div class="title">
+<div class="quote-controls"></div>
+<img alt="" width="24" height="24" src="https://sea1.discourse-cdn.com/flex019/user_avatar/users.rust-lang.org/zackw/48/12089_2.png" class="avatar"> zackw:</div>
+<blockquote>
+<aside class="quote no-group" data-username="MusicalNinjaDad" data-post="5" data-topic="143341" data-full="true">
+<div class="title">
+<div class="quote-controls"></div>
+<img alt="" width="24" height="24" src="https://sea1.discourse-cdn.com/flex019/user_avatar/users.rust-lang.org/musicalninjadad/48/41229_2.png" class="avatar"> MusicalNinjaDad:</div>
+<blockquote>
+<p>Would the following not work and be a touch safer?</p>
+<ol>
+<li>Vec with capacity packet_len</li>
+<li>push 1st 4 fields</li>
+<li>unsafe slice from raw parts addr &amp; copy into Vec</li>
+<li>unsafe slice from raw parts annotation &amp; copy into Vec</li>
+</ol>
+</blockquote>
+</aside>
+<p>That is indeed what I am doing: <code>sockaddr_as_bytes</code> is applied only to the socket address structs, not to the whole packet. (The annotation is a string, so there's no need for unsafe for that part.)</p>
+</blockquote>
+</aside>
+<p>Ah - I see I left off the "using len from <code>addr_len</code> and then adding your own padding to the full size of the field" at step 3 in my haste...<br>
+(So if using a dedicated function for that it would need to be <code>unsafe fn sockaddr_as_bytes&lt;S&gt;(sa: &amp;S, len: usize) -&gt; &amp;[u8]</code></p>
+<p>[EDIT: and now I realise, the padding is not just at the end but also potentially between the fields]</p>
+            </div>
+
+
+
+            
+
+<meta itemprop='upvoteCount' content='0'><meta itemprop='url' content='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/7'>
+          </div>
+          <div id='post_8' itemprop="suggestedAnswer" itemscope="itemscope" itemtype="https://schema.org/Answer" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/kpreid'><span itemprop="name">kpreid</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/kpreid'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time itemprop="datePublished" datetime='2026-10-29T15:50:23Z' class='post-time'>
+                    October 29, 2026,  3:50pm
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-29T15:50:23Z'>
+              <span itemprop="position">8</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <aside class="quote no-group quote-modified" data-username="zackw" data-post="6" data-topic="143341">
+<div class="title">
+<div class="quote-controls"></div>
+<img alt="" width="24" height="24" src="https://sea1.discourse-cdn.com/flex019/user_avatar/users.rust-lang.org/zackw/48/12089_2.png" class="avatar"> zackw:</div>
+<blockquote>
+<p>That's the issue I was trying to cover with "Caller is responsible for ensuring ... <code>sa</code> is fully initialized including padding". ... But I am 100% stuck with "the format of this field is whatever <code>libc::sockaddr_in{,6}</code> is on this target", so "better ideas" somehow have to involve knowing all the fields of those structures.</p>
+</blockquote>
+</aside>
+<p>In Rust, the only way to know that memory for a <code>struct</code> is initialized including the padding between the fields is to write all fields individually at their correct offset (in addition to initializing the padding, perhaps by starting with zeroed memory). <em>Every</em> write operation that uses the <code>struct</code> type as a whole is allowed to write uninit to padding areas, even if it's a move from a location where the padding was initialized. So, you <em>cannot do this</em> without knowing field offsets or knowing there is no padding.</p>
+            </div>
+
+
+
+            
+
+<meta itemprop='upvoteCount' content='3'><meta itemprop='url' content='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/8'>
+          </div>
+          <div id='post_9' itemprop="suggestedAnswer" itemscope="itemscope" itemtype="https://schema.org/Answer" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/zackw'><span itemprop="name">zackw</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/zackw'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time itemprop="datePublished" datetime='2026-10-29T15:59:45Z' class='post-time'>
+                    October 29, 2026,  3:59pm
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-29T15:59:45Z'>
+              <span itemprop="position">9</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <aside class="quote no-group" data-username="kpreid" data-post="8" data-topic="143341">
+<div class="title">
+<div class="quote-controls"></div>
+<img alt="" width="24" height="24" src="https://sea1.discourse-cdn.com/flex019/user_avatar/users.rust-lang.org/kpreid/48/22420_2.png" class="avatar"> kpreid:</div>
+<blockquote>
+<p><em>Every</em> write operation that uses the <code>struct</code> type as a whole is allowed to write uninit to padding areas, even if it's a move from a location where the padding was initialized. So, you <em>cannot do this</em> without knowing field offsets or knowing there is no padding.</p>
+</blockquote>
+</aside>
+<p>Ugh. The most common implementations <em>should</em> avoid having any padding but I do not know that for sure.  I feel like "allowed to write uninit to padding areas even if..." is a bad rule in general, but let's not derail this thread with that conversation; anyway it's much more of an IRLO conversation.</p>
+<p>Given the hard constraints -- I cannot change the packet format, I need to copy the native-endian bytes of every field (standardized or not) of a <code>sockaddr_in[6]</code> to the appropriate location within a larger <code>&amp;mut [u8]</code>, and zero all the bytes that were padding in the source, and the set of fields and their offsets is OS-dependent -- how would you proceed?</p>
+            </div>
+
+
+
+            
+
+<meta itemprop='upvoteCount' content='0'><meta itemprop='url' content='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/9'>
+          </div>
+          <div id='post_10' itemprop="suggestedAnswer" itemscope="itemscope" itemtype="https://schema.org/Answer" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/increasing'><span itemprop="name">increasing</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/increasing'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time itemprop="datePublished" datetime='2026-10-29T16:33:03Z' class='post-time'>
+                    October 29, 2026,  4:33pm
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-29T16:33:03Z'>
+              <span itemprop="position">10</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <p>I think you will need to know which bytes are padding and which ones are not. If you do know that then you can first copy the struct into a MaybeUninit buffer, then zero the padding and then copy it into the output.</p>
+<p>If you did not care about the value of the padding bytes on the wire you could have used something like the probably coming <a href="https://github.com/rust-lang/rfcs/pull/4001" rel="noopener nofollow ugc">freeze</a> operation, but if they need to be zero, i don't think this would help at all.</p>
+            </div>
+
+
+
+            
+
+<meta itemprop='upvoteCount' content='0'><meta itemprop='url' content='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/10'>
+          </div>
+          <div id='post_11' itemprop="suggestedAnswer" itemscope="itemscope" itemtype="https://schema.org/Answer" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/chrefr'><span itemprop="name">chrefr</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/chrefr'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time itemprop="datePublished" datetime='2026-10-29T16:55:12Z' class='post-time'>
+                    October 29, 2026,  4:55pm
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-29T16:55:12Z'>
+              <span itemprop="position">11</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <p>If you cannot guarantee it has a deterministic layout and no padding bytes, you just cannot.</p>
+            </div>
+
+
+
+            
+
+<meta itemprop='upvoteCount' content='0'><meta itemprop='url' content='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/11'>
+          </div>
+          <div id='post_12' itemprop="suggestedAnswer" itemscope="itemscope" itemtype="https://schema.org/Answer" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/zackw'><span itemprop="name">zackw</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/zackw'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time itemprop="datePublished" datetime='2026-10-29T17:07:53Z' class='post-time'>
+                    October 29, 2026,  5:07pm
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-29T17:07:53Z'>
+              <span itemprop="position">12</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <aside class="quote no-group" data-username="increasing" data-post="10" data-topic="143341">
+<div class="title">
+<div class="quote-controls"></div>
+<img alt="" width="24" height="24" src="https://sea1.discourse-cdn.com/flex019/user_avatar/users.rust-lang.org/increasing/48/49136_2.png" class="avatar"> increasing:</div>
+<blockquote>
+<p>I think you will need to know which bytes are padding and which ones are not.</p>
+</blockquote>
+</aside>
+<p>Please understand that <em>this is the part I need help with</em>.</p>
+<p>Just to illustrate the problem, this is the definition of <code>struct sockaddr_in</code> from the Linux kernel's UAPI headers (after erasing a bunch of macro gunk and replacing typedefs with their definitions):</p>
+<pre data-code-wrap="c"><code class="lang-c">struct in_addr {
+    unsigned int s_addr;
+};
+struct sockaddr_in {
+    unsigned short  sin_family;
+    unsigned short  sin_port;
+    struct in_addr  sin_addr;
+    unsigned char   sin_zero[
+      16 - (sizeof(unsigned short)
+            + sizeof(unsigned short)
+            + sizeof(struct in_addr))
+    ];
+};
+</code></pre>
+<p>And this is the definition from NetBSD:</p>
+<pre data-code-wrap="c"><code class="lang-c">struct in_addr {
+    unsigned int    s_addr;
+};
+struct sockaddr_in {
+    unsigned char   sin_len;
+    unsigned char   sin_family;
+    unsigned short  sin_port;
+    struct in_addr  sin_addr;
+    signed char     sin_zero[8];
+};
+</code></pre>
+<p>Notice how <em>even the fields common to all <code>sockaddr</code> structures</em> are not the same between the two clades.</p>
+            </div>
+
+
+
+            
+
+<meta itemprop='upvoteCount' content='0'><meta itemprop='url' content='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/12'>
+          </div>
+          <div id='post_13' itemprop="suggestedAnswer" itemscope="itemscope" itemtype="https://schema.org/Answer" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/zackw'><span itemprop="name">zackw</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/zackw'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time itemprop="datePublished" datetime='2026-10-29T17:17:12Z' class='post-time'>
+                    October 29, 2026,  5:17pm
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-29T17:17:12Z'>
+              <span itemprop="position">13</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <p>I can guarantee a deterministic layout, but not no padding, and more importantly, I can't guarantee a <em>target-independent</em> layout.  If the layout were target-independent I could just copy all of the fields to the right locations and be done.</p>
+            </div>
+
+
+
+            
+
+<meta itemprop='upvoteCount' content='0'><meta itemprop='url' content='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/13'>
+          </div>
+          <div id='post_14' itemprop="suggestedAnswer" itemscope="itemscope" itemtype="https://schema.org/Answer" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/Vorpal'><span itemprop="name">Vorpal</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/Vorpal'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time itemprop="datePublished" datetime='2026-10-29T19:54:17Z' class='post-time'>
+                    October 29, 2026,  7:54pm
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-29T19:54:17Z'>
+              <span itemprop="position">14</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <aside class="quote no-group" data-username="zackw" data-post="9" data-topic="143341">
+<div class="title">
+<div class="quote-controls"></div>
+<img alt="" width="24" height="24" src="https://sea1.discourse-cdn.com/flex019/user_avatar/users.rust-lang.org/zackw/48/12089_2.png" class="avatar"> zackw:</div>
+<blockquote>
+<p>Ugh. The most common implementations <em>should</em> avoid having any padding but I do not know that for sure. I feel like "allowed to write uninit to padding areas even if..." is a bad rule in general</p>
+</blockquote>
+</aside>
+<p>I believe there are at least two reasons for this:</p>
+<ul>
+<li>Being able to pass the struct fields one by one in registers rather than on the stack.</li>
+<li>It might be cheaper (or required) on some architectures to write whole aligned words, so any smaller unit means reading a word in, modifying it and writing it back. Being able to ignore padding allows optimising away such reads sometimes.</li>
+</ul>
+<p>I'm going to leave out the discussions about if those optimisations are worth it or not.</p>
+<aside class="quote no-group quote-modified" data-username="zackw" data-post="12" data-topic="143341">
+<div class="title">
+<div class="quote-controls"></div>
+<img alt="" width="24" height="24" src="https://sea1.discourse-cdn.com/flex019/user_avatar/users.rust-lang.org/zackw/48/12089_2.png" class="avatar"> zackw:</div>
+<blockquote>
+<aside class="quote no-group" data-username="increasing" data-post="10" data-topic="143341">
+<div class="title">
+<div class="quote-controls"></div>
+<img alt="" width="24" height="24" src="https://sea1.discourse-cdn.com/flex019/user_avatar/users.rust-lang.org/increasing/48/49136_2.png" class="avatar"> increasing:</div>
+<blockquote>
+<p>I think you will need to know which bytes are padding and which ones are not.</p>
+</blockquote>
+</aside>
+<p>Please understand that <em>this is the part I need help with</em></p>
+</blockquote>
+</aside>
+<p>If you know which fields exist (and that does unfortunately seem to differ between platforms) perhaps you could do something really awkward with offset_of and size_of to copy the init values field by field. Otherwise sticking entirely to MaybeUninit or raw pointers is the way to go.</p>
+<p><code>&amp;mut [u8]</code> just won't cut it. The other option is to only support specific white listed platforms, since this is clearly not portable anyway.</p>
+            </div>
+
+
+
+            
+
+<meta itemprop='upvoteCount' content='0'><meta itemprop='url' content='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/14'>
+          </div>
+          <div id='post_15' itemprop="suggestedAnswer" itemscope="itemscope" itemtype="https://schema.org/Answer" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/MusicalNinjaDad'><span itemprop="name">MusicalNinjaDad</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/MusicalNinjaDad'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time itemprop="datePublished" datetime='2026-10-29T20:14:32Z' class='post-time'>
+                    October 29, 2026,  8:14pm
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-29T20:14:32Z'>
+              <span itemprop="position">15</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <p>Could you x-y this? If I understand correctly:</p>
+<ul>
+<li>you receive a <code>Paket</code> over the wire as an <code>&amp;[u8]</code> and at this point you have a guarantee that any padding is <code>\0</code></li>
+<li>the problem comes that as soon as this is interpreted as a <code>Packet</code> future moves invalidate that padding guarantee</li>
+</ul>
+<p>What would break if you internally stored the <code>addr</code> as a <code>[u8]</code> exactly as it was received, thus preserving any <code>\0</code> padding?</p>
+<p>Instead of trying to recreate the <code>\0</code>s when <code>send</code>ing, would it be possible to only interpret the addr when needed. Something a bit like:</p>
+<pre data-code-wrap="rust"><code class="lang-rust">enum PacketAddr {
+    sin(libc::sockaddr_in),
+    sin6(libc::sockaddr_in6),
+    ss(libc::sockaddr_storage),
+}
+
+struct Packet {
+    packet_len: u32,
+    proto_ver: u32,
+    msg_type: u32,
+    addr_len: u32, 
+    addr: [u8; ..], // including the original null-bytes
+    annotation: [u8],
+}
+
+impl Packet {
+    fn addr(&amp;self) -&gt; PacketAddr {
+        match self.addr_len {
+            // select variant based on value of addr_len
+        }
+    }
+}
+
+impl PacketAddr {
+    fn from_raw_bytes(&amp;[u8]) -&gt; Self {
+        // ...
+    }
+
+    fn to_socket_addr(&amp;self) -&gt; SocketAddr {
+        match self { ... }
+    }
+}</code></pre>
+            </div>
+
+
+
+            
+
+<meta itemprop='upvoteCount' content='0'><meta itemprop='url' content='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/15'>
+          </div>
+          <div id='post_16' itemprop="suggestedAnswer" itemscope="itemscope" itemtype="https://schema.org/Answer" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/farnz'><span itemprop="name">farnz</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/farnz'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time itemprop="datePublished" datetime='2026-10-29T20:38:44Z' class='post-time'>
+                    October 29, 2026,  8:38pm
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-29T20:38:44Z'>
+              <span itemprop="position">16</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <p>I believe the problem is the other way round - the need is to build a <code>Packet</code> to send to another binary on the same host (so <code>libc::sockaddr_in</code> et al have the same definition), and the question boils down to "how do I convert <code>PacketAddr</code> to <code>[u8; std::mem::size_of::&lt;PacketAddr&gt;]</code> soundly"?</p>
+            </div>
+
+
+
+            
+
+<meta itemprop='upvoteCount' content='0'><meta itemprop='url' content='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/16'>
+          </div>
+          <div id='post_17' itemprop="suggestedAnswer" itemscope="itemscope" itemtype="https://schema.org/Answer" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/zackw'><span itemprop="name">zackw</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/zackw'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time itemprop="datePublished" datetime='2026-10-29T22:04:08Z' class='post-time'>
+                    October 29, 2026, 10:04pm
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-29T22:04:08Z'>
+              <span itemprop="position">17</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <aside class="quote no-group" data-username="MusicalNinjaDad" data-post="15" data-topic="143341">
+<div class="title">
+<div class="quote-controls"></div>
+<img alt="" width="24" height="24" src="https://sea1.discourse-cdn.com/flex019/user_avatar/users.rust-lang.org/musicalninjadad/48/41229_2.png" class="avatar"> MusicalNinjaDad:</div>
+<blockquote>
+<p>Could you x-y this? If I understand correctly:</p>
+<ul>
+<li>you receive a <code>Paket</code> over the wire as an <code>&amp;[u8]</code> and at this point you have a guarantee that any padding is <code>\0</code></li>
+</ul>
+</blockquote>
+</aside>
+<aside class="quote no-group" data-username="farnz" data-post="16" data-topic="143341">
+<div class="title">
+<div class="quote-controls"></div>
+<img alt="" width="24" height="24" src="https://sea1.discourse-cdn.com/flex019/user_avatar/users.rust-lang.org/farnz/48/14366_2.png" class="avatar"> farnz:</div>
+<blockquote>
+<p>I believe the problem is the other way round - the need is to build a <code>Packet</code> to send to another binary on the same host</p>
+</blockquote>
+</aside>
+<p><a class="mention" href="/u/farnz">@farnz</a> is correct: I'm writing a client library for a service I didn't design. I start with a Rust-native <code>SocketAddrV4</code> (or <code>V6</code>) and I need to turn that into the native byte serialization of a C <code>sockaddr_in</code> (or <code>_in6</code>), which will be embedded in the larger packet as shown and sent off to the service. It's a completely fire-and-forget protocol, the server never replies to anything, so I only need to encode packets.  And it doesn't make sense to run this particular service on a different host from its clients, so the C <code>sockaddr_in</code> <em>will</em> always line up between server and client ... unless we get some virtual machines involved, I suppose, but I don't think the service's authors were thinking about that at all.</p>
+<p>(I probably <em>am</em> going to end up writing my own server implementation eventually, but that is not today's problem.)</p>
+<p>So, XY is a fair question, but I really don't see an alternative. I would not have designed this protocol this way, but I don't get to change it.</p>
+<p>I'm not ready to share my crate publicly, but the <em>service</em> is NetBSD's <a href="https://man.netbsd.org/blocklistd.8" rel="noopener nofollow ugc"><code>blocklistd</code></a>, and if you would like to see the C protocol implementation, it can be found here: <a href="https://github.com/zoulasc/blocklist/blob/master/lib/bl.c" rel="noopener nofollow ugc"><code>bl.c</code></a>.  And the reason I'm writing my own client is because there are several things about the <code>bl.c</code> client implementation that make it unpleasant to call via FFI from Rust.  It seems to have been designed with "we want to patch existing network daemons to use this, but we have no plans to upstream those patches so we need them to be minimally invasive so we can carry them indefinitely" as a top-priority design goal.</p>
+            </div>
+
+
+
+            
+
+<meta itemprop='upvoteCount' content='2'><meta itemprop='url' content='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/17'>
+          </div>
+          <div id='post_18' itemprop="suggestedAnswer" itemscope="itemscope" itemtype="https://schema.org/Answer" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/zackw'><span itemprop="name">zackw</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/zackw'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time itemprop="datePublished" datetime='2026-10-29T22:16:10Z' class='post-time'>
+                    October 29, 2026, 10:16pm
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-29T22:16:10Z'>
+              <span itemprop="position">18</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <aside class="quote no-group quote-modified" data-username="Vorpal" data-post="14" data-topic="143341">
+<div class="title">
+<div class="quote-controls"></div>
+<img alt="" width="24" height="24" src="https://avatars.discourse-cdn.com/v4/letter/v/aca169/48.png" class="avatar"> Vorpal:</div>
+<blockquote>
+<p>... sticking entirely to MaybeUninit or raw pointers is the way to go ...</p>
+</blockquote>
+</aside>
+<p>I don't think either <code>MaybeUninit</code> or raw pointers will actually help, because I need the entire packet to be fully initialized by the time I feed it to <a href="https://pubs.opengroup.org/onlinepubs/9699919799/functions/send.html" rel="noopener nofollow ugc"><code>send</code></a>. If I used a copy method that copied uninitialized bytes safely, I would then need to <em>find</em> those uninitialized bytes (if any) and initialize them.  Which reduces to the same problem of needing to know which bytes are padding.</p>
+<p>My current vague plan is to have a module with a bunch of <code>#[cfg()]</code> conditionals that knows how to build up a <code>sockaddr_in(6)</code> field by field, and then use <code>bindgen</code> to generate a test that validates what that module knows, thus avoiding having the crate proper depend on <code>bindgen</code>.</p>
+            </div>
+
+
+
+            
+
+<meta itemprop='upvoteCount' content='0'><meta itemprop='url' content='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/18'>
+          </div>
+          <div id='post_19' itemprop="suggestedAnswer" itemscope="itemscope" itemtype="https://schema.org/Answer" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/robofinch'><span itemprop="name">robofinch</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/robofinch'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time itemprop="datePublished" datetime='2026-10-30T03:32:27Z' class='post-time'>
+                    October 30, 2026,  3:32am
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-30T03:32:27Z'>
+              <span itemprop="position">19</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <p>Given that both of those definitions from Linux and NetBSD have no padding (assuming that an int is at most twice the size of a short which is at most twice the size of a char, and likewise for their alignments, as should be the case in sane C environments), is the problem that you can’t guarantee there’s no padding on every OS?</p>
+<p>If you’re considering using <code>cfg</code> to initialize field-by-field… perhaps it would be better to use <code>cfg</code> to enforce that only targets with known-sane definitions of the packet structs are supported.</p>
+            </div>
+
+
+
+            
+
+<meta itemprop='upvoteCount' content='3'><meta itemprop='url' content='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/19'>
+          </div>
+          <div id='post_20' itemprop="suggestedAnswer" itemscope="itemscope" itemtype="https://schema.org/Answer" class='topic-body crawler-post'>
+            <div class='crawler-post-meta'>
+              <span class="creator" itemprop="author" itemscope="itemscope" itemtype="http://schema.org/Person">
+                <a rel='nofollow' href='https://users.rust-lang.org/u/farnz'><span itemprop="name">farnz</span></a>
+                  <meta itemprop='url' content='https://users.rust-lang.org/u/farnz'>
+                
+              </span>
+
+
+
+              <span class="crawler-post-infos">
+                  <time itemprop="datePublished" datetime='2026-10-30T08:47:02Z' class='post-time'>
+                    October 30, 2026,  8:47am
+                  </time>
+                  <meta itemprop='dateModified' content='2026-10-30T08:47:02Z'>
+              <span itemprop="position">20</span>
+              </span>
+            </div>
+            <div class='post' itemprop="text">
+              <p>Given that this is effectively an FFI boundary, maybe make use of the fact that reading padding bytes is defined in C as returning an arbitrary byte value that can change on every read?</p>
+<p>Something along the lines of (rigorously untested and may not compile):</p>
+<pre data-code-wrap="rust"><code class="lang-rust">fn packet_addr_to_byte_array(pa: PacketAddr) -&gt; [u8; std::mem::size_of::&lt;PacketAddr&gt;] {
+    let mut out = [0u8; std::mem::size_of::&lt;PacketAddr&gt;];
+    // SAFETY: Destination allocated above, so guaranteed large enough
+    unsafe { libc::memcpy(&amp;mut out, &amp;pa, std::mem::size_of::&lt;PacketAddr&gt;()); }
+}
+</code></pre>
+<p>This way, you're doing what the C code would do, which is defined behaviour in C, and has a Rust story making it legal to do via FFI (you're reading the bytes of <code>PacketAddr</code>, replacing the padding with arbitrary values).</p>
+            </div>
+
+
+
+            
+
+<meta itemprop='upvoteCount' content='0'><meta itemprop='url' content='https://users.rust-lang.org/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341/20'>
+          </div>
+
+        </div>
+    </div>
+
+      <div role='navigation' itemscope itemtype='http://schema.org/SiteNavigationElement' class="topic-body crawler-post">
+            <span itemprop='name'><b><a rel="next" itemprop="url" href="/t/official-way-to-read-the-raw-bytes-of-a-struct-i-didnt-define/143341?page=2">next page →</a></b></span>
+      </div>
+
+    <div id="related-topics" class="more-topics__list " role="complementary" aria-labelledby="related-topics-title">
+  <h3 id="related-topics-title" class="more-topics__list-title">
+    Related topics
+  </h3>
+  <div class="topic-list-container" itemscope itemtype='http://schema.org/ItemList'>
+    <meta itemprop='itemListOrder' content='http://schema.org/ItemListOrderDescending'>
+    <table class='topic-list'>
+      <thead>
+        <tr>
+          <th>Topic</th>
+          <th></th>
+          <th class="replies">Replies</th>
+          <th class="views">Views</th>
+          <th>Activity</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="topic-list-item" id="topic-list-item-65641">
+            <td class="main-link" itemprop='itemListElement' itemscope itemtype='http://schema.org/ListItem'>
+              <meta itemprop='position' content='1'>
+              <span class="link-top-line">
+                <a itemprop='url' href='https://users.rust-lang.org/t/interpreting-structs-as-bytes-for-system-interfaces/65641' class='title raw-link raw-topic-link'>Interpreting structs as bytes for system interfaces</a>
+              </span>
+              <div class="link-bottom-line">
+                  <a href='/c/help/5' class='badge-wrapper bullet'>
+                    <span class='badge-category-bg' style='background-color: #F7941D'></span>
+                    <span class='badge-category clear-badge'>
+                      <span class='category-name'>help</span>
+                    </span>
+                  </a>
+                  <div class="discourse-tags">
+                  </div>
+              </div>
+            </td>
+            <td class="replies">
+              <span class='posts' title='posts'>4</span>
+            </td>
+            <td class="views">
+              <span class='views' title='views'>4287</span>
+            </td>
+            <td>
+              October 7, 2021
+            </td>
+          </tr>
+          <tr class="topic-list-item" id="topic-list-item-33713">
+            <td class="main-link" itemprop='itemListElement' itemscope itemtype='http://schema.org/ListItem'>
+              <meta itemprop='position' content='2'>
+              <span class="link-top-line">
+                <a itemprop='url' href='https://users.rust-lang.org/t/check-for-zero-c-struct-memory/33713' class='title raw-link raw-topic-link'>Check for zero C struct memory</a>
+              </span>
+              <div class="link-bottom-line">
+                  <a href='/c/help/5' class='badge-wrapper bullet'>
+                    <span class='badge-category-bg' style='background-color: #F7941D'></span>
+                    <span class='badge-category clear-badge'>
+                      <span class='category-name'>help</span>
+                    </span>
+                  </a>
+                  <div class="discourse-tags">
+                  </div>
+              </div>
+            </td>
+            <td class="replies">
+              <span class='posts' title='posts'>20</span>
+            </td>
+            <td class="views">
+              <span class='views' title='views'>4184</span>
+            </td>
+            <td>
+              October 20, 2019
+            </td>
+          </tr>
+          <tr class="topic-list-item" id="topic-list-item-137651">
+            <td class="main-link" itemprop='itemListElement' itemscope itemtype='http://schema.org/ListItem'>
+              <meta itemprop='position' content='3'>
+              <span class="link-top-line">
+                <a itemprop='url' href='https://users.rust-lang.org/t/is-it-ub-to-byte-copy-memory-containing-repr-c-structs-with-padding/137651' class='title raw-link raw-topic-link'>Is it UB to byte-copy memory containing repr(C) structs with padding?</a>
+              </span>
+              <div class="link-bottom-line">
+                  <div class="discourse-tags">
+                  </div>
+              </div>
+            </td>
+            <td class="replies">
+              <span class='posts' title='posts'>9</span>
+            </td>
+            <td class="views">
+              <span class='views' title='views'>659</span>
+            </td>
+            <td>
+              January 22, 2026
+            </td>
+          </tr>
+          <tr class="topic-list-item" id="topic-list-item-43943">
+            <td class="main-link" itemprop='itemListElement' itemscope itemtype='http://schema.org/ListItem'>
+              <meta itemprop='position' content='4'>
+              <span class="link-top-line">
+                <a itemprop='url' href='https://users.rust-lang.org/t/best-way-of-dynamic-arrays-in-structures-c-like/43943' class='title raw-link raw-topic-link'>Best way of dynamic arrays in structures (c-like)?</a>
+              </span>
+              <div class="link-bottom-line">
+                  <a href='/c/help/5' class='badge-wrapper bullet'>
+                    <span class='badge-category-bg' style='background-color: #F7941D'></span>
+                    <span class='badge-category clear-badge'>
+                      <span class='category-name'>help</span>
+                    </span>
+                  </a>
+                  <div class="discourse-tags">
+                  </div>
+              </div>
+            </td>
+            <td class="replies">
+              <span class='posts' title='posts'>16</span>
+            </td>
+            <td class="views">
+              <span class='views' title='views'>4167</span>
+            </td>
+            <td>
+              June 12, 2020
+            </td>
+          </tr>
+          <tr class="topic-list-item" id="topic-list-item-37731">
+            <td class="main-link" itemprop='itemListElement' itemscope itemtype='http://schema.org/ListItem'>
+              <meta itemprop='position' content='5'>
+              <span class="link-top-line">
+                <a itemprop='url' href='https://users.rust-lang.org/t/reading-writing-a-struct-buffer/37731' class='title raw-link raw-topic-link'>Reading/writing a struct buffer</a>
+              </span>
+              <div class="link-bottom-line">
+                  <a href='/c/help/5' class='badge-wrapper bullet'>
+                    <span class='badge-category-bg' style='background-color: #F7941D'></span>
+                    <span class='badge-category clear-badge'>
+                      <span class='category-name'>help</span>
+                    </span>
+                  </a>
+                  <div class="discourse-tags">
+                  </div>
+              </div>
+            </td>
+            <td class="replies">
+              <span class='posts' title='posts'>4</span>
+            </td>
+            <td class="views">
+              <span class='views' title='views'>2260</span>
+            </td>
+            <td>
+              February 2, 2020
+            </td>
+          </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+
+
+
+    </div>
+    <footer class="container wrap">
+  <nav class='crawler-nav'>
+    <ul>
+      <li itemscope itemtype='http://schema.org/SiteNavigationElement'>
+        <span itemprop='name'>
+          <a href='/' itemprop="url">Home </a>
+        </span>
+      </li>
+      <li itemscope itemtype='http://schema.org/SiteNavigationElement'>
+        <span itemprop='name'>
+          <a href='/categories' itemprop="url">Categories </a>
+        </span>
+      </li>
+      
+      <li itemscope itemtype='http://schema.org/SiteNavigationElement'>
+        <span itemprop='name'>
+          <a href='/guidelines' itemprop="url">Guidelines </a>
+        </span>
+      </li>
+        <li itemscope itemtype='http://schema.org/SiteNavigationElement'>
+          <span itemprop='name'>
+            <a href='/tos' itemprop="url">Terms of Service </a>
+          </span>
+        </li>
+    </ul>
+  </nav>
+  <p class='powered-by-link'>Powered by <a href="https://www.discourse.org">Discourse</a>, best viewed with JavaScript enabled</p>
+</footer>
+
+    
+    
+  </body>
+  
+</html>

@@ -35,9 +35,9 @@ function cover(node, on) {
 const covered = (node) => !!node.dataset.covered;
 document.addEventListener("focusin", (e) => {
   if (!e.target.closest || !e.target.closest("[data-covered]")) return;
-  const tops = [...document.querySelectorAll(".screen:not([hidden]):not([data-covered]), #sidebar:not([hidden]), #menuSheet:not([hidden])")];
+  const tops = [...document.querySelectorAll(".screen:not([hidden]):not([data-covered]), #sidebar:not([hidden]):not([data-covered]), #menuSheet:not([hidden])")];
   const top = tops[tops.length - 1];
-  const first = top && top.querySelector("button:not(:disabled), [href], input:not(:disabled), [tabindex]:not([tabindex=\"-1\"])");
+  const first = top && [...top.querySelectorAll("button:not(:disabled), [href], input:not(:disabled), [tabindex]:not([tabindex=\"-1\"])")].find((n) => n.getClientRects().length);
   if (first) first.focus({ preventScroll: true }); else e.target.blur();
 });
 
@@ -94,11 +94,13 @@ const asPane = (screen) => screen.id === "readerView" && pinned.matches && inner
 
 function pushScreen(screen) {
   pushes.set(screen, (pushes.get(screen) || 0) + 1);
+  // In Settings' window a section takes the pane at once, like a tab.
   if (screen.id === "sectionView" && wide.matches) {
     screen.dataset.beside = "1";
     screen.hidden = false;
-    return M.push(screen);
+    return Promise.resolve();
   }
+  if (screen.id === "settingsView" && wide.matches) return openWin(screen);
   delete screen.dataset.beside;
   const dialog = asDialog(screen);
   if (dialog || asPane(screen)) {
@@ -117,7 +119,7 @@ function pushScreen(screen) {
     showAloudBar();
     if (again) return Promise.resolve();
     const from = dialog && anchorOf(screen);
-    return dialog ? M.popFrom(screen, from && from.getBoundingClientRect()) : M.push(screen);
+    return dialog ? M.dialogIn(screen, from && from.getBoundingClientRect()) : M.push(screen);
   }
   delete screen.dataset.dialog;
   delete screen.dataset.pane;
@@ -135,6 +137,53 @@ function pushScreen(screen) {
   moved.then(() => { if (pushes.get(screen) === n && !screen.hidden && !screen.dataset.leaving) cover(under, true); });
   return moved;
 }
+// Settings on a big screen (1.49.0): a window over the library that
+// fades in by the gear it was opened from, like Downloads and Sync. Until then the whole screen slid in from the
+// right and its menu crossed the window to land on the left. Its menu
+// and section are still the two screens they are on a phone, inside
+// #settingsWin, which is their box (display: contents on a phone).
+let winGone = Promise.resolve(), winTurn = 0;
+const gear = () => ($("settingsBtn").offsetParent ? $("settingsBtn") : null);
+function openWin(screen) {
+  const win = $("settingsWin"), c = $("screenCatch");
+  const again = !!win.dataset.open && !win.dataset.leaving;
+  winTurn++;
+  delete win.dataset.leaving;
+  win.dataset.open = "1";
+  screen.hidden = false;
+  c.classList.remove("clear");
+  c.hidden = false;
+  M.dim(c, true);
+  const n = pushes.get(screen);
+  afterSettle(() => {
+    if (pushes.get(screen) !== n || win.dataset.leaving) return;
+    cover(below(screen), true);
+    cover($("sidebar"), true);
+  });
+  if (again) return Promise.resolve();
+  const from = gear();
+  $("settingsBack").focus({ preventScroll: true });
+  return M.dialogIn(win, from && from.getBoundingClientRect());
+}
+function closeWin(screen, hide) {
+  const win = $("settingsWin"), c = $("screenCatch"), n = pushes.get(screen), t = ++winTurn;
+  win.dataset.leaving = "1";
+  M.dim(c, false).then(() => { if (winTurn === t) c.hidden = true; });
+  cover(below(screen), false);
+  cover($("sidebar"), false);
+  const to = gear();
+  winGone = M.dialogOut(win, to && to.getBoundingClientRect()).then(() => {
+    if (pushes.get(screen) !== n || winTurn !== t) return;
+    delete win.dataset.open;
+    delete win.dataset.leaving;
+    hide();
+    const b = gear();
+    const a = document.activeElement;
+    if (b && (!a || a === document.body || a.closest("#settingsWin"))) b.focus({ preventScroll: true });
+  });
+  return winGone;
+}
+
 // Heavy work after an animation's first frame, so it starts at once.
 const afterStart = (fn) => requestAnimationFrame(() => setTimeout(fn, 0));
 // Work after a spring has all but landed (0.30.8).
@@ -143,7 +192,9 @@ const afterSettle = (fn) => setTimeout(fn, M.reduced() ? 130 : 300);
 function popScreen(screen) {
   const n = pushes.get(screen);
   const hide = () => { if (pushes.get(screen) === n) screen.hidden = true; };
-  if (screen.dataset.beside) return M.pop(screen).then(hide);
+  // A section closing with the window goes when the window has gone.
+  if (screen.dataset.beside) return ($("settingsWin").dataset.leaving ? winGone : Promise.resolve()).then(hide);
+  if (screen.id === "settingsView" && $("settingsWin").dataset.open) return closeWin(screen, hide);
   if (screen.dataset.dialog || screen.dataset.pane) {
     screen.dataset.leaving = "1";
     if (screen.dataset.dialog) {
@@ -152,7 +203,7 @@ function popScreen(screen) {
       afterSettle(() => { if (pushes.get(screen) === n) cover(under, false); });
     }
     const to = screen.dataset.dialog && anchorOf(screen);
-    return (screen.dataset.dialog ? M.popInto(screen, to && to.getBoundingClientRect()) : M.pop(screen)).then(hide).then(() => showAloudBar());
+    return (screen.dataset.dialog ? M.dialogOut(screen, to && to.getBoundingClientRect()) : M.pop(screen)).then(hide).then(() => showAloudBar());
   }
   const under = below(screen);
   screen.dataset.leaving = "1";
@@ -321,7 +372,8 @@ function show(p, html) {
   if (skim) { C.reader.settle(); skimDrop(); }
   closeSkim();
   state.open = p;
-  paintPdfDark();
+  paintReading(false);
+  paintTheme();
   $("aloudPlay").style.visibility = "";
   // Opening counts as reading for the order of things (sort by read, the
   // sidebar, Continue reading). The place has a time of its own,
@@ -347,10 +399,10 @@ function show(p, html) {
   $("readProgress").dir = $("skimTrack").dir = p.dir || "ltr";
   $("readerContents").hidden = true;
   $("readerTranslate").hidden = true;
-  // A comic has no text to narrate: its button is Auto-scroll (1.50.0).
+  // A comic has no text to narrate: its button is Auto-scroll (1.49.0).
   stopGlide();
-  $("readerAloud").hidden = !speech.available || !!p.comic;
-  $("readerScroll").hidden = !p.comic;
+  wordless = false;
+  narrateOrScroll(p);
   $("readerNow").textContent = "Contents";
   $("readerContents").setAttribute("aria-label", "Contents");
   $("readerFolder").hidden =!(p.folder && !p.preview && folderPages(p.folder).length > 1);
@@ -374,7 +426,9 @@ function show(p, html) {
     onTap: toggleBar,
     onMark: openMark,
     onSelect: showReadHere,
-    pages: readingPrefs().layout === "pages",
+    pages: pagesOn(p),
+    turn: turnOf(p),
+    wide: readingPrefs().wide,
     top: () => $("readerView").querySelector(".reader-bar").offsetHeight,
     bottom: () => $("readFoot").offsetHeight,
     onKey: onKeys,
@@ -390,13 +444,15 @@ function show(p, html) {
     paintMarks(p);
     loadTranslation(p);
     $("readerContents").hidden = C.reader.headings().length < 2;
+    wordless = C.reader.wordless();
+    narrateOrScroll(p);
     showSection();
     fitRail();
     // Reading aloud carries on across clips (1.4.0): its light and
     // player show again when its clip is the one open.
     setAloud(aloud.state, aloud.index);
-    // Auto-scroll went on from the chapter before (1.50.0).
-    if (glide.carry && Date.now() - glide.carry < 15000 && state.open === p && p.comic) startGlide();
+    // Auto-scroll went on from the chapter before (1.49.0).
+    if (glide.carry && Date.now() - glide.carry < 15000 && state.open === p && pictureBook()) startGlide();
     glide.carry = 0;
     if (aloudAuto === "here") { aloudAuto = false; C.reader.placed().then(() => { if (state.open === p) startAloud(); }); }
     else if (aloudAuto) { aloudAuto = false; startAloud(0); }
@@ -653,7 +709,7 @@ function spentSwitch() {
       } }));
 }
 
-// Dark PDF pages (1.46.0): a switch at the foot of Layout, shown while a
+// Dark PDF pages (1.49.0): a switch at the foot of Layout, shown while a
 // PDF's printed pages are open. In a dark theme the pages take its colours
 // (reader.js, pdfDarkFilter); in a light one there's nothing to darken.
 const PDF_DARK_KEY = "waypage.pdfDark";
@@ -694,8 +750,20 @@ function volumeSwitch() {
         document.querySelectorAll('input[data-pref="volumePages"]').forEach((i) => { i.checked = e.target.checked; });
         volumeWatch();
       } }));
-  row.style.display = readingPrefs().layout === "pages" ? "" : "none";
+  row.style.display = pagesOn() ? "" : "none";
   return row;
+}
+
+// Which way a comic's pages turn in Pages (Unreleased): right to left for
+// a manga, as its ComicInfo says, unless picked otherwise for this comic.
+const turnOf = (p) => (p && (p.turn === "rtl" || p.turn === "ltr") ? p.turn : p && p.manga ? "rtl" : "ltr");
+async function setTurn(v) {
+  const p = state.open;
+  if (!p) return;
+  if (v === (p.manga ? "rtl" : "ltr")) delete p.turn; else p.turn = v;
+  C.reader.setPicsDir(v);
+  await C.store.writeIndex(state.pages);
+  syncSoon();
 }
 
 function pinchSwitch() {
@@ -748,7 +816,7 @@ function showSection() {
 // away on any scroll, up or down, and a tap brings it back; it stays at
 // the top, at the end, and while a sheet is up. Read aloud's own
 // scrolling, following the voice, leaves it as it is; auto-scroll keeps
-// the top bar on (.gliding, 1.50.1) while bar-away moves only the bottom.
+// the top bar on (.gliding, 1.49.0) while bar-away moves only the bottom.
 let lastY = 0, readerY = 0;
 function readerScrolled(at, y) {
   readerY = y;
@@ -823,7 +891,8 @@ function paintRail() {
   const link = /^https?:/.test(p.url || "") ? el("button", { class: "rail-original", type: "button", onclick: () => C.platform.openOutside(p.url) }) : null;
   if (link) link.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>Read the original';
   fill($("railFoot"),
-    p.licence === "wikipedia" ? el("p", { class: "rail-licence" }, "Text from Wikipedia, CC BY-SA 4.0, by Wikipedia contributors.") : null, link);
+    p.licence === "wikipedia" ? el("p", { class: "rail-licence" }, "Text from Wikipedia, CC BY-SA 4.0, by Wikipedia contributors.")
+      : p.licence === "stackexchange" ? el("p", { class: "rail-licence" }, "Text from " + p.site + ", CC BY-SA, by the people named in it.") : null, link);
   railNow();
 }
 function railNow() {
@@ -1034,7 +1103,8 @@ function closeReader() {
   if (from) player.style.visibility = "hidden";
   stopGlide();
   state.open = null;
-  paintPdfDark();
+  paintReading(false);
+  paintTheme();
   volumeWatch();
   showAloudBar(from);
   // The library redraws (where you got to) before the reader shrinks
@@ -1067,12 +1137,24 @@ const aloudHere = () => (aloudOn() || aloud.state === "ended") && !!state.open &
 const aloudPage = () => state.pages.find((x) => x.id === aloud.key) || null;
 let aloudAuto = false;
 
-// Auto-scroll for a comic (1.50.0), in Narrate's place: the page moves by
+// Auto-scroll for a comic (1.49.0), in Narrate's place: the page moves by
 // itself at Speed (its own, kept apart from the voice's) and, with Go on to
 // the next clip, the next chapter starts at the end. Keep the screen on is
 // Narrate's switch too. A finger on the page holds it (C.reader.glide).
 const SCROLL_PX = 60;
 const glide = { on: false, carry: 0 };
+// A scan or a PDF's printed pages with no words of their own is a comic
+// here too: Narrate would read only the title.
+let wordless = false;
+const pictureBook = () => !!state.open && (!!state.open.comic || wordless);
+function narrateOrScroll(p) {
+  const pics = !!p.comic || wordless;
+  $("readerAloud").hidden = !speech.available || pics;
+  // A comic in Pages turns rather than scrolls.
+  const turned = !!p.comic && pagesOn(p);
+  if (turned && glide.on) stopGlide();
+  $("readerScroll").hidden = !pics || turned;
+}
 const scrollRate = () => clamp(Number(load(SCROLL_RATE_KEY, 1)) || 1, RATE_MIN, RATE_MAX);
 function paintGlide() {
   const b = $("readerScroll"), label = glide.on ? "Stop auto-scrolling" : "Auto-scroll";
@@ -1081,11 +1163,11 @@ function paintGlide() {
   b.title = label + " (S)";
 }
 function startGlide() {
-  if (!state.open || !state.open.comic) return;
+  if (!pictureBook()) return;
   glide.on = true;
   paintGlide();
   keepAwake();
-  // The top bar stays on while it scrolls (1.50.1), so Stop is always there.
+  // The top bar stays on while it scrolls (1.49.0), so Stop is always there.
   $("readerView").classList.add("gliding");
   closeSkim();
   C.reader.glide(SCROLL_PX * scrollRate(), glideEnded);
@@ -1223,9 +1305,13 @@ const langOf = (p) => ((p && p.lang) || navigator.language || "en").toLowerCase(
 const primary = (lang) => String(lang || "").toLowerCase().split(/[-_]/)[0].replace(/^iw$/, "he");
 // The speech engine (1.33.0, Android): "" for the phone's default. Each
 // engine keeps its own voice for each language.
+// One engine per language, so Kokoro can read English while
+// Hebrew stays with Google. Before, one engine for all: kept as "*".
 const ENGINE_KEY = "waypage.aloudEngine";
-const engineOf = () => String(load(ENGINE_KEY, "") || "");
-const voiceKey = (lang) => (engineOf() ? engineOf() + "|" : "") + lang;
+const enginePicks = () => { const v = load(ENGINE_KEY, ""); return v && typeof v === "object" ? v : { "*": String(v || "") }; };
+const engineOf = (lang) => { const all = enginePicks(); return String((lang in all ? all[lang] : all["*"]) || ""); };
+const engineFor = (p) => engineOf(primary(langOf(p)));
+const voiceKey = (lang) => (engineOf(lang) ? engineOf(lang) + "|" : "") + lang;
 const voiceFor = (p) => load(VOICE_KEY, {})[voiceKey(primary(langOf(p)))] || "";
 
 // From a block, or from a word in it (`spot` from a selection).
@@ -1252,7 +1338,7 @@ async function startAloud(from, spot) {
   setAloud("playing", start);
   queued = null;
   try {
-    await speech.play({ items, start, lang: p.lang || "", voice: voiceFor(p), engine: engineOf(), rate: load(RATE_KEY, 1), mix: !!load(MIX_KEY, false),
+    await speech.play({ items, start, lang: p.lang || "", voice: voiceFor(p), engine: engineFor(p), rate: load(RATE_KEY, 1), mix: !!load(MIX_KEY, false),
       key: p.id, blocks: map, ...mediaInfo(p) });
     queueNext();
   } catch (e) {
@@ -1294,7 +1380,7 @@ async function queueNext() {
   if (!texts.length) return;
   const { items, map } = pieces(texts.map((text, block) => ({ text, block })));
   queued = { key: next.id, after: p.id, map };
-  const ok = await speech.queue({ after: p.id, items, start: 0, lang: next.lang || "", voice: voiceFor(next), engine: engineOf(), mix: !!load(MIX_KEY, false),
+  const ok = await speech.queue({ after: p.id, items, start: 0, lang: next.lang || "", voice: voiceFor(next), engine: engineFor(next), mix: !!load(MIX_KEY, false),
     key: next.id, blocks: map, ...mediaInfo(next) });
   if (!ok) queued = null;
 }
@@ -1790,14 +1876,13 @@ function placeAloudBar() {
   const gutter = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--gutter")) || 16;
   const safe = parseFloat(getComputedStyle(bar).getPropertyValue("--safe-bottom")) || 0;
   const w = bar.offsetWidth, h = bar.offsetHeight;
-  // Docked at the foot of the pinned sidebar (1.5.0), over Settings,
-  // when the sidebar is what's beside it.
+  // Docked at the foot of the pinned sidebar (1.5.0), when the sidebar
+  // is what's beside it.
   const docked = pinned.matches && !document.querySelector("#readerView:not([hidden]), #settingsView:not([hidden])");
   bar.classList.toggle("docked", docked);
   document.body.classList.toggle("aloud-docked", docked);
   if (docked) {
-    const settings = $("sidebar").querySelector(".side-settings");
-    const foot = settings ? settings.getBoundingClientRect().top : innerHeight - gutter;
+    const foot = innerHeight - gutter;
     bar.style.left = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--s-4")) + "px";
     bar.style.top = foot - h - 8 + "px";
     return;
@@ -1869,18 +1954,29 @@ $("aloudBarOpen").addEventListener("click", async () => {
 });
 addEventListener("resize", () => { if (!$("aloudBar").hidden) placeAloudBar(); });
 
-speech.onProgress(({ key, index, state: st }) => {
+speech.onProgress(({ key, index, state: st, thinking }) => {
   if (!key) return;
   const moved = key !== aloud.key;
   if (moved && !wentOn(key)) return;
   setAloud(st, index);
   if (moved) queueNext();
+  aloudThinking(!!thinking && st === "playing");
 });
+// The ring round Pause while the engine makes the piece (Daniel's ask);
+// a quick one never shows it.
+let thinkTimer = 0;
+function aloudThinking(on) {
+  clearTimeout(thinkTimer);
+  const b = $("aloudPlay");
+  if (!on) { b.classList.remove("thinking"); b.removeAttribute("aria-busy"); return; }
+  thinkTimer = setTimeout(() => { b.classList.add("thinking"); b.setAttribute("aria-busy", "true"); }, 250);
+}
 // Back from the lock screen: the reading may have moved on or ended
 // while the page slept.
 document.addEventListener("visibilitychange", async () => {
   if (document.hidden || !aloudOn()) return;
   const now = await speech.state();
+  aloudThinking(false);
   if (now.key && (now.key === aloud.key || wentOn(now.key))) {
     setAloud(now.state, now.index);
     queueNext();
@@ -1924,8 +2020,10 @@ function voiceOptions(list, saved) {
     if (order.length > 1) out.push({ head: k ? named(k) : "Other" });
     let n = 0;
     for (const v of vs) {
-      const name = /-language$/i.test(v.name) ? "Standard" : coded(v) ? "Voice " + ++n : v.name;
-      const tags = [v.gender, (v.quality || 0) >= 400 ? "natural" : "", v.online ? "online" : ""].filter(Boolean);
+      // Kokoro's (kokoro-af_heart): Heart, and f or m for female or male.
+      const k = /^kokoro-[a-z]([fm])_(.+)$/.exec(v.name);
+      const name = k ? (/^\d+$/.test(k[2]) ? "Voice " + Number(k[2]) : k[2].charAt(0).toUpperCase() + k[2].slice(1)) : /-language$/i.test(v.name) ? "Standard" : coded(v) ? "Voice " + ++n : v.name;
+      const tags = [k ? (k[1] === "f" ? "female" : "male") : v.gender, (v.quality || 0) >= 400 ? "natural" : "", v.online ? "online" : ""].filter(Boolean);
       out.push({ value: v.id, label: [name, ...tags].join(" · ") });
     }
   }
@@ -1947,29 +2045,53 @@ function aloudControls() {
   // would show it through `hidden`.
   const engineSlot = el("span", { hidden: true }), moreSlot = el("span", { hidden: true });
   const engineRow = el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Speech engine"));
-  const more = el("button", { class: "btn-quiet aloud-more", type: "button", onclick: () => speech.moreVoices(engineOf()) }, "Get more voices");
-  speech.engines().then(({ engines, default: def }) => {
+  const more = el("button", { class: "btn-quiet aloud-more", type: "button", onclick: () => speech.moreVoices(engineOf(lang)) }, "Get more voices");
+  // Kokoro voices (Android, 64-bit ARM), under Get more voices (Daniel's
+  // ask): their own screen in Settings.
+  const kokoroSlot = el("span", { hidden: true });
+  const kokoro = speech.kokoro().catch(() => null);
+  kokoro.then((k) => {
+    if (!k) return;
+    kokoroSlot.replaceWith(el("button", { class: "btn-quiet aloud-more", type: "button",
+      onclick: () => { if (state.settings) openSection("kokoro", false, true); else { closeSheet(); openSettings(false, "kokoro"); } } }, "More speech engines"));
+  });
+  const enginesIn = Promise.all([speech.engines(), kokoro]).then(([{ engines, default: def }, k]) => {
     if (!engines.length) return;
     moreSlot.replaceWith(more);
     if (engines.length < 2) return;
     const dflt = engines.find((e) => e.name === def);
-    const options = [{ value: "", label: "Phone's default" + (dflt ? " (" + dflt.label + ")" : "") }, ...engines.map((e) => ({ value: e.name, label: e.label }))];
-    const picked = engineOf();
+    // Each downloaded Kokoro version is its own option (Daniel's ask),
+    // engine#version; the phone has one Kokoro engine, speaking the one in use.
+    const packs = k ? k.packs.filter((x) => x.ready) : [];
+    const listed = (e) => (k && e.name === k.engine && packs.length ? packs.map((x) => ({ value: e.name + "#" + x.id, label: x.title })) : [{ value: e.name, label: e.label }]);
+    // The phone's default engine is the first option, not listed again.
+    const options = [{ value: "", label: "Phone's default" + (dflt ? " (" + dflt.label + ")" : "") }, ...engines.filter((e) => e.name !== def).flatMap(listed)];
+    const engine = engineOf(lang) === def ? "" : engineOf(lang);
+    const picked = k && engine === k.engine && k.use ? engine + "#" + k.use : engine;
     engineRow.append(dropdown({ label: "Speech engine", cls: "field-pick font-pick", options,
       value: options.some((o) => o.value === picked) ? picked : "",
-      onpick: (v) => {
-        store(ENGINE_KEY, v);
+      onpick: async (v) => {
+        const [name, pack] = v.split("#");
+        if (pack) { try { await speech.kokoro("use", pack); } catch (e) { toast(e && e.message || "Couldn't switch. Try again."); } }
+        store(ENGINE_KEY, { ...enginePicks(), [lang]: name });
+        // Filled again in place, once the new rows are in: the reader
+        // sheet's tab keeps this box (and its heading), so a new one in its
+        // place showed nothing, and rows arriving one by one jumped.
         const box = engineRow.closest(".aloud-controls");
-        if (box) box.replaceWith(aloudControls());
+        if (box) {
+          const fresh = aloudControls();
+          await fresh.ready;
+          box.replaceChildren(...box.querySelectorAll(":scope > h2.overline"), ...fresh.childNodes);
+        }
         restart();
       } }));
     engineSlot.replaceWith(engineRow);
   });
-  speech.voices(engineOf()).then((all) => {
+  const voicesIn = speech.voices(engineOf(lang)).then((all) => {
     const mine = all.filter((v) => primary(v.lang) === lang);
     if (!mine.length) {
       voiceRow.lastChild.replaceWith(el("span", { class: "meta" }, "Phone's default"));
-      note.textContent = "No " + name + " voice " + (engineOf() ? "in this engine" : "on this phone") + ". " + (speech.background ? "Get more voices adds one" : "Add one in the text-to-speech settings") + ", then come back.";
+      note.textContent = "No " + name + " voice " + (engineOf(lang) ? "in this engine" : "on this phone") + ". " + (speech.background ? "Get more voices adds one" : "Add one in the text-to-speech settings") + ", then come back.";
       note.hidden = false;
       return;
     }
@@ -1992,11 +2114,12 @@ function aloudControls() {
     // Applied when the thumb is let go: a phone's voice restarts its sentence on each change.
     onchange: (e) => { const v = Number(e.target.value); store(RATE_KEY, v); if (aloud.state !== "stopped") speech.rate(v); } });
   speed.value = rate;
-  const check = switchRow;
-  return el("div", { class: "aloud-controls" },
+  const check = aloudSwitch;
+  const box = el("div", { class: "aloud-controls" },
     engineSlot,
     voiceRow,
     moreSlot,
+    kokoroSlot,
     el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Speed", shown),
       el("div", { class: "stepper" }, speed)),
     check(FOOTNOTES_KEY, "Read footnotes", "The notes at the end, as part of the clip."),
@@ -2007,9 +2130,11 @@ function aloudControls() {
     speech.background ? check(MIX_KEY, "Allow mixing", "Music or a podcast in another app keeps playing under the voice. Off: they pause while it narrates.") : null,
     speech.background ? check(PIP_KEY, "Small window outside the app", "Going home, the reading stays in a window you can move. Off: only in the app.", false, true) : null,
     note);
+  box.ready = Promise.all([enginesIn, voicesIn, kokoro]).catch(() => {});
+  return box;
 }
 const rateText = (v) => (Math.round(v * 10) / 10) + "×";
-function switchRow(key, text, note, restart = true, on = false) {
+function aloudSwitch(key, text, note, restart = true, on = false) {
   const input = el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!load(key, on),
     onchange: () => {
       store(key, input.checked);
@@ -2021,7 +2146,7 @@ function switchRow(key, text, note, restart = true, on = false) {
   return el("label", { class: "rc-row switch-row" },
     el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, text), el("span", { class: "choice-note" }, note)), input);
 }
-// A comic's Narrate tab (1.50.0): only what auto-scroll uses, Speed (its
+// A comic's Narrate tab (1.49.0): only what auto-scroll uses, Speed (its
 // own), Go on to the next clip and Keep the screen on.
 function scrollControls() {
   const rate = scrollRate();
@@ -2039,8 +2164,8 @@ function scrollControls() {
   return el("div", { class: "aloud-controls" },
     el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Speed", shown),
       el("div", { class: "stepper" }, speed)),
-    switchRow(GO_ON_KEY, "Go on to the next clip", "At the end, the next chapter starts scrolling by itself.", false),
-    switchRow(AWAKE_KEY, "Keep the screen on", "While it scrolls, so you can follow along.", false));
+    aloudSwitch(GO_ON_KEY, "Go on to the next clip", "At the end, the next chapter starts scrolling by itself.", false),
+    aloudSwitch(AWAKE_KEY, "Keep the screen on", "While it scrolls, so you can follow along.", false));
 }
 
 
@@ -2064,33 +2189,67 @@ function slider(label, min, max, step, onvalue, pref) {
 const TEXT_PREFS = ["font", "hebrew", "size", "weight", "align", "hyphens", "spacing", "letters", "words", "paras"];
 const prefsOf = (o, keys) => Object.fromEntries(keys.map((k) => [k, o[k]]));
 
+// Settings per clip (Unreleased): one row at the top of the Aa sheet's
+// Layout and Text, where the open clip's settings come from.
+function scopeRow() {
+  const p = state.open;
+  const d = dropdown({ label: "Applies to", cls: "field-pick font-pick scope-pick", value: readingScope(p), onpick: setScope, options: [
+    { value: "all", label: "Everywhere" },
+    { value: "clip", label: isBook(p) ? "This book" : "This clip" },
+    ...(p.folder ? [{ value: "set", label: "This collection" }] : [])] });
+  return el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Applies to"), d);
+}
+
 let readingGroups = 0;
 function readingControls(withTheme) {
-  const r = readingPrefs();
+  // Settings' own copy always sets the defaults; the Aa sheet sets
+  // wherever the open clip's settings come from.
+  const all = !withTheme;
+  const r = readingPrefs(all ? null : state.open);
   const id = "rc" + ++readingGroups;
+  const set = (change) => setReading(change, all);
+  const scoped = !all && ownable(state.open);
   const label = (text, key) => el("span", { class: "rc-label" }, text, key ? el("span", { class: "rc-value", "data-value": key }) : null);
   const row = (text, control, key) => el("div", { class: "rc-row" }, label(text, key), control);
   const stack = (text, control) => el("div", { class: "rc-row stack" }, label(text), control);
-  const nudge = (d) => setReading({ size: clamp(readingPrefs().size + d, SIZE_MIN, SIZE_MAX) });
+  const nudge = (d) => set({ size: clamp(readingPrefs(all ? null : state.open).size + d, SIZE_MIN, SIZE_MAX) });
   const part = (name, title, ...rows) => el("div", { class: "rc-part", "data-part": name },
     el("h2", { class: "overline" }, title), ...rows);
   // Fonts are drop-downs (0.34.0), each name set in its own face.
   const fontPick = (pref, label, options) => {
-    const d = dropdown({ label, cls: "field-pick font-pick", options, value: r[pref], onpick: (v) => setReading({ [pref]: v }) });
+    const d = dropdown({ label, cls: "field-pick font-pick", options, value: r[pref], onpick: (v) => set({ [pref]: v }) });
     d.dataset.pref = pref;
     return d;
   };
+  // A comic in the reader's sheet (Unreleased) has its own Show as, which
+  // way its pages turn and what a spread does; margins and time left don't
+  // touch its pages.
+  const comic = withTheme && !!state.open && !!state.open.comic;
+  const note = (text) => el("span", { class: "choice-note rc-note" }, text);
   const layout = part("layout", "Layout",
-    row("Show as", seg(id + "-layout", "Show as", [
+    scoped ? scopeRow() : null,
+    comic ? row("Show as", seg(id + "-comicLayout", "Show as", [
       { value: "scroll", label: "Scroll" }, { value: "pages", label: "Pages" },
-    ], r.layout, (v) => setReading({ layout: v }))),
+    ], r.comicLayout, (v) => set({ comicLayout: v })))
+      : row("Show as", seg(id + "-layout", "Show as", [
+        { value: "scroll", label: "Scroll" }, { value: "pages", label: "Pages" },
+      ], r.layout, (v) => set({ layout: v }))),
+    comic ? el("div", { class: "comic-rows" },
+      row("Turn pages", seg(id + "-turn", "Turn pages", [
+        { value: "ltr", label: "Left to right" }, { value: "rtl", label: "Right to left" },
+      ], turnOf(state.open), setTurn)),
+      state.open.manga ? note("This comic says it’s manga, read right to left") : null,
+      row("Wide pages", seg(id + "-wide", "Wide pages", [
+        { value: "split", label: "Split" }, { value: "whole", label: "Whole" },
+      ], r.wide, (v) => set({ wide: v }))),
+      note("A two-page spread on one screen: in halves, or whole")) : null,
     volumeSwitch(),
-    row("Margins", seg(id + "-margins", "Margins", [
+    comic ? null : row("Margins", seg(id + "-margins", "Margins", [
       { value: "narrow", label: "Narrow" }, { value: "normal", label: "Normal" }, { value: "wide", label: "Wide" },
-    ], r.margins, (v) => setReading({ margins: v }))),
+    ], r.margins, (v) => set({ margins: v }))),
     ...(brightSwitch(id) || []),
     // Under Layout since 1.47.0: it adds a line to the page, not to the type.
-    row("Time left in", seg(id + "-leftIn", "Time left in", [
+    comic ? null : row("Time left in", seg(id + "-leftIn", "Time left in", [
       { value: "part", label: "Section" }, { value: "clip", label: "Whole" },
     ], leftIn(state.open), setLeftIn)),
     spentSwitch(),
@@ -2098,18 +2257,19 @@ function readingControls(withTheme) {
     // beside the text.
     wide.matches ? stack("Pages on a wide window", seg(id + "-spread", "Pages on a wide window", [
       { value: "one", label: "One" }, { value: "two", label: "Two" }, { value: "auto", label: "Auto" },
-    ], r.spread, (v) => setReading({ spread: v }))) : null,
+    ], r.spread, (v) => set({ spread: v }))) : null,
     wide.matches ? el("label", { class: "rc-row switch-row" },
       el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Contents beside the text"),
         el("span", { class: "choice-note" }, "On windows 1024 px and wider")),
       el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "rail", checked: r.rail,
-        onchange: (e) => setReading({ rail: e.target.checked }) })) : null,
+        onchange: (e) => set({ rail: e.target.checked }) })) : null,
     withTheme ? stack("Theme", seg(id + "-theme", "Theme",
       [{ value: "system", label: "Auto", swatch: autoSwatch(), auto: true }, ...themeOptions(THEMES)],
-      state.theme, (v) => { setTheme(v); syncThemeInputs(); }, "themes scroll")) : null,
+      readerThemeOn() ? state.readerTheme : state.theme, (v) => { (readerThemeOn() ? setReaderTheme : setTheme)(v); syncThemeInputs(); }, "themes scroll")) : null,
     // Only in the reader's own sheet, where a PDF is open.
     withTheme ? pdfDarkSwitch() : null);
   const text = part("text", "Text",
+    scoped ? scopeRow() : null,
     row("Font", fontPick("font", "Font",
       FONTS.map((f) => ({ value: f.value, label: f.label, style: "font-family: " + f.family + ", var(--sans)" })))),
     row("Hebrew", fontPick("hebrew", "Hebrew font",
@@ -2118,27 +2278,28 @@ function readingControls(withTheme) {
     row("Alignment", fontPick("align", "Alignment", ALIGNS)),
     row("Text size", el("div", { class: "stepper" },
       el("button", { class: "step-btn small", type: "button", "data-step": "-1", "aria-label": "Smaller text", onclick: () => nudge(-1) }, "A"),
-      slider("Text size", SIZE_MIN, SIZE_MAX, 1, (v) => setReading({ size: v }), "size"),
+      slider("Text size", SIZE_MIN, SIZE_MAX, 1, (v) => set({ size: v }), "size"),
       el("button", { class: "step-btn large", type: "button", "data-step": "1", "aria-label": "Larger text", onclick: () => nudge(1) }, "A")), "size"),
     // Text weight (1.45.0), for thin fonts on a dark theme or a dim
     // screen. Fonts made only as regular and bold go in one step.
     row("Weight", el("div", { class: "stepper" },
-      slider("Text weight", SPACES.weight.min, SPACES.weight.max, SPACES.weight.step, (v) => setReading({ weight: v }), "weight")), "weight"),
+      slider("Text weight", SPACES.weight.min, SPACES.weight.max, SPACES.weight.step, (v) => set({ weight: v }), "weight")), "weight"),
     el("label", { class: "rc-row switch-row" },
       el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Hyphenate"),
         el("span", { class: "choice-note" }, "Breaks long words at the line's end, in the clip's language")),
       el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "hyphens", checked: r.hyphens,
-        onchange: (e) => setReading({ hyphens: e.target.checked }) })),
+        onchange: (e) => set({ hyphens: e.target.checked }) })),
     pinchSwitch(),
     // Spacing (1.19.0), headed on its own so the labels stay one word.
     el("h2", { class: "overline rc-sub" }, "Spacing"),
     row("Lines", el("div", { class: "stepper" },
-      slider("Line spacing", SPACING_MIN, SPACING_MAX, 0.05, (v) => setReading({ spacing: v }), "spacing")), "spacing"),
+      slider("Line spacing", SPACING_MIN, SPACING_MAX, 0.05, (v) => set({ spacing: v }), "spacing")), "spacing"),
     ...[["letters", "Letters", "Letter spacing"], ["words", "Words", "Word spacing"], ["paras", "Paragraphs", "Paragraph spacing"]].map(([k, name, aria]) =>
       row(name, el("div", { class: "stepper" },
-        slider(aria, SPACES[k].min, SPACES[k].max, SPACES[k].step, (v) => setReading({ [k]: v }), k)), k)),
-    el("button", { class: "btn-quiet reset", type: "button", onclick: () => setReading(prefsOf(READING_DEFAULT, TEXT_PREFS)) }, "Reset text"));
+        slider(aria, SPACES[k].min, SPACES[k].max, SPACES[k].step, (v) => set({ [k]: v }), k)), k)),
+    el("button", { class: "btn-quiet reset", type: "button", onclick: () => set(prefsOf(READING_DEFAULT, TEXT_PREFS)) }, "Reset text"));
   const box = el("div", { class: "reading-controls" }, layout, text);
+  if (all) box.dataset.all = "";
   syncReadingControls(box);
   requestAnimationFrame(() => box.querySelectorAll(".seg.scroll").forEach(showPicked));
   return box;
@@ -2151,8 +2312,11 @@ function showPicked(row) {
 }
 
 function syncReadingControls(box) {
-  const r = readingPrefs();
-  box.querySelectorAll(".volume-row").forEach((n) => { n.style.display = r.layout === "pages" ? "" : "none"; });
+  const p = "all" in box.dataset ? null : state.open;
+  const r = readingPrefs(p);
+  const scope = readingScope(p);
+  box.querySelectorAll(".scope-pick").forEach((d) => d.set(scope));
+  box.querySelectorAll(".volume-row").forEach((n) => { n.style.display = (p ? pagesOn(p, r) : r.layout === "pages") ? "" : "none"; });
   const shown = {
     size: r.size + " px", spacing: r.spacing.toFixed(2),
     letters: r.letters ? (r.letters > 0 ? "+" : "") + r.letters.toFixed(2) + " em" : "Normal",
@@ -2171,17 +2335,20 @@ function syncReadingControls(box) {
   const rail = box.querySelector('[data-pref="rail"]');
   if (rail) rail.checked = r.rail;
   box.querySelector('[data-pref="hyphens"]').checked = r.hyphens;
-  for (const k of ["layout", "margins", "spread"]) {
+  box.querySelectorAll(".comic-rows").forEach((n) => { n.hidden = !(p && pagesOn(p, r)); });
+  for (const k of ["layout", "margins", "spread", "comicLayout", "wide"]) {
     box.querySelectorAll('input[name$="-' + k + '"]').forEach((i) => { i.checked = i.value === r[k]; });
   }
-  box.querySelectorAll(".font-pick").forEach((d) => d.set(r[d.dataset.pref]));
+  box.querySelectorAll(".font-pick[data-pref]").forEach((d) => d.set(r[d.dataset.pref]));
   // Reset text leaves the layout as it is.
   box.querySelector(".reset").disabled = TEXT_PREFS.every((k) => r[k] === READING_DEFAULT[k]);
 }
 
 // The theme lives in two places (Aa and Settings); keep both radios true.
 function syncThemeInputs() {
-  document.querySelectorAll('input[name$="-theme"], input[name="' + THEME_KEY + '"]').forEach((i) => { i.checked = i.value === state.theme; });
+  const inReader = readerThemeOn() ? state.readerTheme : state.theme;
+  document.querySelectorAll('input[name$="-theme"]').forEach((i) => { i.checked = i.value === inReader; });
+  document.querySelectorAll('input[name="' + THEME_KEY + '"]').forEach((i) => { i.checked = i.value === state.theme; });
 }
 
 // The reader's settings (0.34.0): Layout, Text and Read aloud, one at a
@@ -2190,8 +2357,8 @@ const SHEET_TAB_KEY = "waypage.sheetTab";
 function readerSettings() {
   const box = readingControls(true);
   const parts = [...box.querySelectorAll(".rc-part")];
-  // A comic gets Auto-scroll with its three settings in Narrate's place (1.50.0).
-  const comic = !!(state.open && state.open.comic);
+  // A comic gets Auto-scroll with its three settings in Narrate's place (1.49.0).
+  const comic = pictureBook();
   if (comic || speech.available) {
     const a = comic ? scrollControls() : aloudControls();
     a.classList.add("rc-part");

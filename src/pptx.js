@@ -1,4 +1,4 @@
-// Waypage: a PowerPoint deck as a PDF (1.47.0). A .pptx is a zip of XML:
+// Waypage: a PowerPoint deck as a PDF (1.49.0). A .pptx is a zip of XML:
 // each slide is redrawn on a canvas from its shapes, text, pictures and
 // tables (theme colours and fonts, layout and master inherited), and the
 // pictures of the slides are written into a small PDF by hand. Under each

@@ -48,7 +48,7 @@ sup, sub { line-height: 0; }
 sup a { text-decoration: none; }
 hr { border: 0; border-top: 1px solid var(--line); margin: var(--s-5) 0; }
 pre, code, kbd, samp { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.85em; }
-pre { overflow-x: auto; padding: var(--s-3); border-radius: var(--r-sm); background: var(--surface); border: 1px solid var(--line); }
+pre { overflow-x: auto; padding: var(--s-3); border-radius: var(--r-sm); background: var(--surface); border: 1px solid var(--line); line-height: 1.45; }
 
 table {
   display: block; overflow-x: auto; max-width: 100%;
@@ -123,7 +123,7 @@ figure .co-placeholder { border-width: 0 0 1.5px; border-radius: 0; }
    doesn't glare; comics and a PDF's pages are the page, so stay as they are. */
 html[data-co-dim] img { filter: brightness(0.8) contrast(1.05); }
 html[data-co-dim] .co-comic img, html[data-co-dim] .co-printed img { filter: none; }
-/* Dark PDF pages (1.46.0): the page's white and black take the theme's
+/* Dark PDF pages (1.49.0): the page's white and black take the theme's
    background and ink (reader.js, pdfDarkFilter). Only a PDF's own pages. */
 html[data-co-pdf-dark] .co-printed img[src] { filter: url(#co-pdf-dark); }
 
@@ -137,10 +137,10 @@ html[data-co-pdf-dark] .co-printed img[src] { filter: url(#co-pdf-dark); }
 .co-comic img[data-in]:not([width]) { aspect-ratio: 2 / 3; }
 .co-comic .co-placeholder { margin: 0; border-radius: 0; }
 /* A PDF's printed pages (1.1.3): a gap shows where one page ends. */
-.co-printed img + img { margin-top: var(--s-2); }
+.co-printed img + img { margin-top: calc(var(--s-2) * var(--co-zoom, 1)); }
 /* Two side by side on a wide window (1.5.0). */
 html.co-spread body:has(.co-printed) { max-width: 76rem; }
-html.co-spread .co-printed { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); margin: 0; }
+html.co-spread .co-printed { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--s-3) * var(--co-zoom, 1)); margin: 0; }
 html.co-spread .co-printed img + img { margin-top: 0; }
 
 /* Your time in the clip (1.39.0), under its very last thing. */
@@ -175,6 +175,19 @@ html.co-spread .co-printed img + img { margin-top: 0; }
   font: 400 var(--fs-meta)/var(--lh-meta) var(--sans); color: var(--muted);
 }
 .co-cut a { display: block; margin-top: var(--s-2); color: var(--accent); font-weight: 600; }
+
+/* A discussion (Reddit, Hacker News, GitHub, Stack Exchange): who said it
+   over each comment, replies indented under a line. Past four levels the
+   indent stops growing, so a deep thread still fits a phone. */
+.co-thread { margin-top: var(--s-4); }
+.co-comment { margin: 0 0 var(--s-5); }
+.co-comment > :last-child, .co-replies > .co-comment:last-child { margin-bottom: 0; }
+.co-who { margin: 0 0 var(--s-1); font: 400 var(--fs-meta)/var(--lh-meta) var(--sans); color: var(--muted); }
+.co-who strong { font-weight: 600; color: var(--ink); }
+.co-accepted > .co-who { color: var(--accent); }
+.co-replies { margin: var(--s-4) 0 0; padding-inline-start: var(--s-3); border-inline-start: 2px solid var(--line); }
+.co-replies .co-replies .co-replies .co-replies .co-replies { padding-inline-start: 0; border-inline-start: 0; }
+.co-replies .co-comment { margin-bottom: var(--s-4); }
 
 /* A clip's translation (1.42.0): under each block's own words, quieter,
    and not selectable, so a highlight is always made in the original. */
@@ -232,3 +245,12 @@ html.co-paged img { max-height: calc(100vh - var(--co-top, 0px) - var(--s-5) - v
 html.co-paged figure img { width: auto; }
 html.co-paged figure, html.co-paged .co-next, html.co-paged .co-placeholder, html.co-paged tr { break-inside: avoid; }
 html.co-paged h1, html.co-paged h2, html.co-paged h3 { break-after: avoid; }
+/* A comic in Pages (Unreleased): its pages in a row, one a screen, sized
+   by reader.js (picsLayout); the title and the rest are left out, the
+   next clip's link has a screen of its own at the end. */
+html.co-paged.co-pics body { display: flex; width: max-content; height: 100%; padding: var(--co-top, 0px) 0 0; columns: auto; column-width: auto; }
+html.co-paged.co-pics body > :not(.co-comic):not(.co-next), html.co-paged.co-pics .co-next.co-before { display: none; }
+html.co-paged.co-pics .co-comic { display: flex; flex: none; align-self: flex-start; margin: 0; }
+html.co-paged.co-pics .co-comic img { flex: none; max-width: none; max-height: none; margin-block: 0; object-fit: contain; background: none; }
+html.co-paged.co-pics .co-comic::after { content: ""; flex: none; width: var(--co-tail, 0px); }
+html.co-paged.co-pics .co-next { flex: none; box-sizing: border-box; width: var(--co-screen, 100vw); margin: 0; padding: 0 var(--s-5); align-self: center; }

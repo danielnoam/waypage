@@ -5,7 +5,7 @@
 // behind a CSP that lets it load nothing from the network. The app hands
 // it the library's text and the file's bytes by postMessage; the frame
 // makes blob: URLs of its own for the library and its worker, since a
-// module or worker can't be loaded across origins (NOTES.md, 0.32.0).
+// module or worker can't be loaded across origins (ARCHITECTURE.md, Traps).
 //
 // What comes back is the PDF's words, laid out as paragraphs, so a PDF
 // reads like any other clip: themes, type, search, read aloud, where you

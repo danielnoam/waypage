@@ -83,7 +83,38 @@ test("tools/release.js bumps the three places and dates the Unreleased entry", (
   assert.ok(fs.readFileSync(path.join(dir, "sw.js"), "utf8").includes("waypage-v8"));
   const log = fs.readFileSync(path.join(dir, "CHANGELOG.md"), "utf8");
   assert.ok(log.startsWith("# Changelog\n\n## [1.3.0] - 2026-02-02\n\n### Added\n- A thing.\n"));
-  assert.throws(() => bump("1.4.0", { root: dir }), /no '## Unreleased'/);
+  assert.throws(() => bump("1.4.0", { root: dir }), /nothing to release/);
+});
+
+test("tools/release.js writes the entry from changes/ and deletes the notes", () => {
+  const { bump } = require("../tools/release.js");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "waypage-release-"));
+  fs.mkdirSync(path.join(dir, "src"));
+  fs.mkdirSync(path.join(dir, "changes"));
+  fs.writeFileSync(path.join(dir, "src", "app.js"), 'const APP_VERSION = "1.2.3";\n');
+  fs.writeFileSync(path.join(dir, "index.html"), '<script src="src/app.js?v=1.2.3"></script>\n');
+  fs.writeFileSync(path.join(dir, "sw.js"), 'const CACHE = "waypage-v7";\n');
+  fs.writeFileSync(path.join(dir, "CHANGELOG.md"), "# Changelog\n\nIntro.\n\n## Unreleased\n\n### Fixed\n- From before.\n\n## [1.2.3] - 2026-01-01\n\n### Fixed\n- Old.\n");
+  fs.writeFileSync(path.join(dir, "changes", "README.md"), "How to write a note.\n");
+  fs.writeFileSync(path.join(dir, "changes", "fix-b.md"), "### Fixed\n- Bee, over\n  two lines.\n");
+  fs.writeFileSync(path.join(dir, "changes", "feature-a.md"), "### Added\n- Ay.\n\n### Fixed\n- Ay fix.\n");
+  const r = bump("1.3.0", { root: dir, date: "2026-02-02" });
+  assert.strictEqual(r.notes, 2);
+  const log = fs.readFileSync(path.join(dir, "CHANGELOG.md"), "utf8");
+  assert.strictEqual(log, "# Changelog\n\nIntro.\n\n## [1.3.0] - 2026-02-02\n\n### Added\n- Ay.\n\n### Fixed\n- From before.\n- Ay fix.\n- Bee, over\n  two lines.\n\n## [1.2.3] - 2026-01-01\n\n### Fixed\n- Old.\n");
+  assert.deepStrictEqual(fs.readdirSync(path.join(dir, "changes")), ["README.md"]);
+});
+
+// A branch's notes go in changes/<branch>.md, never in CHANGELOG.md, so
+// two branches don't clash; release.js reads them, and fails on a heading
+// it doesn't know, so a bad one is caught here instead.
+test("every note in changes/ uses the CHANGELOG's headings", () => {
+  const { mergeNotes } = require("../tools/release.js");
+  const dir = path.join(ROOT, "changes");
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith(".md") && x !== "README.md")) {
+    const text = fs.readFileSync(path.join(dir, f), "utf8");
+    assert.ok(mergeNotes([text]), f + " has no '- ' lines under a ### heading");
+  }
 });
 
 test("every ?v= in index.html is APP_VERSION", () => {
@@ -136,6 +167,26 @@ test("android.yml patches the manifest and the updater's plugin is installed", (
   assert.ok(pkg.devDependencies["@capawesome-team/capacitor-file-opener"]);
 });
 
+// Kokoro voices: sherpa-onnx's library is fetched at one pinned,
+// checked version before Gradle runs, and the Java mirror of its JNI
+// classes says the same version (the fields must match it).
+test("the Kokoro engine library is pinned, checked and fetched before the build", () => {
+  const yml = fs.readFileSync(path.join(ROOT, ".github", "workflows", "android.yml"), "utf8");
+  const sh = fs.readFileSync(path.join(ROOT, "tools", "sherpa-lib.sh"), "utf8");
+  const mirror = fs.readFileSync(path.join(ROOT, "native", "share", "android", "src", "main", "java", "com", "k2fsa", "sherpa", "onnx", "OfflineTts.java"), "utf8");
+  const kokoro = fs.readFileSync(path.join(ROOT, "native", "share", "android", "src", "main", "java", "io", "github", "danielnoam", "waypage", "share", "Kokoro.java"), "utf8");
+  assert.ok(/bash tools\/sherpa-lib\.sh\s+- run: npx cap sync android/.test(yml));
+  const v = /^V=(\S+)$/m.exec(sh)[1];
+  assert.ok(/^SHA=[0-9a-f]{64}$/m.test(sh));
+  assert.ok(/sha256sum -c/.test(sh));
+  assert.ok(mirror.includes("Tts.kt at v" + v + "."), "OfflineTts.java mirrors a different sherpa-onnx version");
+  const packs = kokoro.match(/new Pack\([^;]*?\.tar\.bz2",\s*"([^"]*)"/g) || [];
+  assert.ok(packs.length >= 3, "Kokoro's downloads");
+  for (const p of packs) assert.ok(/\.tar\.bz2",\s*"[0-9a-f]{64}"$/.test(p), "every Kokoro download is pinned to a SHA-256: " + p.slice(0, 60));
+  assert.ok(/MessageDigest\.getInstance\("SHA-256"\)/.test(kokoro));
+  assert.ok(/getCanonicalPath\(\)\.startsWith\(rootPath\)/.test(kokoro), "unpacking must keep files inside the voices folder");
+});
+
 test("the updater downloads the asset the workflow publishes", () => {
   const yml = fs.readFileSync(path.join(ROOT, ".github", "workflows", "android.yml"), "utf8");
   const platform = fs.readFileSync(path.join(ROOT, "src", "platform.js"), "utf8");
@@ -144,24 +195,23 @@ test("the updater downloads the asset the workflow publishes", () => {
   assert.ok(platform.includes('file = "Waypage.apk", tag = "app-v" + version'));
 });
 
-// Preview builds (1.48.0): a branch's APK goes on preview-<branch>, a
+// Test builds (1.48.0): a branch's APK goes on test-<branch>, a
 // pre-release, so releases/latest never names it; the iOS workflow adds
 // the IPA to the same one, and the cleanup workflow removes it.
 test("a branch's build is published as a pre-release the updater never sees", () => {
   const yml = fs.readFileSync(path.join(ROOT, ".github", "workflows", "android.yml"), "utf8");
   const ios = fs.readFileSync(path.join(ROOT, ".github", "workflows", "ios.yml"), "utf8");
-  const sh = fs.readFileSync(path.join(ROOT, "tools", "preview-release.sh"), "utf8");
-  const tidy = fs.readFileSync(path.join(ROOT, ".github", "workflows", "preview-cleanup.yml"), "utf8");
-  // every branch builds on push, except cloud sessions' claude/** (those build on workflow_dispatch)
-  assert.ok(/branches-ignore: \["claude\/\*\*"\]/.test(yml) && /branches-ignore: \["claude\/\*\*"\]/.test(ios));
-  assert.ok(!/^\s+branches: /m.test(yml) && !/^\s+branches: /m.test(ios));
-  assert.ok(/workflow_dispatch:/.test(yml) && /workflow_dispatch:/.test(ios));
-  assert.ok(/github\.ref != 'refs\/heads\/main'[\s\S]*preview-release\.sh create Waypage\.apk/.test(yml));
-  assert.ok(/github\.ref != 'refs\/heads\/main'[\s\S]*preview-release\.sh attach Waypage\.ipa/.test(ios));
+  const sh = fs.readFileSync(path.join(ROOT, "tools", "test-build.sh"), "utf8");
+  const tidy = fs.readFileSync(path.join(ROOT, ".github", "workflows", "test-builds.yml"), "utf8");
+  // every branch builds on push, except cloud sessions' claude/** (fork rule: those build on workflow_dispatch)
+  const builds = (y) => /branches: \["\*\*"\]/.test(y) || /branches-ignore: \["claude\/\*\*"\]/.test(y);
+  assert.ok(builds(yml) && builds(ios) && /workflow_dispatch:/.test(yml) && /workflow_dispatch:/.test(ios));
+  assert.ok(/github\.ref != 'refs\/heads\/main'[\s\S]*test-build\.sh create Waypage\.apk/.test(yml));
+  assert.ok(/github\.ref != 'refs\/heads\/main'[\s\S]*test-build\.sh attach Waypage\.ipa/.test(ios));
   assert.ok(sh.includes("--prerelease") && sh.includes('gh pr list --head "$BRANCH" --state open'));
-  assert.ok(/^TAG="preview-/m.test(sh) && tidy.includes('TAG="preview-') && tidy.includes("--cleanup-tag"));
+  assert.ok(/^TAG="test-/m.test(sh) && tidy.includes('"test-$NAME"') && tidy.includes("--cleanup-tag"));
   const start = fs.readFileSync(path.join(ROOT, "src", "app-start.js"), "utf8");
-  assert.ok(start.includes('/releases?per_page=') && start.includes('r.prerelease && /^preview-/.test(r.tag_name)'));
+  assert.ok(start.includes('/releases?per_page=') && start.includes('r.prerelease && /^(test|preview)-/.test(r.tag_name)'));
 });
 
 // The iOS project (1.6.0): what tools/ios-project.js and ios-extensions.rb
@@ -247,6 +297,24 @@ test("the workflow adds and signs the extensions ios-extensions.rb names", () =>
 test("no class the share extension or widgets compile is taken for a plugin", () => {
   for (const f of ["native/share/ios/ShareExtension/ShareViewController.swift", "native/share/ios/Widgets/WaypageWidgets.swift", "native/share/ios/Shared/WaypageShared.swift"]) {
     assert.ok(!/@objc\(/.test(fs.readFileSync(path.join(ROOT, f), "utf8")), f);
+  }
+});
+
+// The page's scripts share one global scope, so two files with the same
+// top-level name means the later one silently replaces the earlier (1.49.0:
+// the reader's switchRow took over Settings' and broke the Narrate section).
+test("no two scripts index.html loads declare the same top-level name", () => {
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const seen = {};
+  for (const [, f] of html.matchAll(/<script src="([^"?]+)/g)) {
+    const src = fs.readFileSync(path.join(ROOT, f), "utf8");
+    const first = src.replace(/^(\s*(\/\/.*|\/\*[\s\S]*?\*\/))*\s*/, "");
+    if (first.startsWith("(")) continue;
+    for (const m of src.matchAll(/^(?:async\s+)?(?:function\*?\s+(\w+)|(?:const|let|class)\s+(\w+))/gm)) {
+      const name = m[1] || m[2];
+      assert.ok(!seen[name], name + " is declared in both " + seen[name] + " and " + f);
+      seen[name] = f;
+    }
   }
 });
 

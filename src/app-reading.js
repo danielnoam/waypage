@@ -86,7 +86,7 @@ const HEBREW = [
   { value: "heebo", label: "Heebo", family: '"Heebo"' },
 ];
 const MARGINS = { narrow: ["var(--s-3)", "44rem"], normal: ["20px", "38rem"], wide: ["var(--s-7)", "32rem"] };
-const READING_DEFAULT = { size: 19, spacing: 1.6, letters: 0, words: 0, paras: 1, weight: 400, hyphens: true, font: "serif", hebrew: "auto", margins: "normal", align: "auto", layout: "scroll", spread: "auto", rail: true };
+const READING_DEFAULT = { size: 19, spacing: 1.6, letters: 0, words: 0, paras: 1, weight: 400, hyphens: true, font: "serif", hebrew: "auto", margins: "normal", align: "auto", layout: "scroll", spread: "auto", rail: true, comicLayout: "scroll", wide: "split" };
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 // Text alignment (1.19.0). "auto" leaves the clip or file as it came.
@@ -95,9 +95,33 @@ const ALIGNS = [
   { value: "center", label: "Centered" }, { value: "right", label: "Right" },
 ];
 
+// Settings per clip, per collection and per book (KOReader-style): a
+// clip's own, then its collection's, then the ones in Settings. Only how
+// the text looks and Show as; the theme, Narrate and the rest stay one
+// for all. Kept on this device, like the defaults.
+const READING_FOR_KEY = "waypage.readingFor";
+const OWN_PREFS = ["font", "hebrew", "size", "weight", "align", "hyphens", "spacing", "letters", "words", "paras", "layout", "margins", "comicLayout"];
+function readingFor() {
+  const o = load(READING_FOR_KEY, {});
+  return { clips: o.clips || {}, sets: o.sets || {} };
+}
+const ownable = (p) => !!p && !p.preview;
+// Where the open clip's settings come from: "clip", "set" or "all".
+function readingScope(p) {
+  if (!ownable(p)) return "all";
+  const f = readingFor();
+  return f.clips[p.id] ? "clip" : p.folder && f.sets[p.folder] ? "set" : "all";
+}
+const ownPart = (o) => Object.fromEntries(OWN_PREFS.filter((k) => o && k in o).map((k) => [k, o[k]]));
+
 // Before 0.24.0 size was a step of five and spacing a word.
-function readingPrefs() {
+function readingPrefs(p = state.open) {
   const r = { ...READING_DEFAULT, ...load(READING_KEY, {}) };
+  if (ownable(p)) {
+    const f = readingFor();
+    if (p.folder) Object.assign(r, ownPart(f.sets[p.folder]));
+    Object.assign(r, ownPart(f.clips[p.id]));
+  }
   if (Number.isInteger(r.size) && r.size >= 0 && r.size < 5) r.size = [16, 18, 19, 21, 24][r.size];
   if (typeof r.spacing === "string") r.spacing = { tight: 1.4, normal: 1.6, loose: 1.8 }[r.spacing];
   r.size = Number.isFinite(r.size) ? clamp(Math.round(r.size), SIZE_MIN, SIZE_MAX) : READING_DEFAULT.size;
@@ -111,11 +135,17 @@ function readingPrefs() {
   if (!MARGINS[r.margins]) r.margins = READING_DEFAULT.margins;
   if (!ALIGNS.some((a) => a.value === r.align)) r.align = READING_DEFAULT.align;
   if (r.layout !== "pages") r.layout = "scroll";
+  // Comics have their own Show as (Unreleased), Scroll unless picked.
+  if (r.comicLayout !== "pages") r.comicLayout = "scroll";
+  if (r.wide !== "whole") r.wide = "split";
   if (!["one", "two", "auto"].includes(r.spread)) r.spread = "auto";
   r.rail = r.rail !== false;
   r.hyphens = r.hyphens !== false;
   return r;
 }
+
+// Whether a clip shows as Pages: a comic by its own setting.
+const pagesOn = (p = state.open, r = readingPrefs(p)) => (p && p.comic ? r.comicLayout : r.layout) === "pages";
 
 function fontStack(r) {
   const f = FONTS.find((x) => x.value === r.font);
@@ -124,7 +154,9 @@ function fontStack(r) {
   return [f.family, hebrew, f.kind === "serif" ? "Georgia, serif" : "sans-serif"].filter(Boolean).join(", ");
 }
 
-function paintReading() {
+// Opening and closing a clip paint the tokens alone; the frame takes them
+// as it loads, and one that's leaving keeps its look.
+function paintReading(frame = true) {
   const r = readingPrefs();
   const root = document.documentElement.style;
   root.setProperty("--reader-fs", r.size + "px");
@@ -138,18 +170,71 @@ function paintReading() {
   root.setProperty("--reader-wt", String(r.weight));
   document.documentElement.dataset.readAlign = r.align;
   document.documentElement.toggleAttribute("data-read-hyphens", r.hyphens);
-  if (C.reader) C.reader.applyTheme();
+  if (C.reader && frame) C.reader.applyTheme();
 }
 
-function setReading(change) {
-  const was = readingPrefs().layout;
-  store(READING_KEY, { ...readingPrefs(), ...change });
+// A change goes to where the open clip's settings come from, or with
+// everywhere (Settings' own controls) to the defaults.
+function setReading(change, everywhere) {
+  const was = readingPrefs();
+  const p = state.open, scope = everywhere ? "all" : readingScope(p);
+  const own = {}, rest = {};
+  for (const [k, v] of Object.entries(change)) (scope !== "all" && OWN_PREFS.includes(k) ? own : rest)[k] = v;
+  if (Object.keys(rest).length) store(READING_KEY, { ...readingPrefs(null), ...rest });
+  if (Object.keys(own).length) {
+    const f = readingFor(), bag = scope === "clip" ? f.clips : f.sets, key = scope === "clip" ? p.id : p.folder;
+    bag[key] = { ...bag[key], ...own };
+    store(READING_FOR_KEY, f);
+  }
+  readingChanged(was, change);
+}
+function readingChanged(was, change) {
   paintReading();
-  if (C.reader && readingPrefs().layout !== was) { C.reader.setPaged(readingPrefs().layout === "pages"); volumeWatch(); }
+  if (C.reader && state.open && pagesOn() !== pagesOn(state.open, was)) { C.reader.setPaged(pagesOn()); volumeWatch(); narrateOrScroll(state.open); }
+  if (C.reader && "wide" in change) C.reader.setWide(readingPrefs().wide);
   if (C.reader && "spread" in change) C.reader.setSpread(readingPrefs().spread);
   if ("rail" in change) fitRail();
   document.querySelectorAll(".reading-controls").forEach(syncReadingControls);
 }
+// The scope switch: where this clip's settings come from. This clip and
+// Collection start from the look it has now, so nothing jumps; Everywhere
+// drops the clip's own and its collection's.
+function setScope(to) {
+  const p = state.open;
+  if (!ownable(p)) return;
+  const from = readingScope(p);
+  if (to === from) return;
+  const was = readingPrefs(), f = readingFor(), before = JSON.stringify(f);
+  const now = ownPart(was);
+  if (to === "clip") f.clips[p.id] = now;
+  else {
+    delete f.clips[p.id];
+    if (to === "set" && p.folder && !f.sets[p.folder]) f.sets[p.folder] = now;
+    if (to === "all" && p.folder) delete f.sets[p.folder];
+  }
+  store(READING_FOR_KEY, f);
+  readingChanged(was, {});
+  const lost = from === "clip" ? "This " + clipWord(p) + "'s own settings" : from === "set" && to === "all" ? "The collection's own settings" : "";
+  if (lost && to !== "clip") toast(lost + " are gone.", "Undo", () => { const w = readingPrefs(); store(READING_FOR_KEY, JSON.parse(before)); readingChanged(w, {}); });
+}
+const clipWord = (p) => (p && p.file ? "book" : "clip");
+// A collection renamed keeps its settings; clips and collections that
+// are gone lose theirs (at start).
+function renameReadingSet(from, to) {
+  const f = readingFor();
+  if (!f.sets[from]) return;
+  if (!f.sets[to]) f.sets[to] = f.sets[from];
+  delete f.sets[from];
+  store(READING_FOR_KEY, f);
+}
+function pruneReadingFor(pages) {
+  const f = readingFor();
+  if (!Object.keys(f.clips).length && !Object.keys(f.sets).length) return;
+  const ids = new Set(pages.map((p) => p.id)), sets = new Set(pages.map((p) => p.folder).filter(Boolean));
+  for (const k of Object.keys(f.clips)) if (!ids.has(k)) delete f.clips[k];
+  for (const k of Object.keys(f.sets)) if (!sets.has(k)) delete f.sets[k];
+  store(READING_FOR_KEY, f);
+}
 paintReading();
 if (C.reader) C.reader.setSpread(readingPrefs().spread);
-if (darkQuery && darkQuery.addEventListener) darkQuery.addEventListener("change", () => { if (state.theme === "system") paintTheme("system"); });
+if (darkQuery && darkQuery.addEventListener) darkQuery.addEventListener("change", () => paintTheme());

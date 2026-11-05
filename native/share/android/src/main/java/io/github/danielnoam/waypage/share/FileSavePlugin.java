@@ -24,7 +24,7 @@ import java.io.OutputStream;
  *   save({ uri, name, mime })   resolves to { saved } (false if put away)
  *
  * `uri` is a file the app already wrote to its cache. With `keep: true`
- * (1.47.0, a deck turned into a PDF) the place chosen is also held on to
+ * (1.49.0, a deck turned into a PDF) the place chosen is also held on to
  * for reading, and comes back as `uri`; `near` is a content:// file whose
  * folder the screen opens in.
  */
