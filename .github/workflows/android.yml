@@ -6,8 +6,7 @@ name: Android app
 
 on:
   push:
-    # claude/** (cloud sessions) build only on request: workflow_dispatch.
-    branches-ignore: ["claude/**"]
+    branches: ["**"]
     paths-ignore: ["**.md", "test/**", ".claude/**", "worker/**", ".github/workflows/worker.yml"]
   workflow_dispatch:
 

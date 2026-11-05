@@ -2,31 +2,6 @@
 
 All notable changes to Carry-on. Newest first.
 
-
-## [1.54.0] - 2026-11-05
-
-### Added
-- Comics in Pages: one page a screen, turned with a tap on either side, a
-  swipe or the keys, the middle tap showing the bars. On a wide window two
-  pages sit side by side, the cover alone. Comics keep Scroll until you
-  pick Pages for them in Aa › Layout, apart from books.
-- A manga turns right to left, picked by itself when its CBZ's ComicInfo
-  says so; Aa › Layout › Turn pages changes it for that comic.
-- Wide pages, in Aa › Layout for a comic in Pages: a two-page spread on a
-  phone shows in halves (Split), or whole.
-- A pinch or double tap on a comic page in Pages opens it in the viewer to
-  zoom.
-- Series: a CBZ whose ComicInfo names its series and number, or an EPUB
-  with a series (calibre's or EPUB 3's), goes into that series' collection
-  in volume order, however the volumes were added.
-- With a mouse, clips and collections answer when you point at them: a soft tint, and the card or its cover lifts a little. Top bar buttons and sidebar rows tint and grow a touch too. Touch screens are unchanged, and Reduce motion or Animations off keep only the tint.
-
-### Changed
-- Merged Daniel's waypage main (his 1.49.0 to 1.52.1 and the two pending notes: comics page by page with series filing, desktop hover) into the fork. His version won every clash; the fork's own features stay on top.
-
-### Fixed
-- Pressing a sidebar heading with a fold arrow (like Library) now lights the whole row, arrow included, not just the part before it.
-
 ## [1.52.1] - 2026-11-03
 
 ### Added
@@ -241,45 +216,6 @@ All notable changes to Carry-on. Newest first.
 ## [1.48.4] - 2026-11-01
 
 ### Changed
-- Speed for Narrate and auto-scroll now goes up to 4×, not 3×. On iPhone
-  the voice itself tops out at about 2×; auto-scroll goes the whole way.
-
-## [1.52.2] - 2026-11-04
-
-### Fixed
-- Tablets: a link, note or look-up opened from the text now appears in the
-  middle of the screen, not in the top-left corner.
-- Tablets: picking several clips no longer draws Tags, Collection, Mark
-  read, Edit and Delete over Cancel and Select all. Under 1280 px wide the
-  actions sit in a bar along the bottom, as on a phone; the one bar at the
-  top stays on wider screens.
-
-## [1.52.1] - 2026-11-02
-
-### Fixed
-- Pages: the side margin no longer grows as you move through a clip, most
-  of all when dragging the skim slider far. On phones whose screen width
-  isn't a whole number of pixels, every page turn left the text a little
-  further off, so the margin crept wider and the text ran to the edge.
-  The last page also sat 20 px to the left; it is centred now.
-
-## [1.52.0] - 2026-11-02
-
-### Added
-- Picking clips in a collection: a ⋯ beside Select all with Read,
-  Unread (pick just those) and Previous (add every clip above the latest
-  one picked).
-
-## [1.51.0] - 2026-11-01
-
-### Changed
-- Brought in Daniel's Waypage 1.46.0 to 1.48.4: compact Settings with
-  search, Google Drive backups with the app closed, Links only backups,
-  GitHub sync switches, preview builds and more. His notes follow, marked
-  with his version numbers. Fork edits kept: dark PDF pages, PowerPoint
-  decks, comics and manga, own Google client.
-
-### Changed (Daniel's 1.48.4)
 - Reader: while skimming, a ring on the bar marks where Back takes you.
 - Settings › Reading › Layout "Time left in": Section or Whole, one
   choice for clips and books. It was the Count this section button on
@@ -287,7 +223,9 @@ All notable changes to Carry-on. Newest first.
 - Settings › Google Drive: Back up by itself is a row like the other
   picks, its choice at the end, not a drop-down under its name.
 
-### Changed (Daniel's 1.48.3)
+## [1.48.3] - 2026-11-01
+
+### Changed
 - Settings › Reading › Layout: Brightness is one row, Off / Left /
   Right, in place of a switch and a side.
 - Settings › Reading › Text: Alignment sits above Text size, Pinch for
@@ -297,12 +235,14 @@ All notable changes to Carry-on. Newest first.
 - A drop-down menu closes with only a short move back toward its
   button, not the whole way.
 
-### Fixed (Daniel's 1.48.3)
+### Fixed
 - Settings: a section after Reading's Text touched its card.
 - Animations off also stops a switch's press stretch, the ? turn and a
   drop-down's pop; they changed in steps before.
 
-### Changed (Daniel's 1.48.2)
+## [1.48.2] - 2026-11-01
+
+### Changed
 - Settings › Reading: Layout and Text are two sections, like Narrate.
 - Settings › Library: Import from another app and Edit clips sit under
   one Actions heading, like Storage's.
@@ -313,14 +253,18 @@ All notable changes to Carry-on. Newest first.
   with the file types and where font files can go; This device has a
   line under it.
 
-### Changed (Daniel's 1.48.1)
+## [1.48.1] - 2026-10-31
+
+### Changed
 - Credits: no ? on its headings; the licence lines say enough.
 - Two cards in one Settings section no longer touch (About, Preview builds, Google Drive, GitHub sync).
 
-### Removed (Daniel's 1.48.1)
+### Removed
 - Settings › Library › Check all collections now: the library itself checks.
 
-### Added (Daniel's 1.48.0)
+## [1.48.0] - 2026-10-31
+
+### Added
 - A search box at the top of Settings. A word or two finds a setting
   wherever it sits, by its name, its line, its heading or its
   explanation; a result opens the screen and lights the row up.
@@ -333,7 +277,7 @@ All notable changes to Carry-on. Newest first.
   version number needs an uninstall first, and the row says so. On
   iPhone the build's page opens instead.
 
-### Changed (Daniel's 1.48.0)
+### Changed
 - Settings say less. Every row is a name and at most one short line, and
   the longer explanation sits behind a ? on its section's heading, the
   way the Steam Deck explains a setting only when asked. Saving went from
@@ -350,7 +294,9 @@ All notable changes to Carry-on. Newest first.
   a pressed switch's knob stretches toward where it's going, and a
   drop-down's new choice pops into place.
 
-### Added (Daniel's 1.47.0)
+## [1.47.0] - 2026-10-31
+
+### Added
 - Google Drive backs up by itself with Waypage closed, on Android: on
   Wi-Fi, with the battery not low, when it's due. A quiet notification
   shows while it packs and sends; one Android stops part way goes on from
@@ -366,7 +312,7 @@ All notable changes to Carry-on. Newest first.
 - Back up the library has Pause and Stop while it runs, like Google
   Drive's backups.
 
-### Changed (Daniel's 1.47.0)
+### Changed
 - Back up by itself is a drop-down.
 - Google Drive backups in a browser go up in 8 MB pieces, so Pause and
   Resume (or a dropped connection) go on from the last piece instead of
@@ -383,11 +329,13 @@ All notable changes to Carry-on. Newest first.
 - Time at the end of a clip moved from Text to Layout, in Settings and
   in the reader's settings.
 
-### Removed (Daniel's 1.47.0)
+### Removed
 - Storage's Biggest clips list: By collection already shows every clip,
   biggest first.
 
-### Changed (Daniel's 1.46.0)
+## [1.46.0] - 2026-10-31
+
+### Changed
 - Google Drive backups leave out files read from outside and watched
   folders, like GitHub sync: they stay where they are. An older backup's
   outside files are skipped on restore instead of coming back as text
@@ -403,75 +351,11 @@ All notable changes to Carry-on. Newest first.
   month, or only when you ask. With backups more often than weekly, Drive
   also keeps one from a week before the newest three.
 
-### Fixed (Daniel's 1.46.0)
+### Fixed
 - Restoring a backup with GitHub sync on no longer loses what it brought
   back: a clip or feed deleted since the backup was made was deleted
   again by the next sync. The restore now wins over the older deletion,
   on every synced device.
-
-## [1.50.1] - 2026-10-31
-
-### Fixed
-- The top bar stays on while a comic auto-scrolls, so its button can always
-  stop it. Before, the page's own scrolling hid the bar a moment after it
-  came back.
-
-## [1.50.0] - 2026-10-31
-
-### Added
-- Comics and manga have Auto-scroll where Narrate was: the page moves by
-  itself, a finger on it holds it, and lifting lets it go on. The Aa tab
-  shows only Speed (its own, apart from Narrate's), Go on to the next clip
-  (the next chapter starts scrolling at the end) and Keep the screen on.
-
-## [1.49.0] - 2026-10-31
-
-### Added
-- Manga and comics are spotted when you save them. A page with little text
-  and a column of large pictures now saves as a comic (its panels, edge to
-  edge) without picking Comic in the new-collection options.
-- Save as comic, under More on a clip that was saved as an article: fetches
-  the page again as its pictures, in the old copy's place.
-
-## [1.48.0] - 2026-10-31
-
-### Changed
-- Brought in the upstream changes of 1.45.8 to 1.45.11: Hebrew and Arabic
-  PDF order, copied-in files look like any clip, Google Drive reconnect,
-  faster backups, privacy and terms pages, and app.js split into more
-  parts. Fork edits kept: dark PDF pages, PowerPoint decks, own Google
-  client.
-
-## [1.47.0] - 2026-10-31
-
-### Added
-- PowerPoint decks: Open a file now takes a .pptx. It asks whether to
-  convert it to a PDF; Cancel stops and opens nothing. Convert redraws the
-  slides (text, shapes, pictures, tables, theme colours), asks where to save
-  the new PDF (on Android the save screen opens in the deck's folder), and
-  adds that PDF to Files, read from where it was saved, like any PDF you
-  open. Search, Narrate and highlights work on the slides' words. Hidden
-  slides are left out. Charts and diagrams without a picture, effects and
-  animations are not drawn, and the app says how many it left out. Nothing
-  is sent anywhere, and a picture that points outside the file is never
-  loaded.
-
-## [1.46.1] - 2026-10-31
-
-### Fixed
-- Dark PDF pages: the switch in Aa › Layout showed for every clip. It now
-  shows only while a PDF's own pages are open, and not when the PDF is
-  shown as text.
-
-## [1.46.0] - 2026-10-31
-
-### Added
-- Dark PDF pages: a switch at the bottom of Aa › Layout, shown while a PDF
-  opened from its file is on screen. In a dark theme the pages are
-  recoloured to the theme (paper becomes its background, black text its
-  text colour) instead of staying white. Photos and coloured figures turn
-  into negatives. Off by default; Paper and the other light themes keep
-  white pages.
 
 ## [1.45.11] - 2026-10-31
 

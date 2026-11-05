@@ -52,38 +52,3 @@ borrows its stack, build workflows and native-fetch trick from.
   (fix/drive-row, feature/kokoro-voices). Push only to that branch.
   A thread with an open PR keeps its branch.
 
-## Working with Daniel (his standing rules, 17 Oct 2026)
-
-These are on top of CONTRIBUTING.md, for Claude sessions only.
-
-- **Merge to main without asking** once the checks are green. Don't ask
-  "shall I merge".
-- **When he says "don't build yet" or "fixes only",** commit locally and
-  don't push (a branch push builds too) until he says build.
-- **Small asks he lists without "add to TODO", do now,** but commit
-  them on the branch and wait for his "Build" (or "Ship") before pushing
-  or opening the release PR. He said so on 1 Nov 2026 after a release
-  went out unasked. A branch push builds a preview, so hold that too.
-- **Several asks go out as one release,** or two at most when grouped;
-  don't split them into many.
-- **Don't wait for iOS before a release is done** (4 Nov 2026). Merge on a
-  green Tests check and report the release as shipped once Android's run
-  has published it. The iOS run attaches the IPA later (it can take a
-  while); check it afterwards and say if it fails, but never hold a
-  merge or the report for it.
-- **App stores aren't a priority.** Don't bring up store prep.
-- **After shipping,** say in a line or two what to try on the phone,
-  above all anything native that couldn't be tested here.
-- **Only omri-ehud/waypage.** Every build, push and PR goes to that repo
-  (`origin`, or `--repo omri-ehud/waypage` with `gh`), never
-  danielnoam/waypage or any other repo.
-- **Cloud sessions** (Claude app) push only `claude/*` branches, never
-  main, and open no PR unless asked. Those pushes don't build (the
-  workflows ignore `claude/**`). On "Build", run
-  `gh workflow run android.yml --ref <branch> --repo omri-ehud/waypage`,
-  and the same for `ios.yml`. A cloud session can't reach the shared
-  project folder or the phone: pull its branch locally, check it, copy
-  then ship. Good for work `node --test` can check; keep
-  UI, releases and upstream syncs local.
-- **Be direct.** Push back when an idea or plan is weak, and say what
-  was checked and what is a guess.

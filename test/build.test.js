@@ -203,9 +203,7 @@ test("a branch's build is published as a pre-release the updater never sees", ()
   const ios = fs.readFileSync(path.join(ROOT, ".github", "workflows", "ios.yml"), "utf8");
   const sh = fs.readFileSync(path.join(ROOT, "tools", "test-build.sh"), "utf8");
   const tidy = fs.readFileSync(path.join(ROOT, ".github", "workflows", "test-builds.yml"), "utf8");
-  // every branch builds on push, except cloud sessions' claude/** (fork rule: those build on workflow_dispatch)
-  const builds = (y) => /branches: \["\*\*"\]/.test(y) || /branches-ignore: \["claude\/\*\*"\]/.test(y);
-  assert.ok(builds(yml) && builds(ios) && /workflow_dispatch:/.test(yml) && /workflow_dispatch:/.test(ios));
+  assert.ok(/branches: \["\*\*"\]/.test(yml) && /branches: \["\*\*"\]/.test(ios));
   assert.ok(/github\.ref != 'refs\/heads\/main'[\s\S]*test-build\.sh create Waypage\.apk/.test(yml));
   assert.ok(/github\.ref != 'refs\/heads\/main'[\s\S]*test-build\.sh attach Waypage\.ipa/.test(ios));
   assert.ok(sh.includes("--prerelease") && sh.includes('gh pr list --head "$BRANCH" --state open'));
