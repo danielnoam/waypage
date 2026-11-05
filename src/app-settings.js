@@ -224,12 +224,31 @@ function autoGroup() {
   return box;
 }
 
+// The reader's own theme (Daniel's ask): off, the reader takes the app's.
+function readerThemeGroup() {
+  const pick = el("div", { class: "group reader-theme-pick" }, el("div", { class: "rc-list" },
+    seg("reader-theme", "Theme in the reader", [{ value: "system", label: "Auto", swatch: autoSwatch(), auto: true }, ...themeOptions(THEMES)],
+      readerThemeOn() ? state.readerTheme : state.theme, (v) => { setReaderTheme(v); syncThemeInputs(); }, "themes grid five theme-grid")));
+  pick.hidden = !readerThemeOn();
+  const sec = section(null, null,
+    el("div", { class: "group" },
+      switchRow("Its own theme in the reader", null, readerThemeOn(), (on) => {
+        setReaderTheme(on ? state.theme : "same");
+        pick.hidden = !on;
+        pick.querySelectorAll("input").forEach((i) => { i.checked = i.value === state.theme; });
+        syncThemeInputs();
+      })),
+    pick);
+  sec.classList.add("reader-theme-sec");
+  return sec;
+}
+
 // Animations (1.12.0): off, nothing moves at all, for a slow phone or
 // for anyone who'd rather things just change.
 function looksGroup() {
   return section("Pictures and motion", null,
     el("div", { class: "group" },
-      switchRow("Dim pictures in dark themes", "Tap a picture to see it in full", load(DIM_KEY, true) !== false, (on) => { store(DIM_KEY, on); paintTheme(state.theme); }),
+      switchRow("Dim pictures in dark themes", "Tap a picture to see it in full", load(DIM_KEY, true) !== false, (on) => { store(DIM_KEY, on); paintTheme(); }),
       switchRow("Animations", "Off: everything changes at once", !M.still(), (on) => { store(MOTION_KEY, on); M.setStill(!on); })));
 }
 
@@ -248,6 +267,74 @@ function aloudGroup() {
   if (!speech.available) return null;
   return section("Narrate", null,
     el("div", { class: "group" }, el("div", { class: "rc-list" }, aloudControls())));
+}
+
+// Kokoro voices (Android, arm64): downloads that become Waypage's own
+// speech engine, picked for English when the first is in. Three to pick
+// from on their own screen (Daniel's ask), one in use at a time. Asked
+// again about once a second while one downloads or unpacks.
+const KOKORO_IN_KEY = "waypage.kokoroIn";
+const kokoroBusy = (s) => s.step === "downloading" || s.step === "checking" || s.step === "unpacking";
+function kokoroArrived(s) {
+  if (!s.use || load(KOKORO_IN_KEY, false)) return;
+  store(KOKORO_IN_KEY, true);
+  store(ENGINE_KEY, { ...enginePicks(), en: s.engine });
+}
+function kokoroStep(s, p) {
+  const which = p ? " " + p.title : "";
+  if (s.step === "downloading") return "Downloading" + which + " · " + (s.total ? Math.min(99, Math.floor(s.done / s.total * 100)) : 0) + "%";
+  return "Unpacking" + which + "…";
+}
+function forgetKokoro(engine) {
+  store(KOKORO_IN_KEY, false);
+  const picks = enginePicks();
+  for (const k of Object.keys(picks)) if (picks[k] === engine) delete picks[k];
+  store(ENGINE_KEY, picks);
+}
+
+// More speech engines: each Kokoro model with what it has and its size,
+// and Download, or a bin once it's here.
+function kokoroSections() {
+  const slot = el("div", { class: "kokoro-slot" }, el("p", { class: "footnote" }, "Looking…"));
+  fillKokoro(slot);
+  return [slot];
+}
+async function fillKokoro(slot) {
+  const s = await speech.kokoro();
+  if (!slot.isConnected && slot.dataset.drawn) return;
+  slot.dataset.drawn = "1";
+  if (!s) { slot.replaceChildren(el("p", { class: "footnote" }, "Kokoro voices need an Android phone with a 64-bit processor.")); return; }
+  kokoroArrived(s);
+  const busy = kokoroBusy(s);
+  const again = () => fillKokoro(slot);
+  const act = (action, id, then) => async () => {
+    try { await speech.kokoro(action, id); } catch (e) { toast(e && e.message || "Couldn't do that. Try again."); }
+    if (then) then();
+    again();
+  };
+  const rows = s.packs.map((p) => {
+    const mine = s.busy === p.id;
+    const note = mine && busy ? kokoroStep(s)
+      : mine && s.step === "bad" ? "The download wasn't the right file. Try again."
+      : mine && s.step === "failed" ? "Couldn't download. Try again."
+      : p.note + " · " + formatSize(p.ready ? p.size : p.bytes);
+    const remove = async () => {
+      if (!confirm("Delete " + p.title + "? It takes " + formatSize(p.size) + "; you can download it again.")) return;
+      const last = s.packs.filter((x) => x.ready).length === 1;
+      await act("remove", p.id, () => { if (last) forgetKokoro(s.engine); })();
+    };
+    // Downloaded: a bin to delete it (Daniel's ask); which one speaks is
+    // picked in Narrate's Speech engine list.
+    const control = mine && s.step === "downloading" ? el("button", { class: "btn-text", type: "button", onclick: act("cancel") }, "Stop")
+      : mine && busy ? null
+      : p.ready ? el("button", { class: "row-x kokoro-delete", type: "button", "aria-label": "Delete " + p.title, title: "Delete", disabled: busy || null, onclick: remove },
+        el("span", { class: "visually-hidden" }, "Delete"), svgBin())
+      : el("button", { class: "btn-text", type: "button", disabled: busy || null, onclick: act("download", p.id) }, "Download");
+    return el("div", { class: "row kokoro-row" },
+      el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, p.title), el("span", { class: "choice-note" }, note)), control);
+  });
+  slot.replaceChildren(section("Kokoro", null, el("div", { class: "group" }, ...rows)));
+  if (busy) setTimeout(() => { if (slot.isConnected) again(); }, 1000);
 }
 
 // Layout and Text are two sections here (1.48.2, Daniel's ask), out of
@@ -283,14 +370,14 @@ async function addFontFile(file) {
   try { await new FontFace("Waypage check", bytes).load(); } catch (e) { toast("That font didn't load. Try another file."); return; }
   try { await C.store.addFont(name, bytes); } catch (e) { toast("Couldn't keep the font. Try again."); return; }
   await loadUserFonts();
-  setReading({ font: "user:" + name });
+  setReading({ font: "user:" + name }, true);
   if (state.section === "reading") renderSection();
   toast("Added " + name.replace(FONT_EXT, "") + ". It's your reading font now.");
 }
 async function removeFontFile(name) {
   if (!confirm("Remove the font " + name.replace(FONT_EXT, "") + "?")) return;
   try { await C.store.removeFont(name); } catch (e) { toast("Couldn't remove it. Try again."); return; }
-  if (readingPrefs().font === "user:" + name) setReading({ font: READING_DEFAULT.font });
+  if (readingPrefs(null).font === "user:" + name) setReading({ font: READING_DEFAULT.font }, true);
   await loadUserFonts();
   if (state.section === "reading") renderSection();
 }
@@ -1012,10 +1099,10 @@ const updateOut = () => UPD_OUT.includes(upd.phase) && upd.latest;
 // Settings sorted by what you came to change (1.12.0): how it looks,
 // how you read, the library; then saving, sync and storage; then About.
 const SECTIONS = {
-  appearance: { title: "Appearance", build: () => [themeGroup(), autoGroup(), looksGroup()],
+  appearance: { title: "Appearance", build: () => [themeGroup(), autoGroup(), readerThemeGroup(), looksGroup()],
     value: () => themeName(state.theme) },
   reading: { title: "Reading", build: () => [readingGroup(), fontsGroup(), dictsGroup(), aloudGroup()],
-    value: () => { const r = readingPrefs(); return (FONTS.find((f) => f.value === r.font) || FONTS[0]).label + " · " + r.size + " px"; } },
+    value: () => { const r = readingPrefs(null); return (FONTS.find((f) => f.value === r.font) || FONTS[0]).label + " · " + r.size + " px"; } },
   library: { title: "Library", build: () => [
     section("Layout", null,
       el("div", { class: "group" }, el("div", { class: "rc-list" },
@@ -1028,10 +1115,13 @@ const SECTIONS = {
   drive: { title: "Google Drive", build: driveSections, value: driveValue },
   notifications: { title: "Notifications", build: notesSections, value: notesValue },
   edit: { title: "Edit clips", build: editGroup, value: () => "", parent: "library" },
+  kokoro: { title: "More speech engines", build: kokoroSections, value: () => "", parent: "reading" },
   storage: { title: "Storage", build: () => [placeGroup(), storageGroup(), browserStorageGroup(), backupGroup(roomRows())], value: () => formatSize(totalBytes()) },
   updates: { title: "About", build: () => [updatesGroup(), aboutGroup()], value: () => (updateOut() ? upd.latest + " is out" : APP_VERSION) },
-  previews: { title: "Preview builds", build: () => previewsSections(), value: () => "", parent: "updates" },
+  previews: { title: "Test builds", build: () => previewsSections(), value: () => "", parent: "updates" },
   credits: { title: "Credits", build: creditsSections, value: () => "", parent: "updates" },
+  news: { title: "Changelog", build: () => newsSections(), value: () => "", parent: "updates" },
+  ahead: { title: "What's new", build: () => aheadSections(), value: () => "", parent: "updates" },
   report: { title: "Report a problem", build: () => [reportGroup()], value: () => { const n = C.platform.log.list().length; return n ? n + (n === 1 ? " note" : " notes") : ""; } },
 };
 
@@ -1052,7 +1142,7 @@ function renderSettings() {
       out ? el("div", { class: "group update-card" },
         el("div", { class: "row update-row out" },
           el("span", { class: "row-label accent" }, "Waypage " + upd.latest + " is out"),
-          el("button", { class: "btn-small", type: "button", onclick: () => openSection("updates") }, "View"))) : null,
+          el("button", { class: "btn-small", type: "button", onclick: () => (upd.tag ? openSection("updates") : openNews(false, true)) }, "View"))) : null,
       el("div", { class: "group" }, row("appearance"), row("reading"), row("library"), C.platform.native ? row("notifications") : null, row("lock")),
       el("div", { class: "group" }, row("saving"), row("sync"), C.drive.available ? row("drive") : null, row("storage")),
       el("div", { class: "group" }, row("updates"), row("report"))));
@@ -1065,16 +1155,16 @@ function renderSettings() {
 // opens, and dropped when they close, so it says what the screens say.
 // Each result opens its screen and lights the row up for a moment.
 const FIND_ALIASES = {
-  Theme: "dark mode light mode colours night", Animations: "motion", Images: "pictures photos", "Images for feeds": "pictures photos feed follow", Layout: "shelf list grid scroll pages margins",
-  "Text size": "font size bigger smaller", Font: "typeface", Narrate: "read aloud voice speech tts", "On mobile data": "wi-fi cellular",
+  Theme: "dark mode light mode colours night", Animations: "motion", Images: "pictures photos", Layout: "shelf list grid scroll pages margins",
+  "Text size": "font size bigger smaller", Font: "typeface", Narrate: "read aloud voice speech tts kokoro", "On mobile data": "wi-fi cellular",
   "Where your library is": "storage folder documents sd card", "App lock": "passcode pin fingerprint face biometric", Notifications: "alerts",
   "Google Drive": "backup cloud", "GitHub sync": "sync devices token", Credits: "about licence licenses open source thanks",
   Version: "update check app", Changelog: "what's new release notes", "Continue reading": "last clip resume",
-  "Preview builds": "beta branch test pull request",
+  "Test builds": "beta branch preview pull request",
 };
 let settingsIdx = null;
 const settingsQuery = () => { const i = $("settingsSearch"); return i ? i.value.trim() : ""; };
-const menuKeys = () => Object.keys(SECTIONS).filter((k) => !((k === "notifications" || k === "previews") && !C.platform.native) && !(k === "drive" && !C.drive.available) && !(k === "lock" && !lockCan()));
+const menuKeys = () => Object.keys(SECTIONS).filter((k) => k !== "news" && k !== "ahead" && !((k === "notifications" || k === "previews") && !C.platform.native) && !(k === "drive" && !C.drive.available) && !(k === "lock" && !lockCan()));
 const text = (n) => (n ? n.textContent.replace(/\s+/g, " ").trim() : "");
 function settingsIndex() {
   if (settingsIdx) return settingsIdx;
@@ -1199,6 +1289,7 @@ function openSettings(fromHistory, at) {
   // With room for the section beside the menu, the first one is open.
   if (wide.matches && !at && !fromHistory) at = "appearance";
   state.settings = true;
+  if (state.open) paintTheme();
   renderSettings();
   if (!fromHistory) history.pushState({ view: "settings" }, "");
   $("settingsBody").scrollTop = 0;
@@ -1209,9 +1300,10 @@ function openSettings(fromHistory, at) {
 
 function closeSettings() {
   if (!state.settings) return;
-  closeSection();
-  state.settings = false;
-  popScreen($("settingsView"));
+  // In the window, the window leaves first and takes its section with it.
+  if (wide.matches) { state.settings = false; popScreen($("settingsView")); closeSection(); }
+  else { closeSection(); state.settings = false; popScreen($("settingsView")); }
+  if (state.open) paintTheme();
   const q = $("settingsSearch");
   if (q) { q.value = ""; $("settingsSearchClear").hidden = true; }
   settingsIdx = null;

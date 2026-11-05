@@ -1,4 +1,4 @@
-// A small PowerPoint deck for the tests (1.47.0): the parts of the format
+// A small PowerPoint deck for the tests (1.49.0): the parts of the format
 // that src/pptx.js draws. Three slides, the last one hidden.
 //   1  a title and bullets (placeholders from the layout and master)
 //   2  a table, a group holding a shape with words, a Hebrew line, a

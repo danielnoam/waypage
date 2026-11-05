@@ -1,6 +1,6 @@
 ---
 name: release-checklist
-description: Release checklist for Waypage (danielnoam/waypage): bump APP_VERSION in three places, add a CHANGELOG.md entry, file notes under TODO.md/NOTES.md/DROPPED.md, keep the vanilla app lean, run the tests, verify phone and desktop width, and push to main (which publishes the APK and IPA). Use before shipping any change.
+description: Release checklist for Waypage (danielnoam/waypage): bump APP_VERSION in three places, add a changes/<branch>.md note (folded into CHANGELOG.md at release), update DROPPED.md, ARCHITECTURE.md's traps and the project's TODO, keep the vanilla app lean, run the tests, verify phone and desktop width, and push to main (which publishes the APK and IPA). Use before shipping any change.
 ---
 
 # Waypage release checklist
@@ -13,32 +13,33 @@ CHANGELOG.md and the notes files in step with it.
 A merge releases only if it bumps the version (CONTRIBUTING.md,
 "Versions and releases"). A change that should reach phones on its own
 (a fix, a small ask) bumps it; work landing in pieces, or that should go
-out with someone else's change, doesn't: its CHANGELOG lines go under
-`## Unreleased` and the next release PR takes them.
+out with someone else's change, doesn't: its lines go in `changes/<branch>.md`
+and the next release PR takes them.
 
 To bump: `node tools/release.js x.y.z` (new feature: minor, fix: patch,
 saved-page format change: major; always above the latest release). It
 changes `APP_VERSION` in `src/app.js`, every `?v=` in `index.html` and
-`CACHE` in `sw.js`, and dates the `## Unreleased` entry. By hand it's
+`CACHE` in `sw.js`, and folds every `changes/*.md` note into a dated CHANGELOG.md entry,
+deleting the notes. By hand it's
 the same three places. A file added to or removed from `src/` goes in or
 out of `sw.js`'s `ASSETS` too (that list is what goes into the apps;
 `tools/build-www.js` fails if `index.html` loads a file it lacks).
 
-## 2. CHANGELOG.md
+## 2. Change notes, not CHANGELOG.md
 
-`## [x.y.z] - YYYY-MM-DD`, newest first, `### Added` / `### Changed` /
-`### Fixed` / `### Removed`, in plain user-facing words. A PR that
-doesn't release writes its lines under `## Unreleased` at the top
-instead (make the heading if it isn't there). The release workflow
-copies the version's entry into the GitHub release notes.
+Write the PR's lines to `changes/<branch>.md` (slashes become hyphens)
+under `### Added` / `### Changed` / `### Fixed` / `### Removed`, in plain
+user-facing words. Don't touch CHANGELOG.md: only `tools/release.js`
+writes it, as `## [x.y.z] - YYYY-MM-DD`, newest first. A release PR
+for a single change can write its note and run the tool in the same PR.
+The release workflow copies the version's entry into the GitHub release
+notes.
 
 ## 3. Notes files (one home per entry)
 
-- **TODO.md**: remove what this change completes, add follow-ups.
-- **DONE.md**: one line for each feature this release adds, under its
-  area, with the version.
-- Copy TODO.md and DONE.md over the shared project folder's
-  waypage/TODO.md and waypage/DONE.md.
+- **TODO** (not in the repo; it lives at
+  `/mnt/project-files/waypage/TODO.md`): remove what this change
+  completes, add follow-ups.
 - **README.md**: every feature, one short line under its section. Add or
   change the line for what this release adds, and retake that section's
   pictures with `node tools/shots.js <section>` (desktop and phone, into
@@ -47,8 +48,9 @@ copies the version's entry into the GitHub release notes.
 - **ARCHITECTURE.md**: a file added, removed or renamed, or a flow
   changed, is updated here in the same change (`test/docs.test.js`
   checks the file list).
-- **NOTES.md**: why something is the way it is, newest first, each entry a
-  bold title with its version.
+- **Why**: in the commit message and PR body. A trap that would bite
+  again or a new trade-off gets a line in ARCHITECTURE.md (Traps,
+  Trade-offs). There is no NOTES.md.
 - **DROPPED.md**: what was decided against, with the reason.
 
 ## 4. Keep it lean
@@ -73,7 +75,7 @@ with their licence beside them. Reuse helpers in `src/app.js` (`el`,
 `main` only takes pull requests (31 Oct 2026): push the branch, open a
 PR, and merge it once the Tests check (`.github/workflows/test.yml`,
 `node test/run-all.js` with Playwright) is green. No review is required;
-merge without asking. Commit the version bump, CHANGELOG.md and notes
+merge without asking. Commit the version bump, change note and notes
 with the change. If `main` moved, merge it into the branch (a squash
 merge makes the old tip unmergeable by fast-forward, so merge, don't
 rebase or force-push). Never force-push `main`.

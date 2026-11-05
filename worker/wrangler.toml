@@ -1,0 +1,17 @@
+# Waypage's fetch proxy: https://waypage-fetch.<account>.workers.dev
+# Deployed by .github/workflows/worker.yml; worker/README.md has the setup.
+name = "waypage-fetch"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+# Stores nothing: no request logs, no traces.
+[observability]
+enabled = false
+
+# Per visitor (IP), counted at each Cloudflare location. Saving a book of
+# chapters fetches one page every second or two, well under this.
+[[ratelimits]]
+name = "PER_IP"
+namespace_id = "1001"
+simple = { limit = 120, period = 60 }

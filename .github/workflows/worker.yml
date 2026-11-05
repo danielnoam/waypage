@@ -1,0 +1,68 @@
+# Deploys the web copy's fetch proxy (worker/) to Cloudflare when it
+# changes on main, or by hand. Needs the repo secrets CLOUDFLARE_API_TOKEN
+# (the "Edit Cloudflare Workers" template, this account only) and
+# CLOUDFLARE_ACCOUNT_ID; without them it says so and stops. worker/README.md.
+name: Worker
+
+on:
+  push:
+    branches: [main]
+    paths: ["worker/**", ".github/workflows/worker.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy the fetch proxy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: node test/worker.test.js
+
+      - name: Deploy
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::notice::No Cloudflare secrets yet, so nothing was deployed (worker/README.md)."
+            exit 0
+          fi
+          npx --yes wrangler@4.151.2 deploy
+
+      # The live worker, from outside: the web copy gets pages through it,
+      # anyone else (a fork, no origin) is refused, and so are private
+      # addresses. The sites' answers are printed, not required, since a
+      # site can block Cloudflare's addresses.
+      - name: Check the live worker
+        env:
+          W: https://waypage-fetch.danielnoam1999.workers.dev/
+        run: |
+          code() { curl -s -o /dev/null -w "%{http_code}" "$@"; }
+          HOME_ORIGIN="Origin: https://danielnoam.github.io"
+          ok=$(code -H "$HOME_ORIGIN" "$W?url=https://example.com/")
+          fork=$(code -H "Origin: https://someone.github.io" "$W?url=https://example.com/")
+          none=$(code "$W?url=https://example.com/")
+          meta=$(code -H "$HOME_ORIGIN" "$W?url=http://169.254.169.254/")
+          post=$(code -X POST -H "$HOME_ORIGIN" "$W?url=https://example.com/")
+          echo "web copy $ok, fork $fork, no origin $none, metadata address $meta, POST $post"
+          curl -s -o /dev/null -D - -H "$HOME_ORIGIN" "$W?url=http://wikipedia.org/" | grep -iE "^HTTP|^x-final-url"
+          for u in https://en.wikipedia.org/wiki/Boeing_747 https://www.royalroad.com/fictions/best-rated "https://www.royalroad.com/fictions/search?title=mother" https://www.bbc.com/news https://www.ynet.co.il/; do
+            h=$(curl -s -o /dev/null -D - -H "$HOME_ORIGIN" "$W?url=$(node -p 'encodeURIComponent(process.argv[1])' "$u")")
+            echo "$(echo "$h" | head -1 | cut -d' ' -f2) $u $(echo "$h" | grep -i '^x-proxy-error' | tr -d '\r')$(echo "$h" | grep -i '^server:' | tr -d '\r')"
+          done
+          [ "$ok" = 200 ] && [ "$fork" = 403 ] && [ "$none" = 403 ] && [ "$meta" = 403 ] && [ "$post" = 405 ]

@@ -15,7 +15,7 @@ on:
   push:
     # claude/** (cloud sessions) build only on request: workflow_dispatch.
     branches-ignore: ["claude/**"]
-    paths-ignore: ["**.md", "test/**", ".claude/**"]
+    paths-ignore: ["**.md", "test/**", ".claude/**", "worker/**", ".github/workflows/worker.yml"]
   workflow_dispatch:
 
 permissions:
@@ -133,11 +133,11 @@ jobs:
           done
           echo "No app-v$V release after 20 minutes (did the Android build publish one?)"; exit 1
 
-      # A branch with an open pull request: the IPA joins the preview
+      # A branch with an open pull request: the IPA joins the test build
       # pre-release the Android workflow made at this commit (1.48.0).
-      - name: Attach to the preview
+      - name: Attach to the test build
         if: github.ref != 'refs/heads/main' && env.HAS_SIGNING_KEY == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           V: ${{ steps.v.outputs.version }}
-        run: bash tools/preview-release.sh attach Waypage.ipa
+        run: bash tools/test-build.sh attach Waypage.ipa

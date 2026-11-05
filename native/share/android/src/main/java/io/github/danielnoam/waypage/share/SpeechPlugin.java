@@ -58,11 +58,12 @@ public class SpeechPlugin extends Plugin {
 
     @Override
     public void load() {
-        SpeechService.listener = (key, index, state) -> {
+        SpeechService.listener = (key, index, state, thinking) -> {
             JSObject o = new JSObject();
             o.put("key", key);
             o.put("index", index);
             o.put("state", state);
+            o.put("thinking", thinking);
             notifyListeners("progress", o);
         };
         SpeechService.sleepListener = (at) -> {

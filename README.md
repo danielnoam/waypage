@@ -24,6 +24,7 @@ Each section below shows the computer (left) and the phone (right).
 - [Narrate](#narrate)
 - [Feeds](#feeds)
 - [Newsletters](#newsletters)
+- [Discover](#discover)
 - [Stats](#stats)
 - [Sync and backup](#sync-and-backup)
 - [Settings and the app](#settings-and-the-app)
@@ -50,7 +51,7 @@ Each section below shows the computer (left) and the phone (right).
 
 - Library with favourites, Collections and Clips; Feeds; Newsletters with the latest addresses and unread counts; Highlights; Stats; tags.
 - Library, Feeds and Newsletters fold under an arrow inside their row.
-- Always there on a wide screen, slides in on a phone.
+- Always there on a wide screen, slides in on a phone. Keys 1 to 5 go to its places.
 
 ## Collections and files
 
@@ -63,6 +64,7 @@ Each section below shows the computer (left) and the phone (right).
 - Big PDFs are read a piece at a time, never whole in memory.
 - A PowerPoint deck (.pptx) is offered as a PDF: Convert redraws the slides, you save the PDF where you like, and it opens like any PDF you picked there.
 - Watched folders bring new files into a chosen collection.
+- A comic or book that names its series (a CBZ's ComicInfo, an EPUB's series) goes into that series' collection in volume order.
 - The library can live in app storage, Documents or any folder you pick.
 
 ## Saving
@@ -72,11 +74,12 @@ Each section below shows the computer (left) and the phone (right).
 - Paste, drop or share a link; Ctrl V saves on a computer.
 - Save with options: several links at once, a file, article or comic, a collection and tags.
 - Wikipedia through its REST API, with its licence line; Readability for everything else.
+- Discussions whole: Reddit, Hacker News, Lobsters, Stack Overflow and the other Stack Exchange sites, any Discourse forum, Bluesky and Mastodon threads, and GitHub issues and pull requests, with who said what and replies indented. A GitHub code file as code, a repo as its README; an arXiv paper whole, from its web version.
 - Pictures as small previews, full size (capped at 1600 px WebP) or links only, per clip or in Settings; or load pictures only when tapped.
 - Images for feeds: while Images is Full images, a second pick in Settings sets the starting pictures for feeds you follow later; a feed's own menu still wins.
 - Videos as a thumbnail and a link.
 - Web serials: save next, previous or all along a site's next-chapter links, or a contents page as its chapters. Royal Road, AO3, Scribble Hub, FanFiction.net, Blogger, WEBTOON, Tapas and Wattpad.
-- Comics and manga as image chapters, read edge to edge; a page that is a column of pictures is spotted as one, and Save as comic fixes a clip saved as an article. Reading one, Auto-scroll takes Narrate's place, with its own Speed, Go on to the next clip and Keep the screen on.
+- Comics and manga as image chapters, read edge to edge; a page that is a column of pictures is spotted as one, and Save as comic (or Save as article) fixes a clip saved the wrong way. Reading one, Auto-scroll takes Narrate's place, with its own Speed, Go on to the next clip and Keep the screen on. In Pages a comic is one page a screen (two side by side on a wide window), turned like a book; a manga turns right to left, and a two-page spread is read in halves on a phone.
 - Pages built by JavaScript, drawn out of sight first; saving signed in to a site; the Internet Archive's copy when a page is gone.
 - Save linked pages from a clip, and Update from the site keeping highlights and your place.
 - Saves keep going with the app put away, wait for Wi-Fi if you like, and show in Downloads.
@@ -107,6 +110,7 @@ Each section below shows the computer (left) and the phone (right).
 - Themes: Paper, Sepia, Slate, Solarized, High contrast, Night, Black, Dusk and Solarized Dark, or Auto to follow the device.
 - Ten reading fonts, four Hebrew ones, and your own.
 - Size (or pinch), weight, line and letter spacing, margins, alignment, hyphenation.
+- Any of them, and Scroll or Pages, per clip, per collection or per book.
 - Dim pictures in dark themes.
 
 ## Skim
@@ -136,6 +140,7 @@ Each section below shows the computer (left) and the phone (right).
 - Goes on to the next clip; keeps the screen on if you like; picture in picture; Bluetooth previous and next.
 - Sleep timer from the moon on the player, and Sleep 15 min on the lock screen.
 - Speech engine picker and Get more voices on Android; Allow mixing with other apps' sound.
+- More speech engines on Android: Kokoro, one of three models to download, and pick a speech engine per language.
 
 ## Feeds
 
@@ -146,6 +151,7 @@ Each section below shows the computer (left) and the phone (right).
 - Checked with the app closed, with notifications per post or grouped, and quiet feeds.
 - Feeds in and out as OPML.
 - Swipe sideways to go to the next or previous feed (or address in Newsletters); the chips stay still.
+- On a computer the list and the open post share the window half and half; drag the line between them to resize.
 
 ## Newsletters
 
@@ -153,6 +159,15 @@ Each section below shows the computer (left) and the phone (right).
 
 - Make an email address (through Kill the Newsletter) and subscribe with it; emails arrive here and save as clips.
 - Several addresses, unread dots, Copy address, and Confirm for subscription emails.
+
+## Discover
+
+<p><img src="docs/shots/discover-desktop.jpg" width="74%" alt="Discover on a computer"> <img src="docs/shots/discover-phone.jpg" width="21%" alt="Discover on a phone"></p>
+
+- Browse feeds, newsletters and Royal Road stories to follow, by kind (Sites, Feeds, Newsletters), and add one with a tap; swipe to move between the chips.
+- A feed goes to Feeds, a story saves as a collection that gets its new chapters, and a newsletter (by email) copies your Newsletters address and opens its sign-up page.
+- On the phone, Sites browses Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON and Tapas as a grid by list and genre, page after page, plus hand-picked web serials.
+- The search at the top searches what's shown: the lists as you type, a story site when you press search.
 
 ## Stats
 
@@ -177,20 +192,20 @@ Each section below shows the computer (left) and the phone (right).
 
 <p><img src="docs/shots/settings-desktop.jpg" width="74%" alt="Settings on a computer"> <img src="docs/shots/settings-phone.jpg" width="21%" alt="Settings on a phone"></p>
 
-- Settings in groups: Appearance, Reading, Library, App lock, Saving, GitHub sync, Google Drive, Storage; a search box at the top finds any setting.
+- Settings in groups: Appearance, Reading, Library, App lock, Saving, GitHub sync, Google Drive, Storage; a search box at the top finds any setting. On a computer or tablet it opens as a window from the gear at the top right.
 - Every setting is a name and one short line; the longer explanation is behind a ? on its heading. Options are drop-downs, themes a grid of swatches.
 - About has the version, the changelog, and Credits: what Waypage is built with.
 - App lock: passcode, fingerprint or face on Android, erase when forgotten.
 - Home screen widgets on Android and iOS: Keep reading, Feeds, Favourites, Collection, Highlight; app icon shortcuts.
-- The Android app updates itself and shows What's new; About › Preview builds installs a branch's build before it's released, and puts the release back.
+- The Android app updates itself and shows What's new; About › Test builds installs a branch's build before it's released, and puts the release back.
 - Report a problem with a local error log.
-- Animations switch; motion zooms and moves, never fades.
+- Animations switch; motion zooms and moves, and only dialogs fade.
 
 ## Privacy and security
 
 - No server: pages are fetched on the device.
 - Saved pages are untrusted and shown in a sandboxed frame with no scripts and a strict CSP; PDFs render in their own locked-down frame.
-- Nothing leaves the device unless you turn it on (sync, Drive backups), and Translate runs on the device. The trade-offs are written in NOTES.md.
+- Nothing leaves the device unless you turn it on (sync, Drive backups), and Translate runs on the device. The trade-offs are listed in ARCHITECTURE.md.
 
 ## Run it
 

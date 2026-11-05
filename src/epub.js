@@ -3,7 +3,7 @@
 // saved page came through, with its saved pictures and its licence line.
 // Written from the EPUB 3.3 spec; the layout choices (mimetype first and
 // stored, nav.xhtml beside toc.ncx for older readers, no WebP) follow what
-// WebToEpub learned in practice (NOTES.md, 0.20.0). Packed by backup.js's
+// WebToEpub learned in practice. Packed by backup.js's
 // zip writer.
 (function () {
   const C = window.Waypage;

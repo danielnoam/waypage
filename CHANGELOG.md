@@ -2,13 +2,243 @@
 
 All notable changes to Carry-on. Newest first.
 
-## [1.53.0] - 2026-11-04
+
+## [1.54.0] - 2026-11-05
 
 ### Added
-- Images for feeds: in Settings, Saving, when Images is on Full images, a
-  second pick sets the pictures for feeds you follow from then on
-  (previews, full images or links only). A feed's own menu still changes
-  that feed.
+- Comics in Pages: one page a screen, turned with a tap on either side, a
+  swipe or the keys, the middle tap showing the bars. On a wide window two
+  pages sit side by side, the cover alone. Comics keep Scroll until you
+  pick Pages for them in Aa › Layout, apart from books.
+- A manga turns right to left, picked by itself when its CBZ's ComicInfo
+  says so; Aa › Layout › Turn pages changes it for that comic.
+- Wide pages, in Aa › Layout for a comic in Pages: a two-page spread on a
+  phone shows in halves (Split), or whole.
+- A pinch or double tap on a comic page in Pages opens it in the viewer to
+  zoom.
+- Series: a CBZ whose ComicInfo names its series and number, or an EPUB
+  with a series (calibre's or EPUB 3's), goes into that series' collection
+  in volume order, however the volumes were added.
+- With a mouse, clips and collections answer when you point at them: a soft tint, and the card or its cover lifts a little. Top bar buttons and sidebar rows tint and grow a touch too. Touch screens are unchanged, and Reduce motion or Animations off keep only the tint.
+
+### Changed
+- Merged Daniel's waypage main (his 1.49.0 to 1.52.1 and the two pending notes: comics page by page with series filing, desktop hover) into the fork. His version won every clash; the fork's own features stay on top.
+
+### Fixed
+- Pressing a sidebar heading with a fold arrow (like Library) now lights the whole row, arrow included, not just the part before it.
+
+## [1.52.1] - 2026-11-03
+
+### Added
+- The reader can have a theme of its own: Settings › Appearance, "Its own theme in the reader". The library, Feeds and Settings keep the app's theme; the theme in the reader's Aa sheet then changes the reader's.
+- The app's version shows in small text at the bottom of the sidebar.
+
+### Changed
+- Discover: Tapas is search only. Its lists don't give the app anything to read; pick Comics or Novels and search.
+
+### Fixed
+- Discover: FanFiction.net and FictionPress lists show their stories again when the phone gets their mobile site (it said "no stories were found" for most fandoms and categories).
+- Discover: WEBTOON's covers show (it only serves them to a visit from its own site, so the phone downloads each once).
+- On a test build, tapping the version in About checks for a newer release instead of opening Test builds.
+
+## [1.52.0] - 2026-11-03
+
+### Added
+- Discover, in the sidebar: browse feeds, newsletters and Royal Road stories to follow, by kind (Sites for Royal Road, Feeds, Newsletters), and add one with a tap; swipe to move between the chips. A feed opens Add a feed, a story saves as a collection that gets its new chapters, and a newsletter (one that comes by email) copies your Newsletters address and opens its sign-up page. On the phone, Sites browses Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON and Tapas as a grid, by list and genre (or fandom, or tag), page after page, plus hand-picked web serials (Worm, The Wandering Inn and more), saved whole; All shows a few from each, and "Sites" opens them. The search field at the top searches what's shown: the lists as you type, and the story site itself when you press search.
+- The web copy can save pages and follow feeds from most sites, through Waypage's own fetch proxy, which stores nothing. The phone app still fetches everything itself.
+
+### Fixed
+- Following a site whose page turns the app away (an error 403) still finds its feed, at the usual feed addresses.
+- Royal Road saves again on Android. It started asking for a browser check, so Waypage now reads it through its hidden browser instead of failing.
+- In a browser on a big screen, Changelog and What's new open inside the Settings window, beside its menu, instead of covering the whole screen.
+- GitHub sync and Storage in the Settings window read top to bottom in one column again; they were split into two side by side columns, so the sync steps read out of order.
+
+## [1.51.0] - 2026-11-02
+
+### Added
+- Discussions save whole. A Reddit post keeps its picture or text and its
+  comment tree, best first; a Hacker News story keeps its link and every
+  comment in HN's order; a Stack Overflow question (and Super User, Server
+  Fault, Ask Ubuntu and the other Stack Exchange sites) keeps the accepted
+  answer and the best others, five in all, with a link to the rest; a
+  GitHub issue or pull request keeps every comment. Each comment shows who
+  wrote it, its points and date, with replies indented under it.
+- A GitHub code file saves as the code itself, and a GitHub repo as its
+  README, named after the repo.
+- More discussions save whole: a topic on any Discourse forum (the Rust,
+  Python, Home Assistant and Obsidian forums and thousands more), a
+  Bluesky or Mastodon post with its replies (an author's own thread reads
+  as one post), and a Lobsters story with its comments.
+- An arXiv link saves the whole paper from its web version, formulas as
+  their LaTeX, instead of only the abstract. A paper without one still
+  saves its abstract page.
+- Settings per clip, per collection and per book. At the top of the Aa
+  sheet's Layout and Text, "Applies to" picks Everywhere, This clip (This
+  book for a file) or This collection; a change then stays there. Font,
+  size, spacing, alignment, margins and Scroll or Pages can differ; the
+  theme and Narrate stay the same for all. They're kept on this device,
+  like the settings in Settings.
+
+### Changed
+- Code blocks in clips have tighter lines.
+
+### Fixed
+- PDFs: a pinch zoom landed off the spot under your fingers, further off
+  the deeper into the PDF you were (a quarter of a page by page 25). It
+  now stays put, also when one finger was already scrolling.
+- PDFs: pinch zoom is smoother, above all with Dark PDF pages on, and a
+  zoom no longer draws the pages on screen again at the same sharpness.
+- A PDF shown as its pages had Narrate, which read only its title. It has
+  Auto-scroll in its place, as a comic does; Show as text brings Narrate
+  back.
+- A clip deleted while a sync was running came straight back when the
+  sync finished, so it had to be deleted twice. It now stays deleted,
+  and the next sync deletes it on your other devices.
+
+## [1.50.2] - 2026-11-01
+
+### Added
+- Narrate: while the voice is still being made (Kokoro at the start or
+  after a skip), a ring turns round Pause until it speaks.
+
+### Changed
+- Narrate (Kokoro): shorter pauses between paragraphs and sentences; the
+  quiet Kokoro leaves around each piece is trimmed.
+- More speech engines: a downloaded version has a bin to delete it, in
+  place of In use / Use and the Actions section; which one speaks is
+  picked in Speech engine.
+
+### Fixed
+- Picking another Kokoro version while it read closed the app.
+- Picking another speech engine in the reader's Narrate tab emptied the
+  tab until the settings were opened again, and in Settings the rows
+  jumped while they were drawn again.
+
+## [1.50.1] - 2026-11-01
+
+### Changed
+- A clip's sheet: Save as comic is back under More, in place of 1.50.0's
+  Read as Article / Comic switch, and a comic has Save as article.
+- Narrate (Android): the Speech engine list names each downloaded Kokoro
+  version (Kokoro 0.19, Kokoro 1.0, Kokoro 1.1), and picking one switches
+  to it.
+- Only one drop-down is open at a time: opening another closes it.
+
+### Fixed
+- Kokoro 1.1 downloads again; it was turned away as the wrong file.
+- "null" no longer shows under Kokoro in More speech engines.
+- A drop-down in a short sheet (Narrate's Voice) opens at its button
+  instead of far below it, off the screen.
+
+## [1.50.0] - 2026-11-01
+
+### Added
+- Narrate (Android): Kokoro voices. More speech engines, under Get
+  more voices, has three downloads: Kokoro 0.19 (English,
+  11 voices, about 99 MB, fastest), 1.0 (8 languages, 53 voices, about
+  350 MB, the best voices) and 1.1 (English and Chinese, 103 voices,
+  140 MB). One is in use at a time; they become a speech engine of the
+  app's own, picked for English when the first is in. Remove sits under
+  Actions. Phones with 64-bit ARM only.
+
+### Changed
+- Narrate (Android): the speech engine is picked for each language, so
+  an installed Kokoro engine can read English while Hebrew stays with
+  the phone's default. An engine picked before stays for every language
+  until one is changed.
+- Narrate (Android) hands the phone's voice the next paragraph while
+  one is read, and Kokoro starts making it right then, so it doesn't
+  pause between paragraphs (Android lets a voice get only half a second
+  ahead on its own).
+- Narrate's Speech engine list names the phone's default engine once,
+  not as the default and again on its own.
+- Reader: Auto-scroll's button is a play sign pointing down, not the
+  download-style arrow.
+- A clip's sheet (hold it in the library): Read as Article / Comic in
+  place of Save as comic, both ways. A web clip saves again that way; a
+  file (not a PDF read from outside) only changes how it's shown.
+- A drop-down in a short sheet (Export as) drops up over the screen
+  with its whole list, instead of being cut off at the sheet's edge.
+- Auto-scroll: a tap on the page pauses it; another tap, or scrolling
+  yourself, lets it go on. Holding a finger still holds it as before.
+- Preview builds are now Test builds, in the app and on GitHub: the
+  labels are test, test-android and test-ios, and the pre-releases
+  test-<branch>.
+- Test builds: a build being downloaded shows its progress on its row,
+  as About's update does (percent, Paused, Install).
+- A new version's bar: View opens What's new for it, every version since
+  yours with Update on top, so you see the changes before updating. In
+  About, tapping the version opens the same, and Update downloads it.
+
+## [1.49.2] - 2026-11-01
+
+### Changed
+- Computer and tablet: Settings opens as a window over the library,
+  instead of sliding in from the right across the whole window.
+- Computer: Search and Settings sit at the top right, beside Downloads,
+  instead of in the sidebar.
+- Downloads, Sync, Save with options and Settings fade in as they open,
+  and fade out as they close. Before, the box was uncovered from the
+  button's corner, which looked like a cut-out sliding open.
+- Computer: Feeds, Newsletters and Highlights split the room half and
+  half between the list and what's open beside it. Drag the line
+  between them to change it (or focus it and use the arrow keys;
+  double-click puts it back in the middle).
+
+### Added
+- Keys 1 to 5 go to Library, Feeds, Newsletters, Highlights and Stats.
+
+## [1.49.1] - 2026-11-01
+
+### Changed
+- Preview builds: only a pull request labelled preview gets one
+  (preview-android or preview-ios for one platform, sooner). Adding the
+  label builds it; taking it off removes it.
+
+### Fixed
+- Settings › Reading › Narrate and the reader's Narrate and Auto-scroll
+  tabs: the switches showed their storage names and were all on (1.49.0).
+
+## [1.49.0] - 2026-11-01
+
+### Added
+- Dark PDF pages: a switch at the bottom of Aa › Layout, shown while a
+  PDF's own pages are open (not when it is shown as text). In a dark
+  theme the pages are recoloured to the theme (paper becomes its
+  background, black text its text colour) instead of staying white.
+  Photos and coloured figures turn into negatives. Off by default; Paper
+  and the other light themes keep white pages.
+- PowerPoint decks: Open a file now takes a .pptx. It asks whether to
+  convert it to a PDF; Cancel stops and opens nothing. Convert redraws the
+  slides (text, shapes, pictures, tables, theme colours), asks where to save
+  the new PDF (on Android the save screen opens in the deck's folder), and
+  adds that PDF to Files, read from where it was saved, like any PDF you
+  open. Search, Narrate and highlights work on the slides' words. Hidden
+  slides are left out. Charts and diagrams without a picture, effects and
+  animations are not drawn, and the app says how many it left out. Nothing
+  is sent anywhere, and a picture that points outside the file is never
+  loaded.
+- Manga and comics are spotted when you save them. A page with little text
+  and a column of large pictures now saves as a comic (its panels, edge to
+  edge) without picking Comic in the new-collection options.
+- Save as comic, under More on a clip that was saved as an article: fetches
+  the page again as its pictures, in the old copy's place.
+- Comics and manga have Auto-scroll where Narrate was: the page moves by
+  itself, a finger on it holds it, and lifting lets it go on. The top bar
+  stays on while it scrolls, so its button can always stop it. The Aa tab
+  shows only Speed (its own, apart from Narrate's), Go on to the next clip
+  (the next chapter starts scrolling at the end) and Keep the screen on.
+- Preview builds in the browser: Settings › About › Preview builds on
+  the web copy opens a pull request's build in place of the release,
+  with a "Back to the release" link at the top.
+
+### Fixed
+- Settings › About › Preview builds: Check again works (it was always
+  greyed out), keeps the list on screen while it looks, and says when
+  it last checked. Opening the screen always looks again.
+- A branch without an open pull request no longer gets a preview build.
+
+## [1.48.4] - 2026-11-01
 
 ### Changed
 - Speed for Narrate and auto-scroll now goes up to 4×, not 3×. On iPhone

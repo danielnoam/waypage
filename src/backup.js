@@ -44,6 +44,9 @@
     if (typeof m.spot === "string" && /^\d{1,6}\/\d{1,2}c?$/.test(m.spot)) out.spot = m.spot;
     if (typeof m.imageBytes === "number" && m.imageBytes >= 0) out.imageBytes = num(m.imageBytes);
     if (m.comic === true) out.comic = true;
+    if (m.manga === true) out.manga = true;
+    if (m.turn === "rtl" || m.turn === "ltr") out.turn = m.turn;
+    if (typeof m.volume === "number" && Number.isFinite(m.volume)) out.volume = m.volume;
     if (m.cut === true) out.cut = true;
     if (num(m.archived)) out.archived = num(m.archived);
     if (num(m.editedAt)) out.editedAt = num(m.editedAt);
