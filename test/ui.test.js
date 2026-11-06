@@ -2514,7 +2514,7 @@ function zipOf(files) {
       await q.context().close();
     });
 
-    await test("Saving shows Images for feeds only while Images is Full images, and new feeds start with it (1.53.0)", async () => {
+    await test("Saving shows Images for feeds only while Images is Full images, and new feeds start with it (Unreleased)", async () => {
       const q = await page(browser, 390);
       const got = await q.evaluate(async () => {
         window.Waypage.platform.native = true;
@@ -2545,7 +2545,7 @@ function zipOf(files) {
       await q.context().close();
     });
 
-    await test("Speed goes up to 4× for Narrate and auto-scroll (1.53.0)", async () => {
+    await test("Speed goes up to 4× for Narrate and auto-scroll (Unreleased)", async () => {
       const q = await page(browser, 390);
       assert.strictEqual(await q.evaluate(() => RATE_MAX), 4);
       await q.context().close();
