@@ -1196,7 +1196,7 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 .toast[hidden] { display: none; }
 /* A toast with one thing to do (1.3.0): "Read to 64% on your other
    device." and a Go there button, 44px tall, in the bar's colours. */
-.toast:has(.toast-act) { display: flex; align-items: center; gap: var(--s-3); padding-block: var(--s-2); }
+.toast:not([hidden]):has(.toast-act) { display: flex; align-items: center; gap: var(--s-3); padding-block: var(--s-2); }
 .toast-act {
   flex: none; min-height: 44px; padding: 0 var(--s-3); border: 0; border-radius: var(--r-sm);
   background: transparent; color: var(--bg); font: 600 var(--fs-label)/var(--lh-label) var(--sans);
