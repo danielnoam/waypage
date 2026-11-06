@@ -187,7 +187,7 @@
     };
   }
 
-  // The series a book is part of (Unreleased): calibre's series and index,
+  // The series a book is part of (1.53.0): calibre's series and index,
   // or EPUB 3's belongs-to-collection with its group-position. A
   // collection that names itself a set rather than a series is left out.
   function bookSeries(opf) {

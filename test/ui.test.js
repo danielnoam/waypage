@@ -2526,7 +2526,7 @@ function zipOf(files) {
       await q.context().close();
     });
 
-    await test("Saving shows Images for feeds only while Images is Full images, and new feeds start with it (Unreleased)", async () => {
+    await test("Saving shows Images for feeds only while Images is Full images, and new feeds start with it (1.53.0)", async () => {
       const q = await page(browser, 390);
       const got = await q.evaluate(async () => {
         window.Waypage.platform.native = true;
@@ -2557,7 +2557,7 @@ function zipOf(files) {
       await q.context().close();
     });
 
-    await test("Speed goes up to 4× for Narrate and auto-scroll (Unreleased)", async () => {
+    await test("Speed goes up to 4× for Narrate and auto-scroll (1.53.0)", async () => {
       const q = await page(browser, 390);
       assert.strictEqual(await q.evaluate(() => RATE_MAX), 4);
       await q.context().close();
@@ -3005,7 +3005,7 @@ function zipOf(files) {
       await q.context().close();
     });
 
-    await test("a comic's series and number file it in order, an EPUB's series too (Unreleased)", async () => {
+    await test("a comic's series and number file it in order, an EPUB's series too (1.53.0)", async () => {
       const q = await page(browser, 390);
       // Copied in, not asked about (Chrome can read a file from where it is).
       const add = (b, name) => q.evaluate(async ([b, name]) => { askKeep = async () => false; await openFile(new File([new Uint8Array(b)], name), null, false); }, [b, name]);
@@ -3020,7 +3020,7 @@ function zipOf(files) {
       await q.context().close();
     });
 
-    await test("a comic in Pages: a page a screen, a manga turns right to left, a spread in halves, two up on a wide window (Unreleased)", async () => {
+    await test("a comic in Pages: a page a screen, a manga turns right to left, a spread in halves, two up on a wide window (1.53.0)", async () => {
       for (const width of [390, 1280]) {
         const q = await page(browser, width);
         await q.evaluate(async (b) => { askKeep = async () => false; await openFile(new File([new Uint8Array(b)], "v1.cbz"), null, false); }, [...mangaBytes(1)]);

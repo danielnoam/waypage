@@ -13,7 +13,7 @@
 // app-cards, app-downloads, app-search, app-draw, app-jobs, app-reader,
 // app-library, app-saving, app-places, app-settings, app-lock, and
 // app-start, which runs last and starts things up.
-const APP_VERSION = "1.52.1";
+const APP_VERSION = "1.53.0";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
@@ -46,7 +46,7 @@ const AUTO_KEY = "waypage.themeAuto";
 // A theme of its own for the reader (Daniel's ask), or "same" as the app.
 const READER_THEME_KEY = "waypage.readerTheme";
 const IMAGES_KEY = "waypage.images";
-// Pictures for feeds (Unreleased): when Images is Full, feeds can have their own
+// Pictures for feeds (1.53.0): when Images is Full, feeds can have their own
 // choice; a feed you follow starts with it, and its own menu still wins.
 const FEED_IMAGES_KEY = "waypage.feedImages";
 const feedImages = () => { const m = load(IMAGES_KEY, "previews"); return m === "full" ? load(FEED_IMAGES_KEY, "full") : m; };

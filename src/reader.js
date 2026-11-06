@@ -1112,7 +1112,7 @@
   // (1080 px at 2.625x is 411.43), where innerWidth is. The columns repeat
   // at the real one, so stepping a page by innerWidth slid the text 0.4 px
   // further off each page: a margin growing as you went, and far in a long
-  // clip (Unreleased).
+  // clip (1.53.0).
   const width = () => doc.documentElement.getBoundingClientRect().width || frame.contentWindow.innerWidth;
   const pages = () => Math.max(1, Math.round(doc.documentElement.scrollWidth / width()));
   // While a turn runs, the page is the one it's going to, so quick taps add up.

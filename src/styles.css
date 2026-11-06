@@ -1122,7 +1122,7 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 /* Reader settings (0.34.0): Layout, Text and Read aloud, each its own part. */
 .rc-part { display: flex; flex-direction: column; gap: var(--s-3); }
 .rc-part[hidden] { display: none; }
-/* A comic's own Layout rows (Unreleased), a note under a row at its end. */
+/* A comic's own Layout rows (1.53.0), a note under a row at its end. */
 .comic-rows { display: flex; flex-direction: column; gap: var(--s-3); }
 .comic-rows[hidden] { display: none; }
 .rc-note { margin-top: calc(var(--s-2) * -1); text-align: end; }
@@ -2351,7 +2351,7 @@ span.update-text { cursor: default; }
 
 @media (min-width: 1280px) {
   /* Picking several: one bar at the top, the actions at its end. Only where
-     it all fits on one line (Unreleased): a tablet keeps the phone's two bars. */
+     it all fits on one line (1.53.0): a tablet keeps the phone's two bars. */
   .select-head {
     top: calc(var(--s-4) + env(safe-area-inset-top)); left: calc(var(--lib-left) + var(--lib-pad)); right: var(--lib-pad);
     height: 52px; padding: 0 var(--s-2); justify-content: flex-start; gap: var(--s-2);
@@ -2450,7 +2450,7 @@ kbd {
     box-shadow: 0 12px 40px var(--shadow);
   }
   .reader .sheet-body { max-height: calc(100dvh - 140px); margin: 0 calc(-1 * var(--s-4)); padding: 0 var(--s-4) var(--s-1); }
-  /* A link, note or look-up opens from the text, with no button to hang under: the middle (Unreleased). */
+  /* A link, note or look-up opens from the text, with no button to hang under: the middle (1.53.0). */
   .reader .sheet[data-pop="center"] { inset: 0; margin: auto; height: fit-content; max-height: calc(100% - 2 * var(--s-5)); }
   .reader-name {
     display: flex; align-items: baseline; gap: var(--s-2); min-width: 0; margin: 0 0 0 var(--s-2);
