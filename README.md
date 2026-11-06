@@ -76,6 +76,7 @@ Each section below shows the computer (left) and the phone (right).
 - Wikipedia through its REST API, with its licence line; Readability for everything else.
 - Discussions whole: Reddit, Hacker News, Lobsters, Stack Overflow and the other Stack Exchange sites, any Discourse forum, Bluesky and Mastodon threads, and GitHub issues and pull requests, with who said what and replies indented. A GitHub code file as code, a repo as its README; an arXiv paper whole, from its web version.
 - Pictures as small previews, full size (capped at 1600 px WebP) or links only, per clip or in Settings; or load pictures only when tapped.
+- Images for feeds: while Images is Full images, a second pick in Settings sets the starting pictures for feeds you follow later; a feed's own menu still wins.
 - Videos as a thumbnail and a link.
 - Web serials: save next, previous or all along a site's next-chapter links, or a contents page as its chapters. Royal Road, AO3, Scribble Hub, FanFiction.net, Blogger, WEBTOON, Tapas and Wattpad.
 - Comics and manga as image chapters, read edge to edge; a page that is a column of pictures is spotted as one, and Save as comic (or Save as article) fixes a clip saved the wrong way. Reading one, Auto-scroll takes Narrate's place, with its own Speed, Go on to the next clip and Keep the screen on. In Pages a comic is one page a screen (two side by side on a wide window), turned like a book; a manga turns right to left, and a two-page spread is read in halves on a phone.
@@ -135,7 +136,7 @@ Each section below shows the computer (left) and the phone (right).
 <p><img src="docs/shots/narrate-desktop.jpg" width="74%" alt="Narrate on a computer"> <img src="docs/shots/narrate-phone.jpg" width="21%" alt="Narrate on a phone"></p>
 
 - The device's own voices, offline, with the screen off and lock-screen controls.
-- Read from here, a voice per language, speed 0.5x to 3x, footnotes on or off.
+- Read from here, a voice per language, speed 0.5x to 4x, footnotes on or off.
 - Goes on to the next clip; keeps the screen on if you like; picture in picture; Bluetooth previous and next.
 - Sleep timer from the moon on the player, and Sleep 15 min on the lock screen.
 - Speech engine picker and Get more voices on Android; Allow mixing with other apps' sound.

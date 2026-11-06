@@ -1198,8 +1198,8 @@ function aloudFrom(id) {
   aloudAuto = "here";
   openPage(id);
 }
-// Speed is a slider since 0.34.0, from half to three times.
-const RATE_MIN = 0.5, RATE_MAX = 3;
+// Speed is a slider since 0.34.0, from half to four times (Unreleased).
+const RATE_MIN = 0.5, RATE_MAX = 4;
 const FOOTNOTES_KEY = "waypage.aloudFootnotes";
 const EDGES_KEY = "waypage.aloudSkipEdges";
 // Read next by itself at the end of a clip (1.6.0), when there's a next.
@@ -2423,6 +2423,11 @@ function openSheet(kind, fromHistory) {
     sheet.style.left = left ? Math.max(8, at.left - box.left) + "px" : "";
     sheet.style.right = left ? "" : Math.max(8, box.right - at.right) + "px";
     M.popFrom(sheet, at);
+  } else if (wide.matches) {
+    // A link, note or look-up has no button to hang under: the middle (Unreleased).
+    sheet.dataset.pop = "center";
+    sheet.style.top = sheet.style.left = sheet.style.right = "";
+    M.rise(sheet);
   } else {
     delete sheet.dataset.pop;
     sheet.style.top = sheet.style.left = sheet.style.right = "";

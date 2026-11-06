@@ -1340,7 +1340,7 @@ function followFeeds(list) {
   for (const o of list) {
     if (feeds.some((h) => sameUrl(h.url, o.url))) continue;
     const title = cleanTag(o.title) || C.feeds.siteOf(o.url);
-    feeds.push({ url: o.url, title, link: "", icon: "", mode: "show", images: load(IMAGES_KEY, "previews"),
+    feeds.push({ url: o.url, title, link: "", icon: "", mode: "show", images: feedImages(),
       folder: cleanTag(o.folder) || title, days: 7, addedAt: Date.now(), checkedAt: 0, error: "", items: [] });
     added++;
   }
@@ -1579,7 +1579,7 @@ function saveFeedPosts(list) {
   }
   for (const [f, urls] of by) {
     const folder = f.folder ? folderName(f.folder) : null;
-    const how = { mode: C.platform.native ? f.images || load(IMAGES_KEY, "previews") : undefined };
+    const how = { mode: C.platform.native ? f.images || feedImages() : undefined };
     feedSaves = feedSaves.then(() => urls.length === 1 ? savePage(urls[0], folder || undefined, how)
       : saveAll(urls, folder, [], how.mode, true)).then(paintFeeds, paintFeeds);
   }

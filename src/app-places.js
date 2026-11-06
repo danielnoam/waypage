@@ -485,7 +485,7 @@ async function saveMail(f, it) {
     } catch (e) { toast("Couldn't reach that email. Kill the Newsletter keeps them a month."); return; }
   }
   const folder = f.folder ? folderName(f.folder) : undefined;
-  await savePage(full.url, folder, { mode: C.platform.native ? f.images || load(IMAGES_KEY, "previews") : undefined, given: mailPage(f, full, html) });
+  await savePage(full.url, folder, { mode: C.platform.native ? f.images || feedImages() : undefined, given: mailPage(f, full, html) });
 }
 
 // Every address's emails: the ones its feed has, and on a computer (or
@@ -613,7 +613,7 @@ function renderNewsletters() {
 // there a sheet asks for the feed link of one made on their page.
 async function addMailBox(url, title) {
   if (feeds.some((f) => sameUrl(f.url, url))) { toast("That address is here already."); return false; }
-  const f = { url, title, link: "", icon: "", mode: "save", images: load(IMAGES_KEY, "previews"), folder: title, days: MAIL_DAYS,
+  const f = { url, title, link: "", icon: "", mode: "save", images: feedImages(), folder: title, days: MAIL_DAYS,
     addedAt: Date.now(), checkedAt: 0, error: "", items: [] };
   feeds.push(f);
   askToNotify = true;
@@ -1450,7 +1450,7 @@ function addFeedSheet() {
   const paintNote = () => {
     if (!found) return;
     note.textContent = (mode === "save" ? "New posts save themselves while you're online. " : "New posts wait in Feeds for you to save. ")
-      + "Saved posts go into a collection called " + cleanTag(found.feed.title) + picturesLine(load(IMAGES_KEY, "previews")) + ".";
+      + "Saved posts go into a collection called " + cleanTag(found.feed.title) + picturesLine(feedImages()) + ".";
   };
   const reset = () => {
     found = null;
@@ -1493,7 +1493,7 @@ function addFeedSheet() {
   const follow = async () => {
     const got = found;
     const f = { url: got.url, title: cleanTag(got.feed.title) || C.feeds.siteOf(got.url), link: got.feed.link, icon: got.feed.icon,
-      mode, images: load(IMAGES_KEY, "previews"), folder: cleanTag(got.feed.title) || C.feeds.siteOf(got.url), days: 7,
+      mode, images: feedImages(), folder: cleanTag(got.feed.title) || C.feeds.siteOf(got.url), days: 7,
       addedAt: Date.now(), checkedAt: Date.now(), error: "", items: [] };
     // A newsletter address pasted here (1.43.0) goes to Newsletters.
     const mail = isMail(f);
@@ -1538,7 +1538,7 @@ function feedSheet() {
         (v) => { set({ mode: v }); if (v === "save") autoSave(f); })),
       C.platform.native ? row("Pictures", seg("feed-images", "Pictures", [
         { value: "previews", label: "Previews" }, { value: "full", label: "Full" }, { value: "links", label: "Links" },
-      ], f.images || load(IMAGES_KEY, "previews"), (v) => set({ images: v }))) : null,
+      ], f.images || feedImages(), (v) => set({ images: v }))) : null,
       row("Save into", into),
       row(mail ? "Skip emails older than" : "Skip posts older than", seg("feed-days", mail ? "Skip emails older than" : "Skip posts older than", FEED_DAYS, String(f.days || 7), (v) => set({ days: Number(v) }))),
       C.platform.native && notesPrefs().on ? row("Notifications", seg("feed-notes", "Notifications", [{ value: "on", label: "On" }, { value: "off", label: "Off" }],

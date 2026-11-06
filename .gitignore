@@ -6,3 +6,6 @@ node_modules/
 /ios/
 # sherpa-onnx's library for Kokoro voices, fetched by tools/sherpa-lib.sh.
 /native/share/android/src/main/jniLibs/
+
+native/share/android/.gradle/
+native/share/android/build/
