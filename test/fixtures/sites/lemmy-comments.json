@@ -1,0 +1,5 @@
+{"comments":[
+{"comment":{"id":1,"content":"KOReader, if you have an e-reader.","path":"0.1","published":"2026-10-30T11:00:00Z","deleted":false,"removed":false},"creator":{"name":"alice"},"counts":{"score":40}},
+{"comment":{"id":2,"content":"Seconded, and it syncs too.","path":"0.1.2","published":"2026-10-30T12:00:00Z","deleted":false,"removed":false},"creator":{"name":"bob","display_name":"Bob"},"counts":{"score":12}},
+{"comment":{"id":3,"content":"gone","path":"0.3","published":"2026-10-30T13:00:00Z","deleted":true,"removed":false},"creator":{"name":"carol"},"counts":{"score":0}}
+]}

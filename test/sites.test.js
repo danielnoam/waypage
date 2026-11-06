@@ -73,6 +73,28 @@ async function saveWith(browser, url, answers) {
   return { meta: got.meta, html: got.html, asked };
 }
 
+// Runs `fn(arg)` in the app with `answers` standing in for the network,
+// as saveWith does, for the calls that aren't a whole save (Find chapters).
+async function inPage(browser, answers, fn, arg) {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+  const p = await ctx.newPage();
+  const asked = [];
+  await ctx.route((u) => !u.href.startsWith(ROOT), (route) => {
+    const raw = new URL(route.request().url());
+    const u = /\.workers\.dev$/.test(raw.hostname) && raw.searchParams.get("url") || raw.href;
+    asked.push(u);
+    const cors = { "access-control-allow-origin": "*", "access-control-expose-headers": "X-Final-Url", "x-final-url": u };
+    const hit = answers.find(([t]) => (typeof t === "string" ? u.startsWith(t) : t.test(u)));
+    if (!hit || !hit[1]) return route.fulfill({ status: 404, body: "", headers: cors });
+    route.fulfill({ status: 200, body: fixture(hit[1]), headers: { "content-type": (/\.json$/.test(hit[1]) ? "application/json" : "text/html") + "; charset=utf-8", ...cors } });
+  });
+  await p.goto(ROOT);
+  await p.waitForFunction(() => window.Waypage && window.Waypage.save && window.Waypage.store);
+  const got = await p.evaluate(fn, arg);
+  await ctx.close();
+  return { got, asked };
+}
+
 // What the saved page says, worked out in Node without a DOM: enough to
 // check the shape of a thread.
 const count = (html, re) => (html.match(re) || []).length;
@@ -254,6 +276,89 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       assert.ok(count(html, /class="co-comment"/g) >= 45, "comments: " + count(html, /class="co-comment"/g));
       assert.ok(count(html, /class="co-replies"/g) > 3);
       assert.ok(/The article, on /.test(html));
+    });
+
+    await test("Lemmy: the post, its link and the comment tree, from any server's API", async () => {
+      const { meta, html } = await saveWith(browser, "https://lemmy.world/post/4242", [
+        ["https://lemmy.world/api/v3/post?id=4242", "lemmy-post.json"],
+        ["https://lemmy.world/api/v3/comment/list?post_id=4242", "lemmy-comments.json"],
+      ]);
+      assert.strictEqual(meta.title, "What's the best offline reader?");
+      assert.strictEqual(meta.site, "Books · lemmy.world");
+      assert.match(meta.byline, /Frequent Flyer · 128 points/);
+      assert.strictEqual(count(html, /class="co-comment"/g), 3);
+      assert.strictEqual(count(html, /class="co-replies"/g), 1, "Bob's reply sits under Alice's comment");
+      assert.match(html, /<strong>something<\/strong>/, "Markdown becomes HTML");
+      assert.match(plain(html), /The link, on example\.org/);
+      assert.match(plain(html), /\[deleted\]/);
+    });
+
+    await test("Substack: the post from its API, on the publication's own domain, with comments", async () => {
+      const { meta, html, asked } = await saveWith(browser, "https://www.example-letters.com/p/why-we-read-on-paper", [
+        ["https://www.example-letters.com/api/v1/posts/why-we-read-on-paper", "substack-post.json"],
+        ["https://www.example-letters.com/api/v1/post/987/comments", "substack-comments.json"],
+      ]);
+      assert.strictEqual(meta.title, "Why we read on paper");
+      assert.match(meta.byline, /^Rosa Field · /);
+      assert.ok(!meta.cut);
+      assert.match(plain(html), /And why screens are catching up/);
+      assert.match(plain(html), /Where screens win/);
+      assert.strictEqual(count(html, /class="co-comment"/g), 2);
+      assert.match(plain(html), /5 likes/);
+      assert.ok(!asked.includes("https://www.example-letters.com/p/why-we-read-on-paper"), "the page itself isn't fetched");
+    });
+
+    await test("LessWrong: the post and its comments from the forum's GraphQL API", async () => {
+      const { meta, html, asked } = await saveWith(browser, "https://www.lesswrong.com/posts/AbCdEfGhIjKlMnOpQ/notes-on-careful-reading", [
+        [/^https:\/\/www\.lesswrong\.com\/graphql\?query=/, "lesswrong.json"],
+      ]);
+      assert.strictEqual(meta.title, "Notes on careful reading");
+      assert.strictEqual(meta.site, "LessWrong");
+      assert.match(meta.byline, /^Quill · 87 points/);
+      assert.strictEqual(count(html, /class="co-comment"/g), 2);
+      assert.strictEqual(count(html, /class="co-replies"/g), 1);
+      assert.ok(decodeURIComponent(asked[0]).includes('postId:"AbCdEfGhIjKlMnOpQ"'));
+    });
+
+    await test("SpaceBattles: a threadmarked post is a chapter, its thread's threadmarks the contents", async () => {
+      const { meta, html } = await saveWith(browser, "https://forums.spacebattles.com/posts/1002/", [
+        ["https://forums.spacebattles.com/posts/1002/", "xf-post.html"],
+      ]);
+      assert.strictEqual(meta.title, "Arc 1.2");
+      assert.strictEqual(meta.series, "A Quiet Hive (Worm AU)");
+      assert.strictEqual(meta.site, "SpaceBattles");
+      assert.strictEqual(meta.byline, "Ashwin");
+      assert.strictEqual(meta.next, "https://forums.spacebattles.com/posts/1003/");
+      assert.strictEqual(meta.prev, "https://forums.spacebattles.com/posts/1001/");
+      assert.match(plain(html), /The bugs were quiet/);
+      assert.ok(!/Great chapter/.test(plain(html)), "only the marked post, not the replies under it");
+      const { got } = await inPage(browser, [
+        [/\/threads\/112233\/threadmarks$/, "xf-threadmarks.html"],
+        [/\/threads\/a-quiet-hive-worm-au\.112233\/$/, "xf-post.html"],
+      ], async () => {
+        const found = await Waypage.save.findChapters("https://forums.spacebattles.com/threads/a-quiet-hive-worm-au.112233/");
+        let thrown = null;
+        try { await Waypage.save.save("https://forums.spacebattles.com/threads/a-quiet-hive-worm-au.112233/"); } catch (e) { thrown = e.contents ? e.contents.links.length : String(e.message); }
+        return { found, thrown };
+      });
+      assert.strictEqual(got.found.title, "A Quiet Hive (Worm AU)");
+      assert.deepStrictEqual(got.found.links, [1001, 1002, 1003].map((n) => "https://forums.spacebattles.com/posts/" + n + "/"));
+      assert.strictEqual(got.thrown, 3, "a thread's own link opens its chapters to check");
+    });
+
+    await test("Wikisource: a work's subpages are its chapters; a chapter keeps its text and next part", async () => {
+      const { meta, html } = await saveWith(browser, "https://en.wikisource.org/wiki/The_Time_Machine_(Wells)/Chapter_2", [
+        ["https://en.wikisource.org/wiki/The_Time_Machine_(Wells)/Chapter_2", "ws-chapter.html"],
+      ]);
+      assert.strictEqual(meta.title, "Chapter 2");
+      assert.strictEqual(meta.series, "The Time Machine");
+      assert.strictEqual(meta.byline, "H. G. Wells");
+      assert.strictEqual(meta.next, "https://en.wikisource.org/wiki/The_Time_Machine_(Wells)/Chapter_3");
+      assert.match(plain(html), /none of us quite believed/);
+      assert.ok(!/public domain/.test(plain(html)), "the licence box goes");
+      const { got } = await inPage(browser, [["https://en.wikisource.org/wiki/The_Time_Machine_(Wells)", "ws-work.html"]],
+        () => Waypage.save.findChapters("https://en.wikisource.org/wiki/The_Time_Machine_(Wells)"));
+      assert.deepStrictEqual(got.links.map((u) => decodeURIComponent(u).replace(/^.*\//, "")), ["Chapter_1", "Chapter_2", "Chapter_3"]);
     });
 
     await test("Royal Road behind Cloudflare's browser check: read through the hidden browser", async () => {

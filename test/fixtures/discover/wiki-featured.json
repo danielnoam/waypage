@@ -1,0 +1,6 @@
+{"tfa":{"type":"standard","titles":{"canonical":"Sea_otter","normalized":"Sea otter","display":"<span>Sea otter</span>"},"description":"Marine mammal","extract":"The sea otter is a marine mammal native to the coasts of the northern Pacific.","thumbnail":{"source":"https://upload.wikimedia.org/otter.jpg"},"content_urls":{"desktop":{"page":"https://en.wikipedia.org/wiki/Sea_otter"},"mobile":{"page":"https://en.m.wikipedia.org/wiki/Sea_otter"}}},
+"mostread":{"date":"2026-11-05Z","articles":[
+{"views":1,"rank":1,"titles":{"normalized":"Main Page"},"namespace":{"id":0},"content_urls":{"desktop":{"page":"https://en.wikipedia.org/wiki/Main_Page"}}},
+{"views":9,"rank":2,"titles":{"normalized":"Halley's Comet"},"namespace":{"id":0},"description":"Short-period comet","content_urls":{"desktop":{"page":"https://en.wikipedia.org/wiki/Halley%27s_Comet"}}},
+{"views":8,"rank":3,"titles":{"normalized":"Ada Lovelace"},"namespace":{"id":0},"description":"English mathematician","content_urls":{"desktop":{"page":"https://en.wikipedia.org/wiki/Ada_Lovelace"}}}
+]}}

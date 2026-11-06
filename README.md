@@ -74,11 +74,12 @@ Each section below shows the computer (left) and the phone (right).
 - Paste, drop or share a link; Ctrl V saves on a computer.
 - Save with options: several links at once, a file, article or comic, a collection and tags.
 - Wikipedia through its REST API, with its licence line; Readability for everything else.
-- Discussions whole: Reddit, Hacker News, Lobsters, Stack Overflow and the other Stack Exchange sites, any Discourse forum, Bluesky and Mastodon threads, and GitHub issues and pull requests, with who said what and replies indented. A GitHub code file as code, a repo as its README; an arXiv paper whole, from its web version.
+- Discussions whole: Reddit, Hacker News, Lobsters, Stack Overflow and the other Stack Exchange sites, any Discourse forum, Lemmy, Substack (comments too), LessWrong and the EA Forum, Bluesky and Mastodon threads, and GitHub issues and pull requests, with who said what and replies indented. A GitHub code file as code, a repo as its README; an arXiv paper whole, from its web version.
 - Pictures as small previews, full size (capped at 1600 px WebP) or links only, per clip or in Settings; or load pictures only when tapped.
 - Images for feeds: while Images is Full images, a second pick in Settings sets the starting pictures for feeds you follow later; a feed's own menu still wins.
 - Videos as a thumbnail and a link.
-- Web serials: save next, previous or all along a site's next-chapter links, or a contents page as its chapters. Royal Road, AO3, Scribble Hub, FanFiction.net, Blogger, WEBTOON, Tapas and Wattpad.
+- A link to an EPUB, PDF or CBZ file downloads the file and adds it like one brought in.
+- Web serials: save next, previous or all along a site's next-chapter links, or a contents page as its chapters. Royal Road, AO3, Scribble Hub, FanFiction.net, Blogger, WEBTOON, Tapas, Wattpad, SpaceBattles and Sufficient Velocity (by their threadmarks), and Wikisource.
 - Comics and manga as image chapters, read edge to edge; a page that is a column of pictures is spotted as one, and Save as comic (or Save as article) fixes a clip saved the wrong way. Reading one, Auto-scroll takes Narrate's place, with its own Speed, Go on to the next clip and Keep the screen on. In Pages a comic is one page a screen (two side by side on a wide window), turned like a book; a manga turns right to left, and a two-page spread is read in halves on a phone.
 - Pages built by JavaScript, drawn out of sight first; saving signed in to a site; the Internet Archive's copy when a page is gone.
 - Save linked pages from a clip, and Update from the site keeping highlights and your place.
@@ -164,9 +165,12 @@ Each section below shows the computer (left) and the phone (right).
 
 <p><img src="docs/shots/discover-desktop.jpg" width="74%" alt="Discover on a computer"> <img src="docs/shots/discover-phone.jpg" width="21%" alt="Discover on a phone"></p>
 
+- Wikipedia today at the top: the featured article and the most read, in your language, saved with a tap.
 - Browse feeds, newsletters and Royal Road stories to follow, by kind (Sites, Feeds, Newsletters), and add one with a tap; swipe to move between the chips.
 - A feed goes to Feeds, a story saves as a collection that gets its new chapters, and a newsletter (by email) copies your Newsletters address and opens its sign-up page.
-- On the phone, Sites browses Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON and Tapas as a grid by list and genre, page after page, plus hand-picked web serials.
+- On the phone, Sites browses Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON, Tapas, SpaceBattles and Sufficient Velocity as a grid by list and genre, page after page, plus hand-picked web serials.
+- Books: Project Gutenberg and Standard Ebooks by list and subject, and Wikisource's texts; a book's EPUB downloads into the Library. These work in the browser too.
+- The list is checked every week, so a feed that dies gets fixed or dropped.
 - The search at the top searches what's shown: the lists as you type, a story site when you press search.
 
 ## Stats
