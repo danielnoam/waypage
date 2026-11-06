@@ -1987,6 +1987,18 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a toast with a button goes away, on its own and when the button is pressed", async () => {
+      const q = await page(browser, 390);
+      const gone = () => q.evaluate(() => getComputedStyle(document.getElementById("toast")).display === "none");
+      await q.evaluate(() => toast("Saved, but the site kept the rest for subscribers.", "Sign in", () => {}));
+      await q.locator("#toast .toast-act").click();
+      assert.ok(await gone(), "still showing after its button");
+      await q.evaluate(() => toast("Saved, but the site kept the rest for subscribers.", "Sign in", () => {}));
+      await until(q, () => getComputedStyle(document.getElementById("toast")).display === "none", null, 12000);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a PDF in Hebrew and English keeps each line's words in order, and a copy doesn't say it's a PDF (1.45.8)", async () => {
       const he = "זהו משפט בעברית עם המילה Waypage Offline Reader באמצע, ועוד מילים כדי שהשורה תהיה ארוכה מספיק להישבר לשתי שורות, וגם המספר 2026 כאן.";
       const en = "An English sentence with the Hebrew words שלום עולם in the middle, long enough that it wraps across more than one line of this page.";
