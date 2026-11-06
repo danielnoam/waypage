@@ -293,6 +293,9 @@
       const own = (site.contents && await site.contents(doc, at, res.text)) || null;
       const links = own ? own.links : site.list ? await site.list(doc, at, res.text) : [];
       if (links.length) return { title: (own && own.title) || readTitle(doc), links, cover };
+      // A site whose chapters are only ever its own kind of link (a
+      // Wikisource work's subpages): no guessing from the page's links.
+      if (site.ownChapters) return { title: readTitle(doc), links: [], cover };
     }
     return { title: readTitle(doc), links: pickChapters(linkGroups(doc, at)).map((l) => l.url), cover };
   }
@@ -801,6 +804,62 @@
       build: lobstersThread,
     },
     {
+      name: "LessWrong",
+      host: /^(www\.)?(lesswrong\.com|alignmentforum\.org)$|^forum\.effectivealtruism\.org$/i,
+      build: forumMagnumPost,
+    },
+    {
+      // SpaceBattles, Sufficient Velocity and Questionable Questing run
+      // XenForo with threadmarks: a story is a thread whose chapters are
+      // marked posts. A chapter is saved by its post (/posts/123/), the
+      // contents are the thread's threadmarks page.
+      name: "XenForo",
+      host: /^forums?\.(spacebattles\.com|sufficientvelocity\.com|questionablequesting\.com)$/i,
+      build: xfPost,
+      contents(doc, url) {
+        if (!/^\/threads\/[^/]+\/threadmarks\/?$/.test(new URL(url).pathname)) return null;
+        return xfThreadmarks(doc, url);
+      },
+      async list(doc, url) {
+        const id = xfThread(url);
+        if (!id) return [];
+        return (await xfAllThreadmarks(new URL(url).origin + "/threads/" + id + "/threadmarks")).links;
+      },
+    },
+    {
+      // Wikisource: a work's page lists its chapters as subpages
+      // (Title/Chapter 1); a chapter's header names the work, its author
+      // and the next and previous parts.
+      name: "Wikisource",
+      host: /^[a-z-]+\.(m\.)?wikisource\.org$/i,
+      ownChapters: true,
+      contents(doc, url) {
+        const own = decodeURIComponent(new URL(url).pathname);
+        if (!/^\/wiki\/[^:]+$/.test(own)) return null;
+        const box = doc.querySelector(".mw-parser-output") || doc.body;
+        const links = uniqueLinks([...box.querySelectorAll("a[href^='/wiki/']")]
+          .filter((a) => !a.closest(".ws-header, .wst-header, #headertemplate, .ws-noexport"))
+          .map((a) => absolute(a.getAttribute("href"), url))
+          .filter((u) => u && decodeURIComponent(new URL(u).pathname).startsWith(own + "/") && !/[#?]/.test(u)));
+        return links.length >= 2 ? { title: wsTitle(doc), links } : null;
+      },
+      chapter(doc, url) {
+        const box = doc.querySelector(".mw-parser-output");
+        if (!box) return null;
+        const content = box.cloneNode(true);
+        content.querySelectorAll(".ws-header, .wst-header, #headertemplate, .ws-noexport, .noprint, .mw-editsection, .navbox, #navigation, .licenseContainer, .licenseBanner").forEach((n) => n.remove());
+        const link = (sel) => { const a = doc.querySelector(sel); return a ? absolute(a.getAttribute("href"), url) || "" : ""; };
+        return {
+          content, licence: null,
+          title: text(doc.querySelector("#header_section_text, .wst-header-section")) || wsTitle(doc),
+          series: text(doc.querySelector("#header_title_text, .wst-header-title")),
+          byline: text(doc.querySelector("#header_author_text a, .wst-header-author a")),
+          next: link("#header_forward_text a, .wst-header-forward a"),
+          prev: link("#header_backward_text a, .wst-header-back a, .wst-header-backward a"),
+        };
+      },
+    },
+    {
       name: "Bluesky",
       host: /^(www\.)?bsky\.app$/i,
       build: blueskyThread,
@@ -815,6 +874,16 @@
       name: "Mastodon",
       path: /^\/(@[^/]+|users\/[^/]+\/statuses)\/\d+\/?$/,
       build: mastodonThread,
+    },
+    {
+      name: "Lemmy",
+      path: /^\/post\/\d+\/?$/,
+      build: lemmyThread,
+    },
+    {
+      name: "Substack",
+      path: /^\/p\/[a-z0-9-]+\/?$/i,
+      build: substackPost,
     },
     {
       name: "Stack Exchange",
@@ -1230,6 +1299,206 @@
     const t = String(text || "").replace(/\s+/g, " ").trim();
     if (t.length <= 80) return t;
     return t.slice(0, 80).replace(/\s+\S*$/, "") + "…";
+  }
+
+  // ---- Lemmy ----
+
+  // A post and its comments as a tree, from the server's API: any Lemmy
+  // server, known by the address (/post/123). Comments come best first,
+  // up to 200; their text is Markdown.
+  const LEMMY_PAGES = 4;
+  async function lemmyThread(url) {
+    const u = new URL(url);
+    const id = u.pathname.match(/^\/post\/(\d+)/)[1];
+    const api = u.origin + "/api/v3/";
+    const post = (await getJson(api + "post?id=" + id)).data;
+    const list = [];
+    for (let page = 1; page <= LEMMY_PAGES; page++) {
+      let got;
+      try { got = (await getJson(api + "comment/list?post_id=" + id + "&sort=Top&type_=All&limit=50&page=" + page)).data; } catch (e) { break; }
+      const more = (got && got.comments) || [];
+      list.push(...more);
+      if (more.length < 50) break;
+    }
+    return lemmyPage(post && post.post_view, list, url);
+  }
+  const md = (t) => (C.files && C.files.markdown ? C.files.markdown(String(t || "")) : "<p>" + esc(t) + "</p>");
+  function lemmyPage(pv, list, url) {
+    if (!pv || !pv.post || !pv.post.name) return null;
+    const p = pv.post;
+    const byId = new Map(), roots = [];
+    for (const c of list) {
+      if (!c || !c.comment) continue;
+      const gone = c.comment.deleted || c.comment.removed;
+      byId.set(c.comment.id, {
+        who: gone ? "" : (c.creator && (c.creator.display_name || c.creator.name)) || "", points: c.counts ? points(c.counts.score, "point") : "",
+        at: Date.parse(c.comment.published) || 0, html: gone ? "<p>[deleted]</p>" : md(c.comment.content), replies: [], path: String(c.comment.path || ""),
+      });
+    }
+    for (const node of byId.values()) {
+      const ids = node.path.split(".").map(Number);
+      const parent = ids.length > 2 ? byId.get(ids[ids.length - 2]) : null;
+      (parent ? parent.replies : roots).push(node);
+    }
+    const host = new URL(url).hostname;
+    const community = pv.community ? (pv.community.title || pv.community.name) : "";
+    const picture = /\.(jpe?g|png|gif|webp)(\?|$)/i.test(p.url || "") ? '<figure><img src="' + esc(p.url) + '" alt=""></figure>' : "";
+    const link = p.url && !picture ? linkLine(p.url, "The link, on " + siteName(p.url)) : "";
+    const self = new URL("/post/" + p.id, url).href;
+    return {
+      url: self, title: p.name.trim(), site: community ? community + " · " + host : host,
+      byline: [pv.creator ? pv.creator.display_name || pv.creator.name : "", pv.counts ? points(pv.counts.score, "point") : "", p.published ? formatDate(Date.parse(p.published)) : ""].filter(Boolean).join(" · "),
+      body: discussion({ lead: picture + link, post: { html: p.body ? md(p.body) : "" }, comments: roots, heading: "Comments" }),
+      base: self, licence: null, lang: "", dir: "", next: "", prev: "",
+    };
+  }
+
+  // ---- Substack ----
+
+  // A post from the publication's own API (any Substack, on its own
+  // domain or not, known by /p/slug), cleaner than its page, and its
+  // comments as a tree. A paid post comes as its free part.
+  async function substackPost(url) {
+    const u = new URL(url);
+    const slug = u.pathname.match(/^\/p\/([^/]+)/)[1];
+    const post = (await getJson(u.origin + "/api/v1/posts/" + slug)).data;
+    let comments = [];
+    if (post && post.id) {
+      try { comments = (await getJson(u.origin + "/api/v1/post/" + post.id + "/comments?all_comments=true&sort=best_first")).data.comments || []; } catch (e) { comments = []; }
+    }
+    return substackPage(post, comments, url);
+  }
+  const textParas = (t) => String(t || "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean).map((p) => "<p>" + esc(p).replace(/\n/g, "<br>") + "</p>").join("");
+  function substackPage(post, comments, url) {
+    if (!post || !post.title || !post.body_html) return null;
+    const likes = (c) => Object.values(c.reactions || {}).reduce((n, x) => n + (Number(x) || 0), 0);
+    const tree = (list) => (list || []).map((c) => ({
+      who: c.deleted ? "" : c.name || "", points: likes(c) ? points(likes(c), "like") : "", at: Date.parse(c.date) || 0,
+      html: c.deleted || !c.body ? "<p>[deleted]</p>" : textParas(c.body), replies: tree(c.children),
+    }));
+    const by = (post.publishedBylines || []).map((b) => b && b.name).filter(Boolean).join(", ");
+    const self = post.canonical_url || url;
+    const lead = post.subtitle ? "<p><em>" + esc(post.subtitle) + "</em></p>" : "";
+    return {
+      url: self, title: post.title.trim(), site: siteName(self),
+      byline: [by, post.post_date ? formatDate(Date.parse(post.post_date)) : ""].filter(Boolean).join(" · "),
+      body: discussion({ lead, post: { html: post.body_html }, comments: tree(comments), heading: "Comments" }),
+      base: self, licence: null, lang: "", dir: "", next: "", prev: "",
+      cut: post.audience === "only_paid" || !!post.truncated_body_text && !post.body_html,
+    };
+  }
+
+  // ---- LessWrong, the EA Forum and the Alignment Forum ----
+
+  // One codebase (ForumMagnum) with a public GraphQL API: the post and its
+  // comments, best first, as a tree.
+  const FORUM_NAMES = { "lesswrong.com": "LessWrong", "alignmentforum.org": "Alignment Forum", "forum.effectivealtruism.org": "EA Forum" };
+  async function forumMagnumPost(url) {
+    const u = new URL(url);
+    const id = (u.pathname.match(/^\/posts\/([A-Za-z0-9]{10,24})/) || [])[1];
+    if (!id) return null;
+    const q = '{post(input:{selector:{_id:"' + id + '"}}){result{_id title pageUrl postedAt baseScore htmlBody user{displayName}}}' +
+      ' comments(input:{terms:{view:"postCommentsTop",postId:"' + id + '",limit:300}}){results{_id parentCommentId postedAt baseScore htmlBody deleted user{displayName}}}}';
+    const got = (await getJson(u.origin + "/graphql?query=" + encodeURIComponent(q))).data;
+    return forumMagnumPage(got && got.data, url);
+  }
+  function forumMagnumPage(data, url) {
+    const post = data && data.post && data.post.result;
+    if (!post || !post.title || !post.htmlBody) return null;
+    const nodes = new Map(), roots = [];
+    const list = (data.comments && data.comments.results) || [];
+    for (const c of list) nodes.set(c._id, { who: c.deleted ? "" : (c.user && c.user.displayName) || "", points: points(c.baseScore, "point"), at: Date.parse(c.postedAt) || 0, html: c.deleted ? "<p>[deleted]</p>" : c.htmlBody || "", replies: [] });
+    for (const c of list) { const parent = c.parentCommentId && nodes.get(c.parentCommentId); (parent ? parent.replies : roots).push(nodes.get(c._id)); }
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    const self = post.pageUrl ? absolute(post.pageUrl, url) : url;
+    return {
+      url: self, title: post.title.trim(), site: FORUM_NAMES[host] || host,
+      byline: [post.user && post.user.displayName, points(post.baseScore, "point"), post.postedAt ? formatDate(Date.parse(post.postedAt)) : ""].filter(Boolean).join(" · "),
+      body: discussion({ post: { html: post.htmlBody }, comments: roots, heading: "Comments" }),
+      base: self, licence: null, lang: "", dir: "", next: "", prev: "",
+    };
+  }
+
+  // ---- XenForo story forums (SpaceBattles, Sufficient Velocity) ----
+
+  const XF_NAMES = { "spacebattles.com": "SpaceBattles", "sufficientvelocity.com": "Sufficient Velocity", "questionablequesting.com": "Questionable Questing" };
+  const xfName = (url) => XF_NAMES[new URL(url).hostname.replace(/^forums?\./, "")] || siteName(url);
+  const xfThread = (url) => (new URL(url).pathname.match(/^\/threads\/(?:[^/]*\.)?(\d+)/) || [])[1] || "";
+  // A post's number, from any of the ways XenForo links one.
+  const xfPostId = (href) => (String(href || "").match(/\/posts\/(\d+)|\/post-(\d+)|#post-(\d+)/) || []).slice(1).find(Boolean) || "";
+  const xfPostUrl = (origin, id) => origin + "/posts/" + id + "/";
+  // One threadmarks page: its chapters as /posts/ addresses, in order, with
+  // the ranges a long list folds away fetched in their place.
+  async function xfThreadmarks(doc, url) {
+    const origin = new URL(url).origin;
+    const box = doc.querySelector(".block-body, .structItemContainer, main") || doc.body;
+    const links = [];
+    for (const n of box.querySelectorAll(".structItem--threadmark .structItem-title a[href], [data-fetchurl]")) {
+      if (n.hasAttribute("data-fetchurl")) {
+        try {
+          const got = (await getJson(absolute(n.getAttribute("data-fetchurl"), url), { "X-Requested-With": "XMLHttpRequest" })).data;
+          const part = parse((got && got.html && (got.html.content || got.html)) || "", url);
+          for (const a of part.querySelectorAll("a[href]")) { const id = xfPostId(a.getAttribute("href")); if (id) links.push(xfPostUrl(origin, id)); }
+        } catch (e) { /* that range stays out */ }
+        continue;
+      }
+      const id = xfPostId(n.getAttribute("href"));
+      if (id) links.push(xfPostUrl(origin, id));
+    }
+    const next = doc.querySelector("a.pageNav-jump--next[href]");
+    return { title: text(doc.querySelector("h1.p-title-value")).replace(/\s*-\s*Threadmarks.*$/i, "").replace(/^Threadmarks\s*(for:?)?\s*/i, ""), links: uniqueLinks(links), next: next ? absolute(next.getAttribute("href"), url) : "" };
+  }
+  async function xfAllThreadmarks(url) {
+    const out = { title: "", links: [] };
+    for (let page = 0, at = url; at && page < 40; page++) {
+      const res = await get(at);
+      const got = await xfThreadmarks(parse(res.text, res.url || at), res.url || at);
+      if (!out.title) out.title = got.title;
+      out.links.push(...got.links);
+      at = got.next && got.next !== at ? got.next : "";
+    }
+    out.links = uniqueLinks(out.links);
+    return out;
+  }
+  // One marked post as a chapter, with the threadmark's name and the next
+  // and previous marked posts.
+  async function xfPost(url) {
+    const u = new URL(url);
+    const id = xfPostId(u.pathname + u.hash);
+    if (!id) {
+      // A thread's own address: its threadmarks are its chapters.
+      if (!/^\/threads\/[^/]+\/?$/.test(u.pathname)) return null;
+      const marks = await xfAllThreadmarks(u.origin + "/threads/" + xfThread(url) + "/threadmarks");
+      if (marks.links.length) throw new ContentsPage({ title: marks.title, links: marks.links });
+      return null;
+    }
+    const res = await get(xfPostUrl(u.origin, id));
+    return xfPage(parse(res.text, res.url || url), id, res.url || url);
+  }
+  function xfPage(doc, id, at) {
+    const origin = new URL(at).origin;
+    const post = doc.querySelector('article[data-content="post-' + id + '"], #js-post-' + id + ", #post-" + id);
+    const bb = post && post.querySelector(".message-body .bbWrapper, .bbWrapper");
+    if (!bb) return null;
+    const body = document.implementation.createHTMLDocument("").body;
+    body.append(body.ownerDocument.importNode(bb, true));
+    const thread = text(doc.querySelector("h1.p-title-value"));
+    const mark = text(post.querySelector(".threadmarkLabel, .message-cell--threadmark-header .threadmarkLabel"));
+    const nav = (word) => {
+      const a = post.querySelector(".threadmark-control--" + word + "[href], a[class*='threadmark-control--" + word + "']");
+      const n = a && xfPostId(a.getAttribute("href"));
+      return n ? xfPostUrl(origin, n) : "";
+    };
+    const self = xfPostUrl(origin, id);
+    return {
+      url: self, title: mark || thread || "Post " + id, series: mark ? thread : "", site: xfName(at),
+      byline: post.getAttribute("data-author") || text(post.querySelector(".message-name")),
+      body, base: self, licence: null, lang: "", dir: "", next: nav("next"), prev: nav("prev"),
+    };
+  }
+
+  function wsTitle(doc) {
+    return text(doc.querySelector("#header_title_text, .wst-header-title")) || text(doc.querySelector("h1#firstHeading, h1")) || readTitle(doc);
   }
 
   // ---- Bluesky ----
@@ -1823,7 +2092,9 @@
     if (given) asPage = true;
     if (site && site.build && !given && !comic) {
       let built = null;
-      try { built = await site.build(url); } catch (e) { built = null; }
+      // A builder may find a list of chapters (a forum thread's
+      // threadmarks), which opens to check unless one page was asked for.
+      try { built = await site.build(url); } catch (e) { if (e instanceof ContentsPage && !asPage) throw e; built = null; }
       if (built) return built;
     }
     const res = given ? { status: 200, url: given.url, text: given.html }

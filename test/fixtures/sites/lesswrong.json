@@ -1,0 +1,4 @@
+{"data":{"post":{"result":{"_id":"AbCdEfGhIjKlMnOpQ","title":"Notes on careful reading","pageUrl":"https://www.lesswrong.com/posts/AbCdEfGhIjKlMnOpQ/notes-on-careful-reading","postedAt":"2026-09-01T00:00:00.000Z","baseScore":87,"htmlBody":"<p>Careful reading is a skill. It can be practised like any other, and these notes are about how.</p><p>First, slow down at the claims that matter. Second, write down what you expected before you read the answer. Third, come back a week later.</p>","user":{"displayName":"Quill"}}},"comments":{"results":[
+{"_id":"c1","parentCommentId":null,"postedAt":"2026-09-02T00:00:00.000Z","baseScore":20,"htmlBody":"<p>The third point is underrated.</p>","deleted":false,"user":{"displayName":"Reader One"}},
+{"_id":"c2","parentCommentId":"c1","postedAt":"2026-09-03T00:00:00.000Z","baseScore":5,"htmlBody":"<p>Agreed.</p>","deleted":false,"user":{"displayName":"Reader Two"}}
+]}}}

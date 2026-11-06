@@ -57,6 +57,7 @@ const savingAs = (url) => state.saving.some((s) => !s.error && (sameUrl(s.url, u
 const newJob = (url, folder) => ({ key: url, url, site: C.save.siteName(url), done: 0, total: null, error: null, folder: folder || null });
 
 async function savePage(url, folder, how) {
+  if (!(how && how.given) && fileLinkName(url)) return saveFileLink(url);
   const existing = savedAs(url);
   if (existing) { toast("Already in your library"); openPage(existing.id); return; }
   if (state.saving.some((s) => !s.error && sameUrl(s.url, url))) return;
@@ -72,6 +73,48 @@ async function savePage(url, folder, how) {
   if (meta) savedToast(meta);
   if (meta && !C.platform.native) C.store.keepStored();
   else if (job.contents) contentsFound(job);
+}
+
+// A link to a file (an EPUB, a PDF, a CBZ comic, Project Gutenberg's
+// ebook links): downloaded and added like a file brought in, not read as
+// a page. arXiv's PDFs keep their own rule (its HTML version).
+function fileLinkName(url) {
+  let u;
+  try { u = new URL(url); } catch (e) { return ""; }
+  if (!/^https?:$/.test(u.protocol) || /(^|\.)arxiv\.org$/i.test(u.hostname)) return "";
+  const pg = u.pathname.match(/^\/ebooks\/(\d+)\.epub3?\.(no)?images$/);
+  if (/(^|\.)gutenberg\.org$/i.test(u.hostname) && pg) return "Gutenberg " + pg[1] + ".epub";
+  const m = u.pathname.match(/([^/]+\.(epub|pdf|cbz))$/i);
+  return m ? decodeURIComponent(m[1]) : "";
+}
+const FILE_HEADS = [[0x50, 0x4b], [0x25, 0x50, 0x44, 0x46]];
+async function isFileBlob(blob) {
+  const head = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+  return FILE_HEADS.some((h) => h.every((b, i) => head[i] === b));
+}
+async function saveFileLink(url, name, page) {
+  if (!navigator.onLine) { toast("You're offline. Add it when you're back online."); return; }
+  if (!C.platform.canReadPages) { toast("This browser can't download from that site. Add it in Waypage on your phone."); return; }
+  name = name || fileLinkName(url) || "file";
+  toast("Downloading “" + name.replace(/\.[a-z0-9]+$/i, "") + "”…");
+  try {
+    let got = await C.platform.fetchBytes(url, name);
+    // Some sites answer the first download with a page that links the file
+    // (a thank-you page); its link to the same kind of file is followed.
+    if (got.status === 200 && !(await isFileBlob(got.blob)) && got.blob.size < 2e6) {
+      const doc = new DOMParser().parseFromString(await got.blob.text(), "text/html");
+      const ext = (name.match(/\.([a-z0-9]+)$/i) || [])[1] || "epub";
+      const refresh = doc.querySelector('meta[http-equiv="refresh" i]');
+      const a = [...doc.querySelectorAll("a[href]")].map((x) => x.getAttribute("href")).find((h) => new RegExp("\\." + ext + "(\\?|$)", "i").test(h) && !/kepub|advanced/i.test(h));
+      const next = (refresh && (/url=(.+)$/i.exec(refresh.getAttribute("content") || "") || [])[1]) || a;
+      if (next) got = await C.platform.fetchBytes(new URL(next.replace(/^['"]|['"]$/g, ""), got.url || url).href, name);
+    }
+    if (got.status >= 400) throw new Error("HTTP " + got.status);
+    if (!(await isFileBlob(got.blob))) throw new Error("not a file");
+    await openFile(new File([got.blob], name, { type: got.blob.type || got.type || "" }), null, true, null, {});
+  } catch (e) {
+    toast("Couldn't download it just now. Try again later" + (page ? ", or open it on the site." : "."));
+  }
 }
 
 // Save for later, offline (1.14.0): the link waits in Downloads, and in

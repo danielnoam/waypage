@@ -350,6 +350,108 @@ async function phone(browser) {
       await ctx.close();
     });
 
+    await test("books, texts and story forums read as stories from their sites' answers", async () => {
+      const { ctx, p } = await phone(browser);
+      const got = await p.evaluate(([pg, se, ws, xf, wiki]) => {
+        const D = window.Waypage.discover;
+        return {
+          pg: D.parseGutendex(pg), se: D.parseSE(se, "https://standardebooks.org/ebooks"), ws: D.parseWsList(ws),
+          xf: D.parseXf(xf, "https://forums.spacebattles.com/forums/creative-writing.18/", "sb"),
+          wiki: D.parseWikiToday(wiki, "en"),
+          ids: ["https://forums.spacebattles.com/threads/a-quiet-hive-worm-au.112233/", "https://forums.sufficientvelocity.com/threads/9/"].map(D.storyId),
+          urls: [D.pgBrowseUrl("popular", "fiction", 2), D.seBrowseUrl("popularity", "horror", 1), D.xfBrowseUrl("sv", "post_date", 3)],
+        };
+      }, [fixture("gutendex.json"), fixture("se-list.html"), fixture("ws-cat.json"), fixture("xf-board.html"), fixture("wiki-featured.json")]);
+      await ctx.close();
+      assert.strictEqual(got.pg.length, 2);
+      assert.strictEqual(got.pg[0].title, "Pride and Prejudice");
+      assert.strictEqual(got.pg[0].by, "Jane Austen");
+      assert.strictEqual(got.pg[0].epub, "https://www.gutenberg.org/ebooks/1342.epub3.images");
+      assert.ok(got.pg[0].book);
+      assert.strictEqual(got.pg[0].about, "A novel of manners about Elizabeth Bennet and Mr Darcy.");
+      assert.strictEqual(got.pg[0].stat, "78K downloads");
+      assert.strictEqual(got.pg[1].epub, "https://www.gutenberg.org/ebooks/84.epub3.images", "a book with no formats gets Gutenberg's own EPUB address");
+      assert.deepStrictEqual(got.se.map((b) => [b.title, b.by]), [["Pride and Prejudice", "Jane Austen"], ["War and Peace", "Leo Tolstoy"]]);
+      assert.strictEqual(got.se[0].epub, "https://standardebooks.org/ebooks/jane-austen/pride-and-prejudice/downloads/jane-austen_pride-and-prejudice.epub");
+      assert.strictEqual(got.se[1].epub, "https://standardebooks.org/ebooks/leo-tolstoy/war-and-peace/louise-maude_aylmer-maude/downloads/leo-tolstoy_war-and-peace_louise-maude_aylmer-maude.epub");
+      assert.strictEqual(got.se[0].cover, "https://standardebooks.org/images/covers/pride-cover-thumbnail.jpg");
+      assert.deepStrictEqual(got.ws.items.map((t) => t.title), ["The Time Machine (Wells)", "A Modest Proposal"], "categories inside a category are left out");
+      assert.strictEqual(got.ws.next, "page|4b49|123");
+      assert.strictEqual(got.ws.items[0].url, "https://en.wikisource.org/wiki/The_Time_Machine_(Wells)");
+      assert.deepStrictEqual(got.xf.map((t) => t.title), ["A Quiet Hive (Worm AU)", "Salt Crown"], "the pinned rules thread is left out");
+      assert.strictEqual(got.xf[0].url, "https://forums.spacebattles.com/threads/a-quiet-hive-worm-au.112233/");
+      assert.strictEqual(got.xf[0].chapters, 42);
+      assert.strictEqual(got.xf[0].stat, "310k words");
+      assert.deepStrictEqual(got.xf[0].tags, ["Worm"]);
+      assert.strictEqual(got.xf[1].chapters, 7);
+      assert.deepStrictEqual(got.ids, ["sb112233", "sv9"]);
+      assert.strictEqual(got.wiki.featured.title, "Sea otter");
+      assert.deepStrictEqual(got.wiki.most.map((a) => a.title), ["Halley's Comet", "Ada Lovelace"], "the Main Page isn't an article to read");
+      assert.match(got.urls[0], /^https:\/\/gutendex\.com\/books\/\?sort=popular&languages=en&topic=fiction&page=2$/);
+      assert.strictEqual(got.urls[1], "https://standardebooks.org/subjects/horror?sort=popularity&per-page=48");
+      assert.strictEqual(got.urls[2], "https://forums.sufficientvelocity.com/forums/user-fiction.2/page-3?order=post_date&direction=desc");
+    });
+
+    await test("Wikipedia today sits at the top of All; a book's + downloads its EPUB into the Library", async () => {
+      const { ctx, p } = await phone(browser);
+      await p.evaluate(([wiki, pg, list]) => {
+        const P = Waypage.platform;
+        P.fetchText = async (url) => {
+          window.asked.push(url);
+          if (/wikipedia\.org\/api\/rest_v1\/feed\/featured\//.test(url)) return { status: 200, url, text: wiki };
+          if (/gutendex/.test(url)) return { status: 200, url, text: pg };
+          return { status: 200, url, text: list };
+        };
+        // A zip's first bytes, as an EPUB starts.
+        window.fetched = [];
+        P.fetchBytes = async (url) => { window.fetched.push(url); return { status: 200, url, type: "application/epub+zip", blob: new Blob([new Uint8Array([0x50, 0x4b, 3, 4, 0, 0])]) }; };
+        window.opened = [];
+        window.openFile = async (file, btn, open, ref, forced) => { window.opened.push({ name: file.name, size: file.size, forced: !!forced }); };
+        goPlace("discover");
+      }, [fixture("wiki-featured.json"), fixture("gutendex.json"), fixture("rr-list.html")]);
+      await p.locator('#discover .section-head:has-text("Wikipedia today")').waitFor();
+      const heads = (await p.locator("#discover .section-head .overline").allTextContents()).map((t) => t.replace("›", ""));
+      assert.strictEqual(heads[0], "Wikipedia today");
+      assert.strictEqual(await p.locator("#discover .dz-wiki .dz-row").count(), 3);
+      assert.match(await p.locator("#discover .dz-wiki .dz-row").first().textContent(), /Sea otter[\s\S]*Featured article/);
+      // Sites: Project Gutenberg, a book's sheet, then Add the book.
+      await p.locator('#discover .chip:has-text("Sites")').click();
+      await p.locator("#discover .dz-tools .dropdown").first().locator(".dropdown-btn").click();
+      await p.locator('[role="option"]:has-text("Project Gutenberg")').click();
+      await p.locator('#discover .dz-grid .dz-book:has-text("Pride and Prejudice")').click();
+      await p.locator('#menuSheet[data-kind="story"]:not([hidden])').waitFor();
+      const sheet = await p.locator("#menuSheet").textContent();
+      assert.match(sheet, /Jane Austen/);
+      assert.match(sheet, /78K downloads/);
+      await p.locator('#menuSheet .btn-primary:has-text("Add the book")').click();
+      await p.waitForFunction(() => window.opened.length === 1);
+      const got = await p.evaluate(() => ({ fetched: window.fetched, opened: window.opened, asked: window.asked }));
+      await ctx.close();
+      assert.deepStrictEqual(got.fetched, ["https://www.gutenberg.org/ebooks/1342.epub3.images"]);
+      assert.deepStrictEqual(got.opened, [{ name: "Pride and Prejudice - Jane Austen.epub", size: 6, forced: true }]);
+      assert.ok(got.asked.some((u) => u.startsWith("https://gutendex.com/books/?sort=popular")), got.asked.join(" "));
+    });
+
+    await test("a pasted link to an EPUB file is downloaded, not read as a page", async () => {
+      const { ctx, p } = await phone(browser);
+      const got = await p.evaluate(async () => {
+        const names = ["https://www.gutenberg.org/ebooks/84.epub3.images", "https://example.com/books/Moby%20Dick.epub", "https://example.com/a.pdf?x=1", "https://arxiv.org/pdf/2401.00001.pdf", "https://example.com/post"].map(fileLinkName);
+        window.opened = [];
+        window.openFile = async (file) => { window.opened.push(file.name); };
+        let calls = 0;
+        // A thank-you page first, which links the file.
+        Waypage.platform.fetchBytes = async (url) => (calls++ === 0
+          ? { status: 200, url, type: "text/html", blob: new Blob(['<html><body><a href="/downloads/moby_compatible.kepub.epub">Kobo</a> <a href="/downloads/moby.epub">EPUB</a></body></html>'], { type: "text/html" }) }
+          : { status: 200, url, type: "application/epub+zip", blob: new Blob([new Uint8Array([0x50, 0x4b, 3, 4])]) });
+        await savePage("https://example.com/books/Moby%20Dick.epub");
+        return { names, opened: window.opened, saving: state.saving.length };
+      });
+      await ctx.close();
+      assert.deepStrictEqual(got.names, ["Gutenberg 84.epub", "Moby Dick.epub", "a.pdf", "", ""]);
+      assert.deepStrictEqual(got.opened, ["Moby Dick.epub"]);
+      assert.strictEqual(got.saving, 0, "no page save was started");
+    });
+
     await test("the web copy hides Royal Road and says where it works", async () => {
       const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
       const p = await ctx.newPage();
@@ -360,6 +462,10 @@ async function phone(browser) {
       assert.strictEqual(await p.locator("#discover .dz-book").count(), 0);
       await p.locator('#discover .chip:has-text("Sites")').click();
       assert.match(await p.locator("#discover").textContent(), /on your phone/);
+      // The books and texts are read here too, through the fetch proxy.
+      await p.locator("#discover .dz-tools .dropdown").first().locator(".dropdown-btn").click();
+      const sites = await p.locator('[role="option"]').allTextContents();
+      assert.deepStrictEqual(sites.map((t) => t.trim()), ["Project Gutenberg", "Standard Ebooks", "Wikisource", "Web serials"]);
       await ctx.close();
     });
   } finally {

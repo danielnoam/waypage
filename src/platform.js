@@ -189,6 +189,27 @@
     return { status: res.status, url: res.headers.get("X-Final-Url") || url, text: await res.text() };
   }
 
+  // A file's bytes as a Blob (a book's EPUB from Discover or a pasted
+  // link), with its final address and type. The app downloads it into the
+  // cache and reads it back from there; a browser fetches it, through the
+  // proxy unless the site allows any origin.
+  async function fetchBytes(url, name) {
+    if (plugin("Filesystem") && plugin("CapacitorHttp")) {
+      const path = "fetched/" + String(name || "file").replace(/[^\w.-]+/g, "_").slice(0, 80);
+      const src = await downloadTo(url, path, null, "CACHE");
+      if (!src) throw new TypeError("Failed to fetch (no file)");
+      const blob = await (await fetch(src)).blob();
+      plugin("Filesystem").deleteFile({ path, directory: "CACHE" }).catch(() => {});
+      return { status: 200, url, type: blob.type, blob };
+    }
+    const res = !PROXY || direct(url)
+      ? await deadline(fetch(url), PAGE_TIMEOUT * 2)
+      : await deadline(fetch(PROXY + "?" + new URLSearchParams({ url, accept: "*/*" }), { credentials: "omit" }), PAGE_TIMEOUT * 2);
+    const refused = res.headers.get("X-Proxy-Error");
+    if (refused && res.status !== 429) throw new TypeError("Failed to fetch (" + refused + ")");
+    return { status: res.status, url: res.headers.get("X-Final-Url") || res.url || url, type: res.headers.get("Content-Type") || "", blob: await res.blob() };
+  }
+
   // A form sent to a site (1.43.0, making or deleting a newsletter
   // address), as { status, text }. The app only: a browser's CORS keeps
   // it from reading the answer.
@@ -1149,6 +1170,7 @@
       if (c && c.addEventListener) c.addEventListener("change", f);
     },
     fetchText,
+    fetchBytes,
     postForm,
     signIn,
     translateText,

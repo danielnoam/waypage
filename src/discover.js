@@ -84,6 +84,8 @@
   // A story's id: Royal Road's number, or the site's key and its number
   // (FictionPress "fp123"), so a saved collection is known by its source.
   const IDS = [
+    [/(^|\.)spacebattles\.com$/i, "sb", /^\/threads\/(?:[^/]*\.)?(\d+)/],
+    [/(^|\.)sufficientvelocity\.com$/i, "sv", /^\/threads\/(?:[^/]*\.)?(\d+)/],
     [/(^|\.)fictionpress\.com$/i, "fp", /^\/s\/(\d+)/],
     [/(^|\.)fanfiction\.net$/i, "ffn", /^\/s\/(\d+)/],
     [/(^|\.)(archiveofourown\.org|ao3\.org)$/i, "ao3", /^\/works\/(\d+)/],
@@ -441,6 +443,235 @@
   let tapasKind = "COMICS";
   const tapasSearch = (words) => found(stories(TAPAS + "/search?t=" + tapasKind + "&q=" + encodeURIComponent(String(words || "").trim()), parseTapas));
 
+  // ---- Books: Project Gutenberg and Standard Ebooks ----
+  // Public-domain books as EPUB files: + downloads the file and adds it to
+  // the Library like any file. `book` marks them; `epub` is the file.
+  // Gutenberg is read through Gutendex (gutendex.com), a JSON index of its
+  // catalogue, 32 books a page.
+  const GUTENDEX = "https://gutendex.com/books/";
+  const PG = "https://www.gutenberg.org";
+  const PG_LISTS = [{ key: "popular", label: "Most downloaded" }, { key: "descending", label: "Newest" }];
+  const PG_TOPICS = ["Fiction", "Science fiction", "Adventure", "Detective and mystery", "Romance", "Horror", "Fantasy", "Short stories", "Poetry", "Drama", "Philosophy", "History", "Science", "Children"]
+    .map((t) => ({ key: t.toLowerCase(), label: t === "Detective and mystery" ? "Mystery" : t }));
+  // "Austen, Jane" reads "Jane Austen".
+  const personName = (n) => String(n || "").replace(/^([^,]+),\s*([^,]+)$/, "$2 $1").trim();
+  function parseGutendex(body) {
+    let data;
+    try { data = JSON.parse(String(body || "").trim()); } catch (e) {
+      try { data = JSON.parse(new DOMParser().parseFromString(String(body || ""), "text/html").body.textContent); } catch (x) { return []; }
+    }
+    return ((data && data.results) || []).filter((b) => b && b.id && b.title).slice(0, MAX).map((b) => {
+      const f = b.formats || {};
+      const epub = httpUrl(f["application/epub+zip"]) || PG + "/ebooks/" + b.id + ".epub3.images";
+      return {
+        id: "pg" + b.id, url: PG + "/ebooks/" + b.id, site: "Project Gutenberg", book: true, epub,
+        title: String(b.title).replace(/\s*\$[a-z]\s*/g, " ").replace(/\s+/g, " ").trim().slice(0, 120), cover: httpUrl(f["image/jpeg"]),
+        tags: (b.bookshelves || []).map((t) => String(t).replace(/^(Browsing|Category):\s*/i, "")).filter((t) => t && !/Best Books|Listings|^Reading Lists?$/i.test(t)).slice(0, 3),
+        chapters: 0, followers: 0, rating: 0, stat: b.download_count ? short(b.download_count) + " downloads" : "",
+        by: (b.authors || []).map((a) => personName(a && a.name)).filter(Boolean).slice(0, 2).join(", "),
+        about: String((b.summaries || [])[0] || "").replace(/\s*\(This is an automatically generated summary\.\)\s*$/i, "").slice(0, 600),
+      };
+    });
+  }
+  const pgBrowseUrl = (key, topic, page) => {
+    const u = new URL(GUTENDEX);
+    u.searchParams.set("sort", key === "descending" ? "descending" : "popular");
+    u.searchParams.set("languages", "en");
+    if (topic) u.searchParams.set("topic", topic);
+    if (page > 1) u.searchParams.set("page", String(page));
+    return u.href;
+  };
+  const pgSearch = (words) => found(stories(GUTENDEX + "?search=" + encodeURIComponent(String(words || "").trim()), parseGutendex));
+
+  // Standard Ebooks: about a thousand classics, carefully edited. Its list
+  // pages mark each book with schema.org's Book (li[typeof="schema:Book"]);
+  // a book's EPUB is downloads/<its path with _>.epub.
+  const SE = "https://standardebooks.org";
+  const SE_LISTS = [{ key: "popularity", label: "Most popular" }, { key: "newest", label: "Newest" }, { key: "reading-ease", label: "Easiest to read" }, { key: "length", label: "Shortest" }];
+  const SE_SUBJECTS = ["fiction", "nonfiction", "adventure", "science-fiction", "fantasy", "horror", "mystery", "comedy", "drama", "poetry", "shorts", "philosophy", "travel", "childrens"]
+    .map((t) => ({ key: t, label: t === "childrens" ? "Children's" : t === "shorts" ? "Short stories" : t[0].toUpperCase() + t.slice(1).replace("-", " ") }));
+  const SE_BOOK = /^\/ebooks\/([a-z0-9-]+(?:\/[a-z0-9_-]+){1,3})\/?$/;
+  const seEpub = (path) => SE + "/ebooks/" + path + "/downloads/" + path.replace(/\//g, "_") + ".epub";
+  function parseSE(html, base) {
+    const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
+    const out = [];
+    for (const row of doc.querySelectorAll('li[typeof="schema:Book"], ol.ebooks-list > li')) {
+      let path = "";
+      for (const a of row.querySelectorAll("a[href]")) {
+        let u;
+        try { u = new URL(a.getAttribute("href"), base || SE); } catch (e) { continue; }
+        const m = SE_BOOK.exec(u.pathname);
+        if (m && !/\/downloads\b/.test(u.pathname)) { path = m[1]; break; }
+      }
+      if (!path || out.some((x) => x.id === "se" + path)) continue;
+      const names = [...row.querySelectorAll('[property="schema:name"]')].map(text).filter(Boolean);
+      const author = text(row.querySelector('.author [property="schema:name"], .author'));
+      const img = row.querySelector("img");
+      const title = (names[0] && names[0] !== author ? names[0] : "") || text(row.querySelector("p a, a:not([tabindex])"));
+      if (!title) continue;
+      out.push({
+        id: "se" + path, url: SE + "/ebooks/" + path, site: "Standard Ebooks", book: true, epub: seEpub(path), title: title.slice(0, 120),
+        cover: img ? httpUrl(new URL(img.getAttribute("src") || "", base || SE).href) : "",
+        tags: [], chapters: 0, followers: 0, rating: 0, stat: "", by: author, about: "",
+      });
+      if (out.length >= MAX) break;
+    }
+    return out;
+  }
+  const seBrowseUrl = (sort, subject, page) => {
+    const u = new URL(subject ? SE + "/subjects/" + subject : SE + "/ebooks");
+    u.searchParams.set("sort", sort || "popularity");
+    u.searchParams.set("per-page", "48");
+    if (page > 1) u.searchParams.set("page", String(page));
+    return u.href;
+  };
+  const seSearch = (words) => found(stories(SE + "/ebooks?query=" + encodeURIComponent(String(words || "").trim()) + "&per-page=48", parseSE));
+
+  // ---- Wikisource ----
+  // Public-domain texts, through the wiki's API (which any site may read).
+  // Lists are its categories, 40 at a time, the next batch named by the
+  // last one's `continue`; a text saves as a collection when its page
+  // lists chapters as subpages, else as one clip.
+  const WS = "https://en.wikisource.org";
+  const WS_LISTS = [["Featured_texts", "Featured"], ["Novels", "Novels"], ["Short_stories", "Short stories"], ["Poems", "Poems"], ["Plays", "Plays"], ["Essays", "Essays"]]
+    .map(([key, label]) => ({ key, label }));
+  const wsNext = new Map();
+  const wsItem = (title, about) => ({
+    id: "ws" + title.replace(/ /g, "_"), url: WS + "/wiki/" + encodeURIComponent(title.replace(/ /g, "_")).replace(/%2F/g, "/"), site: "Wikisource",
+    title: String(title).slice(0, 120), cover: "", tags: [], chapters: 0, followers: 0, rating: 0, stat: "", by: "", about: String(about || "").slice(0, 600),
+  });
+  function parseWsList(body) {
+    let data;
+    try { data = JSON.parse(String(body || "").trim()); } catch (e) { return { items: [], next: "" }; }
+    const q = (data && data.query) || {};
+    const plain = (h) => new DOMParser().parseFromString(String(h || ""), "text/html").body.textContent.replace(/\s+/g, " ").trim();
+    const items = (q.categorymembers || q.search || []).filter((p) => p && p.ns === 0 && p.title).map((p) => wsItem(p.title, plain(p.snippet)));
+    return { items: items.slice(0, MAX), next: (data.continue && (data.continue.cmcontinue || "")) || "" };
+  }
+  async function wsBrowse(key, page) {
+    const at = key + ":" + page;
+    if (page > 1 && !wsNext.get(key + ":" + (page - 1))) return [];
+    const u = new URL(WS + "/w/api.php");
+    for (const [k, v] of Object.entries({ action: "query", format: "json", origin: "*", list: "categorymembers", cmtitle: "Category:" + key, cmnamespace: "0", cmlimit: "40" })) u.searchParams.set(k, v);
+    if (page > 1) u.searchParams.set("cmcontinue", wsNext.get(key + ":" + (page - 1)));
+    const res = await C.platform.fetchText(u.href, { headers: { Accept: "application/json" } });
+    if (res.status !== 200) throw new Error("HTTP " + res.status);
+    const got = parseWsList(res.text);
+    wsNext.set(at, got.next);
+    return got.items;
+  }
+  async function wsSearch(words) {
+    const u = new URL(WS + "/w/api.php");
+    for (const [k, v] of Object.entries({ action: "query", format: "json", origin: "*", list: "search", srnamespace: "0", srlimit: "30", srsearch: String(words || "").trim() })) u.searchParams.set(k, v);
+    const res = await C.platform.fetchText(u.href, { headers: { Accept: "application/json" } });
+    if (res.status !== 200) throw new Error("HTTP " + res.status);
+    return parseWsList(res.text).items;
+  }
+
+  // ---- SpaceBattles and Sufficient Velocity ----
+  // Story forums (XenForo) where a story is a thread and its chapters are
+  // threadmarks; their fiction boards list threads (div.structItem--thread),
+  // in the board's orders, 20 or so a page.
+  const XF_ORDERS = [{ key: "last_post_date", label: "Latest updates" }, { key: "post_date", label: "New" }, { key: "reply_count", label: "Most replies" }, { key: "view_count", label: "Most viewed" }];
+  const XF_BOARDS = {
+    sb: { origin: "https://forums.spacebattles.com", board: "/forums/creative-writing.18/", site: "SpaceBattles" },
+    sv: { origin: "https://forums.sufficientvelocity.com", board: "/forums/user-fiction.2/", site: "Sufficient Velocity" },
+  };
+  const XF_THREAD = /^\/threads\/(?:[^/]*\.)?(\d+)\/?$/;
+  function parseXf(html, base, key) {
+    const { origin, site } = XF_BOARDS[key];
+    const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
+    const out = [];
+    for (const row of doc.querySelectorAll(".structItem--thread, .structItem")) {
+      if (row.classList.contains("structItem--sticky") || row.closest(".structItemContainer-group--sticky")) continue;
+      const links = [...row.querySelectorAll(".structItem-title a[href]")];
+      const a = links.reverse().find((x) => { try { return XF_THREAD.test(new URL(x.getAttribute("href"), base || origin).pathname); } catch (e) { return false; } });
+      if (!a) continue;
+      const path = new URL(a.getAttribute("href"), base || origin).pathname;
+      const n = XF_THREAD.exec(path)[1];
+      if (out.some((x) => x.id === key + n)) continue;
+      const all = text(row);
+      const words = /Words?:?\s*([\d.,]+\s*[kKmM]?)/.exec(all);
+      out.push({
+        id: key + n, url: origin + path.replace(/\/?$/, "/"), site, title: text(a).slice(0, 120), cover: "",
+        tags: [...row.querySelectorAll(".structItem-title .label, .structItem-tagBlock a, .tagItem")].map(text).filter(Boolean).slice(0, 3),
+        chapters: num((/([\d,]+)\s+threadmarks?/i.exec(all) || /threadmarks?:?\s*([\d,]+)/i.exec(all) || [])[1]),
+        followers: 0, rating: 0, stat: words ? words[1].replace(/\s+/g, "") + " words" : "",
+        by: row.getAttribute("data-author") || text(row.querySelector(".username")), about: "",
+      });
+      if (out.length >= MAX) break;
+    }
+    return out;
+  }
+  const xfBrowseUrl = (key, order, page) => {
+    const { origin, board } = XF_BOARDS[key];
+    const u = new URL(origin + board + (page > 1 ? "page-" + page : ""));
+    u.searchParams.set("order", order || "last_post_date");
+    u.searchParams.set("direction", "desc");
+    return u.href;
+  };
+  // A search of thread titles; XenForo answers a GET search with a
+  // redirect to its results page (div.contentRow rows, not structItems).
+  const xfSearch = (key) => (words) => {
+    const { origin } = XF_BOARDS[key];
+    return found(stories(origin + "/search/search?keywords=" + encodeURIComponent(String(words || "").trim()) + "&t=post&c[title_only]=1&o=relevance", (h, b) => parseXfSearch(h, b, key)));
+  };
+  function parseXfSearch(html, base, key) {
+    const rows = parseXf(html, base, key);
+    if (rows.length) return rows;
+    const { origin, site } = XF_BOARDS[key];
+    const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
+    const out = [];
+    for (const a of doc.querySelectorAll(".contentRow-title a[href], h3 a[href]")) {
+      let u;
+      try { u = new URL(a.getAttribute("href"), base || origin); } catch (e) { continue; }
+      const m = /^\/threads\/(?:[^/]*\.)?(\d+)\//.exec(u.pathname);
+      if (!m || out.some((x) => x.id === key + m[1])) continue;
+      out.push({ id: key + m[1], url: origin + "/threads/" + m[1] + "/", site, title: text(a).slice(0, 120), cover: "", tags: [], chapters: 0, followers: 0, rating: 0, stat: "", by: "", about: "" });
+    }
+    return out.slice(0, MAX);
+  }
+
+  // ---- Wikipedia today ----
+  // The day's featured article and most read, from Wikipedia's feed API
+  // (any site may read it, so the web copy too), in the phone's language
+  // when Wikipedia has a feed for it. Kept for the day, for offline.
+  const WIKI_KEY = "waypage.discover.wiki";
+  const WIKI_LANGS = /^(en|he|de|fr|es|it|pt|ru|ja|zh|ar|pl|nl|sv|uk|fa|ko|tr|vi|id|cs|fi|no|da|hu|ro|el|bg|ca)$/;
+  const day = (t) => { const d = new Date(t); return [d.getUTCFullYear(), String(d.getUTCMonth() + 1).padStart(2, "0"), String(d.getUTCDate()).padStart(2, "0")]; };
+  const wikiLang = () => { const l = String((navigator.languages && navigator.languages[0]) || navigator.language || "en").slice(0, 2).toLowerCase(); return WIKI_LANGS.test(l) ? l : "en"; };
+  function parseWikiToday(body, lang) {
+    let data;
+    try { data = JSON.parse(String(body || "").trim()); } catch (e) { return null; }
+    const one = (p) => p && p.titles && p.content_urls ? {
+      title: (p.titles.normalized || p.titles.display || "").replace(/<[^>]+>/g, ""), url: httpUrl(p.content_urls.desktop && p.content_urls.desktop.page) || httpUrl(p.content_urls.mobile && p.content_urls.mobile.page),
+      about: String(p.description || p.extract || "").slice(0, 200), thumb: httpUrl(p.thumbnail && p.thumbnail.source),
+    } : null;
+    const featured = one(data && data.tfa);
+    const most = ((data && data.mostread && data.mostread.articles) || []).filter((p) => p && (!p.namespace || p.namespace.id === 0))
+      .map(one).filter((p) => p && p.url && p.title && !/^(Main Page|Special:|Wikipedia:)/.test(p.title)).slice(0, 6);
+    if (!featured && !most.length) return null;
+    return { lang, featured: featured && featured.url ? featured : null, most };
+  }
+  const wikiSaved = () => read(WIKI_KEY, null);
+  async function wikiToday(force) {
+    const had = wikiSaved();
+    const today = day(Date.now()).join("/");
+    if (!force && had && had.day === today) return had;
+    const ask = async (lang) => {
+      // The feed for a day fills in during it, so yesterday's most read
+      // is the whole of a day.
+      const res = await C.platform.fetchText("https://" + lang + ".wikipedia.org/api/rest_v1/feed/featured/" + today, { headers: { Accept: "application/json" } });
+      return res.status === 200 ? parseWikiToday(res.text, lang) : null;
+    };
+    const lang = wikiLang();
+    const got = (await ask(lang)) || (lang !== "en" ? await ask("en") : null);
+    if (!got) throw new Error("no Wikipedia today");
+    const out = { at: Date.now(), day: today, ...got };
+    keep(WIKI_KEY, out);
+    return out;
+  }
+
   // The first page of a source's first list, for All's Sites row, kept
   // like Royal Road's.
   const FIRST_KEY = "waypage.discover.first.";
@@ -512,7 +743,21 @@
     // novels for the search.
     { key: "tp", label: "Tapas", comics: true, once: true, searchOnly: true, lists: TAPAS_LISTS, genres: [], anyGenre: true,
       browse: (k) => { tapasKind = k || "COMICS"; return Promise.resolve([]); }, search: tapasSearch },
+
+    { key: "sb", label: "SpaceBattles", lists: XF_ORDERS, genres: [], anyGenre: true,
+      browse: (k, g, p) => stories(xfBrowseUrl("sb", k, p), (h, b) => parseXf(h, b, "sb")), search: xfSearch("sb") },
+    { key: "sv", label: "Sufficient Velocity", lists: XF_ORDERS, genres: [], anyGenre: true,
+      browse: (k, g, p) => stories(xfBrowseUrl("sv", k, p), (h, b) => parseXf(h, b, "sv")), search: xfSearch("sv") },
+    // Books and texts the web copy reads too (`web`): their sites answer
+    // its fetch proxy, or any site.
+    { key: "pg", label: "Project Gutenberg", books: true, web: true, lists: PG_LISTS, genres: PG_TOPICS, anyGenre: true, genreLabel: "Subject",
+      browse: (k, g, p) => stories(pgBrowseUrl(k, g, p), parseGutendex), search: pgSearch },
+    { key: "se", label: "Standard Ebooks", books: true, web: true, lists: SE_LISTS, genres: SE_SUBJECTS, anyGenre: true, genreLabel: "Subject",
+      browse: (k, g, p) => stories(seBrowseUrl(k, g, p), parseSE), search: seSearch },
+    { key: "ws", label: "Wikisource", texts: true, web: true, lists: WS_LISTS, genres: [], anyGenre: true,
+      browse: (k, g, p) => wsBrowse(k, p), search: (w) => wsSearch(w) },
   ];
 
-  C.discover = { list, refresh, fromSource, clean, isStory, storyId, parseList, rrLists: RR_LISTS, rrGenres: RR_GENRES, rrSaved, rrRead, rrSearch, rrBrowse, rrBrowseUrl, parseFP, parseFFN, parseAO3, parseSH, parseWattpad, parseWebtoon, parseTapas, fpBrowseUrl, ffnBrowseUrl, ao3BrowseUrl, wpBrowseUrl, firstSaved, firstRead, fpSaved, fpRead, serialLinks, serialChapters, sources: SOURCES };
+  C.discover = { list, refresh, fromSource, clean, isStory, storyId, parseList, rrLists: RR_LISTS, rrGenres: RR_GENRES, rrSaved, rrRead, rrSearch, rrBrowse, rrBrowseUrl, parseFP, parseFFN, parseAO3, parseSH, parseWattpad, parseWebtoon, parseTapas, fpBrowseUrl, ffnBrowseUrl, ao3BrowseUrl, wpBrowseUrl, firstSaved, firstRead, fpSaved, fpRead, serialLinks, serialChapters, sources: SOURCES,
+    parseGutendex, parseSE, parseWsList, parseXf, parseXfSearch, parseWikiToday, pgBrowseUrl, seBrowseUrl, xfBrowseUrl, seEpub, wikiSaved, wikiToday };
 })();

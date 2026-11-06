@@ -55,7 +55,7 @@ src/app-reader.js   moving between screens; the reader around the page: brightne
 src/app-library.js  tags, collections, a clip's sheet, multi-select, export, import, watched folders
 src/app-saving.js   sync screen, saving several, next links and new chapters, feeds, home-screen widgets
 src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestures, a feed's sheets
-src/app-discover.js the Discover place: the list, its search, the Sites grid, the story and sign-up sheets
+src/app-discover.js the Discover place: Wikipedia today, the list, its search, the Sites grid (stories, books, texts), the story and sign-up sheets
 src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
 src/app-lock.js     app lock: passcode (PBKDF2 hash), fingerprint or face on Android
 src/app-start.js    wiring at launch, what other apps share in, self-update, Test builds, What's new
@@ -68,7 +68,7 @@ src/pdf.js          PDFs through pdf.js in a locked-down frame
 src/pptx.js         PowerPoint decks redrawn on a canvas and written as a PDF (1.49.0)
 src/epub.js         clips as an EPUB 3 book, for e-readers and Send to Kindle
 src/feeds.js        RSS, Atom and JSON Feed, read into one shape
-src/discover.js     Discover's sources: the hand-picked list, and the story sites' lists and search (Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON, Tapas)
+src/discover.js     Discover's sources: the hand-picked list, Wikipedia today, and the sites' lists and search (Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON, Tapas, SpaceBattles, Sufficient Velocity; books from Project Gutenberg via Gutendex and Standard Ebooks; Wikisource)
 src/discover-list.js  the hand-picked list itself (strict JSON between markers, refreshed from GitHub)
 src/sync.js         GitHub sync; src/sync-worker.js runs the merge off the main thread
 src/drive.js        Google Drive backups
@@ -93,11 +93,12 @@ tools/sign-apk.sh   signs the APK with the release key in CI
 tools/sherpa-lib.sh   fetches sherpa-onnx's arm64 library (Kokoro voices) into the Android build, pinned and checked
 tools/test-build.sh        puts a labelled pull request's build on its test-<branch> pre-release
 tools/shots.js      retakes the README's screenshots (tools/shots/demo is the demo library)
+tools/check-discover.js  checks every feed, sign-up and serial in Discover's list still answers (weekly, discover-check.yml)
 test/               node test/run-all.js runs every *.test.js
 design/             the design canvas's artboards, for the exact markup
 docs/PROPOSAL.md    the original architecture, storage, legal and store reasoning
 docs/shots/         the README's screenshots
-.github/workflows/  test.yml (every PR), android.yml and ios.yml (builds, releases, test builds), test-builds.yml (test labels: build on, remove off), worker.yml (deploys worker/ to Cloudflare)
+.github/workflows/  test.yml (every PR), android.yml and ios.yml (builds, releases, test builds), test-builds.yml (test labels: build on, remove off), worker.yml (deploys worker/ to Cloudflare), discover-check.yml (Discover's list, weekly)
 ```
 
 ## Load order and the one scope
@@ -133,11 +134,17 @@ up. A new shell file goes in the order in `index.html` and in `sw.js`'s
    with a User-Agent naming the app; a site in `save.js`'s `SITES` list by
    its own rule (fiction and comics sites; Reddit from the post's `.json`;
    Hacker News from the page; Stack Exchange, Lobsters, Bluesky and
-   Mastodon (any server, by the address's shape) from their APIs; a
+   Mastodon (any server, by the address's shape) from their APIs, as are
+   Lemmy (/post/123) and Substack (/p/slug, on its own domain too) by
+   the address's shape, and LessWrong and the EA Forum (GraphQL); a
    Discourse forum, known by its page's generator tag, from the topic's
    .json; GitHub issues and pull requests from the API, code files from
    their raw copy, a repo as its README; an arXiv paper from its HTML
-   version); everything else through Mozilla Readability. A
+   version; SpaceBattles and Sufficient Velocity by their threadmarks, a
+   chapter saved as its post, /posts/123/; a Wikisource work by its
+   subpages); a link to an EPUB, PDF or CBZ file is downloaded
+   (`C.platform.fetchBytes`) and added like a file brought in;
+   everything else through Mozilla Readability. A
    discussion keeps its `co-thread`/`co-comment` classes for reader.css.
 3. **Clean** to an allowlist of tags and attributes: no scripts, iframes,
    forms, handlers or tracking pixels. Lazy images resolve to one URL.
@@ -343,6 +350,14 @@ adds a line here.
   were never seen from here: Cloudflare or AO3's own check blocks every
   plain fetch; only the phone's hidden browser gets them), so a change
   there leaves the last list read until the parser is fixed.
+- Discover's books and texts (Gutendex, Standard Ebooks, Wikisource) and
+  Wikipedia today are read in the web copy too, through the fetch proxy;
+  Gutendex is a volunteer-run index of Gutenberg and has been slow or down
+  at times, and Standard Ebooks' list markup is scraped. A book's EPUB is
+  downloaded once, on the tap, never in bulk (Gutenberg bans crawlers).
+- A path rule (Lemmy's /post/123, Substack's /p/slug) tries the API of
+  any site whose address has that shape before reading the page, so one
+  of those that isn't Lemmy or Substack costs a request that fails.
 - Translate downloads each language's model from Google once, which tells
   Google the languages, never the words.
 - A deck (PPTX) is redrawn by `pptx.js`, an approximation: no charts,
