@@ -245,7 +245,8 @@ secrets, so it can't sign or publish anything.
   `main` as it is; the service worker paints from cache and fetches the
   new files for the next launch), version bump or not.
 - `.github/workflows/android.yml` and `ios.yml` build on every push to
-  any branch. Pushes that only touch `**.md`, `test/**` or `.claude/**`
+  `main`, and on a branch push only when its open pull request has a
+  test label (a quick `gate` job checks first). Pushes that only touch `**.md`, `test/**` or `.claude/**`
   don't run them. A pull request labelled for it gets its build on
   the pre-release `test-<branch>`, which the app's Test builds
   screen lists; it goes away with the branch. Only a PR with a test

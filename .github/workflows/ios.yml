@@ -26,7 +26,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A branch push builds the app only when its open pull request has a test
+  # label (test, test-ios). main and a run by hand always build.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.g.outputs.build }}
+    steps:
+      - id: g
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          if [ "$GITHUB_REF" = refs/heads/main ] || [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            echo build=true >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          LABELS="$(gh pr list -R "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json labels --jq '.[:1][] | [.labels[].name] | join(",")' || true)"
+          case ",$LABELS," in *,test,*|*,test-ios,*) echo build=true ;; *) echo build=false ;; esac >> "$GITHUB_OUTPUT"
+
   ipa:
+    needs: gate
+    if: needs.gate.outputs.build == 'true'
     runs-on: macos-15
     env:
       HAS_SIGNING_KEY: ${{ secrets.ANDROID_KEYSTORE_B64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' }}

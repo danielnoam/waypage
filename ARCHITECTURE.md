@@ -264,8 +264,8 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
 
 - **Android:** `.github/workflows/android.yml` generates the Capacitor
   project, patches it (`tools/android-manifest.js`,
-  `tools/android-version.js`), builds an APK on every push to any
-  branch, signs it with the release key (secrets
+  `tools/android-version.js`), builds an APK on every push to `main`
+  (a branch only with a test label), signs it with the release key (secrets
   `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, alias `carryon`)
   and publishes the release `app-v<version>` when `APP_VERSION` is new.
   Without the secrets it builds a test APK and publishes nothing.
