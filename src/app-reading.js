@@ -135,7 +135,7 @@ function readingPrefs(p = state.open) {
   if (!MARGINS[r.margins]) r.margins = READING_DEFAULT.margins;
   if (!ALIGNS.some((a) => a.value === r.align)) r.align = READING_DEFAULT.align;
   if (r.layout !== "pages") r.layout = "scroll";
-  // Comics have their own Show as (Unreleased), Scroll unless picked.
+  // Comics have their own Show as (1.53.0), Scroll unless picked.
   if (r.comicLayout !== "pages") r.comicLayout = "scroll";
   if (r.wide !== "whole") r.wide = "split";
   if (!["one", "two", "auto"].includes(r.spread)) r.spread = "auto";

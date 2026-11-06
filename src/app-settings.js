@@ -29,7 +29,7 @@ const SETTINGS = [
       { value: "links", label: "Links only", note: "Pictures only when you're online" },
     ],
   },
-  // Only shown while Images is Full images (Unreleased): the starting choice
+  // Only shown while Images is Full images (1.53.0): the starting choice
   // for feeds you follow from then on; a feed's own menu still wins.
   {
     key: FEED_IMAGES_KEY,

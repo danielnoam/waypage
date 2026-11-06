@@ -754,7 +754,7 @@ function volumeSwitch() {
   return row;
 }
 
-// Which way a comic's pages turn in Pages (Unreleased): right to left for
+// Which way a comic's pages turn in Pages (1.53.0): right to left for
 // a manga, as its ComicInfo says, unless picked otherwise for this comic.
 const turnOf = (p) => (p && (p.turn === "rtl" || p.turn === "ltr") ? p.turn : p && p.manga ? "rtl" : "ltr");
 async function setTurn(v) {
@@ -1198,7 +1198,7 @@ function aloudFrom(id) {
   aloudAuto = "here";
   openPage(id);
 }
-// Speed is a slider since 0.34.0, from half to four times (Unreleased).
+// Speed is a slider since 0.34.0, from half to four times (1.53.0).
 const RATE_MIN = 0.5, RATE_MAX = 4;
 const FOOTNOTES_KEY = "waypage.aloudFootnotes";
 const EDGES_KEY = "waypage.aloudSkipEdges";
@@ -2189,7 +2189,7 @@ function slider(label, min, max, step, onvalue, pref) {
 const TEXT_PREFS = ["font", "hebrew", "size", "weight", "align", "hyphens", "spacing", "letters", "words", "paras"];
 const prefsOf = (o, keys) => Object.fromEntries(keys.map((k) => [k, o[k]]));
 
-// Settings per clip (Unreleased): one row at the top of the Aa sheet's
+// Settings per clip (1.51.0): one row at the top of the Aa sheet's
 // Layout and Text, where the open clip's settings come from.
 function scopeRow() {
   const p = state.open;
@@ -2221,7 +2221,7 @@ function readingControls(withTheme) {
     d.dataset.pref = pref;
     return d;
   };
-  // A comic in the reader's sheet (Unreleased) has its own Show as, which
+  // A comic in the reader's sheet (1.53.0) has its own Show as, which
   // way its pages turn and what a spread does; margins and time left don't
   // touch its pages.
   const comic = withTheme && !!state.open && !!state.open.comic;
@@ -2424,7 +2424,7 @@ function openSheet(kind, fromHistory) {
     sheet.style.right = left ? "" : Math.max(8, box.right - at.right) + "px";
     M.popFrom(sheet, at);
   } else if (wide.matches) {
-    // A link, note or look-up has no button to hang under: the middle (Unreleased).
+    // A link, note or look-up has no button to hang under: the middle (1.53.0).
     sheet.dataset.pop = "center";
     sheet.style.top = sheet.style.left = sheet.style.right = "";
     M.rise(sheet);
