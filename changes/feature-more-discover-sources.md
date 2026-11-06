@@ -6,4 +6,4 @@
 - Saving: a Wikisource work saves its parts as a collection; a part keeps the work's name, author and next part.
 - Saving: Lemmy posts (any server), Substack posts (on their own domains too) and LessWrong, EA Forum and Alignment Forum posts save with their comments as a tree.
 - Saving: a link to an EPUB, PDF or CBZ file downloads the file and adds it like one brought in, instead of failing as a page.
-- Discover: 28 more feeds (long reads, science, programming, fiction magazines, comics, world news, Hebrew news) and 3 more newsletters.
+- Discover: 25 more feeds (long reads, science, programming, fiction magazines, comics, world news, Hebrew news) and 3 more newsletters.
