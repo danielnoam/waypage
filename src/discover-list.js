@@ -59,7 +59,7 @@ window.Waypage.discoverList =
     { "kind": "feed", "name": "Daring Fireball", "about": "Apple, technology and design, by John Gruber.", "url": "https://daringfireball.net/", "feed": "https://daringfireball.net/feeds/main" },
     { "kind": "feed", "name": "Reactor", "about": "Science fiction and fantasy stories, essays and news (once Tor.com).", "url": "https://reactormag.com/", "feed": "https://reactormag.com/feed/" },
     { "kind": "feed", "name": "Uncanny Magazine", "about": "Science fiction and fantasy stories and essays.", "url": "https://www.uncannymagazine.com/", "feed": "https://www.uncannymagazine.com/feed/" },
-    { "kind": "feed", "name": "Strange Horizons", "about": "A weekly magazine of speculative fiction.", "url": "http://strangehorizons.com/", "feed": "http://strangehorizons.com/feed/" },
+    { "kind": "feed", "name": "Strange Horizons", "about": "A weekly magazine of speculative fiction.", "url": "http://strangehorizons.com/", "feed": "https://strangehorizons.com/feed/" },
     { "kind": "feed", "name": "xkcd", "about": "A webcomic of romance, sarcasm, maths and language.", "url": "https://xkcd.com/", "feed": "https://xkcd.com/atom.xml" },
     { "kind": "feed", "name": "Saturday Morning Breakfast Cereal", "about": "A daily comic about science, philosophy and people.", "url": "https://www.smbc-comics.com/", "feed": "https://www.smbc-comics.com/comic/rss" },
     { "kind": "feed", "name": "Al Jazeera", "about": "World news from the Middle East outward.", "url": "https://www.aljazeera.com/", "feed": "https://www.aljazeera.com/xml/rss/all.xml" },

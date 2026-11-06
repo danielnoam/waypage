@@ -3,7 +3,7 @@
 // sign-up page and a serial's contents page must load. Run weekly by
 // .github/workflows/discover-check.yml, and by hand: `node tools/check-discover.js`.
 //
-// A 403, 429 or 503 is reported but doesn't fail the check: many sites turn
+// A 403, 419, 429 or 503 is reported but doesn't fail the check: many sites turn
 // away GitHub's machines (datacenter addresses) while a phone gets through.
 // A 404, 410, a dead host or a feed that isn't a feed fails it.
 const fs = require("fs");
@@ -16,7 +16,21 @@ const { entries } = JSON.parse(m[1]);
 
 const UA = "Mozilla/5.0 (compatible; Waypage list check; +https://github.com/danielnoam/waypage)";
 const FEED = /<(rss|feed|rdf:RDF)[\s>]/i;
-const BLOCKED = new Set([401, 403, 429, 503]);
+const BLOCKED = new Set([401, 403, 419, 429, 503]);
+
+// For a feed that's gone, the site's own <link rel="alternate"> often names where it moved.
+async function suggest(site) {
+  try {
+    const res = await fetch(site, { headers: { "User-Agent": UA }, redirect: "follow", signal: AbortSignal.timeout(20000) });
+    const html = await res.text();
+    for (const tag of html.match(/<link\b[^>]*>/gi) || []) {
+      if (!/rel=["']?alternate/i.test(tag) || !/(rss|atom)\+xml/i.test(tag)) continue;
+      const href = /href=["']([^"']+)/i.exec(tag);
+      if (href) return ", the site points to " + new URL(href[1], res.url).href;
+    }
+  } catch (_) {}
+  return "";
+}
 
 async function check(e) {
   const url = e.kind === "feed" ? e.feed : e.kind === "newsletter" ? e.signup || e.url : e.url;
@@ -29,7 +43,7 @@ async function check(e) {
     const body = await res.text();
     const ms = Date.now() - t0;
     if (BLOCKED.has(res.status)) return { e, url, level: "warn", why: "HTTP " + res.status + " (the site may turn away GitHub's machines)", ms };
-    if (!res.ok) return { e, url, level: "fail", why: "HTTP " + res.status, ms };
+    if (!res.ok) return { e, url, level: "fail", why: "HTTP " + res.status + (e.kind === "feed" ? await suggest(e.url) : ""), ms };
     if (e.kind === "feed" && !FEED.test(body.slice(0, 4000))) return { e, url, level: "fail", why: "not a feed (" + (res.headers.get("content-type") || "no type") + ")", ms };
     const moved = res.url && res.url.replace(/\/$/, "") !== url.replace(/\/$/, "") ? "moved to " + res.url : "";
     return { e, url, level: "ok", why: moved, ms };
