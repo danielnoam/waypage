@@ -2067,7 +2067,8 @@ function aloudControls() {
     // use. This language's Piper voice is one more, engine#piper: the
     // same engine, with that voice picked.
     const packs = k ? k.packs.filter((x) => x.ready) : [];
-    const piper = k && (k.piper || []).find((x) => x.ready && primary(x.lang) === lang);
+    const piperHere = k ? (k.piper || []).filter((x) => x.ready && primary(x.lang) === lang) : [];
+    const piper = piperHere.find((x) => x.voice === voiceFor(p)) || piperHere[0];
     const ours = (e) => [...packs.map((x) => ({ value: e.name + "#" + x.id, label: x.title })), ...(piper ? [{ value: e.name + "#piper", label: "Piper" }] : [])];
     const listed = (e) => (k && e.name === k.engine && ours(e).length ? ours(e) : [{ value: e.name, label: e.label }]);
     // The phone's default engine is the first option, not listed again.

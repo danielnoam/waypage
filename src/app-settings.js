@@ -364,7 +364,9 @@ async function fillKokoro(slot) {
       el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, p.title), el("span", { class: "choice-note" }, note)), control);
   });
   // Piper: a voice for each language, by its name in the phone's language.
-  const piper = (s.piper || []).map((v) => ({ ...v, title: langName(primary(v.lang)) }))
+  // English has two (US and UK): those are named with their country.
+  const twice = (v) => (s.piper || []).filter((x) => primary(x.lang) === primary(v.lang)).length > 1;
+  const piper = (s.piper || []).map((v) => ({ ...v, title: langName(twice(v) ? v.lang : primary(v.lang)) }))
     .sort((a, b) => a.title.localeCompare(b.title));
   const piperRows = piper.map((v) => {
     const mine = s.busy === v.id;

@@ -111,13 +111,17 @@ final class Kokoro {
     };
 
     // One voice per language, the best whose licence allows any use (CC0,
-    // or CC BY for French's SIWIS). Arabic's and Italian's say "see URL":
-    // left out until that's checked. Ukrainian's has three speakers;
-    // speaker 0, Lada, speaks.
+    // public domain, or CC BY for French's SIWIS); English has a US and a
+    // UK one, for phones too slow for Kokoro (LJ Speech is read by Linda
+    // Johnson). Arabic's and Italian's say "see URL": left out until
+    // that's checked. Ukrainian's has three speakers; speaker 0, Lada,
+    // speaks.
     static final Pack[] PIPER = {
         piper("cs_CZ-jirka-medium", "m", "321aafd83dd89b3d5b2c36c5898e0710d4f472f3c191cb7f73901a89b7f8539f", 67_212_775L),
         piper("de_DE-thorsten-medium", "m", "50487d9c95fdf2191f31d2588569381063ba1591dcd4c7d4bdd30f12b2191714", 67_214_254L),
         piper("el_GR-rapunzelina-low", "f", "bb868070a9ba0d7220b3d7c9291a998c2f60accdb73525bd63b8751b86dd4839", 67_105_521L),
+        piper("en_GB-cori-medium", "f", "49c9a5361bbdd95d7ca9687c4de11e5908481f65e7c7c368960df79949fdac2b", 67_257_412L),
+        piper("en_US-ljspeech-medium", "linda", "f", "3dfb4b759d8be032a4903a9538d128b0fda2a06ab1de6cbc2d93a97e2dd83dba", 67_169_893L),
         piper("es_ES-davefx-medium", "m", "a3f6beb54a9cb893279f72978a22f807a4d9fc9c7848157b524d5cc7b7f58b22", 67_184_952L),
         piper("fa_IR-amir-medium", "m", "46af65c1cdd86ec300db3998f2bf31a68d9e38da930c0655c1ff6f610e84f864", 67_180_373L),
         piper("fr_FR-siwis-medium", "f", "375909aa30842b3a4efa10b1beb1d761af792960ae6873b4d53889f96c66195b", 67_207_459L),
