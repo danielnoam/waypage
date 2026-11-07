@@ -268,7 +268,7 @@
   // Pages (in reading order) as one book. `title` names it; one page's
   // book is named after the page. Resolves like backup.exportLibrary:
   // { uri, name } in the app, { blob, name } in a browser.
-  async function exportBook(pages, title) {
+  async function exportBook(pages, title, cover) {
     title = clean(title || pages[0].title);
     const native = C.platform.native;
     const name = slug(title) + ".epub";
@@ -289,9 +289,12 @@
     const wiki = pages.some((p) => p.licence === "wikipedia");
     const items = chapters.map(outline);
 
-    // The cover: the first picture, or a title card. A book of several
-    // pages also opens on it, as a page of its own before the first.
-    let coverAt = images.length ? 0 : -1;
+    // The cover: a collection's own (`cover`, its bytes), else the first
+    // picture, or a title card. A book of several pages also opens on
+    // it, as a page of its own before the first.
+    const own = cover ? await bookImage(cover) : null;
+    if (own) images.push({ file: "images/cover." + FORMATS[own.type], bytes: own.bytes, type: own.type });
+    let coverAt = own ? images.length - 1 : images.length ? 0 : -1;
     if (coverAt < 0) {
       const card = await titleCard(title, first.site || "", rtl);
       if (card) { images.push({ file: "images/cover.jpg", bytes: card, type: "image/jpeg" }); coverAt = images.length - 1; }
