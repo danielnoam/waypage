@@ -384,6 +384,8 @@ async function savePickedPosts() {
 // its ⋯ offers Save and the browser. Discover's Wikipedia rows come with
 // no feed.
 let previewing = null;
+// The last few read this way, so Back from a link read here comes to them.
+const previewsKept = new Map();
 async function previewPost(f, it) {
   if (!navigator.onLine) { toast("You're offline. Save posts while you're online to read them here."); return; }
   if (previewing) return;
@@ -398,6 +400,8 @@ async function previewPost(f, it) {
   } finally { previewing = null; }
   if (f) got.meta.feed = f.url;
   got.meta.post = it.url;
+  previewsKept.set(got.meta.id, got);
+  while (previewsKept.size > 6) previewsKept.delete(previewsKept.keys().next().value);
   const swap = state.open && $("readerView").dataset.pane && !$("readerView").dataset.leaving;
   if (swap) { closeSheet(true); history.replaceState(readerState(got.meta), ""); }
   else history.pushState(readerState(got.meta), "");
@@ -1010,6 +1014,7 @@ function jumpSection(d) {
 let gAt = 0;
 const PLACE_KEYS = ["library", "feeds", "newsletters", "highlights", "reading", "discover"];
 function onKeys(e) {
+  if (e.key === "Tab" || e.key.startsWith("Arrow") || e.key === "Enter" || e.key === "Escape") document.body.classList.add("keys");
   if (e.defaultPrevented || e.isComposing) return;
   const k = e.key, inFrame = e.target && e.target.ownerDocument !== document;
   if (k === "Escape" && (state.sheet || state.image || state.menu || state.select || state.side)) { history.back(); return; }

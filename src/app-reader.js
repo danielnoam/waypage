@@ -2541,6 +2541,7 @@ function linkSheet(l) {
         el("span", { class: "choice-text" },
           el("span", { class: "row-label accent" }, "Save for later"),
           el("span", { class: "choice-note" }, navigator.onLine ? "Into your library, to read offline" : "It saves when you're back online"))),
+      saved || !/^https?:/i.test(l.href) ? null : menuRow("Read it here", go(() => previewPost(null, { url: l.href }))),
       menuRow("Open in the browser", go(() => C.platform.openOutside(l.href))),
       menuRow("Copy the link", go(() => copyText(l.href, "Link copied")))));
 }

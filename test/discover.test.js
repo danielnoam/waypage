@@ -469,6 +469,39 @@ async function phone(browser) {
       assert.match(got.saved[1], /wikipedia\.org\/wiki\//);
     });
 
+    await test("a link in a page read without saving reads the same way, and Back comes to the page it was on", async () => {
+      const { ctx, p } = await phone(browser);
+      await p.evaluate(([wiki]) => {
+        Waypage.platform.fetchText = async (url) => ({ status: 200, url, text: /wikipedia\.org/.test(url) ? wiki : "" });
+        window.previewed = [];
+        let n = 0;
+        Waypage.save.preview = async (url) => {
+          window.previewed.push(url);
+          const title = n++ ? "Otter" : "Sea otter";
+          return { meta: { id: "preview:p" + n, preview: true, url, title, site: "Wikipedia", minutes: 3, mode: "links", next: "", prev: "" },
+            html: "<!doctype html><html><body><article><h1>" + title + "</h1><p>About <a href='https://en.wikipedia.org/wiki/Otter'>otters</a>.</p></article></body></html>" };
+        };
+        goPlace("discover");
+      }, [fixture("wiki-featured.json")]);
+      await p.locator("#discover .dz-wiki .dz-row .post-open").first().click();
+      await p.waitForFunction(() => state.open && state.open.id === "preview:p1");
+      await p.evaluate(() => openLink("https://en.wikipedia.org/wiki/Otter", "otters"));
+      const read = p.locator('#readingSheet:not([hidden]) button:has-text("Read it here")');
+      await read.waitFor();
+      await read.click();
+      await p.waitForFunction(() => state.open && state.open.id === "preview:p2");
+      assert.strictEqual(await p.evaluate(() => state.open.title), "Otter");
+      await p.evaluate(() => history.back());
+      await p.waitForFunction(() => state.open && state.open.id === "preview:p1");
+      assert.match(await p.frameLocator("#readerFrame").locator("body").textContent(), /Sea otter/);
+      await p.evaluate(() => history.back());
+      await p.waitForFunction(() => !state.open);
+      const got = await p.evaluate(() => ({ previewed: window.previewed, pages: state.pages.length }));
+      await ctx.close();
+      assert.strictEqual(got.previewed.length, 2);
+      assert.strictEqual(got.pages, 0, "nothing was saved");
+    });
+
     await test("Discover's view options turn Wikipedia today off, and it stays off", async () => {
       const { ctx, p } = await phone(browser);
       await p.evaluate(([wiki]) => {
