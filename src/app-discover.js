@@ -501,16 +501,16 @@ function dzWiki() {
 }
 function dzWikiRow(a) {
   const had = savedAs(a.url);
-  const go = () => (had ? openPage(had.id) : savePage(a.url));
+  const open = () => (had ? openPage(had.id) : previewPost(null, { url: a.url }));
   return el("div", { class: "post dz-row", "data-key": "wiki:" + a.url },
-    el("button", { class: "post-open", type: "button", "aria-label": a.title + (had ? ", saved" : ""), onclick: go }),
+    el("button", { class: "post-open", type: "button", "aria-label": a.title + (had ? ", saved" : ""), onclick: open }),
     Object.assign(siteMark({ site: "Wikipedia", url: "https://www.wikipedia.org/" }), { className: "site-mark feed-mark" }),
     el("span", { class: "post-body" },
       el("span", { class: "post-title", dir: "auto" }, a.title),
       a.about ? el("span", { class: "dz-about", dir: "auto" }, a.about) : null,
       el("span", { class: "post-meta" }, a.what)),
     had ? el("span", { class: "post-saved dz-on" }, dzIcon("check"), "Saved")
-      : el("button", { class: "post-act post-save", type: "button", "aria-label": "Save " + a.title, onclick: go }, dzIcon("plus")));
+      : el("button", { class: "post-act post-save", type: "button", "aria-label": "Save " + a.title, onclick: () => savePage(a.url) }, dzIcon("plus")));
 }
 async function dzReadWiki() {
   if (dzWikiBusy || !navigator.onLine || !C.platform.canReadPages) return;
