@@ -1327,7 +1327,7 @@ function openSection(key, fromHistory, deeper) {
   const swap = !!state.section;
   state.section = key;
   renderSection();
-  const entry = { view: "settings", section: key };
+  const entry = { view: "settings", section: key, reader: readerUnder() };
   if (!fromHistory) swap && !deeper ? history.replaceState(entry, "") : history.pushState(entry, "");
   renderSettings();
   $("sectionBody").scrollTop = 0;
@@ -1341,16 +1341,23 @@ function closeSection() {
   if (state.settings) renderSettings();
 }
 
+// Opened from a clip, Settings goes over it and Back comes back to it:
+// its history entries name the clip, so the route keeps it open.
+const readerUnder = () => (state.open ? state.open.id : undefined);
+
 // `at` names a section to open over the menu (the update bar opens Updates).
 function openSettings(fromHistory, at) {
   if (state.settings) return;
+  // The reader sits over the other screens; under Settings while it's up.
+  if (state.open) $("readerView").classList.add("under");
   settingsIdx = null;
   // With room for the section beside the menu, the first one is open.
   if (wide.matches && !at && !fromHistory) at = "appearance";
   state.settings = true;
   if (state.open) paintTheme();
   renderSettings();
-  if (!fromHistory) history.pushState({ view: "settings" }, "");
+  // A page of it opened from a clip is one step: Back goes to the clip.
+  if (!fromHistory && !(at && state.open)) history.pushState({ view: "settings", reader: readerUnder() }, "");
   $("settingsBody").scrollTop = 0;
   const shown = pushScreen($("settingsView"));
   if (at) openSection(at);
@@ -1360,8 +1367,10 @@ function openSettings(fromHistory, at) {
 function closeSettings() {
   if (!state.settings) return;
   // In the window, the window leaves first and takes its section with it.
-  if (wide.matches) { state.settings = false; popScreen($("settingsView")); closeSection(); }
-  else { closeSection(); state.settings = false; popScreen($("settingsView")); }
+  let gone;
+  if (wide.matches) { state.settings = false; gone = popScreen($("settingsView")); closeSection(); }
+  else { closeSection(); state.settings = false; gone = popScreen($("settingsView")); }
+  Promise.resolve(gone).then(() => { if (!state.settings) $("readerView").classList.remove("under"); });
   if (state.open) paintTheme();
   const q = $("settingsSearch");
   if (q) { q.value = ""; $("settingsSearchClear").hidden = true; }

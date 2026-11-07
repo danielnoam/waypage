@@ -592,6 +592,8 @@ html.native .screen-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
 }
 html.native .reader-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top)); }
 .reader { z-index: 11; }
+/* With Settings opened over the clip (app-settings.js). */
+.reader.under { z-index: 9; }
 .icon-btn[hidden] { display: none; }
 :root[data-clips="had"] #searchBtn[hidden] { display: inline-flex; }
 #readerAa[aria-expanded="true"] { background: var(--line); }
