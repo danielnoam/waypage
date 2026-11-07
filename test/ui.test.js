@@ -1323,6 +1323,41 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a collection's EPUB carries its cover: a picture of your own, else what the library shows", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const png = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0));
+        await S.writeCover("ucov1.png", png, "image/png");
+        const c = (i) => ({ id: "bk" + i, url: "https://example.com/bk" + i, title: "Part " + i, site: "example.com", savedAt: 1000 + i, minutes: 1, mode: "links", at: 0, finished: false, folder: "Tome", folderAt: i, coverPick: "ucov1.png" });
+        await S.writeIndex([c(1), c(2)]);
+        for (const i of [1, 2]) await S.writePage("bk" + i, "<!doctype html><html><body><h1>Part " + i + "</h1><p>Words of part " + i + ".</p></body></html>", c(i));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const book = () => q.evaluate(async () => {
+        const B = window.Waypage.backup;
+        let got = null;
+        window.Waypage.platform.download = (name, blob) => { got = blob; };
+        await exportAs({ pages: folderPages("Tome"), title: "Tome" }, "epub", "save", document.createElement("button"));
+        const files = await B.zipEntries(got);
+        const opf = new TextDecoder().decode(await B.zipRead(got, files.get("OEBPS/content.opf")));
+        const cover = (opf.match(/<item [^>]*properties="cover-image"[^>]*>/) || [""])[0];
+        const href = (cover.match(/href="([^"]+)"/) || [])[1];
+        const bytes = href ? [...await B.zipRead(got, files.get("OEBPS/" + href))] : [];
+        return { cover, bytes: bytes.length, png: bytes[1] === 0x50, page: files.has("OEBPS/cover.xhtml") };
+      });
+      const own = await book();
+      assert.ok(/href="images\/cover\.png"/.test(own.cover), own.cover);
+      assert.ok(own.png && own.page, JSON.stringify(own));
+      // Automatic, with no pictures: the title card.
+      await q.evaluate(async () => { for (const p of state.pages) delete p.coverPick; });
+      const auto = await book();
+      assert.ok(/href="images\/cover\.jpg"/.test(auto.cover) && auto.page, JSON.stringify(auto));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a picked collection's ring goes round its name and progress (1.23.1)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

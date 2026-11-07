@@ -64,6 +64,16 @@ function shownCover(list) {
   const p = list.find((x) => thumbUrl(x));
   return p ? thumbUrl(p) : null;
 }
+// The bytes of what the collection shows, for a book's cover (epub.js).
+async function coverBytes(list) {
+  const url = shownCover(list);
+  if (!url) return null;
+  try {
+    const here = url.startsWith("data:") || new URL(url, location.href).origin === location.origin;
+    const blob = here ? await (await fetch(url)).blob() : navigator.onLine ? (await C.platform.fetchBytes(url, "cover")).blob : null;
+    return blob ? new Uint8Array(await blob.arrayBuffer()) : null;
+  } catch (e) { return null; }
+}
 function coverUrl(list) {
   const picked = pickedCoverUrl(list);
   if (picked) return picked;

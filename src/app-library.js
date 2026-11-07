@@ -1554,7 +1554,7 @@ async function exportAs(p, kind, how, btn) {
   btn.disabled = true;
   try {
     let name, text = null, uri = null, blob = null;
-    if (kind === "epub") ({ name, uri = null, blob = null } = await C.epub.exportBook(pages || [p], pages ? p.title : undefined));
+    if (kind === "epub") ({ name, uri = null, blob = null } = await C.epub.exportBook(pages || [p], pages ? p.title : undefined, pages ? await coverBytes(pages) : null));
     else if (kind === "md") ({ name, text } = await (pages ? C.backup.exportMarkdownAll(pages, p.title) : C.backup.exportMarkdown(p)));
     else if (kind === "html") ({ name, html: text } = await (pages ? C.backup.exportPages(pages, p.title) : C.backup.exportPage(p)));
     else ({ name, html: text } = await C.save.pageSource(p.url));
