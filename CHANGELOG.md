@@ -2,6 +2,32 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.54.0] - 2026-11-07
+
+### Added
+- Collections: ⋯ › Cover sets a collection's cover, from a picture of your own or one of its clips' pictures, or back to Automatic. It syncs and goes in backups with the collection.
+- Discover: a View options button (the sliders in the top bar) with a switch for Wikipedia today. Off, the section is hidden and Wikipedia isn't asked.
+- Discover: Wikipedia today at the top, the featured article and the day's most read, in the phone's language when Wikipedia has it. A tap saves one.
+- Discover › Sites: books from Project Gutenberg and Standard Ebooks, by list and subject, and searched. Add the book downloads its EPUB into the Library. Wikisource's texts too, saved as a collection when they come in parts. These work in the browser as well as on the phone.
+- Discover › Sites: SpaceBattles and Sufficient Velocity, their fiction boards by latest, new, most replies or most viewed. A story saves as a collection of its threadmarked chapters.
+- Saving: a SpaceBattles, Sufficient Velocity or Questionable Questing thread saves its threadmarks as chapters, each chapter its own post with next and previous.
+- Saving: a Wikisource work saves its parts as a collection; a part keeps the work's name, author and next part.
+- Saving: Lemmy posts (any server), Substack posts (on their own domains too) and LessWrong, EA Forum and Alignment Forum posts save with their comments as a tree.
+- Saving: a link to an EPUB, PDF or CBZ file downloads the file and adds it like one brought in, instead of failing as a page.
+- Discover: 25 more feeds (long reads, science, programming, fiction magazines, comics, world news, Hebrew news) and 3 more newsletters.
+- Discover: PC Gamer and Mako (Hebrew news) feeds.
+- Narrate (Android): Piper voices under More speech engines, one for each of 13 languages Kokoro doesn't cover well: Czech, Dutch, French, German, Greek, Persian, Polish, Portuguese, Russian, Spanish, Swedish, Turkish and Ukrainian, plus a US and a UK English voice for phones too slow for Kokoro. Each is about 67 MB. A downloaded voice reads its language from then on; the Speech engine list shows it as Piper.
+- Settings › Credits: sherpa-onnx, Kokoro and the Piper voices.
+
+### Changed
+- A collection's page shows its first clip's picture as its cover when it has no other, as its tile in the library already did.
+- Discover: tapping a Wikipedia today article opens it in the reader without saving it, the way a feed post does; save it from its ⋯, or with the + beside it as before.
+
+### Fixed
+- Opening the app no longer shows Paper for a moment and then eases across to your theme: the first frame is already in your theme. On Android the window behind the page, the status and navigation bar icons, and (with the phone in dark mode) the splash follow it too.
+- The top bar no longer shifts on start: Search and Sync are in place from the first frame instead of arriving with the clips.
+- "Opening your library" shows only when opening really takes a while (half a second), so a quick start doesn't flash it.
+
 ## [1.53.0] - 2026-11-06
 
 ### Added
