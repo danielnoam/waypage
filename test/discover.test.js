@@ -491,7 +491,13 @@ async function phone(browser) {
       if (process.env.SHOTS) await p.screenshot({ path: process.env.SHOTS + "/wiki-off.png" });
       const asked = await p.evaluate(() => { window.asked = []; goPlace("library"); goPlace("discover"); return window.asked.filter((u) => /wikipedia/.test(u)).length; });
       assert.strictEqual(asked, 0, "off, Wikipedia isn't asked");
-      assert.strictEqual(await p.evaluate(() => localStorage.getItem("waypage.discover.wiki")), "false");
+      assert.strictEqual(await p.evaluate(() => localStorage.getItem("waypage.discover.showWiki")), "false");
+      // Back on, it shows again (its switch has a key of its own, apart from Wikipedia's kept answer).
+      await p.locator("#viewBtn").click();
+      await sw.waitFor();
+      await sw.click();
+      await p.evaluate(() => history.back());
+      await p.locator("#discover .dz-wiki .dz-row").first().waitFor();
       await ctx.close();
     });
 

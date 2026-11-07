@@ -10,7 +10,7 @@
 let dzPick = "all";
 let dzList = load("waypage.discover.rrList", "rising");
 // View options (the top bar's sliders, Discover only): Wikipedia today on or off.
-let dzWikiOn = load("waypage.discover.wiki", true) !== false;
+let dzWikiOn = load("waypage.discover.showWiki", true) !== false;
 // Royal Road as last read: { at, items } per list, or an error line.
 const dz = { busy: false, error: "", found: null };
 // Only the phone reads the story sites: most sit behind Cloudflare's or
@@ -483,7 +483,7 @@ function dzViewSheet() {
     el("div", { class: "group" },
       switchRow("Wikipedia today", "The featured article and the most read, at the top of All", dzWikiOn, (on) => {
         dzWikiOn = on;
-        store("waypage.discover.wiki", on);
+        store("waypage.discover.showWiki", on);
         renderDiscover();
         if (on) dzReadWiki();
       })));
