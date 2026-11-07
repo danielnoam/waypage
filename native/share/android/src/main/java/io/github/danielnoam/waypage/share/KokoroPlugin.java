@@ -13,7 +13,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  * (Kokoro.java): Kokoro packs and Piper voices.
  *
  *   status()          { supported, engine, use, busy, step, done, total,
- *                       packs: [{ id, title, note, bytes, ready, size, voices }],
+ *                       packs: [{ id, title, note, bytes, ready, size, voices, languages }],
  *                       piper: [{ id, lang, speaker, gender, voice, bytes, ready, size }] }
  *                     busy: the pack downloading or unpacking;
  *                     step: "" | "downloading" | "checking" | "unpacking" | "failed" | "bad"
@@ -80,6 +80,11 @@ public class KokoroPlugin extends Plugin {
             j.put("ready", ready);
             j.put("size", ready ? Kokoro.size(c, p) : 0);
             j.put("voices", p.voices.length);
+            JSArray langs = new JSArray();
+            java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+            for (String v : p.voices) seen.add(java.util.Locale.forLanguageTag(Kokoro.languageOf(v)).getLanguage());
+            for (String l : seen) langs.put(l);
+            j.put("languages", langs);
             packs.put(j);
         }
         o.put("packs", packs);

@@ -292,8 +292,37 @@ function forgetKokoro(engine) {
   store(ENGINE_KEY, picks);
 }
 
+// Piper voices: one per language. A new one reads its language from then
+// on (the engine and its voice picked for it), once per download.
+const PIPER_IN_KEY = "waypage.piperIn";
+function piperArrived(s) {
+  const seen = load(PIPER_IN_KEY, []);
+  const ready = (s.piper || []).filter((v) => v.ready);
+  const kept = seen.filter((id) => ready.some((v) => v.id === id));
+  for (const v of ready) {
+    if (kept.includes(v.id)) continue;
+    kept.push(v.id);
+    const lang = primary(v.lang);
+    store(ENGINE_KEY, { ...enginePicks(), [lang]: s.engine });
+    store(VOICE_KEY, { ...load(VOICE_KEY, {}), [s.engine + "|" + lang]: v.voice });
+  }
+  if (kept.length !== seen.length || kept.some((id, i) => id !== seen[i])) store(PIPER_IN_KEY, kept);
+}
+// Deleted: its language goes back to the phone's voice, unless the
+// Kokoro in use speaks it.
+function forgetPiper(s, v) {
+  const lang = primary(v.lang);
+  const voices = load(VOICE_KEY, {});
+  if (voices[s.engine + "|" + lang] === v.voice) { delete voices[s.engine + "|" + lang]; store(VOICE_KEY, voices); }
+  const kokoro = s.packs.find((p) => p.id === s.use && p.ready);
+  const picks = enginePicks();
+  if (picks[lang] === s.engine && !(kokoro && (kokoro.languages || []).includes(lang))) { delete picks[lang]; store(ENGINE_KEY, picks); }
+  store(PIPER_IN_KEY, load(PIPER_IN_KEY, []).filter((id) => id !== v.id));
+}
+
 // More speech engines: each Kokoro model with what it has and its size,
-// and Download, or a bin once it's here.
+// and Download, or a bin once it's here; then a Piper voice per language.
+const allReady = (s) => s.packs.filter((x) => x.ready).length + (s.piper || []).filter((x) => x.ready).length;
 function kokoroSections() {
   const slot = el("div", { class: "kokoro-slot" }, el("p", { class: "footnote" }, "Looking…"));
   fillKokoro(slot);
@@ -305,6 +334,7 @@ async function fillKokoro(slot) {
   slot.dataset.drawn = "1";
   if (!s) { slot.replaceChildren(el("p", { class: "footnote" }, "Kokoro voices need an Android phone with a 64-bit processor.")); return; }
   kokoroArrived(s);
+  piperArrived(s);
   const busy = kokoroBusy(s);
   const again = () => fillKokoro(slot);
   const act = (action, id, then) => async () => {
@@ -320,7 +350,7 @@ async function fillKokoro(slot) {
       : p.note + " · " + formatSize(p.ready ? p.size : p.bytes);
     const remove = async () => {
       if (!confirm("Delete " + p.title + "? It takes " + formatSize(p.size) + "; you can download it again.")) return;
-      const last = s.packs.filter((x) => x.ready).length === 1;
+      const last = allReady(s) === 1;
       await act("remove", p.id, () => { if (last) forgetKokoro(s.engine); })();
     };
     // Downloaded: a bin to delete it (Daniel's ask); which one speaks is
@@ -333,7 +363,31 @@ async function fillKokoro(slot) {
     return el("div", { class: "row kokoro-row" },
       el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, p.title), el("span", { class: "choice-note" }, note)), control);
   });
-  slot.replaceChildren(section("Kokoro", null, el("div", { class: "group" }, ...rows)));
+  // Piper: a voice for each language, by its name in the phone's language.
+  const piper = (s.piper || []).map((v) => ({ ...v, title: langName(primary(v.lang)) }))
+    .sort((a, b) => a.title.localeCompare(b.title));
+  const piperRows = piper.map((v) => {
+    const mine = s.busy === v.id;
+    const who = v.speaker.charAt(0).toUpperCase() + v.speaker.slice(1).replace(/_/g, " ");
+    const note = mine && busy ? kokoroStep(s, v)
+      : mine && s.step === "bad" ? "The download wasn't the right file. Try again."
+      : mine && s.step === "failed" ? "Couldn't download. Try again."
+      : [who, v.gender === "f" ? "female" : "male", formatSize(v.ready ? v.size : v.bytes)].join(" · ");
+    const remove = async () => {
+      if (!confirm("Delete the " + v.title + " voice? It takes " + formatSize(v.size) + "; you can download it again.")) return;
+      const last = allReady(s) === 1;
+      await act("remove", v.id, () => { forgetPiper(s, v); if (last) forgetKokoro(s.engine); })();
+    };
+    const control = mine && s.step === "downloading" ? el("button", { class: "btn-text", type: "button", onclick: act("cancel") }, "Stop")
+      : mine && busy ? null
+      : v.ready ? el("button", { class: "row-x kokoro-delete", type: "button", "aria-label": "Delete " + v.title, title: "Delete", disabled: busy || null, onclick: remove },
+        el("span", { class: "visually-hidden" }, "Delete"), svgBin())
+      : el("button", { class: "btn-text", type: "button", disabled: busy || null, onclick: act("download", v.id) }, "Download");
+    return el("div", { class: "row kokoro-row piper-row" },
+      el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, v.title), el("span", { class: "choice-note" }, note)), control);
+  });
+  slot.replaceChildren(section("Kokoro", null, el("div", { class: "group" }, ...rows)),
+    ...(piperRows.length ? [section("Piper", null, el("div", { class: "group" }, ...piperRows))] : []));
   if (busy) setTimeout(() => { if (slot.isConnected) again(); }, 1000);
 }
 
