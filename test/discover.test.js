@@ -502,6 +502,30 @@ async function phone(browser) {
       assert.strictEqual(got.pages, 0, "nothing was saved");
     });
 
+    await test("a page read without saving shows no saved date, not Invalid Date", async () => {
+      const { ctx, p } = await phone(browser);
+      const got = await p.evaluate(() => {
+        const out = document.implementation.createHTMLDocument("");
+        const page = (meta) => {
+          const root = out.createElement("article");
+          root.textContent = "Sea otters are marine mammals.";
+          return Waypage.save.savedPageHtml(meta, root, out);
+        };
+        const head = (html) => new DOMParser().parseFromString(html, "text/html");
+        const wiki = head(page({ preview: true, url: "https://en.wikipedia.org/wiki/Sea_otter", title: "Sea otter", site: "Wikipedia", licence: "wikipedia" }));
+        const other = head(page({ preview: true, url: "https://example.com/a", title: "A", site: "Example" }));
+        const saved = head(page({ url: "https://example.com/a", title: "A", site: "Example", savedAt: Date.UTC(2026, 10, 7, 12) }));
+        return { wiki: wiki.querySelector(".co-meta").textContent, other: other.body.textContent,
+          saved: saved.querySelector(".co-meta").textContent, savedFoot: saved.querySelector(".co-licence").textContent };
+      });
+      await ctx.close();
+      assert.strictEqual(got.wiki, "Wikipedia");
+      assert.doesNotMatch(got.other, /Invalid|saved|Saved/);
+      assert.match(got.other, /From Example\. Read the original/);
+      assert.match(got.saved, /^Example · saved .*2026/);
+      assert.match(got.savedFoot, /^Saved from Example on .*2026/);
+    });
+
     await test("Discover's view options turn Wikipedia today off, and it stays off", async () => {
       const { ctx, p } = await phone(browser);
       await p.evaluate(([wiki]) => {
