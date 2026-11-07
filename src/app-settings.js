@@ -369,7 +369,7 @@ async function fillKokoro(slot) {
   const piperRows = piper.map((v) => {
     const mine = s.busy === v.id;
     const who = v.speaker.charAt(0).toUpperCase() + v.speaker.slice(1).replace(/_/g, " ");
-    const note = mine && busy ? kokoroStep(s, v)
+    const note = mine && busy ? kokoroStep(s)
       : mine && s.step === "bad" ? "The download wasn't the right file. Try again."
       : mine && s.step === "failed" ? "Couldn't download. Try again."
       : [who, v.gender === "f" ? "female" : "male", formatSize(v.ready ? v.size : v.bytes)].join(" · ");
@@ -1118,6 +1118,9 @@ const CREDITS = {
     { name: "Capacitor", by: "Ionic", licence: "MIT", url: "https://capacitorjs.com", note: "Wraps the app for Android and iOS" },
     { name: "Capacitor File Opener", by: "Capawesome", licence: "MIT", url: "https://github.com/capawesome-team/capacitor-plugins", note: "Opens the downloaded update" },
     { name: "Capacitor ML Kit Barcode Scanning", by: "Capawesome", licence: "Apache 2.0", url: "https://github.com/capawesome-team/capacitor-mlkit", note: "Scans the sync setup code" },
+    { name: "sherpa-onnx", by: "k2-fsa", licence: "Apache 2.0", url: "https://github.com/k2-fsa/sherpa-onnx", note: "Runs the Kokoro and Piper voices, on Android" },
+    { name: "Kokoro", by: "hexgrad", licence: "Apache 2.0", url: "https://huggingface.co/hexgrad/Kokoro-82M", note: "Voices for Narrate, downloaded" },
+    { name: "Piper voices", by: "Open Home Foundation", licence: "CC0, CC BY 4.0", url: "https://github.com/OHF-Voice/piper1-gpl", note: "Voices for Narrate, downloaded; French from the SIWIS corpus (CC BY 4.0)" },
   ],
   fonts: [
     ["Source Serif 4", "Adobe"], ["Instrument Sans", "Rodrigo Fuenzalida"], ["Literata", "TypeTogether"], ["Lora", "Cyreal"],

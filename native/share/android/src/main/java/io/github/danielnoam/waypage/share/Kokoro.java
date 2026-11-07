@@ -58,10 +58,14 @@ final class Kokoro {
     // Piper: id is the voice's own name (de_DE-thorsten-medium), the
     // archive vits-piper-<id>.tar.bz2.
     private static Pack piper(String id, String gender, String sha256, long bytes) {
-        String[] parts = id.split("-");
-        Pack p = new Pack(id, parts[1], "", "vits-piper-" + id + ".tar.bz2", sha256, bytes, "", new String[] {parts[1]});
-        p.lang = parts[0].replace('_', '-');
-        p.speaker = parts[1];
+        return piper(id, id.split("-")[1], gender, sha256, bytes);
+    }
+
+    // speaker: the name of the model's speaker 0, when its own name isn't one.
+    private static Pack piper(String id, String speaker, String gender, String sha256, long bytes) {
+        Pack p = new Pack(id, speaker, "", "vits-piper-" + id + ".tar.bz2", sha256, bytes, "", new String[] {speaker});
+        p.lang = id.split("-")[0].replace('_', '-');
+        p.speaker = speaker;
         p.gender = gender;
         return p;
     }
@@ -106,9 +110,24 @@ final class Kokoro {
             "259c9c8bc906d6078e4e0570421885dabb68b539c2f970fcbb890a58eeaf3e9c", 147_052_523L, MULTI, V11),
     };
 
-    // One voice per language, the best whose licence allows any use.
+    // One voice per language, the best whose licence allows any use (CC0,
+    // or CC BY for French's SIWIS). Arabic's and Italian's say "see URL":
+    // left out until that's checked. Ukrainian's has three speakers;
+    // speaker 0, Lada, speaks.
     static final Pack[] PIPER = {
-        // PIPER_LIST
+        piper("cs_CZ-jirka-medium", "m", "321aafd83dd89b3d5b2c36c5898e0710d4f472f3c191cb7f73901a89b7f8539f", 67_212_775L),
+        piper("de_DE-thorsten-medium", "m", "50487d9c95fdf2191f31d2588569381063ba1591dcd4c7d4bdd30f12b2191714", 67_214_254L),
+        piper("el_GR-rapunzelina-low", "f", "bb868070a9ba0d7220b3d7c9291a998c2f60accdb73525bd63b8751b86dd4839", 67_105_521L),
+        piper("es_ES-davefx-medium", "m", "a3f6beb54a9cb893279f72978a22f807a4d9fc9c7848157b524d5cc7b7f58b22", 67_184_952L),
+        piper("fa_IR-amir-medium", "m", "46af65c1cdd86ec300db3998f2bf31a68d9e38da930c0655c1ff6f610e84f864", 67_180_373L),
+        piper("fr_FR-siwis-medium", "f", "375909aa30842b3a4efa10b1beb1d761af792960ae6873b4d53889f96c66195b", 67_207_459L),
+        piper("nl_NL-pim-medium", "m", "e78ed301bf6fc66561a04c110754cd6928d772630a3b80b09a83f89410130171", 67_240_538L),
+        piper("pl_PL-gosia-medium", "f", "75bd34dcbdc4dd98d763954756b4b34b4208100497c836381542e4d73dcefa9c", 67_211_182L),
+        piper("pt_BR-faber-medium", "m", "7add3f923ad6bc25ca8a192805fd1a64d1b3893e4611c4a9719545a825039a83", 67_183_065L),
+        piper("ru_RU-dmitri-medium", "m", "c86d0803737de13d441923ff3b3f309482fab8d7af3ec85949942809eb9a3660", 67_188_551L),
+        piper("sv_SE-nst-medium", "m", "5aed0f5ab75135fc3ba6a4f3567e171d72df753305b08a01ca42f79411587f67", 67_144_884L),
+        piper("tr_TR-fahrettin-medium", "m", "2ee3c18b5dc0a5faf913f995b027163befa6e7a6ad2f5c6b8a2e99fe1aad8b6d", 67_212_827L),
+        piper("uk_UA-ukrainian_tts-medium", "lada", "f", "92be6ff21ebb1cbcc0c71121a6437db8d060cee5785287aaa6a19a2548f59c03", 80_355_083L),
     };
 
     static Pack pack(String id) {

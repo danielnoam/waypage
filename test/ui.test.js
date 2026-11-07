@@ -2468,6 +2468,35 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("Speech engine lists the language's Piper voice, and picking it picks that voice", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(() => {
+        window.asked = [];
+        const st = { supported: true, engine: "app", use: "v019", busy: "", step: "", done: 0, total: 0, packs: [
+          { id: "v019", title: "Kokoro 0.19", note: "English", bytes: 98.5e6, ready: true, size: 1, voices: 11, languages: ["en"] }],
+          piper: [{ id: "en_US-test-medium", lang: "en-US", speaker: "test", gender: "f", voice: "piper-f_test", bytes: 64e6, ready: true, size: 1 },
+            { id: "de_DE-thorsten-medium", lang: "de-DE", speaker: "thorsten", gender: "m", voice: "piper-m_thorsten", bytes: 64e6, ready: true, size: 1 }] };
+        const sp = C.platform.speech;
+        Object.defineProperty(sp, "kokoro", { value: async (action, id) => { if (action) { window.asked.push(action + " " + id); return null; } return JSON.parse(JSON.stringify(st)); } });
+        Object.defineProperty(sp, "engines", { value: async () => ({ engines: [{ name: "g", label: "Google" }, { name: "app", label: "Kokoro" }], default: "g" }) });
+        Object.defineProperty(sp, "voices", { value: async () => [] });
+        Object.defineProperty(navigator, "language", { value: "en-US" });
+        openSettings();
+        openSection("reading");
+      });
+      const btn = q.getByRole("button", { name: /^Speech engine/ });
+      await btn.waitFor();
+      await btn.click();
+      const names = await q.locator(".dropdown-menu .dropdown-item").allInnerTexts();
+      assert.deepStrictEqual(names.map((x) => x.trim()), ["Phone's default (Google)", "Kokoro 0.19", "Piper"]);
+      await q.locator(".dropdown-menu .dropdown-item", { hasText: "Piper" }).click();
+      await until(q, () => JSON.parse(localStorage.getItem("waypage.aloudVoice") || "{}")["app|en"] === "piper-f_test");
+      assert.deepStrictEqual(await q.evaluate(() => window.asked), [], "Piper isn't a Kokoro pack to put in use");
+      await until(q, () => /Piper/.test(document.querySelector("[aria-label^='Speech engine']").getAttribute("aria-label")));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("the reader sheet's Narrate tab keeps its rows after another engine is picked, and a downloaded Kokoro has a bin", async () => {
       const q = await page(browser, 390);
       await q.fill("#saveUrl", ROOT + "test/fixtures/chapters.html");

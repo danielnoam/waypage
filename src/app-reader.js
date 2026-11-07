@@ -2024,7 +2024,8 @@ function voiceOptions(list, saved) {
       // male; Piper's the same (piper-m_thorsten).
       const k = /^(?:kokoro-[a-z]|piper-)([fm])_(.+)$/.exec(v.name);
       const name = k ? (/^\d+$/.test(k[2]) ? "Voice " + Number(k[2]) : k[2].charAt(0).toUpperCase() + k[2].slice(1).replace(/_/g, " ")) : /-language$/i.test(v.name) ? "Standard" : coded(v) ? "Voice " + ++n : v.name;
-      const tags = [k ? (k[1] === "f" ? "female" : "male") : v.gender, (v.quality || 0) >= 400 ? "natural" : "", v.online ? "online" : ""].filter(Boolean);
+      // Kokoro 1.0 and Piper both have a French Siwis: Piper's says so.
+      const tags = [/^piper-/.test(v.name) ? "Piper" : "", k ? (k[1] === "f" ? "female" : "male") : v.gender, (v.quality || 0) >= 400 ? "natural" : "", v.online ? "online" : ""].filter(Boolean);
       out.push({ value: v.id, label: [name, ...tags].join(" · ") });
     }
   }
