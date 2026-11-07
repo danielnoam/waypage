@@ -165,7 +165,7 @@ Each section below shows the computer (left) and the phone (right).
 
 <p><img src="docs/shots/discover-desktop.jpg" width="74%" alt="Discover on a computer"> <img src="docs/shots/discover-phone.jpg" width="21%" alt="Discover on a phone"></p>
 
-- Wikipedia today at the top: the featured article and the most read, in your language. Tap one to read it first, or + to save it.
+- Wikipedia today at the top: the featured article and the most read, in your language. Tap one to read it first, or + to save it. The sliders at the top turn it off.
 - Browse feeds, newsletters and Royal Road stories to follow, by kind (Sites, Feeds, Newsletters), and add one with a tap; swipe to move between the chips.
 - A feed goes to Feeds, a story saves as a collection that gets its new chapters, and a newsletter (by email) copies your Newsletters address and opens its sign-up page.
 - On the phone, Sites browses Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON, Tapas, SpaceBattles and Sufficient Velocity as a grid by list and genre, page after page, plus hand-picked web serials.
