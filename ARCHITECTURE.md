@@ -237,6 +237,12 @@ web copy stay links, as before.
   (`LibraryZip`), and `DriveBackupJob` makes the automatic one with the
   app closed, from a plan the app hands over each time it goes to the
   background.
+- A collection's picked cover is `coverPick` on its clips (`clip:<id>`,
+  or the name of a picture of your own). Pictures never sync, except
+  that one: it has no link to fetch it again, so it goes up as
+  `covers/<name>` before the library naming it, comes down before the
+  library is shown, and rides in a backup as `covers.json`. Stored in
+  `_covers/` in the app, in the database in a browser.
 - Files read from outside (`link` on the entry) are this device's alone:
   neither sync nor any backup takes them, and a restore skips them.
 - **Backups and exports** (`backup.js`, `epub.js`): one zip of the whole

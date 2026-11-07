@@ -14,6 +14,8 @@
 
   const ID = /^[a-z0-9]{4,24}$/;
   const LOCAL = /^images\/[A-Za-z0-9._-]{1,80}$/;
+  // A picture of your own picked as a collection's cover: its file's name.
+  const COVER_FILE = /^u[a-z0-9]{4,24}\.(jpg|png)$/;
   const httpUrl = (v) => (typeof v === "string" && /^https?:\/\//i.test(v) ? v.slice(0, 2000) : "");
   const text = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
   const num = (v) => (typeof v === "number" && isFinite(v) ? v : 0);
@@ -62,6 +64,7 @@
     if (folder) { out.folder = folder; out.folderAt = num(m.folderAt) || out.savedAt; }
     if (folder && m.folderFav === true) { out.folderFav = true; out.folderFavAt = num(m.folderFavAt) || out.savedAt; }
     if (folder && httpUrl(m.source)) out.source = httpUrl(m.source);
+    if (folder && typeof m.coverPick === "string" && (COVER_FILE.test(m.coverPick) || /^clip:[a-z0-9]{4,24}$/.test(m.coverPick))) out.coverPick = m.coverPick;
     if (text(m.series, 200)) out.series = text(m.series, 200);
     if (file) out.file = file;
     const marks = cleanMarks(m.marks);
@@ -225,14 +228,38 @@
 
   // The files a backup starts with, also handed to the Drive backup that
   // runs with the app closed (1.47.0).
-  function headFiles(listed, feeds) {
+  async function headFiles(listed, feeds) {
+    const covers = await coversOf(listed);
     return [
       { name: "waypage.json", text: JSON.stringify({ format: 1, app: C.version, made: Date.now(), pages: listed.length, feeds: (feeds || []).length }) },
       { name: "library.json", text: JSON.stringify(listed) },
       ...(feeds && feeds.length ? [{ name: "feeds.json", text: JSON.stringify(feeds) }] : []),
       // Reading stats (1.39.0): this device's and the others it knows.
       ...(C.stats ? [{ name: "stats.json", text: JSON.stringify(C.stats.backup()) }] : []),
+      // Pictures picked as covers, small enough to go as text.
+      ...(Object.keys(covers).length ? [{ name: "covers.json", text: JSON.stringify(covers) }] : []),
     ];
+  }
+  async function coversOf(pages) {
+    const out = {};
+    for (const name of new Set(pages.map((p) => p.coverPick).filter((c) => COVER_FILE.test(c || "")))) {
+      const bytes = await S().readCover(name);
+      if (bytes) out[name] = S().toBase64(bytes);
+    }
+    return out;
+  }
+  async function restoreCovers(blob, entry) {
+    let got;
+    try { got = JSON.parse(new TextDecoder().decode(await zipRead(blob, entry))); } catch (e) { return; }
+    if (!got || typeof got !== "object") return;
+    for (const [name, b64] of Object.entries(got)) {
+      if (!COVER_FILE.test(name) || typeof b64 !== "string" || await S().readCover(name)) continue;
+      try {
+        const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        const type = imageType(bytes);
+        if (type === "image/jpeg" || type === "image/png") await S().writeCover(name, bytes, type);
+      } catch (e) { /* the clips matter more */ }
+    }
   }
 
   // Writes the backup and resolves to { uri } in the app (a file in its
@@ -250,7 +277,7 @@
     if (bare && bare.size) pages = pages.filter((p) => !bare.has(p.id));
     const native = C.platform.native;
     const name = "waypage-backup-" + today() + ".zip";
-    const head = headFiles(listed, feeds);
+    const head = await headFiles(listed, feeds);
     const from = native ? await S().packSource().catch(() => null) : null;
     if (from) return packNatively(name, pages, head, from, onProgress);
     const file = native ? await S().cacheFile(name) : null;
@@ -366,6 +393,8 @@
       try { feeds = JSON.parse(new TextDecoder().decode(await zipRead(blob, feedsEntry))); } catch (e) { feeds = []; }
       feeds = Array.isArray(feeds) ? feeds.map(cleanFeed).filter(Boolean) : [];
     }
+    const coversEntry = entries.get("covers.json");
+    if (coversEntry) await restoreCovers(blob, coversEntry);
     const statsEntry = entries.get("stats.json");
     if (statsEntry && C.stats) {
       try { C.stats.restore(JSON.parse(new TextDecoder().decode(await zipRead(blob, statsEntry)))); } catch (e) { /* the clips matter more */ }
@@ -640,5 +669,5 @@
     return meta;
   }
 
-  C.backup = { holdPack, stopPack, cleanMeta, cleanMarks, marksMarkdown, sameFile, cleanFeed, crc32, zipWriter, zipEntries, zipRead, headFiles, exportLibrary, restoreLibrary, exportPage, exportPages, exportMarkdown, exportMarkdownAll, importPage, imageType, mdBlocks };
+  C.backup = { COVER_FILE, holdPack, stopPack, cleanMeta, cleanMarks, marksMarkdown, sameFile, cleanFeed, crc32, zipWriter, zipEntries, zipRead, headFiles, exportLibrary, restoreLibrary, exportPage, exportPages, exportMarkdown, exportMarkdownAll, importPage, imageType, mdBlocks };
 })();

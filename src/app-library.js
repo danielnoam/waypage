@@ -80,10 +80,13 @@ function setFolderFav(name, on) {
     else { delete p.folderFav; delete p.folderFavAt; }
   }
 }
-// A clip moving to another collection takes that one's mark, or none.
+// A clip moving to another collection takes that one's mark and picked
+// cover, or none.
 function joinFav(p, name) {
   const on = name && folderPages(name).some((x) => x !== p && x.folderFav);
   if (on) { p.folderFav = true; p.folderFavAt = Date.now(); } else { delete p.folderFav; delete p.folderFavAt; }
+  const pick = name ? coverPick(folderPages(name).filter((x) => x !== p)) : "";
+  if (pick) p.coverPick = pick; else delete p.coverPick;
 }
 
 // A folder's name as already spelled, if one by that name exists.
@@ -175,7 +178,8 @@ function folderTile(name) {
     el("span", { class: "progress thin", "aria-hidden": "true" },
       el("span", { class: "progress-fill", style: "transform: scaleX(" + done / list.length + ")" })));
   // A cover whose file is gone (a restored backup) is read again.
-  if (cover) tile.querySelector(".tile-thumb img").addEventListener("error", () => {
+  if (cover) tile.querySelector(".tile-thumb img").addEventListener("error", (e) => {
+    if (pickedCoverUrl(list)) { e.target.replaceWith(collectionIcon(list, 44)); return; }
     for (const p of list) { delete p.cover; delete p.coverFrom; }
     updateCover(name);
   }, { once: true });
@@ -237,6 +241,7 @@ const FOLDER_BARS = {
   order: { title: "Reorder", done: "Done" },
   chapters: { title: "Story page", done: "Done" },
   export: { title: "Export", done: "Done" },
+  cover: { title: "Cover", done: "Done" },
 };
 
 function setFolderMode(m) {
@@ -276,7 +281,7 @@ const minutesLeft = (list) => list.filter((p) => !p.finished)
 const chapterWord = (list, n) => (isSeries(list) ? (n === 1 ? "chapter" : "chapters") : (n === 1 ? "clip" : "clips"));
 
 function bookCover(list) {
-  const url = coverUrl(list);
+  const url = shownCover(list);
   if (url) {
     const img = el("img", { class: "book-cover", src: url, alt: "" });
     img.addEventListener("error", () => img.replaceWith(drawnCover(list)), { once: true });
@@ -382,6 +387,7 @@ function renderFolder() {
   const ordering = folderMode === "order";
   let top;
   if (folderMode === "chapters") top = [chaptersPanel(list)];
+  else if (folderMode === "cover") top = [coverPanel(list)];
   else if (folderMode === "export") top = [el("div", { class: "folder-actions export-panel" }, exportControls({ pages: list, title: state.folder }, () => setFolderMode("")))];
   else if (ordering) {
     top = [el("div", { class: "order-hint" },
@@ -389,7 +395,7 @@ function renderFolder() {
       el("button", { class: "btn-quiet sort-chapters", type: "button", onclick: () => sortByChapter(list) }, "Sort by chapter"))];
   // On a big screen the book's cover and facts stand beside its list.
   } else top = [el("div", { class: "book-side" }, ...bookHead(list, next, done))];
-  const showList = folderMode !== "export";
+  const showList = folderMode !== "export" && folderMode !== "cover";
   fill($("folderBody"),
     ...top,
     showList && !ordering ? sectionHead((isSeries(list) ? "Chapters" : "Clips") + " · " + list.length) : null,
@@ -553,6 +559,7 @@ function openFolderMenu() {
     item("add", "Add clips", () => openBatch("", false, state.folder)),
     sep(),
     item("rename", "Rename", () => setFolderMode("rename")),
+    item("cover", "Cover", () => setFolderMode("cover")),
     item("reorder", "Reorder", () => setFolderMode("order"), { disabled: list.length < 2 }),
     item("select", "Select", () => startSelect([])),
     item("send", "Export", () => setFolderMode("export")),
@@ -592,6 +599,76 @@ function closeFolderMenu(away) {
   $("folderMore").setAttribute("aria-expanded", "false");
   M.popInto(pop, $("folderMore").getBoundingClientRect()).then(() => pop.remove());
   if (!away) $("folderMore").focus();
+}
+
+// ---- Cover ----
+// Any collection's cover can be picked: a picture of your own, or one of
+// its clips'. Automatic is the story page's picture, else the first
+// clip's, else the collection's icon. The pick is a mark on its clips,
+// like a favourite, so it syncs and backs up with them; a picture of
+// your own goes as its own small file (backup.headFiles, sync.syncCovers).
+function coverPanel(list) {
+  const pick = coverPick(list);
+  const input = el("input", { type: "file", accept: "image/*", class: "visually-hidden", tabindex: "-1", "aria-hidden": "true" });
+  input.addEventListener("change", () => { const f = input.files[0]; input.value = ""; if (f) coverFromFile(state.folder, f); });
+  const choice = (label, on, pic, onclick, named) => el("button", { class: "cover-choice", type: "button", "aria-pressed": on ? "true" : "false", "aria-label": label, onclick },
+    el("span", { class: "cover-choice-pic" }, pic),
+    named ? el("span", { class: "cover-choice-name", "aria-hidden": "true" }, named) : null);
+  const img = (src) => {
+    const i = el("img", { src, alt: "", loading: "lazy" });
+    i.addEventListener("error", () => i.replaceWith(collectionIcon(list, 28)), { once: true });
+    return i;
+  };
+  const autoUrl = shownCover(list.map((p) => ({ ...p, coverPick: undefined })));
+  const own = C.backup.COVER_FILE.test(pick) ? C.store.coverUrl(pick) : null;
+  const plus = svgIcon("add", 28);
+  const clips = list.filter((p) => thumbUrl(p));
+  return el("div", { class: "folder-actions cover-panel" }, input,
+    el("div", { class: "cover-grid" },
+      choice("Automatic", !pick, autoUrl ? img(autoUrl) : collectionIcon(list, 28), () => setCoverPick(state.folder, ""), "Automatic"),
+      choice(own ? "Your picture, choose another" : "Choose a picture of your own", !!own, own ? img(own) : plus, () => input.click(), "Your picture"),
+      ...clips.map((p) => choice(p.title, pick === "clip:" + p.id, img(thumbUrl(p)), () => setCoverPick(state.folder, "clip:" + p.id)))));
+}
+
+async function setCoverPick(name, pick) {
+  const list = folderPages(name);
+  const was = coverPick(list);
+  for (const p of list) { if (pick) p.coverPick = pick; else delete p.coverPick; }
+  await C.store.writeIndex(state.pages);
+  if (was && was !== pick && C.backup.COVER_FILE.test(was) && !state.pages.some((p) => p.coverPick === was)) C.store.removeCover(was).catch(() => {});
+  if (state.folder && sameTag(state.folder, name)) renderFolder();
+  renderLibrary();
+}
+
+// A picture of your own, drawn no bigger than a cover is shown (480 by
+// 720), as a JPEG, or a PNG when it has see-through parts.
+async function coverFromFile(name, file) {
+  if (!/^image\//.test(file.type || "image/")) { toast("That isn't a picture."); return; }
+  const url = URL.createObjectURL(file);
+  try {
+    const pic = new Image();
+    pic.src = url;
+    await pic.decode();
+    const k = Math.min(1, 480 / pic.naturalWidth, 720 / pic.naturalHeight);
+    const w = Math.max(1, Math.round(pic.naturalWidth * k)), h = Math.max(1, Math.round(pic.naturalHeight * k));
+    const canvas = el("canvas", { width: String(w), height: String(h) });
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(pic, 0, 0, w, h);
+    const px = ctx.getImageData(0, 0, w, h).data;
+    let clear = false;
+    for (let i = 3; i < px.length && !clear; i += 4) clear = px[i] < 255;
+    const type = clear ? "image/png" : "image/jpeg";
+    const blob = await new Promise((done) => canvas.toBlob(done, type, 0.85));
+    if (!blob) throw new Error("not drawn");
+    const kept = "u" + C.save.newId() + (clear ? ".png" : ".jpg");
+    await C.store.writeCover(kept, new Uint8Array(await blob.arrayBuffer()), type);
+    await setCoverPick(name, kept);
+  } catch (e) {
+    toast("Couldn't read that picture. Try another.");
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 // ---- What's saved (0.27.11) ----
@@ -727,7 +804,7 @@ async function removeFolder(withPages) {
   if (withPages) forgetWatched(list);
   for (const p of list) {
     if (withPages) { if (p.link && !p.watched) C.platform.files.release(p.link); await C.store.removePage(p.id); }
-    else { delete p.folder; delete p.folderAt; delete p.folderFav; delete p.folderFavAt; }
+    else { delete p.folder; delete p.folderAt; delete p.folderFav; delete p.folderFavAt; delete p.coverPick; }
   }
   if (withPages) state.pages = state.pages.filter((p) => !list.includes(p));
   await C.store.writeIndex(state.pages);
@@ -764,6 +841,7 @@ const ICONS = {
   star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.7l5.9-.9z"/>',
   mark: '<path d="M14.5 4.5l5 5L11 18H6v-5z"/><path d="M4 21h16"/>',
   translate: '<path d="M4 5h9M8.5 3v2M11 5c-1 4-3.5 7-7 8.5M6.5 8.5c1.2 2 3 3.5 5 4.5"/><path d="M13 21l4-9 4 9M14.5 18h5"/>',
+  cover: '<rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.5"/><path d="M20 15l-4.5-4.5L6 20"/>',
   lookup: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/><path d="M9 8h7M9 11.5h5"/>',
 };
 function svgIcon(name, size) {
@@ -2180,7 +2258,7 @@ function watchIntoPick(w) {
       const dir = into || ((p.file && p.file.path) || "").split("/").slice(-2, -1)[0];
       const to = dir ? folderName(dir) : null;
       if ((p.folder || null) === to) continue;
-      if (to) Object.assign(p, { folder: to, folderAt: at }); else { delete p.folder; delete p.folderAt; }
+      if (to) { joinFav(p, to); Object.assign(p, { folder: to, folderAt: at }); } else { delete p.folder; delete p.folderAt; joinFav(p, null); }
       moved++;
     }
     if (moved) { await C.store.writeIndex(state.pages); renderLibrary(); updateWidgets(); }

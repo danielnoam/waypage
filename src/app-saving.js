@@ -11,7 +11,7 @@
 const PICTURES_KEY = "waypage.syncPictures";
 let syncTimer = null, syncQueue = load(PICTURES_KEY, null) || [], fetchingPictures = false;
 const keepQueue = () => store(PICTURES_KEY, syncQueue.length ? [...new Set(syncQueue)] : null);
-const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "turn", "fav", "favAt", "folderFav", "folderFavAt", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks"];
+const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "turn", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks"];
 // While a run of saves is on, sync waits longer (1.2.0): each sync is a
 // merge of the whole library, and one after every page landing was a
 // stutter every few seconds.
@@ -2041,7 +2041,7 @@ async function driveHandOver() {
   const ids = kept.filter((p) => !bare || !bare.has(p.id)).map((p) => p.id);
   const l = C.drive.last;
   const plan = { every: C.drive.every, last: Math.max(l.at || 0, C.drive.since), tried: l.tried || 0, folder: C.drive.folder,
-    device: load(DEVICE_KEY, "") || guessedName(), clips: kept.length, ids, head: C.backup.headFiles(kept, fs), ...from };
+    device: load(DEVICE_KEY, "") || guessedName(), clips: kept.length, ids, head: await C.backup.headFiles(kept, fs), ...from };
   const sig = JSON.stringify({ ...plan, head: plan.head.map((h) => (h.name === "waypage.json" ? "" : h.text)) });
   if (sig === driveHanded) return;
   driveHanded = sig;

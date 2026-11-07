@@ -261,4 +261,18 @@ test("removing every highlight on one device removes them everywhere", () => {
   assert.strictEqual(r.pages[0].marks, undefined);
 });
 
+test("a collection's picked cover goes to the other device, and only a name Waypage makes is kept", () => {
+  const base = lib([page("a1b2", { folder: "Trip" })]);
+  const r = S.merge(base, lib([page("a1b2", { folder: "Trip", coverPick: "uabcd1234.jpg" })]), base, NOW);
+  assert.strictEqual(r.pages[0].coverPick, "uabcd1234.jpg");
+  require("../src/backup.js");
+  const B = window.Waypage.backup;
+  const keep = (v, folder = "Trip") => B.cleanMeta(page("a1b2", { folder, coverPick: v }), "a1b2").coverPick;
+  assert.strictEqual(keep("uabcd1234.jpg"), "uabcd1234.jpg");
+  assert.strictEqual(keep("clip:c3d4"), "clip:c3d4");
+  assert.strictEqual(keep("../library.json"), undefined);
+  assert.strictEqual(keep("https://example.com/x.jpg"), undefined);
+  assert.strictEqual(keep("uabcd1234.jpg", ""), undefined);
+});
+
 console.log("\n" + passed + " passed");

@@ -503,6 +503,44 @@
     return dataUrl ? dataUrl + "pages/" + id + "/" : null;
   }
 
+  // ---- Pictures picked for collections' covers ----
+  // In the app, files in _covers/ beside the story pages' covers; in a
+  // browser, data: URLs in the database, read once into `webCovers`.
+  const IDB_COVER = "__cover:";
+  const webCovers = new Map();
+  async function readCovers() {
+    if (FS()) return;
+    try {
+      const range = IDBKeyRange.bound(IDB_COVER, IDB_COVER + "\uffff");
+      const keys = (await idbDo("readonly", (s) => s.getAllKeys(range))) || [];
+      const urls = (await idbDo("readonly", (s) => s.getAll(range))) || [];
+      keys.forEach((k, i) => { if (typeof urls[i] === "string") webCovers.set(String(k).slice(IDB_COVER.length), urls[i]); });
+    } catch (e) { /* none */ }
+  }
+  function coverUrl(name) {
+    if (!FS()) return webCovers.get(name) || null;
+    const base = pageDirUrl("_covers");
+    return base ? base + name : null;
+  }
+  async function readCover(name) {
+    if (FS()) { try { return await readBytes("_covers", name); } catch (e) { return null; } }
+    const url = webCovers.get(name);
+    if (!url) return null;
+    const bin = atob(url.split(",")[1] || "");
+    return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  }
+  async function writeCover(name, bytes, type) {
+    if (FS()) { await writeBytes("_covers", name, bytes); return; }
+    const url = "data:" + (type || "image/jpeg") + ";base64," + toBase64(bytes);
+    await idbDo("readwrite", (s) => s.put(url, IDB_COVER + name));
+    webCovers.set(name, url);
+  }
+  async function removeCover(name) {
+    if (FS()) { await removeFile("_covers", name); return; }
+    webCovers.delete(name);
+    try { await idbDo("readwrite", (s) => s.delete(IDB_COVER + name)); } catch (e) { /* gone */ }
+  }
+
   // ---- Your own fonts (1.33.0) ----
   // In the app, a fonts folder in the library, so a font put there by
   // hand (in Documents/Waypage/fonts, or a picked folder's fonts) is
@@ -624,5 +662,6 @@
 
   window.Waypage.store = { ready,
     get place() { return cur ? cur.place : savedPlace(); }, placeName, get problem() { return problem; }, moveTo, readIndex, writeIndex, writeIndexOnly, set onIndex(f) { onIndex = f; }, writeThumb, readThumbs, storageInfo, keepStored, writePage, readPage, readPages, removePage, writeText, readText, writeTranslation, readTranslation, download, removeFile, sizeOf, shrink, squeeze, pageDirUrl, bytesOf,
-    listFiles, listSized, readBytes, writeBytes, cacheFile, packSource, toBase64, listFonts, readFont, addFont, removeFont };
+    listFiles, listSized, readBytes, writeBytes, cacheFile, packSource, toBase64, listFonts, readFont, addFont, removeFont,
+    readCovers, coverUrl, readCover, writeCover, removeCover };
 })();
