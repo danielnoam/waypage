@@ -39,7 +39,12 @@ function route(s) {
   if (view === "select") startSelect([], true);
   // A sheet isn't rebuilt going forward: step back off it instead.
   if (view === "menu" && !state.menu) history.back();
-  if (view === "reader" && String(s.page).startsWith("preview:") && !(state.open && state.open.id === s.page)) { history.back(); return; }
+  if (view === "reader" && String(s.page).startsWith("preview:") && !(state.open && state.open.id === s.page)) {
+    // Back from a link read here to the page it was on, if that's still kept.
+    const kept = previewsKept.get(s.page);
+    if (kept && !$("readerView").hidden) show(kept.meta, kept.html);
+    else { history.back(); return; }
+  }
   if (view === "reader" && (!state.open || state.open.id !== s.page)) openPage(s.page, true);
   if (state.image && !(view === "reader" && s.image)) closeImage();
   if (view === "reader" && s.image && !state.image) history.back();
