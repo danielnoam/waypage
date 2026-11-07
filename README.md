@@ -37,7 +37,7 @@ Each section below shows the computer (left) and the phone (right).
 <p><img src="docs/shots/library-desktop.jpg" width="74%" alt="Library on a computer"> <img src="docs/shots/library-phone.jpg" width="21%" alt="Library on a phone"></p>
 
 - Continue reading at the top, then Collections, then Clips.
-- Shelf, list or grid layouts, site icons and collection covers.
+- Shelf, list or grid layouts, site icons and collection covers. Any collection's cover can be set: a picture of your own or one of its clips'.
 - Filter by unread, finished or a tag; sort by saved, read, length or site.
 - Search titles, tags and the full text of every clip.
 - Favourites, tags, and a star on a clip's picture.

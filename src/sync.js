@@ -20,6 +20,7 @@
   const SENT_KEY = "waypage.syncSent";   // pages sent before library.json was (1.13.0)
   const REPO = "waypage-data";
   const OLD_REPO = "carryon-data"; // Carry-on's name for it, before 1.0.0
+  const COVERS_KEY = "waypage.syncCovers"; // picked covers this device knows are on GitHub
   const STATS_KEY = "waypage.syncStats"; // { device: sha of its stats file as last read, _sent: what this device last wrote }
   const DAY = 24 * 3600 * 1000;
   const LOCAL = /^images\//;
@@ -35,7 +36,7 @@
   // Every field an index entry can carry through a backup or sync
   // (backup.cleanMeta); anything else on a page stays on its device.
   const SYNCED = new Set(["id", "url", "title", "site", "byline", "licence", "savedAt", "minutes", "lang", "dir", "mode", "images",
-    "at", "finished", "readAt", "readOn", "placeAt", "spot", "comic", "manga", "volume", "turn", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "file", "marks", "cut", "archived", "editedAt"]);
+    "at", "finished", "readAt", "readOn", "placeAt", "spot", "comic", "manga", "volume", "turn", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "file", "marks", "cut", "archived", "editedAt"]);
   // Where the reader is, which goes with whichever device moved it last:
   // placeAt (1.30.2), or readAt on entries from before it. Opening a clip
   // stamps readAt alone, so a device that opened one at an older place
@@ -799,6 +800,8 @@
       const took = await settleSome(early, false);
       for (const p of getPages()) if (took.has(p.id)) snapshot.set(p.id, JSON.stringify(p));
     };
+    // A picked cover goes up before the library that names it.
+    if (!light && !noClips) try { await syncCovers(before, true); } catch (e) { if (e instanceof Paused) throw e; }
     let up = 0;
     let merged, remote;
     for (let tries = 0; ; tries++) {
@@ -1044,6 +1047,8 @@
     keep(WAIT_KEY, stillWaiting.length ? stillWaiting : null);
     takeFeeds();
     if (setSeen && merged.feedsSeen && merged.feedsSeen > (getSeen() || 0)) setSeen(merged.feedsSeen);
+    // Before the library is shown, so a cover that came down is in it.
+    try { await syncCovers(out); } catch (e) { if (e instanceof Paused) throw e; }
     await setPages(out);
     for (const id of gone) await C.store.removePage(id);
     // Reading stats last (1.39.0), and never the reason a sync failed.
@@ -1087,6 +1092,31 @@
       known._sent = sent;
     }
     keep(STATS_KEY, known);
+  }
+
+  // Pictures picked as collections' covers: covers/<name>, written once
+  // by the device that picked it (a name is never used for another), and
+  // brought down by the others. The one picture that syncs: it has no
+  // link to download it from.
+  async function syncCovers(pages, upOnly) {
+    const names = [...new Set(pages.map((p) => p.coverPick).filter((c) => C.backup.COVER_FILE.test(c || "")))];
+    if (!names.length) return;
+    const sent = new Set(load(COVERS_KEY, []));
+    for (const name of names) {
+      halt();
+      const bytes = await C.store.readCover(name);
+      if (bytes) {
+        if (!sent.has(name)) { await put("covers/" + name, null, null, "Cover", bytes); sent.add(name); }
+        continue;
+      }
+      if (upOnly) continue;
+      try {
+        const got = await readBytes("covers/" + name);
+        const type = C.backup.imageType(got);
+        if (type === "image/jpeg" || type === "image/png") { await C.store.writeCover(name, got, type); sent.add(name); }
+      } catch (e) { if (e instanceof Paused) throw e; /* not sent yet by the device that picked it */ }
+    }
+    keep(COVERS_KEY, upOnly ? [...sent] : [...sent].filter((n) => names.includes(n)));
   }
 
   // A library file from GitHub, down to what Waypage writes.

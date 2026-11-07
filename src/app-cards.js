@@ -19,7 +19,7 @@ const pagesLine = (n) => countLine(n) + " · " + formatSize(totalBytes());
 const webThumbs = new Map();
 async function loadThumbs() {
   if (C.platform.native) return;
-  const got = await C.store.readThumbs();
+  const [got] = await Promise.all([C.store.readThumbs(), C.store.readCovers()]);
   webThumbs.clear();
   got.forEach((url, id) => webThumbs.set(id, url));
 }
@@ -48,9 +48,25 @@ function iconUrl(p) {
   try { return new URL("/favicon.ico", p.url).href; } catch (e) { return null; }
 }
 
-// A collection's cover (0.27.6), read from its story page: kept in
-// _covers/, or its link.
+// A collection's cover: the one picked for it, a picture of your own
+// or one of its clips', else its story page's (0.27.6), kept in _covers/,
+// or its link.
+const coverPick = (list) => (list.find((p) => p.coverPick) || {}).coverPick || "";
+function pickedCoverUrl(list) {
+  const pick = coverPick(list);
+  if (pick.startsWith("clip:")) { const p = list.find((x) => x.id === pick.slice(5)); return p ? thumbUrl(p) : null; }
+  return pick ? C.store.coverUrl(pick) : null;
+}
+// What the collection shows: its cover, else its first clip's picture.
+function shownCover(list) {
+  const c = coverUrl(list);
+  if (c) return c;
+  const p = list.find((x) => thumbUrl(x));
+  return p ? thumbUrl(p) : null;
+}
 function coverUrl(list) {
+  const picked = pickedCoverUrl(list);
+  if (picked) return picked;
   const c = (list.find((p) => p.cover) || {}).cover;
   if (!c) return null;
   if (/^https?:/.test(c)) return navigator.onLine ? c : null;
