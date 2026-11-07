@@ -44,6 +44,7 @@ server.js           zero-dependency static server for local work (start.cmd on W
 sw.js               offline cache for the web copy; its ASSETS list is also what goes into the apps
 manifest.json       the web copy as an installable app
 privacy.html, terms.html   the pages Google's OAuth branding links to
+src/boot.js         runs in <head>: puts the saved theme on <html> before the first frame
 src/app.js          APP_VERSION, the shared helpers (el, load, store, toast), theme and state
 src/app-reading.js  text size, spacing, margins, alignment, fonts (bundled and added)
 src/app-cards.js    clip cards, saving cards and runs, failed saves, update and archive a clip
@@ -390,6 +391,10 @@ adds a line here.
 Things that broke once and would again. Check here before touching the
 area.
 
+- **`src/boot.js` picks the theme twice over:** it runs in `<head>` and
+  resolves the saved choice (Auto's light and dark picks included) on its
+  own, before app.js exists. A change to how `resolveTheme` or the theme
+  keys work goes in both, or starts flash a wrong theme again.
 - **`isPaged()` is true for a comic in Pages** (since comic Pages): code
   that means text columns checks `comic` too (relayout branches to
   picsLayout, chunkUp and text pinch skip comics).

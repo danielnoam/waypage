@@ -289,6 +289,9 @@ function startLine() {
 }
 
 paintPlace();
+// The sync button is known before the library is read, so it is there
+// from the first frame rather than arriving with the clips.
+paintSync();
 // The library is read as soon as its place is known, beside the build's
 // details rather than after them (1.2.0).
 const firstIndex = C.store.ready.then(() => Promise.all([C.store.readIndex(), loadThumbs()])).then((got) => { startAt.library = performance.now(); return got; });

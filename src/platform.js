@@ -1134,6 +1134,16 @@
       const c = navigator.connection;
       return !!c && /^(cellular|wimax|bluetooth)$/.test(c.type || "");
     },
+    // The theme's background and whether it's dark, for the phone's bars
+    // and, through native/share's Look plugin (Android), for the window
+    // and WebView at the next start, before the page paints. SystemBars
+    // first: it also repaints the window, which Look then puts right.
+    // keep is false for a reader's own theme: the next start opens on the library.
+    look(bg, dark, keep) {
+      const bars = plugin("SystemBars"), look = keep ? plugin("Look") : null;
+      const style = bars && bars.setStyle ? bars.setStyle({ style: dark ? "DARK" : "LIGHT" }).catch(() => {}) : Promise.resolve();
+      if (look) style.then(() => look.set({ bg, dark })).catch(() => {});
+    },
     // The reader's brightness (1.10.0), native/share's Brightness plugin.
     brightness: {
       get available() { return !!plugin("Brightness"); },

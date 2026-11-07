@@ -141,12 +141,15 @@ const DIM_KEY = "waypage.dimPictures";
 // The reader's own theme shows while a clip is open, not over Settings.
 const readerThemeOn = () => state.readerTheme !== "same";
 const shownTheme = () => (state.open && !state.settings && readerThemeOn() ? state.readerTheme : state.theme);
+let paintedLook = "";
 function paintTheme() {
   const theme = resolveTheme(shownTheme());
   document.documentElement.dataset.theme = theme;
   document.documentElement.toggleAttribute("data-dim-pictures", !!(themeOf(theme) || {}).dark && load(DIM_KEY, true) !== false);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+  const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+  if (meta) meta.content = bg;
+  if (bg !== paintedLook) { paintedLook = bg; C.platform.look(bg, !!(themeOf(theme) || {}).dark, shownTheme() === state.theme); }
   if (C.reader) { if (typeof paintPdfDark === "function") paintPdfDark(); C.reader.applyTheme(); }
 }
 
