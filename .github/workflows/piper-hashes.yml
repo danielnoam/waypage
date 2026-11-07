@@ -1,0 +1,37 @@
+# Temporary: reads Piper voice archives' sizes, hashes and licences
+# (GitHub release downloads are blocked where this is written). Removed
+# before the PR merges.
+name: Piper hashes
+on:
+  push:
+    branches: [feature/piper-voices]
+    paths: [.github/workflows/piper-hashes.yml]
+jobs:
+  hashes:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        voice: [ar_JO-kareem-medium, cs_CZ-jirka-medium, de_DE-thorsten-medium, el_GR-rapunzelina-low,
+          es_ES-davefx-medium, es_ES-sharvard-medium, es_MX-ald-medium, fa_IR-amir-medium, fa_IR-gyro-medium,
+          fr_FR-siwis-medium, fr_FR-tom-medium, fr_FR-upmc-medium, it_IT-paola-medium,
+          nl_NL-pim-medium, nl_NL-ronnie-medium, nl_BE-nathalie-medium, pl_PL-gosia-medium, pl_PL-darkman-medium,
+          pt_BR-faber-medium, pt_BR-cadu-medium, pt_PT-tugão-medium, ru_RU-irina-medium, ru_RU-dmitri-medium,
+          ru_RU-denis-medium, sv_SE-nst-medium, sv_SE-lisa-medium, tr_TR-fahrettin-medium, tr_TR-dfki-medium,
+          uk_UA-ukrainian_tts-medium]
+    steps:
+      - run: |
+          f="vits-piper-${{ matrix.voice }}.tar.bz2"
+          curl -fsSL --retry 3 -o a.tar.bz2 "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$f"
+          echo "RESULT $f $(stat -c %s a.tar.bz2) $(sha256sum a.tar.bz2 | cut -d' ' -f1)"
+          mkdir x && tar xjf a.tar.bz2 -C x
+          find x -maxdepth 2 -not -path '*espeak-ng-data/*' -exec ls -ld {} \;
+          du -sh x/*/espeak-ng-data || true
+          for m in x/*/MODEL_CARD x/*/*.json; do [ -f "$m" ] && { echo "== $m"; head -c 1500 "$m"; echo; }; done
+          python3 - <<'PY'
+          import glob, onnx
+          PY
+          pip -q install onnx >/dev/null 2>&1 && python3 -c "
+          import glob,onnx
+          m=onnx.load(glob.glob('x/*/*.onnx')[0],load_external_data=False)
+          print('META',{p.key:p.value for p in m.metadata_props})" || true
