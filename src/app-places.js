@@ -381,7 +381,8 @@ async function savePickedPosts() {
 }
 
 // A post read in the app without saving it: the reader shows it, and
-// its ⋯ offers Save and the browser.
+// its ⋯ offers Save and the browser. Discover's Wikipedia rows come with
+// no feed.
 let previewing = null;
 async function previewPost(f, it) {
   if (!navigator.onLine) { toast("You're offline. Save posts while you're online to read them here."); return; }
@@ -395,7 +396,7 @@ async function previewPost(f, it) {
       ? "Couldn't open that post. Try the browser button." : "This browser can't reach that site. Try the browser button.");
     return;
   } finally { previewing = null; }
-  got.meta.feed = f.url;
+  if (f) got.meta.feed = f.url;
   got.meta.post = it.url;
   const swap = state.open && $("readerView").dataset.pane && !$("readerView").dataset.leaving;
   if (swap) { closeSheet(true); history.replaceState(readerState(got.meta), ""); }
@@ -416,7 +417,7 @@ function previewSheet(p) {
     el("div", { class: "tile-row" },
       tileButton("add", saved ? "Saved" : "Save", saved ? () => {} : () => {
         if (f) saveFeedPosts([{ f, it: { url: p.post, date: Date.now() } }]);
-        else savePage(p.url);
+        else savePage(p.post || p.url);
         history.back();
       }),
       tileButton("original", "Browser", () => C.platform.openOutside(p.url))));

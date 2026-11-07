@@ -432,6 +432,43 @@ async function phone(browser) {
       assert.ok(got.asked.some((u) => u.startsWith("https://gutendex.com/books/?sort=popular")), got.asked.join(" "));
     });
 
+    await test("tapping a Wikipedia today row reads it without saving; its + saves it", async () => {
+      const { ctx, p } = await phone(browser);
+      await p.evaluate(([wiki]) => {
+        const P = Waypage.platform;
+        P.fetchText = async (url) => ({ status: 200, url, text: /wikipedia\.org\/api\/rest_v1\/feed\/featured\//.test(url) ? wiki : "" });
+        window.previewed = [];
+        Waypage.save.preview = async (url) => {
+          window.previewed.push(url);
+          return { meta: { id: "preview:w1", preview: true, url, title: "Sea otter", site: "Wikipedia", minutes: 3, mode: "links", next: "", prev: "" },
+            html: "<!doctype html><html><body><article><p>Sea otters are marine mammals.</p></article></body></html>" };
+        };
+        window.saved = [];
+        window.savePage = async (url) => { window.saved.push(url); };
+        goPlace("discover");
+      }, [fixture("wiki-featured.json")]);
+      const rows = p.locator("#discover .dz-wiki .dz-row");
+      await rows.first().waitFor();
+      await rows.first().locator(".post-open").click();
+      await p.waitForFunction(() => state.open && state.open.preview);
+      await p.locator("#readerMore").click();
+      await p.locator('#readingSheet:not([hidden]) .tile-row').waitFor();
+      assert.match(await p.locator("#readingSheet").textContent(), /Not saved[\s\S]*Save[\s\S]*Browser/);
+      await p.locator('#readingSheet .tile-row button:has-text("Save")').click();
+      await p.waitForFunction(() => window.saved.length === 1);
+      const first = await p.evaluate(() => ({ previewed: window.previewed, saved: window.saved.slice() }));
+      assert.strictEqual(first.previewed.length, 1);
+      assert.deepStrictEqual(first.saved, first.previewed, "Save in the reader saves the row's own link");
+      await p.evaluate(() => history.back());
+      await p.waitForFunction(() => !state.open);
+      await rows.nth(1).locator(".post-save").click();
+      await p.waitForFunction(() => window.saved.length === 2);
+      const got = await p.evaluate(() => ({ previewed: window.previewed.length, saved: window.saved }));
+      await ctx.close();
+      assert.strictEqual(got.previewed, 1, "+ saves straight away, with no reading first");
+      assert.match(got.saved[1], /wikipedia\.org\/wiki\//);
+    });
+
     await test("a pasted link to an EPUB file is downloaded, not read as a page", async () => {
       const { ctx, p } = await phone(browser);
       const got = await p.evaluate(async () => {
