@@ -1,0 +1,27 @@
+# Temporary: reads Piper voice archives' sizes, hashes and licences
+# (GitHub release downloads are blocked where this is written). Removed
+# before the PR merges.
+name: Piper hashes
+on:
+  push:
+    branches: [feature/piper-voices]
+    paths: [.github/workflows/piper-hashes.yml]
+jobs:
+  hashes:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          pip -q install onnx >/dev/null 2>&1
+          for v in en_US-amy-medium en_US-bryce-medium en_US-hfc_female-medium en_US-hfc_male-medium en_US-joe-medium en_US-john-medium en_US-kristin-medium en_US-norman-medium en_US-ryan-medium en_US-ljspeech-medium en_US-sam-medium en_GB-alan-medium en_GB-alba-medium en_GB-cori-medium en_GB-jenny_dioco-medium en_GB-northern_english_male-medium; do
+            f="vits-piper-$v.tar.bz2"
+            rm -rf x a.tar.bz2; mkdir x
+            curl -fsSL --retry 3 -o a.tar.bz2 "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$f" || { echo "RESULT|$f|missing"; continue; }
+            tar xjf a.tar.bz2 -C x
+            META=$(python3 -c "
+          import glob,onnx
+          m=onnx.load(glob.glob('x/*/*.onnx')[0],load_external_data=False)
+          d={p.key:p.value for p in m.metadata_props}; print(d.get('n_speakers'), d.get('sample_rate'), d.get('voice'))")
+            LIC=$(cat x/*/MODEL_CARD 2>/dev/null | grep -i -A3 -E 'licen' | tr '\n' ' ' | head -c 400)
+            DATA=$(cat x/*/MODEL_CARD 2>/dev/null | grep -i -A2 -E 'dataset' | tr '\n' ' ' | head -c 200)
+            echo "RESULT|$f|$(stat -c %s a.tar.bz2)|$(sha256sum a.tar.bz2 | cut -d' ' -f1)|$META|$(ls x/*/ | tr '\n' ' ')|LIC $LIC|DATA $DATA"
+          done
