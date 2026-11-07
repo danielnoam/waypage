@@ -370,6 +370,9 @@ adds a line here.
   before unpacking. It is a real Android speech engine (`KokoroTtsService`),
   so the lock screen, PiP and sleep timer work unchanged, but other apps
   can use it too. 32-bit and x86 phones, iOS and the web copy get none.
+  Piper voices (one per language) are more downloads for the same engine
+  and library; one model is in memory at a time, so switching between a
+  Kokoro and a Piper language reloads (a second or two).
 - The web copy reads pages through the fetch proxy (`worker/`), so
   Cloudflare sees which addresses a browser user saves (not the app's).
   It only answers the web copy's origin, but the Origin header binds only

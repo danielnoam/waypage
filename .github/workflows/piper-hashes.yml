@@ -12,7 +12,7 @@ jobs:
     steps:
       - run: |
           pip -q install onnx >/dev/null 2>&1
-          for v in ar_JO-kareem-medium cs_CZ-jirka-medium de_DE-thorsten-medium el_GR-rapunzelina-low es_ES-davefx-medium es_ES-sharvard-medium es_MX-ald-medium fa_IR-amir-medium fa_IR-gyro-medium fr_FR-siwis-medium fr_FR-tom-medium fr_FR-upmc-medium it_IT-paola-medium nl_NL-pim-medium nl_NL-ronnie-medium nl_BE-nathalie-medium pl_PL-gosia-medium pl_PL-darkman-medium pt_BR-faber-medium pt_BR-cadu-medium ru_RU-irina-medium ru_RU-dmitri-medium ru_RU-denis-medium sv_SE-nst-medium sv_SE-lisa-medium tr_TR-fahrettin-medium tr_TR-dfki-medium uk_UA-ukrainian_tts-medium; do
+          for v in uk_UA-ukrainian_tts-medium; do
             f="vits-piper-$v.tar.bz2"
             rm -rf x a.tar.bz2; mkdir x
             curl -fsSL --retry 3 -o a.tar.bz2 "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$f" || { echo "RESULT|$f|missing"; continue; }
@@ -23,5 +23,6 @@ jobs:
           d={p.key:p.value for p in m.metadata_props}; print(d.get('n_speakers'), d.get('sample_rate'), d.get('voice'))")
             LIC=$(cat x/*/MODEL_CARD 2>/dev/null | grep -i -A3 -E 'licen' | tr '\n' ' ' | head -c 300)
             DATA=$(cat x/*/MODEL_CARD 2>/dev/null | grep -i -A2 -E 'dataset' | tr '\n' ' ' | head -c 200)
+            python3 -c "import json,glob; print('SPK', json.load(open(glob.glob('x/*/*.onnx.json')[0])).get('speaker_id_map'))"
             echo "RESULT|$f|$(stat -c %s a.tar.bz2)|$(sha256sum a.tar.bz2 | cut -d' ' -f1)|$META|$(ls x/*/ | tr '\n' ' ')|LIC $LIC|DATA $DATA"
           done

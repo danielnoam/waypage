@@ -2381,6 +2381,40 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("More speech engines (Piper): a voice per language, downloaded, then picked for its language", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(() => {
+        window.asked = [];
+        window.st = { supported: true, engine: "app", use: "", busy: "", step: "", done: 0, total: 0, packs: [
+          { id: "v019", title: "Kokoro 0.19", note: "English", bytes: 98.5e6, ready: false, size: 0, voices: 11, languages: ["en"] }],
+          piper: [
+            { id: "fr_FR-siwis-medium", lang: "fr-FR", speaker: "siwis", gender: "f", voice: "piper-f_siwis", bytes: 64e6, ready: false, size: 0 },
+            { id: "de_DE-thorsten-medium", lang: "de-DE", speaker: "thorsten", gender: "m", voice: "piper-m_thorsten", bytes: 64e6, ready: false, size: 0 }] };
+        Object.defineProperty(C.platform.speech, "kokoro", { value: async (action, id) => {
+          if (action) { window.asked.push(action + " " + id); if (action === "remove") window.st.piper.find((v) => v.id === id).ready = false; return null; }
+          return JSON.parse(JSON.stringify(window.st));
+        } });
+        openSettings();
+        openSection("kokoro");
+      });
+      const row = q.locator(".piper-row", { hasText: "German" });
+      await row.waitFor();
+      assert.deepStrictEqual((await q.locator(".piper-row .choice-label").allInnerTexts()).map((x) => x.trim()), ["French", "German"]);
+      assert.ok(/Thorsten · male/.test(await row.innerText()));
+      await row.getByRole("button", { name: "Download" }).click();
+      await until(q, () => window.asked.length > 0);
+      assert.deepStrictEqual(await q.evaluate(() => window.asked), ["download de_DE-thorsten-medium"]);
+      await q.evaluate(() => { window.st.piper[1].ready = true; window.st.piper[1].size = 70e6; renderSection(); });
+      await until(q, () => (JSON.parse(localStorage.getItem("waypage.aloudEngine") || "{}")).de === "app");
+      assert.strictEqual(await q.evaluate(() => JSON.parse(localStorage.getItem("waypage.aloudVoice") || "{}")["app|de"]), "piper-m_thorsten");
+      q.on("dialog", (d) => d.accept());
+      await q.getByRole("button", { name: "Delete German" }).click();
+      await until(q, () => !("de" in JSON.parse(localStorage.getItem("waypage.aloudEngine") || "{}")));
+      assert.strictEqual(await q.evaluate(() => JSON.parse(localStorage.getItem("waypage.aloudVoice") || "{}")["app|de"]), undefined);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a drop-down too long for its sheet opens right at its button, and one at a time", async () => {
       const q = await page(browser, 390);
       await q.fill("#saveUrl", ROOT + "test/fixtures/chapters.html");
