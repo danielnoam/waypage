@@ -82,7 +82,7 @@ jobs:
         run: >-
           npx --yes @capacitor/assets@3.0.5 generate --android
           --iconBackgroundColor '#2F5D8A' --iconBackgroundColorDark '#2F5D8A'
-          --splashBackgroundColor '#F7F4EE' --splashBackgroundColorDark '#F7F4EE'
+          --splashBackgroundColor '#F7F4EE' --splashBackgroundColorDark '#0F1216'
 
       - name: Stamp the version
         id: v
