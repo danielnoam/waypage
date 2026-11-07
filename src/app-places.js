@@ -1014,6 +1014,7 @@ function jumpSection(d) {
 let gAt = 0;
 const PLACE_KEYS = ["library", "feeds", "newsletters", "highlights", "reading", "discover"];
 function onKeys(e) {
+  if (e.key === "Tab" || e.key.startsWith("Arrow") || e.key === "Enter" || e.key === "Escape") document.body.classList.add("keys");
   if (e.defaultPrevented || e.isComposing) return;
   const k = e.key, inFrame = e.target && e.target.ownerDocument !== document;
   if (k === "Escape" && (state.sheet || state.image || state.menu || state.select || state.side)) { history.back(); return; }

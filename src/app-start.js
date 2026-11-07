@@ -194,6 +194,7 @@ $("sheetCatch").addEventListener("click", () => history.back());
 dragToClose($("readingSheet"), null, () => !!state.sheet && !$("readingSheet").dataset.pop, () => history.back());
 dragToClose($("menuSheet"), $("menuCatch"), () => !!state.menu && !wide.matches, () => history.back());
 addEventListener("keydown", onKeys);
+addEventListener("pointerdown", () => document.body.classList.remove("keys"), true);
 addEventListener("popstate", (e) => route(e.state));
 addEventListener("online", () => { showOffline(); renderLibrary(); });
 addEventListener("offline", () => { showOffline(); renderLibrary(); });
