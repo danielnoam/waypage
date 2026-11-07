@@ -9,6 +9,8 @@
 // newsletters (Daniel: no topic chips).
 let dzPick = "all";
 let dzList = load("waypage.discover.rrList", "rising");
+// View options (the top bar's sliders, Discover only): Wikipedia today on or off.
+let dzWikiOn = load("waypage.discover.wiki", true) !== false;
 // Royal Road as last read: { at, items } per list, or an error line.
 const dz = { busy: false, error: "", found: null };
 // Only the phone reads the story sites: most sit behind Cloudflare's or
@@ -75,7 +77,7 @@ function renderDiscover() {
   const show = (k) => dzPick === "all" || dzPick === k;
   // Sites is the story sites to browse: a grid with every list and genre,
   // page after page; All shows a row of Royal Road.
-  if (dzPick === "all" && !q) nodes.push(...dzWiki());
+  if (dzPick === "all" && !q && dzWikiOn) nodes.push(...dzWiki());
   if (dzPick === "stories") nodes.push(...dzGrid());
   else if (show("stories")) nodes.push(...dzStories());
   const pick = (kind) => entries.filter((e) => e.kind === kind && dzMatch(e, q));
@@ -475,6 +477,20 @@ function signupSheet() {
     chips, addr, go);
 }
 
+function dzViewSheet() {
+  return el("div", { class: "page-controls dz-view" },
+    el("h2", { class: "menu-title" }, "View options"),
+    el("div", { class: "group" },
+      switchRow("Wikipedia today", "The featured article and the most read, at the top of All", dzWikiOn, (on) => {
+        dzWikiOn = on;
+        store("waypage.discover.wiki", on);
+        renderDiscover();
+        if (on) dzReadWiki();
+      })));
+}
+$("viewBtn").addEventListener("click", () => { if (state.place === "discover") openMenu("discoverView"); });
+
+MENUS.discoverView = { label: "View options", build: () => dzViewSheet() };
 MENUS.story = { label: "Story", build: () => storySheet() };
 MENUS.signup = { label: "Sign up", build: () => signupSheet() };
 
@@ -513,7 +529,7 @@ function dzWikiRow(a) {
       : el("button", { class: "post-act post-save", type: "button", "aria-label": "Save " + a.title, onclick: () => savePage(a.url) }, dzIcon("plus")));
 }
 async function dzReadWiki() {
-  if (dzWikiBusy || !navigator.onLine || !C.platform.canReadPages) return;
+  if (!dzWikiOn || dzWikiBusy || !navigator.onLine || !C.platform.canReadPages) return;
   dzWikiBusy = true;
   try { await C.discover.wikiToday(); } catch (e) { /* yesterday's stays, or none */ }
   dzWikiBusy = false;

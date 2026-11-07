@@ -469,6 +469,32 @@ async function phone(browser) {
       assert.match(got.saved[1], /wikipedia\.org\/wiki\//);
     });
 
+    await test("Discover's view options turn Wikipedia today off, and it stays off", async () => {
+      const { ctx, p } = await phone(browser);
+      await p.evaluate(([wiki]) => {
+        window.asked = [];
+        Waypage.platform.fetchText = async (url) => { window.asked.push(url); return { status: 200, url, text: /wikipedia\.org/.test(url) ? wiki : "" }; };
+        goPlace("library");
+      }, [fixture("wiki-featured.json")]);
+      assert.ok(await p.locator("#viewBtn").isHidden(), "only Discover has view options");
+      await p.evaluate(() => goPlace("discover"));
+      await p.locator("#discover .dz-wiki").waitFor();
+      await p.locator("#viewBtn").click();
+      const sw = p.locator('#menuSheet:not([hidden]) .switch');
+      await sw.waitFor();
+      assert.strictEqual(await sw.isChecked(), true);
+      if (process.env.SHOTS) await p.screenshot({ path: process.env.SHOTS + "/view-sheet.png" });
+      await sw.click();
+      await p.evaluate(() => history.back());
+      await p.waitForFunction(() => !state.menu);
+      assert.strictEqual(await p.locator("#discover .dz-wiki").count(), 0);
+      if (process.env.SHOTS) await p.screenshot({ path: process.env.SHOTS + "/wiki-off.png" });
+      const asked = await p.evaluate(() => { window.asked = []; goPlace("library"); goPlace("discover"); return window.asked.filter((u) => /wikipedia/.test(u)).length; });
+      assert.strictEqual(asked, 0, "off, Wikipedia isn't asked");
+      assert.strictEqual(await p.evaluate(() => localStorage.getItem("waypage.discover.wiki")), "false");
+      await ctx.close();
+    });
+
     await test("a pasted link to an EPUB file is downloaded, not read as a page", async () => {
       const { ctx, p } = await phone(browser);
       const got = await p.evaluate(async () => {
