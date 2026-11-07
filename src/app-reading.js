@@ -185,9 +185,16 @@ function setReading(change, everywhere) {
     const f = readingFor(), bag = scope === "clip" ? f.clips : f.sets, key = scope === "clip" ? p.id : p.folder;
     bag[key] = { ...bag[key], ...own };
     store(READING_FOR_KEY, f);
+    // A change that stays with one clip or collection says so, once a
+    // clip: the next clip opening in its old look read as a reset.
+    if (scopeNoted !== p) {
+      scopeNoted = p;
+      toast("Changed for this " + (scope === "clip" ? clipWord(p) : "collection") + " only");
+    }
   }
   readingChanged(was, change);
 }
+let scopeNoted = null;
 function readingChanged(was, change) {
   paintReading();
   if (C.reader && state.open && pagesOn() !== pagesOn(state.open, was)) { C.reader.setPaged(pagesOn()); volumeWatch(); narrateOrScroll(state.open); }

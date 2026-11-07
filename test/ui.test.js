@@ -547,6 +547,7 @@ function zipOf(files) {
         setReading({ size: usual + 4, layout: "pages" });
         await wait();
         out.own = [readingScope(state.open), readingPrefs().size, readingPrefs(null).size, readingPrefs(null).layout, frameSize()];
+        out.noted = document.getElementById("toast").textContent;
         // Settings' copy shows and sets the defaults.
         const box = readingControls(false);
         out.settings = box.querySelector('.range[data-pref="size"]').value;
@@ -567,6 +568,7 @@ function zipOf(files) {
       const u = got.usual;
       assert.strictEqual(got.start, "all");
       assert.deepStrictEqual(got.own, ["clip", u + 4, u, "scroll", u + 4 + "px"]);
+      assert.strictEqual(got.noted, "Changed for this clip only", "a change kept with the clip didn't say so");
       assert.strictEqual(Number(got.settings), u, "Settings showed the clip's size");
       assert.strictEqual(got.settingsScope, 0);
       assert.strictEqual(got.sheet, 2);
