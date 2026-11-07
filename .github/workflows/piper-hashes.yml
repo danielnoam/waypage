@@ -28,9 +28,6 @@ jobs:
           find x -maxdepth 2 -not -path '*espeak-ng-data/*' -exec ls -ld {} \;
           du -sh x/*/espeak-ng-data || true
           for m in x/*/MODEL_CARD x/*/*.json; do [ -f "$m" ] && { echo "== $m"; head -c 1500 "$m"; echo; }; done
-          python3 - <<'PY'
-          import glob, onnx
-          PY
           pip -q install onnx >/dev/null 2>&1 && python3 -c "
           import glob,onnx
           m=onnx.load(glob.glob('x/*/*.onnx')[0],load_external_data=False)
