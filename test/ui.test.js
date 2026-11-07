@@ -2523,6 +2523,11 @@ function zipOf(files) {
       await q.locator("#readingSheet").getByRole("button", { name: "More speech engines" }).click();
       await q.getByRole("button", { name: "Delete Kokoro 0.19" }).waitFor();
       assert.strictEqual(await q.locator(".kokoro-slot").getByText("In use").count(), 0);
+      // It's over the clip, not under it, and Back goes back to the clip's Narrate tab.
+      await until(q, () => !!document.elementFromPoint(innerWidth / 2, innerHeight / 2).closest("#sectionView"));
+      await q.goBack();
+      await until(q, () => !state.settings && state.sheet === "reading" && !document.getElementById("sectionView").checkVisibility());
+      assert.strictEqual(await q.evaluate(() => !!(state.open && document.elementFromPoint(innerWidth / 2, 60).closest("#readerView"))), true, "Back left the clip");
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

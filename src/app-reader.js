@@ -7,7 +7,9 @@
 // push is a history entry, so Android's back gesture pops it.
 
 // The reader can open over a folder's screen; everything else is over the library.
+// Settings can open over a clip too (Narrate's More speech engines).
 const below = (screen) => ((screen.id === "readerView" || screen.id === "batchView") && state.folder ? $("folderView")
+  : screen.id === "settingsView" && state.open ? $("readerView")
   : screen.id === "sectionView" ? $("settingsView")
   : screen.id === "newsView" && state.section ? $("sectionView")
   : screen.id === "newsView" && state.settings ? $("settingsView") : $("libraryView"));

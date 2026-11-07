@@ -12,7 +12,9 @@ function route(s) {
   if (s && s.view && s.launch !== LAUNCH) { history.replaceState(null, ""); s = null; }
   const view = s && s.view;
   const inSettings = view === "settings" || (view === "news" && s.over === "settings");
-  if (view !== "reader") closeReader();
+  // Settings (and What's new from it) opened over a clip keep it under them.
+  const overClip = s && s.reader && state.open && state.open.id === s.reader && (inSettings || (view === "news" && s.over === "settings"));
+  if (view !== "reader" && !overClip) closeReader();
   if (view !== "menu") closeMenu();
   if (view !== "side") closeSide();
   if (view === "side" && !state.side) history.back();
@@ -862,7 +864,7 @@ async function openNews(fromHistory, ahead) {
   }
   state.news = ahead ? "ahead" : true;
   const over = state.settings ? "settings" : undefined;
-  if (!fromHistory) history.pushState({ view: "news", ahead: ahead || undefined, over, section: state.section || undefined }, "");
+  if (!fromHistory) history.pushState({ view: "news", ahead: ahead || undefined, over, section: state.section || undefined, reader: over && state.open ? state.open.id : undefined }, "");
   $("newsBody").replaceChildren(el("p", { class: "meta" }, "Loading…"));
   $("newsBody").scrollTop = 0;
   pushScreen($("newsView")).then(() => $("newsBack").focus());
