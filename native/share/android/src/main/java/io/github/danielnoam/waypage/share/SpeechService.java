@@ -256,12 +256,13 @@ public class SpeechService extends Service {
         main.postDelayed(() -> said(id), most);
     }
 
-    // Waypage's own Kokoro engine makes a piece as soon as it's asked for
+    // Waypage's own engine (Kokoro and Piper voices) makes a piece as soon as it's asked for
     // here, not when Android hands it over (Kokoro.take).
     private void makeAhead(int n) {
         if (!getPackageName().equals(engine) || !Kokoro.ready(this)) return;
         Locale l = job.lang != null && !job.lang.isEmpty() ? Locale.forLanguageTag(job.lang) : Locale.getDefault();
-        Kokoro.take(this, job.items[n], Kokoro.sidFor(this, job.voice, l), Kokoro.speedOf((int) (job.rate * 100)));
+        Kokoro.Pick pick = Kokoro.pick(this, job.voice, l);
+        if (pick != null) Kokoro.take(this, job.items[n], pick, Kokoro.speedOf((int) (job.rate * 100)));
     }
 
     // The next piece goes to the engine while this one plays, so it's

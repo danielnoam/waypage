@@ -2020,10 +2020,12 @@ function voiceOptions(list, saved) {
     if (order.length > 1) out.push({ head: k ? named(k) : "Other" });
     let n = 0;
     for (const v of vs) {
-      // Kokoro's (kokoro-af_heart): Heart, and f or m for female or male.
-      const k = /^kokoro-[a-z]([fm])_(.+)$/.exec(v.name);
-      const name = k ? (/^\d+$/.test(k[2]) ? "Voice " + Number(k[2]) : k[2].charAt(0).toUpperCase() + k[2].slice(1)) : /-language$/i.test(v.name) ? "Standard" : coded(v) ? "Voice " + ++n : v.name;
-      const tags = [k ? (k[1] === "f" ? "female" : "male") : v.gender, (v.quality || 0) >= 400 ? "natural" : "", v.online ? "online" : ""].filter(Boolean);
+      // Kokoro's (kokoro-af_heart): Heart, and f or m for female or
+      // male; Piper's the same (piper-m_thorsten).
+      const k = /^(?:kokoro-[a-z]|piper-)([fm])_(.+)$/.exec(v.name);
+      const name = k ? (/^\d+$/.test(k[2]) ? "Voice " + Number(k[2]) : k[2].charAt(0).toUpperCase() + k[2].slice(1).replace(/_/g, " ")) : /-language$/i.test(v.name) ? "Standard" : coded(v) ? "Voice " + ++n : v.name;
+      // Kokoro 1.0 and Piper both have a French Siwis: Piper's says so.
+      const tags = [/^piper-/.test(v.name) ? "Piper" : "", k ? (k[1] === "f" ? "female" : "male") : v.gender, (v.quality || 0) >= 400 ? "natural" : "", v.online ? "online" : ""].filter(Boolean);
       out.push({ value: v.id, label: [name, ...tags].join(" · ") });
     }
   }
@@ -2061,19 +2063,31 @@ function aloudControls() {
     if (engines.length < 2) return;
     const dflt = engines.find((e) => e.name === def);
     // Each downloaded Kokoro version is its own option (Daniel's ask),
-    // engine#version; the phone has one Kokoro engine, speaking the one in use.
+    // engine#version; the phone has one Kokoro engine, speaking the one in
+    // use. This language's Piper voice is one more, engine#piper: the
+    // same engine, with that voice picked.
     const packs = k ? k.packs.filter((x) => x.ready) : [];
-    const listed = (e) => (k && e.name === k.engine && packs.length ? packs.map((x) => ({ value: e.name + "#" + x.id, label: x.title })) : [{ value: e.name, label: e.label }]);
+    const piper = k && (k.piper || []).find((x) => x.ready && primary(x.lang) === lang);
+    const ours = (e) => [...packs.map((x) => ({ value: e.name + "#" + x.id, label: x.title })), ...(piper ? [{ value: e.name + "#piper", label: "Piper" }] : [])];
+    const listed = (e) => (k && e.name === k.engine && ours(e).length ? ours(e) : [{ value: e.name, label: e.label }]);
     // The phone's default engine is the first option, not listed again.
     const options = [{ value: "", label: "Phone's default" + (dflt ? " (" + dflt.label + ")" : "") }, ...engines.filter((e) => e.name !== def).flatMap(listed)];
     const engine = engineOf(lang) === def ? "" : engineOf(lang);
-    const picked = k && engine === k.engine && k.use ? engine + "#" + k.use : engine;
+    const picked = !k || engine !== k.engine ? engine
+      : piper && voiceFor(p) === piper.voice ? engine + "#piper"
+      : k.use ? engine + "#" + k.use : engine;
     engineRow.append(dropdown({ label: "Speech engine", cls: "field-pick font-pick", options,
       value: options.some((o) => o.value === picked) ? picked : "",
       onpick: async (v) => {
         const [name, pack] = v.split("#");
-        if (pack) { try { await speech.kokoro("use", pack); } catch (e) { toast(e && e.message || "Couldn't switch. Try again."); } }
+        if (pack && pack !== "piper") { try { await speech.kokoro("use", pack); } catch (e) { toast(e && e.message || "Couldn't switch. Try again."); } }
         store(ENGINE_KEY, { ...enginePicks(), [lang]: name });
+        if (pack) {
+          const voices = load(VOICE_KEY, {});
+          if (pack === "piper") voices[name + "|" + lang] = piper.voice;
+          else if (/^piper-/.test(voices[name + "|" + lang] || "")) delete voices[name + "|" + lang];
+          store(VOICE_KEY, voices);
+        }
         // Filled again in place, once the new rows are in: the reader
         // sheet's tab keeps this box (and its heading), so a new one in its
         // place showed nothing, and rows arriving one by one jumped.

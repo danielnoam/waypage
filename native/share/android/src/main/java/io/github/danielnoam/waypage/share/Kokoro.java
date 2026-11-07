@@ -26,28 +26,48 @@ import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 
 /**
- * Kokoro voices: sherpa-onnx's Kokoro models, downloaded from Settings
- * (KokoroPlugin, the Kokoro voices screen) and spoken through Waypage's
- * own speech engine (KokoroTtsService), so Narrate, the lock screen and
- * other apps use it like any engine. The engine's library ships in the
- * APK (arm64 phones only); the models are the downloads, three to pick
- * from, one in use at a time. Nothing is sent anywhere: each archive
+ * More speech engines: sherpa-onnx's Kokoro and Piper models, downloaded
+ * from Settings (KokoroPlugin, the More speech engines screen) and spoken
+ * through Waypage's own speech engine (KokoroTtsService), so Narrate, the
+ * lock screen and other apps use it like any engine. The engine's library
+ * ships in the APK (arm64 phones only); the models are the downloads:
+ * three Kokoro packs, one in use at a time, and Piper voices, one per
+ * language, any number of them. Nothing is sent anywhere: each archive
  * comes from sherpa-onnx's GitHub release and is checked against its
  * SHA-256 before it's unpacked.
  */
 final class Kokoro {
     static final String BASE = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/";
 
-    /** One download: a Kokoro model and its voices. */
+    /** One download: a Kokoro model and its voices, or one Piper voice (lang set). */
     static final class Pack {
         final String id, title, note, file, sha256, lexicons;
         final long bytes;
         final String[] voices;
+        String lang = "", speaker = "", gender = "";
         Pack(String id, String title, String note, String file, String sha256, long bytes, String lexicons, String[] voices) {
             this.id = id; this.title = title; this.note = note; this.file = file; this.sha256 = sha256;
             this.bytes = bytes; this.lexicons = lexicons; this.voices = voices;
         }
         boolean multi() { return !lexicons.isEmpty(); }
+        boolean piper() { return !lang.isEmpty(); }
+        /** Its voice's name in the engine: piper-m_thorsten. */
+        String voice() { return PIPER_PREFIX + gender + "_" + speaker; }
+    }
+
+    // Piper: id is the voice's own name (de_DE-thorsten-medium), the
+    // archive vits-piper-<id>.tar.bz2.
+    private static Pack piper(String id, String gender, String sha256, long bytes) {
+        return piper(id, id.split("-")[1], gender, sha256, bytes);
+    }
+
+    // speaker: the name of the model's speaker 0, when its own name isn't one.
+    private static Pack piper(String id, String speaker, String gender, String sha256, long bytes) {
+        Pack p = new Pack(id, speaker, "", "vits-piper-" + id + ".tar.bz2", sha256, bytes, "", new String[] {speaker});
+        p.lang = id.split("-")[0].replace('_', '-');
+        p.speaker = speaker;
+        p.gender = gender;
+        return p;
     }
 
     // Each model's speakers in order (speaker id = place in the list).
@@ -90,12 +110,34 @@ final class Kokoro {
             "259c9c8bc906d6078e4e0570421885dabb68b539c2f970fcbb890a58eeaf3e9c", 147_052_523L, MULTI, V11),
     };
 
+    // One voice per language, the best whose licence allows any use (CC0,
+    // or CC BY for French's SIWIS). Arabic's and Italian's say "see URL":
+    // left out until that's checked. Ukrainian's has three speakers;
+    // speaker 0, Lada, speaks.
+    static final Pack[] PIPER = {
+        piper("cs_CZ-jirka-medium", "m", "321aafd83dd89b3d5b2c36c5898e0710d4f472f3c191cb7f73901a89b7f8539f", 67_212_775L),
+        piper("de_DE-thorsten-medium", "m", "50487d9c95fdf2191f31d2588569381063ba1591dcd4c7d4bdd30f12b2191714", 67_214_254L),
+        piper("el_GR-rapunzelina-low", "f", "bb868070a9ba0d7220b3d7c9291a998c2f60accdb73525bd63b8751b86dd4839", 67_105_521L),
+        piper("es_ES-davefx-medium", "m", "a3f6beb54a9cb893279f72978a22f807a4d9fc9c7848157b524d5cc7b7f58b22", 67_184_952L),
+        piper("fa_IR-amir-medium", "m", "46af65c1cdd86ec300db3998f2bf31a68d9e38da930c0655c1ff6f610e84f864", 67_180_373L),
+        piper("fr_FR-siwis-medium", "f", "375909aa30842b3a4efa10b1beb1d761af792960ae6873b4d53889f96c66195b", 67_207_459L),
+        piper("nl_NL-pim-medium", "m", "e78ed301bf6fc66561a04c110754cd6928d772630a3b80b09a83f89410130171", 67_240_538L),
+        piper("pl_PL-gosia-medium", "f", "75bd34dcbdc4dd98d763954756b4b34b4208100497c836381542e4d73dcefa9c", 67_211_182L),
+        piper("pt_BR-faber-medium", "m", "7add3f923ad6bc25ca8a192805fd1a64d1b3893e4611c4a9719545a825039a83", 67_183_065L),
+        piper("ru_RU-dmitri-medium", "m", "c86d0803737de13d441923ff3b3f309482fab8d7af3ec85949942809eb9a3660", 67_188_551L),
+        piper("sv_SE-nst-medium", "m", "5aed0f5ab75135fc3ba6a4f3567e171d72df753305b08a01ca42f79411587f67", 67_144_884L),
+        piper("tr_TR-fahrettin-medium", "m", "2ee3c18b5dc0a5faf913f995b027163befa6e7a6ad2f5c6b8a2e99fe1aad8b6d", 67_212_827L),
+        piper("uk_UA-ukrainian_tts-medium", "lada", "f", "92be6ff21ebb1cbcc0c71121a6437db8d060cee5785287aaa6a19a2548f59c03", 80_355_083L),
+    };
+
     static Pack pack(String id) {
         for (Pack p : PACKS) if (p.id.equals(id)) return p;
+        for (Pack p : PIPER) if (p.id.equals(id)) return p;
         return null;
     }
 
     private static final String PREFS = "waypage.kokoro";
+    // One model in memory at a time: Kokoro 1.0 alone takes ~330 MB.
     private static OfflineTts tts;
     private static String loaded = "";
     private static Boolean supported;
@@ -137,7 +179,7 @@ final class Kokoro {
 
     static boolean ready(Context c, Pack p) {
         File d = dir(c, p);
-        return new File(d, "voices.bin").isFile() && new File(d, "tokens.txt").isFile() && model(d) != null;
+        return (p.piper() || new File(d, "voices.bin").isFile()) && new File(d, "tokens.txt").isFile() && model(d) != null;
     }
 
     /** The pack the engine speaks with: the one picked, if it's on the phone. */
@@ -148,7 +190,18 @@ final class Kokoro {
         return null;
     }
 
-    static boolean ready(Context c) { return inUse(c) != null; }
+    /** Some voices are here: a Kokoro pack or a Piper voice. */
+    static boolean ready(Context c) {
+        if (inUse(c) != null) return true;
+        for (Pack p : PIPER) if (ready(c, p)) return true;
+        return false;
+    }
+
+    static List<Pack> piperReady(Context c) {
+        List<Pack> out = new ArrayList<>();
+        for (Pack p : PIPER) if (ready(c, p)) out.add(p);
+        return out;
+    }
 
     static void use(Context c, Pack p) {
         prefs(c).edit().putString("use", p.id).apply();
@@ -173,24 +226,34 @@ final class Kokoro {
     }
 
     /** Loaded once and kept: loading a model takes a few seconds. */
-    static synchronized OfflineTts get(Context c) {
-        Pack p = inUse(c);
-        if (p == null || !supported()) return null;
+    static synchronized OfflineTts get(Context c, Pack p) {
+        if (p == null || !supported() || !ready(c, p)) return null;
         if (tts != null && loaded.equals(p.id)) return tts;
         freeLater(tts);
         tts = null;
+        loaded = "";
         File d = dir(c, p);
+        int threads = Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() / 2));
+        if (p.piper()) {
+            try {
+                tts = OfflineTts.piper(model(d).getAbsolutePath(), new File(d, "tokens.txt").getAbsolutePath(),
+                    new File(d, "espeak-ng-data").getAbsolutePath(), threads);
+                if (tts != null) loaded = p.id;
+            } catch (Throwable e) {
+                tts = null;
+            }
+            return tts;
+        }
         StringBuilder lex = new StringBuilder();
         for (String l : p.lexicons.split(",")) {
             if (l.isEmpty() || !new File(d, l).isFile()) continue;
             if (lex.length() > 0) lex.append(',');
             lex.append(new File(d, l).getAbsolutePath());
         }
-        int threads = Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() / 2));
         try {
             tts = OfflineTts.kokoro(model(d).getAbsolutePath(), new File(d, "voices.bin").getAbsolutePath(),
                 new File(d, "tokens.txt").getAbsolutePath(), new File(d, "espeak-ng-data").getAbsolutePath(), lex.toString(), threads);
-            loaded = p.id;
+            if (tts != null) loaded = p.id;
         } catch (Throwable e) {
             tts = null;
         }
@@ -219,6 +282,8 @@ final class Kokoro {
     // shows it as Heart.
 
     static final String PREFIX = "kokoro-";
+    // A Piper voice's is piper-<f|m>_<speaker> (Pack.voice()).
+    static final String PIPER_PREFIX = "piper-";
 
     static String languageOf(String id) {
         switch (id.charAt(0)) {
@@ -278,9 +343,66 @@ final class Kokoro {
             || ("zh".equals(v.getLanguage()) && ("zho".equalsIgnoreCase(lang) || "cmn".equalsIgnoreCase(lang)));
     }
 
-    static int sidFor(Context c, String voiceName, Locale l) {
+    static boolean kokoroHas(Context c, String lang) {
+        Pack p = inUse(c);
+        if (p == null || lang == null) return false;
+        for (String v : p.voices) if (matches(v, lang)) return true;
+        return false;
+    }
+
+    static boolean piperMatches(Pack p, String lang) {
+        Locale v = Locale.forLanguageTag(p.lang);
+        return lang != null && (v.getLanguage().equalsIgnoreCase(lang) || v.getISO3Language().equalsIgnoreCase(lang));
+    }
+
+    /** The Piper voice on the phone by its engine name, or null. */
+    static Pack piperVoice(Context c, String name) {
+        if (name == null || !name.startsWith(PIPER_PREFIX)) return null;
+        for (Pack p : PIPER) if (p.voice().equals(name) && ready(c, p)) return p;
+        return null;
+    }
+
+    /** A language's Piper voice on the phone, the country's own first. */
+    static Pack piperFor(Context c, Locale l) {
+        Pack any = null;
+        for (Pack p : piperReady(c)) {
+            if (!piperMatches(p, l.getLanguage())) continue;
+            if (Locale.forLanguageTag(p.lang).getCountry().equalsIgnoreCase(l.getCountry())) return p;
+            if (any == null) any = p;
+        }
+        return any;
+    }
+
+    static boolean has(Context c, String lang) {
+        if (kokoroHas(c, lang)) return true;
+        for (Pack p : piperReady(c)) if (piperMatches(p, lang)) return true;
+        return false;
+    }
+
+    /** What speaks: a model and its speaker. */
+    static final class Pick {
+        final Pack pack;
+        final int sid;
+        Pick(Pack pack, int sid) { this.pack = pack; this.sid = sid; }
+        String voice() { return pack.piper() ? pack.voice() : PREFIX + pack.voices[sid]; }
+    }
+
+    /**
+     * The voice asked for by name, else the language's: Kokoro's when the
+     * pack in use has it, else its Piper voice. Null when nothing's here.
+     */
+    static Pick pick(Context c, String voiceName, Locale l) {
+        Pack pv = piperVoice(c, voiceName);
+        if (pv != null) return new Pick(pv, 0);
+        Pack k = inUse(c);
         int s = sid(c, voiceName);
-        return s >= 0 ? s : defaultSid(c, l);
+        if (k != null && s >= 0) return new Pick(k, s);
+        if (k != null && kokoroHas(c, l.getLanguage())) return new Pick(k, defaultSid(c, l));
+        Pack p = piperFor(c, l);
+        if (p != null) return new Pick(p, 0);
+        if (k != null) return new Pick(k, defaultSid(c, l));
+        List<Pack> all = piperReady(c);
+        return all.isEmpty() ? null : new Pick(all.get(0), 0);
     }
 
     // Shown in the phone's list of engines only once some voices are here.
@@ -316,17 +438,18 @@ final class Kokoro {
     static float speedOf(int percent) { return Math.max(0.5f, Math.min(3f, percent / 100f)); }
 
     /** The piece, being made or made already, else started now. */
-    static Take take(Context c, String text, int sid, float speed) {
-        Pack p = inUse(c);
-        String key = (p == null ? "" : p.id) + "|" + sid + "|" + Math.round(speed * 100) + "|" + text;
+    static Take take(Context c, String text, Pick pick, float speed) {
+        Pack p = pick.pack;
+        int sid = pick.sid;
+        String key = p.id + "|" + sid + "|" + Math.round(speed * 100) + "|" + text;
         synchronized (LOCK) {
             for (Take t : takes) if (t.key.equals(key) && !t.cancelled) return t;
             Take t = new Take(key, ++seqs);
             takes.add(t);
             while (takes.size() > 6) takes.remove(0).cancelled = true;
             final Context app = c.getApplicationContext();
-            String lang = p != null && p.multi() && sid < p.voices.length ? espeakOf(p.voices[sid]) : "";
-            maker.execute(() -> make(app, t, text, sid, speed, lang));
+            String lang = p.multi() && sid < p.voices.length ? espeakOf(p.voices[sid]) : "";
+            maker.execute(() -> make(app, t, p, text, sid, speed, lang));
             return t;
         }
     }
@@ -381,8 +504,8 @@ final class Kokoro {
         }
     }
 
-    private static void make(Context c, Take t, String text, int sid, float speed, String lang) {
-        OfflineTts tts = t.cancelled ? null : get(c);
+    private static void make(Context c, Take t, Pack p, String text, int sid, float speed, String lang) {
+        OfflineTts tts = t.cancelled ? null : get(c, p);
         if (tts != null) {
             final int perMs = Math.max(1, tts.sampleRate() / 1000);
             // A sentence's trailing quiet waits for the next one: the last
@@ -436,7 +559,7 @@ final class Kokoro {
         File a = archive(c);
         a.delete();
         DownloadManager.Request r = new DownloadManager.Request(Uri.parse(BASE + p.file))
-            .setTitle(p.title + " voices")
+            .setTitle(p.piper() ? "Piper voice (" + p.title + ")" : p.title + " voices")
             .setDescription("For Narrate")
             .setDestinationUri(Uri.fromFile(a))
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE);
@@ -530,7 +653,9 @@ final class Kokoro {
         root(c).mkdirs();
         if (!tmp.renameTo(d)) throw new Exception("rename");
         a.delete();
-        prefs(c).edit().remove("id").remove("pack").putString("use", p.id).apply();
+        SharedPreferences.Editor ed = prefs(c).edit().remove("id").remove("pack");
+        if (!p.piper()) ed.putString("use", p.id);
+        ed.apply();
         release();
         step = "";
         listEngine(c);
