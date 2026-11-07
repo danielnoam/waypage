@@ -9,15 +9,17 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 /**
- * Kokoro voices, Settings › Reading › Narrate › Kokoro voices (Kokoro.java):
+ * More speech engines, Settings › Reading › Narrate › More speech engines
+ * (Kokoro.java): Kokoro packs and Piper voices.
  *
  *   status()          { supported, engine, use, busy, step, done, total,
- *                       packs: [{ id, title, note, bytes, ready, size, voices, languages }] }
+ *                       packs: [{ id, title, note, bytes, ready, size, voices, languages }],
+ *                       piper: [{ id, lang, speaker, gender, voice, bytes, ready, size }] }
  *                     busy: the pack downloading or unpacking;
  *                     step: "" | "downloading" | "checking" | "unpacking" | "failed" | "bad"
- *   download({ id })  starts one (Android's own downloader, with its notification)
+ *   download({ id })  starts one, a pack or a Piper voice (Android's own downloader, with its notification)
  *   cancel()          stops the download
- *   use({ id })       the pack the engine speaks with
+ *   use({ id })       the Kokoro pack the engine speaks with
  *   remove({ id })    deletes a pack; the engine leaves the phone's list with the last
  *
  * The app asks for status about once a second while something is under
@@ -78,9 +80,29 @@ public class KokoroPlugin extends Plugin {
             j.put("ready", ready);
             j.put("size", ready ? Kokoro.size(c, p) : 0);
             j.put("voices", p.voices.length);
+            JSArray langs = new JSArray();
+            java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+            for (String v : p.voices) seen.add(java.util.Locale.forLanguageTag(Kokoro.languageOf(v)).getLanguage());
+            for (String l : seen) langs.put(l);
+            j.put("languages", langs);
             packs.put(j);
         }
         o.put("packs", packs);
+        JSArray piper = new JSArray();
+        for (Kokoro.Pack p : Kokoro.PIPER) {
+            JSObject j = new JSObject();
+            boolean ready = Kokoro.ready(c, p);
+            j.put("id", p.id);
+            j.put("lang", p.lang);
+            j.put("speaker", p.speaker);
+            j.put("gender", p.gender);
+            j.put("voice", p.voice());
+            j.put("bytes", p.bytes);
+            j.put("ready", ready);
+            j.put("size", ready ? Kokoro.size(c, p) : 0);
+            piper.put(j);
+        }
+        o.put("piper", piper);
         call.resolve(o);
     }
 
@@ -137,6 +159,7 @@ public class KokoroPlugin extends Plugin {
     public void use(PluginCall call) {
         Kokoro.Pack p = packOf(call);
         if (p == null) return;
+        if (p.piper()) { call.reject("No such voices."); return; }
         if (!Kokoro.ready(getContext(), p)) { call.reject("Download it first."); return; }
         Kokoro.use(getContext(), p);
         call.resolve();

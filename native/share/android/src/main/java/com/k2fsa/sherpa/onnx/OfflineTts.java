@@ -1,7 +1,7 @@
 package com.k2fsa.sherpa.onnx;
 
 /**
- * sherpa-onnx's offline text-to-speech (Kokoro voices, see
+ * sherpa-onnx's offline text-to-speech (Kokoro and Piper voices, see
  * io.github.danielnoam.waypage.share.Kokoro), mirrored in Java from its
  * kotlin-api/Tts.kt at v1.13.7. libsherpa-onnx-jni reads the config
  * objects field by field by these exact names and types, so the fields
@@ -33,6 +33,17 @@ public final class OfflineTts {
         c.model.kokoro.tokens = tokens;
         c.model.kokoro.dataDir = dataDir;
         c.model.kokoro.lexicon = lexicon;
+        c.model.numThreads = threads;
+        OfflineTts t = new OfflineTts(c);
+        return t.ptr == 0 ? null : t;
+    }
+
+    /** A Piper voice (sherpa-onnx's VITS model) from files on the phone; null when the library can't load it. */
+    public static OfflineTts piper(String model, String tokens, String dataDir, int threads) {
+        OfflineTtsConfig c = new OfflineTtsConfig();
+        c.model.vits.model = model;
+        c.model.vits.tokens = tokens;
+        c.model.vits.dataDir = dataDir;
         c.model.numThreads = threads;
         OfflineTts t = new OfflineTts(c);
         return t.ptr == 0 ? null : t;

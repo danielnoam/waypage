@@ -183,6 +183,9 @@ test("the Kokoro engine library is pinned, checked and fetched before the build"
   const packs = kokoro.match(/new Pack\([^;]*?\.tar\.bz2",\s*"([^"]*)"/g) || [];
   assert.ok(packs.length >= 3, "Kokoro's downloads");
   for (const p of packs) assert.ok(/\.tar\.bz2",\s*"[0-9a-f]{64}"$/.test(p), "every Kokoro download is pinned to a SHA-256: " + p.slice(0, 60));
+  const piper = kokoro.match(/\bpiper\("[^"]+",\s*(?:"[a-z]+",\s*)?"[fm]",\s*"[^"]*",\s*[\d_]+L\)/g) || [];
+  assert.ok(piper.length >= 10, "Piper's voices");
+  for (const p of piper) assert.ok(/"[0-9a-f]{64}",\s*[\d_]+L\)$/.test(p), "every Piper voice is pinned to a SHA-256: " + p.slice(0, 60));
   assert.ok(/MessageDigest\.getInstance\("SHA-256"\)/.test(kokoro));
   assert.ok(/getCanonicalPath\(\)\.startsWith\(rootPath\)/.test(kokoro), "unpacking must keep files inside the voices folder");
 });
