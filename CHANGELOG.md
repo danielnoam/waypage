@@ -2,6 +2,23 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.55.0] - 2026-11-09
+
+### Added
+- Search in Feeds and Newsletters: the bar's search button finds posts (by title, summary, feed name or site) and emails (by subject, summary or sender), in everything or in the feed or address picked. Leaving the place empties it, and / opens it from the keyboard.
+- A View button in the library's top bar, as Discover has: it picks the library's layout (Shelf, One list or Grid) and turns Continue reading on or off, without going into Settings.
+- Reader: a link's sheet has Read it here, which opens the linked page in the reader without saving it, as a feed post opens. Back comes to the page you were on, saved or not.
+
+### Changed
+- A change in Aa (or a pinch) that applies only to the open clip, book or collection now says so once, so the next clip opening in the usual look doesn't read as a reset.
+- Narrate: Get more voices moved into More speech engines, which is now one page for every engine: the phone's own engines first, each with its Get more voices, then Kokoro and Piper. Narrate keeps one More speech engines button, shown on any Android phone with a speech engine.
+
+### Fixed
+- A sheet opened with a tap (a link's, ⋯, Discover's) no longer draws a blue focus line under its first row; it shows only when you use a keyboard.
+- A collection exported as an EPUB now has the collection's cover as the book's cover: the picture you picked, else the one the library shows. Before, it took the first picture in the book, or a title card.
+- Narrate's More speech engines in the reader opens that page over the clip again (on a phone it opened behind it), and Back goes straight back to the clip's Narrate tab instead of closing the clip.
+- A page read before saving it (a Discover Wikipedia row, a feed post, Read it here) no longer says "saved Invalid Date" at the top; it shows just the site, and the footer says "From" the site instead of a saved date.
+
 ## [1.54.0] - 2026-11-07
 
 ### Added
