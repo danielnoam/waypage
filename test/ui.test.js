@@ -1382,6 +1382,32 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("the library's View button changes its layout, and shows only over clips", async () => {
+      const q = await page(browser, 360);
+      assert.ok(await q.locator("#viewBtn").isHidden(), "no clips, no View");
+      await q.evaluate(async () => {
+        localStorage.setItem("waypage.layout", JSON.stringify("shelf"));
+        const c = (i) => ({ id: "lv" + i, url: "https://example.com/lv" + i, title: "Clip " + i, site: "example.com", savedAt: 1000 + i, minutes: 1, mode: "links", at: 0, finished: false });
+        await window.Waypage.store.writeIndex([c(1), c(2), c(3)]);
+      });
+      await q.reload();
+      await q.waitForSelector("#library [data-key]");
+      await q.locator("#viewBtn").click();
+      const grid = q.locator('#menuSheet:not([hidden]) .seg-item:has-text("Grid")');
+      await grid.waitFor();
+      await grid.click();
+      await q.waitForFunction(() => JSON.parse(localStorage.getItem("waypage.layout")) === "grid");
+      assert.match(await q.locator("#menuSheet .lib-view .choice-note").first().textContent(), /three across/);
+      const top = await q.evaluate(() => { const r = document.querySelector("#topBar").getBoundingClientRect(); return { w: document.documentElement.scrollWidth, h: r.height }; });
+      assert.ok(top.w <= 360, "the bar fits a small phone: " + JSON.stringify(top));
+      await q.evaluate(() => history.back());
+      await q.waitForFunction(() => !state.menu);
+      await q.evaluate(() => goPlace("feeds"));
+      assert.ok(await q.locator("#viewBtn").isHidden(), "Feeds has no view options");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("Keep the screen on holds only while reading aloud speaks (1.24.0)", async () => {
       const q = await page(browser, 390);
       const got = await q.evaluate(async () => {
