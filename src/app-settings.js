@@ -320,8 +320,10 @@ function forgetPiper(s, v) {
   store(PIPER_IN_KEY, load(PIPER_IN_KEY, []).filter((id) => id !== v.id));
 }
 
-// More speech engines: each Kokoro model with what it has and its size,
-// and Download, or a bin once it's here; then a Piper voice per language.
+// More speech engines, one page for them all (Daniel's ask): the phone's
+// own engines, each opening its page for more voices; then each Kokoro
+// model with what it has and its size, and Download, or a bin once it's
+// here; then a Piper voice per language.
 const allReady = (s) => s.packs.filter((x) => x.ready).length + (s.piper || []).filter((x) => x.ready).length;
 function kokoroSections() {
   const slot = el("div", { class: "kokoro-slot" }, el("p", { class: "footnote" }, "Looking…"));
@@ -329,10 +331,15 @@ function kokoroSections() {
   return [slot];
 }
 async function fillKokoro(slot) {
-  const s = await speech.kokoro();
+  const [s, { engines }] = await Promise.all([speech.kokoro(), speech.engines()]);
   if (!slot.isConnected && slot.dataset.drawn) return;
   slot.dataset.drawn = "1";
-  if (!s) { slot.replaceChildren(el("p", { class: "footnote" }, "Kokoro voices need an Android phone with a 64-bit processor.")); return; }
+  const phone = engines.filter((e) => !s || e.name !== s.engine);
+  const phoneSection = phone.length ? [section("Phone's speech engines", null, el("div", { class: "group" },
+    ...phone.map((e) => el("div", { class: "row" },
+      el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, e.label)),
+      el("button", { class: "btn-text", type: "button", onclick: () => speech.moreVoices(e.name) }, "Get more voices")))))] : [];
+  if (!s) { slot.replaceChildren(...phoneSection, el("p", { class: "footnote" }, "Kokoro voices need an Android phone with a 64-bit processor.")); return; }
   kokoroArrived(s);
   piperArrived(s);
   const busy = kokoroBusy(s);
@@ -388,7 +395,7 @@ async function fillKokoro(slot) {
     return el("div", { class: "row kokoro-row piper-row" },
       el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, v.title), el("span", { class: "choice-note" }, note)), control);
   });
-  slot.replaceChildren(section("Kokoro", null, el("div", { class: "group" }, ...rows)),
+  slot.replaceChildren(...phoneSection, section("Kokoro", null, el("div", { class: "group" }, ...rows)),
     ...(piperRows.length ? [section("Piper", null, el("div", { class: "group" }, ...piperRows))] : []));
   if (busy) setTimeout(() => { if (slot.isConnected) again(); }, 1000);
 }

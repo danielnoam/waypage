@@ -140,8 +140,8 @@ Each section below shows the computer (left) and the phone (right).
 - Read from here, a voice per language, speed 0.5x to 4x, footnotes on or off.
 - Goes on to the next clip; keeps the screen on if you like; picture in picture; Bluetooth previous and next.
 - Sleep timer from the moon on the player, and Sleep 15 min on the lock screen.
-- Speech engine picker and Get more voices on Android; Allow mixing with other apps' sound.
-- More speech engines on Android: Kokoro, one of three models to download, and Piper voices for English and 13 more languages; pick a speech engine per language.
+- Speech engine picker on Android; Allow mixing with other apps' sound.
+- More speech engines on Android: Kokoro, one of three models to download, Piper voices for English and 13 more languages, and Get more voices for each of the phone's engines; pick a speech engine per language.
 
 ## Feeds
 
