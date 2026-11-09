@@ -306,6 +306,13 @@ html.native .top-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top));
 }
 .top-actions { display: flex; gap: var(--s-1); flex-shrink: 0; margin-inline-start: auto; }
 .top-actions [hidden] { display: none; }
+/* Five icons (with Sync and View) leave "Library" room on a 390 px phone
+   only with the spaces between them taken out; each stays 44 px. */
+@media (max-width: 419px) {
+  #topBar { gap: var(--s-1); }
+  #topBar .screen-title { margin-left: 0; }
+  .top-actions { gap: 0; }
+}
 .meta { margin: var(--s-1) 0 0; font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--muted); }
 
 .icon-btn {
@@ -595,7 +602,7 @@ html.native .reader-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
 /* With Settings opened over the clip (app-settings.js). */
 .reader.under { z-index: 9; }
 .icon-btn[hidden] { display: none; }
-:root[data-clips="had"] #searchBtn[hidden] { display: inline-flex; }
+:root[data-clips="had"] #searchBtn[hidden], :root[data-clips="had"] #libraryView[data-place="library"] #viewBtn[hidden] { display: inline-flex; }
 #readerAa[aria-expanded="true"] { background: var(--line); }
 .aloud-btn[aria-pressed="true"] { color: var(--accent); background: var(--line); }
 

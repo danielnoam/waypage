@@ -488,9 +488,10 @@ function dzViewSheet() {
         if (on) dzReadWiki();
       })));
 }
-$("viewBtn").addEventListener("click", () => { if (state.place === "discover") openMenu("discoverView"); });
+$("viewBtn").addEventListener("click", () => openMenu(state.place === "discover" ? "discoverView" : "libView"));
 
 MENUS.discoverView = { label: "View options", build: () => dzViewSheet() };
+MENUS.libView = { label: "View options", build: () => libViewSheet() };
 MENUS.story = { label: "Story", build: () => storySheet() };
 MENUS.signup = { label: "Sign up", build: () => signupSheet() };
 

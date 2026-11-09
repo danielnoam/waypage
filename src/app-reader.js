@@ -2044,24 +2044,17 @@ function aloudControls() {
   note.hidden = !note.textContent;
   const restart = () => { if (aloud.state !== "stopped" && state.open && aloud.key === state.open.id) startAloud(blockAt(aloud.index)); };
   // Another speech engine (1.33.0, Android), when the phone has more than
-  // one, and the engine's own page for adding voices.
-  // Kept out until the phone says it has engines: a row's own display
+  // one. Kept out until the phone says it has engines: a row's own display
   // would show it through `hidden`.
   const engineSlot = el("span", { hidden: true }), moreSlot = el("span", { hidden: true });
   const engineRow = el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Speech engine"));
-  const more = el("button", { class: "btn-quiet aloud-more", type: "button", onclick: () => speech.moreVoices(engineOf(lang)) }, "Get more voices");
-  // Kokoro voices (Android, 64-bit ARM), under Get more voices (Daniel's
-  // ask): their own screen in Settings.
-  const kokoroSlot = el("span", { hidden: true });
+  // More speech engines: Kokoro and Piper, and each phone engine's own page
+  // for adding voices (Get more voices moved there, Daniel's ask).
+  const more = el("button", { class: "btn-quiet aloud-more", type: "button",
+    onclick: () => { if (state.settings) openSection("kokoro", false, true); else { closeSheet(); openSettings(false, "kokoro"); } } }, "More speech engines");
   const kokoro = speech.kokoro().catch(() => null);
-  kokoro.then((k) => {
-    if (!k) return;
-    kokoroSlot.replaceWith(el("button", { class: "btn-quiet aloud-more", type: "button",
-      onclick: () => { if (state.settings) openSection("kokoro", false, true); else { closeSheet(); openSettings(false, "kokoro"); } } }, "More speech engines"));
-  });
   const enginesIn = Promise.all([speech.engines(), kokoro]).then(([{ engines, default: def }, k]) => {
-    if (!engines.length) return;
-    moreSlot.replaceWith(more);
+    if (engines.length || k) moreSlot.replaceWith(more);
     if (engines.length < 2) return;
     const dflt = engines.find((e) => e.name === def);
     // Each downloaded Kokoro version is its own option (Daniel's ask),
@@ -2108,7 +2101,7 @@ function aloudControls() {
     const mine = all.filter((v) => primary(v.lang) === lang);
     if (!mine.length) {
       voiceRow.lastChild.replaceWith(el("span", { class: "meta" }, "Phone's default"));
-      note.textContent = "No " + name + " voice " + (engineOf(lang) ? "in this engine" : "on this phone") + ". " + (speech.background ? "Get more voices adds one" : "Add one in the text-to-speech settings") + ", then come back.";
+      note.textContent = "No " + name + " voice " + (engineOf(lang) ? "in this engine" : "on this phone") + ". " + (speech.background ? "More speech engines adds one" : "Add one in the text-to-speech settings") + ", then come back.";
       note.hidden = false;
       return;
     }
@@ -2136,7 +2129,6 @@ function aloudControls() {
     engineSlot,
     voiceRow,
     moreSlot,
-    kokoroSlot,
     el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Speed", shown),
       el("div", { class: "stepper" }, speed)),
     check(FOOTNOTES_KEY, "Read footnotes", "The notes at the end, as part of the clip."),

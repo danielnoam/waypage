@@ -164,9 +164,10 @@ and the page shows above it.
 - **Library (Now, 0.27.7):** a bar that stays while the list scrolls
   under it: the title, then Search (a magnifier, which opens the field
   under the bar and focuses it; `--line` behind it while open, 0.27.10),
-  Sync (a cloud, only with sync on, 1.13.0), Downloads (an arrow into
-  a tray, 0.27.9) and Settings (a gear), 44 px
-  icons; a hairline under the bar once the list is under it. Above
+  View (sliders, once there are clips: a sheet with the Layout picker
+  and Continue reading), Sync (a cloud, only with sync on, 1.13.0),
+  Downloads (an arrow into a tray, 0.27.9) and Settings (a gear), 44 px
+  icons, with no space between them under 420 px; a hairline under the bar once the list is under it. Above
   the bar `--s-5` scrolls away (on the phone, the safe area instead).
   Under it, scrolling away: the count, search (only once opened, and
   while something is typed in it), then Show and Order on one row (Select

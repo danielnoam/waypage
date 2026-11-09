@@ -533,7 +533,6 @@ async function phone(browser) {
         Waypage.platform.fetchText = async (url) => { window.asked.push(url); return { status: 200, url, text: /wikipedia\.org/.test(url) ? wiki : "" }; };
         goPlace("library");
       }, [fixture("wiki-featured.json")]);
-      assert.ok(await p.locator("#viewBtn").isHidden(), "only Discover has view options");
       await p.evaluate(() => goPlace("discover"));
       await p.locator("#discover .dz-wiki").waitFor();
       await p.locator("#viewBtn").click();

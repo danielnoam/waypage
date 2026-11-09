@@ -256,6 +256,21 @@ function sortControl() {
   });
 }
 
+// The library's View button: its layout, here as in Settings, Library.
+function libViewSheet() {
+  const note = el("p", { class: "choice-note" }, (LAYOUTS.find((l) => l.value === layout()) || LAYOUTS[0]).note);
+  return el("div", { class: "page-controls lib-view" },
+    el("h2", { class: "menu-title" }, "View options"),
+    el("div", { class: "group" }, el("div", { class: "rc-list" },
+      seg("libViewLayout", "Layout", LAYOUTS.map((l) => ({ value: l.value, label: l.label })), layout(), (v) => {
+        store(LAYOUT_KEY, v);
+        note.textContent = LAYOUTS.find((l) => l.value === v).note;
+        renderLibrary();
+      }), note)),
+    el("div", { class: "group" },
+      switchRow("Continue reading", "Your last clip at the top of the library", load(CONTINUE_KEY, true), (on) => { store(CONTINUE_KEY, on); renderLibrary(); })));
+}
+
 // Our own dropdown (0.26.0), in place of the system's <select>: a
 // button showing the choice, and a small menu that arrives under it.
 // Arrow keys move through it, Escape or a tap outside puts it away.
