@@ -2003,7 +2003,8 @@ span.update-text { cursor: default; }
 
 /* ---- 0.28.0: the sidebar and Feeds ---- */
 .library[hidden], .feeds[hidden], .highlights[hidden], .reading[hidden] { display: none; }
-:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"], [data-place="reading"], [data-place="discover"]) :is(.top, #searchBtn) { display: none; }
+:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"], [data-place="reading"], [data-place="discover"]) .top { display: none; }
+:is([data-place="highlights"], [data-place="reading"], [data-place="discover"]) #searchBtn { display: none; }
 
 .side-catch { z-index: 17; }
 .sidebar {
@@ -2188,6 +2189,8 @@ span.update-text { cursor: default; }
   display: flex; flex-direction: column; gap: var(--s-3);
 }
 .feeds .feed-chips { margin-top: var(--s-1); }
+.post-search { margin-top: var(--s-1); }
+.post-search:not([hidden]) + .feed-chips { margin-top: 0; }
 .chip-label { overflow: hidden; text-overflow: ellipsis; max-width: 12rem; }
 .feed-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin: calc(-1 * var(--s-2)) 0 calc(-1 * var(--s-2)); }
 .feed-head .meta { margin: 0 0 0 var(--s-1); min-width: 0; }

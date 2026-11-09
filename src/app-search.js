@@ -91,10 +91,17 @@ function clearSearch() {
 // typed in it; empty, it goes away again (0.27.10).
 let searchOpen = false;
 function paintSearch() {
+  if (postPlace()) return;
   const on = !!state.pages.length && (searchOpen || !!state.query);
   $("searchBox").hidden = !on;
   $("searchBtn").setAttribute("aria-expanded", String(on));
   $("searchBtn").classList.toggle("on", on);
+}
+// The bar's button searches whatever place it's in: the library, or the
+// posts in Feeds and the emails in Newsletters.
+function paintSearchBtn() {
+  const n = state.place === "feeds" ? siteFeeds().length : state.place === "newsletters" ? mailBoxes().length : state.pages.length;
+  $("searchBtn").hidden = !n;
 }
 function openSearch() {
   searchOpen = true;
@@ -106,6 +113,83 @@ function closeSearch() {
   if (state.query) clearSearch();
   searchOpen = false;
   paintSearch();
+}
+
+// ---- Searching Feeds and Newsletters ----
+// The posts (or emails) the place lists, in the feed or address picked:
+// titles, summaries, feed names, sites and senders, every word typed.
+// The field sits at the top of the list, shown and put away like the
+// library's. Leaving the place empties it.
+let postQuery = "", postSearchOpen = false;
+const postPlace = () => state.place === "feeds" || state.place === "newsletters";
+const postTerms = () => fold(postQuery).split(/\s+/).filter(Boolean);
+function postMatch(f, it, ts) {
+  const mail = state.place === "newsletters";
+  const hay = fold([it.title, it.summary, f.title, mail ? senderOf(f, it) : hostOf(it.url)].join(" "));
+  return ts.every((t) => hay.includes(t));
+}
+const renderPosts = () => (state.place === "feeds" ? renderFeeds() : state.place === "newsletters" ? renderNewsletters() : null);
+const postBoxes = {};
+function postSearchBox() {
+  const place = state.place;
+  let box = postBoxes[place];
+  if (!box) {
+    const label = place === "feeds" ? "Search your feeds" : "Search your newsletters";
+    const input = el("input", { type: "search", placeholder: label, "aria-label": label, autocomplete: "off", autocapitalize: "off",
+      spellcheck: "false", enterkeyhint: "search", dir: "auto" });
+    const clear = el("button", { class: "icon-btn search-clear", type: "button", "aria-label": "Clear search" });
+    clear.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>';
+    input.addEventListener("input", () => { postQuery = input.value; renderPosts(); });
+    input.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (postQuery) { postQuery = ""; renderPosts(); }
+      else { closePostSearch(); $("searchBtn").focus(); }
+    });
+    input.addEventListener("blur", () => { if (!postQuery) { postSearchOpen = false; setTimeout(() => { if (!postSearchOpen) renderPosts(); }, 150); } });
+    clear.addEventListener("click", () => { postQuery = ""; renderPosts(); input.focus(); });
+    box = el("div", { class: "search post-search", role: "search" }, input, clear);
+    box.insertAdjacentHTML("afterbegin", '<svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path></svg>');
+    postBoxes[place] = box;
+  }
+  const on = postSearchOpen || !!postQuery;
+  const input = box.querySelector("input");
+  if (input.value !== postQuery) input.value = postQuery;
+  box.hidden = !on;
+  box.querySelector(".search-clear").hidden = !postQuery;
+  $("searchBtn").setAttribute("aria-expanded", String(on));
+  $("searchBtn").classList.toggle("on", on);
+  return box;
+}
+// The list under the field is rebuilt; the field stays, keeping its focus.
+function fillPosts(root, box, nodes) {
+  for (const n of [...root.children]) if (n !== box) n.remove();
+  if (root.firstChild !== box) root.prepend(box);
+  root.append(...nodes);
+}
+function openPostSearch() {
+  postSearchOpen = true;
+  renderPosts();
+  window.scrollTo({ top: 0, behavior: M.reduced() ? "auto" : "smooth" });
+  const box = postBoxes[state.place];
+  if (box) box.querySelector("input").focus({ preventScroll: true });
+}
+function closePostSearch() {
+  postQuery = "";
+  postSearchOpen = false;
+  renderPosts();
+}
+function togglePostSearch() {
+  const box = postBoxes[state.place];
+  if (box && !box.hidden && (!postQuery || box.getBoundingClientRect().bottom > $("topBar").offsetHeight)) closePostSearch();
+  else openPostSearch();
+}
+function leavePostSearch() {
+  postQuery = "";
+  postSearchOpen = false;
+  $("searchBtn").setAttribute("aria-expanded", "false");
+  $("searchBtn").classList.remove("on");
 }
 
 // ---- Filters and order ----

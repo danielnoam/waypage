@@ -101,6 +101,7 @@ $("sectionBack").addEventListener("click", () => history.back());
 // Search's button sits in the bar that stays, so it's there from anywhere
 // in the list. A second tap, with the field empty or in view, puts it away.
 $("searchBtn").addEventListener("click", () => {
+  if (postPlace()) { togglePostSearch(); return; }
   const box = $("searchBox");
   if (!box.hidden && (!state.query || box.getBoundingClientRect().bottom > $("topBar").offsetHeight)) closeSearch();
   else openSearch();

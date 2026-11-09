@@ -963,6 +963,50 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("Feeds and Newsletters: the bar's search finds posts and emails, and leaving empties it", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(() => {
+        const now = Date.now();
+        localStorage.setItem("waypage.feeds", JSON.stringify([
+          { url: "https://example.com/feed", title: "Example News", days: 7, checkedAt: now,
+            items: [{ id: "a", url: "https://example.com/a", title: "Zeppelins return", summary: "Airships over the bay", date: now - 60000 },
+              { id: "b", url: "https://example.com/b", title: "Café opens", date: now - 120000 }] },
+          { url: "https://kill-the-newsletter.com/feeds/abc123.xml", title: "Letters", days: 30, checkedAt: now,
+            items: [{ id: "m", url: "https://kill-the-newsletter.com/feeds/abc123/entries/m1.html", title: "Weekly roundup", summary: "Ten links about gardens", date: now - 60000 },
+              { id: "n", url: "https://kill-the-newsletter.com/feeds/abc123/entries/m2.html", title: "Hello there", date: now - 90000 }] }]));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => goPlace("feeds"));
+      await q.locator("#feeds .post", { hasText: "Zeppelins" }).waitFor();
+      assert.ok(await q.locator("#searchBtn").isVisible(), "no search button in Feeds");
+      await q.click("#searchBtn");
+      await until(q, () => document.activeElement && document.activeElement.closest("#feeds .post-search"));
+      await q.keyboard.type("airship");
+      await until(q, () => document.querySelectorAll("#feeds .post").length === 1);
+      assert.match(await q.textContent("#feeds .feed-head .meta"), /1 post found/);
+      await q.keyboard.type("x");
+      await q.locator("#feeds .hl-none", { hasText: "No posts match that." }).waitFor();
+      await q.fill("#feeds .post-search input", "cafe");
+      await until(q, () => document.querySelectorAll("#feeds .post").length === 1 && document.querySelector("#feeds .post").textContent.includes("Café"));
+      await q.keyboard.press("Escape");
+      await until(q, () => document.querySelectorAll("#feeds .post").length === 2);
+      await q.keyboard.press("Escape");
+      await until(q, () => document.querySelector("#feeds .post-search").hidden && document.activeElement.id === "searchBtn");
+      await q.evaluate(() => goPlace("newsletters"));
+      await q.locator("#newsletters .post", { hasText: "Weekly roundup" }).waitFor();
+      await q.click("#searchBtn");
+      await q.keyboard.type("gardens");
+      await until(q, () => document.querySelectorAll("#newsletters .post").length === 1);
+      assert.match(await q.textContent("#newsletters .feed-head .meta"), /1 email found/);
+      await q.evaluate(() => goPlace("feeds"));
+      await until(q, () => document.querySelectorAll("#feeds .post").length === 2 && document.querySelector("#feeds .post-search").hidden);
+      await q.evaluate(() => goPlace("newsletters"));
+      await until(q, () => document.querySelectorAll("#newsletters .post").length === 2 && document.querySelector("#newsletters .post-search").hidden);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("Notifications: off, each post or all together, feeds kept quiet, and a notification's Save (1.30.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(() => {
