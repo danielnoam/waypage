@@ -1624,6 +1624,7 @@ function paintPlace() {
   $("severalBtn").hidden = feedsOn || mailOn || findOn;
   $("viewBtn").hidden = !findOn;
   if (feedsOn || mailOn || marksOn || readOn || findOn) { if (state.query) clearSearch(); }
+  paintSearchBtn();
   if (feedsOn) renderFeeds();
   else if (mailOn) renderNewsletters();
   else if (marksOn) renderHighlights();
@@ -1636,6 +1637,7 @@ function goPlace(place, feed) {
   // The pinned sidebar is there over a collection or Files too: a tap in
   // it steps back to the library first.
   if (pinned.matches && history.state && history.state.view) return toLibrary().then(() => goPlace(place, feed));
+  if (place !== state.place) leavePostSearch();
   state.place = place;
   state.feed = feed || null;
   store(PLACE_KEY, place);
@@ -1666,6 +1668,8 @@ function renderFeeds() {
   const scrollX = chipsAt ? chipsAt.scrollLeft : 0;
   const nodes = [];
   if (!feeds.length) {
+    leavePostSearch();
+    paintSearchBtn();
     nodes.push(el("div", { class: "empty" },
       el("h2", { class: "empty-title" }, "Follow the sites you read"),
       el("p", { class: "empty-text" }, C.platform.native
@@ -1689,12 +1693,15 @@ function renderFeeds() {
       return c;
     })));
   const checked = Math.max(0, ...(picked ? [picked] : feeds).map((f) => f.checkedAt || 0));
-  const line = feedsChecking ? "Checking…" : picked && picked.error ? picked.error
-    : checked ? "Checked " + whenText(checked) : "Not checked yet";
+  const box = postSearchBox(), ts = postTerms();
   const list = (picked ? [picked] : feeds).flatMap((f) => feedPosts(f).map((it) => ({ f, it })))
+    .filter((x) => !ts.length || postMatch(x.f, x.it, ts))
     .sort((a, b) => postAt(b.it) - postAt(a.it));
+  const line = ts.length ? (list.length === 1 ? "1 post found" : list.length + " posts found")
+    : feedsChecking ? "Checking…" : picked && picked.error ? picked.error
+    : checked ? "Checked " + whenText(checked) : "Not checked yet";
   nodes.push(el("div", { class: "feed-head" },
-    el("p", { class: "meta" + (picked && picked.error && !feedsChecking ? " warn" : "") }, line),
+    el("p", { class: "meta" + (picked && picked.error && !feedsChecking && !ts.length ? " warn" : ""), role: ts.length ? "status" : null }, line),
     // Phones pull down to check; a pointer gets the button.
     el("span", { class: "feed-head-acts" },
       el("button", { class: "btn-text feed-check", type: "button", "data-key": "check", onclick: () => checkNow(picked) }, "Check now"))));
@@ -1711,13 +1718,14 @@ function renderFeeds() {
     }
     group.append(postRow(x.f, x.it, !picked));
   }
-  if (!list.length) {
+  if (!list.length && ts.length) nodes.push(el("p", { class: "empty-text hl-none" }, "No posts match that."));
+  else if (!list.length) {
     const days = (picked || feeds[0]).days || 7;
     nodes.push(el("div", { class: "empty" },
       el("p", { class: "empty-text" }, (picked && picked.error) || (!checked ? "Its posts show up after the first check."
         : "Nothing posted in the last " + (FEED_DAYS.find((o) => o.value === String(days)) || FEED_DAYS[1]).label.replace(/^A /, "").toLowerCase() + "."))));
   }
-  root.replaceChildren(...nodes);
+  fillPosts(root, box, nodes);
   if (state.feedPick) paintPostPicks();
   const chips = root.querySelector(".feed-chips");
   if (chips) chips.scrollLeft = scrollX;

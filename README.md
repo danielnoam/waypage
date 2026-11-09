@@ -150,6 +150,7 @@ Each section below shows the computer (left) and the phone (right).
 - Follow a site or feed (RSS, Atom, JSON Feed); posts in one list by day.
 - Save a post, save all, or pick several; auto-save a feed's posts.
 - Checked with the app closed, with notifications per post or grouped, and quiet feeds.
+- Search the posts from the bar: titles, summaries, feed names and sites, in all feeds or the one picked.
 - Feeds in and out as OPML.
 - Swipe sideways to go to the next or previous feed (or address in Newsletters); the chips stay still.
 - On a computer the list and the open post share the window half and half; drag the line between them to resize.
@@ -160,6 +161,7 @@ Each section below shows the computer (left) and the phone (right).
 
 - Make an email address (through Kill the Newsletter) and subscribe with it; emails arrive here and save as clips.
 - Several addresses, unread dots, Copy address, and Confirm for subscription emails.
+- Search the emails from the bar, by subject, summary or sender.
 
 ## Discover
 

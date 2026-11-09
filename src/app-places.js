@@ -311,7 +311,8 @@ function postRow(f, it, withFeed) {
 function feedPostsShown() {
   const feeds = siteFeeds();
   const picked = state.feed && feeds.find((f) => f.url === state.feed);
-  return (picked ? [picked] : feeds).flatMap((f) => feedPosts(f).map((it) => ({ f, it, key: f.url + " " + postKey(it) })));
+  const ts = postTerms();
+  return (picked ? [picked] : feeds).flatMap((f) => feedPosts(f).filter((it) => !ts.length || postMatch(f, it, ts)).map((it) => ({ f, it, key: f.url + " " + postKey(it) })));
 }
 const pickedPosts = () => feedPostsShown().filter((x) => state.feedPick && state.feedPick.has(x.key));
 
@@ -560,6 +561,8 @@ function renderNewsletters() {
   if (state.feed && !picked) state.feed = null;
   const nodes = [];
   if (!boxes.length) {
+    leavePostSearch();
+    paintSearchBtn();
     nodes.push(el("div", { class: "empty" },
       el("h2", { class: "empty-title" }, "Read newsletters here"),
       el("p", { class: "empty-text" }, "Make an email address for newsletters and sign up with it. Each email arrives here, and is saved for reading offline."),
@@ -571,7 +574,8 @@ function renderNewsletters() {
   // line with Copy address, and a new address from the bottom field.
   const one = picked || (boxes.length === 1 ? boxes[0] : null);
   const all = mailList(boxes);
-  const list = picked ? all.filter((x) => x.f === picked) : all;
+  const box = postSearchBox(), ts = postTerms();
+  const list = all.filter((x) => (!picked || x.f === picked) && (!ts.length || postMatch(x.f, x.it, ts)));
   const chip = (label, n, on, onclick, key, url) => {
     const b = el("button", { class: "chip" + (on ? " on" : ""), type: "button", "aria-pressed": String(on), "data-key": key, onclick },
       el("span", { class: "chip-label", dir: "auto" }, label), n ? " · " + n : null);
@@ -584,10 +588,11 @@ function renderNewsletters() {
     chip("All", [...unread.values()].reduce((n, k) => n + k, 0), !picked, () => pickBox(null), "chip:all"),
     ...boxes.map((f) => chip(f.title, unread.get(f) || 0, picked === f, () => pickBox(f.url), "chip:" + f.url, f.url))));
   const checked = Math.max(0, ...(picked ? [picked] : boxes).map((f) => f.checkedAt || 0));
-  const line = !C.platform.canFetchPages ? "Your phone collects these. Saved ones come here through sync."
+  const line = ts.length ? (list.length === 1 ? "1 email found" : list.length + " emails found")
+    : !C.platform.canFetchPages ? "Your phone collects these. Saved ones come here through sync."
     : feedsChecking ? "Checking…" : picked && picked.error ? picked.error : checked ? "Checked " + whenText(checked) : "Not checked yet";
   nodes.push(el("div", { class: "feed-head" },
-    el("p", { class: "meta" + (picked && picked.error && !feedsChecking ? " warn" : "") },
+    el("p", { class: "meta" + (picked && picked.error && !feedsChecking && !ts.length ? " warn" : ""), role: ts.length ? "status" : null },
       one ? el("span", { class: "nl-mail" }, mailAddress(one)) : null, one ? el("br") : null, line),
     one ? el("span", { class: "feed-head-acts" },
       el("button", { class: "btn-text", type: "button", "data-key": "copy", onclick: () => copyText(mailAddress(one), "Address copied. Sign up with it.") }, "Copy address")) : null));
@@ -604,11 +609,12 @@ function renderNewsletters() {
     }
     group.append(mailRow(x.f, x.it, !picked && boxes.length > 1));
   }
-  if (!list.length) {
+  if (!list.length && ts.length) nodes.push(el("p", { class: "empty-text hl-none" }, "No emails match that."));
+  else if (!list.length) {
     nodes.push(el("div", { class: "empty" },
       el("p", { class: "empty-text" }, (picked && picked.error) || (one ? "No emails yet. Copy the address and sign up to a newsletter with it." : "No emails yet."))));
   }
-  root.replaceChildren(...nodes);
+  fillPosts(root, box, nodes);
   const chips = root.querySelector(".feed-chips");
   if (chips && picked) { const on = chips.querySelector(".chip.on"); if (on) on.scrollIntoView({ block: "nearest", inline: "nearest" }); }
 }
@@ -966,7 +972,7 @@ function fitWidth() {
 // rest of the app has letters too, listed behind "?". Keys pressed in
 // the reader's page come here through reader.js.
 const KEYS = [
-  ["Anywhere", [["/", "Search the library"], [(/Mac/.test(navigator.platform) && navigator.maxTouchPoints < 2 ? "⌘" : "Ctrl") + " V", "Save a copied link"],
+  ["Anywhere", [["/", "Search"], [(/Mac/.test(navigator.platform) && navigator.maxTouchPoints < 2 ? "⌘" : "Ctrl") + " V", "Save a copied link"],
     ["1  2  3  4  5  6", "Library, Feeds, Newsletters, Highlights, Stats, Discover"], ["G then L", "Go to the library"],
     ["G then F", "Go to Feeds"], ["G then N", "Go to Newsletters"], ["G then H", "Go to Highlights"], ["G then S", "Go to Stats"], ["G then E", "Go to Discover"], ["D", "Downloads"], [",", "Settings"], ["?", "These shortcuts"]]],
   ["In the library", [["↑ ↓", "Move between clips"], ["Enter", "Open"], ["X", "Pick, to act on several"], ["Shift-click", "Pick a run"],
@@ -1075,7 +1081,8 @@ function onKeys(e) {
     "/": () => (state.folder ? toLibrary() : Promise.resolve()).then(() => {
       if (state.place === "highlights") { $("highlights").querySelector(".hl-search input").focus(); return; }
       if (state.place === "discover") { $("discover").querySelector(".dz-search input").focus(); return; }
-      return (["feeds", "reading"].includes(state.place) ? goPlace("library") : Promise.resolve()).then(openSearch);
+      if (postPlace() && !$("searchBtn").hidden) { openPostSearch(); return; }
+      return (["feeds", "newsletters", "reading"].includes(state.place) ? goPlace("library") : Promise.resolve()).then(openSearch);
     }),
     d: () => openDownloads(),
     ",": () => openSettings(),
