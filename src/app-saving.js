@@ -1622,7 +1622,7 @@ function paintPlace() {
   document.querySelector('label[for="saveUrl"]').textContent = feedsOn ? "Site or feed" : mailOn ? "New address's name" : "Page link";
   $("saveForm").querySelector(".btn-primary").textContent = feedsOn ? "Follow" : mailOn ? "Make" : "Save";
   $("severalBtn").hidden = feedsOn || mailOn || findOn;
-  $("viewBtn").hidden = !findOn;
+  $("viewBtn").hidden = !findOn && (state.place !== "library" || !state.pages.length);
   if (feedsOn || mailOn || marksOn || readOn || findOn) { if (state.query) clearSearch(); }
   if (feedsOn) renderFeeds();
   else if (mailOn) renderNewsletters();
