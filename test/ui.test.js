@@ -2431,6 +2431,34 @@ function zipOf(files) {
       assert.strictEqual(touches.pen, true, "a pen's touch is kept from scrolling");
       assert.strictEqual(touches.finger, false, "a finger's still scrolls with Finger off");
       assert.strictEqual(await q.evaluate(() => { const d = document.getElementById("readerFrame").contentDocument; const e = new MouseEvent("contextmenu", { cancelable: true, bubbles: true }); d.querySelector(".co-ink[data-page='1']").dispatchEvent(e); return e.defaultPrevented; }), true, "no menu from the pen's button");
+      // The phone's own word on the pen (the Pen plugin): the page can't tell a side button from a touch,
+      // so with the button held a plain touch (buttons 1) erases, and while the pen is near nothing pans under it.
+      assert.strictEqual(await q.evaluate(() => Waypage.platform.pen.available), false, "no Pen plugin in a browser");
+      await q.evaluate(() => Waypage.ink.fromPhone({ near: true, down: false, button: false, eraser: false, tool: 2, buttons: 0 }));
+      const calm = await q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument;
+        return [d.documentElement.hasAttribute("data-co-pen-near"), getComputedStyleOf(d)];
+        function getComputedStyleOf(d) { return d.defaultView.getComputedStyle(d.querySelector(".co-ink[data-page='1']")).touchAction; }
+      });
+      assert.deepStrictEqual(calm, [true, "none"], "a pen near: no pan under it");
+      await q.evaluate(() => Waypage.ink.fromPhone({ near: false }));
+      assert.deepStrictEqual(await q.evaluate(() => { const d = document.getElementById("readerFrame").contentDocument; return [d.documentElement.hasAttribute("data-co-pen-near"), d.defaultView.getComputedStyle(d.querySelector(".co-ink[data-page='1']")).touchAction]; }), [false, "auto"], "and a finger scrolls once it's gone");
+      await q.evaluate(() => Waypage.ink.fromPhone({ near: true, down: false, button: true, eraser: true, tool: 2, buttons: 32 }));
+      await penAct(14, 1, 0, [[0.4, 0.15], [0.4, 0.27]]);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).map((s) => s.t).join("")), "h", "the phone says a button's held: a plain touch erases");
+      await q.evaluate(() => Waypage.ink.fromPhone({ near: true, down: false, button: false, eraser: false, tool: 2, buttons: 0 }));
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      await q.evaluate(() => {
+        const svg = document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
+        const fire = (name, fx, fy) => svg.dispatchEvent(new PointerEvent(name, { pointerType: "pen", pointerId: 15, isPrimary: true, bubbles: true, cancelable: true, button: name === "pointerdown" ? 0 : -1, buttons: name === "pointerup" ? 0 : 1, pressure: 0.5, clientX: r.left + fx * r.width, clientY: r.top + fy * r.width }));
+        fire("pointerdown", 0.4, 0.1); fire("pointermove", 0.4, 0.12);
+        Waypage.ink.fromPhone({ near: true, down: true, button: true, eraser: true, tool: 2, buttons: 32 });
+        fire("pointermove", 0.4, 0.2); fire("pointermove", 0.4, 0.27); fire("pointerup", 0.4, 0.27);
+        Waypage.ink.fromPhone({ near: false });
+      });
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).map((s) => s.t).join("")), "h", "pressed mid-stroke, by the phone's word, it erases");
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).length), 2);
       // A finger draws once Finger is on, but not beside a pen that's just been on the page.
       await q.locator('.ink-bar [data-act="finger"]').click();
       await q.waitForTimeout(1100);
@@ -2443,6 +2471,14 @@ function zipOf(files) {
       await q.waitForTimeout(1100);
       await stroke("touch", 9, [[0.2, 0.5], [0.4, 0.55]], 0);
       assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 3);
+      // A finger's stroke cancelled (a palm, a gesture) is dropped.
+      await q.waitForTimeout(1100);
+      await q.evaluate(() => {
+        const svg = document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
+        const fire = (name, fx, fy) => svg.dispatchEvent(new PointerEvent(name, { pointerType: "touch", pointerId: 40, isPrimary: true, bubbles: true, cancelable: true, buttons: name === "pointercancel" ? 0 : 1, clientX: r.left + fx * r.width, clientY: r.top + fy * r.width }));
+        fire("pointerdown", 0.6, 0.6); fire("pointermove", 0.7, 0.65); fire("pointercancel", 0.7, 0.65);
+      });
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 3, "a cancelled finger stroke leaves nothing");
       // The layer sits over its page whatever its size, in the page's own units.
       const fit = await q.evaluate(() => {
         const d = document.getElementById("readerFrame").contentDocument;
@@ -2459,7 +2495,14 @@ function zipOf(files) {
       await until(q, () => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1'] path"));
       assert.strictEqual(await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-ink[data-page='1'] path").length), 3);
       assert.strictEqual(await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelector(".co-ink").dataset.on), "", "words select and links tap again with Draw off");
-      // The Drawings sheet lists the page, and a copy has the strokes as ink annotations.
+      // The Drawings sheet lists the page, and has a pad that says what the pen sends.
+      await q.evaluate(() => openSheet("ink"));
+      await q.locator("#readingSheet .ink-probe-pad").waitFor();
+      assert.ok(/Page: nothing yet\nPhone: no pen reading here/.test(await q.locator("#readingSheet .ink-probe-out").innerText()));
+      await q.locator("#readingSheet .row", { hasText: "Page 1" }).waitFor();
+      await q.goBack();
+      await q.locator("#readingSheet").waitFor({ state: "hidden" });
+      // A copy has the strokes as ink annotations.
       const copy = await q.evaluate(async () => {
         const out = await Waypage.files.heldPdf().ink(Waypage.ink.forPdf());
         const s = new TextDecoder("latin1").decode(out);

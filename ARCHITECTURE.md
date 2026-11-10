@@ -88,7 +88,7 @@ src/vendor/         Readability, pdf.js, foliate-js's MOBI reader, each with its
 assets/             icon and splash sources for the apps
 icons/, icon.svg    app icons
 worker/             the web copy's fetch proxy, a Cloudflare Worker (worker.js, wrangler.toml, README.md has the setup)
-native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
+native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Pen, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
 tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-build.json
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
 tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
@@ -483,6 +483,20 @@ area.
   Pages a page is `object-fit: contain`ed into its box, so the layer goes
   over the page drawn, not the box. Its spaces are zero-size text at the
   layer's corner: leave them out of a selection's box.
+- **A stylus's side button never reaches a web page as one:** Chromium
+  maps Android's `BUTTON_STYLUS_PRIMARY` to the left mouse button, so a
+  pen touching with its button held has `buttons` 1, the same as without
+  (`ui/events/android/event_flags_android.cc`). Notes apps read the
+  `MotionEvent` (`getToolType`, `getButtonState`), and so does the Pen
+  plugin (`PenPlugin.java`, wrapping the window's callback as VolumeKeys
+  does): it tells the page when a stylus is near, touching, holding a
+  button or on its eraser end, and ink.js erases with that. Hover comes
+  first, so the button is known before the stroke. While a pen is near the
+  layers get `touch-action: none` (`data-co-pen-near`), since the browser
+  decides whether to pan at the touch, and the touch's own events come
+  too late and differ from device to device. Drawings › Try your pen shows
+  what the page and the phone each say. iOS and the web copy have only the
+  browser's `buttons` 2 or 32.
 - **Drawing on a page:** the layer is `pointer-events: none` until Draw
   is on, or words couldn't be selected under it. A pen would scroll the
   page as a finger does, so its `touchstart` is `preventDefault`ed on the

@@ -35,6 +35,8 @@ async function inkSync(p) {
   if (inkClipId === p.id) return;
   inkClose();
   inkClipId = p.id;
+  // The pen's buttons are read natively while a PDF's pages are open.
+  C.platform.pen.watch(true);
   const { stale } = await C.ink.load(p);
   if (state.open !== p) return;
   if (stale) toast("This PDF has changed since you drew on it. The drawings may not line up.");
@@ -43,6 +45,7 @@ function inkClose() {
   if (inkClipId == null && !C.ink.on) return;
   inkSet(false);
   C.ink.unload();
+  C.platform.pen.watch(false);
   inkClipId = null;
 }
 function inkPrefs() {
@@ -137,6 +140,8 @@ C.ink.onPen = () => {
   toast("Draw on this PDF with your pen?", "Draw", () => inkSet(true));
 };
 $("readerInk").addEventListener("click", () => inkSet(!C.ink.on));
+// What the phone says of the pen: near, the eraser end, a button held.
+if (C.platform.pen.available) C.platform.pen.onState((s) => C.ink.fromPhone(s));
 
 // ---- Drawings, in ⋯ ----
 
@@ -154,8 +159,33 @@ function inkSheet(p) {
         el("span", { class: "row-label" }, "Page " + d.page), el("span", { class: "row-value" }, String(d.strokes))))) : null,
     total ? el("div", { class: "group" },
       menuRow("Save a copy with drawings", () => inkCopy(p)),
-      menuRow("Remove all drawings", () => { if (confirm("Remove all drawings from “" + p.title + "”? This can't be undone.")) C.ink.clearAll(); }, "warn")) : null);
+      menuRow("Remove all drawings", () => { if (confirm("Remove all drawings from “" + p.title + "”? This can't be undone.")) C.ink.clearAll(); }, "warn")) : null,
+    inkProbe());
   return box;
+}
+
+// A pad to try the pen on, with what the page and the phone each say of
+// it: the pen's side button shows as `buttons` 2 or 32 in a browser, or
+// not at all, and as "button yes" from the phone's own touch events. It
+// says what a pen really sends, where it can't be seen otherwise.
+function inkProbe() {
+  const out = el("pre", { class: "ink-probe-out" });
+  let web = null, touch = "";
+  const yes = (v) => (v ? "yes" : "no");
+  const paint = () => {
+    const n = C.ink.nat;
+    out.textContent = "Page: " + (web ? web.pointerType + " " + web.type + " · button " + web.button + " · buttons " + web.buttons + " · pressure " + web.pressure + (touch ? " · touch " + touch : "") : "nothing yet") + "\n" +
+      "Phone: " + (C.platform.pen.available ? "near " + yes(n.near) + " · down " + yes(n.down) + " · button " + yes(n.button) + " · eraser " + yes(n.eraser) + " · tool " + n.tool + " · buttons " + n.buttons : "no pen reading here");
+  };
+  const pad = el("div", { class: "ink-probe-pad" }, "Touch here with the pen, with a button held too");
+  for (const t of ["pointerdown", "pointermove", "pointerup", "pointercancel", "pointerenter"]) {
+    pad.addEventListener(t, (e) => { web = { type: e.type, pointerType: e.pointerType, button: e.button, buttons: e.buttons, pressure: Math.round(e.pressure * 100) / 100 }; paint(); });
+  }
+  pad.addEventListener("touchstart", (e) => { touch = (e.changedTouches[0] && e.changedTouches[0].touchType) || ""; paint(); }, { passive: true });
+  pad.addEventListener("contextmenu", (e) => e.preventDefault());
+  C.ink.onProbe = paint;
+  paint();
+  return el("div", { class: "ink-probe" }, el("h3", { class: "overline" }, "Try your pen"), pad, out);
 }
 
 // The PDF with the drawings in it as ink annotations, saved where the

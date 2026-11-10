@@ -122,7 +122,7 @@
   let clip = null;        // { id, size, pages: { "<n>": [stroke] } }
   let saveTimer = 0;
   let undos = [], redos = [];
-  let onChange = null, onPen = null;
+  let onChange = null, onPen = null, onProbe = null;
   const layers = new Map(); // page -> svg
 
   // A stroke read back from a file: anything else is dropped.
@@ -271,10 +271,14 @@
   let lastStroke = 0;
   let penTouch = false;   // a pen's touch is down: its touchstart must not scroll
   let penAt = 0;          // when a pen was last seen on a page, hovering or down
+  // What the phone says of the pen (platform.pen, the Pen plugin): the page
+  // can't tell its side button from a touch, so it is read natively.
+  let nat = { near: false, down: false, button: false, eraser: false, tool: 0, buttons: 0 };
+  let nearUntil = 0, nearTimer = 0;
 
   function setOn(v) {
     on = !!v;
-    if (!on) cur = null;
+    if (!on) { cur = null; away(); }
     const D = frameDoc();
     if (D) D.documentElement.toggleAttribute("data-co-inking", on);
     if (on) for (const n of shown()) ensure(n);
@@ -297,6 +301,44 @@
     return [(e.clientX - r.left) / (r.width || 1), (e.clientY - r.top) / (r.width || 1)];
   };
 
+  // While a pen is near the layers take no pan from the browser
+  // (reader.css: touch-action none), so the pen's drag can't scroll the page
+  // however its touch is reported: the browser decides at the touch, and
+  // hovering says it's coming. A finger scrolls again once it's gone.
+  function near(ms) {
+    const D = frameDoc();
+    nearUntil = Math.max(nearUntil, performance.now() + ms);
+    if (D) D.documentElement.setAttribute("data-co-pen-near", "");
+    clearTimeout(nearTimer);
+    nearTimer = setTimeout(() => {
+      const left = nearUntil - performance.now();
+      if (left > 20) { near(0); return; }
+      const d = frameDoc();
+      if (d) d.documentElement.removeAttribute("data-co-pen-near");
+    }, Math.max(0, nearUntil - performance.now()) + 10);
+  }
+  function away() {
+    nearUntil = 0;
+    clearTimeout(nearTimer);
+    const D = frameDoc();
+    if (D) D.documentElement.removeAttribute("data-co-pen-near");
+  }
+  // The Pen plugin's word: near, and the eraser end or a button held.
+  function fromPhone(s) {
+    nat = { near: !!s.near, down: !!s.down, button: !!s.button, eraser: !!s.eraser, tool: s.tool | 0, buttons: s.buttons | 0 };
+    if (nat.near) near(8000); else away();
+    if (nat.eraser && cur && cur.kind === "pen" && !cur.erase) toEraser();
+    if (onProbe) onProbe();
+  }
+  // What a stroke being drawn becomes when the button is pressed: what it
+  // drew so far is dropped, and it erases from here.
+  function toEraser() {
+    if (cur.path) cur.path.remove();
+    cur.path = null;
+    cur.s = null;
+    cur.erase = true;
+  }
+
   // Whether a pen pointer means to erase: the flip-over eraser end (button
   // 5, buttons 32) or its side button, which browsers report as a right
   // button (buttons 2, button 2).
@@ -304,13 +346,15 @@
 
   function bind(svg) {
     // First, before down() can return early: a pen is on the page.
-    svg.addEventListener("pointerdown", (e) => { if (e.pointerType === "pen") { penTouch = true; penAt = performance.now(); } });
+    svg.addEventListener("pointerdown", (e) => { if (e.pointerType === "pen") { penTouch = true; penAt = performance.now(); near(1300); } });
     svg.addEventListener("pointerdown", down);
     svg.addEventListener("pointermove", move);
+    svg.addEventListener("pointerenter", (e) => { if (e.pointerType === "pen") { penAt = performance.now(); near(1300); } });
     svg.addEventListener("pointerup", up);
-    svg.addEventListener("pointercancel", up);
+    // A finger's stroke cancelled is a palm (or a gesture): it's dropped.
+    svg.addEventListener("pointercancel", (e) => { if (cur && cur.id === e.pointerId && e.pointerType === "touch") abandon(); else up(e); });
     svg.addEventListener("lostpointercapture", up);
-    for (const name of ["pointerup", "pointercancel"]) svg.addEventListener(name, (e) => { if (e.pointerType === "pen") { penTouch = false; penAt = performance.now(); } });
+    for (const name of ["pointerup", "pointercancel"]) svg.addEventListener(name, (e) => { if (e.pointerType === "pen") { penTouch = false; penAt = performance.now(); near(1300); } });
     // A pen would otherwise scroll the page as a finger does: the touch it
     // makes is taken for drawing. It is told by its pointer, which comes
     // just before its touch: not every device says "stylus" in the touch.
@@ -340,7 +384,7 @@
     if (e.pointerType === "touch" && performance.now() - penAt < 1000) return;
     const n = Number(svg.dataset.page);
     // The pen's own eraser end, or its button held, whatever the tool.
-    const erase = tool === "eraser" || penErases(e);
+    const erase = tool === "eraser" || penErases(e) || (pen && nat.eraser);
     e.preventDefault();
     try { svg.setPointerCapture(e.pointerId); } catch (err) { /* it draws anyway */ }
     const [x, y] = where(e, svg);
@@ -363,17 +407,12 @@
     s.p.push(r4(x), r4(y), Math.round(pr * 100) / 100);
   }
   function move(e) {
-    if (e.pointerType === "pen") penAt = performance.now();
+    if (e.pointerType === "pen") { penAt = performance.now(); near(1300); }
     if (!cur || cur.id !== e.pointerId) return;
     const svg = cur.svg;
     // The button pressed after the pen touched down: what it drew so far
     // is dropped and it erases from here.
-    if (!cur.erase && cur.kind === "pen" && penErases(e)) {
-      if (cur.path) cur.path.remove();
-      cur.path = null;
-      cur.s = null;
-      cur.erase = true;
-    }
+    if (!cur.erase && cur.kind === "pen" && (penErases(e) || nat.eraser)) toEraser();
     // Every sample the pen made since the last frame, and the next ones
     // it is going to make, when the browser guesses them.
     const list = (e.getCoalescedEvents && e.getCoalescedEvents()) || [];
@@ -508,6 +547,8 @@
     load, unload, flush, setOn, setting, state, undo, redo, clearPage, clearAll, forPdf, count, drawn, strokes, shown,
     set onChange(f) { onChange = f; },
     set onPen(f) { onPen = f; },
+    set onProbe(f) { onProbe = f; },
+    fromPhone, get nat() { return nat; },
     get on() { return on; },
     get lastStroke() { return lastStroke; },
   };

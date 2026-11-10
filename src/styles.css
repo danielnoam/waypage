@@ -747,6 +747,13 @@ body.aloud-bar-up .library, body.aloud-bar-up .screen-body { padding-bottom: cal
 .ink-dot[data-t="h"][data-c="pink"] { background: var(--hl-pink); }
 .ink-dot[data-t="h"][data-c="purple"] { background: var(--hl-purple); }
 .ink-bar button[aria-pressed="true"] .ink-dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+.ink-probe-pad {
+  display: flex; align-items: center; justify-content: center; min-height: 96px; margin-top: var(--s-2);
+  border: 1px dashed var(--line); border-radius: var(--r-md); color: var(--muted);
+  font: 400 var(--fs-label)/var(--lh-label) var(--sans);
+  touch-action: none; -webkit-user-select: none; user-select: none;
+}
+.ink-probe-out { margin: var(--s-2) 0 0; white-space: pre-wrap; color: var(--muted); font: 400 var(--fs-meta)/var(--lh-meta) ui-monospace, monospace; }
 .ink-size { display: block; border-radius: var(--r-full); background: currentColor; }
 .read-here {
   position: fixed; z-index: 3; transform: translateX(-50%);
