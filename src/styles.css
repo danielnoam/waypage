@@ -12,6 +12,17 @@
   --line: #E4DED3;
   --preview: #D9E2EA;
   --mark: #F6E3A1;
+  /* Pen colours (1.57.0): the same in every theme, as the page they're
+     drawn on is white paper in every theme (reader.css has the paint). */
+  --pen-ink: #1C1B19;
+  --pen-red: #D0312D;
+  --pen-blue: #2B61C4;
+  --pen-green: #2E8B57;
+  --hl-yellow: #FFD60A;
+  --hl-green: #5BD66B;
+  --hl-blue: #5AB0FF;
+  --hl-pink: #FF7AB6;
+  --hl-purple: #B58CFF;
   --mark-green: #97F0AD;
   --mark-blue: #C8DFF7;
   --mark-pink: #F9D3E0;
@@ -233,6 +244,17 @@
   --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   /* A QR code's paper, the same in every theme: scanners read black on white. */
   --code-paper: #ffffff;
+  /* Highlights on a PDF's printed pages (1.56.0), the same in every
+     theme: the page is its own white paper unless Dark PDF pages is on. */
+  --page-mark: #F6E3A1;
+  --page-mark-green: #97F0AD;
+  --page-mark-blue: #C8DFF7;
+  --page-mark-pink: #F9D3E0;
+  --page-mark-purple: #E8D7F9;
+  /* Words being selected on a printed page: a see-through blue, as on a
+     computer, since it lies over the page's own type, not under it. */
+  --page-select: rgba(0, 120, 215, 0.28);
+  --page-select-dark: rgba(100, 170, 255, 0.35);
 
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px;
   --s-6: 32px; --s-7: 40px; --s-8: 56px; --s-9: 72px;
@@ -690,6 +712,73 @@ body.pip > :not(.pip-view) { visibility: hidden; }
 }
 .aloud-bar-title { font: 600 var(--fs-label) var(--serif); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 body.aloud-bar-up .library, body.aloud-bar-up .screen-body { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+/* Draw (1.57.0, app-ink.js): the bar along the foot of a PDF's pages while
+   Draw is on. Tools and Undo above, colours, size and Finger below. */
+#readerInk[aria-pressed="true"] { color: var(--accent); background: var(--line); }
+.ink-bar {
+  position: fixed; z-index: 3; left: 0; right: 0; width: max-content; margin-inline: auto;
+  bottom: calc(var(--s-4) + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; align-items: stretch;
+  max-width: calc(100vw - 2 * var(--s-3));
+  border-radius: var(--r-lg, 22px); overflow: hidden;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 24px var(--shadow), 0 1px 4px var(--shadow);
+}
+.ink-bar[hidden] { display: none; }
+.ink-row { display: flex; align-items: center; justify-content: center; }
+.ink-row + .ink-row { border-top: 1px solid var(--line); }
+.ink-bar button {
+  position: relative; flex: 0 0 auto; width: var(--tap); height: var(--tap); padding: 0; border: 0; background: none; color: inherit;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.ink-bar button:active { background-image: linear-gradient(var(--press), var(--press)); }
+.ink-bar button:disabled { opacity: .35; cursor: default; }
+.ink-bar button[aria-pressed="true"] { color: var(--accent); background: var(--line); }
+.ink-bar .ink-gap { flex: 1 1 auto; min-width: var(--s-2); }
+.ink-bar .ink-done { width: auto; padding: 0 var(--s-4); font: 600 var(--fs-label)/1 var(--sans); color: var(--accent); }
+.ink-dot { display: block; width: 22px; height: 22px; border-radius: var(--r-full); background: var(--pen-ink); box-shadow: 0 0 0 1px var(--line); }
+.ink-dot[data-c="red"] { background: var(--pen-red); }
+.ink-dot[data-c="blue"] { background: var(--pen-blue); }
+.ink-dot[data-c="green"] { background: var(--pen-green); }
+.ink-dot[data-t="h"][data-c="yellow"] { background: var(--hl-yellow); }
+.ink-dot[data-t="h"][data-c="green"] { background: var(--hl-green); }
+.ink-dot[data-t="h"][data-c="blue"] { background: var(--hl-blue); }
+.ink-dot[data-t="h"][data-c="pink"] { background: var(--hl-pink); }
+.ink-dot[data-t="h"][data-c="purple"] { background: var(--hl-purple); }
+.ink-bar button[aria-pressed="true"] .ink-dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+.ink-probe-pad {
+  display: flex; align-items: center; justify-content: center; min-height: 96px; margin-top: var(--s-2);
+  border: 1px dashed var(--line); border-radius: var(--r-md); color: var(--muted);
+  font: 400 var(--fs-label)/var(--lh-label) var(--sans);
+  touch-action: none; -webkit-user-select: none; user-select: none;
+}
+.ink-probe-out { margin: var(--s-2) 0 0; white-space: pre-wrap; color: var(--muted); font: 400 var(--fs-meta)/var(--lh-meta) ui-monospace, monospace; }
+.ink-test-box { margin-top: var(--s-3); }
+.ink-test-what { margin: 0 0 var(--s-3); font: 600 var(--fs-label)/var(--lh-label) var(--sans); }
+/* Size and pen style: a small menu above their button on the Draw bar. */
+.ink-pop {
+  position: fixed; z-index: 4; display: flex;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden;
+  box-shadow: 0 8px 24px var(--shadow), 0 1px 4px var(--shadow);
+}
+.ink-pop button {
+  border: 0; background: none; color: inherit; cursor: pointer;
+  font: 400 var(--fs-meta)/var(--lh-meta) var(--sans);
+}
+.ink-pop button:active { background-image: linear-gradient(var(--press), var(--press)); }
+.ink-pop button[aria-pressed="true"] { color: var(--accent); background-color: var(--line); }
+.ink-pop-sizes button { width: var(--tap); height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-1); padding: 0; }
+.ink-pop-dot { height: 20px; display: flex; align-items: center; justify-content: center; }
+.ink-pop-n { font-variant-numeric: tabular-nums; }
+.ink-pop-styles { flex-direction: column; min-width: 220px; }
+.ink-pop-styles button { display: flex; align-items: center; gap: var(--s-3); min-height: var(--tap); padding: 0 var(--s-3); text-align: start; font: 500 var(--fs-label)/var(--lh-label) var(--sans); }
+.ink-pop-styles button + button { border-top: 1px solid var(--line); }
+.ink-pop-name { flex: 1; }
+.ink-pop-tick { width: 18px; text-align: center; }
+.ink-bar button svg { flex-shrink: 0; }
+.ink-size { display: block; border-radius: var(--r-full); background: currentColor; }
 .read-here {
   position: fixed; z-index: 3; transform: translateX(-50%);
   display: inline-flex; align-items: stretch;

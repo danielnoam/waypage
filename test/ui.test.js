@@ -2242,6 +2242,476 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("words on a linked PDF's printed pages can be highlighted, and the highlight is kept with the clip's others (1.56.0)", async () => {
+      const maker = await browser.newPage();
+      let html = "<style>@page{size:A4;margin:0} div{padding:60px;font:24px sans-serif;page-break-after:always}</style>";
+      for (let i = 1; i <= 3; i++) html += "<div><p>Page " + i + " opens here.</p><p>" + (i === 2 ? "We watched the marmalade harbour lights come on." : "Nothing much happens on this page.") + "</p></div>";
+      await maker.setContent(html);
+      const bytes = [...await maker.pdf({ format: "A4" })];
+      await maker.close();
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      q.errors = [];
+      // Playwright looking into pdf.js's sandbox (no allow-same-origin) is itself refused there.
+      q.on("pageerror", (e) => { if (!/sandboxed and lacks the 'allow-same-origin'/.test(String(e))) q.errors.push(String(e)); });
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      const bring = (b) => {
+        const file = new File([new Uint8Array(b)], "harbour.pdf", { type: "application/pdf" });
+        window.Waypage.platform.files.blob = async () => file;
+        return file;
+      };
+      const id = await q.evaluate(async ([b, f]) => {
+        const file = eval(f)(b);
+        const meta = await window.Waypage.files.bring(file, "pdf", { has: () => false, link: "content://docs/harbour.pdf" });
+        await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
+        return meta.id;
+      }, [bytes, String(bring)]);
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(([b, f]) => { eval(f)(b); }, [bytes, String(bring)]);
+      await q.evaluate((i) => openPage(i), id);
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      // The Highlights button stays for a PDF's printed pages.
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerMarks").hidden), false);
+      await q.evaluate(() => { const d = document.getElementById("readerFrame").contentDocument; d.defaultView.scrollTo(0, d.querySelector("img[data-page='2']").getBoundingClientRect().top + d.defaultView.scrollY); });
+      await until(q, () => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-tl[data-page='2'] span"));
+      // Select "harbour lights" among the page's words.
+      const picked = await q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument;
+        const layer = d.querySelector(".co-tl[data-page='2']");
+        const walk = d.createTreeWalker(layer, NodeFilter.SHOW_TEXT);
+        const nodes = [];
+        let text = "";
+        for (let t = walk.nextNode(); t; t = walk.nextNode()) { nodes.push([t, text.length]); text += t.data; }
+        const at = text.indexOf("harbour"), end = text.indexOf("lights") + "lights".length;
+        if (at < 0 || end < at) return text;
+        const point = (off) => { for (const [t, n] of nodes) if (off <= n + t.length) return [t, off - n]; return null; };
+        const r = d.createRange();
+        r.setStart(...point(at));
+        r.setEnd(...point(end));
+        const sel = d.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+        return null;
+      });
+      assert.strictEqual(picked, null, "the page's words: " + picked);
+      await q.locator(".read-here .sel-mark:not([hidden])").click();
+      await until(q, () => (state.open.marks || []).length === 1);
+      const kept = await q.evaluate(() => state.open.marks[0]);
+      assert.strictEqual(kept.page, 2);
+      assert.strictEqual(kept.endPage, 2);
+      assert.strictEqual(kept.text, "harbour lights");
+      assert.ok(kept.rects.length >= 1 && kept.rects.every((r) => r[0] === 2 && r.slice(1).every((v) => v >= 0 && v <= 1)), JSON.stringify(kept.rects));
+      await until(q, () => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-tl[data-page='2'] mark.co-pm"));
+      // In the clip's Highlights and the Highlights place, as any other.
+      await q.evaluate(() => document.getElementById("readerMarks").click());
+      await q.locator("#readingSheet .mark-quote", { hasText: "harbour lights" }).waitFor();
+      await q.goBack();
+      await q.locator("#readingSheet").waitFor({ state: "hidden" });
+      const stored = await q.evaluate(async (i) => (await window.Waypage.store.readIndex()).find((p) => p.id === i).marks, id);
+      assert.strictEqual(stored.length, 1);
+      assert.strictEqual(stored[0].page, 2);
+      // It survives a backup's clean-up of the clip.
+      assert.strictEqual(await q.evaluate(() => window.Waypage.backup.cleanMarks(state.open.marks)[0].page), 2);
+      // Show as text finds it by its words.
+      await q.evaluate(() => { const p = state.open; p.view = "text"; return window.Waypage.store.writeIndex(state.pages); });
+      await q.evaluate(() => back());
+      await q.evaluate((i) => openPage(i), id);
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open && !document.getElementById("readerFrame").contentDocument.querySelector(".co-printed"));
+      await until(q, () => !!document.getElementById("readerFrame").contentDocument.querySelector("mark.co-mark"));
+      assert.strictEqual(await q.evaluate(() => [...document.getElementById("readerFrame").contentDocument.querySelectorAll("mark.co-mark")].map((m) => m.textContent).join("")), "harbour lights");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await ctx.close();
+    });
+
+    await test("a linked PDF's printed pages can be drawn on with a pen, kept, undone, and saved in a copy as ink annotations (1.57.0)", async () => {
+      const maker = await browser.newPage();
+      let html = "<style>@page{size:A4;margin:0} div{padding:60px;font:24px sans-serif;page-break-after:always}</style>";
+      for (let i = 1; i <= 3; i++) html += "<div><p>Page " + i + " opens here.</p><p>Nothing much happens on this page, and the margins are wide enough to write in.</p></div>";
+      await maker.setContent(html);
+      const bytes = [...await maker.pdf({ format: "A4" })];
+      await maker.close();
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      q.errors = [];
+      q.on("pageerror", (e) => { if (!/sandboxed and lacks the 'allow-same-origin'/.test(String(e))) q.errors.push(String(e)); });
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      const bring = (b) => {
+        const file = new File([new Uint8Array(b)], "sketch.pdf", { type: "application/pdf" });
+        window.Waypage.platform.files.blob = async () => file;
+        return file;
+      };
+      const id = await q.evaluate(async ([b, f]) => {
+        const file = eval(f)(b);
+        const meta = await window.Waypage.files.bring(file, "pdf", { has: () => false, link: "content://docs/sketch.pdf" });
+        await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
+        return meta.id;
+      }, [bytes, String(bring)]);
+      const open = async () => {
+        await q.reload();
+        await q.waitForSelector("#saveUrl");
+        await q.evaluate(([b, f]) => { eval(f)(b); }, [bytes, String(bring)]);
+        await q.evaluate((i) => openPage(i), id);
+        await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      };
+      await open();
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").hidden), false, "the pen button is on a PDF's pages");
+      // No layer until Draw is on and no drawings are there.
+      assert.strictEqual(await q.evaluate(() => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink")), false);
+      await q.evaluate(() => document.getElementById("readerInk").click());
+      await until(q, () => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-on='1'][data-page='1']"));
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").getAttribute("aria-pressed")), "true");
+      await until(q, () => !document.querySelector(".ink-bar").hidden);
+      // The bar: no step row. Size opens a scale of five, and the pen has a style menu of four.
+      assert.strictEqual(await q.locator(".ink-bar .ink-test, .ink-bar [data-act='testdone']").count(), 0);
+      await q.locator('.ink-bar [data-act="size"]').click();
+      await q.locator(".ink-pop-sizes").waitFor();
+      assert.strictEqual(await q.locator(".ink-pop-sizes button").count(), 5);
+      assert.deepStrictEqual(await q.locator(".ink-pop-sizes .ink-pop-n").allInnerTexts(), ["1", "2", "3", "4", "5"]);
+      assert.strictEqual(await q.locator('.ink-pop-sizes [aria-checked="true"]').count(), 1);
+      const onScreen = await q.evaluate(() => { const r = document.querySelector(".ink-pop-sizes").getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.bottom <= document.querySelector(".ink-bar").getBoundingClientRect().top; });
+      assert.strictEqual(onScreen, true, "above its button, inside the screen");
+      await q.locator(".ink-pop-sizes button").nth(4).click();
+      await q.locator(".ink-pop-sizes").waitFor({ state: "detached" });
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.state().size), 4);
+      await q.locator('.ink-bar [data-act="style"]').click();
+      await q.locator(".ink-pop-styles").waitFor();
+      assert.deepStrictEqual(await q.locator(".ink-pop-styles .ink-pop-name").allInnerTexts(), ["Ballpoint", "Marker", "Fountain pen", "Brush"]);
+      assert.strictEqual(await q.locator(".ink-pop-styles svg path").count(), 4, "each shows a stroke in its style");
+      // Only one menu at a time, and a tap elsewhere closes it.
+      await q.locator('.ink-bar [data-act="size"]').click();
+      await q.locator(".ink-pop-sizes").waitFor();
+      await until(q, () => document.querySelectorAll(".ink-pop").length === 1);
+      await q.mouse.click(4, 4);
+      await q.locator(".ink-pop").waitFor({ state: "detached" });
+      await q.locator('.ink-bar [data-act="style"]').click();
+      await q.locator(".ink-pop-styles button", { hasText: "Fountain pen" }).click();
+      await q.locator(".ink-pop-styles").waitFor({ state: "detached" });
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.state().style), "fountain");
+      assert.ok(/Fountain pen/.test(await q.locator('.ink-bar [data-act="style"]').getAttribute("aria-label")));
+      // What the pen writes with is kept on the stroke, at the size picked.
+      await q.evaluate(() => {
+        const svg = document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
+        const pe = (name, f) => svg.dispatchEvent(new PointerEvent(name, { pointerType: "pen", pointerId: 51, isPrimary: true, bubbles: true, cancelable: true, buttons: name === "pointerup" ? 0 : 1, button: name === "pointerdown" ? 0 : -1, pressure: 0.5, clientX: r.left + r.width * f, clientY: r.top + r.width * 0.7 }));
+        pe("pointerdown", 0.2); pe("pointermove", 0.4); pe("pointerup", 0.4);
+      });
+      assert.deepStrictEqual(await q.evaluate(() => { const s = Waypage.ink.strokes(1)[0]; return [s.y, s.w === Waypage.ink.SIZES.pen[4]]; }), ["fountain", true]);
+      // The style only belongs to the pen, the size to both pen and highlighter.
+      await q.locator('.ink-bar [data-act="tool:highlighter"]').click();
+      assert.strictEqual(await q.locator('.ink-bar [data-act="style"]').count(), 0);
+      assert.strictEqual(await q.locator('.ink-bar [data-act="size"]').count(), 1);
+      await q.locator('.ink-bar [data-act="tool:eraser"]').click();
+      assert.strictEqual(await q.locator('.ink-bar [data-act="style"], .ink-bar [data-act="size"]').count(), 0);
+      await q.locator('.ink-bar [data-act="tool:pen"]').click();
+      // [ and ] make it smaller or bigger; an old saved size (of three) keeps its place on the scale of five.
+      await q.keyboard.press("[");
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.state().size), 3);
+      await q.keyboard.press("]");
+      await q.keyboard.press("]");
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.state().size), 4, "no further than the biggest");
+      assert.deepStrictEqual(await q.evaluate(() => {
+        const sizeOf = (saved) => { localStorage.setItem("waypage.ink", JSON.stringify(saved)); return inkPrefs().size; };
+        return [sizeOf({ tool: "pen", size: 0 }), sizeOf({ tool: "pen", size: 1 }), sizeOf({ tool: "pen", size: 2 }), sizeOf({ v: 2, size: 1 }), sizeOf({ v: 2, size: 4 })];
+      }), [0, 2, 4, 1, 4]);
+      // Back to a ballpoint at the middle size for what follows, and what was drawn above taken off.
+      await q.evaluate(() => { Waypage.ink.undo(); Waypage.ink.setting({ size: 1, style: "ball" }); });
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 0);
+      // A touch screen draws with the pen alone: a finger's stroke leaves nothing.
+      const stroke = (type, pointerId, pts, pressure) => q.evaluate(([type, pointerId, pts, pressure]) => {
+        const d = document.getElementById("readerFrame").contentDocument;
+        const svg = d.querySelector(".co-ink[data-page='1']");
+        const r = svg.getBoundingClientRect();
+        const fire = (name, [fx, fy]) => svg.dispatchEvent(new PointerEvent(name, { pointerType: type, pointerId, isPrimary: true, bubbles: true, cancelable: true, buttons: name === "pointerup" ? 0 : 1, pressure, clientX: r.left + fx * r.width, clientY: r.top + fy * r.width }));
+        fire("pointerdown", pts[0]);
+        for (const p of pts.slice(1)) fire("pointermove", p);
+        fire("pointerup", pts[pts.length - 1]);
+      }, [type, pointerId, pts, pressure]);
+      const line = [[0.2, 0.2], [0.3, 0.22], [0.4, 0.2], [0.5, 0.24], [0.6, 0.2]];
+      await stroke("touch", 3, line, 0.5);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 0, "a finger doesn't draw in pen only");
+      await stroke("pen", 5, line, 0.7);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 1);
+      const d1 = await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelector(".co-ink path.pen").getAttribute("d"));
+      assert.ok(/^M[\d.]+ [\d.]+Q/.test(d1) && d1.endsWith("z"), d1.slice(0, 60));
+      // The highlighter, in yellow, under the pen's.
+      await q.locator('.ink-bar [data-act="tool:highlighter"]').click();
+      await stroke("pen", 6, [[0.2, 0.3], [0.5, 0.3]], 0.5);
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-ink path.hl.c-yellow").length), 1);
+      // The eraser takes the whole stroke it crosses; Undo brings it back, Redo takes it again.
+      await q.locator('.ink-bar [data-act="tool:eraser"]').click();
+      await stroke("pen", 7, [[0.4, 0.15], [0.4, 0.27]], 0.5);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).map((s) => s.t).join("")), "h");
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).length), 2);
+      await q.locator('.ink-bar [data-act="redo"]').click();
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).length), 1);
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      // The pen's side button (a right button, buttons 2) and its eraser end (buttons 32) erase
+      // whatever the tool, and a pen's touch doesn't scroll the page whether or not it says "stylus".
+      await q.locator('.ink-bar [data-act="tool:pen"]').click();
+      const penAct = (pointerId, buttons, button, pts) => q.evaluate(([pointerId, buttons, button, pts]) => {
+        const d = document.getElementById("readerFrame").contentDocument, svg = d.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
+        const fire = (name, [fx, fy], b) => svg.dispatchEvent(new PointerEvent(name, { pointerType: "pen", pointerId, isPrimary: true, bubbles: true, cancelable: true, button: name === "pointerdown" ? button : -1, buttons: name === "pointerup" ? 0 : b, pressure: 0.5, clientX: r.left + fx * r.width, clientY: r.top + fy * r.width }));
+        fire("pointerdown", pts[0], buttons);
+        for (const p of pts.slice(1)) fire("pointermove", p, buttons);
+        fire("pointerup", pts[pts.length - 1], buttons);
+      }, [pointerId, buttons, button, pts]);
+      await penAct(11, 3, 2, [[0.4, 0.15], [0.4, 0.27]]);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).map((s) => s.t).join("")), "h", "the side button erases the pen's stroke");
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      await penAct(12, 33, 5, [[0.4, 0.15], [0.4, 0.27]]);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).map((s) => s.t).join("")), "h", "the eraser end erases too");
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      // Pressed after the pen touched down: what it drew is dropped and it erases from there.
+      await q.evaluate(() => {
+        const svg = document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
+        const fire = (name, fx, fy, buttons) => svg.dispatchEvent(new PointerEvent(name, { pointerType: "pen", pointerId: 13, isPrimary: true, bubbles: true, cancelable: true, button: name === "pointerdown" ? 0 : -1, buttons, pressure: 0.5, clientX: r.left + fx * r.width, clientY: r.top + fy * r.width }));
+        fire("pointerdown", 0.4, 0.1, 1); fire("pointermove", 0.4, 0.12, 1); fire("pointermove", 0.4, 0.2, 3); fire("pointermove", 0.4, 0.27, 3); fire("pointerup", 0.4, 0.27, 0);
+      });
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).map((s) => s.t).join("")), "h", "the button pressed mid-stroke erases, and the stroke so far isn't kept");
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).length), 2);
+      const touches = await q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument, svg = d.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
+        const down = (type, buttons) => svg.dispatchEvent(new PointerEvent("pointerdown", { pointerType: type, pointerId: 21, isPrimary: true, bubbles: true, cancelable: true, buttons, button: 0, clientX: r.left + 0.9 * r.width, clientY: r.top + 0.9 * r.width }));
+        const start = () => { const ev = new TouchEvent("touchstart", { cancelable: true, bubbles: true }); svg.dispatchEvent(ev); return ev.defaultPrevented; };
+        const up = (type) => svg.dispatchEvent(new PointerEvent("pointerup", { pointerType: type, pointerId: 21, isPrimary: true, bubbles: true, cancelable: true, buttons: 0, clientX: r.left + 0.9 * r.width, clientY: r.top + 0.9 * r.width }));
+        down("pen", 33); const pen = start(); up("pen");
+        down("touch", 1); const finger = start(); up("touch");
+        return { pen, finger };
+      });
+      assert.strictEqual(touches.pen, true, "a pen's touch is kept from scrolling");
+      assert.strictEqual(touches.finger, false, "a finger's still scrolls with Finger off");
+      assert.strictEqual(await q.evaluate(() => { const d = document.getElementById("readerFrame").contentDocument; const e = new MouseEvent("contextmenu", { cancelable: true, bubbles: true }); d.querySelector(".co-ink[data-page='1']").dispatchEvent(e); return e.defaultPrevented; }), true, "no menu from the pen's button");
+      // The phone's own word on the pen (the Pen plugin): the page can't tell a side button from a touch,
+      // so with the button held a plain touch (buttons 1) erases, and while the pen is near nothing pans under it.
+      assert.strictEqual(await q.evaluate(() => Waypage.platform.pen.available), false, "no Pen plugin in a browser");
+      await q.evaluate(() => Waypage.ink.fromPhone({ near: true, down: false, button: false, eraser: false, tool: 2, buttons: 0 }));
+      const calm = await q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument;
+        return [d.documentElement.hasAttribute("data-co-pen-near"), getComputedStyleOf(d)];
+        function getComputedStyleOf(d) { return d.defaultView.getComputedStyle(d.querySelector(".co-ink[data-page='1']")).touchAction; }
+      });
+      assert.deepStrictEqual(calm, [true, "none"], "a pen near: no pan under it");
+      assert.strictEqual(await q.evaluate(() => { const d = document.getElementById("readerFrame").contentDocument; return [d.defaultView.getComputedStyle(d.body).touchAction, d.defaultView.getComputedStyle(d.querySelector(".co-ink[data-page='1']")).zIndex].join(" "); }), "none 2", "nothing pans anywhere in the page, and the layer is above the words'");
+      // One UI sends the pen's hover exit just before its touch: that doesn't let the touch pan.
+      await q.evaluate(() => Waypage.ink.fromPhone({ near: false }));
+      const touchAction = () => q.evaluate(() => { const d = document.getElementById("readerFrame").contentDocument; return [d.documentElement.hasAttribute("data-co-pen-near"), d.defaultView.getComputedStyle(d.querySelector(".co-ink[data-page='1']")).touchAction]; });
+      assert.deepStrictEqual(await touchAction(), [true, "none"], "a pen that has just left is still near, for the touch that follows");
+      await q.waitForTimeout(1800);
+      assert.deepStrictEqual(await touchAction(), [false, "auto"], "and a finger scrolls once it's gone");
+      // The side button held and the pen dragged: One UI sends no touch, the Pen plugin sends "erase".
+      assert.strictEqual(await q.evaluate(() => typeof Waypage.platform.pen.onErase), "function");
+      await q.evaluate(() => {
+        const svg = document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
+        const at = (fx, fy) => [r.left + fx * r.width, r.top + fy * r.width];
+        Waypage.ink.eraseFrom("down", ...at(0.4, 0.15)); Waypage.ink.eraseFrom("move", ...at(0.4, 0.27)); Waypage.ink.eraseFrom("up", ...at(0.4, 0.27));
+      });
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).map((s) => s.t).join("")), "h", "the button-drag erases what it crosses");
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).length), 2, "and Undo brings it back");
+      await q.evaluate(() => Waypage.ink.fromPhone({ near: true, down: false, button: true, eraser: true, tool: 2, buttons: 32 }));
+      await penAct(14, 1, 0, [[0.4, 0.15], [0.4, 0.27]]);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).map((s) => s.t).join("")), "h", "the phone says a button's held: a plain touch erases");
+      await q.evaluate(() => Waypage.ink.fromPhone({ near: true, down: false, button: false, eraser: false, tool: 2, buttons: 0 }));
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      await q.evaluate(() => {
+        const svg = document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
+        const fire = (name, fx, fy) => svg.dispatchEvent(new PointerEvent(name, { pointerType: "pen", pointerId: 15, isPrimary: true, bubbles: true, cancelable: true, button: name === "pointerdown" ? 0 : -1, buttons: name === "pointerup" ? 0 : 1, pressure: 0.5, clientX: r.left + fx * r.width, clientY: r.top + fy * r.width }));
+        fire("pointerdown", 0.4, 0.1); fire("pointermove", 0.4, 0.12);
+        Waypage.ink.fromPhone({ near: true, down: true, button: true, eraser: true, tool: 2, buttons: 32 });
+        fire("pointermove", 0.4, 0.2); fire("pointermove", 0.4, 0.27); fire("pointerup", 0.4, 0.27);
+        Waypage.ink.fromPhone({ near: false });
+      });
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).map((s) => s.t).join("")), "h", "pressed mid-stroke, by the phone's word, it erases");
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).length), 2);
+      // A finger draws once Finger is on, but not beside a pen that's just been on the page.
+      await q.locator('.ink-bar [data-act="finger"]').click();
+      await q.waitForTimeout(1100);
+      await q.evaluate(() => {
+        const svg = document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1']");
+        svg.dispatchEvent(new PointerEvent("pointermove", { pointerType: "pen", pointerId: 30, isPrimary: true, bubbles: true, buttons: 0, clientX: 40, clientY: 400 }));
+      });
+      await stroke("touch", 8, [[0.2, 0.5], [0.4, 0.55]], 0);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 2, "a hand beside the pen doesn't write");
+      await q.waitForTimeout(1100);
+      await stroke("touch", 9, [[0.2, 0.5], [0.4, 0.55]], 0);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 3);
+      // A finger's stroke cancelled (a palm, a gesture) is dropped.
+      await q.waitForTimeout(1100);
+      await q.evaluate(() => {
+        const svg = document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
+        const fire = (name, fx, fy) => svg.dispatchEvent(new PointerEvent(name, { pointerType: "touch", pointerId: 40, isPrimary: true, bubbles: true, cancelable: true, buttons: name === "pointercancel" ? 0 : 1, clientX: r.left + fx * r.width, clientY: r.top + fy * r.width }));
+        fire("pointerdown", 0.6, 0.6); fire("pointermove", 0.7, 0.65); fire("pointercancel", 0.7, 0.65);
+      });
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 3, "a cancelled finger stroke leaves nothing");
+      // The layer sits over its page whatever its size, in the page's own units.
+      const fit = await q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument;
+        const img = d.querySelector("img[data-page='1']"), svg = d.querySelector(".co-ink[data-page='1']");
+        const a = img.getBoundingClientRect(), b = svg.getBoundingClientRect();
+        return [Math.abs(a.left - b.left), Math.abs(a.top - b.top), Math.abs(a.width - b.width), Math.abs(a.height - b.height), svg.getAttribute("viewBox")];
+      });
+      assert.ok(fit.slice(0, 4).every((v) => v < 1.5), JSON.stringify(fit));
+      // Kept: on this device, beside the clip, and back when the clip is opened again.
+      await q.waitForTimeout(1200);
+      const saved = await q.evaluate((i) => Waypage.store.readInk(i), id);
+      assert.strictEqual(saved.pages["1"].length, 3);
+      await open();
+      await until(q, () => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1'] path"));
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-ink[data-page='1'] path").length), 3);
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelector(".co-ink").dataset.on), "", "words select and links tap again with Draw off");
+      // The Drawings sheet lists the page, and has a pad that says what the pen sends.
+      await q.evaluate(() => openSheet("ink"));
+      await q.locator("#readingSheet .ink-probe-pad").waitFor();
+      assert.ok(/Page: nothing yet\nPhone: no pen reading here/.test(await q.locator("#readingSheet .ink-probe-out").innerText()));
+      await q.locator("#readingSheet .row", { hasText: "Page 1" }).waitFor();
+      await q.goBack();
+      await q.locator("#readingSheet").waitFor({ state: "hidden" });
+      // A copy has the strokes as ink annotations.
+      const copy = await q.evaluate(async () => {
+        const out = await Waypage.files.heldPdf().ink(Waypage.ink.forPdf());
+        const s = new TextDecoder("latin1").decode(out);
+        const again = await Waypage.pdf.open(out);
+        const pages = again.pages;
+        again.close();
+        return { size: out.length, ink: (s.match(/\/Subtype\s*\/Ink/g) || []).length, list: /\/InkList/.test(s), pages };
+      });
+      assert.strictEqual(copy.ink, 3, JSON.stringify(copy));
+      assert.ok(copy.list && copy.pages === 3, JSON.stringify(copy));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await ctx.close();
+    });
+
+    await test("the pen test in Drawings asks for each thing in turn, records what comes in, and makes a log to save (1.57.0)", async () => {
+      const maker = await browser.newPage();
+      let html = "<style>@page{size:A4;margin:0} div{padding:60px;font:24px sans-serif;page-break-after:always}</style>";
+      for (let i = 1; i <= 3; i++) html += "<div><p>Page " + i + " opens here.</p><p>Nothing much happens on this page, and the margins are wide enough to write in.</p></div>";
+      await maker.setContent(html);
+      const bytes = [...await maker.pdf({ format: "A4" })];
+      await maker.close();
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block", acceptDownloads: true });
+      const q = await ctx.newPage();
+      q.errors = [];
+      q.on("pageerror", (e) => { if (!/sandboxed and lacks the 'allow-same-origin'/.test(String(e))) q.errors.push(String(e)); });
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      const bring = (b) => {
+        const file = new File([new Uint8Array(b)], "logbook.pdf", { type: "application/pdf" });
+        window.Waypage.platform.files.blob = async () => file;
+        return file;
+      };
+      const id = await q.evaluate(async ([b, f]) => {
+        const file = eval(f)(b);
+        const meta = await window.Waypage.files.bring(file, "pdf", { has: () => false, link: "content://docs/logbook.pdf" });
+        await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
+        return meta.id;
+      }, [bytes, String(bring)]);
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(([b, f]) => { eval(f)(b); }, [bytes, String(bring)]);
+      await q.evaluate((i) => openPage(i), id);
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      await q.evaluate(() => openSheet("ink"));
+      await q.locator("#readingSheet .ink-test-box .btn-primary", { hasText: "Start test" }).click();
+      await q.locator("#readingSheet .ink-test-box", { hasText: "Step 1 of 10" }).waitFor();
+      const onPad = (kind, pointerType, buttons) => q.evaluate(([kind, pointerType, buttons]) => {
+        const pad = document.querySelector("#readingSheet .ink-probe-pad"), r = pad.getBoundingClientRect();
+        const pe = (name, f) => pad.dispatchEvent(new PointerEvent(name, { pointerType, pointerId: 7, isPrimary: true, bubbles: true, cancelable: true, buttons: name === "pointerup" ? 0 : buttons, button: name === "pointerdown" ? 0 : -1, pressure: 0.5, clientX: r.left + r.width * f, clientY: r.top + r.height / 2 }));
+        if (kind === "draw") { pe("pointerdown", 0.1); for (let i = 2; i < 8; i++) pe("pointermove", i / 10); pe("pointerup", 0.8); }
+        if (kind === "touch") pad.dispatchEvent(new TouchEvent("touchstart", { bubbles: true, cancelable: true }));
+      }, [kind, pointerType, buttons]);
+      const done = () => q.locator("#readingSheet .ink-test-box .btn-primary").click();
+      const skip = () => q.locator("#readingSheet .ink-test-box button", { hasText: "Skip" }).click();
+      // 1: a finger. 2: the pen hovering, as the phone says it. 3: the pen drawing.
+      await onPad("draw", "touch", 1); await onPad("touch", "touch", 1); await done();
+      await q.evaluate(() => { penTestState({ near: true, down: false, button: false, eraser: false, tool: 2, buttons: 0 }); penTestRaw({ k: "m", a: "ACTION_HOVER_ENTER", tools: "2", b: 0, p: 0, n: 1, c: false, src: 16386 }); penTestRaw({ k: "k", a: "down", code: 308, name: "KEYCODE_STYLUS_BUTTON_PRIMARY" }); });
+      await done();
+      await onPad("draw", "pen", 1); await done();
+      for (let i = 0; i < 6; i++) await skip();
+      await q.locator("#readingSheet .ink-test-box", { hasText: "Step 10 of 10" }).waitFor();
+      await skip();
+      // Ten steps, all on the pad: the sheet is where it ends, with the log and nothing on the Draw bar to press.
+      assert.strictEqual(await q.evaluate(() => !document.querySelector(".ink-test") && !document.querySelector('[data-act="testdone"]')), true, "no step row on the Draw bar");
+      // Over: the log is there to save, and nothing was drawn on the page.
+      await q.locator("#readingSheet .row", { hasText: "Save the last log" }).waitFor();
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 0, "the test draws nothing on the page");
+      const log = await q.evaluate(() => penLogText());
+      for (const want of ["Waypage pen test log", "agent: ", "pen plugin: no", "finger drawing was: ", "== Step 1: Touch the pad with a finger", "pad pointerdown touch button=0 buttons=1",
+        "pad touchstart touchType=n/a", "phone state near=yes", "phone MotionEvent ACTION_HOVER_ENTER tools=2", "phone KeyEvent down 308 KEYCODE_STYLUS_BUTTON_PRIMARY",
+        "pad pointerdown pen button=0 buttons=1", "pad pointermove pen button=-1 buttons=1", "x6 until", "[skipped]"]) {
+        assert.ok(log.includes(want), "the log has: " + want + "\n" + log.slice(0, 1500));
+      }
+      assert.ok(!/clientX|clientY/.test(log), "no positions in the log");
+      const [download] = await Promise.all([q.waitForEvent("download"), q.locator("#readingSheet .row", { hasText: "Save the last log" }).click()]);
+      assert.ok(/^waypage-pen-log-\d{4}-\d\d-\d\d\.txt$/.test(download.suggestedFilename()), download.suggestedFilename());
+      assert.ok(fs.readFileSync(await download.path(), "utf8").startsWith("Waypage pen test log"));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await ctx.close();
+    });
+
+    await test("a scanned PDF, which has no words, can be drawn on too (1.57.0)", async () => {
+      const maker = await browser.newPage();
+      await maker.setContent("<style>@page{size:A4;margin:0} div{height:1100px;page-break-after:always}</style><div></div><div></div>");
+      const bytes = [...await maker.pdf({ format: "A4" })];
+      await maker.close();
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      q.errors = [];
+      q.on("pageerror", (e) => { if (!/sandboxed and lacks the 'allow-same-origin'/.test(String(e))) q.errors.push(String(e)); });
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      const bring = (b) => {
+        const file = new File([new Uint8Array(b)], "scan.pdf", { type: "application/pdf" });
+        window.Waypage.platform.files.blob = async () => file;
+        return file;
+      };
+      const id = await q.evaluate(async ([b, f]) => {
+        const file = eval(f)(b);
+        const meta = await window.Waypage.files.bring(file, "pdf", { has: () => false, link: "content://docs/scan.pdf" });
+        await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
+        return meta.id;
+      }, [bytes, String(bring)]);
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(([b, f]) => { eval(f)(b); }, [bytes, String(bring)]);
+      await q.evaluate((i) => openPage(i), id);
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      assert.strictEqual(await q.evaluate(() => state.open.comic), true, "a PDF with no words is a scan");
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").hidden), false);
+      await q.evaluate(() => document.getElementById("readerInk").click());
+      await until(q, () => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1']"));
+      await q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument, svg = d.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
+        const fire = (name, fx, fy) => svg.dispatchEvent(new PointerEvent(name, { pointerType: "pen", pointerId: 4, isPrimary: true, bubbles: true, cancelable: true, buttons: name === "pointerup" ? 0 : 1, pressure: 0.5, clientX: r.left + fx * r.width, clientY: r.top + fy * r.width }));
+        fire("pointerdown", 0.3, 0.3); fire("pointermove", 0.5, 0.4); fire("pointerup", 0.5, 0.4);
+      });
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 1);
+      const fit = await q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument;
+        const a = d.querySelector("img[data-page='1']").getBoundingClientRect(), b = d.querySelector(".co-ink[data-page='1']").getBoundingClientRect();
+        return [Math.abs(a.left - b.left), Math.abs(a.top - b.top), Math.abs(a.width - b.width), Math.abs(a.height - b.height)];
+      });
+      assert.ok(fit.every((v) => v < 1.5), JSON.stringify(fit));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await ctx.close();
+    });
+
+    await test("a comic has no Highlights button (1.56.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async (b) => { askKeep = async () => false; await openFile(new File([new Uint8Array(b)], "v1.cbz"), null, false); }, [...mangaBytes(1)]);
+      await q.evaluate(() => openPage(state.pages[0].id));
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      await q.waitForTimeout(300);
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerMarks").hidden), true);
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").hidden), true, "a CBZ comic has no pen");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a pinch deep in a linked PDF keeps the spot under the fingers, gaps and all", async () => {
       const maker = await browser.newPage();
       let html = "<style>@page{size:A4;margin:0} div{height:297mm;box-sizing:border-box;padding:40px;font:28px sans-serif;page-break-after:always}</style>";
@@ -2269,13 +2739,15 @@ function zipOf(files) {
       await q.evaluate(([b, f]) => { eval(f)(b); }, [bytes, String(bring)]);
       await q.evaluate((i) => openPage(i), id);
       await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
-      await q.evaluate(() => { const d = document.getElementById("readerFrame").contentDocument; d.defaultView.scrollTo(0, d.querySelector("img[data-page='25']").offsetTop - 100); });
+      await q.evaluate(() => { const d = document.getElementById("readerFrame").contentDocument; d.defaultView.scrollTo(0, d.querySelector("img[data-page='25']").getBoundingClientRect().top + d.defaultView.scrollY - 100); });
       await q.waitForTimeout(400);
       const fr = await q.evaluate(() => { const r = document.getElementById("readerFrame").getBoundingClientRect(); return [r.left, r.top]; });
       const x = 250, y = 450;
       const under = () => q.evaluate(([x, y]) => {
         const d = document.getElementById("readerFrame").contentDocument;
-        const img = d.elementFromPoint(x, y).closest("img"), r = img.getBoundingClientRect();
+        // The page's words lie over it (1.56.0): the page under them.
+        const hit = d.elementFromPoint(x, y), words = hit.closest(".co-tl");
+        const img = words ? d.querySelector("img[data-page='" + words.dataset.page + "']") : hit.closest("img"), r = img.getBoundingClientRect();
         return { page: img.getAttribute("data-page"), fx: Math.round((x - r.left) / r.width * 100), fy: Math.round((y - r.top) / r.height * 100) };
       }, [x, y]);
       const before = await under();

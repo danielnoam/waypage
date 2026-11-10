@@ -83,10 +83,25 @@
     for (const m of list.slice(0, 2000)) {
       if (!m || typeof m !== "object") continue;
       const id = text(m.id, 40), words = text(m.text, 4000).replace(/\s+/g, " ").trim();
-      const block = Math.floor(num(m.block)), endBlock = Math.floor(num(m.endBlock));
-      if (!id || ids.has(id) || !words || block < 0 || endBlock < block) continue;
+      if (!id || ids.has(id) || !words) continue;
+      const start = Math.max(0, Math.floor(num(m.start))), end = Math.max(0, Math.floor(num(m.end)));
+      let o;
+      if (m.page != null) {
+        // One on a PDF's printed pages (1.56.0): by page, with its boxes
+        // on the page as fractions of it.
+        const page = Math.floor(num(m.page)), endPage = Math.floor(num(m.endPage));
+        if (page < 1 || endPage < page) continue;
+        const rects = (Array.isArray(m.rects) ? m.rects : []).slice(0, 60)
+          .filter((r) => Array.isArray(r) && r.length === 5 && r.every((v) => Number.isFinite(v)) && r[0] >= page && r[0] <= endPage)
+          .map(([n, ...b]) => [Math.floor(n), ...b.map((v) => Math.min(1, Math.max(0, v)))]);
+        o = { id, page, start, endPage, end, text: words, at: num(m.at) || Date.now() };
+        if (rects.length) o.rects = rects;
+      } else {
+        const block = Math.floor(num(m.block)), endBlock = Math.floor(num(m.endBlock));
+        if (block < 0 || endBlock < block) continue;
+        o = { id, block, start, endBlock, end, text: words, at: num(m.at) || Date.now() };
+      }
       ids.add(id);
-      const o = { id, block, start: Math.max(0, Math.floor(num(m.start))), endBlock, end: Math.max(0, Math.floor(num(m.end))), text: words, at: num(m.at) || Date.now() };
       if (text(m.note, 4000).trim()) o.note = text(m.note, 4000).trim();
       if (MARK_COLORS.includes(m.color)) o.color = m.color;
       out.push(o);

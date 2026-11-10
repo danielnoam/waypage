@@ -142,6 +142,55 @@ html[data-co-pdf-dark] .co-printed img[src] { filter: url(#co-pdf-dark); }
 html.co-spread body:has(.co-printed) { max-width: 76rem; }
 html.co-spread .co-printed { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--s-3) * var(--co-zoom, 1)); margin: 0; }
 html.co-spread .co-printed img + img { margin-top: 0; }
+/* A printed page's words (1.56.0, reader.js textLayer): see-through
+   type over the picture, for selecting and highlighting, each piece
+   placed and stretched to where the page has it. */
+.co-printed, .co-comic:has(> img[data-page]) { position: relative; }
+.co-tl { position: absolute; container-type: size; overflow: hidden; font-size: 0; line-height: 1; color: transparent; -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+.co-tl span { position: absolute; white-space: pre; font-family: sans-serif; line-height: 1; transform-origin: 0 0; cursor: text; }
+.co-tl ::selection { background: var(--page-select); color: transparent; }
+html[data-co-pdf-dark] .co-tl ::selection { background: var(--page-select-dark); }
+/* A highlight on a printed page: a box over the words, multiplied so the
+   page's own type shows through it. The page is white paper in every
+   theme, so it takes paper's colours; with Dark PDF pages, the theme's. */
+mark.co-mark.co-pm { position: absolute; padding: 0; border-radius: 2px; background: var(--page-mark); mix-blend-mode: multiply; pointer-events: none; text-decoration: none; }
+mark.co-mark.co-pm.co-c-green { background: var(--page-mark-green); }
+mark.co-mark.co-pm.co-c-blue { background: var(--page-mark-blue); }
+mark.co-mark.co-pm.co-c-pink { background: var(--page-mark-pink); }
+mark.co-mark.co-pm.co-c-purple { background: var(--page-mark-purple); }
+html[data-co-pdf-dark] mark.co-mark.co-pm { background: var(--mark); mix-blend-mode: screen; }
+html[data-co-pdf-dark] mark.co-mark.co-pm.co-c-green { background: var(--mark-green); }
+html[data-co-pdf-dark] mark.co-mark.co-pm.co-c-blue { background: var(--mark-blue); }
+html[data-co-pdf-dark] mark.co-mark.co-pm.co-c-pink { background: var(--mark-pink); }
+html[data-co-pdf-dark] mark.co-mark.co-pm.co-c-purple { background: var(--mark-purple); }
+mark.co-mark.co-pm.co-noted { box-shadow: inset 0 -2px var(--muted); }
+
+/* Pen drawing on a printed page (1.57.0, ink.js): a layer of SVG over
+   the picture, in page widths. It takes the pointer only while Draw is
+   on, so words select and links tap the rest of the time; a finger still
+   scrolls over it unless it draws. The page is white paper in every
+   theme, so the inks are paper's; with Dark PDF pages they're the ones
+   that show on the dark page. */
+.co-ink { position: absolute; z-index: 2; overflow: hidden; pointer-events: none; -webkit-user-select: none; user-select: none; }
+.co-ink[data-on="1"] { pointer-events: auto; cursor: crosshair; }
+/* While a pen is near (ink.js near()), no pan under it: it draws. */
+html[data-co-pen-near] .co-ink[data-on="1"], html[data-co-inking][data-co-pen-near], html[data-co-inking][data-co-pen-near] body { touch-action: none; }
+.co-ink path.pen { stroke: none; }
+.co-ink path.hl { fill: none; stroke-linecap: butt; stroke-linejoin: round; opacity: .55; mix-blend-mode: multiply; }
+.co-ink .pen.c-ink { fill: #1C1B19; }
+.co-ink .pen.c-red { fill: #D0312D; }
+.co-ink .pen.c-blue { fill: #2B61C4; }
+.co-ink .pen.c-green { fill: #2E8B57; }
+.co-ink .hl.c-yellow { stroke: #FFD60A; }
+.co-ink .hl.c-green { stroke: #5BD66B; }
+.co-ink .hl.c-blue { stroke: #5AB0FF; }
+.co-ink .hl.c-pink { stroke: #FF7AB6; }
+.co-ink .hl.c-purple { stroke: #B58CFF; }
+html[data-co-pdf-dark] .co-ink path.hl { mix-blend-mode: screen; opacity: .4; }
+html[data-co-pdf-dark] .co-ink .pen.c-ink { fill: #EDE9E0; }
+html[data-co-pdf-dark] .co-ink .pen.c-red { fill: #FF6B63; }
+html[data-co-pdf-dark] .co-ink .pen.c-blue { fill: #6FA0FF; }
+html[data-co-pdf-dark] .co-ink .pen.c-green { fill: #5CCB8A; }
 
 /* Your time in the clip (1.39.0), under its very last thing. */
 .co-spent {

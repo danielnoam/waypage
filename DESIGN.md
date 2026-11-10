@@ -767,6 +767,24 @@ and the page shows above it.
   foot shows "? Shortcuts" with a mouse). Row heights follow the pointer,
   not the width: 44 px or more for a finger, 40 px for a mouse.
 
+**Draw bar (1.57.0, `app-ink.js`).** A PDF's pages have a pen in the reader
+bar (accent and `--line` behind it while Draw is on). The tools float on
+`--surface` with a `--line` border, `--r-lg` corners and the selection
+bar's shadow, along the foot of the screen, in two rows of 44 px
+buttons: Pen, Highlighter, Eraser, Undo, Redo and Done above; colours,
+Size, Pen style and Finger below. The chosen tool and colour are ringed in
+`--accent`. Size and Pen style each open a small menu above the bar, over
+their button, on the same surface: five sizes as dots growing with their
+number under them, and four pen styles (Ballpoint, Marker, Fountain pen,
+Brush) each shown as a short stroke drawn by the engine in that style, the
+chosen one in `--accent` with a tick. One menu at a time; a tap elsewhere,
+Esc or starting to draw closes it. Pen style belongs to the pen: it's gone
+for the highlighter and eraser. The bar and its menus grow in and shrink
+away (`M.appear`, `M.vanish`), and the reduced-motion answer is the same.
+Pen colours are the same in every theme (`--pen-*`, `--hl-*`): the page
+under them is white paper in every theme, and reader.css re-paints them for
+Dark PDF pages.
+
 ## 6. Voice
 
 Short, plain, about the reader's situation: "Plays when you're back

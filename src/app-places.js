@@ -21,7 +21,8 @@ function marksShown() {
     .sort((a, b) => b.last - a.last);
 }
 function goToMark(p, id) {
-  if (state.open === p && !$("readerView").hidden) { C.reader.toMark(id, true); return; }
+  const m = (p.marks || []).find((x) => x.id === id);
+  if (state.open === p && !$("readerView").hidden) { if (m) jumpToMark(p, m, true); return; }
   markAfterOpen = id;
   openPage(p.id);
 }
@@ -978,7 +979,7 @@ const KEYS = [
   ["In the library", [["↑ ↓", "Move between clips"], ["Enter", "Open"], ["X", "Pick, to act on several"], ["Shift-click", "Pick a run"],
     ["F", "Favourite"], ["E", "Export"], ["Del", "Delete"]]],
   ["Reading", [["Space  ← →", "Next or previous page"], ["J  K", "Next or previous section"], ["T", "Contents beside the text"],
-    ["S", "Narrate, or auto-scroll a comic"], ["A", "Reader settings"], ["H", "Highlights"], ["L", "Translate this clip"], ["/", "Find in this clip"], ["+  −", "Text size"], ["O", "Open the original"], ["Esc", "Back"]]],
+    ["S", "Narrate, or auto-scroll a comic"], ["A", "Reader settings"], ["H", "Highlights"], ["D", "Draw on a PDF, then P pen, B highlighter, E eraser, [ ] size"], ["L", "Translate this clip"], ["/", "Find in this clip"], ["+  −", "Text size"], ["O", "Open the original"], ["Esc", "Back"]]],
 ];
 function keysSheet() {
   return el("div", { class: "keys-sheet" },
@@ -1023,6 +1024,7 @@ function onKeys(e) {
   if (e.key === "Tab" || e.key.startsWith("Arrow") || e.key === "Enter" || e.key === "Escape") document.body.classList.add("keys");
   if (e.defaultPrevented || e.isComposing) return;
   const k = e.key, inFrame = e.target && e.target.ownerDocument !== document;
+  if (k === "Escape" && inkPop) { inkPopClose(); e.preventDefault(); return; }
   if (k === "Escape" && (state.sheet || state.image || state.menu || state.select || state.side)) { history.back(); return; }
   if (state.image && !e.altKey && !e.ctrlKey && !e.metaKey) {
     const act = { ArrowLeft: () => stepImage(-1), ArrowRight: () => stepImage(1), "+": () => zoomStep(1), "=": () => zoomStep(1), "-": () => zoomStep(-1) }[k];
@@ -1030,6 +1032,12 @@ function onKeys(e) {
     return;
   }
   if (state.open && !state.image && (e.ctrlKey || e.metaKey) && !e.altKey && k.toLowerCase() === "f") { e.preventDefault(); openFind(); return; }
+  // Undo and redo for a pen drawing (1.57.0).
+  if (state.open && C.ink.on && !state.sheet && !state.menu && (e.ctrlKey || e.metaKey) && !e.altKey && k.toLowerCase() === "z" && !typingIn(e.target)) {
+    e.preventDefault();
+    inkGo(e.shiftKey ? C.ink.redo() : C.ink.undo());
+    return;
+  }
   if (e.altKey || e.ctrlKey || e.metaKey || typingIn(e.target)) return;
   // In pages, the arrow keys turn them (inside the page, src/reader.js
   // does the same).
@@ -1052,6 +1060,12 @@ function onKeys(e) {
       s: () => { const b = $("readerAloud").hidden ? $("readerScroll") : $("readerAloud"); if (!b.hidden) b.click(); },
       a: () => toggleSheet("reading"),
       h: () => !$("readerMarks").hidden && $("readerMarks").click(),
+      d: () => !$("readerInk").hidden && $("readerInk").click(),
+      // While drawing (1.57.0).
+      p: () => C.ink.on && (C.ink.setting({ tool: "pen" }), inkKeep()),
+      b: () => C.ink.on && (C.ink.setting({ tool: "highlighter" }), inkKeep()),
+      e: () => C.ink.on && (C.ink.setting({ tool: "eraser" }), inkKeep()),
+      "[": () => C.ink.on && inkSize(-1), "]": () => C.ink.on && inkSize(1),
       l: () => !$("readerTranslate").hidden && $("readerTranslate").click(),
       "+": () => size(1), "=": () => size(1), "-": () => size(-1), "−": () => size(-1),
       o: () => /^https?:/.test(p.url || "") && C.platform.openOutside(p.url),

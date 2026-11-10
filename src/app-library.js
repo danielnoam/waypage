@@ -937,6 +937,7 @@ function pageSheet(p, where) {
       el("div", { class: "group" },
         p.link && p.file && p.file.kind === "pdf" && !p.comic
           ? menuRow(p.view === "text" ? "Show as printed pages" : "Show as text", () => switchView(p, where)) : null,
+        inReader && C.files.drawable(p) && !p.preview ? menuRow("Drawings", () => back().then(() => openSheet("ink"))) : null,
         inReader && !C.files.printed(p) ? menuRow("Find in this clip", () => back().then(openFind)) : null,
         inReader && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow("Save linked pages", () => back().then(() => openSheet("links"))) : null,
         menuRow(p.finished ? "Mark as unread" : "Mark as read", () => markRead([p], !p.finished).then(draw)),
