@@ -240,6 +240,10 @@
   --page-mark-blue: #C8DFF7;
   --page-mark-pink: #F9D3E0;
   --page-mark-purple: #E8D7F9;
+  /* Words being selected on a printed page: a see-through blue, as on a
+     computer, since it lies over the page's own type, not under it. */
+  --page-select: rgba(0, 120, 215, 0.28);
+  --page-select-dark: rgba(100, 170, 255, 0.35);
 
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px;
   --s-6: 32px; --s-7: 40px; --s-8: 56px; --s-9: 72px;

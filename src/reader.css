@@ -148,8 +148,8 @@ html.co-spread .co-printed img + img { margin-top: 0; }
 .co-printed { position: relative; }
 .co-tl { position: absolute; container-type: size; overflow: hidden; font-size: 0; line-height: 1; color: transparent; -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 .co-tl span { position: absolute; white-space: pre; font-family: sans-serif; line-height: 1; transform-origin: 0 0; cursor: text; }
-.co-tl ::selection { background: var(--page-mark-blue); color: transparent; }
-html[data-co-pdf-dark] .co-tl ::selection { background: var(--mark-blue); }
+.co-tl ::selection { background: var(--page-select); color: transparent; }
+html[data-co-pdf-dark] .co-tl ::selection { background: var(--page-select-dark); }
 /* A highlight on a printed page: a box over the words, multiplied so the
    page's own type shows through it. The page is white paper in every
    theme, so it takes paper's colours; with Dark PDF pages, the theme's. */

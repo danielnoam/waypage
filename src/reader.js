@@ -8,7 +8,7 @@
   const C = window.Waypage;
 
   const CSP = "default-src 'none'; img-src 'self' https: data: blob:; style-src 'self'; font-src 'self'; base-uri 'self'; form-action 'none'";
-  const TOKENS = ["bg", "surface", "ink", "muted", "accent", "line", "preview", "mark", "mark-green", "mark-blue", "mark-pink", "mark-purple", "page-mark", "page-mark-green", "page-mark-blue", "page-mark-pink", "page-mark-purple", "video", "on-video", "scrim",
+  const TOKENS = ["bg", "surface", "ink", "muted", "accent", "line", "preview", "mark", "mark-green", "mark-blue", "mark-pink", "mark-purple", "page-mark", "page-mark-green", "page-mark-blue", "page-mark-pink", "page-mark-purple", "page-select", "page-select-dark", "video", "on-video", "scrim",
     "serif", "sans", "measure", "s-1", "s-2", "s-3", "s-4", "s-5", "s-6", "s-7", "r-sm", "r-md", "r-full",
     "fs-title", "lh-title", "fs-heading", "lh-heading", "fs-body", "lh-body", "fs-label", "lh-label", "fs-meta", "lh-meta",
     "reader-fs", "reader-lh", "reader-font", "reader-pad", "reader-measure",
