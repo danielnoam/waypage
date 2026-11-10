@@ -15,6 +15,14 @@ const INK_ICONS = {
   eraser: '<path d="M7 21h10"></path><path d="M5.5 13.5l7-7a2 2 0 0 1 2.8 0l3.2 3.2a2 2 0 0 1 0 2.8L11.5 19H8l-2.5-2.5a2 2 0 0 1 0-3z"></path>',
   undo: '<path d="M9 14L4 9l5-5"></path><path d="M4 9h10a6 6 0 0 1 0 12h-3"></path>',
   redo: '<path d="M15 14l5-5-5-5"></path><path d="M20 9H10a6 6 0 0 0 0 12h3"></path>',
+  select: '<path d="M12 4c4.4 0 8 1.8 8 4s-3.6 4-8 4-8-1.8-8-4 3.6-4 8-4z" stroke-dasharray="3 3"></path><path d="M9 12.5c-.6 2.2.4 4 2 5.2 1.1.8 1.2 2.3-.2 3.3"></path>',
+  add: '<path d="M12 5v14"></path><path d="M5 12h14"></path>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="9" cy="10" r="1.6"></circle><path d="M21 16l-5-5-9 9"></path>',
+  cut: '<circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M8.1 8.1L20 20"></path><path d="M20 4L8.1 15.9"></path>',
+  copy: '<rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V6a2 2 0 0 1 2-2h8"></path>',
+  paste: '<rect x="5" y="4" width="14" height="17" rx="2"></rect><path d="M9 4h6v3H9z"></path>',
+  trash: '<path d="M4 7h16"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M6 7l1 13h10l1-13"></path><path d="M9 7V4h6v3"></path>',
+  drop: '<path d="M20.5 3.5a2.1 2.1 0 0 0-3 0L14 7l-1-1-2 2 1 1-7 7v4h4l7-7 1 1 2-2-1-1 3.5-3.5a2.1 2.1 0 0 0 0-3z"></path>',
   finger: '<path d="M18 11V6a2 2 0 0 0-4 0v1"></path><path d="M14 10V4a2 2 0 0 0-4 0v6"></path><path d="M10 10.5V6a2 2 0 0 0-4 0v8"></path><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-5.9-2.4L3.4 16a2 2 0 0 1 3.2-2.4L8 15"></path>',
 };
 const inkIcon = (name) => {
@@ -25,6 +33,10 @@ const inkIcon = (name) => {
 };
 
 let inkBar = null, inkClipId = null;
+// The colours in the bar, kept: a name is the colour it always was, "#rrggbb" one of your own.
+let inkSlots = null;
+const inkColorOk = (kind, c) => (/^#[0-9a-f]{6}$/.test(c) || INK_COLORS[kind].some((x) => x[0] === c));
+const inkSlotsOf = (kind) => (inkSlots && inkSlots[kind]) || INK_COLORS[kind].map((x) => x[0]);
 
 // What the Pen plugin is asked to do: look at the pen (while a PDF's pages
 // are open), tell everything (the pen test), take One UI's button-and-drag
@@ -51,6 +63,7 @@ async function inkSync(p) {
   if (stale) toast("This PDF has changed since you drew on it. The drawings may not line up.");
 }
 function inkClose() {
+  if (inkColor) inkColor.close();
   if (inkClipId == null && !C.ink.on) return;
   // A pen test going on is stopped, and what it drew on the page taken off.
   if (penT) penTestEnd(true, true);
@@ -65,13 +78,18 @@ function inkPrefs() {
   const size = saved.v === 2 ? saved.size : [0, 2, 4][saved.size];
   // A computer draws with the mouse; a touch screen with the pen alone,
   // so a hand resting on the page leaves no mark.
-  return { tool: ["pen", "highlighter", "eraser"].includes(saved.tool) ? saved.tool : "pen", colors: saved.colors || {}, size: [0, 1, 2, 3, 4].includes(size) ? size : 2,
+  inkSlots = {};
+  for (const kind of ["pen", "highlighter"]) {
+    const n = INK_COLORS[kind].length, mine = saved.slots && Array.isArray(saved.slots[kind]) ? saved.slots[kind] : [];
+    inkSlots[kind] = INK_COLORS[kind].map((x, i) => (typeof mine[i] === "string" && inkColorOk(kind, mine[i]) ? mine[i] : x[0])).slice(0, n);
+  }
+  return { tool: ["pen", "highlighter", "eraser", "select"].includes(saved.tool) ? saved.tool : "pen", colors: saved.colors || {}, size: [0, 1, 2, 3, 4].includes(size) ? size : 2,
     style: C.ink.STYLES.includes(saved.style) ? saved.style : "ball",
     finger: typeof saved.finger === "boolean" ? saved.finger : !matchMedia("(pointer: coarse)").matches };
 }
 function inkKeep() {
   const s = C.ink.state();
-  store(INK_KEY, { v: 2, tool: s.tool, colors: s.colors, size: s.size, style: s.style, finger: s.finger });
+  store(INK_KEY, { v: 2, tool: s.tool, colors: s.colors, slots: inkSlots || undefined, size: s.size, style: s.style, finger: s.finger });
 }
 
 function inkSet(on) {
@@ -90,6 +108,7 @@ function inkSet(on) {
     hideReadHere();
   } else if (inkBar && !inkBar.hidden) {
     inkPopClose(true);
+    if (inkColor) inkColor.close();
     const bar = inkBar;
     M.vanish(bar).finally(() => { if (!C.ink.on) bar.hidden = true; });
   }
@@ -103,7 +122,8 @@ function inkBuild() {
   };
   inkBar = el("div", { class: "ink-bar", role: "toolbar", "aria-label": "Draw", hidden: true },
     el("div", { class: "ink-row ink-tools" },
-      btn("Pen", "pen", "tool:pen"), btn("Highlighter", "highlighter", "tool:highlighter"), btn("Eraser", "eraser", "tool:eraser"),
+      btn("Pen", "pen", "tool:pen"), btn("Highlighter", "highlighter", "tool:highlighter"), btn("Eraser", "eraser", "tool:eraser"), btn("Select", "select", "tool:select"),
+      btn("Add", "add", "add", { "aria-haspopup": "menu", "aria-expanded": "false" }),
       el("span", { class: "ink-gap" }),
       btn("Undo", "undo", "undo"), btn("Redo", "redo", "redo"),
       el("button", { type: "button", class: "ink-done", "data-act": "done" }, "Done")),
@@ -113,7 +133,12 @@ function inkBuild() {
     if (!b || b.disabled) return;
     const [act, arg] = b.dataset.act.split(":");
     // Size and Style open their small menu; anything else closes it.
-    if (act === "size" || act === "style") { inkPopOpen(act, b); return; }
+    if (inkLP.fired) { inkLP.fired = false; return; }
+    if (act === "size" || act === "style" || act === "add") { inkPopOpen(act, b); return; }
+    if (act === "cut") { C.ink.cut(); return; }
+    if (act === "copy") { C.ink.copy(); return; }
+    if (act === "paste") { C.ink.paste(); return; }
+    if (act === "delete") { C.ink.del(); return; }
     inkPopClose();
     if (act === "tool") C.ink.setting({ tool: arg });
     else if (act === "color") C.ink.setting({ color: arg });
@@ -124,6 +149,52 @@ function inkBuild() {
     inkKeep();
   });
   $("readerView").append(inkBar);
+  // Long press on a colour opens the colour sheet for it (a right click does too).
+  const slotOf = (e) => { const b = e.target.closest && e.target.closest('button[data-slot]'); return b && inkBar.contains(b) ? b : null; };
+  inkBar.addEventListener("pointerdown", (e) => {
+    const b = slotOf(e);
+    clearTimeout(inkLP.timer);
+    inkLP.fired = false;
+    if (!b) return;
+    inkLP.timer = setTimeout(() => { inkLP.fired = true; inkColorOpen(Number(b.dataset.slot)); }, 500);
+  });
+  for (const t of ["pointerup", "pointercancel", "pointerleave"]) inkBar.addEventListener(t, () => clearTimeout(inkLP.timer));
+  inkBar.addEventListener("contextmenu", (e) => { const b = slotOf(e); if (!b) return; e.preventDefault(); inkColorOpen(Number(b.dataset.slot)); });
+  inkBar.addEventListener("keydown", (e) => { const b = slotOf(e); if (b && e.key === "Enter" && e.shiftKey) { e.preventDefault(); inkColorOpen(Number(b.dataset.slot)); } });
+  // The file picker behind Add > Image.
+  inkFile = el("input", { type: "file", accept: "image/*", class: "visually-hidden", tabindex: "-1", "aria-hidden": "true" });
+  inkFile.addEventListener("change", () => { const f = inkFile.files[0]; inkFile.value = ""; if (f) inkAddImage(f); });
+  inkBar.append(inkFile);
+}
+const inkLP = { timer: 0, fired: false };
+let inkFile = null;
+
+// A picture from the phone onto the page in view: at most 2000 px a side,
+// a JPEG, or a PNG when it has see-through parts. Nothing leaves the device.
+async function inkAddImage(file) {
+  try {
+    if (!/^image\//.test(file.type) || file.size > 40e6) throw new Error("not a picture");
+    const bmp = await createImageBitmap(file);
+    const k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * k)), h = Math.max(1, Math.round(bmp.height * k));
+    const cv = document.createElement("canvas");
+    cv.width = w; cv.height = h;
+    const g = cv.getContext("2d", { willReadFrequently: true });
+    g.drawImage(bmp, 0, 0, w, h);
+    bmp.close();
+    const px = g.getImageData(0, 0, w, h).data;
+    let see = false;
+    for (let i = 3; i < px.length; i += 16) if (px[i] < 250) { see = true; break; }
+    const url = cv.toDataURL(see ? "image/png" : "image/jpeg", 0.85);
+    if (!C.ink.addImage(url, h / w)) throw new Error("no page");
+    inkSelect();
+  } catch (e) {
+    toast("Couldn't add that picture. Try another.");
+  }
+}
+// The picture just added is taken, so it can be moved: Select is the tool.
+function inkSelect() {
+  if (C.ink.state().tool !== "select") { C.ink.setting({ tool: "select" }); inkKeep(); }
 }
 // ---- Size and pen style: a small menu above their button ----
 
@@ -159,6 +230,10 @@ function inkPopMenu(kind) {
       ...INK_DOTS.map((d, i) => el("button", { type: "button", role: "menuitemradio", "aria-checked": String(s.size === i), "aria-pressed": String(s.size === i), "aria-label": "Size " + (i + 1), onclick: () => pick({ size: i }) },
         el("span", { class: "ink-pop-dot" }, el("span", { class: "ink-size", style: "width:" + d + "px;height:" + d + "px" })), el("span", { class: "ink-pop-n" }, String(i + 1)))));
   }
+  if (kind === "add") {
+    return el("div", { class: "ink-pop ink-pop-styles", role: "menu", "aria-label": "Add" },
+      el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkFile.click(); } }, inkIcon("image"), el("span", { class: "ink-pop-name" }, "Image")));
+  }
   return el("div", { class: "ink-pop ink-pop-styles", role: "menu", "aria-label": "Pen style" },
     ...INK_STYLES.map(([y, name]) => el("button", { type: "button", role: "menuitemradio", "aria-checked": String(s.style === y), "aria-pressed": String(s.style === y), onclick: () => pick({ style: y }) },
       inkSample(y, 72, 28), el("span", { class: "ink-pop-name" }, name), el("span", { class: "ink-pop-tick", "aria-hidden": "true" }, s.style === y ? "✓" : ""))));
@@ -193,7 +268,7 @@ function inkPopClose(now) {
 // another one while a menu closes still lands on it.
 function inkPopMark() {
   if (!inkBar) return;
-  for (const kind of ["size", "style"]) {
+  for (const kind of ["size", "style", "add"]) {
     const b = inkBar.querySelector('[data-act="' + kind + '"]');
     if (b) b.setAttribute("aria-expanded", String(!!inkPop && inkPop.kind === kind));
   }
@@ -234,14 +309,20 @@ function inkPaint() {
   inkBar.querySelector('[data-act="redo"]').disabled = !s.canRedo;
   const row = inkBar.querySelector(".ink-style");
   const hl = s.tool === "highlighter";
-  const swatches = s.tool === "eraser" ? [] : INK_COLORS[hl ? "highlighter" : "pen"].map(([c, name]) =>
-    el("button", { type: "button", "aria-label": name, title: name, "aria-pressed": String(s.color === c), "data-act": "color:" + c },
-      el("span", { class: "ink-dot", "data-c": c, "data-t": hl ? "h" : "p" })));
-  const sizeBtn = s.tool === "eraser" ? null : el("button", { type: "button", "aria-label": "Size " + (s.size + 1) + " of 5", title: "Size", "aria-haspopup": "menu", "aria-expanded": String(!!inkPop && inkPop.kind === "size"), "data-act": "size" },
+  const kind = hl ? "highlighter" : "pen";
+  const swatches = s.tool === "eraser" || s.tool === "select" ? [] : INK_COLORS[kind].map(([name0, name], i) => {
+    const c = inkSlotsOf(kind)[i], mine = c[0] === "#";
+    return el("button", { type: "button", "aria-label": mine ? "Your colour " + c.toUpperCase() : name, title: "Hold to change this colour", "aria-pressed": String(s.color === c), "data-act": "color:" + c, "data-slot": String(i) },
+      el("span", { class: "ink-dot", "data-c": mine ? "" : c, "data-t": hl ? "h" : "p", ...(mine ? { style: "background:" + c } : {}) }));
+  });
+  const act = (label, icon, a, on) => el("button", { type: "button", "aria-label": label, title: label, "data-act": a, ...(on ? {} : { disabled: "" }) }, inkIcon(icon));
+  const editRow = s.tool === "select" ? [act("Cut", "cut", "cut", s.selected), act("Copy", "copy", "copy", s.selected), act("Paste", "paste", "paste", s.canPaste), act("Delete", "trash", "delete", s.selected)] : [];
+  const sizeBtn = s.tool === "eraser" || s.tool === "select" ? null : el("button", { type: "button", "aria-label": "Size " + (s.size + 1) + " of 5", title: "Size", "aria-haspopup": "menu", "aria-expanded": String(!!inkPop && inkPop.kind === "size"), "data-act": "size" },
     el("span", { class: "ink-size", style: "width:" + INK_DOTS[s.size] + "px;height:" + INK_DOTS[s.size] + "px" }));
   const styleBtn = s.tool !== "pen" ? null : el("button", { type: "button", "aria-label": "Pen style: " + inkStyleName(s.style), title: "Pen style", "aria-haspopup": "menu", "aria-expanded": String(!!inkPop && inkPop.kind === "style"), "data-act": "style" },
     inkSample(s.style, 28, 16));
-  fill(row, ...swatches, sizeBtn, styleBtn,
+  fill(row, ...swatches, ...editRow, sizeBtn, styleBtn,
+    s.tool === "select" ? el("span", { class: "ink-gap" }) : null,
     el("button", { type: "button", "aria-label": "Draw with a finger", title: "Draw with a finger or mouse", "aria-pressed": String(s.finger), "data-act": "finger" }, inkIcon("finger")));
   // What's open can't be, with this tool.
   if (inkPop && ((inkPop.kind === "style" && s.tool !== "pen") || (inkPop.kind === "size" && s.tool === "eraser"))) inkPopClose(true);
@@ -336,3 +417,146 @@ async function inkCopy(p) {
     toast("Couldn't make the copy. Try again.");
   }
 }
+
+// ---- Your own colours: the colour sheet ----
+// Opened by a long press on a colour in the bar. A spectrum (hue across,
+// pale at the top), a slider for how light it is, the colour as Hex and
+// Red, Green and Blue to type into, the tool's colours to pick which one
+// changes, and an eyedropper that reads a colour off the PDF.
+
+let inkColor = null;   // { el, kind, slots, orig, at, h, s, v, stop }
+const inkRgbOf = (kind, c) => (c[0] === "#" ? C.ink.hexRgb(c) : (kind === "highlighter" ? C.ink.HIGHLIGHT : C.ink.PEN)[c]);
+
+function inkColorOpen(at) {
+  if (inkColor) return;
+  const kind = C.ink.state().tool === "highlighter" ? "highlighter" : "pen";
+  if (C.ink.state().tool !== kind) return;
+  inkPopClose(true);
+  const slots = [...inkSlotsOf(kind)];
+  const k = { kind, slots, orig: [...slots], at, h: 0, s: 0, v: 1, stop: null };
+  const sheet = el("div", { class: "ink-color", role: "dialog", "aria-label": "Colour" });
+  k.el = sheet;
+  inkColor = k;
+  const canvas = el("canvas", { class: "ic-spectrum", width: 320, height: 200, "aria-label": "Colour spectrum" });
+  const ring = el("span", { class: "ic-ring" });
+  const slider = el("input", { type: "range", class: "ic-slider", min: 0, max: 100, step: 1, "aria-label": "Lightness" });
+  const pct = el("span", { class: "ic-pct" });
+  const oldSw = el("span", { class: "ic-old" }), newSw = el("span", { class: "ic-new" });
+  const field = (label, attrs) => { const i = el("input", { class: "ic-field", "aria-label": label, autocomplete: "off", spellcheck: "false", ...attrs }); return [i, el("label", { class: "ic-col" }, el("span", {}, label), i)]; };
+  const [hexI, hexC] = field("Hex", { type: "text", maxlength: 7, inputmode: "text" });
+  const [rI, rC] = field("Red", { type: "text", inputmode: "numeric", maxlength: 3 });
+  const [gI, gC] = field("Green", { type: "text", inputmode: "numeric", maxlength: 3 });
+  const [bI, bC] = field("Blue", { type: "text", inputmode: "numeric", maxlength: 3 });
+  const slotRow = el("div", { class: "ic-slots", role: "group", "aria-label": "Which colour to change" });
+  const dropper = el("button", { type: "button", class: "ic-drop", "aria-label": "Pick a colour from the page", title: "Pick a colour from the page" }, inkIcon("drop"));
+  const cancel = el("button", { type: "button", class: "ic-btn" }, "Cancel"), done = el("button", { type: "button", class: "ic-btn" }, "Done");
+
+  const rgb = () => C.ink.hsvRgb(k.h, k.s, k.v);
+  const hex = () => C.ink.rgbHex(...rgb());
+  // Paint the spectrum once: hue across, white fading in from the bottom to the top.
+  const g = canvas.getContext("2d");
+  const hues = g.createLinearGradient(0, 0, canvas.width, 0);
+  for (let i = 0; i <= 6; i++) hues.addColorStop(i / 6, "hsl(" + i * 60 + " 100% 50%)");
+  g.fillStyle = hues; g.fillRect(0, 0, canvas.width, canvas.height);
+  const pale = g.createLinearGradient(0, 0, 0, canvas.height);
+  pale.addColorStop(0, "#fff"); pale.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = pale; g.fillRect(0, 0, canvas.width, canvas.height);
+
+  const set = (rgbv) => { [k.h, k.s, k.v] = C.ink.rgbHsv(...rgbv); paint(); };
+  function paint(from) {
+    const [r, gr, b] = rgb(), h = C.ink.rgbHex(r, gr, b);
+    k.slots[k.at] = h;
+    ring.style.left = (k.h / 360) * 100 + "%";
+    ring.style.top = k.s * 100 + "%";
+    ring.style.background = h;
+    slider.value = Math.round(k.v * 100);
+    slider.style.setProperty("--ic-to", C.ink.rgbHex(...C.ink.hsvRgb(k.h, k.s, 1)));
+    pct.textContent = Math.round(k.v * 100) + "%";
+    newSw.style.background = h;
+    if (from !== "hex") hexI.value = h.toUpperCase();
+    if (from !== "rgb") { rI.value = String(r); gI.value = String(gr); bI.value = String(b); }
+    paintSlots();
+  }
+  function paintSlots() {
+    slotRow.replaceChildren(...k.slots.map((c, i) => el("button", { type: "button", class: "ic-slot", "aria-pressed": String(i === k.at), "aria-label": "Colour " + (i + 1) + ", " + c.toUpperCase(), onclick: () => { k.at = i; oldSw.style.background = "rgb(" + inkRgbOf(kind, k.orig[i]).join(",") + ")"; set(inkRgbOf(kind, c)); } },
+      el("span", { class: "ink-dot", style: "background:rgb(" + inkRgbOf(kind, c).join(",") + ")" }))), dropper);
+  }
+  // Drag on the spectrum with a pen, a finger or the mouse.
+  const fromSpectrum = (e) => {
+    const r = canvas.getBoundingClientRect();
+    k.h = Math.max(0, Math.min(359.9, ((e.clientX - r.left) / r.width) * 360));
+    k.s = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+    paint();
+  };
+  const wrap = el("div", { class: "ic-spec", tabindex: "0", role: "slider", "aria-label": "Hue and paleness" }, canvas, ring);
+  wrap.addEventListener("pointerdown", (e) => { e.preventDefault(); try { wrap.setPointerCapture(e.pointerId); } catch (err) { /* it drags anyway */ } k.drag = true; fromSpectrum(e); });
+  wrap.addEventListener("pointermove", (e) => { if (k.drag) fromSpectrum(e); });
+  for (const t of ["pointerup", "pointercancel"]) wrap.addEventListener(t, () => { k.drag = false; });
+  wrap.addEventListener("keydown", (e) => {
+    const d = { ArrowLeft: [-6, 0], ArrowRight: [6, 0], ArrowUp: [0, -0.04], ArrowDown: [0, 0.04] }[e.key];
+    if (!d) return;
+    e.preventDefault();
+    k.h = (k.h + d[0] + 360) % 360; k.s = Math.max(0, Math.min(1, k.s + d[1]));
+    paint();
+  });
+  slider.addEventListener("input", () => { k.v = Number(slider.value) / 100; paint(); });
+  hexI.addEventListener("input", () => { let t = hexI.value.trim().toLowerCase(); if (t && t[0] !== "#") t = "#" + t; if (/^#[0-9a-f]{6}$/.test(t)) set(C.ink.hexRgb(t)), paint("hex"); });
+  for (const i of [rI, gI, bI]) i.addEventListener("input", () => {
+    const v = [rI, gI, bI].map((x) => x.value.trim());
+    if (v.every((x) => /^\d{1,3}$/.test(x))) { [k.h, k.s, k.v] = C.ink.rgbHsv(...v.map((x) => Math.min(255, Number(x)))); paint("rgb"); }
+  });
+  for (const i of [hexI, rI, gI, bI]) i.addEventListener("blur", () => paint());
+  dropper.addEventListener("click", () => {
+    sheet.hidden = true;
+    toast("Tap the page to take its colour. Esc to stop.");
+    const back = () => { k.stop = null; if (inkColor === k) sheet.hidden = false; };
+    k.stop = back;
+    C.ink.pick((c) => {
+      back();
+      if (c) set(C.ink.hexRgb(c)); else toast("Couldn't read a colour there.");
+    });
+  });
+  const close = () => { C.ink.pick(null); inkColor = null; M.vanish(sheet).finally(() => sheet.remove()); };
+  k.close = close;
+  cancel.addEventListener("click", close);
+  done.addEventListener("click", () => {
+    // A colour the sheet only passed through (a rounding off by one) stays as it was.
+    const near = (a, b) => inkRgbOf(kind, a).every((v, i) => Math.abs(v - inkRgbOf(kind, b)[i]) <= 1);
+    inkSlots[kind] = k.slots.map((c, i) => (near(c, k.orig[i]) ? k.orig[i] : c));
+    C.ink.setting({ color: inkSlots[kind][k.at] });
+    inkKeep();
+    inkPaint();
+    close();
+  });
+  sheet.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); if (sheet.hidden) { C.ink.pick(null); k.stop && k.stop(); } else close(); } });
+  fill(sheet, wrap,
+    el("div", { class: "ic-slide" }, slider, pct),
+    el("div", { class: "ic-values" }, el("span", { class: "ic-pair" }, oldSw, newSw), hexC, rC, gC, bC),
+    el("hr", { class: "ic-rule" }), slotRow,
+    el("div", { class: "ic-actions" }, cancel, done));
+  inkInit(k, oldSw, set);
+  $("readerView").append(sheet);
+  M.appear(sheet);
+  hexI.blur();
+}
+function inkInit(k, oldSw, set) {
+  oldSw.style.background = "rgb(" + inkRgbOf(k.kind, k.orig[k.at]).join(",") + ")";
+  set(inkRgbOf(k.kind, k.orig[k.at]));
+}
+// Esc while the sheet is hidden for the eyedropper gives it back.
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && inkColor && inkColor.el.hidden) { C.ink.pick(null); inkColor.stop && inkColor.stop(); }
+}, true);
+
+// Cut, Copy, Paste and Delete from the keys while Select is the tool.
+document.addEventListener("keydown", (e) => {
+  if (!C.ink.on || C.ink.state().tool !== "select" || e.target.closest("input, textarea, [contenteditable]")) return;
+  const mod = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
+  if (mod && key === "c") C.ink.copy();
+  else if (mod && key === "x") C.ink.cut();
+  else if (mod && key === "v") C.ink.paste();
+  else if (e.key === "Delete" || e.key === "Backspace") C.ink.del();
+  else if (e.key === "Escape") C.ink.clearSelection();
+  else return;
+  e.preventDefault();
+});

@@ -301,6 +301,12 @@
       try { await (await B()).rmdir("pages/" + id); } catch (e) { /* already gone */ }
       return;
     }
+    try {
+      const d = await readInk(id);
+      const files = new Set();
+      for (const list of Object.values((d && d.pages) || {})) for (const it of list || []) if (it && it.f) files.add(String(it.f));
+      for (const f of files) await removeInkImage(id, f);
+    } catch (e) { /* none */ }
     try { await idbDo("readwrite", (s) => { s.delete(id + ":text"); s.delete(id + ":thumb"); s.delete(id + ":translation"); s.delete(id + ":ink"); return s.delete(id); }); } catch (e) { /* already gone */ }
   }
 
@@ -350,6 +356,26 @@
     } else {
       await idbDo("readwrite", (s) => (text ? s.put(text, id + ":ink") : s.delete(id + ":ink")));
     }
+  }
+  // Pictures put on a PDF's pages with Draw's +, each one a data: URL in a
+  // file of its own beside ink.json (ink/<file id>.txt); a browser keeps
+  // them in IndexedDB. Removed with the clip.
+  const inkImg = (id, f) => "pages/" + id + "/ink/" + f + ".txt";
+  async function writeInkImage(id, f, url) {
+    if (FS()) await (await B()).write(inkImg(id, f), url, true);
+    else await idbDo("readwrite", (s) => s.put(url, id + ":inkimg:" + f));
+  }
+  async function readInkImage(id, f) {
+    try {
+      const t = FS() ? await (await B()).read(inkImg(id, f)) : await idbDo("readonly", (s) => s.get(id + ":inkimg:" + f));
+      return typeof t === "string" && /^data:image\//.test(t) ? t : null;
+    } catch (e) { return null; }
+  }
+  async function removeInkImage(id, f) {
+    try {
+      if (FS()) await (await B()).remove(inkImg(id, f));
+      else await idbDo("readwrite", (s) => s.delete(id + ":inkimg:" + f));
+    } catch (e) { /* none */ }
   }
   async function readInk(id) {
     try {
@@ -680,7 +706,7 @@
   }
 
   window.Waypage.store = { ready,
-    get place() { return cur ? cur.place : savedPlace(); }, placeName, get problem() { return problem; }, moveTo, readIndex, writeIndex, writeIndexOnly, set onIndex(f) { onIndex = f; }, writeThumb, readThumbs, storageInfo, keepStored, writePage, readPage, readPages, removePage, writeText, readText, writeTranslation, readTranslation, writeInk, readInk, download, removeFile, sizeOf, shrink, squeeze, pageDirUrl, bytesOf,
+    get place() { return cur ? cur.place : savedPlace(); }, placeName, get problem() { return problem; }, moveTo, readIndex, writeIndex, writeIndexOnly, set onIndex(f) { onIndex = f; }, writeThumb, readThumbs, storageInfo, keepStored, writePage, readPage, readPages, removePage, writeText, readText, writeTranslation, readTranslation, writeInk, readInk, writeInkImage, readInkImage, removeInkImage, download, removeFile, sizeOf, shrink, squeeze, pageDirUrl, bytesOf,
     listFiles, listSized, readBytes, writeBytes, cacheFile, packSource, toBase64, listFonts, readFont, addFont, removeFont,
     readCovers, coverUrl, readCover, writeCover, removeCover };
 })();

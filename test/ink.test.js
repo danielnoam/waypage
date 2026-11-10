@@ -112,4 +112,51 @@ test("a stroke keeps its style, a stroke without one or with one we don't know i
   assert.strictEqual(I.clean({ t: "h", c: "yellow", w: 0.02, y: "brush", p: [0.1, 0.1, 0.5, 0.2, 0.1, 0.5] }).y, undefined, "a highlighter has none");
 });
 
+test("a loop takes what's inside it: strokes with half their points in it, pictures by their middle", () => {
+  const square = [[0.2, 0.2], [0.6, 0.2], [0.6, 0.6], [0.2, 0.6]];
+  assert.strictEqual(I.inside(square, 0.4, 0.4), true);
+  assert.strictEqual(I.inside(square, 0.7, 0.4), false);
+  // A concave loop (a C shape) leaves its hollow out.
+  const c = [[0, 0], [1, 0], [1, 0.3], [0.3, 0.3], [0.3, 0.7], [1, 0.7], [1, 1], [0, 1]];
+  assert.strictEqual(I.inside(c, 0.1, 0.5), true);
+  assert.strictEqual(I.inside(c, 0.7, 0.5), false);
+  const stroke = (xs) => ({ t: "p", w: 0.004, p: xs.flatMap((x) => [x, 0.4, 0.5]) });
+  assert.strictEqual(I.within(square, stroke([0.3, 0.4, 0.5])), true);
+  assert.strictEqual(I.within(square, stroke([0.3, 0.7, 0.8, 0.9])), false);
+  assert.strictEqual(I.within(square, { t: "i", f: "a", x: 0.3, y: 0.3, w: 0.2, h: 0.2 }), true);
+  assert.strictEqual(I.within(square, { t: "i", f: "a", x: 0.55, y: 0.3, w: 0.4, h: 0.2 }), false, "middle outside");
+});
+
+test("the box round items takes in their width and a picture's corners", () => {
+  const b = I.boxOf([{ t: "p", w: 0.01, p: [0.2, 0.2, 0.5, 0.4, 0.3, 0.5] }, { t: "i", f: "a", x: 0.5, y: 0.5, w: 0.2, h: 0.1 }]);
+  assert.ok(b[0] < 0.2 && b[1] < 0.2 && b[0] + b[2] > 0.7 && b[1] + b[3] > 0.6);
+  assert.strictEqual(I.boxOf([]), null);
+});
+
+test("a colour of your own is #rrggbb: read back from a file, anything else is dropped", () => {
+  assert.strictEqual(I.clean({ t: "p", c: "#44cbff", w: 0.003, p: [0, 0, 1] }).c, "#44cbff");
+  assert.strictEqual(I.clean({ t: "h", c: "#ff00aa", w: 0.02, p: [0, 0, 1] }).c, "#ff00aa");
+  for (const bad of ["#44CBFF", "#44cbf", "#44cbffaa", "red;x", "url(#a)"]) assert.strictEqual(I.clean({ t: "p", c: bad, w: 0.003, p: [0, 0, 1] }), null, bad);
+});
+
+test("a picture on a page is kept with its file and box, and refused when it makes no sense", () => {
+  const ok = I.clean({ id: "p1", t: "i", f: "img_1", x: 0.1, y: 0.2, w: 0.4, h: 0.3, extra: 1 });
+  assert.deepStrictEqual(ok, { id: "p1", t: "i", f: "img_1", x: 0.1, y: 0.2, w: 0.4, h: 0.3 });
+  for (const bad of [{ f: "../x" }, { f: "" }, { w: 0 }, { w: 9 }, { h: -1 }, { x: NaN }, { y: 99 }]) assert.strictEqual(I.clean({ t: "i", f: "a", x: 0, y: 0, w: 0.2, h: 0.2, ...bad }), null, JSON.stringify(bad));
+  assert.strictEqual(I.hits({ t: "i", x: 0.2, y: 0.2, w: 0.2, h: 0.2 }, 0.3, 0.3, 0), true);
+  assert.strictEqual(I.hits({ t: "i", x: 0.2, y: 0.2, w: 0.2, h: 0.2 }, 0.6, 0.3, 0.01), false);
+});
+
+test("colours go between hex, rgb and hue, saturation, value without drifting", () => {
+  assert.strictEqual(I.rgbHex(68, 203, 255), "#44cbff");
+  assert.deepStrictEqual(I.hexRgb("#44cbff"), [68, 203, 255]);
+  assert.strictEqual(I.rgbHex(300, -4, 12.4), "#ff000c", "kept inside 0-255");
+  for (const rgb of [[68, 203, 255], [208, 49, 45], [28, 27, 25], [255, 255, 255], [0, 0, 0], [91, 214, 107]]) {
+    const back = I.hsvRgb(...I.rgbHsv(...rgb));
+    assert.ok(back.every((v, i) => Math.abs(v - rgb[i]) <= 1), rgb + " came back " + back);
+  }
+  assert.deepStrictEqual(I.hsvRgb(0, 1, 1), [255, 0, 0]);
+  assert.deepStrictEqual(I.hsvRgb(120, 0, 1), [255, 255, 255], "pale is white");
+});
+
 console.log("\n" + passed + " passed");

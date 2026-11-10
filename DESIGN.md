@@ -781,6 +781,18 @@ chosen one in `--accent` with a tick. One menu at a time; a tap elsewhere,
 Esc or starting to draw closes it. Pen style belongs to the pen: it's gone
 for the highlighter and eraser. The bar and its menus grow in and shrink
 away (`M.appear`, `M.vanish`), and the reduced-motion answer is the same.
+**Select, Add and colours (1.57.0).** The top row also has Select (a dashed
+loop) and a + that opens a menu over it with Image. With Select the second
+row holds Cut, Copy, Paste and Delete (dim until they can work) and Finger.
+A selection is a dashed `--accent` box round it, a lone picture with a
+round handle on its corner. A long press on a colour opens the colour
+sheet, a card on `--surface` over the bar (the dialog exception to "no
+fades"): the spectrum, a lightness slider with its %, old and new as two
+halves of one swatch, Hex / Red / Green / Blue to type into, a dotted
+rule, the tool's colours (the one being changed ringed in `--accent`) and
+the eyedropper, then Cancel and Done. The eyedropper hides the card until
+a page is tapped.
+
 Pen colours are the same in every theme (`--pen-*`, `--hl-*`): the page
 under them is white paper in every theme, and reader.css re-paints them for
 Dark PDF pages.

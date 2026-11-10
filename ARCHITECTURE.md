@@ -241,6 +241,29 @@ fountain pen thin along a 45° nib and thick across it, brush a strong
 response with tapered ends); a saved size from the three-step bar maps 0, 1, 2
 to 0, 2, 4 on the five (`waypage.ink` has `v: 2` from then on).
 
+Select, a picture and colours of your own (1.57.0), all in `ink.js` and
+`app-ink.js`. Select is a fourth tool: a loop (`inside`, even-odd) takes the
+strokes with half their points in it and the pictures whose middle is in
+it, a tap takes the top thing under it, and a selection is `{ n, ids }` on
+one page, drawn as a dashed box (`.sel`, with a corner handle `.hnd` for a
+lone picture). Cut, Copy and Paste are in the bar's second row (Select
+shows them in place of colours), Paste goes to the page most in view
+(`viewPage`), and the clipboard is in memory only, this session. Moving
+and resizing push a `set` op (the items before and after) and cut, paste,
+delete and add push a `many` op (`del` and `add` lists), next to the
+older `add` and `del`. A picture is a stroke-list item, `{ id, t: "i", f, x,
+y, w, h }` in page widths, drawn as an SVG `<image>`; its bytes are a data:
+URL in `ink/<f>.txt` beside `ink.json` (`store.writeInkImage`, in IndexedDB
+`<id>:inkimg:<f>` in a browser), read back by `load` and removed when no
+stroke names it (`flush`) or the clip is deleted. A copy of the PDF gets
+each as a stamp annotation (`pdf.js inkOf`). A stroke's colour `c` is a
+name or `#rrggbb`; a name keeps its CSS class (and Dark PDF repaint), a hex
+is drawn with an attribute and, on Dark PDF pages, inverted with its hue
+kept (`.custom`). The bar's colours are slots (`inkSlots`, kept in
+`waypage.ink` as `slots`): a long press, right click or Shift+Enter opens
+the colour sheet for one; its eyedropper (`ink.pick`, `colorAt`) takes the
+colour of the stroke tapped, else the pixel of the page's picture there.
+
 A comic in Pages (reader.js `picsLayout`) is a flex row of its pages, each
 sized in px to a screen or half of one, so the text's own turning
 (`goPage`, `pages()`, the swipe, keys and thirds) works unchanged; a manga
@@ -431,6 +454,10 @@ adds a line here.
   neither sync nor a backup takes them, and deleting the clip deletes them.
   A copy of the PDF with them as annotations is how they leave. The copy's
   strokes are even in width (a PDF ink annotation has no pressure).
+  Pictures put on a page stay with the drawings (this device) and go into
+  the copy as stamps, at most 2000 px a side, as JPEG or PNG; the
+  eyedropper reads the page's picture, not Dark PDF's dark view, and not a
+  placed picture.
 - Dialogs (Downloads, Sync, Save with options, Settings) fade in and out,
   the one planned exception to "nothing fades" (Daniel's pick over the
   grow and the zoom).
