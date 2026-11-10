@@ -4102,7 +4102,8 @@ function zipOf(files) {
       assert.strictEqual(await q.evaluate(() => state.open.link || state.open.file || null), null, "a note has no file to read from");
       await q.evaluate(() => closeReader());
       // Now All notes is there, and lists the note alone.
-      assert.ok((await showItems()).includes("All notes"));
+      const items = await showItems();
+      assert.strictEqual(items.indexOf("All notes"), items.indexOf("All clips") + 1, "right under All clips");
       await q.locator(".show-wrap .dropdown-btn").click();
       await q.locator(".show-wrap .dropdown-item", { hasText: "All notes" }).click();
       await until(q, () => state.filter === "notes");

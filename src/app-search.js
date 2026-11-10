@@ -229,10 +229,11 @@ function renderTools() {
   fill(libTools, dropdown({
     label: "Show", cls: "start show-wrap" + (state.filter === "all" ? "" : " on"),
     icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>',
-    options: [{ value: "all", label: "All clips" }, { value: "unread", label: "Unread" }, { value: "finished", label: "Finished" }, { value: "favourites", label: "Favourites" },
-      ...(state.pages.some((p) => p.marks && p.marks.length) || state.filter === "highlights" ? [{ value: "highlights", label: "Highlighted" }] : []),
-      // Once there is a note (2.0.0), all of them in one list.
+    options: [{ value: "all", label: "All clips" },
+      // Once there is a note (2.0.0), all of them in one list, right under All clips.
       ...(state.pages.some((p) => p.note) || state.filter === "notes" ? [{ value: "notes", label: "All notes" }] : []),
+      { value: "unread", label: "Unread" }, { value: "finished", label: "Finished" }, { value: "favourites", label: "Favourites" },
+      ...(state.pages.some((p) => p.marks && p.marks.length) || state.filter === "highlights" ? [{ value: "highlights", label: "Highlighted" }] : []),
       ...(tags.length ? [{ head: "Tags" }, ...tags.map((t) => ({ value: "#" + t, label: "#" + t }))] : [])],
     value: state.filter,
     onpick: setFilter,
