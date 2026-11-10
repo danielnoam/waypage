@@ -185,6 +185,23 @@ async function inkOf(doc, pages) {
       const page = await doc.getPage(n);
       const v = page.getViewport({ scale: 1 });
       for (const s of pages[key].slice(0, 5000)) {
+        // A picture put on the page (Draw's +): a stamp over its box.
+        if (s && typeof s.img === "string" && /^data:image\/(jpeg|png|webp|gif);base64,/.test(s.img)) {
+          try {
+            const bin = atob(s.img.slice(s.img.indexOf(",") + 1)), raw = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) raw[i] = bin.charCodeAt(i);
+            const bitmap = await createImageBitmap(new Blob([raw], { type: s.img.slice(5, s.img.indexOf(";")) }));
+            const a = v.convertToPdfPoint(s.x * v.width, s.y * v.width), b = v.convertToPdfPoint((s.x + s.w) * v.width, (s.y + s.h) * v.width);
+            const key3 = "pdfjs_internal_editor_" + (k++);
+            keys.push(key3);
+            storage.setValue(key3, {
+              annotationType: 13, bitmapId: "waypage_" + key3, bitmap, pageIndex: n - 1, rotation: 0, isSvg: false,
+              accessibilityData: null, structTreeParentId: null,
+              rect: [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])],
+            });
+          } catch (e) { /* a picture that won't decode is left out of the copy */ }
+          continue;
+        }
         if (!s || !Array.isArray(s.pts) || s.pts.length < 3) continue;
         const flat = [], lines = [0, 0, 0, 0];
         let count = 0;

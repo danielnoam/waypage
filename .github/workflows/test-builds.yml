@@ -4,13 +4,15 @@
 # ios.yml run on it, and tools/test-build.sh publishes the
 # pre-release); taking it off, closing the pull request or deleting the
 # branch removes the pre-release. A fork's pull request has a read-only token
-# here, and never gets a test build anyway.
+# here, and never gets a test build anyway. A pull request opened (or
+# reopened) with "manual testing" in its title gets the APK at once, with no
+# label to add (android.yml's gate reads the title for the pushes after).
 name: Test builds
 
 on:
   delete:
   pull_request:
-    types: [closed, labeled, unlabeled]
+    types: [opened, reopened, closed, labeled, unlabeled]
 
 permissions:
   contents: write
@@ -18,13 +20,13 @@ permissions:
 
 jobs:
   build:
-    if: github.event_name == 'pull_request' && github.event.action == 'labeled' && startsWith(github.event.label.name, 'test')
+    if: github.event_name == 'pull_request' && ((github.event.action == 'labeled' && startsWith(github.event.label.name, 'test')) || ((github.event.action == 'opened' || github.event.action == 'reopened') && contains(github.event.pull_request.title, 'manual testing')))
     runs-on: ubuntu-latest
     steps:
       - env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ github.event.pull_request.head.ref }}
-          LABEL: ${{ github.event.label.name }}
+          LABEL: ${{ github.event.action == 'labeled' && github.event.label.name || 'test-android' }}
         run: |
           case "$LABEL" in test|test-android) gh workflow run android.yml --ref "$BRANCH" -R "$GITHUB_REPOSITORY" ;; esac
           case "$LABEL" in test|test-ios) gh workflow run ios.yml --ref "$BRANCH" -R "$GITHUB_REPOSITORY" ;; esac
