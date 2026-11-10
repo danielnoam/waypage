@@ -392,7 +392,7 @@ async function setFileKind(p, kind) {
   if (state.folder) renderFolder();
   toast(comic ? "Shown as a comic." : "Shown as an article.");
   if (state.open !== p) return;
-  const now = await (p.link ? openLinked(p) : C.store.readPage(p.id)).catch(() => null);
+  const now = await (p.link || p.note ? openLinked(p) : C.store.readPage(p.id)).catch(() => null);
   if (now && state.open === p) show(p, now);
 }
 
@@ -507,6 +507,8 @@ function favThumb(fav, thumb) {
 // A card with no picture shows its site: the icon on the preview tint,
 // or the site's first letter when there's no icon to show.
 function siteMark(p) {
+  // A note shows that it is one (2.0.0).
+  if (p.note) return el("span", { class: "card-thumb site-mark", "aria-hidden": "true" }, el("span", { class: "site-letter file-ext" }, "NOTE"));
   // A file with no picture shows what kind it is (0.31.0).
   if (p.link) return el("span", { class: "card-thumb site-mark", "aria-hidden": "true" }, el("span", { class: "site-letter file-ext" }, p.file.ext.toUpperCase()));
   if (p.file) return el("span", { class: "card-thumb site-mark", "aria-hidden": "true" }, el("span", { class: "site-letter" }, (p.title || "?").trim().charAt(0).toUpperCase()));

@@ -1783,6 +1783,8 @@ span.update-text { cursor: default; }
 .cover-choice-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .cover-choice-pic .folder-icon, .cover-choice-pic .book-icon { color: var(--accent); }
 .cover-choice[aria-pressed="true"] .cover-choice-pic { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.paper-row { gap: var(--s-4); }
+.paper-pic { flex: none; width: 40px; height: 56px; display: grid; background: #fdfcf8; color: #c8d2e2; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
 .cover-choice-name { font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cover-choice[aria-pressed="true"] .cover-choice-name { color: var(--accent); font-weight: 600; }
 .source-row { display: flex; gap: var(--s-2); align-items: center; }

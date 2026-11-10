@@ -830,7 +830,9 @@ function renderSide() {
     hasFolders ? item(sideMark("folder"), "Collections", inLib && state.part === "collections", null, () => partFromSide("collections"), "side-sub") : null,
     item(sideMark("open"), "Clips", inLib && state.part === "pages", null, () => partFromSide("pages"), "side-sub"),
     // Files of your own (0.31.0), their part of the library.
-    state.pages.some((p) => p.link) ? item(fileMark(), "Files", inLib && state.part === "files", null, () => partFromSide("files"), "side-sub") : null]),
+    state.pages.some((p) => p.link) ? item(fileMark(), "Files", inLib && state.part === "files", null, () => partFromSide("files"), "side-sub") : null,
+    // Notes (2.0.0).
+    state.pages.some((p) => p.note) ? item(sideMark("open"), "Notes", inLib && state.part === "notes", null, () => partFromSide("notes"), "side-sub") : null]),
     ...sideFold("feeds", item(feedIcon("feeds"), "Feeds", inFeeds && !state.feed, fresh ? el("span", { class: "side-pill" }, fresh + " new") : null,
       () => goPlace("feeds")), siteFeeds().sort((a, b) => latest(b) - latest(a)).slice(0, SIDE_MAX).map((f) =>
       withFeed(item(feedMark(f, true), f.title, inFeeds && state.feed === f.url, null, () => goPlace("feeds", f.url), "side-sub"), f))),

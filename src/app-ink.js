@@ -49,6 +49,8 @@ async function inkSync(p) {
   const { stale } = await C.ink.load(p);
   if (state.open !== p) return;
   if (stale) toast("This PDF has changed since you drew on it. The drawings may not line up.");
+  // A note is for writing: its pen is ready when it opens.
+  if (p.note) inkSet(true);
 }
 function inkClose() {
   if (inkClipId == null && !C.ink.on) return;
@@ -257,6 +259,8 @@ C.ink.onPen = () => {
   toast("Draw on this PDF with your pen?", "Draw", () => inkSet(true));
 };
 $("readerInk").addEventListener("click", () => inkSet(!C.ink.on));
+// A note grows as you write: a stroke on its last sheet adds one.
+C.ink.onStroke = (n) => { if (n === C.files.noteSheets()) C.files.addSheet(); };
 // What the phone says of the pen: near, the eraser end, a button held.
 if (C.platform.pen.available) {
   C.platform.pen.onState((s) => { C.ink.fromPhone(s); penTestState(s); });
@@ -334,5 +338,27 @@ async function inkCopy(p) {
   } catch (e) {
     console.error(e);
     toast("Couldn't make the copy. Try again.");
+  }
+}
+
+// A note saved as a PDF (2.0.0): every sheet with what is drawn on it, as a
+// picture to a page. Saved or shared the way the copy of a PDF is.
+async function noteToPdf(p) {
+  if (!p.note || state.open !== p) return;
+  toast("Making the PDF…");
+  try {
+    await C.ink.flush();
+    const { blob, name } = await C.notes.toPdf(p, C.files.noteSheets(), C.ink.strokes);
+    if (!C.platform.canSaveFiles) { C.platform.download(name, blob); return; }
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const cache = await C.store.cacheFile(name);
+    for (let i = 0; i < bytes.length; i += 1 << 20) await cache.append(bytes.subarray(i, i + (1 << 20)));
+    const uri = await cache.uri();
+    const saved = await C.platform.saveFile(uri, name, "application/pdf");
+    if (saved === null) await C.platform.shareFile(uri, name);
+    else if (saved) toast("Saved " + name);
+  } catch (e) {
+    console.error(e);
+    toast("Couldn't make the PDF. Try again.");
   }
 }

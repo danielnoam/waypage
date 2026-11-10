@@ -3724,6 +3724,40 @@ function zipOf(files) {
       }
     });
 
+    await test("a note: New note picks paper, opens in Scroll with the pen on, grows with a stroke on its last sheet, has its own settings, and has its own part of the library (2.0.0)", async () => {
+      const q = await page(browser, 390);
+      await q.click("#severalBtn");
+      await q.locator("#batchView .row", { hasText: "New note" }).click();
+      const kinds = await q.locator(".paper-row .choice-label").allTextContents();
+      assert.deepStrictEqual(kinds, ["Blank note", "Lines note", "Squares note"]);
+      await q.locator(".paper-row", { hasText: "Lines note" }).click();
+      await until(q, () => !!state.open && state.open.note && C.ink.on && document.querySelectorAll("#readerFrame").length && C.reader.frameDoc.querySelectorAll("svg.co-ink").length === 1);
+      await q.waitForTimeout(1200);
+      assert.strictEqual(await q.evaluate(() => state.open.note.paper), "lines");
+      assert.strictEqual(await q.evaluate(() => C.reader.paged || pagesOn()), false, "a note is always a scroll");
+      // A stroke on the last sheet adds one (a touch screen draws with the pen alone, so Finger goes on).
+      await q.evaluate(() => C.ink.setting({ ...inkPrefs(), finger: true }));
+      const box = await q.evaluate(() => { const r = C.reader.frameDoc.querySelector("svg.co-ink").getBoundingClientRect(); return [r.x, r.y]; });
+      const fb = await q.locator("#readerFrame").boundingBox();
+      await q.mouse.move(fb.x + box[0] + 60, fb.y + box[1] + 100);
+      await q.mouse.down();
+      await q.mouse.move(fb.x + box[0] + 160, fb.y + box[1] + 160, { steps: 8 });
+      await q.mouse.up();
+      await until(q, () => C.files.noteSheets() === 2 && C.reader.frameDoc.querySelectorAll(".co-comic > img").length === 2);
+      // Its Aa sheet: Layout and Auto-scroll, in the note's words.
+      await q.click("#readerAa");
+      assert.deepStrictEqual(await q.locator(".sheet-tabs label, .sheet-tabs button").allTextContents(), ["Layout", "Auto-scroll"]);
+      await q.locator(".sheet-tabs", { hasText: "Auto-scroll" }).getByText("Auto-scroll").click();
+      assert.ok(await q.getByText("Go on to the next note").isVisible(), "the note's own wording");
+      await q.evaluate(() => closeSheet(true));
+      // The library lists it apart from clips and files.
+      await q.evaluate(() => closeReader());
+      await q.locator("#library .overline, #library .section-head", { hasText: "Notes · 1" }).first().waitFor({ timeout: 5000 });
+      assert.strictEqual(await q.locator("#library .page-card", { hasText: "Note," }).count(), 1);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     for (const width of [390, 1280]) {
       for (const theme of THEMES) {
         await test("opens at " + width + " px in " + theme + " with no errors", async () => {

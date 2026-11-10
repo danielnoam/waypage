@@ -937,9 +937,10 @@ function pageSheet(p, where) {
       el("div", { class: "group" },
         p.link && p.file && p.file.kind === "pdf" && !p.comic
           ? menuRow(p.view === "text" ? "Show as printed pages" : "Show as text", () => switchView(p, where)) : null,
-        inReader && C.files.drawable(p) && !p.preview ? menuRow("Drawings", () => back().then(() => openSheet("ink"))) : null,
-        inReader && !C.files.printed(p) ? menuRow("Find in this clip", () => back().then(openFind)) : null,
-        inReader && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow("Save linked pages", () => back().then(() => openSheet("links"))) : null,
+        inReader && p.note ? menuRow("Save as PDF", () => back().then(() => noteToPdf(p))) : null,
+        inReader && !p.note && C.files.drawable(p) && !p.preview ? menuRow("Drawings", () => back().then(() => openSheet("ink"))) : null,
+        inReader && !p.note && !C.files.printed(p) ? menuRow("Find in this clip", () => back().then(openFind)) : null,
+        inReader && !p.note && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow("Save linked pages", () => back().then(() => openSheet("links"))) : null,
         menuRow(p.finished ? "Mark as unread" : "Mark as read", () => markRead([p], !p.finished).then(draw)),
         // The page changed since (1.38.0): fetched again in its place.
         p.file || p.preview || !/^https?:/.test(p.url || "") ? null
@@ -1257,6 +1258,7 @@ const MENUS = {
   keys: { label: "Keyboard shortcuts", build: () => keysSheet() },
   importList: { label: "Import", build: () => importSheet() },
   send: { label: "Saving a page", build: () => sendSheet() },
+  newNote: { label: "New note", build: () => newNoteSheet() },
 };
 let menuUnder = [];
 let menuFrom = null;
@@ -2337,4 +2339,37 @@ function importRow() {
           el("span", { class: "choice-note" }, "Pocket, Instapaper, Omnivore, Wallabag, Raindrop, OPML")));
   input.addEventListener("change", () => { const f = input.files[0]; input.value = ""; openFile(f, open); });
   return [open, input];
+}
+
+// ---- Notes (2.0.0) ----
+
+// Paper as a small picture, for the choice of what a new note is on.
+const PAPER_PICS = {
+  blank: "",
+  lines: [10, 18, 26, 34, 42, 50].map((y) => '<path d="M0 ' + y + 'H40"/>').join(""),
+  squares: [8, 16, 24, 32].map((x) => '<path d="M' + x + ' 0V56"/>').join("") + [8, 16, 24, 32, 40, 48].map((y) => '<path d="M0 ' + y + 'H40"/>').join(""),
+};
+function paperPic(kind) {
+  const pic = el("span", { class: "paper-pic", "aria-hidden": "true" });
+  pic.innerHTML = '<svg viewBox="0 0 40 56" width="40" height="56" fill="none" stroke="currentColor" stroke-width="0.8">' + PAPER_PICS[kind] + "</svg>";
+  return pic;
+}
+// The choice of paper for a new note: a picture beside each.
+function newNoteSheet() {
+  return el("div", { class: "page-controls" },
+    el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, "New note")),
+    el("div", { class: "group" }, ...C.notes.PAPERS.map((kind) =>
+      el("button", { class: "row paper-row", type: "button", onclick: () => makeNote(kind) },
+        paperPic(kind),
+        el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, C.notes.LABELS[kind]))))));
+}
+// Makes the note, puts it first in the library and opens it to write on.
+async function makeNote(kind) {
+  let meta;
+  try { meta = await C.notes.create(kind); } catch (e) { console.error(e); toast("Couldn't make the note. Free some space and try again."); return; }
+  state.pages.unshift(meta);
+  await C.store.writeIndex(state.pages);
+  await back(state.batch ? 2 : 1);
+  renderLibrary();
+  openPage(meta.id);
 }

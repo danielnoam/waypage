@@ -301,7 +301,7 @@
       try { await (await B()).rmdir("pages/" + id); } catch (e) { /* already gone */ }
       return;
     }
-    try { await idbDo("readwrite", (s) => { s.delete(id + ":text"); s.delete(id + ":thumb"); s.delete(id + ":translation"); s.delete(id + ":ink"); return s.delete(id); }); } catch (e) { /* already gone */ }
+    try { await idbDo("readwrite", (s) => { s.delete(id + ":text"); s.delete(id + ":thumb"); s.delete(id + ":translation"); s.delete(id + ":ink"); s.delete(id + ":note"); return s.delete(id); }); } catch (e) { /* already gone */ }
   }
 
   // The page's words as plain text (text.txt), for searching the library.
@@ -354,6 +354,20 @@
   async function readInk(id) {
     try {
       const t = FS() ? await (await B()).read("pages/" + id + "/ink.json") : await idbDo("readonly", (s) => s.get(id + ":ink"));
+      return typeof t === "string" && t ? JSON.parse(t) : null;
+    } catch (e) { return null; }
+  }
+
+  // A note's sheets (2.0.0), as JSON beside the clip: { v, sheets, texts }.
+  // null when there is none. A note's strokes are in ink.json as on a PDF.
+  async function writeNote(id, data) {
+    const text = JSON.stringify(data);
+    if (FS()) await (await B()).write("pages/" + id + "/note.json", text, true);
+    else await idbDo("readwrite", (s) => s.put(text, id + ":note"));
+  }
+  async function readNote(id) {
+    try {
+      const t = FS() ? await (await B()).read("pages/" + id + "/note.json") : await idbDo("readonly", (s) => s.get(id + ":note"));
       return typeof t === "string" && t ? JSON.parse(t) : null;
     } catch (e) { return null; }
   }
@@ -680,7 +694,7 @@
   }
 
   window.Waypage.store = { ready,
-    get place() { return cur ? cur.place : savedPlace(); }, placeName, get problem() { return problem; }, moveTo, readIndex, writeIndex, writeIndexOnly, set onIndex(f) { onIndex = f; }, writeThumb, readThumbs, storageInfo, keepStored, writePage, readPage, readPages, removePage, writeText, readText, writeTranslation, readTranslation, writeInk, readInk, download, removeFile, sizeOf, shrink, squeeze, pageDirUrl, bytesOf,
+    get place() { return cur ? cur.place : savedPlace(); }, placeName, get problem() { return problem; }, moveTo, readIndex, writeIndex, writeIndexOnly, set onIndex(f) { onIndex = f; }, writeThumb, readThumbs, storageInfo, keepStored, writePage, readPage, readPages, removePage, writeText, readText, writeTranslation, readTranslation, writeInk, readInk, writeNote, readNote, download, removeFile, sizeOf, shrink, squeeze, pageDirUrl, bytesOf,
     listFiles, listSized, readBytes, writeBytes, cacheFile, packSource, toBase64, listFonts, readFont, addFont, removeFont,
     readCovers, coverUrl, readCover, writeCover, removeCover };
 })();

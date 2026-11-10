@@ -287,7 +287,7 @@
   // files stay out: they go in the list alone, to be saved again from
   // their links on restore.
   async function exportLibrary(pages, onProgress, feeds, gate, bare) {
-    pages = pages.filter((p) => !p.link);
+    pages = pages.filter((p) => !p.link && !p.note);
     const listed = pages;
     if (bare && bare.size) pages = pages.filter((p) => !bare.has(p.id));
     const native = C.platform.native;

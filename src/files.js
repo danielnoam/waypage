@@ -881,7 +881,8 @@
   // before the first page showed, and a 400 MB comic sat whole in memory.
   const printed = (meta) => !!(meta && meta.link && meta.file && meta.file.kind === "pdf" && !meta.comic && meta.view !== "text");
   // A PDF shown as its own pages, words or scan: where a pen can draw (1.56.0).
-  const drawable = (meta) => !!(meta && meta.link && meta.file && meta.file.kind === "pdf" && (meta.comic || meta.view !== "text"));
+  // A note is a stack of sheets drawn the same way (2.0.0, notes.js).
+  const drawable = (meta) => !!(meta && (meta.note || (meta.link && meta.file && meta.file.kind === "pdf" && (meta.comic || meta.view !== "text"))));
   async function openLinked(meta) {
     closeHeld();
     const html = await S().readPage(meta.id);
@@ -915,6 +916,38 @@
     if (body) await epubMarks(blob, entries, body).catch(() => {});
     if (!body || !body.querySelector("[data-toc]")) { unmarkable.add(meta.id); return html; }
     return "<!doctype html>\n" + doc.documentElement.outerHTML;
+  }
+
+  // A note's page, ready to write on (2.0.0): one slot per sheet, drawn as
+  // a PDF's printed pages are, from the note's own handle (notes.js). It
+  // has no words, so nothing is laid over a sheet but what is drawn.
+  async function openNoteItem(meta) {
+    closeHeld();
+    const { data, handle } = await C.notes.open(meta);
+    const doc = new DOMParser().parseFromString(await S().readPage(meta.id), "text/html");
+    for (const x of doc.querySelectorAll(".co-head, .co-licence")) x.remove();
+    const html = await fillPdf(doc, [], handle, meta, doc.querySelector(".co-body"));
+    if (held) { held.words = false; held.note = { id: meta.id, data, handle }; }
+    return html;
+  }
+  // The sheet after the last, once a stroke lands on the last (2.0.0).
+  const noteSheets = () => (held && held.note ? held.note.handle.count : 0);
+  function addSheet() {
+    const h = held, doc = C.reader.frameDoc;
+    const body = doc && doc.querySelector(".co-body.co-comic");
+    if (!h || !h.note || !body || !h.note.handle.add()) return false;
+    const n = h.note.handle.count, W = C.notes.W, H = C.notes.H;
+    const img = doc.createElement("img");
+    img.setAttribute("alt", "Page " + n);
+    img.setAttribute("width", W);
+    img.setAttribute("height", H);
+    img.setAttribute("src", blank(W, H));
+    img.setAttribute("data-page", n);
+    body.append(img);
+    C.notes.keep(h.note.id, h.note.data).catch(() => {});
+    C.reader.placeText();
+    if (h.frame) drawNear(h.frame);
+    return true;
   }
 
   // Fills the picture slots within a screen and a half of what the reader
@@ -987,7 +1020,8 @@
     closeHeld();
     let pdf;
     try {
-      pdf = await C.pdf.open(blob);
+      // A note hands over its own stand-in for the open document.
+      pdf = blob && typeof blob.draw === "function" ? blob : await C.pdf.open(blob);
     } catch (e) {
       throw new FileError("Waypage can't read " + meta.file.name + " any more.");
     }
@@ -1370,5 +1404,5 @@
     return meta;
   }
 
-  C.files = { KINDS, LINKABLE, canLink, kindOf, bring, openLinked, printed, drawable, drawNear, findPage, heldPdf: () => (held && held.pdf) || null, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
+  C.files = { KINDS, LINKABLE, canLink, kindOf, bring, openLinked, openNoteItem, noteSheets, addSheet, printed, drawable, drawNear, findPage, heldPdf: () => (held && held.pdf) || null, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
 })();

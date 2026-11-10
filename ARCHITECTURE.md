@@ -69,6 +69,7 @@ src/platform.js     browser vs app: native fetch, plugins, downloads, speech, op
 src/files.js        EPUB, Kindle (MOBI/AZW3), FB2, CBZ, Markdown, text and HTML files
 src/pdf.js          PDFs through pdf.js in a locked-down frame
 src/ink.js          pen drawing over a PDF's pages: strokes, layers, undo, what a copy of the PDF is given
+src/notes.js        notes: sheets of paper you draw on, opened through the PDF pages pipeline with a stand-in document
 src/pptx.js         PowerPoint decks redrawn on a canvas and written as a PDF (1.49.0)
 src/epub.js         clips as an EPUB 3 book, for e-readers and Send to Kindle
 src/feeds.js        RSS, Atom and JSON Feed, read into one shape
@@ -240,6 +241,16 @@ highlighter 40% opacity. The pen has five sizes (`SIZES`) and four styles
 fountain pen thin along a 45° nib and thick across it, brush a strong
 response with tapered ends); a saved size from the three-step bar maps 0, 1, 2
 to 0, 2, 4 on the five (`waypage.ink` has `v: 2` from then on).
+
+A note (2.0.0, `notes.js`) is a library item with `note: { paper }` and no
+file: a stack of A4 sheets, in `note.json` (`store.readNote`, `writeNote`),
+with its strokes in `ink.json` as on a PDF. It opens through `fillPdf`
+with a stand-in for the pdf.js document (`notes.js handle`: `draw(n, width)`
+paints the paper on a canvas), so drawing, the layers and undo are the
+PDF's own. A stroke on the last sheet adds one (`ink.onStroke`,
+`files.addSheet`). A note is always a scroll (`pagesOn`). Notes are this
+device's own for now, like linked files: neither sync nor a backup takes
+them (a line on the to-do list).
 
 A comic in Pages (reader.js `picsLayout`) is a flex row of its pages, each
 sized in px to a screen or half of one, so the text's own turning

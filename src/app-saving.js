@@ -39,7 +39,7 @@ async function syncNow(quiet = true) {
       // A clip that reads from a file on this device can't be read from
       // another one, so it stays here (0.32.0). A copy syncs like any
       // other clip, with its pictures inside it.
-      getPages: () => state.pages.filter((p) => !p.link),
+      getPages: () => state.pages.filter((p) => !p.link && !p.note),
       urlKey,
       // The same objects are kept and updated in place: the open page,
       // an open menu and the position timer hold on to them.
@@ -51,7 +51,7 @@ async function syncNow(quiet = true) {
           if (!o || o === n) return n;
           for (const k of Object.keys(o)) if (!(k in n)) delete o[k];
           return Object.assign(o, n);
-        }).concat(state.pages.filter((p) => p.link)).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+        }).concat(state.pages.filter((p) => p.link || p.note)).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
         // A place read further on another device is followed when it
         // comes in just after the clip opened, before it was scrolled here
         // at all (1.31.0): a clip opened from a widget before sync came in
@@ -697,7 +697,9 @@ function renderBatch(text, preset, from) {
   // A file of your own comes in from here too (0.31.0).
   const fromFile = preset || from ? null : el("section", { class: "settings-section batch-file" }, el("h2", { class: "overline" }, "File"),
     el("div", { class: "group" }, el("button", { class: "row", type: "button", onclick: () => pickFile(() => back()) },
-      el("span", { class: "row-label accent" }, "Open a file"))),
+      el("span", { class: "row-label accent" }, "Open a file")),
+      el("button", { class: "row", type: "button", onclick: () => openMenu("newNote") },
+        el("span", { class: "row-label accent" }, "New note"))),
     el("p", { class: "meta" }, "An EPUB book, a Markdown or text note, an HTML page, an email (.eml) or a CBZ comic. It stays " + ON_HERE + "."));
   const form = el("form", { class: "batch-form" }, asPage, fromFile,
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, "Links"), area, count, finder, skipRow),
@@ -2031,7 +2033,7 @@ async function driveRefresh() {
 const savableAgain = (p) => !!p.url && !p.file && !p.url.startsWith(MAIL_ENTRY);
 function driveContents() {
   const w = C.drive.what;
-  const pages = w.clips ? state.pages.filter((p) => !p.link) : [];
+  const pages = w.clips ? state.pages.filter((p) => !p.link && !p.note) : [];
   const bare = w.clips && w.links ? new Set(pages.filter(savableAgain).map((p) => p.id)) : null;
   return { pages, bare, feeds: [...(w.feeds ? siteFeeds() : []), ...(w.newsletters ? mailBoxes() : [])] };
 }
@@ -2046,7 +2048,7 @@ async function driveHandOver() {
   const from = await C.store.packSource().catch(() => null);
   if (!from) return;
   const { pages, bare, feeds: fs } = driveContents();
-  const kept = pages.filter((p) => !p.link);
+  const kept = pages.filter((p) => !p.link && !p.note);
   const ids = kept.filter((p) => !bare || !bare.has(p.id)).map((p) => p.id);
   const l = C.drive.last;
   const plan = { every: C.drive.every, last: Math.max(l.at || 0, C.drive.since), tried: l.tried || 0, folder: C.drive.folder,

@@ -149,7 +149,7 @@
   let clip = null;        // { id, size, pages: { "<n>": [stroke] } }
   let saveTimer = 0;
   let undos = [], redos = [];
-  let onChange = null, onPen = null, onProbe = null, onDraw = null;
+  let onChange = null, onPen = null, onProbe = null, onDraw = null, onStroke = null;
   const layers = new Map(); // page -> svg
 
   // A stroke read back from a file: anything else is dropped.
@@ -536,6 +536,7 @@
     redos = [];
     save();
     changed();
+    if (onStroke) onStroke(c.n);
   }
   // A finger stroke that turned out to be a pinch.
   function abandon() {
@@ -639,6 +640,7 @@
     set onPen(f) { onPen = f; },
     set onProbe(f) { onProbe = f; },
     set onDraw(f) { onDraw = f; },
+    set onStroke(f) { onStroke = f; },
     snapshot, restore,
     fromPhone, eraseFrom, get nat() { return nat; },
     get on() { return on; },

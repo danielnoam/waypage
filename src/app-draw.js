@@ -254,8 +254,10 @@ function renderLibrary() {
     // Files are the clips that read from a file of your own; a copy is
     // a clip like any other (0.32.0).
     const apart = !ts.length && state.filter === "all";
-    const mine = apart ? loose.filter((p) => p.link) : [];
-    const clips = apart ? loose.filter((p) => !p.link) : loose;
+    // Notes (2.0.0) are a part of their own too, after Files.
+    const notes = apart ? loose.filter((p) => p.note) : [];
+    const mine = apart ? loose.filter((p) => p.link && !p.note) : [];
+    const clips = apart ? loose.filter((p) => !p.link && !p.note) : loose;
     if (folders.length && (!part || part === "collections")) {
       const names = sorted(folders.map(asItem)).map((x) => x.folder);
       const label = "Collections · " + names.length;
@@ -270,7 +272,7 @@ function renderLibrary() {
     if (clips.length && (!part || part === "pages")) {
       const label = (ts.length ? "Found" : state.filter === "all" ? "Clips"
         : (status || favs) && folders.length ? filterName() + " clips" : filterName()) + " · " + clips.length;
-      if (part || ts.length || (!folders.length && !mine.length)) keep("h:pages", () => sectionHead(label), label);
+      if (part || ts.length || (!folders.length && !mine.length && !notes.length)) keep("h:pages", () => sectionHead(label), label);
       else keep("h:pages", () => partHead("pages", label), "link" + label);
     }
     if (!part || part === "pages") for (const p of some(clips)) {
@@ -281,9 +283,15 @@ function renderLibrary() {
     }
     if (mine.length && (!part || part === "files")) {
       const label = "Files · " + mine.length;
-      if (part || (!folders.length && !clips.length)) keep("h:files", () => sectionHead(label), label);
+      if (part || (!folders.length && !clips.length && !notes.length)) keep("h:files", () => sectionHead(label), label);
       else keep("h:files", () => partHead("files", label), "link" + label);
       for (const p of some(mine)) keep("p:" + p.id, () => pageCard(p), pageSig(p));
+    }
+    if (notes.length && (!part || part === "notes")) {
+      const label = "Notes · " + notes.length;
+      if (part || (!folders.length && !clips.length && !mine.length)) keep("h:notes", () => sectionHead(label), label);
+      else keep("h:notes", () => partHead("notes", label), "link" + label);
+      for (const p of some(notes)) keep("p:" + p.id, () => pageCard(p), pageSig(p));
     }
   }
   if (more) keep("more", () => el("div", { class: "lib-more", "aria-hidden": "true" }));

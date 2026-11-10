@@ -257,7 +257,7 @@ async function openPage(id, fromHistory) {
   const wait = !!p.file;
   if (wait) readerWait(p, fromHistory);
   try {
-    html = p.link ? await openLinked(p) : await C.store.readPage(id);
+    html = p.link || p.note ? await openLinked(p) : await C.store.readPage(id);
   } catch (e) {
     html = null;
     trouble = e instanceof C.files.FileError ? e.message : null;
@@ -279,13 +279,13 @@ async function openPage(id, fromHistory) {
     const d = $("readerFrame").contentDocument;
     await Promise.race([Promise.all([
       d && d.fonts ? d.fonts.ready : null,
-      p.link ? new Promise((first) => C.files.drawNear($("readerFrame"), first)) : null,
+      p.link || p.note ? new Promise((first) => C.files.drawNear($("readerFrame"), first)) : null,
     ]), new Promise((r) => setTimeout(r, 4000))]);
     // The place it was left is set the frame after the fonts are in.
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     if (waiting !== id) return;
     stopWaiting();
-  } else if (p.link) C.files.drawNear($("readerFrame"));
+  } else if (p.link || p.note) C.files.drawNear($("readerFrame"));
   $("readerFrame").focus();
   if (markAfterOpen) {
     const id = markAfterOpen, d = $("readerFrame").contentDocument;
@@ -326,7 +326,7 @@ function onDevice(name) {
   return mine ? "on your other device" : "on " + name;
 }
 async function furtherRead(p) {
-  if (!C.sync.on || C.sync.paused || !navigator.onLine || p.link) return;
+  if (!C.sync.on || C.sync.paused || !navigator.onLine || p.link || p.note) return;
   let got;
   try { got = await C.sync.peek(); } catch (e) { got = null; }
   if (!got || state.open !== p) return;
@@ -349,7 +349,7 @@ async function furtherRead(p) {
 
 // A linked PDF from before 1.2.1 gets its cover a moment after it opens
 // (1.2.2, 1.2.4): the card learns of it here.
-const openLinked = (p) => C.files.openLinked(p);
+const openLinked = (p) => (p.note ? C.files.openNoteItem(p) : C.files.openLinked(p));
 C.files.onCover = async (p) => {
   if (!state.pages.includes(p)) return;
   await C.store.writeIndex(state.pages);
@@ -447,6 +447,7 @@ function show(p, html) {
     paintMarks(p);
     loadTranslation(p);
     inkSync(p);
+    paintNote();
     $("readerContents").hidden = C.reader.headings().length < 2;
     wordless = C.reader.wordless();
     narrateOrScroll(p);
@@ -717,8 +718,8 @@ function spentSwitch() {
 // PDF's printed pages are open. In a dark theme the pages take its colours
 // (reader.js, pdfDarkFilter); in a light one there's nothing to darken.
 const PDF_DARK_KEY = "waypage.pdfDark";
-const pdfDarkOn = () => !!load(PDF_DARK_KEY, false);
-const pdfPages = () => !!(state.open && C.files.printed(state.open));
+const pdfDarkOn = () => (state.open && state.open.note ? noteLook().dark : !!load(PDF_DARK_KEY, false));
+const pdfPages = () => !!(state.open && (state.open.note || C.files.printed(state.open)));
 function paintPdfDark() {
   const root = document.documentElement;
   const dark = pdfDarkOn() && pdfPages() && !!(themeOf(root.dataset.theme) || {}).dark;
@@ -729,11 +730,12 @@ function paintPdfDark() {
 }
 function pdfDarkSwitch() {
   const row = el("label", { class: "rc-row switch-row pdf-dark-row" },
-    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Dark PDF pages"),
-      el("span", { class: "choice-note" }, "In a dark theme, pages take its colours")),
+    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, state.open && state.open.note ? "Dark note" : "Dark PDF pages"),
+      el("span", { class: "choice-note" }, state.open && state.open.note ? "In a dark theme, the paper takes its colours" : "In a dark theme, pages take its colours")),
     el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "pdfDark", checked: pdfDarkOn(),
       onchange: (e) => {
-        store(PDF_DARK_KEY, e.target.checked);
+        if (state.open && state.open.note) setNoteLook({ dark: e.target.checked });
+        else store(PDF_DARK_KEY, e.target.checked);
         document.querySelectorAll('input[data-pref="pdfDark"]').forEach((i) => { i.checked = e.target.checked; });
         paintPdfDark();
         C.reader.applyTheme();
@@ -825,7 +827,7 @@ let lastY = 0, readerY = 0;
 function readerScrolled(at, y) {
   readerY = y;
   C.stats.active();
-  if (state.open && state.open.link) C.files.drawNear($("readerFrame"));
+  if (state.open && (state.open.link || state.open.note)) C.files.drawNear($("readerFrame"));
   if (readHere && !readHere.hidden) showReadHere();
   if (!(skim && skim.dragging)) skimShow(at);
   railNow();
@@ -970,6 +972,12 @@ function contentsList() {
 // site's next page (saved already, or to save now and open).
 function endLink(p) {
   if (p.preview) return null;
+  // A note goes on to the next one in the library's Notes (2.0.0).
+  if (p.note) {
+    const notes = state.pages.filter((x) => x.note), i = notes.findIndex((x) => x.id === p.id);
+    const nx = i >= 0 ? notes[i + 1] : null;
+    return nx ? { over: "Next note", title: nx.title, go: () => goTo(nx, true) } : null;
+  }
   const next = neighbour(p, 1);
   if (next) return { over: "Next in " + p.folder, title: next.title, go: () => goTo(next, true) };
   if (!p.next) return null;
@@ -2202,7 +2210,8 @@ function scrollControls() {
   return el("div", { class: "aloud-controls" },
     el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Speed", shown),
       el("div", { class: "stepper" }, speed)),
-    aloudSwitch(GO_ON_KEY, "Go on to the next clip", "At the end, the next chapter starts scrolling by itself.", false),
+    state.open && state.open.note ? aloudSwitch(GO_ON_KEY, "Go on to the next note", "At the end, the next note starts scrolling by itself.", false)
+      : aloudSwitch(GO_ON_KEY, "Go on to the next clip", "At the end, the next chapter starts scrolling by itself.", false),
     aloudSwitch(AWAKE_KEY, "Keep the screen on", "While it scrolls, so you can follow along.", false));
 }
 
@@ -2393,6 +2402,7 @@ function syncThemeInputs() {
 // time behind tabs, the last one opened coming back.
 const SHEET_TAB_KEY = "waypage.sheetTab";
 function readerSettings() {
+  if (state.open && state.open.note) return noteSettings();
   const box = readingControls(true);
   const parts = [...box.querySelectorAll(".rc-part")];
   // A comic gets Auto-scroll with its three settings in Narrate's place (1.49.0).
@@ -2603,7 +2613,7 @@ const trMode = (data) => !data ? "off" : data.mode || (data.show === false ? "of
 // translate and this device can, or a translation is already kept.
 function translateButton(p) {
   const b = $("readerTranslate");
-  b.hidden = !(p && !C.files.printed(p) && !p.comic && (C.platform.translator.available || translationOf(p)));
+  b.hidden = !(p && !p.note && !C.files.printed(p) && !p.comic && (C.platform.translator.available || translationOf(p)));
   const label = translationOf(p) ? "Translation" : "Translate this clip";
   b.setAttribute("aria-label", label);
   b.title = label + " (L)";
@@ -3360,3 +3370,37 @@ $("viewerPrev").addEventListener("click", () => stepImage(-1));
 $("viewerNext").addEventListener("click", () => stepImage(1));
 $("viewerZoomIn").addEventListener("click", () => zoomStep(1));
 $("viewerZoomOut").addEventListener("click", () => zoomStep(-1));
+
+// A note's own settings (2.0.0): only Layout (where they apply, margins,
+// brightness slider, theme, dark note) and Auto-scroll. A note is always a
+// scroll of sheets, so it has no Show as, and no text to set.
+function noteSettings() {
+  const p = state.open, id = "nc" + ++readingGroups, r = noteLook(p);
+  const row = (text, control) => el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, text), control);
+  const stack = (text, control) => el("div", { class: "rc-row stack" }, el("span", { class: "rc-label" }, text), control);
+  const scope = el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Applies to"),
+    dropdown({ label: "Applies to", cls: "field-pick font-pick scope-pick", value: noteScope(p), onpick: setNoteScope,
+      options: [{ value: "all", label: "All notes" }, { value: "note", label: "This note" }] }));
+  const layout = el("div", { class: "rc-part", "data-part": "layout" }, el("h2", { class: "overline" }, "Layout"),
+    scope,
+    row("Margins", seg(id + "-margins", "Margins", [
+      { value: "narrow", label: "Narrow" }, { value: "normal", label: "Normal" }, { value: "wide", label: "Wide" },
+    ], r.margins, (v) => setNoteLook({ margins: v }))),
+    ...(brightSwitch(id) || []),
+    stack("Theme", seg(id + "-theme", "Theme",
+      [{ value: "system", label: "Auto", swatch: autoSwatch(), auto: true }, ...themeOptions(THEMES)],
+      readerThemeOn() ? state.readerTheme : state.theme, (v) => { (readerThemeOn() ? setReaderTheme : setTheme)(v); syncThemeInputs(); }, "themes scroll")),
+    pdfDarkSwitch());
+  const a = scrollControls();
+  a.classList.add("rc-part");
+  a.dataset.part = "aloud";
+  a.prepend(el("h2", { class: "overline" }, "Auto-scroll"));
+  const parts = [layout, a];
+  const names = { layout: "Layout", aloud: "Auto-scroll" };
+  let tab = load(SHEET_TAB_KEY, "layout");
+  if (!names[tab]) tab = "layout";
+  const show = (v) => { tab = v; store(SHEET_TAB_KEY, v); for (const x of parts) x.hidden = x.dataset.part !== v; };
+  const tabs = seg("sheet-tab", "Settings", parts.map((x) => ({ value: x.dataset.part, label: names[x.dataset.part] })), tab, show, "sheet-tabs");
+  show(tab);
+  return el("div", { class: "reader-settings" }, tabs, el("div", { class: "reading-controls" }, ...parts));
+}
