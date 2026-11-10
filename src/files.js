@@ -880,9 +880,11 @@
   // PDF's pages are drawn: before, every picture was read and decoded
   // before the first page showed, and a 400 MB comic sat whole in memory.
   const printed = (meta) => !!(meta && meta.link && meta.file && meta.file.kind === "pdf" && !meta.comic && meta.view !== "text");
-  // A PDF shown as its own pages, words or scan: where a pen can draw (1.56.0).
-  // A note is a stack of sheets drawn the same way (2.0.0, notes.js).
-  const drawable = (meta) => !!(meta && (meta.note || (meta.link && meta.file && meta.file.kind === "pdf" && (meta.comic || meta.view !== "text"))));
+  // Only a note can be drawn on (2.0.0, notes.js): its sheets are drawn as a
+  // PDF's printed pages are. A PDF shown as its own pages, words or scan,
+  // can be made into one (`convertible`); before 2.0.0 it was drawn on itself.
+  const drawable = (meta) => !!(meta && meta.note);
+  const convertible = (meta) => !!(meta && !meta.note && meta.link && meta.file && meta.file.kind === "pdf" && (meta.comic || meta.view !== "text"));
   async function openLinked(meta) {
     closeHeld();
     const html = await S().readPage(meta.id);
@@ -1404,5 +1406,5 @@
     return meta;
   }
 
-  C.files = { KINDS, LINKABLE, canLink, kindOf, bring, openLinked, openNoteItem, noteSheets, addSheet, printed, drawable, drawNear, findPage, heldPdf: () => (held && held.pdf) || null, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
+  C.files = { KINDS, LINKABLE, canLink, kindOf, bring, openLinked, openNoteItem, noteSheets, addSheet, printed, drawable, convertible, drawNear, findPage, heldPdf: () => (held && held.pdf) || null, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
 })();

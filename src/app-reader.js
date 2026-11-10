@@ -1020,7 +1020,7 @@ let heading = "";
 async function goTo(p, turn) {
   heading = p.id;
   let html;
-  try { html = await C.store.readPage(p.id); } catch (e) { html = null; }
+  try { html = p.note ? await openLinked(p) : await C.store.readPage(p.id); } catch (e) { html = null; }
   if (!html) {
     if (heading === p.id) { heading = ""; showAloudBar(); }
     toast("This clip's file is missing. Delete it and save it again.");

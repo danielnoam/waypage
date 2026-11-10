@@ -938,7 +938,8 @@ function pageSheet(p, where) {
         p.link && p.file && p.file.kind === "pdf" && !p.comic
           ? menuRow(p.view === "text" ? "Show as printed pages" : "Show as text", () => switchView(p, where)) : null,
         inReader && p.note ? menuRow("Save as PDF", () => back().then(() => noteToPdf(p))) : null,
-        inReader && !p.note && C.files.drawable(p) && !p.preview ? menuRow("Drawings", () => back().then(() => openSheet("ink"))) : null,
+        inReader && C.files.drawable(p) && !p.preview ? menuRow("Drawings", () => back().then(() => openSheet("ink"))) : null,
+        C.files.convertible(p) && !p.preview ? menuRow("Make a note from this PDF", () => back().then(() => makeNoteFrom(p))) : null,
         inReader && !p.note && !C.files.printed(p) ? menuRow("Find in this clip", () => back().then(openFind)) : null,
         inReader && !p.note && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow("Save linked pages", () => back().then(() => openSheet("links"))) : null,
         menuRow(p.finished ? "Mark as unread" : "Mark as read", () => markRead([p], !p.finished).then(draw)),
@@ -1259,6 +1260,7 @@ const MENUS = {
   importList: { label: "Import", build: () => importSheet() },
   send: { label: "Saving a page", build: () => sendSheet() },
   newNote: { label: "New note", build: () => newNoteSheet() },
+  toNote: { label: "Make a note", build: () => toNoteSheet() },
 };
 let menuUnder = [];
 let menuFrom = null;
@@ -2372,4 +2374,45 @@ async function makeNote(kind) {
   await back(state.batch ? 2 : 1);
   renderLibrary();
   openPage(meta.id);
+}
+
+// The pen on a PDF (2.0.0): only a note is drawn on, so a PDF asks to be
+// made into one.
+function toNoteSheet() {
+  const p = state.open;
+  return el("div", { class: "page-controls" },
+    el("div", { class: "menu-head" },
+      el("p", { class: "menu-title" }, "Make a note from this PDF?"),
+      el("p", { class: "meta" }, "Only a note can be drawn on.")),
+    el("div", { class: "group" },
+      el("button", { class: "row", type: "button", onclick: () => { back().then(() => p && makeNoteFrom(p)); } },
+        el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, "Make a note"),
+          el("span", { class: "choice-note" }, "A copy of the PDF's pages you can draw on, in Notes. The PDF itself stays as it is."))),
+      el("button", { class: "row", type: "button", onclick: () => back() },
+        el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, "Cancel")))));
+}
+// A note made from a PDF: its pages, any drawings made on the PDF before
+// moved over, and opened to draw on.
+async function makeNoteFrom(p) {
+  if (!C.files.convertible(p)) return;
+  toast("Making the note…");
+  let meta;
+  try {
+    const blob = await C.platform.files.blob(p.link, p.file.size);
+    meta = await C.notes.fromPdf(p, blob);
+  } catch (e) {
+    console.error(e);
+    toast(e instanceof C.files.FileError ? e.message : "Couldn't make the note. Is the PDF still where it was?");
+    return;
+  }
+  // Drawings made on the PDF before 2.0.0 go with it, page for page.
+  try {
+    const old = await C.store.readInk(p.id);
+    if (old) { await C.store.writeInk(meta.id, old); await C.store.writeInk(p.id, null); }
+  } catch (e) { /* the note is made without them */ }
+  state.pages.unshift(meta);
+  await C.store.writeIndex(state.pages);
+  renderLibrary();
+  if (state.open) await goTo(meta, true);
+  else openPage(meta.id);
 }

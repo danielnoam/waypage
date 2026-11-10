@@ -39,7 +39,11 @@ function penNativeSet(patch) {
 // is where the drawings can go. Called once the reader has the clip up.
 async function inkSync(p) {
   const ok = !!p && !p.preview && C.files.drawable(p);
-  $("readerInk").hidden = !ok;
+  // A PDF's pages can't be drawn on, but the pen offers to make a note of
+  // it (2.0.0): drawings made on it before are offered a note too.
+  const convert = !!p && !p.preview && !ok && C.files.convertible(p);
+  $("readerInk").hidden = !(ok || convert);
+  if (convert) C.store.readInk(p.id).then((d) => { if (d && state.open === p) toast("Your drawings on this PDF can go into a note.", "Make a note", () => makeNoteFrom(p)); });
   if (!ok) { inkClose(); return; }
   if (inkClipId === p.id) return;
   inkClose();
@@ -256,9 +260,14 @@ C.ink.onChange = () => {
 C.ink.onPen = () => {
   if (C.ink.on || $("readerInk").hidden || state.sheet || load(INK_OFFER_KEY, false)) return;
   store(INK_OFFER_KEY, true);
-  toast("Draw on this PDF with your pen?", "Draw", () => inkSet(true));
+  toast("Draw on this note with your pen?", "Draw", () => inkSet(true));
 };
-$("readerInk").addEventListener("click", () => inkSet(!C.ink.on));
+$("readerInk").addEventListener("click", () => {
+  const p = state.open;
+  // Only a note is drawn on: a PDF asks to be made into one.
+  if (p && C.files.convertible(p)) openMenu("toNote");
+  else inkSet(!C.ink.on);
+});
 // A note grows as you write: a stroke on its last sheet adds one.
 C.ink.onStroke = (n) => { if (n === C.files.noteSheets()) C.files.addSheet(); };
 // What the phone says of the pen: near, the eraser end, a button held.
@@ -279,15 +288,16 @@ function inkSheet(p) {
   const go = (n) => { history.back(); setTimeout(() => C.reader.toPrinted(n), 0); };
   const total = C.ink.count(), list = C.ink.drawn();
   const word = (n, one, many) => n + " " + (n === 1 ? one : many);
+  const note = !!p.note;
   fill(box,
     el("p", { class: "meta" }, total
-      ? word(total, "stroke", "strokes") + " on " + word(list.length, "page", "pages") + ". They stay on this device. Save a copy to keep them with the PDF."
+      ? word(total, "stroke", "strokes") + " on " + word(list.length, note ? "sheet" : "page", note ? "sheets" : "pages") + ". They stay on this device." + (note ? " Save as PDF keeps them with the pages." : " Save a copy to keep them with the PDF.")
       : "Nothing drawn yet. Tap the pen in the reader bar and draw."),
     list.length ? el("div", { class: "group" }, ...list.map((d) =>
       el("button", { class: "row", type: "button", onclick: () => go(d.page) },
-        el("span", { class: "row-label" }, "Page " + d.page), el("span", { class: "row-value" }, String(d.strokes))))) : null,
+        el("span", { class: "row-label" }, (note ? "Sheet " : "Page ") + d.page), el("span", { class: "row-value" }, String(d.strokes))))) : null,
     total ? el("div", { class: "group" },
-      menuRow("Save a copy with drawings", () => inkCopy(p)),
+      note ? menuRow("Save as PDF", () => { history.back(); setTimeout(() => noteToPdf(p), 0); }) : menuRow("Save a copy with drawings", () => inkCopy(p)),
       menuRow("Remove all drawings", () => { if (confirm("Remove all drawings from “" + p.title + "”? This can't be undone.")) C.ink.clearAll(); }, "warn")) : null,
     inkProbe());
   return box;
@@ -348,7 +358,7 @@ async function noteToPdf(p) {
   toast("Making the PDF…");
   try {
     await C.ink.flush();
-    const { blob, name } = await C.notes.toPdf(p, C.files.noteSheets(), C.ink.strokes);
+    const { blob, name } = await C.notes.toPdf(p, C.files.heldPdf(), C.ink.strokes);
     if (!C.platform.canSaveFiles) { C.platform.download(name, blob); return; }
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const cache = await C.store.cacheFile(name);
