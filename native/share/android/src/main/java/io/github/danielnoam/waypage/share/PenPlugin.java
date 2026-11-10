@@ -3,6 +3,7 @@ package io.github.danielnoam.waypage.share;
 import android.app.Activity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.View;
 import android.view.Window;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -20,8 +21,10 @@ import java.lang.reflect.Proxy;
  * page, and the page is told when the pen's state changes. Nothing is
  * consumed: the events go on to the WebView as they were.
  *
- *   watch({ on, raw })  look at the pen, or stop; raw also sends every event (Drawings' pen test)
+ *   watch({ on, raw, grab })  look at the pen, or stop; raw also sends every event (Drawings' pen test);
+ *                   grab takes Samsung's button-and-drag (below) from the page, for erasing
  *   "pen"           { near, down, button, eraser, tool, buttons } when any of them changes
+ *   "erase"         { a: "down" | "move" | "up", x, y } while the side button is held and the pen drags
  *   "raw"           { k: "m", a, tools, b, p, c, n, src } for a MotionEvent (moves thinned out),
  *                   { k: "k", a, code, name } for a KeyEvent
  *
@@ -34,6 +37,7 @@ import java.lang.reflect.Proxy;
 public class PenPlugin extends Plugin {
     private volatile boolean on;
     private volatile boolean raw;
+    private volatile boolean grab;
     private boolean wrapped;
     private String rawKey = "";
     private long rawAt;
@@ -45,6 +49,7 @@ public class PenPlugin extends Plugin {
     public void watch(PluginCall call) {
         on = call.getBoolean("on", false);
         raw = on && call.getBoolean("raw", false);
+        grab = on && call.getBoolean("grab", false);
         Activity a = getActivity();
         if (a == null || !on || wrapped) { call.resolve(); return; }
         a.runOnUiThread(() -> {
@@ -66,6 +71,12 @@ public class PenPlugin extends Plugin {
                         if (raw) {
                             try { send((MotionEvent) args[0]); } catch (RuntimeException ignored) { /* as above */ }
                         }
+                        // The side button held and the pen dragged: One UI doesn't send a touch but
+                        // its own actions (211 down, 213 move, 212 up), which the WebView drops,
+                        // so the page never sees it. With Draw on they're the page's eraser.
+                        if (grab) {
+                            try { if (drag((MotionEvent) args[0])) return Boolean.TRUE; } catch (RuntimeException ignored) { /* the touch goes on */ }
+                        }
                     }
                 } else if (raw && args != null && args.length == 1 && args[0] instanceof KeyEvent && "dispatchKeyEvent".equals(m.getName())) {
                     try { send((KeyEvent) args[0]); } catch (RuntimeException ignored) { /* the key goes on */ }
@@ -76,6 +87,31 @@ public class PenPlugin extends Plugin {
                     throw x.getCause();
                 }
             }));
+    }
+
+    private static final int PEN_DRAG_DOWN = 211, PEN_DRAG_UP = 212, PEN_DRAG_MOVE = 213;
+
+    // A button-and-drag action of the stylus: told to the page, from the
+    // web view's own corner, and kept from the web view (text selection).
+    private boolean drag(MotionEvent e) {
+        int act = e.getActionMasked();
+        if (act != PEN_DRAG_DOWN && act != PEN_DRAG_UP && act != PEN_DRAG_MOVE) return false;
+        int t = e.getToolType(0);
+        if (t != MotionEvent.TOOL_TYPE_STYLUS && t != MotionEvent.TOOL_TYPE_ERASER) return false;
+        float x = e.getRawX(), y = e.getRawY();
+        View web = getBridge() == null ? null : getBridge().getWebView();
+        if (web != null) {
+            int[] at = new int[2];
+            web.getLocationOnScreen(at);
+            x -= at[0];
+            y -= at[1];
+        }
+        JSObject o = new JSObject();
+        o.put("a", act == PEN_DRAG_DOWN ? "down" : act == PEN_DRAG_UP ? "up" : "move");
+        o.put("x", x);
+        o.put("y", y);
+        notifyListeners("erase", o);
+        return true;
     }
 
     // The pen test's log (raw): each event as the phone made it. A run of
@@ -150,5 +186,6 @@ public class PenPlugin extends Plugin {
     protected void handleOnDestroy() {
         on = false;
         raw = false;
+        grab = false;
     }
 }

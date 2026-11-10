@@ -26,6 +26,15 @@ const inkIcon = (name) => {
 
 let inkBar = null, inkClipId = null;
 
+// What the Pen plugin is asked to do: look at the pen (while a PDF's pages
+// are open), tell everything (the pen test), take One UI's button-and-drag
+// from the page (while Draw is on).
+const penNative = { on: false, raw: false, grab: false };
+function penNativeSet(patch) {
+  Object.assign(penNative, patch);
+  C.platform.pen.watch(penNative.on, penNative.on && penNative.raw, penNative.on && penNative.grab);
+}
+
 // The pen button follows the clip: shown on a PDF's printed pages, which
 // is where the drawings can go. Called once the reader has the clip up.
 async function inkSync(p) {
@@ -36,7 +45,7 @@ async function inkSync(p) {
   inkClose();
   inkClipId = p.id;
   // The pen's buttons are read natively while a PDF's pages are open.
-  C.platform.pen.watch(true);
+  penNativeSet({ on: true });
   const { stale } = await C.ink.load(p);
   if (state.open !== p) return;
   if (stale) toast("This PDF has changed since you drew on it. The drawings may not line up.");
@@ -47,7 +56,7 @@ function inkClose() {
   if (penT) penTestEnd(true, true);
   inkSet(false);
   C.ink.unload();
-  C.platform.pen.watch(false);
+  penNativeSet({ on: false, raw: false, grab: false });
   inkClipId = null;
 }
 function inkPrefs() {
@@ -67,6 +76,7 @@ function inkSet(on) {
   if (on === C.ink.on && (!!inkBar && !inkBar.hidden) === on) { $("readerInk").setAttribute("aria-pressed", String(on)); return; }
   if (on) C.ink.setting(inkPrefs());
   C.ink.setOn(on);
+  penNativeSet({ grab: on });
   $("readerInk").setAttribute("aria-pressed", String(on));
   $("readerInk").setAttribute("aria-label", on ? "Stop drawing" : "Draw");
   if (on) {
@@ -150,7 +160,15 @@ C.ink.onPen = () => {
 };
 $("readerInk").addEventListener("click", () => inkSet(!C.ink.on));
 // What the phone says of the pen: near, the eraser end, a button held.
-if (C.platform.pen.available) C.platform.pen.onState((s) => { C.ink.fromPhone(s); penTestState(s); });
+if (C.platform.pen.available) {
+  C.platform.pen.onState((s) => { C.ink.fromPhone(s); penTestState(s); });
+  // The side button and a drag (One UI sends no touch for it): erases, from the web view's corner.
+  C.platform.pen.onErase((e) => {
+    penTestErase(e);
+    const r = $("readerFrame").getBoundingClientRect(), k = devicePixelRatio || 1;
+    C.ink.eraseFrom(e.a, e.x / k - r.left, e.y / k - r.top);
+  });
+}
 
 // ---- Drawings, in ⋯ ----
 

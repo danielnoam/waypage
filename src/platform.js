@@ -1179,9 +1179,12 @@
     // { near, down, button, eraser, tool, buttons } when any changes.
     pen: {
       get available() { return os === "android" && !!plugin("Pen"); },
-      // raw: every touch, hover and key too, for the pen test's log.
-      watch(on, raw) { const P = plugin("Pen"); if (P) P.watch({ on: !!on, raw: !!raw }).catch(() => {}); },
+      // raw: every touch, hover and key too, for the pen test's log. grab:
+      // One UI's side button and drag (not sent to a page at all) comes
+      // as "erase" events, { a: "down" | "move" | "up", x, y } from the web view's corner.
+      watch(on, raw, grab) { const P = plugin("Pen"); if (P) P.watch({ on: !!on, raw: !!raw, grab: !!grab }).catch(() => {}); },
       onState(f) { const P = plugin("Pen"); if (P) P.addListener("pen", f); },
+      onErase(f) { const P = plugin("Pen"); if (P) P.addListener("erase", f); },
       onRaw(f) { const P = plugin("Pen"); if (P) P.addListener("raw", f); },
     },
     get knowsConnection() { return os === "ios" ? !!plugin("Connection") : os === "android" && !!navigator.connection; },

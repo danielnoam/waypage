@@ -501,6 +501,17 @@ area.
   MotionEvent and KeyEvent) to save and send. The log holds only event
   types, buttons, pressure, tool types and key codes, timed. iOS and the web copy have only the
   browser's `buttons` 2 or 32.
+  On a Galaxy Tab S6 (One UI), found with the pen test's log: with the side
+  button *held before* the touch, the phone sends no touch at all but its
+  own actions 211 (down), 213 (move) and 212 (up), which the WebView drops
+  (the page gets a `pointerleave` and a `contextmenu`). With Draw on, the
+  plugin's `grab` takes them, tells the page ("erase" with the position
+  from the web view's corner) and consumes them (`ink.js eraseFrom`).
+  Pressed *after* the touch it is an ordinary move with `buttons` 32, which
+  the pen's state covers. And the pen's hover exit comes just before its
+  touch, and the phone's word for the touch after it has begun: so "near"
+  lasts 1.5 s past the exit, or the touch has no lock (`touch-action: none`
+  on the page while Draw is on and a pen is near).
 - **Drawing on a page:** the layer is `pointer-events: none` until Draw
   is on, or words couldn't be selected under it. A pen would scroll the
   page as a finger does, so its `touchstart` is `preventDefault`ed on the

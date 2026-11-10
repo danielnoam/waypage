@@ -2441,8 +2441,23 @@ function zipOf(files) {
         function getComputedStyleOf(d) { return d.defaultView.getComputedStyle(d.querySelector(".co-ink[data-page='1']")).touchAction; }
       });
       assert.deepStrictEqual(calm, [true, "none"], "a pen near: no pan under it");
+      assert.strictEqual(await q.evaluate(() => { const d = document.getElementById("readerFrame").contentDocument; return [d.defaultView.getComputedStyle(d.body).touchAction, d.defaultView.getComputedStyle(d.querySelector(".co-ink[data-page='1']")).zIndex].join(" "); }), "none 2", "nothing pans anywhere in the page, and the layer is above the words'");
+      // One UI sends the pen's hover exit just before its touch: that doesn't let the touch pan.
       await q.evaluate(() => Waypage.ink.fromPhone({ near: false }));
-      assert.deepStrictEqual(await q.evaluate(() => { const d = document.getElementById("readerFrame").contentDocument; return [d.documentElement.hasAttribute("data-co-pen-near"), d.defaultView.getComputedStyle(d.querySelector(".co-ink[data-page='1']")).touchAction]; }), [false, "auto"], "and a finger scrolls once it's gone");
+      const touchAction = () => q.evaluate(() => { const d = document.getElementById("readerFrame").contentDocument; return [d.documentElement.hasAttribute("data-co-pen-near"), d.defaultView.getComputedStyle(d.querySelector(".co-ink[data-page='1']")).touchAction]; });
+      assert.deepStrictEqual(await touchAction(), [true, "none"], "a pen that has just left is still near, for the touch that follows");
+      await q.waitForTimeout(1800);
+      assert.deepStrictEqual(await touchAction(), [false, "auto"], "and a finger scrolls once it's gone");
+      // The side button held and the pen dragged: One UI sends no touch, the Pen plugin sends "erase".
+      assert.strictEqual(await q.evaluate(() => typeof Waypage.platform.pen.onErase), "function");
+      await q.evaluate(() => {
+        const svg = document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
+        const at = (fx, fy) => [r.left + fx * r.width, r.top + fy * r.width];
+        Waypage.ink.eraseFrom("down", ...at(0.4, 0.15)); Waypage.ink.eraseFrom("move", ...at(0.4, 0.27)); Waypage.ink.eraseFrom("up", ...at(0.4, 0.27));
+      });
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).map((s) => s.t).join("")), "h", "the button-drag erases what it crosses");
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).length), 2, "and Undo brings it back");
       await q.evaluate(() => Waypage.ink.fromPhone({ near: true, down: false, button: true, eraser: true, tool: 2, buttons: 32 }));
       await penAct(14, 1, 0, [[0.4, 0.15], [0.4, 0.27]]);
       assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).map((s) => s.t).join("")), "h", "the phone says a button's held: a plain touch erases");
@@ -2586,7 +2601,8 @@ function zipOf(files) {
       const log = await q.evaluate(() => penLogText());
       for (const want of ["Waypage pen test log", "agent: ", "pen plugin: no", "finger drawing was: ", "== Step 1: Touch the pad with a finger", "pad pointerdown touch button=0 buttons=1",
         "pad touchstart touchType=n/a", "phone state near=yes", "phone MotionEvent ACTION_HOVER_ENTER tools=2", "phone KeyEvent down 308 KEYCODE_STYLUS_BUTTON_PRIMARY",
-        "pad pointerdown pen button=0 buttons=1", "pad pointermove pen button=-1 buttons=1", "x6 until", "[skipped]", "page pointerdown pen button=0 buttons=1 pressure=0.6", "page scroll y=40"]) {
+        "pad pointerdown pen button=0 buttons=1", "pad pointermove pen button=-1 buttons=1", "x6 until", "[skipped]", "page pointerdown pen button=0 buttons=1 pressure=0.6", "page scroll y=40",
+        "page frame ", "ink layers: page 1 on", "page pointerdown pen target=svg.co-ink[page 1][on] under=svg.co-ink[page 1][on]"]) {
         assert.ok(log.includes(want), "the log has: " + want + "\n" + log.slice(0, 1500));
       }
       assert.ok(!/clientX|clientY/.test(log), "no positions in the log");

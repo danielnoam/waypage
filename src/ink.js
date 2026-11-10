@@ -305,9 +305,10 @@
   // (reader.css: touch-action none), so the pen's drag can't scroll the page
   // however its touch is reported: the browser decides at the touch, and
   // hovering says it's coming. A finger scrolls again once it's gone.
-  function near(ms) {
+  // `set`: the phone's word, which says how long, instead of adding to it.
+  function near(ms, set) {
     const D = frameDoc();
-    nearUntil = Math.max(nearUntil, performance.now() + ms);
+    nearUntil = set ? performance.now() + ms : Math.max(nearUntil, performance.now() + ms);
     if (D) D.documentElement.setAttribute("data-co-pen-near", "");
     clearTimeout(nearTimer);
     nearTimer = setTimeout(() => {
@@ -326,9 +327,44 @@
   // The Pen plugin's word: near, and the eraser end or a button held.
   function fromPhone(s) {
     nat = { near: !!s.near, down: !!s.down, button: !!s.button, eraser: !!s.eraser, tool: s.tool | 0, buttons: s.buttons | 0 };
-    if (nat.near) near(8000); else away();
+    // One UI sends the pen's hover exit just before its touch, and this word
+    // for the touch comes after it has begun: a pen that has just left is
+    // still near for a moment, or the touch would be let pan.
+    near(nat.near ? 8000 : 1500, true);
     if (nat.eraser && cur && cur.kind === "pen" && !cur.erase) toEraser();
     if (onProbe) onProbe();
+  }
+  // The side button held and the pen dragged (the Pen plugin's "erase"):
+  // x, y are in the frame's own corner, in CSS px. A pass over the pages
+  // takes the strokes it crosses, as the eraser does.
+  function eraseFrom(phase, px, py) {
+    if (!on) return;
+    const D = frameDoc();
+    if (!D) return;
+    // The page under the point.
+    let under = null;
+    for (const svg of layers.values()) {
+      const r = svg.getBoundingClientRect();
+      if (px >= r.left && px <= r.right && py >= r.top && py <= r.bottom) { under = { svg, r }; break; }
+    }
+    if (phase === "down") {
+      if (cur) cur = null;
+      cur = { id: -1, kind: "phone", n: 0, svg: null, erase: true, gone: [], at: performance.now() };
+    }
+    if (!cur || cur.kind !== "phone") return;
+    if (under) {
+      const n = Number(under.svg.dataset.page);
+      if (n !== cur.n) cur.last = null;
+      cur.n = n;
+      cur.svg = under.svg;
+      wipe((px - under.r.left) / (under.r.width || 1), (py - under.r.top) / (under.r.width || 1));
+    }
+    if (phase === "up") {
+      const c = cur;
+      cur = null;
+      lastStroke = performance.now();
+      if (c.gone.length) { undos.push({ k: "del", items: c.gone }); redos = []; save(); changed(); }
+    }
   }
   // What a stroke being drawn becomes when the button is pressed: what it
   // drew so far is dropped, and it erases from here.
@@ -565,7 +601,7 @@
     set onProbe(f) { onProbe = f; },
     set onLog(f) { logger = f; },
     snapshot, restore,
-    fromPhone, get nat() { return nat; },
+    fromPhone, eraseFrom, get nat() { return nat; },
     get on() { return on; },
     get lastStroke() { return lastStroke; },
   };
