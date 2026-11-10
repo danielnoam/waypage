@@ -58,4 +58,58 @@ test("a stroke read from a file keeps only what a stroke is", () => {
   assert.strictEqual(I.clean({ t: "p", c: "__proto__", w: 0.003, p: [0, 0, 1] }), null);
 });
 
+// The outline's points, and how far from a line through `at` going `dir` they lie, within a stretch of it.
+const pairs = (d) => { const n = nums(d), out = []; for (let i = 0; i + 1 < n.length; i += 2) out.push([n[i], n[i + 1]]); return out; };
+function reach(d, at, dir, from, to) {
+  let most = 0;
+  for (const [x, y] of pairs(d)) {
+    const along = (x - at[0]) * dir[0] + (y - at[1]) * dir[1];
+    if (along < from || along > to) continue;
+    most = Math.max(most, Math.abs((x - at[0]) * dir[1] - (y - at[1]) * dir[0]));
+  }
+  return most;
+}
+const straight = (at, dir, len, pr) => { const a = []; for (let i = 0; i <= 60; i++) a.push(at[0] + dir[0] * len * i / 60, at[1] + dir[1] * len * i / 60, pr); return a; };
+const W = 0.004;
+
+test("there are five sizes and four pen styles, each a closed outline", () => {
+  assert.strictEqual(I.SIZES.pen.length, 5);
+  assert.strictEqual(I.SIZES.highlighter.length, 5);
+  assert.ok(I.SIZES.pen.every((v, i, a) => !i || v > a[i - 1]), "growing");
+  assert.deepStrictEqual(I.STYLES, ["ball", "marker", "fountain", "brush"]);
+  for (const y of I.STYLES) assert.ok(I.penPath(straight([0.2, 0.5], [1, 0], 0.5, 0.5), W, y).endsWith("z"), y);
+});
+
+test("a marker keeps one width, where a ballpoint and a brush follow the pressure", () => {
+  const wide = (y, pr) => reach(I.penPath(straight([0.2, 0.5], [1, 0], 0.5, pr), W, y), [0.2, 0.5], [1, 0], 0.2, 0.3);
+  assert.ok(Math.abs(wide("marker", 0.2) - wide("marker", 0.9)) < 1e-6, "marker");
+  assert.ok(wide("ball", 0.9) > wide("ball", 0.2) * 1.5, "ballpoint");
+  assert.ok(wide("brush", 0.9) > wide("brush", 0.2) * 3, "brush follows it more strongly than the ballpoint");
+});
+
+test("a fountain pen is thin along its nib and thick across it", () => {
+  const nib = [Math.SQRT1_2, -Math.SQRT1_2], across = [Math.SQRT1_2, Math.SQRT1_2];
+  const wide = (dir) => reach(I.penPath(straight([0.3, 0.5], dir, 0.4, 0.5), W, "fountain"), [0.3, 0.5], dir, 0.1, 0.3);
+  assert.ok(wide(across) > wide(nib) * 2, "across " + wide(across) + " along " + wide(nib));
+  // A ballpoint is the same either way.
+  const ball = (dir) => reach(I.penPath(straight([0.3, 0.5], dir, 0.4, 0.5), W, "ball"), [0.3, 0.5], dir, 0.1, 0.3);
+  assert.ok(Math.abs(ball(across) - ball(nib)) < W * 0.1);
+});
+
+test("a brush comes to a point at both ends", () => {
+  const d = I.penPath(straight([0.1, 0.5], [1, 0], 0.8, 0.6), W, "brush");
+  const mid = reach(d, [0.1, 0.5], [1, 0], 0.35, 0.45);
+  assert.ok(reach(d, [0.1, 0.5], [1, 0], 0, 0.01) < mid * 0.35, "the start");
+  assert.ok(reach(d, [0.1, 0.5], [1, 0], 0.79, 0.8) < mid * 0.35, "the end");
+});
+
+test("a stroke keeps its style, a stroke without one or with one we don't know is a ballpoint's", () => {
+  const stroke = (y) => I.clean({ t: "p", c: "ink", w: 0.003, p: [0.1, 0.1, 0.5, 0.2, 0.1, 0.5], ...(y ? { y } : {}) });
+  assert.strictEqual(stroke("fountain").y, "fountain");
+  assert.strictEqual(stroke("brush").y, "brush");
+  assert.strictEqual(stroke("laser").y, undefined);
+  assert.strictEqual(stroke().y, undefined);
+  assert.strictEqual(I.clean({ t: "h", c: "yellow", w: 0.02, y: "brush", p: [0.1, 0.1, 0.5, 0.2, 0.1, 0.5] }).y, undefined, "a highlighter has none");
+});
+
 console.log("\n" + passed + " passed");

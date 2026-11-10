@@ -170,7 +170,7 @@ async function textOf(doc, n) {
 }
 
 // The PDF with pen drawings in it as ink annotations (1.57.0): pages is
-// { "<page>": [{ pts, w, rgb, a }] }, pts as x, y, pressure triples with
+// { "<page>": [{ pts, w, rgb, a, k }] }, pts as x, y, pressure triples with
 // x and y in fractions of the page's width, w a fraction of it, a the
 // opacity. pdf.js writes them the way its own editor does (an
 // incremental update: the file's bytes stay as they were); the viewport
@@ -187,7 +187,7 @@ async function inkOf(doc, pages) {
       for (const s of pages[key].slice(0, 5000)) {
         if (!s || !Array.isArray(s.pts) || s.pts.length < 3) continue;
         const flat = [], lines = [0, 0, 0, 0];
-        let press = 0, count = 0;
+        let count = 0;
         const box = [Infinity, Infinity, -Infinity, -Infinity];
         for (let i = 0; i + 2 < s.pts.length; i += 3) {
           const q = v.convertToPdfPoint(s.pts[i] * v.width, s.pts[i + 1] * v.width);
@@ -196,11 +196,10 @@ async function inkOf(doc, pages) {
           lines.push(q[0], q[1]);
           box[0] = Math.min(box[0], q[0]); box[1] = Math.min(box[1], q[1]);
           box[2] = Math.max(box[2], q[0]); box[3] = Math.max(box[3], q[1]);
-          press += s.pts[i + 2];
           count++;
         }
-        // The pen's pressure is an even width here: its average.
-        const t = Math.max(0.2, s.w * v.width * (s.press ? 0.55 + 0.9 * (press / count) : 1));
+        // The pen's width is even here: its average, as a multiple of its size (s.k).
+        const t = Math.max(0.2, s.w * v.width * (s.k || 1));
         const key2 = "pdfjs_internal_editor_" + (k++);
         keys.push(key2);
         storage.setValue(key2, {

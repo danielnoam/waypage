@@ -14,26 +14,40 @@
   // The rgb is what a copy of the PDF gets.
   const PEN = { ink: [28, 27, 25], red: [208, 49, 45], blue: [43, 97, 196], green: [46, 139, 87] };
   const HIGHLIGHT = { yellow: [255, 214, 10], green: [91, 214, 107], blue: [90, 176, 255], pink: [255, 122, 182], purple: [181, 140, 255] };
-  // Widths as fractions of the page's width: about 1, 2 and 4 px on a
-  // 600 px page. The highlighter is wider.
-  const SIZES = { pen: [0.0018, 0.0034, 0.0066], highlighter: [0.014, 0.022, 0.034] };
+  // Widths as fractions of the page's width, five steps: the pen's about 0.7,
+  // 1.2, 2, 3 and 4.5 px on a 600 px page. The highlighter is wider.
+  const SIZES = { pen: [0.0012, 0.0022, 0.0034, 0.005, 0.0072], highlighter: [0.01, 0.016, 0.022, 0.028, 0.036] };
+  // How a pen writes: a ballpoint (wider with pressure), a marker (one
+  // width), a fountain pen (a slanted nib: thick across it, thin along
+  // it) and a brush (a strong pressure response, tapered ends).
+  const STYLES = ["ball", "marker", "fountain", "brush"];
+  const NIB = -Math.PI / 4;
   const MAX_POINTS = 6000, MAX_STROKES = 5000;
 
   const r5 = (v) => Math.round(v * 1e5) / 1e5;
   const r4 = (v) => Math.round(v * 1e4) / 1e4;
   // A pen's radius at a pressure: an even line (0.5) is the size itself.
-  const radius = (w, pr) => (w / 2) * (0.55 + 0.9 * pr);
+  const radius = (w, pr, style) => {
+    const half = w / 2;
+    if (style === "marker") return half * 1.15;
+    if (style === "brush") return half * (0.2 + 1.6 * pr);
+    if (style === "fountain") return half * (0.8 + 0.4 * pr);
+    return half * (0.55 + 0.9 * pr);
+  };
+  // How wide a fountain pen's nib draws going this way: thin along the
+  // nib's edge, thick across it.
+  const nibWidth = (dx, dy) => 0.3 + 0.7 * Math.abs(Math.sin(Math.atan2(dy, dx) - NIB));
 
   // ---- Drawing a stroke ----
 
   // A pen stroke as a filled outline, wider with pressure, with round
   // ends, smoothed through the midpoints of its sides. `p` is x, y,
   // pressure triples; the path is in the layer's units (page widths).
-  function penPath(p, w) {
+  function penPath(p, w, style) {
     const pts = [];
     for (let i = 0; i + 2 < p.length; i += 3) {
       const last = pts[pts.length - 1];
-      const here = { x: p[i], y: p[i + 1], r: radius(w, p[i + 2]) };
+      const here = { x: p[i], y: p[i + 1], r: radius(w, p[i + 2], style) };
       // Points too close to say a direction are one, the last one kept.
       if (last && Math.hypot(here.x - last.x, here.y - last.y) < w * 0.15) { if (i + 3 >= p.length) { last.x = here.x; last.y = here.y; } continue; }
       pts.push(here);
@@ -46,15 +60,28 @@
     // Radii evened out over three points, so a jittery pressure doesn't
     // make the line lumpy.
     const rs = pts.map((q, i) => (pts[Math.max(0, i - 1)].r + q.r + pts[Math.min(pts.length - 1, i + 1)].r) / 3);
-    const left = [], right = [];
-    let d0 = null, dn = null;
-    for (let i = 0; i < pts.length; i++) {
+    // The way the line goes at each point.
+    const dirs = pts.map((q, i) => {
       const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
-      let dx = b.x - a.x, dy = b.y - a.y;
-      const len = Math.hypot(dx, dy) || 1;
-      dx /= len; dy /= len;
-      if (i === 0) d0 = [dx, dy];
-      if (i === pts.length - 1) dn = [dx, dy];
+      const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+      return [dx / len, dy / len];
+    });
+    // The nib's width follows the direction, evened out as the radii are.
+    if (style === "fountain") {
+      const k = dirs.map(([dx, dy]) => nibWidth(dx, dy));
+      for (let i = 0; i < rs.length; i++) rs[i] *= (k[Math.max(0, i - 1)] + k[i] + k[Math.min(k.length - 1, i + 1)]) / 3;
+    }
+    // A brush comes to a point at both ends, over a few widths of the line.
+    if (style === "brush") {
+      const along = [0];
+      for (let i = 1; i < pts.length; i++) along.push(along[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+      const total = along[along.length - 1], reach = Math.min(w * 8, total / 2) || 1;
+      for (let i = 0; i < rs.length; i++) rs[i] *= Math.max(0.08, Math.min(1, along[i] / reach, (total - along[i]) / reach));
+    }
+    const left = [], right = [];
+    let d0 = dirs[0], dn = dirs[dirs.length - 1];
+    for (let i = 0; i < pts.length; i++) {
+      const [dx, dy] = dirs[i];
       left.push([pts[i].x - dy * rs[i], pts[i].y + dx * rs[i]]);
       right.push([pts[i].x + dy * rs[i], pts[i].y - dx * rs[i]]);
     }
@@ -101,11 +128,11 @@
     return out + "L" + r5(e[0]) + " " + r5(e[1]);
   }
 
-  const pathOf = (s) => (s.t === "h" ? linePath(s.p) : penPath(s.p, s.w));
+  const pathOf = (s) => (s.t === "h" ? linePath(s.p) : penPath(s.p, s.w, s.y));
 
   // Whether a point is on a stroke, to within `slop` (page widths).
   function hits(s, x, y, slop) {
-    const reach = (s.t === "h" ? s.w : s.w * 1.2) / 2 + slop;
+    const reach = (s.t === "h" ? s.w : s.w * (s.y === "brush" ? 1.9 : 1.2)) / 2 + slop;
     const p = s.p;
     if (p.length < 6) return Math.hypot(p[0] - x, p[1] - y) <= reach;
     for (let i = 0; i + 5 < p.length; i += 3) {
@@ -122,7 +149,7 @@
   let clip = null;        // { id, size, pages: { "<n>": [stroke] } }
   let saveTimer = 0;
   let undos = [], redos = [];
-  let onChange = null, onPen = null, onProbe = null, logger = null;
+  let onChange = null, onPen = null, onProbe = null, onDraw = null;
   const layers = new Map(); // page -> svg
 
   // A stroke read back from a file: anything else is dropped.
@@ -133,7 +160,10 @@
     const w = Number(s.w);
     if (!(w > 0 && w < 0.2) || !Array.isArray(s.p) || s.p.length < 3 || s.p.length % 3 || s.p.length > MAX_POINTS * 3) return null;
     if (!s.p.every((v) => Number.isFinite(v))) return null;
-    return { id: String(s.id || "").slice(0, 40) || C.save.newId(), t: s.t, c: s.c, w, p: s.p.map((v, i) => (i % 3 === 2 ? Math.min(1, Math.max(0, v)) : v)) };
+    const out = { id: String(s.id || "").slice(0, 40) || C.save.newId(), t: s.t, c: s.c, w, p: s.p.map((v, i) => (i % 3 === 2 ? Math.min(1, Math.max(0, v)) : v)) };
+    // How a pen wrote; a stroke from before styles, or one that names none we know, is a ballpoint's.
+    if (s.t === "p" && STYLES.includes(s.y) && s.y !== "ball") out.y = s.y;
+    return out;
   }
   async function load(meta) {
     unload();
@@ -265,7 +295,8 @@
   let on = false;
   let tool = "pen";       // "pen", "highlighter", "eraser"
   let color = { pen: "ink", highlighter: "yellow" };
-  let size = 1;           // 0, 1 or 2
+  let size = 2;           // 0 to 4
+  let style = "ball";     // how the pen writes
   let finger = false;     // whether a finger or mouse draws, not only a pen
   let cur = null;         // the stroke being drawn, or the eraser's pass
   let lastStroke = 0;
@@ -290,11 +321,12 @@
     if (o.tool) tool = o.tool;
     if (o.color) color[tool === "highlighter" ? "highlighter" : "pen"] = o.color;
     if (o.colors) for (const k of ["pen", "highlighter"]) if (o.colors[k] in (k === "pen" ? PEN : HIGHLIGHT)) color[k] = o.colors[k];
-    if (o.size != null) size = o.size;
+    if (o.size != null) size = Math.max(0, Math.min(4, Math.round(Number(o.size)) || 0));
+    if (STYLES.includes(o.style)) style = o.style;
     if (o.finger != null) finger = !!o.finger;
     changed();
   }
-  const state = () => ({ on, tool, color: color[tool === "highlighter" ? "highlighter" : "pen"], colors: { ...color }, size, finger, count: count(), canUndo: !!undos.length, canRedo: !!redos.length });
+  const state = () => ({ on, tool, color: color[tool === "highlighter" ? "highlighter" : "pen"], colors: { ...color }, size, style, finger, count: count(), canUndo: !!undos.length, canRedo: !!redos.length });
 
   const where = (e, svg) => {
     const r = svg.getBoundingClientRect();
@@ -402,10 +434,6 @@
     }, { passive: false });
     // The pen's button would open a menu.
     svg.addEventListener("contextmenu", (e) => { if (on) e.preventDefault(); });
-    // The pen test's log (app-pentest.js): last, so what was prevented shows.
-    for (const t of ["pointerdown", "pointermove", "pointerup", "pointercancel", "pointerenter", "pointerleave", "touchstart", "touchmove", "touchend", "touchcancel", "contextmenu"]) {
-      svg.addEventListener(t, (e) => { if (logger) logger(e); }, { passive: true });
-    }
   }
   function down(e) {
     if (!on) return;
@@ -433,6 +461,8 @@
     if (erase) { wipe(x, y); return; }
     const kind = hl ? "highlighter" : "pen";
     const s = { id: C.save.newId(), t: hl ? "h" : "p", c: color[kind], w: SIZES[kind][size], p: [] };
+    if (!hl && style !== "ball") s.y = style;
+    if (onDraw) onDraw();
     cur.s = s;
     cur.press = pen;
     add(e, svg, x, y);
@@ -581,25 +611,34 @@
     changed();
   }
 
+  // A pen stroke in a copy of the PDF is one even width, so it's the
+  // width the stroke has on average, as a multiple of its size.
+  function exportWidth(s) {
+    let sum = 0, n = 0;
+    for (let i = 2; i < s.p.length; i += 3) { sum += s.p[i]; n++; }
+    const pr = n ? sum / n : 0.5;
+    return (2 * radius(s.w, pr, s.y)) / s.w * (s.y === "fountain" ? 0.7 : s.y === "brush" ? 0.75 : 1);
+  }
+
   // The drawings for a copy of the PDF, to pdf.js inkOf.
   function forPdf() {
     const out = {};
     for (const [n, list] of Object.entries(clip ? clip.pages : {})) {
       out[n] = list.map((s) => {
         const rgb = (s.t === "h" ? HIGHLIGHT : PEN)[s.c];
-        return { pts: s.p, w: s.w, rgb, a: s.t === "h" ? 0.4 : 1, press: s.t === "p" };
+        return { pts: s.p, w: s.w, rgb, a: s.t === "h" ? 0.4 : 1, k: s.t === "h" ? 1 : exportWidth(s) };
       });
     }
     return out;
   }
 
   C.ink = {
-    PEN, HIGHLIGHT, SIZES, penPath, linePath, hits, clean,
+    PEN, HIGHLIGHT, SIZES, STYLES, penPath, linePath, hits, clean,
     load, unload, flush, setOn, setting, state, undo, redo, clearPage, clearAll, forPdf, count, drawn, strokes, shown,
     set onChange(f) { onChange = f; },
     set onPen(f) { onPen = f; },
     set onProbe(f) { onProbe = f; },
-    set onLog(f) { logger = f; },
+    set onDraw(f) { onDraw = f; },
     snapshot, restore,
     fromPhone, eraseFrom, get nat() { return nat; },
     get on() { return on; },

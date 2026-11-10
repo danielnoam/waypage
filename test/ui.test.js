@@ -2364,6 +2364,60 @@ function zipOf(files) {
       await until(q, () => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-on='1'][data-page='1']"));
       assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").getAttribute("aria-pressed")), "true");
       await until(q, () => !document.querySelector(".ink-bar").hidden);
+      // The bar: no step row. Size opens a scale of five, and the pen has a style menu of four.
+      assert.strictEqual(await q.locator(".ink-bar .ink-test, .ink-bar [data-act='testdone']").count(), 0);
+      await q.locator('.ink-bar [data-act="size"]').click();
+      await q.locator(".ink-pop-sizes").waitFor();
+      assert.strictEqual(await q.locator(".ink-pop-sizes button").count(), 5);
+      assert.deepStrictEqual(await q.locator(".ink-pop-sizes .ink-pop-n").allInnerTexts(), ["1", "2", "3", "4", "5"]);
+      assert.strictEqual(await q.locator('.ink-pop-sizes [aria-checked="true"]').count(), 1);
+      const onScreen = await q.evaluate(() => { const r = document.querySelector(".ink-pop-sizes").getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.bottom <= document.querySelector(".ink-bar").getBoundingClientRect().top; });
+      assert.strictEqual(onScreen, true, "above its button, inside the screen");
+      await q.locator(".ink-pop-sizes button").nth(4).click();
+      await q.locator(".ink-pop-sizes").waitFor({ state: "detached" });
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.state().size), 4);
+      await q.locator('.ink-bar [data-act="style"]').click();
+      await q.locator(".ink-pop-styles").waitFor();
+      assert.deepStrictEqual(await q.locator(".ink-pop-styles .ink-pop-name").allInnerTexts(), ["Ballpoint", "Marker", "Fountain pen", "Brush"]);
+      assert.strictEqual(await q.locator(".ink-pop-styles svg path").count(), 4, "each shows a stroke in its style");
+      // Only one menu at a time, and a tap elsewhere closes it.
+      await q.locator('.ink-bar [data-act="size"]').click();
+      await q.locator(".ink-pop-sizes").waitFor();
+      await until(q, () => document.querySelectorAll(".ink-pop").length === 1);
+      await q.mouse.click(4, 4);
+      await q.locator(".ink-pop").waitFor({ state: "detached" });
+      await q.locator('.ink-bar [data-act="style"]').click();
+      await q.locator(".ink-pop-styles button", { hasText: "Fountain pen" }).click();
+      await q.locator(".ink-pop-styles").waitFor({ state: "detached" });
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.state().style), "fountain");
+      assert.ok(/Fountain pen/.test(await q.locator('.ink-bar [data-act="style"]').getAttribute("aria-label")));
+      // What the pen writes with is kept on the stroke, at the size picked.
+      await q.evaluate(() => {
+        const svg = document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
+        const pe = (name, f) => svg.dispatchEvent(new PointerEvent(name, { pointerType: "pen", pointerId: 51, isPrimary: true, bubbles: true, cancelable: true, buttons: name === "pointerup" ? 0 : 1, button: name === "pointerdown" ? 0 : -1, pressure: 0.5, clientX: r.left + r.width * f, clientY: r.top + r.width * 0.7 }));
+        pe("pointerdown", 0.2); pe("pointermove", 0.4); pe("pointerup", 0.4);
+      });
+      assert.deepStrictEqual(await q.evaluate(() => { const s = Waypage.ink.strokes(1)[0]; return [s.y, s.w === Waypage.ink.SIZES.pen[4]]; }), ["fountain", true]);
+      // The style only belongs to the pen, the size to both pen and highlighter.
+      await q.locator('.ink-bar [data-act="tool:highlighter"]').click();
+      assert.strictEqual(await q.locator('.ink-bar [data-act="style"]').count(), 0);
+      assert.strictEqual(await q.locator('.ink-bar [data-act="size"]').count(), 1);
+      await q.locator('.ink-bar [data-act="tool:eraser"]').click();
+      assert.strictEqual(await q.locator('.ink-bar [data-act="style"], .ink-bar [data-act="size"]').count(), 0);
+      await q.locator('.ink-bar [data-act="tool:pen"]').click();
+      // [ and ] make it smaller or bigger; an old saved size (of three) keeps its place on the scale of five.
+      await q.keyboard.press("[");
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.state().size), 3);
+      await q.keyboard.press("]");
+      await q.keyboard.press("]");
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.state().size), 4, "no further than the biggest");
+      assert.deepStrictEqual(await q.evaluate(() => {
+        const sizeOf = (saved) => { localStorage.setItem("waypage.ink", JSON.stringify(saved)); return inkPrefs().size; };
+        return [sizeOf({ tool: "pen", size: 0 }), sizeOf({ tool: "pen", size: 1 }), sizeOf({ tool: "pen", size: 2 }), sizeOf({ v: 2, size: 1 }), sizeOf({ v: 2, size: 4 })];
+      }), [0, 2, 4, 1, 4]);
+      // Back to a ballpoint at the middle size for what follows, and what was drawn above taken off.
+      await q.evaluate(() => { Waypage.ink.undo(); Waypage.ink.setting({ size: 1, style: "ball" }); });
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 0);
       // A touch screen draws with the pen alone: a finger's stroke leaves nothing.
       const stroke = (type, pointerId, pts, pressure) => q.evaluate(([type, pointerId, pts, pressure]) => {
         const d = document.getElementById("readerFrame").contentDocument;
@@ -2563,7 +2617,7 @@ function zipOf(files) {
       await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
       await q.evaluate(() => openSheet("ink"));
       await q.locator("#readingSheet .ink-test-box .btn-primary", { hasText: "Start test" }).click();
-      await q.locator("#readingSheet .ink-test-box", { hasText: "Step 1 of 12" }).waitFor();
+      await q.locator("#readingSheet .ink-test-box", { hasText: "Step 1 of 10" }).waitFor();
       const onPad = (kind, pointerType, buttons) => q.evaluate(([kind, pointerType, buttons]) => {
         const pad = document.querySelector("#readingSheet .ink-probe-pad"), r = pad.getBoundingClientRect();
         const pe = (name, f) => pad.dispatchEvent(new PointerEvent(name, { pointerType, pointerId: 7, isPrimary: true, bubbles: true, cancelable: true, buttons: name === "pointerup" ? 0 : buttons, button: name === "pointerdown" ? 0 : -1, pressure: 0.5, clientX: r.left + r.width * f, clientY: r.top + r.height / 2 }));
@@ -2578,31 +2632,17 @@ function zipOf(files) {
       await done();
       await onPad("draw", "pen", 1); await done();
       for (let i = 0; i < 6; i++) await skip();
-      await q.locator("#readingSheet .ink-test-box", { hasText: "Step 10 of 12" }).waitFor();
+      await q.locator("#readingSheet .ink-test-box", { hasText: "Step 10 of 10" }).waitFor();
       await skip();
-      // 11, on the page: the sheet goes, Draw comes on, and the step is on the Draw bar.
-      await q.locator("#readingSheet .ink-test-box button", { hasText: "Go to the page" }).click();
-      await until(q, () => !!document.querySelector(".ink-test") && !document.querySelector(".ink-test").hidden && !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-on='1'][data-page='1']"));
-      await q.evaluate(() => {
-        const d = document.getElementById("readerFrame").contentDocument, svg = d.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
-        const pe = (name, f) => svg.dispatchEvent(new PointerEvent(name, { pointerType: "pen", pointerId: 8, isPrimary: true, bubbles: true, cancelable: true, buttons: name === "pointerup" ? 0 : 1, button: name === "pointerdown" ? 0 : -1, pressure: 0.6, clientX: r.left + r.width * f, clientY: r.top + r.width * 0.3 }));
-        pe("pointerdown", 0.2); for (let i = 3; i < 8; i++) pe("pointermove", i / 10); pe("pointerup", 0.8);
-        d.defaultView.scrollBy(0, 40);
-      });
-      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 1, "the test drew a line on the page");
-      await q.waitForTimeout(300);
-      await q.locator('.ink-bar [data-act="testdone"]').click();
-      await q.locator('.ink-bar .ink-test-text', { hasText: "Step 12 of 12" }).waitFor();
-      await q.locator('.ink-bar [data-act="testskip"]').click();
-      // Over: the sheet is back with the log, and the line drawn for the test is gone.
+      // Ten steps, all on the pad: the sheet is where it ends, with the log and nothing on the Draw bar to press.
+      assert.strictEqual(await q.evaluate(() => !document.querySelector(".ink-test") && !document.querySelector('[data-act="testdone"]')), true, "no step row on the Draw bar");
+      // Over: the log is there to save, and nothing was drawn on the page.
       await q.locator("#readingSheet .row", { hasText: "Save the last log" }).waitFor();
-      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 0, "what the test drew is taken off again");
-      assert.strictEqual(await q.evaluate(() => Waypage.ink.on), false, "Draw is as it was");
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 0, "the test draws nothing on the page");
       const log = await q.evaluate(() => penLogText());
       for (const want of ["Waypage pen test log", "agent: ", "pen plugin: no", "finger drawing was: ", "== Step 1: Touch the pad with a finger", "pad pointerdown touch button=0 buttons=1",
         "pad touchstart touchType=n/a", "phone state near=yes", "phone MotionEvent ACTION_HOVER_ENTER tools=2", "phone KeyEvent down 308 KEYCODE_STYLUS_BUTTON_PRIMARY",
-        "pad pointerdown pen button=0 buttons=1", "pad pointermove pen button=-1 buttons=1", "x6 until", "[skipped]", "page pointerdown pen button=0 buttons=1 pressure=0.6", "page scroll y=40",
-        "page frame ", "ink layers: page 1 on", "page pointerdown pen target=svg.co-ink[page 1][on] under=svg.co-ink[page 1][on]"]) {
+        "pad pointerdown pen button=0 buttons=1", "pad pointermove pen button=-1 buttons=1", "x6 until", "[skipped]"]) {
         assert.ok(log.includes(want), "the log has: " + want + "\n" + log.slice(0, 1500));
       }
       assert.ok(!/clientX|clientY/.test(log), "no positions in the log");

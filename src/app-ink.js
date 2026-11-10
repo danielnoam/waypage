@@ -61,14 +61,17 @@ function inkClose() {
 }
 function inkPrefs() {
   const saved = load(INK_KEY, {}) || {};
+  // Three sizes became five (1.57.0): an older saved one keeps its place on the scale.
+  const size = saved.v === 2 ? saved.size : [0, 2, 4][saved.size];
   // A computer draws with the mouse; a touch screen with the pen alone,
   // so a hand resting on the page leaves no mark.
-  return { tool: ["pen", "highlighter", "eraser"].includes(saved.tool) ? saved.tool : "pen", colors: saved.colors || {}, size: [0, 1, 2].includes(saved.size) ? saved.size : 1,
+  return { tool: ["pen", "highlighter", "eraser"].includes(saved.tool) ? saved.tool : "pen", colors: saved.colors || {}, size: [0, 1, 2, 3, 4].includes(size) ? size : 2,
+    style: C.ink.STYLES.includes(saved.style) ? saved.style : "ball",
     finger: typeof saved.finger === "boolean" ? saved.finger : !matchMedia("(pointer: coarse)").matches };
 }
 function inkKeep() {
   const s = C.ink.state();
-  store(INK_KEY, { tool: s.tool, colors: s.colors, size: s.size, finger: s.finger });
+  store(INK_KEY, { v: 2, tool: s.tool, colors: s.colors, size: s.size, style: s.style, finger: s.finger });
 }
 
 function inkSet(on) {
@@ -86,6 +89,7 @@ function inkSet(on) {
     M.appear(inkBar);
     hideReadHere();
   } else if (inkBar && !inkBar.hidden) {
+    inkPopClose(true);
     const bar = inkBar;
     M.vanish(bar).finally(() => { if (!C.ink.on) bar.hidden = true; });
   }
@@ -103,29 +107,120 @@ function inkBuild() {
       el("span", { class: "ink-gap" }),
       btn("Undo", "undo", "undo"), btn("Redo", "redo", "redo"),
       el("button", { type: "button", class: "ink-done", "data-act": "done" }, "Done")),
-    el("div", { class: "ink-row ink-style" }),
-    // The pen test's page steps (app-pentest.js).
-    el("div", { class: "ink-row ink-test", hidden: true },
-      el("span", { class: "ink-test-text" }),
-      el("button", { type: "button", class: "ink-done", "data-act": "testdone" }, "Next step"),
-      el("button", { type: "button", class: "ink-done", "data-act": "testskip" }, "Skip")));
+    el("div", { class: "ink-row ink-style" }));
   inkBar.addEventListener("click", (e) => {
     const b = e.target.closest("button[data-act]");
     if (!b || b.disabled) return;
     const [act, arg] = b.dataset.act.split(":");
+    // Size and Style open their small menu; anything else closes it.
+    if (act === "size" || act === "style") { inkPopOpen(act, b); return; }
+    inkPopClose();
     if (act === "tool") C.ink.setting({ tool: arg });
     else if (act === "color") C.ink.setting({ color: arg });
-    else if (act === "size") C.ink.setting({ size: (C.ink.state().size + 1) % 3 });
     else if (act === "finger") C.ink.setting({ finger: !C.ink.state().finger });
     else if (act === "undo") inkGo(C.ink.undo());
     else if (act === "redo") inkGo(C.ink.redo());
-    else if (act === "testdone") { penTestNext(false); return; }
-    else if (act === "testskip") { penTestNext(true); return; }
     else if (act === "done") { inkSet(false); return; }
     inkKeep();
   });
   $("readerView").append(inkBar);
 }
+// ---- Size and pen style: a small menu above their button ----
+
+const INK_DOTS = [3, 6, 9, 12, 16];
+const INK_STYLES = [["ball", "Ballpoint"], ["marker", "Marker"], ["fountain", "Fountain pen"], ["brush", "Brush"]];
+const inkStyleName = (y) => (INK_STYLES.find((x) => x[0] === y) || INK_STYLES[0])[1];
+let inkPop = null;     // { kind, el }
+
+// A short stroke in a style, drawn by the engine that draws the real ones.
+function inkSample(style, width, height) {
+  const NS = "http://www.w3.org/2000/svg";
+  const h = height / width, svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 1 " + h);
+  svg.setAttribute("width", width);
+  svg.setAttribute("height", height);
+  svg.setAttribute("aria-hidden", "true");
+  const pts = [];
+  for (let i = 0; i <= 24; i++) {
+    const t = i / 24;
+    pts.push(0.1 + 0.8 * t, h / 2 + h * 0.22 * Math.sin(t * Math.PI * 2), 0.3 + 0.6 * Math.sin(t * Math.PI));
+  }
+  const path = document.createElementNS(NS, "path");
+  path.setAttribute("d", C.ink.penPath(pts, 0.09, style));
+  path.setAttribute("fill", "currentColor");
+  svg.append(path);
+  return svg;
+}
+function inkPopMenu(kind) {
+  const s = C.ink.state();
+  const pick = (patch) => { C.ink.setting(patch); inkKeep(); inkPopClose(); };
+  if (kind === "size") {
+    return el("div", { class: "ink-pop ink-pop-sizes", role: "menu", "aria-label": "Size" },
+      ...INK_DOTS.map((d, i) => el("button", { type: "button", role: "menuitemradio", "aria-checked": String(s.size === i), "aria-pressed": String(s.size === i), "aria-label": "Size " + (i + 1), onclick: () => pick({ size: i }) },
+        el("span", { class: "ink-pop-dot" }, el("span", { class: "ink-size", style: "width:" + d + "px;height:" + d + "px" })), el("span", { class: "ink-pop-n" }, String(i + 1)))));
+  }
+  return el("div", { class: "ink-pop ink-pop-styles", role: "menu", "aria-label": "Pen style" },
+    ...INK_STYLES.map(([y, name]) => el("button", { type: "button", role: "menuitemradio", "aria-checked": String(s.style === y), "aria-pressed": String(s.style === y), onclick: () => pick({ style: y }) },
+      inkSample(y, 72, 28), el("span", { class: "ink-pop-name" }, name), el("span", { class: "ink-pop-tick", "aria-hidden": "true" }, s.style === y ? "✓" : ""))));
+}
+function inkPopOpen(kind, btn) {
+  if (inkPop && inkPop.kind === kind) { inkPopClose(); return; }
+  inkPopClose(true);
+  const menu = inkPopMenu(kind);
+  $("readerView").append(menu);
+  // Over its button and above the bar (so it covers none of the bar's own
+  // buttons), kept inside the screen.
+  const r = btn.getBoundingClientRect(), top = inkBar.getBoundingClientRect().top, w = menu.offsetWidth;
+  const left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2));
+  menu.style.left = left + "px";
+  menu.style.bottom = (innerHeight - top + 8) + "px";
+  menu.style.transformOrigin = (r.left + r.width / 2 - left) + "px 100%";
+  M.appear(menu);
+  inkPop = { kind, el: menu };
+  inkPopMark();
+  const first = menu.querySelector('[aria-checked="true"]') || menu.querySelector("button");
+  if (first && document.body.classList.contains("keys")) first.focus();
+}
+function inkPopClose(now) {
+  const p = inkPop;
+  if (!p) return;
+  inkPop = null;
+  if (now) p.el.remove();
+  else M.vanish(p.el).finally(() => p.el.remove());
+  inkPopMark();
+}
+// Which button has its menu open, said in place: the bar's buttons stay as they are, so a tap on
+// another one while a menu closes still lands on it.
+function inkPopMark() {
+  if (!inkBar) return;
+  for (const kind of ["size", "style"]) {
+    const b = inkBar.querySelector('[data-act="' + kind + '"]');
+    if (b) b.setAttribute("aria-expanded", String(!!inkPop && inkPop.kind === kind));
+  }
+}
+// A tap anywhere else, and drawing, close it.
+document.addEventListener("pointerdown", (e) => {
+  if (!inkPop || inkPop.el.contains(e.target)) return;
+  const t = inkBar && inkBar.querySelector('[data-act="' + inkPop.kind + '"]');
+  if (t && t.contains(e.target)) return;
+  inkPopClose();
+}, true);
+C.ink.onDraw = () => inkPopClose();
+// Arrow keys move along an open menu.
+document.addEventListener("keydown", (e) => {
+  if (!inkPop || !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) return;
+  const items = [...inkPop.el.querySelectorAll("button")], at = items.indexOf(document.activeElement);
+  const d = e.key === "ArrowUp" || e.key === "ArrowLeft" ? -1 : 1;
+  items[(at + d + items.length) % items.length].focus();
+  e.preventDefault();
+});
+// Smaller or bigger, from the keys.
+function inkSize(d) {
+  const to = Math.max(0, Math.min(4, C.ink.state().size + d));
+  C.ink.setting({ size: to });
+  inkKeep();
+}
+
 // Undo or redo on a page that isn't on screen goes there.
 function inkGo(n) {
   if (n && !C.ink.shown().includes(n)) C.reader.toPrinted(n);
@@ -142,11 +237,14 @@ function inkPaint() {
   const swatches = s.tool === "eraser" ? [] : INK_COLORS[hl ? "highlighter" : "pen"].map(([c, name]) =>
     el("button", { type: "button", "aria-label": name, title: name, "aria-pressed": String(s.color === c), "data-act": "color:" + c },
       el("span", { class: "ink-dot", "data-c": c, "data-t": hl ? "h" : "p" })));
-  const dia = [4, 8, 13][s.size];
-  fill(row, ...swatches,
-    s.tool === "eraser" ? null : el("button", { type: "button", "aria-label": "Size: " + ["fine", "medium", "bold"][s.size], title: "Size", "data-act": "size" },
-      el("span", { class: "ink-size", style: "width:" + dia + "px;height:" + dia + "px" })),
+  const sizeBtn = s.tool === "eraser" ? null : el("button", { type: "button", "aria-label": "Size " + (s.size + 1) + " of 5", title: "Size", "aria-haspopup": "menu", "aria-expanded": String(!!inkPop && inkPop.kind === "size"), "data-act": "size" },
+    el("span", { class: "ink-size", style: "width:" + INK_DOTS[s.size] + "px;height:" + INK_DOTS[s.size] + "px" }));
+  const styleBtn = s.tool !== "pen" ? null : el("button", { type: "button", "aria-label": "Pen style: " + inkStyleName(s.style), title: "Pen style", "aria-haspopup": "menu", "aria-expanded": String(!!inkPop && inkPop.kind === "style"), "data-act": "style" },
+    inkSample(s.style, 28, 16));
+  fill(row, ...swatches, sizeBtn, styleBtn,
     el("button", { type: "button", "aria-label": "Draw with a finger", title: "Draw with a finger or mouse", "aria-pressed": String(s.finger), "data-act": "finger" }, inkIcon("finger")));
+  // What's open can't be, with this tool.
+  if (inkPop && ((inkPop.kind === "style" && s.tool !== "pen") || (inkPop.kind === "size" && s.tool === "eraser"))) inkPopClose(true);
 }
 C.ink.onChange = () => {
   inkPaint();

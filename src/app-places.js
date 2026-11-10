@@ -979,7 +979,7 @@ const KEYS = [
   ["In the library", [["↑ ↓", "Move between clips"], ["Enter", "Open"], ["X", "Pick, to act on several"], ["Shift-click", "Pick a run"],
     ["F", "Favourite"], ["E", "Export"], ["Del", "Delete"]]],
   ["Reading", [["Space  ← →", "Next or previous page"], ["J  K", "Next or previous section"], ["T", "Contents beside the text"],
-    ["S", "Narrate, or auto-scroll a comic"], ["A", "Reader settings"], ["H", "Highlights"], ["D", "Draw on a PDF, then P pen, B highlighter, E eraser"], ["L", "Translate this clip"], ["/", "Find in this clip"], ["+  −", "Text size"], ["O", "Open the original"], ["Esc", "Back"]]],
+    ["S", "Narrate, or auto-scroll a comic"], ["A", "Reader settings"], ["H", "Highlights"], ["D", "Draw on a PDF, then P pen, B highlighter, E eraser, [ ] size"], ["L", "Translate this clip"], ["/", "Find in this clip"], ["+  −", "Text size"], ["O", "Open the original"], ["Esc", "Back"]]],
 ];
 function keysSheet() {
   return el("div", { class: "keys-sheet" },
@@ -1024,6 +1024,7 @@ function onKeys(e) {
   if (e.key === "Tab" || e.key.startsWith("Arrow") || e.key === "Enter" || e.key === "Escape") document.body.classList.add("keys");
   if (e.defaultPrevented || e.isComposing) return;
   const k = e.key, inFrame = e.target && e.target.ownerDocument !== document;
+  if (k === "Escape" && inkPop) { inkPopClose(); e.preventDefault(); return; }
   if (k === "Escape" && (state.sheet || state.image || state.menu || state.select || state.side)) { history.back(); return; }
   if (state.image && !e.altKey && !e.ctrlKey && !e.metaKey) {
     const act = { ArrowLeft: () => stepImage(-1), ArrowRight: () => stepImage(1), "+": () => zoomStep(1), "=": () => zoomStep(1), "-": () => zoomStep(-1) }[k];
@@ -1064,6 +1065,7 @@ function onKeys(e) {
       p: () => C.ink.on && (C.ink.setting({ tool: "pen" }), inkKeep()),
       b: () => C.ink.on && (C.ink.setting({ tool: "highlighter" }), inkKeep()),
       e: () => C.ink.on && (C.ink.setting({ tool: "eraser" }), inkKeep()),
+      "[": () => C.ink.on && inkSize(-1), "]": () => C.ink.on && inkSize(1),
       l: () => !$("readerTranslate").hidden && $("readerTranslate").click(),
       "+": () => size(1), "=": () => size(1), "-": () => size(-1), "−": () => size(-1),
       o: () => /^https?:/.test(p.url || "") && C.platform.openOutside(p.url),

@@ -54,7 +54,7 @@ src/app-draw.js     section heads, a part opened alone, the flip, Continue readi
 src/app-jobs.js     links out of a paste or share, the URL index, savePage, saveAll, Wi-Fi wait, runJob
 src/app-reader.js   moving between screens; the reader around the page: brightness, contents, Narrate, highlights, image viewer
 src/app-ink.js      Draw: the pen button, the bar of tools, the Drawings sheet, saving a copy with them
-src/app-pentest.js  the pen test in Drawings: asks for a dozen things in turn, records what the page and the phone report, makes a log
+src/app-pentest.js  the pen test in Drawings: asks for ten things in turn, records what the page and the phone report, makes a log
 src/app-library.js  tags, collections, a clip's sheet, multi-select, export, import, watched folders
 src/app-saving.js   sync screen, saving several, next links and new chapters, feeds, home-screen widgets
 src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestures, a feed's sheets
@@ -219,7 +219,9 @@ A PDF's pages, words or scan, can be drawn on with a pen (1.57.0).
 `ink.js` gives each page that has a picture a layer of SVG over it
 (`.co-ink`, a sibling of the picture like the words' layer, placed by
 `placeText` with the same `pageBox`), and `app-ink.js` is the button, the
-bar of tools and the sheet. A stroke is `{ id, t: "p"|"h", c, w, p }`:
+bar of tools and the sheet. A stroke is `{ id, t: "p"|"h", c, w, p, y? }` (`y` is how a pen wrote: "marker",
+"fountain" or "brush"; none is a ballpoint, so strokes from before styles
+look as they did):
 colour by name (reader.css paints it, and re-paints it for Dark PDF
 pages), width and points as fractions of the page's width (`p` is x, y,
 pressure triples, y too in widths, so a page whose size was guessed and
@@ -232,7 +234,12 @@ beside the clip (`store.readInk`, `writeInk`), this device's own like the
 file; the PDF itself is never written to. "Save a copy with drawings"
 has pdf.js write the strokes as `/Ink` annotations (`pdf.js inkOf`, the
 sandbox's `ink` job, `saveDocument` on the open document): the pen's
-pressure becomes one even width, the highlighter 40% opacity.
+pressure becomes one even width (the style's average, `ink.js exportWidth`), the
+highlighter 40% opacity. The pen has five sizes (`SIZES`) and four styles
+(`penPath`'s radius rules: ballpoint wider with pressure, marker one width,
+fountain pen thin along a 45° nib and thick across it, brush a strong
+response with tapered ends); a saved size from the three-step bar maps 0, 1, 2
+to 0, 2, 4 on the five (`waypage.ink` has `v: 2` from then on).
 
 A comic in Pages (reader.js `picsLayout`) is a flex row of its pages, each
 sized in px to a screen or half of one, so the text's own turning
@@ -497,7 +504,7 @@ area.
   decides whether to pan at the touch, and the touch's own events come
   too late and differ from device to device. Drawings › Try your pen shows
   what the page and the phone each say, and its Start test records a log of
-  a dozen steps (`app-pentest.js`; the Pen plugin's `raw` mode sends every
+  ten steps (`app-pentest.js`; the Pen plugin's `raw` mode sends every
   MotionEvent and KeyEvent) to save and send. The log holds only event
   types, buttons, pressure, tool types and key codes, timed. iOS and the web copy have only the
   browser's `buttons` 2 or 32.

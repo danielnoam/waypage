@@ -756,8 +756,28 @@ body.aloud-bar-up .library, body.aloud-bar-up .screen-body { padding-bottom: cal
 .ink-probe-out { margin: var(--s-2) 0 0; white-space: pre-wrap; color: var(--muted); font: 400 var(--fs-meta)/var(--lh-meta) ui-monospace, monospace; }
 .ink-test-box { margin-top: var(--s-3); }
 .ink-test-what { margin: 0 0 var(--s-3); font: 600 var(--fs-label)/var(--lh-label) var(--sans); }
-.ink-bar .ink-test { flex-wrap: wrap; justify-content: space-between; padding: var(--s-2) var(--s-3); gap: var(--s-1); }
-.ink-bar .ink-test-text { flex: 1 1 100%; font: 400 var(--fs-meta)/var(--lh-meta) var(--sans); text-align: start; }
+/* Size and pen style: a small menu above their button on the Draw bar. */
+.ink-pop {
+  position: fixed; z-index: 4; display: flex;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden;
+  box-shadow: 0 8px 24px var(--shadow), 0 1px 4px var(--shadow);
+}
+.ink-pop button {
+  border: 0; background: none; color: inherit; cursor: pointer;
+  font: 400 var(--fs-meta)/var(--lh-meta) var(--sans);
+}
+.ink-pop button:active { background-image: linear-gradient(var(--press), var(--press)); }
+.ink-pop button[aria-pressed="true"] { color: var(--accent); background-color: var(--line); }
+.ink-pop-sizes button { width: var(--tap); height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-1); padding: 0; }
+.ink-pop-dot { height: 20px; display: flex; align-items: center; justify-content: center; }
+.ink-pop-n { font-variant-numeric: tabular-nums; }
+.ink-pop-styles { flex-direction: column; min-width: 220px; }
+.ink-pop-styles button { display: flex; align-items: center; gap: var(--s-3); min-height: var(--tap); padding: 0 var(--s-3); text-align: start; font: 500 var(--fs-label)/var(--lh-label) var(--sans); }
+.ink-pop-styles button + button { border-top: 1px solid var(--line); }
+.ink-pop-name { flex: 1; }
+.ink-pop-tick { width: 18px; text-align: center; }
+.ink-bar button svg { flex-shrink: 0; }
 .ink-size { display: block; border-radius: var(--r-full); background: currentColor; }
 .read-here {
   position: fixed; z-index: 3; transform: translateX(-50%);
