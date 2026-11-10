@@ -1849,7 +1849,11 @@ function fileSheet() {
         el("span", { class: "choice-text" }, el("span", { class: "choice-label" + (a.can ? " accent" : "") }, "Read from where it is"),
           el("span", { class: "choice-note" }, a.can
             ? "Lives in Files and costs almost nothing here. It needs the file to stay where it is, and doesn't sync."
-            : "Waypage wasn't given lasting access to this file. Open it with Open a file to read it from where it is.")))));
+            : "Waypage wasn't given lasting access to this file. Open it with Open a file to read it from where it is."))),
+      // A PDF can also be made into a note to draw on (2.0.0).
+      a.kind === "pdf" ? el("button", { class: "row", type: "button", onclick: () => answer("note") },
+        el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, "Make a note"),
+          el("span", { class: "choice-note" }, "A copy of its pages you can draw on, in Notes. The PDF itself isn't changed."))) : null));
 }
 // A file dropped on the window, on a computer.
 addEventListener("dragover", (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes("Files")) e.preventDefault(); });
@@ -1915,9 +1919,16 @@ async function openFile(file, btn, open, ref, forced) {
     let link = null;
     // A PDF made from a deck was saved just now, so it isn't asked about.
     if (forced) link = forced.ref || null;
-    else if (C.files.canLink(kind) && (ref || C.platform.files.canLink)) {
+    else if ((C.files.canLink(kind) && (ref || C.platform.files.canLink)) || kind === "pdf") {
       const asked = await askKeep(file, kind, !!ref);
       if (asked == null) { if (btn) { btn.disabled = false; say("Restore"); } return; }
+      // A PDF made into a note (2.0.0): the file is read once and let go.
+      if (asked === "note") {
+        if (ref) C.platform.files.release(ref);
+        await noteFromFile(file, open);
+        if (btn) { btn.disabled = false; say("Restore"); }
+        return;
+      }
       link = asked ? ref : null;
     }
     if (ref && !link) C.platform.files.release(ref);
@@ -2377,6 +2388,23 @@ async function makeNote(kind) {
   openPage(meta.id);
 }
 
+// A PDF picked to open can be made into a note straight away: a copy of its
+// pages, the file itself let go. `open` says to show it once it's made.
+async function noteFromFile(file, open) {
+  toast("Making the note…");
+  let meta;
+  try {
+    meta = await C.notes.fromPdf({ title: file.name.replace(/\.pdf$/i, "") }, file);
+  } catch (e) {
+    console.error(e);
+    toast(e instanceof C.files.FileError ? e.message : "Couldn't make the note. Try again.");
+    return;
+  }
+  state.pages.unshift(meta);
+  await C.store.writeIndex(state.pages);
+  renderLibrary();
+  if (open) openPage(meta.id);
+}
 // The pen on a PDF (2.0.0): only a note is drawn on, so a PDF asks to be
 // made into one.
 function toNoteSheet() {

@@ -2369,7 +2369,7 @@ function zipOf(files) {
       const noteId = await q.evaluate(() => state.open.id);
       target = noteId;
       assert.ok(await q.evaluate(() => state.open.note.from), "the note says which PDF it was made from");
-      assert.strictEqual(await q.evaluate(() => state.open.title), "sketch (note)");
+      assert.strictEqual(await q.evaluate(() => state.open.title), "sketch", "named as the PDF is");
       assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").getAttribute("aria-pressed")), "true");
       await until(q, () => !document.querySelector(".ink-bar").hidden);
       // The bar: no step row. Size opens a scale of five, and the pen has a style menu of four.
@@ -4070,6 +4070,46 @@ function zipOf(files) {
       });
       assert.ok(/Changed/.test(words), words);
       // (Reading the exported PDF back opens pdf.js's sandbox, which says so in the console.)
+      const errs = q.errors.filter((e) => !/sandboxed and lacks the 'allow-same-origin'/.test(e));
+      assert.deepStrictEqual(errs, [], errs.join(" | "));
+      await q.context().close();
+    });
+
+    await test("opening a PDF offers Make a note as a third choice, named as the file is, and Show has All notes only once there is a note (2.0.0)", async () => {
+      const maker = await browser.newPage();
+      await maker.setContent("<style>@page{size:A4;margin:0} div{padding:60px;font:24px sans-serif;page-break-after:always}</style><div><p>One</p></div><div><p>Two</p></div>");
+      const bytes = [...await maker.pdf({ format: "A4" })];
+      await maker.close();
+      const q = await page(browser, 390);
+      await q.evaluate(async (b) => { const real = askKeep; askKeep = async () => false; try { await openFile(new File([new Uint8Array(b)], "plain.pdf", { type: "application/pdf" }), null, false); } finally { askKeep = real; } }, bytes);
+      await until(q, () => !!document.querySelector(".page-card"));
+      const showItems = async () => {
+        await q.locator(".show-wrap .dropdown-btn").click();
+        const items = await q.locator(".show-wrap .dropdown-item").allInnerTexts();
+        // Closed by choosing what is chosen already.
+        await q.locator(".show-wrap .dropdown-item", { hasText: "All clips" }).click();
+        await q.locator(".show-wrap .dropdown-menu").waitFor({ state: "detached" });
+        return items.map((t) => t.trim());
+      };
+      assert.ok(!(await showItems()).includes("All notes"), "no note yet, no All notes");
+      // Opening a PDF: Keep a copy, Read from where it is, and Make a note.
+      q.evaluate(async (b) => { await openFile(new File([new Uint8Array(b)], "My sketch.pdf", { type: "application/pdf" }), null, true); }, bytes).catch(() => {});
+      await q.locator("#menuSheet .row").first().waitFor();
+      assert.deepStrictEqual(await q.locator("#menuSheet .row .choice-label").allInnerTexts(), ["Keep a copy", "Read from where it is", "Make a note"]);
+      await q.locator("#menuSheet .row", { hasText: "Make a note" }).click();
+      await until(q, () => !!state.open && !!state.open.note && C.reader.frameDoc.querySelectorAll("svg.co-ink").length === 2, null, 20000);
+      assert.strictEqual(await q.evaluate(() => state.open.title), "My sketch", "named as the file is, with no (note)");
+      assert.strictEqual(await q.evaluate(() => state.open.link || state.open.file || null), null, "a note has no file to read from");
+      await q.evaluate(() => closeReader());
+      // Now All notes is there, and lists the note alone.
+      assert.ok((await showItems()).includes("All notes"));
+      await q.locator(".show-wrap .dropdown-btn").click();
+      await q.locator(".show-wrap .dropdown-item", { hasText: "All notes" }).click();
+      await until(q, () => state.filter === "notes");
+      assert.deepStrictEqual(await q.locator("#library .page-card .card-title").allInnerTexts(), ["My sketch"]);
+      // Deleting the last note puts the filter back to All.
+      await q.evaluate(async () => { const n = state.pages.find((x) => x.note); await C.store.removePage(n.id); state.pages = state.pages.filter((x) => !x.note); await C.store.writeIndex(state.pages); renderLibrary(); });
+      await until(q, () => state.filter === "all");
       const errs = q.errors.filter((e) => !/sandboxed and lacks the 'allow-same-origin'/.test(e));
       assert.deepStrictEqual(errs, [], errs.join(" | "));
       await q.context().close();

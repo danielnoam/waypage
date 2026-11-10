@@ -299,6 +299,9 @@ and only a note is `drawable`; a linked PDF is `convertible`: its pen asks
 for a note, and `notes.fromPdf` keeps a copy of the PDF beside the note
 (`base.pdf`, `store.writeNoteBase`; a browser keeps a Blob in the database,
 at most 100 MB), one sheet to a page, and moves the PDF's old drawings over.
+Opening a PDF asks Keep a copy, Read from where it is or Make a note too
+(`noteFromFile`, `fileSheet`), in a browser as well; the library's Show has
+All notes (`filter "notes"`) while a note exists.
 Typed text is an item in `ink.json` like a picture, `{ id, t: "x", c, x, y,
 w, h, z, text }` (`z` the size in page widths, `ink.js addText`, `editText`),
 so Select, move, cut, paste, delete and undo take it with no more code. Save

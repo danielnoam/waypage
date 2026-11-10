@@ -174,6 +174,8 @@ function renderLibrary() {
   // A tag filter whose last page lost the tag (or was deleted) falls back to All.
   if (n && state.filter.startsWith("#")
     && !allTags().some((t) => sameTag(t, state.filter.slice(1)))) { state.filter = "all"; store(FILTER_KEY, "all"); }
+  // The same for All notes once the last note is gone (2.0.0).
+  if (loaded && state.filter === "notes" && !state.pages.some((p) => p.note)) { state.filter = "all"; store(FILTER_KEY, "all"); }
   renderTools();
   // Until the library is read nothing is said (1.2.0): the empty state
   // showed for the second it took, as if there were no clips.

@@ -209,7 +209,8 @@
     return keepNew(entry(C.save.newId(), title(), { paper: kind }), [{ bg: "paper" }]);
   }
 
-  // A note made from a PDF (`src` is its library entry, `blob` its bytes):
+  // A note made from a PDF (`src` is its library entry, or just { title } for a
+  // file picked to be one; `blob` its bytes):
   // a copy of the PDF is kept, one sheet to a page, and the PDF itself is
   // never touched. The sheets it grows by are lined paper.
   async function fromPdf(src, blob) {
@@ -219,9 +220,9 @@
     catch (e) { throw new C.files.FileError("Waypage can't read this PDF."); }
     if (!pages) throw new C.files.FileError("There are no pages in this PDF.");
     if (pages > MAX_SHEETS) throw new C.files.FileError("This PDF has over " + MAX_SHEETS + " pages, too many for a note.");
-    const name = ((src.title || "PDF").slice(0, 280) + " (note)").trim();
+    const name = (src.title || "PDF").slice(0, 300).trim();
     const sheets = Array.from({ length: pages }, (_, i) => ({ bg: "pdf", n: i + 1 }));
-    return keepNew(entry(C.save.newId(), name, { paper: "lines", from: src.id }), sheets, blob);
+    return keepNew(entry(C.save.newId(), name, { paper: "lines", ...(src.id ? { from: src.id } : {}) }), sheets, blob);
   }
 
   C.notes = { PAPERS, LABELS, paper, toPdf, create, fromPdf, open, keep, W, H };

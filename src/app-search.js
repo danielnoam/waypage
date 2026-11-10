@@ -201,11 +201,12 @@ function shown(p) {
   if (f === "finished") return !!p.finished;
   if (f === "favourites") return !!p.fav;
   if (f === "highlights") return !!(p.marks && p.marks.length);
+  if (f === "notes") return !!p.note;
   if (f.startsWith("#")) return (p.tags || []).some((t) => sameTag(t, f.slice(1)));
   return true;
 }
 
-const FILTER_NAMES = { unread: "Unread", finished: "Finished", favourites: "Favourites", highlights: "Highlighted" };
+const FILTER_NAMES = { unread: "Unread", finished: "Finished", favourites: "Favourites", highlights: "Highlighted", notes: "Notes" };
 const filterName = () => FILTER_NAMES[state.filter] || state.filter;
 
 function setFilter(f) {
@@ -220,7 +221,7 @@ function setFilter(f) {
 // doesn't close a menu that's open.
 function renderTools() {
   const tags = allTags();
-  const sig = [state.pages.length > 0, state.filter, state.sort, state.pages.some((p) => p.marks && p.marks.length), tags.join("\u0000")].join("|");
+  const sig = [state.pages.length > 0, state.filter, state.sort, state.pages.some((p) => p.marks && p.marks.length), state.pages.some((p) => p.note), tags.join("\u0000")].join("|");
   if (libTools.dataset.sig === sig) return;
   libTools.dataset.sig = sig;
   libTools.hidden = !state.pages.length;
@@ -230,6 +231,8 @@ function renderTools() {
     icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>',
     options: [{ value: "all", label: "All clips" }, { value: "unread", label: "Unread" }, { value: "finished", label: "Finished" }, { value: "favourites", label: "Favourites" },
       ...(state.pages.some((p) => p.marks && p.marks.length) || state.filter === "highlights" ? [{ value: "highlights", label: "Highlighted" }] : []),
+      // Once there is a note (2.0.0), all of them in one list.
+      ...(state.pages.some((p) => p.note) || state.filter === "notes" ? [{ value: "notes", label: "All notes" }] : []),
       ...(tags.length ? [{ head: "Tags" }, ...tags.map((t) => ({ value: "#" + t, label: "#" + t }))] : [])],
     value: state.filter,
     onpick: setFilter,

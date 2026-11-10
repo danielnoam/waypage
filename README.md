@@ -75,8 +75,8 @@ Each section below shows the computer (left) and the phone (right).
 - A note is a page of your own to draw and type on. Save with options › New note asks for Blank, Lines or Squares paper, each shown beside its name.
 - It grows as you write: drawing on its last sheet adds another. A note is always a scroll, never Pages.
 - Pen, highlighter, eraser, Undo and Redo as before, and Select (loop, cut, copy, paste, move), Add › Image and Add › Text. Only a pen draws on a touch screen unless Finger is on.
-- The pen on a PDF asks to make a note from it: a copy of its pages you can draw on, in Notes. The PDF stays as it is, and drawings made on it before move over.
-- Notes show in their own part of the library, after Files. Aa on a note has only Layout (All notes or This note, margins, brightness slider, theme, Dark note) and Auto-scroll, which goes on to the next note.
+- Opening a PDF offers Make a note beside Keep a copy and Read from where it is; the pen on a PDF asks the same. A note made from a PDF is a copy of its pages you can draw on, named as the file is, in Notes. The PDF stays as it is, and drawings made on it before move over.
+- Notes show in their own part of the library, after Files, and Show › All notes (there once you have a note) lists them alone. Aa on a note has only Layout (All notes or This note, margins, brightness slider, theme, Dark note) and Auto-scroll, which goes on to the next note.
 - ⋯ › Drawings lists the sheets and has Try your pen; ⋯ › Save as PDF makes a PDF of the sheets with what is on them.
 - Notes stay on this device for now (not synced or backed up).
 
