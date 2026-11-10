@@ -165,7 +165,7 @@ html[data-co-pdf-dark] mark.co-mark.co-pm.co-c-pink { background: var(--mark-pin
 html[data-co-pdf-dark] mark.co-mark.co-pm.co-c-purple { background: var(--mark-purple); }
 mark.co-mark.co-pm.co-noted { box-shadow: inset 0 -2px var(--muted); }
 
-/* Pen drawing on a printed page (1.57.0, ink.js): a layer of SVG over
+/* Pen drawing on a printed page (1.56.0, ink.js): a layer of SVG over
    the picture, in page widths. It takes the pointer only while Draw is
    on, so words select and links tap the rest of the time; a finger still
    scrolls over it unless it draws. The page is white paper in every

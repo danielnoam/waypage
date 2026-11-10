@@ -880,7 +880,7 @@
   // PDF's pages are drawn: before, every picture was read and decoded
   // before the first page showed, and a 400 MB comic sat whole in memory.
   const printed = (meta) => !!(meta && meta.link && meta.file && meta.file.kind === "pdf" && !meta.comic && meta.view !== "text");
-  // A PDF shown as its own pages, words or scan: where a pen can draw (1.57.0).
+  // A PDF shown as its own pages, words or scan: where a pen can draw (1.56.0).
   const drawable = (meta) => !!(meta && meta.link && meta.file && meta.file.kind === "pdf" && (meta.comic || meta.view !== "text"));
   async function openLinked(meta) {
     closeHeld();

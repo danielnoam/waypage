@@ -14,7 +14,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 
 /**
- * A stylus's buttons and eraser end (1.57.0). A web page can't tell the
+ * A stylus's buttons and eraser end (1.56.0). A web page can't tell the
  * pen's side button from the pen touching: Chromium turns Android's
  * BUTTON_STYLUS_PRIMARY into the left mouse button. So, as a notes app
  * does, the touch and hover events are read here, before they reach the

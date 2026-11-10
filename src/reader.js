@@ -225,7 +225,7 @@
     img.src = full;
   }
   function onClick(e) {
-    // The click that follows a pen stroke is not a tap (1.57.0).
+    // The click that follows a pen stroke is not a tap (1.56.0).
     if (inkHook && inkHook.click(e)) { e.preventDefault(); e.stopPropagation(); return; }
     const held = onTapOnly && navigator.onLine && e.target.closest && e.target.closest(".co-placeholder");
     if (held && boxes.has(held)) { e.preventDefault(); loadHeld(boxes.get(held)); return; }
@@ -1123,7 +1123,7 @@
     const dx = side === "left" ? 0 : side === "right" ? bw - w : (bw - w) / 2;
     return { left: img.offsetLeft + dx, top: img.offsetTop + (bh - h) / 2, width: w, height: h };
   }
-  // Pen drawing over the pages (1.57.0, ink.js): told when a page gets or
+  // Pen drawing over the pages (1.56.0, ink.js): told when a page gets or
   // loses its picture, and when the layers should be put in place.
   let inkHook = null;
   const pageShown = (n) => { if (inkHook) inkHook.show(Number(n)); };
@@ -1955,7 +1955,7 @@
         pagedInput();
         zoomInput();
         glideInput();
-        // A pen on the page, the first time it's seen (1.57.0): the app offers Draw.
+        // A pen on the page, the first time it's seen (1.56.0): the app offers Draw.
         doc.addEventListener("pointerdown", (e) => { if (e.pointerType === "pen" && inkHook && inkHook.pen) inkHook.pen(); }, { passive: true });
         edgeInput();
         textPinchInput();

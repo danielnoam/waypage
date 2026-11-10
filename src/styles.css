@@ -12,7 +12,7 @@
   --line: #E4DED3;
   --preview: #D9E2EA;
   --mark: #F6E3A1;
-  /* Pen colours (1.57.0): the same in every theme, as the page they're
+  /* Pen colours (1.56.0): the same in every theme, as the page they're
      drawn on is white paper in every theme (reader.css has the paint). */
   --pen-ink: #1C1B19;
   --pen-red: #D0312D;
@@ -712,7 +712,7 @@ body.pip > :not(.pip-view) { visibility: hidden; }
 }
 .aloud-bar-title { font: 600 var(--fs-label) var(--serif); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 body.aloud-bar-up .library, body.aloud-bar-up .screen-body { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
-/* Draw (1.57.0, app-ink.js): the bar along the foot of a PDF's pages while
+/* Draw (1.56.0, app-ink.js): the bar along the foot of a PDF's pages while
    Draw is on. Tools and Undo above, colours, size and Finger below. */
 #readerInk[aria-pressed="true"] { color: var(--accent); background: var(--line); }
 .ink-bar {

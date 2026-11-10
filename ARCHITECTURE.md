@@ -215,7 +215,7 @@ fallback); one made in Show as text is found on the printed pages the
 same way (`findRects`, and `files.findPage` for Go to it). Comics and
 scans have no words, so the reader hides Highlights for them.
 
-A PDF's pages, words or scan, can be drawn on with a pen (1.57.0).
+A PDF's pages, words or scan, can be drawn on with a pen (1.56.0).
 `ink.js` gives each page that has a picture a layer of SVG over it
 (`.co-ink`, a sibling of the picture like the words' layer, placed by
 `placeText` with the same `pageBox`), and `app-ink.js` is the button, the

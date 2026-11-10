@@ -339,7 +339,7 @@
     } catch (e) { return null; }
   }
 
-  // A PDF's pen drawings (1.57.0), as JSON beside the clip: this device's
+  // A PDF's pen drawings (1.56.0), as JSON beside the clip: this device's
   // own, never synced or backed up, like the file they are on. null when
   // there are none; writing null (or no strokes) removes the file.
   async function writeInk(id, data) {

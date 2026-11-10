@@ -169,7 +169,7 @@ async function textOf(doc, n) {
   return out;
 }
 
-// The PDF with pen drawings in it as ink annotations (1.57.0): pages is
+// The PDF with pen drawings in it as ink annotations (1.56.0): pages is
 // { "<page>": [{ pts, w, rgb, a, k }] }, pts as x, y, pressure triples with
 // x and y in fractions of the page's width, w a fraction of it, a the
 // opacity. pdf.js writes them the way its own editor does (an
@@ -559,7 +559,7 @@ post({ ready: true });
       handle.outline = async () => (closed ? [] : (await b.ask({ kind: "outline" })).outline || []);
       // A page's words where they sit (1.56.0), for selecting them.
       handle.text = async (n) => (closed ? [] : (await b.ask({ kind: "text", n })).items || []);
-      // The file with pen drawings in it as annotations (1.57.0).
+      // The file with pen drawings in it as annotations (1.56.0).
       handle.ink = async (pages) => {
         if (closed) throw new Error("closed");
         return new Uint8Array((await b.ask({ kind: "ink", pages })).bytes);

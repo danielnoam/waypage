@@ -1,4 +1,4 @@
-// Pen drawing on a PDF (1.57.0), the parts that need no browser:
+// Pen drawing on a PDF (1.56.0), the parts that need no browser:
 // `node test/ink.test.js`. Drawing, erasing, undo and a copy of the PDF
 // with the strokes are driven in a browser by test/ui.test.js.
 const assert = require("assert");
