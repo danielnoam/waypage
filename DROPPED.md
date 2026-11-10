@@ -39,3 +39,7 @@ stops being true.
   clips you can finish in the time you have. Not needed.
 - **"Add a feed" in the computer's sidebar (Daniel, 30 Oct 2026, 1.45.7).**
   Removed; feeds are added from the Feeds place's bar, like on a phone.
+- **Drawing on a PDF itself (Daniel, 10 Nov 2026, 2.0.0).** Drawing is only
+  for notes. The pen on a PDF asks to make a note from it (a copy of its
+  pages), so the PDF is never marked and its own drawings aren't a second
+  kind of thing to keep in step.

@@ -942,7 +942,7 @@ function pageSheet(p, where) {
         C.files.convertible(p) && !p.preview ? menuRow("Make a note from this PDF", () => back().then(() => makeNoteFrom(p))) : null,
         inReader && !p.note && !C.files.printed(p) ? menuRow("Find in this clip", () => back().then(openFind)) : null,
         inReader && !p.note && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow("Save linked pages", () => back().then(() => openSheet("links"))) : null,
-        menuRow(p.finished ? "Mark as unread" : "Mark as read", () => markRead([p], !p.finished).then(draw)),
+        p.note ? null : menuRow(p.finished ? "Mark as unread" : "Mark as read", () => markRead([p], !p.finished).then(draw)),
         // The page changed since (1.38.0): fetched again in its place.
         p.file || p.preview || !/^https?:/.test(p.url || "") ? null
           : menuRow("Update from the site", () => back().then(() => updateClip(p))),
@@ -954,7 +954,7 @@ function pageSheet(p, where) {
         p.file || p.preview || p.comic || !/^https?:/.test(p.url || "") ? null
           : menuRow(p.archived ? "Find a newer archived copy" : "Use the archived copy", () => back().then(() => archiveClip(p))),
         inReader ? null : menuRow("Select", () => back().then(() => startSelect([p.id]))),
-        menuRow(p.link ? "Remove from Waypage" : "Delete this clip", () => deletePage(p, where), "warn")));
+        menuRow(p.link ? "Remove from Waypage" : p.note ? "Delete this note" : "Delete this clip", () => deletePage(p, where), "warn")));
   };
   draw();
   return box;
@@ -1261,6 +1261,7 @@ const MENUS = {
   send: { label: "Saving a page", build: () => sendSheet() },
   newNote: { label: "New note", build: () => newNoteSheet() },
   toNote: { label: "Make a note", build: () => toNoteSheet() },
+  noteText: { label: "Text", build: () => noteTextSheet() },
 };
 let menuUnder = [];
 let menuFrom = null;

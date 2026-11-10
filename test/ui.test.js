@@ -4027,6 +4027,54 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("typed text on a note: Add › Text, edited from Select, undone, kept, and in Save as PDF as words you can search (2.0.0)", async () => {
+      const q = await page(browser, 390);
+      await q.click("#severalBtn");
+      await q.locator("#batchView .row", { hasText: "New note" }).click();
+      await q.locator(".paper-row", { hasText: "Blank note" }).click();
+      await until(q, () => !!state.open && state.open.note && C.ink.on && C.reader.frameDoc.querySelectorAll("svg.co-ink").length === 1);
+      await q.waitForTimeout(1200);
+      await q.locator('.ink-bar [data-act="add"]').click();
+      await q.locator(".ink-pop button", { hasText: "Text" }).click();
+      await q.locator("#menuSheet textarea.note-text").fill("Hello note\nsecond line");
+      await q.locator("#menuSheet .row", { hasText: "Done" }).click();
+      await until(q, () => C.ink.strokes(1).some((x) => x.t === "x"));
+      const t = await q.evaluate(() => C.ink.strokes(1).find((x) => x.t === "x"));
+      assert.strictEqual(t.text, "Hello note\nsecond line");
+      assert.ok(t.w > 0 && t.h > 0 && t.z === 0.026, JSON.stringify(t));
+      assert.strictEqual(await q.evaluate(() => C.reader.frameDoc.querySelectorAll(".co-ink text.txt tspan").length), 2, "one line each");
+      // It is taken, so it can be moved; Edit text changes the words and the size.
+      assert.strictEqual(await q.evaluate(() => C.ink.state().tool), "select");
+      await q.locator('.ink-bar [data-act="edittext"]').click();
+      assert.strictEqual(await q.locator("#menuSheet textarea.note-text").inputValue(), "Hello note\nsecond line");
+      await q.locator("#menuSheet textarea.note-text").fill("Changed");
+      await q.locator("#menuSheet label", { hasText: "Large" }).click();
+      await q.locator("#menuSheet .row", { hasText: "Done" }).click();
+      await until(q, () => C.ink.strokes(1).some((x) => x.t === "x" && x.text === "Changed" && x.z === 0.038));
+      // Undo brings the words and size back, Redo changes them again.
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      assert.deepStrictEqual(await q.evaluate(() => { const x = C.ink.strokes(1).find((y) => y.t === "x"); return [x.text, x.z]; }), ["Hello note\nsecond line", 0.026]);
+      await q.locator('.ink-bar [data-act="redo"]').click();
+      assert.strictEqual(await q.evaluate(() => C.ink.strokes(1).find((y) => y.t === "x").text), "Changed");
+      // Kept with the note, and back when it opens again.
+      await q.waitForTimeout(1200);
+      const saved = await q.evaluate(() => C.store.readInk(state.open.id));
+      assert.strictEqual(saved.pages["1"].find((x) => x.t === "x").text, "Changed");
+      // Save as PDF sets it in the sheet, and as words the PDF can be searched for.
+      const words = await q.evaluate(async () => {
+        const { blob } = await C.notes.toPdf(state.open, C.files.heldPdf(), C.ink.strokes);
+        const doc = await C.pdf.open(blob);
+        const items = await doc.text(1);
+        doc.close();
+        return items.map((i) => i.s).join(" ");
+      });
+      assert.ok(/Changed/.test(words), words);
+      // (Reading the exported PDF back opens pdf.js's sandbox, which says so in the console.)
+      const errs = q.errors.filter((e) => !/sandboxed and lacks the 'allow-same-origin'/.test(e));
+      assert.deepStrictEqual(errs, [], errs.join(" | "));
+      await q.context().close();
+    });
+
     for (const width of [390, 1280]) {
       for (const theme of THEMES) {
         await test("opens at " + width + " px in " + theme + " with no errors", async () => {

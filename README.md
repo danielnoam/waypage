@@ -16,6 +16,7 @@ Each section below shows the computer (left) and the phone (right).
 - [Library](#library)
 - [Sidebar](#sidebar)
 - [Collections and files](#collections-and-files)
+- [Notes](#notes)
 - [Saving](#saving)
 - [Reader](#reader)
 - [Text and themes](#text-and-themes)
@@ -67,6 +68,18 @@ Each section below shows the computer (left) and the phone (right).
 - A comic or book that names its series (a CBZ's ComicInfo, an EPUB's series) goes into that series' collection in volume order.
 - The library can live in app storage, Documents or any folder you pick.
 
+## Notes
+
+<p><img src="docs/shots/notes-desktop.jpg" width="74%" alt="A lines note with a line written and typed text, on a computer"> <img src="docs/shots/notes-phone.jpg" width="21%" alt="A lines note with a line written and typed text, on a phone"></p>
+
+- A note is a page of your own to draw and type on. Save with options › New note asks for Blank, Lines or Squares paper, each shown beside its name.
+- It grows as you write: drawing on its last sheet adds another. A note is always a scroll, never Pages.
+- Pen, highlighter, eraser, Undo and Redo as before, and Select (loop, cut, copy, paste, move), Add › Image and Add › Text. Only a pen draws on a touch screen unless Finger is on.
+- The pen on a PDF asks to make a note from it: a copy of its pages you can draw on, in Notes. The PDF stays as it is, and drawings made on it before move over.
+- Notes show in their own part of the library, after Files. Aa on a note has only Layout (All notes or This note, margins, brightness slider, theme, Dark note) and Auto-scroll, which goes on to the next note.
+- ⋯ › Drawings lists the sheets and has Try your pen; ⋯ › Save as PDF makes a PDF of the sheets with what is on them.
+- Notes stay on this device for now (not synced or backed up).
+
 ## Saving
 
 <p><img src="docs/shots/saving-desktop.jpg" width="74%" alt="Save with options on a computer"> <img src="docs/shots/saving-phone.jpg" width="21%" alt="Save with options on a phone"></p>
@@ -103,7 +116,7 @@ Each section below shows the computer (left) and the phone (right).
 - Volume buttons turn pages on Android; keyboard shortcuts on a computer.
 - Dark PDF pages: with a PDF open, a switch at the foot of Layout recolours its pages to a dark theme.
 - Highlight words on a PDF read from where it is: select them on its printed pages and tap Highlight; they join the clip's other highlights.
-- Draw on a PDF's pages with a pen (the pen in the reader bar, or D): pen, highlighter, eraser, Undo and Redo. Only the pen draws on a touch screen, drawings stay on this device, and ⋯ › Drawings saves a copy of the PDF with them.
+- The pen on a PDF offers to make a note from it, which you draw on (see Notes).
 
 ## Text and themes
 

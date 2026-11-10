@@ -183,7 +183,12 @@ html[data-co-pen-near] .co-ink[data-on="1"], html[data-co-inking][data-co-pen-ne
 .co-ink .sel { fill: none; stroke: var(--accent); stroke-width: 1.5px; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; pointer-events: none; }
 .co-ink .hnd { fill: var(--accent); stroke: #fff; stroke-width: 2px; vector-effect: non-scaling-stroke; }
 .co-ink .pic { pointer-events: none; }
-html[data-co-pdf-dark] .co-ink .custom.pen, html[data-co-pdf-dark] .co-ink .custom.hl { filter: invert(1) hue-rotate(180deg); }
+html[data-co-pdf-dark] .co-ink .custom.pen, html[data-co-pdf-dark] .co-ink .custom.hl, html[data-co-pdf-dark] .co-ink .custom.txt { filter: invert(1) hue-rotate(180deg); }
+.co-ink .txt { font-family: "Instrument Sans", system-ui, sans-serif; white-space: pre; pointer-events: none; }
+.co-ink .txt.c-ink { fill: #1C1B19; }
+.co-ink .txt.c-red { fill: #D0312D; }
+.co-ink .txt.c-blue { fill: #2B61C4; }
+.co-ink .txt.c-green { fill: #2E8B57; }
 .co-ink .pen.c-ink { fill: #1C1B19; }
 .co-ink .pen.c-red { fill: #D0312D; }
 .co-ink .pen.c-blue { fill: #2B61C4; }
@@ -194,6 +199,10 @@ html[data-co-pdf-dark] .co-ink .custom.pen, html[data-co-pdf-dark] .co-ink .cust
 .co-ink .hl.c-pink { stroke: #FF7AB6; }
 .co-ink .hl.c-purple { stroke: #B58CFF; }
 html[data-co-pdf-dark] .co-ink path.hl { mix-blend-mode: screen; opacity: .4; }
+html[data-co-pdf-dark] .co-ink .txt.c-ink { fill: #EDE9E0; }
+html[data-co-pdf-dark] .co-ink .txt.c-red { fill: #FF6B63; }
+html[data-co-pdf-dark] .co-ink .txt.c-blue { fill: #6FA0FF; }
+html[data-co-pdf-dark] .co-ink .txt.c-green { fill: #5CCB8A; }
 html[data-co-pdf-dark] .co-ink .pen.c-ink { fill: #EDE9E0; }
 html[data-co-pdf-dark] .co-ink .pen.c-red { fill: #FF6B63; }
 html[data-co-pdf-dark] .co-ink .pen.c-blue { fill: #6FA0FF; }

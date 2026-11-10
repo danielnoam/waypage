@@ -235,6 +235,29 @@ const SHOTS = {
   async stats(p) { await home(p); await p.evaluate(() => goPlace("reading")); await p.waitForSelector(".rs-total"); },
   async sync(p) { await home(p); await p.evaluate(() => openSyncPage()); await p.locator("#syncView:not([hidden])").waitFor(); },
   async settings(p) { await home(p); await p.evaluate(() => openSettings()); await p.locator("#settingsView:not([hidden])").waitFor(); },
+  // A lines note with a line written by hand and a typed one (2.0.0).
+  async notes(p) {
+    await home(p);
+    await p.evaluate(async () => {
+      const meta = await window.Waypage.notes.create("lines");
+      state.pages.unshift(meta);
+      await window.Waypage.store.writeIndex(state.pages);
+      openPage(meta.id);
+    });
+    await p.locator("#readerView:not([hidden])").waitFor();
+    await p.frameLocator("#readerFrame").locator("svg.co-ink[data-on='1']").waitFor();
+    await p.waitForTimeout(1200);
+    await p.evaluate(() => window.Waypage.ink.setting({ finger: true, tool: "pen", color: "blue", size: 2 }));
+    const at = await p.evaluate(() => { const r = window.Waypage.reader.frameDoc.querySelector("svg.co-ink").getBoundingClientRect(), f = document.getElementById("readerFrame").getBoundingClientRect(); return [f.left + r.left, f.top + r.top, r.width]; });
+    // A wavy line, like a word written in a hurry.
+    const [x0, y0, w] = at;
+    await p.mouse.move(x0 + w * 0.12, y0 + w * 0.2);
+    await p.mouse.down();
+    for (let i = 1; i <= 40; i++) await p.mouse.move(x0 + w * (0.12 + i * 0.015), y0 + w * (0.2 + 0.025 * Math.sin(i / 2.2)));
+    await p.mouse.up();
+    await p.evaluate(() => { window.Waypage.ink.setting({ tool: "select" }); window.Waypage.ink.addText("Packing list\npassport\ncharger\na good book", 0.038); window.Waypage.ink.setting({ tool: "pen" }); });
+    await p.waitForTimeout(600);
+  },
   // A PDF read from its file, its pages recoloured to Night (1.49.0). Last,
   // since the PDF stays in this library for the shots after it.
   async pdf(p) {

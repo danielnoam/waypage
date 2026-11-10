@@ -216,7 +216,8 @@ fallback); one made in Show as text is found on the printed pages the
 same way (`findRects`, and `files.findPage` for Go to it). Comics and
 scans have no words, so the reader hides Highlights for them.
 
-A PDF's pages, words or scan, can be drawn on with a pen (1.56.0).
+Only a note is drawn on (2.0.0); a PDF's pages, words or scan, were drawn on
+with a pen before (1.56.0), and the pen on a PDF now makes a note of it.
 `ink.js` gives each page that has a picture a layer of SVG over it
 (`.co-ink`, a sibling of the picture like the words' layer, placed by
 `placeText` with the same `pageBox`), and `app-ink.js` is the button, the
@@ -285,15 +286,26 @@ with no layer yet (not near the screen) get no copy, and in Pages layout
 (one page a screen) only a side-by-side spread has a neighbour to drop on.
 There's no scrolling while dragging near the screen's edge.
 
-A note (2.0.0, `notes.js`) is a library item with `note: { paper }` and no
-file: a stack of A4 sheets, in `note.json` (`store.readNote`, `writeNote`),
-with its strokes in `ink.json` as on a PDF. It opens through `fillPdf`
-with a stand-in for the pdf.js document (`notes.js handle`: `draw(n, width)`
-paints the paper on a canvas), so drawing, the layers and undo are the
-PDF's own. A stroke on the last sheet adds one (`ink.onStroke`,
-`files.addSheet`). A note is always a scroll (`pagesOn`). Notes are this
-device's own for now, like linked files: neither sync nor a backup takes
-them (a line on the to-do list).
+A note (2.0.0, `notes.js`) is a library item with `note: { paper, from? }`
+and no file: a stack of sheets, in `note.json` (`store.readNote`,
+`writeNote`), `{ bg: "paper" }` or `{ bg: "pdf", n }`, with its strokes in
+`ink.json` as before. It opens through `fillPdf` with a stand-in for the
+pdf.js document (`notes.js handle`: `draw(n, width)` paints the paper on a
+canvas, or draws the page from the note's PDF), so drawing, the layers and
+undo are the PDF's own. A stroke on the last sheet adds a sheet of paper
+(`ink.onStroke`, `files.addSheet`). A note is always a scroll (`pagesOn`),
+has its own margins and Dark note (`waypage.noteLook`, `app-reading.js`),
+and only a note is `drawable`; a linked PDF is `convertible`: its pen asks
+for a note, and `notes.fromPdf` keeps a copy of the PDF beside the note
+(`base.pdf`, `store.writeNoteBase`; a browser keeps a Blob in the database,
+at most 100 MB), one sheet to a page, and moves the PDF's old drawings over.
+Typed text is an item in `ink.json` like a picture, `{ id, t: "x", c, x, y,
+w, h, z, text }` (`z` the size in page widths, `ink.js addText`, `editText`),
+so Select, move, cut, paste, delete and undo take it with no more code. Save
+as PDF (`notes.toPdf`) draws each sheet, its strokes, pictures and text into
+a JPEG and writes them with `pptx.js writePdf`, the text also as its
+invisible words. Notes are this device's own for now, like linked files:
+neither sync nor a backup takes them (a line on the to-do list).
 
 A comic in Pages (reader.js `picsLayout`) is a flex row of its pages, each
 sized in px to a screen or half of one, so the text's own turning

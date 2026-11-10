@@ -17,6 +17,7 @@ const INK_ICONS = {
   redo: '<path d="M15 14l5-5-5-5"></path><path d="M20 9H10a6 6 0 0 0 0 12h3"></path>',
   select: '<path d="M12 4c4.4 0 8 1.8 8 4s-3.6 4-8 4-8-1.8-8-4 3.6-4 8-4z" stroke-dasharray="3 3"></path><path d="M9 12.5c-.6 2.2.4 4 2 5.2 1.1.8 1.2 2.3-.2 3.3"></path>',
   add: '<path d="M12 5v14"></path><path d="M5 12h14"></path>',
+  text: '<path d="M5 7V4h14v3"></path><path d="M12 4v16"></path><path d="M9 20h6"></path>',
   image: '<rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="9" cy="10" r="1.6"></circle><path d="M21 16l-5-5-9 9"></path>',
   cut: '<circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M8.1 8.1L20 20"></path><path d="M20 4L8.1 15.9"></path>',
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V6a2 2 0 0 1 2-2h8"></path>',
@@ -149,6 +150,7 @@ function inkBuild() {
     if (act === "delete") { C.ink.del(); return; }
     if (act === "front") { C.ink.front(); return; }
     if (act === "back") { C.ink.back(); return; }
+    if (act === "edittext") { const t = C.ink.selectedText(); if (t) inkText(t); return; }
     inkPopClose();
     if (act === "tool") C.ink.setting({ tool: arg });
     else if (act === "color") C.ink.setting({ color: arg });
@@ -196,8 +198,9 @@ async function inkAddImage(file) {
     let see = false;
     for (let i = 3; i < px.length; i += 16) if (px[i] < 250) { see = true; break; }
     const url = cv.toDataURL(see ? "image/png" : "image/jpeg", 0.85);
-    if (!C.ink.addImage(url, h / w)) throw new Error("no page");
+    // Select first: changing tool lets go of what is taken, and the new picture is.
     inkSelect();
+    if (!C.ink.addImage(url, h / w)) throw new Error("no page");
   } catch (e) {
     toast("Couldn't add that picture. Try another.");
   }
@@ -242,7 +245,9 @@ function inkPopMenu(kind) {
   }
   if (kind === "add") {
     return el("div", { class: "ink-pop ink-pop-styles", role: "menu", "aria-label": "Add" },
-      el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkFile.click(); } }, inkIcon("image"), el("span", { class: "ink-pop-name" }, "Image")));
+      el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkFile.click(); } }, inkIcon("image"), el("span", { class: "ink-pop-name" }, "Image")),
+      // Typed text goes on a note (2.0.0).
+      el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkText(null); } }, inkIcon("text"), el("span", { class: "ink-pop-name" }, "Text")));
   }
   return el("div", { class: "ink-pop ink-pop-styles", role: "menu", "aria-label": "Pen style" },
     ...INK_STYLES.map(([y, name]) => el("button", { type: "button", role: "menuitemradio", "aria-checked": String(s.style === y), "aria-pressed": String(s.style === y), onclick: () => pick({ style: y }) },
@@ -326,7 +331,7 @@ function inkPaint() {
       el("span", { class: "ink-dot", "data-c": mine ? "" : c, "data-t": hl ? "h" : "p", ...(mine ? { style: "background:" + c } : {}) }));
   });
   const act = (label, icon, a, on) => el("button", { type: "button", "aria-label": label, title: label, "data-act": a, ...(on ? {} : { disabled: "" }) }, inkIcon(icon));
-  const editRow = s.tool === "select" ? [act("Cut", "cut", "cut", s.selected), act("Copy", "copy", "copy", s.selected), act("Paste", "paste", "paste", s.canPaste), act("Delete", "trash", "delete", s.selected), act("Move to top", "front", "front", s.selected), act("Move to bottom", "back", "back", s.selected)] : [];
+  const editRow = s.tool === "select" ? [...(C.ink.selectedText() ? [act("Edit text", "text", "edittext", true)] : []), act("Cut", "cut", "cut", s.selected), act("Copy", "copy", "copy", s.selected), act("Paste", "paste", "paste", s.canPaste), act("Delete", "trash", "delete", s.selected), act("Move to top", "front", "front", s.selected), act("Move to bottom", "back", "back", s.selected)] : [];
   const sizeBtn = s.tool === "eraser" || s.tool === "select" ? null : el("button", { type: "button", "aria-label": "Size " + (s.size + 1) + " of 5", title: "Size", "aria-haspopup": "menu", "aria-expanded": String(!!inkPop && inkPop.kind === "size"), "data-act": "size" },
     el("span", { class: "ink-size", style: "width:" + INK_DOTS[s.size] + "px;height:" + INK_DOTS[s.size] + "px" }));
   const styleBtn = s.tool !== "pen" ? null : el("button", { type: "button", "aria-label": "Pen style: " + inkStyleName(s.style), title: "Pen style", "aria-haspopup": "menu", "aria-expanded": String(!!inkPop && inkPop.kind === "style"), "data-act": "style" },
@@ -601,4 +606,36 @@ async function noteToPdf(p) {
     console.error(e);
     toast("Couldn't make the PDF. Try again.");
   }
+}
+
+// ---- Typed text on a note (2.0.0) ----
+
+// What the text sheet is for: a new text, or the one taken ({ id, text, z }).
+let inkTextFor = null;
+function inkText(existing) {
+  inkTextFor = existing ? { ...existing } : { id: null, text: "", z: C.ink.TEXT_SIZES[1] };
+  openMenu("noteText");
+}
+// The words in a box, a size, and Done; empty, a text is taken off.
+function noteTextSheet() {
+  const t = inkTextFor || { id: null, text: "", z: C.ink.TEXT_SIZES[1] };
+  const box = el("textarea", { class: "note-text", rows: "5", "aria-label": "Text", placeholder: "Type here", maxlength: "4000", dir: "auto" });
+  box.value = t.text;
+  const names = ["Small", "Medium", "Large"];
+  const sizes = seg("note-text-size", "Size", C.ink.TEXT_SIZES.map((v, i) => ({ value: String(v), label: names[i] })), String(t.z), (v) => { t.z = Number(v); });
+  const done = () => {
+    const text = box.value, z = t.z, id = t.id;
+    back().then(() => {
+      if (id) C.ink.editText(id, text, z);
+      else if (text.trim()) { inkSelect(); C.ink.addText(text, z); }
+    });
+  };
+  setTimeout(() => box.focus(), 80);
+  return el("div", { class: "page-controls" },
+    el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, t.id ? "Edit text" : "Add text")),
+    box,
+    el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Size"), sizes),
+    el("div", { class: "group" },
+      el("button", { class: "row", type: "button", onclick: done }, el("span", { class: "row-label accent" }, "Done")),
+      el("button", { class: "row", type: "button", onclick: () => back() }, el("span", { class: "row-label" }, "Cancel"))));
 }

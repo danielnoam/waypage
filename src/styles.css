@@ -1786,6 +1786,7 @@ span.update-text { cursor: default; }
 .cover-choice-pic .folder-icon, .cover-choice-pic .book-icon { color: var(--accent); }
 .cover-choice[aria-pressed="true"] .cover-choice-pic { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .paper-row { gap: var(--s-4); }
+.note-text { display: block; width: 100%; box-sizing: border-box; min-height: 7rem; margin: 0 0 var(--s-3); padding: var(--s-3); font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-md, 12px); resize: vertical; }
 .paper-pic { flex: none; width: 40px; height: 56px; display: grid; background: #fdfcf8; color: #c8d2e2; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
 .cover-choice-name { font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cover-choice[aria-pressed="true"] .cover-choice-name { color: var(--accent); font-weight: 600; }

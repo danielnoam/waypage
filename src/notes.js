@@ -64,6 +64,7 @@
     let last = 1;
     for (let n = 1; n <= count; n++) if (strokesOf(n).length || handle.sheets[n - 1].bg === "pdf") last = n;
     const w = 1240, pages = [];
+    const font = (z) => "400 " + Math.round(z * w * 100) / 100 + "px " + C.ink.TEXT_FONT;
     for (let n = 1; n <= last; n++) {
       if (onProgress) onProgress(n - 1, last);
       const [pw, ph] = handle.sizes[n - 1] || [W, H];
@@ -77,7 +78,24 @@
       bg.close();
       // Strokes are in page widths, so one scale puts them on the sheet.
       g.setTransform(w, 0, 0, w, 0, 0);
+      const texts = [];
       for (const s of strokesOf(n)) {
+        // Typed text: set in pixels (a font that small isn't asked of a scaled canvas), and
+        // also written as the PDF's invisible words, so it can be searched.
+        if (s.t === "x") {
+          const rgb = C.ink.rgbOf(s) || [28, 27, 25];
+          g.save();
+          g.setTransform(1, 0, 0, 1, 0, 0);
+          g.fillStyle = "rgb(" + rgb.join(",") + ")";
+          g.font = font(s.z);
+          s.text.split("\n").forEach((line, i) => {
+            const y = s.y + s.z * (0.95 + i * C.ink.TEXT_LINE);
+            g.fillText(line, s.x * w, y * w);
+            if (line.trim()) texts.push({ text: line, size: s.z * pw, x: s.x * pw, y: y * pw, width: Math.max(1, g.measureText(line).width / w * pw) });
+          });
+          g.restore();
+          continue;
+        }
         // A picture put on the sheet (width and height in page widths).
         if (s.t === "i") {
           const url = C.ink.imageUrl(s.f);
@@ -95,7 +113,7 @@
         } else { g.fillStyle = col; g.fill(new Path2D(C.ink.penPath(s.p, s.w, s.y))); }
       }
       g.setTransform(1, 0, 0, 1, 0, 0);
-      pages.push({ jpeg: await jpeg(c, 0.9), iw: w, ih: h, texts: [], w: pw, h: ph });
+      pages.push({ jpeg: await jpeg(c, 0.9), iw: w, ih: h, texts, w: pw, h: ph });
       await new Promise((r) => setTimeout(r, 0));
     }
     if (onProgress) onProgress(last, last);
