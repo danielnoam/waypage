@@ -225,11 +225,13 @@
     img.src = full;
   }
   function onClick(e) {
+    // The click that follows a pen stroke is not a tap (1.57.0).
+    if (inkHook && inkHook.click(e)) { e.preventDefault(); e.stopPropagation(); return; }
     const held = onTapOnly && navigator.onLine && e.target.closest && e.target.closest(".co-placeholder");
     if (held && boxes.has(held)) { e.preventDefault(); loadHeld(boxes.get(held)); return; }
     // A tap on a printed page's words (1.56.0) is a tap on the page, or
     // on the highlight under it; while words are selected it's neither.
-    const onWords = layerAt(e.target);
+    const onWords = layerAt(e.target) || (e.target.closest && e.target.closest(".co-ink"));
     if (onWords) {
       const sel = doc.getSelection();
       if (sel && !sel.isCollapsed) return;
@@ -1049,7 +1051,7 @@
   // fractions of it, so it paints again at any zoom or width.
   const layers = new Map();
   let measure = null, printedMarks = [];
-  const pageImg = (n) => (doc ? doc.querySelector('.co-printed > img[data-page="' + n + '"]') : null);
+  const pageImg = (n) => (doc ? doc.querySelector('.co-comic > img[data-page="' + n + '"]') : null);
   const layerAt = (node) => { const e = node && (node.nodeType === 1 ? node : node.parentElement); return (e && e.closest && e.closest(".co-tl")) || null; };
   const hasText = (n) => layers.has(Number(n));
   function textLayer(n, items) {
@@ -1101,20 +1103,31 @@
     for (const l of only ? [only] : layers.values()) {
       const img = pageImg(l.dataset.page);
       if (!img) { dropText(l.dataset.page); continue; }
-      // In Pages a page is fitted into its box (object-fit: contain) and
-      // pushed to one side of it: the layer goes over the page drawn.
-      const bw = img.offsetWidth, bh = img.offsetHeight;
-      const nw = Number(img.getAttribute("width")) || bw, nh = Number(img.getAttribute("height")) || bh;
-      const k = picsPaged() && nw && nh ? Math.min(bw / nw, bh / nh) : 0;
-      const w = k ? nw * k : bw, h = k ? nh * k : bh;
-      const side = (img.style.objectPosition || "center").split(" ")[0];
-      const dx = side === "left" ? 0 : side === "right" ? bw - w : (bw - w) / 2;
-      l.style.left = img.offsetLeft + dx + "px";
-      l.style.top = img.offsetTop + (bh - h) / 2 + "px";
-      l.style.width = w + "px";
-      l.style.height = h + "px";
+      const b = pageBox(img);
+      l.style.left = b.left + "px";
+      l.style.top = b.top + "px";
+      l.style.width = b.width + "px";
+      l.style.height = b.height + "px";
     }
+    if (!only && inkHook) inkHook.place();
   }
+  // Where a page is drawn within its picture's box. In Pages a page is
+  // fitted into its box (object-fit: contain) and pushed to one side of
+  // it: a layer goes over the page drawn.
+  function pageBox(img) {
+    const bw = img.offsetWidth, bh = img.offsetHeight;
+    const nw = Number(img.getAttribute("width")) || bw, nh = Number(img.getAttribute("height")) || bh;
+    const k = picsPaged() && nw && nh ? Math.min(bw / nw, bh / nh) : 0;
+    const w = k ? nw * k : bw, h = k ? nh * k : bh;
+    const side = (img.style.objectPosition || "center").split(" ")[0];
+    const dx = side === "left" ? 0 : side === "right" ? bw - w : (bw - w) / 2;
+    return { left: img.offsetLeft + dx, top: img.offsetTop + (bh - h) / 2, width: w, height: h };
+  }
+  // Pen drawing over the pages (1.57.0, ink.js): told when a page gets or
+  // loses its picture, and when the layers should be put in place.
+  let inkHook = null;
+  const pageShown = (n) => { if (inkHook) inkHook.show(Number(n)); };
+  const pageGone = (n) => { if (inkHook) inkHook.hide(Number(n)); };
   const layerText = (l) => blockText(l);
   // Out to whole words, and a word broken over two lines put back
   // together as the text view has it (pdf.js blocksOf).
@@ -1339,7 +1352,7 @@
     if (doc && topSpace) doc.documentElement.style.setProperty("--co-top", topSpace() + "px");
     if (doc && bottomSpace) doc.documentElement.style.setProperty("--co-bottom", bottomSpace() + "px");
     if (isPaged()) relayout();
-    if (layers.size) placeText();
+    placeText();
   }
 
   // ---- Pages ----
@@ -1477,7 +1490,7 @@
     const per = two ? 2 : 1;
     root.style.setProperty("--co-tail", ((per - pos % per) % per) * unit + "px");
     root.style.setProperty("--co-screen", w + "px");
-    if (layers.size) placeText();
+    placeText();
     if (keepImg) goPage(pageOf(keepImg), true);
     else goPage(Math.round(keep * (pages() - 1)), true);
   }
@@ -1554,7 +1567,7 @@
       const r = at.el.getBoundingClientRect();
       w.scrollTo(w.scrollX + r.left + at.fx * r.width - mx, w.scrollY + r.top + at.fy * r.height - my);
     } else w.scrollTo(ox + (px - ox) * q - mx, oy + (py - oy) * q - my);
-    if (layers.size) placeText();
+    placeText();
   }
   function zoomInput() {
     doc.addEventListener("touchstart", (e) => {
@@ -1861,6 +1874,7 @@
     anchors = [];
     spans = [];
     layers.clear();
+    if (inkHook) inkHook.reset();
     printedMarks = [];
     lit = null;
     onImage = image || null;
@@ -1941,6 +1955,8 @@
         pagedInput();
         zoomInput();
         glideInput();
+        // A pen on the page, the first time it's seen (1.57.0): the app offers Draw.
+        doc.addEventListener("pointerdown", (e) => { if (e.pointerType === "pen" && inkHook && inkHook.pen) inkHook.pen(); }, { passive: true });
         edgeInput();
         textPinchInput();
         // Keys pressed in the page that it doesn't use itself go to the
@@ -2053,6 +2069,7 @@
     anchors = [];
     spans = [];
     layers.clear();
+    if (inkHook) inkHook.reset();
     printedMarks = [];
     lit = null;
   }
@@ -2082,5 +2099,5 @@
       return line;
     }));
   }
-  C.reader = { pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, textLayer, dropText, hasText, placeText, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
+  C.reader = { pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
 })();

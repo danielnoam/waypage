@@ -880,6 +880,8 @@
   // PDF's pages are drawn: before, every picture was read and decoded
   // before the first page showed, and a 400 MB comic sat whole in memory.
   const printed = (meta) => !!(meta && meta.link && meta.file && meta.file.kind === "pdf" && !meta.comic && meta.view !== "text");
+  // A PDF shown as its own pages, words or scan: where a pen can draw (1.57.0).
+  const drawable = (meta) => !!(meta && meta.link && meta.file && meta.file.kind === "pdf" && (meta.comic || meta.view !== "text"));
   async function openLinked(meta) {
     closeHeld();
     const html = await S().readPage(meta.id);
@@ -1137,6 +1139,7 @@
             h.urls.delete(n);
             img.setAttribute("src", blank(img.getAttribute("width"), img.getAttribute("height")));
             if (C.reader.hasText(n)) C.reader.dropText(n);
+            C.reader.pageGone(n);
           } else if ((!has || Math.abs(has.width - want) > want / 4) && away <= tall * 1.5 && away < best) { next = img; best = away; width = want; }
         }
         if (!next) return;
@@ -1150,6 +1153,7 @@
         h.urls.set(n, { url, width });
         next.setAttribute("src", url);
         wordsOn(h, Number(n));
+        C.reader.pageShown(n);
         if (onFirst) { onFirst(); onFirst = null; }
       }
     } finally { h.busy = false; if (onFirst) onFirst(); }
@@ -1366,5 +1370,5 @@
     return meta;
   }
 
-  C.files = { KINDS, LINKABLE, canLink, kindOf, bring, openLinked, printed, drawNear, findPage, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
+  C.files = { KINDS, LINKABLE, canLink, kindOf, bring, openLinked, printed, drawable, drawNear, findPage, heldPdf: () => (held && held.pdf) || null, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
 })();

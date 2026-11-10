@@ -2325,6 +2325,158 @@ function zipOf(files) {
       await ctx.close();
     });
 
+    await test("a linked PDF's printed pages can be drawn on with a pen, kept, undone, and saved in a copy as ink annotations (1.57.0)", async () => {
+      const maker = await browser.newPage();
+      let html = "<style>@page{size:A4;margin:0} div{padding:60px;font:24px sans-serif;page-break-after:always}</style>";
+      for (let i = 1; i <= 3; i++) html += "<div><p>Page " + i + " opens here.</p><p>Nothing much happens on this page, and the margins are wide enough to write in.</p></div>";
+      await maker.setContent(html);
+      const bytes = [...await maker.pdf({ format: "A4" })];
+      await maker.close();
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      q.errors = [];
+      q.on("pageerror", (e) => { if (!/sandboxed and lacks the 'allow-same-origin'/.test(String(e))) q.errors.push(String(e)); });
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      const bring = (b) => {
+        const file = new File([new Uint8Array(b)], "sketch.pdf", { type: "application/pdf" });
+        window.Waypage.platform.files.blob = async () => file;
+        return file;
+      };
+      const id = await q.evaluate(async ([b, f]) => {
+        const file = eval(f)(b);
+        const meta = await window.Waypage.files.bring(file, "pdf", { has: () => false, link: "content://docs/sketch.pdf" });
+        await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
+        return meta.id;
+      }, [bytes, String(bring)]);
+      const open = async () => {
+        await q.reload();
+        await q.waitForSelector("#saveUrl");
+        await q.evaluate(([b, f]) => { eval(f)(b); }, [bytes, String(bring)]);
+        await q.evaluate((i) => openPage(i), id);
+        await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      };
+      await open();
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").hidden), false, "the pen button is on a PDF's pages");
+      // No layer until Draw is on and no drawings are there.
+      assert.strictEqual(await q.evaluate(() => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink")), false);
+      await q.evaluate(() => document.getElementById("readerInk").click());
+      await until(q, () => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-on='1'][data-page='1']"));
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").getAttribute("aria-pressed")), "true");
+      await until(q, () => !document.querySelector(".ink-bar").hidden);
+      // A touch screen draws with the pen alone: a finger's stroke leaves nothing.
+      const stroke = (type, pointerId, pts, pressure) => q.evaluate(([type, pointerId, pts, pressure]) => {
+        const d = document.getElementById("readerFrame").contentDocument;
+        const svg = d.querySelector(".co-ink[data-page='1']");
+        const r = svg.getBoundingClientRect();
+        const fire = (name, [fx, fy]) => svg.dispatchEvent(new PointerEvent(name, { pointerType: type, pointerId, isPrimary: true, bubbles: true, cancelable: true, buttons: name === "pointerup" ? 0 : 1, pressure, clientX: r.left + fx * r.width, clientY: r.top + fy * r.width }));
+        fire("pointerdown", pts[0]);
+        for (const p of pts.slice(1)) fire("pointermove", p);
+        fire("pointerup", pts[pts.length - 1]);
+      }, [type, pointerId, pts, pressure]);
+      const line = [[0.2, 0.2], [0.3, 0.22], [0.4, 0.2], [0.5, 0.24], [0.6, 0.2]];
+      await stroke("touch", 3, line, 0.5);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 0, "a finger doesn't draw in pen only");
+      await stroke("pen", 5, line, 0.7);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 1);
+      const d1 = await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelector(".co-ink path.pen").getAttribute("d"));
+      assert.ok(/^M[\d.]+ [\d.]+Q/.test(d1) && d1.endsWith("z"), d1.slice(0, 60));
+      // The highlighter, in yellow, under the pen's.
+      await q.locator('.ink-bar [data-act="tool:highlighter"]').click();
+      await stroke("pen", 6, [[0.2, 0.3], [0.5, 0.3]], 0.5);
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-ink path.hl.c-yellow").length), 1);
+      // The eraser takes the whole stroke it crosses; Undo brings it back, Redo takes it again.
+      await q.locator('.ink-bar [data-act="tool:eraser"]').click();
+      await stroke("pen", 7, [[0.4, 0.15], [0.4, 0.27]], 0.5);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).map((s) => s.t).join("")), "h");
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).length), 2);
+      await q.locator('.ink-bar [data-act="redo"]').click();
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).length), 1);
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      // A finger draws once Finger is on.
+      await q.locator('.ink-bar [data-act="finger"]').click();
+      await q.locator('.ink-bar [data-act="tool:pen"]').click();
+      await stroke("touch", 8, [[0.2, 0.5], [0.4, 0.55]], 0);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 3);
+      // The layer sits over its page whatever its size, in the page's own units.
+      const fit = await q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument;
+        const img = d.querySelector("img[data-page='1']"), svg = d.querySelector(".co-ink[data-page='1']");
+        const a = img.getBoundingClientRect(), b = svg.getBoundingClientRect();
+        return [Math.abs(a.left - b.left), Math.abs(a.top - b.top), Math.abs(a.width - b.width), Math.abs(a.height - b.height), svg.getAttribute("viewBox")];
+      });
+      assert.ok(fit.slice(0, 4).every((v) => v < 1.5), JSON.stringify(fit));
+      // Kept: on this device, beside the clip, and back when the clip is opened again.
+      await q.waitForTimeout(1200);
+      const saved = await q.evaluate((i) => Waypage.store.readInk(i), id);
+      assert.strictEqual(saved.pages["1"].length, 3);
+      await open();
+      await until(q, () => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1'] path"));
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-ink[data-page='1'] path").length), 3);
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelector(".co-ink").dataset.on), "", "words select and links tap again with Draw off");
+      // The Drawings sheet lists the page, and a copy has the strokes as ink annotations.
+      const copy = await q.evaluate(async () => {
+        const out = await Waypage.files.heldPdf().ink(Waypage.ink.forPdf());
+        const s = new TextDecoder("latin1").decode(out);
+        const again = await Waypage.pdf.open(out);
+        const pages = again.pages;
+        again.close();
+        return { size: out.length, ink: (s.match(/\/Subtype\s*\/Ink/g) || []).length, list: /\/InkList/.test(s), pages };
+      });
+      assert.strictEqual(copy.ink, 3, JSON.stringify(copy));
+      assert.ok(copy.list && copy.pages === 3, JSON.stringify(copy));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await ctx.close();
+    });
+
+    await test("a scanned PDF, which has no words, can be drawn on too (1.57.0)", async () => {
+      const maker = await browser.newPage();
+      await maker.setContent("<style>@page{size:A4;margin:0} div{height:1100px;page-break-after:always}</style><div></div><div></div>");
+      const bytes = [...await maker.pdf({ format: "A4" })];
+      await maker.close();
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      q.errors = [];
+      q.on("pageerror", (e) => { if (!/sandboxed and lacks the 'allow-same-origin'/.test(String(e))) q.errors.push(String(e)); });
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      const bring = (b) => {
+        const file = new File([new Uint8Array(b)], "scan.pdf", { type: "application/pdf" });
+        window.Waypage.platform.files.blob = async () => file;
+        return file;
+      };
+      const id = await q.evaluate(async ([b, f]) => {
+        const file = eval(f)(b);
+        const meta = await window.Waypage.files.bring(file, "pdf", { has: () => false, link: "content://docs/scan.pdf" });
+        await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
+        return meta.id;
+      }, [bytes, String(bring)]);
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(([b, f]) => { eval(f)(b); }, [bytes, String(bring)]);
+      await q.evaluate((i) => openPage(i), id);
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      assert.strictEqual(await q.evaluate(() => state.open.comic), true, "a PDF with no words is a scan");
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").hidden), false);
+      await q.evaluate(() => document.getElementById("readerInk").click());
+      await until(q, () => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1']"));
+      await q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument, svg = d.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
+        const fire = (name, fx, fy) => svg.dispatchEvent(new PointerEvent(name, { pointerType: "pen", pointerId: 4, isPrimary: true, bubbles: true, cancelable: true, buttons: name === "pointerup" ? 0 : 1, pressure: 0.5, clientX: r.left + fx * r.width, clientY: r.top + fy * r.width }));
+        fire("pointerdown", 0.3, 0.3); fire("pointermove", 0.5, 0.4); fire("pointerup", 0.5, 0.4);
+      });
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 1);
+      const fit = await q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument;
+        const a = d.querySelector("img[data-page='1']").getBoundingClientRect(), b = d.querySelector(".co-ink[data-page='1']").getBoundingClientRect();
+        return [Math.abs(a.left - b.left), Math.abs(a.top - b.top), Math.abs(a.width - b.width), Math.abs(a.height - b.height)];
+      });
+      assert.ok(fit.every((v) => v < 1.5), JSON.stringify(fit));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await ctx.close();
+    });
+
     await test("a comic has no Highlights button (1.56.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async (b) => { askKeep = async () => false; await openFile(new File([new Uint8Array(b)], "v1.cbz"), null, false); }, [...mangaBytes(1)]);
@@ -2332,6 +2484,7 @@ function zipOf(files) {
       await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
       await q.waitForTimeout(300);
       assert.strictEqual(await q.evaluate(() => document.getElementById("readerMarks").hidden), true);
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").hidden), true, "a CBZ comic has no pen");
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

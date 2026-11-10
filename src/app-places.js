@@ -979,7 +979,7 @@ const KEYS = [
   ["In the library", [["↑ ↓", "Move between clips"], ["Enter", "Open"], ["X", "Pick, to act on several"], ["Shift-click", "Pick a run"],
     ["F", "Favourite"], ["E", "Export"], ["Del", "Delete"]]],
   ["Reading", [["Space  ← →", "Next or previous page"], ["J  K", "Next or previous section"], ["T", "Contents beside the text"],
-    ["S", "Narrate, or auto-scroll a comic"], ["A", "Reader settings"], ["H", "Highlights"], ["L", "Translate this clip"], ["/", "Find in this clip"], ["+  −", "Text size"], ["O", "Open the original"], ["Esc", "Back"]]],
+    ["S", "Narrate, or auto-scroll a comic"], ["A", "Reader settings"], ["H", "Highlights"], ["D", "Draw on a PDF, then P pen, B highlighter, E eraser"], ["L", "Translate this clip"], ["/", "Find in this clip"], ["+  −", "Text size"], ["O", "Open the original"], ["Esc", "Back"]]],
 ];
 function keysSheet() {
   return el("div", { class: "keys-sheet" },
@@ -1031,6 +1031,12 @@ function onKeys(e) {
     return;
   }
   if (state.open && !state.image && (e.ctrlKey || e.metaKey) && !e.altKey && k.toLowerCase() === "f") { e.preventDefault(); openFind(); return; }
+  // Undo and redo for a pen drawing (1.57.0).
+  if (state.open && C.ink.on && !state.sheet && !state.menu && (e.ctrlKey || e.metaKey) && !e.altKey && k.toLowerCase() === "z" && !typingIn(e.target)) {
+    e.preventDefault();
+    inkGo(e.shiftKey ? C.ink.redo() : C.ink.undo());
+    return;
+  }
   if (e.altKey || e.ctrlKey || e.metaKey || typingIn(e.target)) return;
   // In pages, the arrow keys turn them (inside the page, src/reader.js
   // does the same).
@@ -1053,6 +1059,11 @@ function onKeys(e) {
       s: () => { const b = $("readerAloud").hidden ? $("readerScroll") : $("readerAloud"); if (!b.hidden) b.click(); },
       a: () => toggleSheet("reading"),
       h: () => !$("readerMarks").hidden && $("readerMarks").click(),
+      d: () => !$("readerInk").hidden && $("readerInk").click(),
+      // While drawing (1.57.0).
+      p: () => C.ink.on && (C.ink.setting({ tool: "pen" }), inkKeep()),
+      b: () => C.ink.on && (C.ink.setting({ tool: "highlighter" }), inkKeep()),
+      e: () => C.ink.on && (C.ink.setting({ tool: "eraser" }), inkKeep()),
       l: () => !$("readerTranslate").hidden && $("readerTranslate").click(),
       "+": () => size(1), "=": () => size(1), "-": () => size(-1), "−": () => size(-1),
       o: () => /^https?:/.test(p.url || "") && C.platform.openOutside(p.url),

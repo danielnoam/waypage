@@ -42,7 +42,7 @@ addEventListener("message", async (e) => {
     if (ranges && ranges.tid === job.tid) ranges.transport.onDataRange(job.begin, new Uint8Array(job.bytes));
     return;
   }
-  if (job.kind === "open" || job.kind === "draw" || job.kind === "close" || job.kind === "outline" || job.kind === "text") {
+  if (job.kind === "open" || job.kind === "draw" || job.kind === "close" || job.kind === "outline" || job.kind === "text" || job.kind === "ink") {
     queue = queue.then(async () => {
       try {
         if (job.kind === "close") {
@@ -73,6 +73,10 @@ addEventListener("message", async (e) => {
         } else if (job.kind === "text") {
           if (!held) throw new Error("No PDF open");
           post({ id: job.id, n: job.n, items: await textOf(held, job.n) });
+        } else if (job.kind === "ink") {
+          if (!held) throw new Error("No PDF open");
+          const bytes = await inkOf(held, job.pages);
+          post({ id: job.id, bytes: bytes.buffer }, [bytes.buffer]);
         } else {
           if (!held) throw new Error("No PDF open");
           const bytes = await drawOne(held, job.n, job.width);
@@ -163,6 +167,54 @@ async function textOf(doc, n) {
   }
   page.cleanup();
   return out;
+}
+
+// The PDF with pen drawings in it as ink annotations (1.57.0): pages is
+// { "<page>": [{ pts, w, rgb, a }] }, pts as x, y, pressure triples with
+// x and y in fractions of the page's width, w a fraction of it, a the
+// opacity. pdf.js writes them the way its own editor does (an
+// incremental update: the file's bytes stay as they were); the viewport
+// turns the page's own place into PDF space, rotation and all.
+async function inkOf(doc, pages) {
+  const storage = doc.annotationStorage, keys = [];
+  try {
+    let k = 0;
+    for (const key of Object.keys(pages).slice(0, 2000)) {
+      const n = Number(key);
+      if (!(n >= 1 && n <= doc.numPages) || !Array.isArray(pages[key])) continue;
+      const page = await doc.getPage(n);
+      const v = page.getViewport({ scale: 1 });
+      for (const s of pages[key].slice(0, 5000)) {
+        if (!s || !Array.isArray(s.pts) || s.pts.length < 3) continue;
+        const flat = [], lines = [0, 0, 0, 0];
+        let press = 0, count = 0;
+        const box = [Infinity, Infinity, -Infinity, -Infinity];
+        for (let i = 0; i + 2 < s.pts.length; i += 3) {
+          const q = v.convertToPdfPoint(s.pts[i] * v.width, s.pts[i + 1] * v.width);
+          flat.push(q[0], q[1]);
+          if (count) lines.push(NaN, NaN, NaN, NaN);
+          lines.push(q[0], q[1]);
+          box[0] = Math.min(box[0], q[0]); box[1] = Math.min(box[1], q[1]);
+          box[2] = Math.max(box[2], q[0]); box[3] = Math.max(box[3], q[1]);
+          press += s.pts[i + 2];
+          count++;
+        }
+        // The pen's pressure is an even width here: its average.
+        const t = Math.max(0.2, s.w * v.width * (s.press ? 0.55 + 0.9 * (press / count) : 1));
+        const key2 = "pdfjs_internal_editor_" + (k++);
+        keys.push(key2);
+        storage.setValue(key2, {
+          annotationType: 15, color: s.rgb, opacity: s.a, thickness: t, pageIndex: n - 1, rotation: 0,
+          rect: [box[0] - t / 2, box[1] - t / 2, box[2] + t / 2, box[3] + t / 2],
+          paths: { lines: [lines], points: [flat] },
+        });
+      }
+    }
+    return await doc.saveDocument();
+  } finally {
+    // The page goes on being read as it was.
+    for (const key of keys) { try { storage.remove(key); } catch (e) { /* kept */ } }
+  }
 }
 
 // The PDF's bookmarks (1.27.2): [{ title, page, depth }], page from 1,
@@ -470,7 +522,7 @@ post({ ready: true });
     const ranged = !(file instanceof Uint8Array) && file.size > RANGE_FROM;
     const tid = ++tids;
     let closed = false;
-    const handle = { pages: 0, sizes: [], onSizes: null, draw: null, text: null, close: null };
+    const handle = { pages: 0, sizes: [], onSizes: null, draw: null, text: null, ink: null, close: null };
     const close = () => {
       if (closed) return;
       closed = true;
@@ -508,6 +560,11 @@ post({ ready: true });
       handle.outline = async () => (closed ? [] : (await b.ask({ kind: "outline" })).outline || []);
       // A page's words where they sit (1.56.0), for selecting them.
       handle.text = async (n) => (closed ? [] : (await b.ask({ kind: "text", n })).items || []);
+      // The file with pen drawings in it as annotations (1.57.0).
+      handle.ink = async (pages) => {
+        if (closed) throw new Error("closed");
+        return new Uint8Array((await b.ask({ kind: "ink", pages })).bytes);
+      };
       handle.close = close;
       return handle;
     } catch (e) {

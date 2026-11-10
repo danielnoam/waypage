@@ -231,7 +231,7 @@ let waiting = null;
 function readerWait(p, fromHistory) {
   waiting = p.id;
   const swap = state.open && $("readerView").dataset.pane && !$("readerView").dataset.leaving;
-  if (state.open) { closeSheet(true); hideReadHere(); brightClose(); closeFind(true); stopGlide(); state.open = null; volumeWatch(); }
+  if (state.open) { closeSheet(true); hideReadHere(); brightClose(); closeFind(true); stopGlide(); inkClose(); state.open = null; volumeWatch(); }
   C.reader.close();
   C.files.closeHeld();
   $("readerView").classList.add("waiting");
@@ -446,6 +446,7 @@ function show(p, html) {
     volumeWatch();
     paintMarks(p);
     loadTranslation(p);
+    inkSync(p);
     $("readerContents").hidden = C.reader.headings().length < 2;
     wordless = C.reader.wordless();
     narrateOrScroll(p);
@@ -1105,6 +1106,7 @@ function closeReader() {
   const from = aloudHere() && !$("aloudPlayer").hidden ? player.getBoundingClientRect() : null;
   if (from) player.style.visibility = "hidden";
   stopGlide();
+  inkClose();
   state.open = null;
   paintReading(false);
   paintTheme();
@@ -2434,6 +2436,8 @@ const SHEETS = {
   // Under ⋯, which they're opened from, on a big screen (1.42.0).
   links: { button: "readerMore", label: "Linked pages", build: () => linksSheet(state.open) },
   translate: { button: "readerTranslate", label: "Translation", build: () => translateSheet(state.open) },
+  // A PDF's pen drawings (1.57.0), from This clip's More.
+  ink: { button: "readerMore", label: "Drawings", build: () => inkSheet(state.open) },
 };
 
 function openSheet(kind, fromHistory) {

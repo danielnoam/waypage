@@ -53,6 +53,7 @@ src/app-search.js   search, filters, sort orders, the dropdown control
 src/app-draw.js     section heads, a part opened alone, the flip, Continue reading, renderLibrary
 src/app-jobs.js     links out of a paste or share, the URL index, savePage, saveAll, Wi-Fi wait, runJob
 src/app-reader.js   moving between screens; the reader around the page: brightness, contents, Narrate, highlights, image viewer
+src/app-ink.js      Draw: the pen button, the bar of tools, the Drawings sheet, saving a copy with them
 src/app-library.js  tags, collections, a clip's sheet, multi-select, export, import, watched folders
 src/app-saving.js   sync screen, saving several, next links and new chapters, feeds, home-screen widgets
 src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestures, a feed's sheets
@@ -66,6 +67,7 @@ src/store.js        one directory per clip and library.json; IndexedDB in a brow
 src/platform.js     browser vs app: native fetch, plugins, downloads, speech, opening links
 src/files.js        EPUB, Kindle (MOBI/AZW3), FB2, CBZ, Markdown, text and HTML files
 src/pdf.js          PDFs through pdf.js in a locked-down frame
+src/ink.js          pen drawing over a PDF's pages: strokes, layers, undo, what a copy of the PDF is given
 src/pptx.js         PowerPoint decks redrawn on a canvas and written as a PDF (1.49.0)
 src/epub.js         clips as an EPUB 3 book, for e-readers and Send to Kindle
 src/feeds.js        RSS, Atom and JSON Feed, read into one shape
@@ -212,6 +214,25 @@ fallback); one made in Show as text is found on the printed pages the
 same way (`findRects`, and `files.findPage` for Go to it). Comics and
 scans have no words, so the reader hides Highlights for them.
 
+A PDF's pages, words or scan, can be drawn on with a pen (1.57.0).
+`ink.js` gives each page that has a picture a layer of SVG over it
+(`.co-ink`, a sibling of the picture like the words' layer, placed by
+`placeText` with the same `pageBox`), and `app-ink.js` is the button, the
+bar of tools and the sheet. A stroke is `{ id, t: "p"|"h", c, w, p }`:
+colour by name (reader.css paints it, and re-paints it for Dark PDF
+pages), width and points as fractions of the page's width (`p` is x, y,
+pressure triples, y too in widths, so a page whose size was guessed and
+then fixed keeps its strokes), so it paints again at any zoom or layout.
+Only a pen draws on a touch screen (`pointerType`, with a stylus's touch
+taken so it doesn't scroll); the Finger switch lets a finger or mouse
+draw, and a computer starts with it on. The eraser takes whole strokes,
+also with the pen's eraser end or button. They are kept in `ink.json`
+beside the clip (`store.readInk`, `writeInk`), this device's own like the
+file; the PDF itself is never written to. "Save a copy with drawings"
+has pdf.js write the strokes as `/Ink` annotations (`pdf.js inkOf`, the
+sandbox's `ink` job, `saveDocument` on the open document): the pen's
+pressure becomes one even width, the highlighter 40% opacity.
+
 A comic in Pages (reader.js `picsLayout`) is a flex row of its pages, each
 sized in px to a screen or half of one, so the text's own turning
 (`goPage`, `pages()`, the swipe, keys and thirds) works unchanged; a manga
@@ -335,7 +356,7 @@ bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js` and `pptx.test.js` test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `pptx.test.js` and `ink.test.js` test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
 changes Markdown runs just `build.test.js` and `docs.test.js`.
 
 `node tools/shots.js` retakes the README's pictures at 1280 px and 390 px
@@ -398,6 +419,10 @@ adds a line here.
   It only answers the web copy's origin, but the Origin header binds only
   browsers: a script can fake it, and a public web copy can't hold a
   secret. The per-IP rate limit and the free plan's daily cap bound that.
+- A PDF's pen drawings are this device's own, like the file they are on:
+  neither sync nor a backup takes them, and deleting the clip deletes them.
+  A copy of the PDF with them as annotations is how they leave. The copy's
+  strokes are even in width (a PDF ink annotation has no pressure).
 - Dialogs (Downloads, Sync, Save with options, Settings) fade in and out,
   the one planned exception to "nothing fades" (Daniel's pick over the
   grow and the zoom).
@@ -458,6 +483,16 @@ area.
   Pages a page is `object-fit: contain`ed into its box, so the layer goes
   over the page drawn, not the box. Its spaces are zero-size text at the
   layer's corner: leave them out of a selection's box.
+- **Drawing on a page:** the layer is `pointer-events: none` until Draw
+  is on, or words couldn't be selected under it. A pen would scroll the
+  page as a finger does, so `touchstart` of a `touchType` "stylus" is
+  `preventDefault`ed on the layer (a finger's isn't, unless Finger is on),
+  and the click that follows a stroke is swallowed (`inkHook.click`) or
+  it turns the page. A second finger down in a finger stroke is a pinch:
+  the stroke is dropped. The eraser tests the whole way between two
+  samples, or a quick pass skips a line. Strokes are kept in widths, never
+  pixels, and the layer's viewBox is the page's shape, so nothing is
+  stretched.
 - **pdf.js frame:** opaque origin, so modules and workers can't load
   across origins; the app posts the library's text in and the frame makes
   its own blob: URLs. Pages draw with `intent: "print"`, because the
