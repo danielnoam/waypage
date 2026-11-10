@@ -2394,10 +2394,54 @@ function zipOf(files) {
       await q.locator('.ink-bar [data-act="redo"]').click();
       assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).length), 1);
       await q.locator('.ink-bar [data-act="undo"]').click();
-      // A finger draws once Finger is on.
-      await q.locator('.ink-bar [data-act="finger"]').click();
+      // The pen's side button (a right button, buttons 2) and its eraser end (buttons 32) erase
+      // whatever the tool, and a pen's touch doesn't scroll the page whether or not it says "stylus".
       await q.locator('.ink-bar [data-act="tool:pen"]').click();
+      const penAct = (pointerId, buttons, button, pts) => q.evaluate(([pointerId, buttons, button, pts]) => {
+        const d = document.getElementById("readerFrame").contentDocument, svg = d.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
+        const fire = (name, [fx, fy], b) => svg.dispatchEvent(new PointerEvent(name, { pointerType: "pen", pointerId, isPrimary: true, bubbles: true, cancelable: true, button: name === "pointerdown" ? button : -1, buttons: name === "pointerup" ? 0 : b, pressure: 0.5, clientX: r.left + fx * r.width, clientY: r.top + fy * r.width }));
+        fire("pointerdown", pts[0], buttons);
+        for (const p of pts.slice(1)) fire("pointermove", p, buttons);
+        fire("pointerup", pts[pts.length - 1], buttons);
+      }, [pointerId, buttons, button, pts]);
+      await penAct(11, 3, 2, [[0.4, 0.15], [0.4, 0.27]]);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).map((s) => s.t).join("")), "h", "the side button erases the pen's stroke");
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      await penAct(12, 33, 5, [[0.4, 0.15], [0.4, 0.27]]);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).map((s) => s.t).join("")), "h", "the eraser end erases too");
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      // Pressed after the pen touched down: what it drew is dropped and it erases from there.
+      await q.evaluate(() => {
+        const svg = document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
+        const fire = (name, fx, fy, buttons) => svg.dispatchEvent(new PointerEvent(name, { pointerType: "pen", pointerId: 13, isPrimary: true, bubbles: true, cancelable: true, button: name === "pointerdown" ? 0 : -1, buttons, pressure: 0.5, clientX: r.left + fx * r.width, clientY: r.top + fy * r.width }));
+        fire("pointerdown", 0.4, 0.1, 1); fire("pointermove", 0.4, 0.12, 1); fire("pointermove", 0.4, 0.2, 3); fire("pointermove", 0.4, 0.27, 3); fire("pointerup", 0.4, 0.27, 0);
+      });
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).map((s) => s.t).join("")), "h", "the button pressed mid-stroke erases, and the stroke so far isn't kept");
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).length), 2);
+      const touches = await q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument, svg = d.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
+        const down = (type, buttons) => svg.dispatchEvent(new PointerEvent("pointerdown", { pointerType: type, pointerId: 21, isPrimary: true, bubbles: true, cancelable: true, buttons, button: 0, clientX: r.left + 0.9 * r.width, clientY: r.top + 0.9 * r.width }));
+        const start = () => { const ev = new TouchEvent("touchstart", { cancelable: true, bubbles: true }); svg.dispatchEvent(ev); return ev.defaultPrevented; };
+        const up = (type) => svg.dispatchEvent(new PointerEvent("pointerup", { pointerType: type, pointerId: 21, isPrimary: true, bubbles: true, cancelable: true, buttons: 0, clientX: r.left + 0.9 * r.width, clientY: r.top + 0.9 * r.width }));
+        down("pen", 33); const pen = start(); up("pen");
+        down("touch", 1); const finger = start(); up("touch");
+        return { pen, finger };
+      });
+      assert.strictEqual(touches.pen, true, "a pen's touch is kept from scrolling");
+      assert.strictEqual(touches.finger, false, "a finger's still scrolls with Finger off");
+      assert.strictEqual(await q.evaluate(() => { const d = document.getElementById("readerFrame").contentDocument; const e = new MouseEvent("contextmenu", { cancelable: true, bubbles: true }); d.querySelector(".co-ink[data-page='1']").dispatchEvent(e); return e.defaultPrevented; }), true, "no menu from the pen's button");
+      // A finger draws once Finger is on, but not beside a pen that's just been on the page.
+      await q.locator('.ink-bar [data-act="finger"]').click();
+      await q.waitForTimeout(1100);
+      await q.evaluate(() => {
+        const svg = document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1']");
+        svg.dispatchEvent(new PointerEvent("pointermove", { pointerType: "pen", pointerId: 30, isPrimary: true, bubbles: true, buttons: 0, clientX: 40, clientY: 400 }));
+      });
       await stroke("touch", 8, [[0.2, 0.5], [0.4, 0.55]], 0);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 2, "a hand beside the pen doesn't write");
+      await q.waitForTimeout(1100);
+      await stroke("touch", 9, [[0.2, 0.5], [0.4, 0.55]], 0);
       assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 3);
       // The layer sits over its page whatever its size, in the page's own units.
       const fit = await q.evaluate(() => {

@@ -269,6 +269,8 @@
   let finger = false;     // whether a finger or mouse draws, not only a pen
   let cur = null;         // the stroke being drawn, or the eraser's pass
   let lastStroke = 0;
+  let penTouch = false;   // a pen's touch is down: its touchstart must not scroll
+  let penAt = 0;          // when a pen was last seen on a page, hovering or down
 
   function setOn(v) {
     on = !!v;
@@ -295,33 +297,50 @@
     return [(e.clientX - r.left) / (r.width || 1), (e.clientY - r.top) / (r.width || 1)];
   };
 
+  // Whether a pen pointer means to erase: the flip-over eraser end (button
+  // 5, buttons 32) or its side button, which browsers report as a right
+  // button (buttons 2, button 2).
+  const penErases = (e) => e.pointerType === "pen" && (e.button === 5 || e.button === 2 || (e.buttons & (32 | 2)) !== 0);
+
   function bind(svg) {
+    // First, before down() can return early: a pen is on the page.
+    svg.addEventListener("pointerdown", (e) => { if (e.pointerType === "pen") { penTouch = true; penAt = performance.now(); } });
     svg.addEventListener("pointerdown", down);
     svg.addEventListener("pointermove", move);
     svg.addEventListener("pointerup", up);
     svg.addEventListener("pointercancel", up);
     svg.addEventListener("lostpointercapture", up);
+    for (const name of ["pointerup", "pointercancel"]) svg.addEventListener(name, (e) => { if (e.pointerType === "pen") { penTouch = false; penAt = performance.now(); } });
     // A pen would otherwise scroll the page as a finger does: the touch it
-    // makes is taken for drawing. A finger scrolls, unless it draws.
+    // makes is taken for drawing. It is told by its pointer, which comes
+    // just before its touch: not every device says "stylus" in the touch.
+    // A finger scrolls, unless it draws.
     svg.addEventListener("touchstart", (e) => {
       if (!on || e.touches.length > 1) return;
       const t = e.changedTouches[0];
-      if ((t && t.touchType === "stylus") || finger) { if (e.cancelable) e.preventDefault(); }
+      if (penTouch || (t && t.touchType === "stylus") || finger) { if (e.cancelable) e.preventDefault(); }
     }, { passive: false });
+    // The pen's button would open a menu.
+    svg.addEventListener("contextmenu", (e) => { if (on) e.preventDefault(); });
   }
   function down(e) {
     if (!on) return;
     const svg = e.currentTarget;
     const pen = e.pointerType === "pen";
+    // A stroke left over from the same pointer (it never got its end) is
+    // dropped, so it can't keep the next one out.
+    if (cur && cur.id === e.pointerId) abandon();
     // A second finger is a pinch: whatever the first one drew is undone.
     if (cur && cur.id !== e.pointerId) { if (cur.kind === "touch") abandon(); return; }
     if (cur) return;
     if (!pen && !finger) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if (!e.isPrimary) return;
+    // A hand resting beside the pen doesn't write.
+    if (e.pointerType === "touch" && performance.now() - penAt < 1000) return;
     const n = Number(svg.dataset.page);
     // The pen's own eraser end, or its button held, whatever the tool.
-    const erase = tool === "eraser" || (pen && (e.button === 5 || (e.buttons & 32) !== 0));
+    const erase = tool === "eraser" || penErases(e);
     e.preventDefault();
     try { svg.setPointerCapture(e.pointerId); } catch (err) { /* it draws anyway */ }
     const [x, y] = where(e, svg);
@@ -344,8 +363,17 @@
     s.p.push(r4(x), r4(y), Math.round(pr * 100) / 100);
   }
   function move(e) {
+    if (e.pointerType === "pen") penAt = performance.now();
     if (!cur || cur.id !== e.pointerId) return;
     const svg = cur.svg;
+    // The button pressed after the pen touched down: what it drew so far
+    // is dropped and it erases from here.
+    if (!cur.erase && cur.kind === "pen" && penErases(e)) {
+      if (cur.path) cur.path.remove();
+      cur.path = null;
+      cur.s = null;
+      cur.erase = true;
+    }
     // Every sample the pen made since the last frame, and the next ones
     // it is going to make, when the browser guesses them.
     const list = (e.getCoalescedEvents && e.getCoalescedEvents()) || [];

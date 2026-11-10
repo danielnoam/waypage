@@ -485,9 +485,14 @@ area.
   layer's corner: leave them out of a selection's box.
 - **Drawing on a page:** the layer is `pointer-events: none` until Draw
   is on, or words couldn't be selected under it. A pen would scroll the
-  page as a finger does, so `touchstart` of a `touchType` "stylus" is
-  `preventDefault`ed on the layer (a finger's isn't, unless Finger is on),
-  and the click that follows a stroke is swallowed (`inkHook.click`) or
+  page as a finger does, so its `touchstart` is `preventDefault`ed on the
+  layer (a finger's isn't, unless Finger is on). The pen is told by its
+  `pointerdown`, which comes just before: some devices don't say "stylus"
+  in the touch. Its side button is a right button (`buttons` 2) and its
+  eraser end `buttons` 32 or `button` 5: both erase, also when pressed
+  after it touched down, and the `contextmenu` is stopped. With Finger on,
+  a finger within a second of a pen is a hand resting, and doesn't write.
+  The click that follows a stroke is swallowed (`inkHook.click`) or
   it turns the page. A second finger down in a finger stroke is a pinch:
   the stroke is dropped. The eraser tests the whole way between two
   samples, or a quick pass skips a line. Strokes are kept in widths, never
