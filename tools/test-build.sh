@@ -6,7 +6,7 @@
 #   bash tools/test-build.sh attach Waypage.ipa   # ios.yml
 #
 # Only an open pull request labelled test, test-android or
-# test-ios gets one; `create` remakes the pre-release (and its tag)
+# test-ios (or titled "manual testing", the APK alone) gets one; `create` remakes the pre-release (and its tag)
 # at the pushed commit on every push, and `attach` waits for the one at
 # this commit and adds its file (or makes it, for test-ios alone). A
 # pre-release is never GitHub's "latest", so the app's updater, which reads
@@ -37,6 +37,9 @@ TITLE="${REST#*	}"
 APK=false; IPA=false
 case "$LABELS" in *,test,*|*,test-android,*) APK=true ;; esac
 case "$LABELS" in *,test,*|*,test-ios,*) IPA=true ;; esac
+# A title that says the change needs manual testing gets the APK too, with
+# no label (the IPA still needs one). Read as text, never run.
+case "$(printf '%s' "$TITLE" | tr '[:upper:]' '[:lower:]')" in *"manual testing"*) APK=true ;; esac
 
 publish() {
   gh release delete "$TAG" --yes --cleanup-tag >/dev/null 2>&1 || true
