@@ -152,7 +152,7 @@
       else if (!B.has(id)) out.push(m);
     }
     for (const [id, m] of R) if (!L.has(id) && !B.has(id)) out.push(m);
-    return out.sort((x, y) => x.block - y.block || x.start - y.start);
+    return out.sort((x, y) => (x.page ? 1 : 0) - (y.page ? 1 : 0) || (x.page ? x.page - y.page : x.block - y.block) || x.start - y.start);
   }
 
   // One page changed on both sides since the base.

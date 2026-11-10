@@ -199,6 +199,19 @@ read from where they are (shown under Files, not synced). PDFs go through
 (`src/pdf.js` is the bridge, `src/vendor/pdf.min.mjs` and its worker the library); large
 linked PDFs are read in ranges.
 
+A linked PDF's printed pages can be highlighted (1.56.0). As a page is
+drawn, `files.js` asks the sandbox for its words where they sit
+(`pdf.text(n)`, plain strings and fractions of the page) and
+`reader.js textLayer` lays them over the picture in see-through type, so
+the reader's own selection and Highlight bar work on them. A highlight
+made there is kept in the clip's `marks` by page, not by text block:
+`{ id, page, start, endPage, end, rects, text }`, start and end in the
+page's words, `rects` boxes on the page as fractions of it, painted again
+at any zoom or width. Show as text finds it by its words (`locate`'s
+fallback); one made in Show as text is found on the printed pages the
+same way (`findRects`, and `files.findPage` for Go to it). Comics and
+scans have no words, so the reader hides Highlights for them.
+
 A comic in Pages (reader.js `picsLayout`) is a flex row of its pages, each
 sized in px to a screen or half of one, so the text's own turning
 (`goPage`, `pages()`, the swipe, keys and thirds) works unchanged; a manga
@@ -437,6 +450,14 @@ area.
   `allow-same-origin` only because it has no `allow-scripts`; the two
   together are dangerous, and `test/save.test.js` fails if
   `allow-scripts` appears.
+- **A PDF page's words layer is a sibling, not a wrapper:** the layers
+  sit at the end of `.co-printed`, absolutely placed over their page by
+  `placeText` (called from `applyTop`, `picsLayout`, `setZoom` and
+  `fixSizes`). Wrapping each `<img>` breaks everything that walks
+  `.co-comic > img` (the page rail, Pages, zoom, `img + img` gaps). In
+  Pages a page is `object-fit: contain`ed into its box, so the layer goes
+  over the page drawn, not the box. Its spaces are zero-size text at the
+  layer's corner: leave them out of a selection's box.
 - **pdf.js frame:** opaque origin, so modules and workers can't load
   across origins; the app posts the library's text in and the frame makes
   its own blob: URLs. Pages draw with `intent: "print"`, because the

@@ -42,7 +42,7 @@ addEventListener("message", async (e) => {
     if (ranges && ranges.tid === job.tid) ranges.transport.onDataRange(job.begin, new Uint8Array(job.bytes));
     return;
   }
-  if (job.kind === "open" || job.kind === "draw" || job.kind === "close" || job.kind === "outline") {
+  if (job.kind === "open" || job.kind === "draw" || job.kind === "close" || job.kind === "outline" || job.kind === "text") {
     queue = queue.then(async () => {
       try {
         if (job.kind === "close") {
@@ -70,6 +70,9 @@ addEventListener("message", async (e) => {
         } else if (job.kind === "outline") {
           if (!held) throw new Error("No PDF open");
           post({ id: job.id, outline: await outlineOf(held).catch(() => []) });
+        } else if (job.kind === "text") {
+          if (!held) throw new Error("No PDF open");
+          post({ id: job.id, n: job.n, items: await textOf(held, job.n) });
         } else {
           if (!held) throw new Error("No PDF open");
           const bytes = await drawOne(held, job.n, job.width);
@@ -135,6 +138,31 @@ async function drawOne(doc, n, width) {
   const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.78 });
   page.cleanup();
   return new Uint8Array(await blob.arrayBuffer());
+}
+
+// One page's words where they sit on it (1.56.0), for the layer that
+// lets them be selected over its picture: [{ s, x, y, w, h, rtl, eol }],
+// each place a fraction of the page. Only text and numbers come out.
+async function textOf(doc, n) {
+  const page = await doc.getPage(n);
+  const view = page.getViewport({ scale: 1 });
+  const content = await page.getTextContent();
+  const [a, b, c, d, e, f] = view.transform;
+  const out = [];
+  for (const it of content.items) {
+    if (!it.transform || typeof it.str !== "string") continue;
+    const t = it.transform;
+    // The item's matrix put on the page's, as pdf.js's own text layer does.
+    const m = [a * t[0] + c * t[1], b * t[0] + d * t[1], a * t[2] + c * t[3], b * t[2] + d * t[3], a * t[4] + c * t[5] + e, b * t[4] + d * t[5] + f];
+    const h = Math.hypot(m[2], m[3]);
+    if (!it.str || !h) { if (it.hasEOL && out.length) out[out.length - 1].eol = true; continue; }
+    const w = (it.width || 0) * Math.hypot(view.transform[0], view.transform[1]) || it.str.length * h * 0.5;
+    out.push({ s: it.str.slice(0, 2000), x: m[4] / view.width, y: (m[5] - h) / view.height, w: w / view.width, h: h / view.height,
+      rtl: it.dir === "rtl", eol: !!it.hasEOL });
+    if (out.length >= 6000) break;
+  }
+  page.cleanup();
+  return out;
 }
 
 // The PDF's bookmarks (1.27.2): [{ title, page, depth }], page from 1,
@@ -442,7 +470,7 @@ post({ ready: true });
     const ranged = !(file instanceof Uint8Array) && file.size > RANGE_FROM;
     const tid = ++tids;
     let closed = false;
-    const handle = { pages: 0, sizes: [], onSizes: null, draw: null, close: null };
+    const handle = { pages: 0, sizes: [], onSizes: null, draw: null, text: null, close: null };
     const close = () => {
       if (closed) return;
       closed = true;
@@ -478,6 +506,8 @@ post({ ready: true });
       };
       // Its bookmarks, for a PDF added before 1.27.2 (1.28.0).
       handle.outline = async () => (closed ? [] : (await b.ask({ kind: "outline" })).outline || []);
+      // A page's words where they sit (1.56.0), for selecting them.
+      handle.text = async (n) => (closed ? [] : (await b.ask({ kind: "text", n })).items || []);
       handle.close = close;
       return handle;
     } catch (e) {

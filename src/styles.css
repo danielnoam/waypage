@@ -233,6 +233,13 @@
   --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   /* A QR code's paper, the same in every theme: scanners read black on white. */
   --code-paper: #ffffff;
+  /* Highlights on a PDF's printed pages (1.56.0), the same in every
+     theme: the page is its own white paper unless Dark PDF pages is on. */
+  --page-mark: #F6E3A1;
+  --page-mark-green: #97F0AD;
+  --page-mark-blue: #C8DFF7;
+  --page-mark-pink: #F9D3E0;
+  --page-mark-purple: #E8D7F9;
 
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px;
   --s-6: 32px; --s-7: 40px; --s-8: 56px; --s-9: 72px;

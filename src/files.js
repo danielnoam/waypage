@@ -989,7 +989,8 @@
     } catch (e) {
       throw new FileError("Waypage can't read " + meta.file.name + " any more.");
     }
-    const h = held = { pdf, urls: new Map(), busy: false, frame: null };
+    // `words`: its pages get a layer of their words, to select (1.56.0).
+    const h = held = { pdf, urls: new Map(), busy: false, frame: null, words: !!into, texts: new Map(), asking: new Set() };
     // A PDF from before 1.2.1 has no card picture: its first page, once
     // the reader is up (1.2.4), so the open isn't held for it.
     if (!meta.thumb) {
@@ -1047,6 +1048,34 @@
     pdf.onSizes = () => { if (held === h && h.frame) fixSizes(h); };
     return "<!doctype html>\n" + doc.documentElement.outerHTML;
   }
+  // A drawn page's words over it (1.56.0), asked of pdf.js once a page
+  // and kept while the PDF is open: a page's are a few kilobytes.
+  async function pageWords(h, n) {
+    if (!h.texts.has(n)) h.texts.set(n, h.pdf.text(n).catch(() => []));
+    return h.texts.get(n);
+  }
+  function wordsOn(h, n) {
+    if (!h.words || C.reader.hasText(n) || h.asking.has(n)) return;
+    h.asking.add(n);
+    pageWords(h, n).then((items) => {
+      h.asking.delete(n);
+      if (held === h && h.urls.has(String(n))) C.reader.textLayer(n, items);
+    });
+  }
+  // The page a highlight made in Show as text is on, by its words; 0
+  // when no page has them.
+  async function findPage(text) {
+    const h = held;
+    if (!h || !h.words || !text) return 0;
+    const want = text.replace(/\s+/g, " ").trim();
+    const flat = (items) => items.map((it) => it.s).join(" ").replace(/([a-zà-ɏ])-\s+(?=[a-zà-ɏ])/g, "$1").replace(/\s+/g, " ");
+    for (let n = 1; n <= (h.pdf.count || h.pdf.pages); n++) {
+      const items = await pageWords(h, n);
+      if (held !== h) return 0;
+      if (flat(items).includes(want)) return n;
+    }
+    return 0;
+  }
   // Slots that were given a guessed size take their page's real one.
   function fixSizes(h) {
     const win = h.frame && h.frame.contentWindow;
@@ -1061,6 +1090,7 @@
       img.setAttribute("height", s[1]);
       if (!h.urls.has(String(n))) img.setAttribute("src", blank(s[0], s[1]));
     }
+    C.reader.placeText();
   }
   // Told when a PDF opened without a card picture has one (app.js).
   let onCover = null;
@@ -1106,6 +1136,7 @@
             URL.revokeObjectURL(has.url);
             h.urls.delete(n);
             img.setAttribute("src", blank(img.getAttribute("width"), img.getAttribute("height")));
+            if (C.reader.hasText(n)) C.reader.dropText(n);
           } else if ((!has || Math.abs(has.width - want) > want / 4) && away <= tall * 1.5 && away < best) { next = img; best = away; width = want; }
         }
         if (!next) return;
@@ -1118,6 +1149,7 @@
         const url = URL.createObjectURL(new Blob([bytes], { type: "image/jpeg" }));
         h.urls.set(n, { url, width });
         next.setAttribute("src", url);
+        wordsOn(h, Number(n));
         if (onFirst) { onFirst(); onFirst = null; }
       }
     } finally { h.busy = false; if (onFirst) onFirst(); }
@@ -1334,5 +1366,5 @@
     return meta;
   }
 
-  C.files = { KINDS, LINKABLE, canLink, kindOf, bring, openLinked, printed, drawNear, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
+  C.files = { KINDS, LINKABLE, canLink, kindOf, bring, openLinked, printed, drawNear, findPage, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
 })();

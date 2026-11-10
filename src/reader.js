@@ -8,7 +8,7 @@
   const C = window.Waypage;
 
   const CSP = "default-src 'none'; img-src 'self' https: data: blob:; style-src 'self'; font-src 'self'; base-uri 'self'; form-action 'none'";
-  const TOKENS = ["bg", "surface", "ink", "muted", "accent", "line", "preview", "mark", "mark-green", "mark-blue", "mark-pink", "mark-purple", "video", "on-video", "scrim",
+  const TOKENS = ["bg", "surface", "ink", "muted", "accent", "line", "preview", "mark", "mark-green", "mark-blue", "mark-pink", "mark-purple", "page-mark", "page-mark-green", "page-mark-blue", "page-mark-pink", "page-mark-purple", "video", "on-video", "scrim",
     "serif", "sans", "measure", "s-1", "s-2", "s-3", "s-4", "s-5", "s-6", "s-7", "r-sm", "r-md", "r-full",
     "fs-title", "lh-title", "fs-heading", "lh-heading", "fs-body", "lh-body", "fs-label", "lh-label", "fs-meta", "lh-meta",
     "reader-fs", "reader-lh", "reader-font", "reader-pad", "reader-measure",
@@ -227,7 +227,16 @@
   function onClick(e) {
     const held = onTapOnly && navigator.onLine && e.target.closest && e.target.closest(".co-placeholder");
     if (held && boxes.has(held)) { e.preventDefault(); loadHeld(boxes.get(held)); return; }
-    const img = e.target.closest && e.target.closest("img");
+    // A tap on a printed page's words (1.56.0) is a tap on the page, or
+    // on the highlight under it; while words are selected it's neither.
+    const onWords = layerAt(e.target);
+    if (onWords) {
+      const sel = doc.getSelection();
+      if (sel && !sel.isCollapsed) return;
+      const id = printedMarkAt(e.clientX, e.clientY);
+      if (id && onMark) { e.preventDefault(); onMark(id); return; }
+    }
+    const img = e.target.closest && (e.target.closest("img") || (onWords && pageImg(onWords.dataset.page)));
     if (img && img.closest(".co-comic") && picsPaged()) {
       // Pages: a side third turns, the middle shows the bar, a double tap
       // opens the page in the viewer to zoom.
@@ -908,6 +917,8 @@
   // The highlights a selection touches (1.7.1), and whether every word in
   // it is highlighted already, when the button under it removes instead.
   function selectionMarks() {
+    const onPages = layers.size ? printedSelectionMarks() : null;
+    if (onPages) return onPages;
     const sel = doc && doc.getSelection();
     if (!sel || sel.isCollapsed || !sel.rangeCount) return { ids: [], all: false };
     const r = sel.getRangeAt(0);
@@ -937,6 +948,8 @@
 
   // The selection as a highlight to keep: { block, start, endBlock, end, text }.
   function selectionMark() {
+    const onPages = layers.size ? printedSelection(true) : null;
+    if (onPages) return onPages;
     const sel = doc && doc.getSelection();
     if (!sel || sel.isCollapsed || !sel.rangeCount || !words(sel.toString())) return null;
     const r = sel.getRangeAt(0);
@@ -986,6 +999,13 @@
   // Paints the clip's highlights; returns the ids it found a place for.
   function paintMarks(list) {
     if (!doc) return [];
+    // A PDF's printed pages: every highlight counts as found, as most of
+    // its pages aren't drawn yet; each paints as its page is.
+    if (doc.querySelector(".co-printed")) {
+      printedMarks = (list || []).slice();
+      paintPage(null);
+      return printedMarks.map((m) => m.id);
+    }
     unpaint();
     const found = [];
     for (const m of list || []) {
@@ -1017,6 +1037,209 @@
     }
     return found;
   }
+  // ---- Words over a PDF's printed pages (1.56.0) ----
+  // A PDF read from its file shows its pages as pictures. Each drawn page
+  // gets a layer of its words, where they sit on it, in see-through type
+  // (files.js asks pdf.js for them as the page is drawn), so they can be
+  // selected and highlighted. The layers sit at the end of the pages'
+  // row, in page order, each placed over its picture by placeText: a
+  // wrapper round the picture would break everything that walks
+  // `.co-comic > img` (the page rail, Pages, zoom). A highlight on them
+  // is kept by page, where in the page's words, and boxes on the page as
+  // fractions of it, so it paints again at any zoom or width.
+  const layers = new Map();
+  let measure = null, printedMarks = [];
+  const pageImg = (n) => (doc ? doc.querySelector('.co-printed > img[data-page="' + n + '"]') : null);
+  const layerAt = (node) => { const e = node && (node.nodeType === 1 ? node : node.parentElement); return (e && e.closest && e.closest(".co-tl")) || null; };
+  const hasText = (n) => layers.has(Number(n));
+  function textLayer(n, items) {
+    n = Number(n);
+    const root = doc && doc.querySelector(".co-printed");
+    const img = pageImg(n);
+    if (!root || !img || !items || !items.length) return;
+    dropText(n);
+    const aspect = (Number(img.getAttribute("width")) || 3) / (Number(img.getAttribute("height")) || 4);
+    if (!measure) measure = document.createElement("canvas").getContext("2d");
+    measure.font = "100px sans-serif";
+    const layer = doc.createElement("div");
+    layer.className = "co-tl";
+    layer.dataset.page = String(n);
+    layer.setAttribute("aria-label", "Page " + n);
+    const pct = (v) => (Math.round(v * 100000) / 1000) + "%";
+    for (const [i, it] of items.entries()) {
+      const span = doc.createElement("span");
+      span.textContent = it.s;
+      if (it.rtl) span.setAttribute("dir", "rtl");
+      span.style.left = pct(it.x);
+      span.style.top = pct(it.y);
+      span.style.fontSize = "calc(" + (Math.round(it.h * 100000) / 1000) + "cqh)";
+      // Stretched to the item's width on the page, the way pdf.js lays
+      // its own text over a page; the ratio holds at any size.
+      const natural = measure.measureText(it.s).width / 100;
+      if (natural > 0 && it.h > 0) span.style.transform = "scaleX(" + (Math.round((it.w * aspect) / (natural * it.h) * 1000) / 1000) + ")";
+      layer.append(span);
+      // A space between two pieces the page shows apart, so the words a
+      // selection gives don't run together.
+      const next = items[i + 1];
+      if (next && !/\s$/.test(it.s) && !/^\s/.test(next.s) && (it.eol || Math.abs(next.y - it.y) > it.h * 0.5 || next.x - (it.x + it.w) > it.h * 0.18 / aspect)) layer.append(" ");
+    }
+    // In page order, so a selection from one page to the next runs on.
+    const after = [...root.querySelectorAll(":scope > .co-tl")].find((l) => Number(l.dataset.page) > n);
+    root.insertBefore(layer, after || null);
+    layers.set(n, layer);
+    placeText(layer);
+    paintPage(n);
+  }
+  function dropText(n) {
+    const l = layers.get(Number(n));
+    if (l) l.remove();
+    layers.delete(Number(n));
+  }
+  // Each layer over its picture, wherever the layout put it (zoom, two
+  // side by side, Pages). Only the pages near the screen have one.
+  function placeText(only) {
+    for (const l of only ? [only] : layers.values()) {
+      const img = pageImg(l.dataset.page);
+      if (!img) { dropText(l.dataset.page); continue; }
+      // In Pages a page is fitted into its box (object-fit: contain) and
+      // pushed to one side of it: the layer goes over the page drawn.
+      const bw = img.offsetWidth, bh = img.offsetHeight;
+      const nw = Number(img.getAttribute("width")) || bw, nh = Number(img.getAttribute("height")) || bh;
+      const k = picsPaged() && nw && nh ? Math.min(bw / nw, bh / nh) : 0;
+      const w = k ? nw * k : bw, h = k ? nh * k : bh;
+      const side = (img.style.objectPosition || "center").split(" ")[0];
+      const dx = side === "left" ? 0 : side === "right" ? bw - w : (bw - w) / 2;
+      l.style.left = img.offsetLeft + dx + "px";
+      l.style.top = img.offsetTop + (bh - h) / 2 + "px";
+      l.style.width = w + "px";
+      l.style.height = h + "px";
+    }
+  }
+  const layerText = (l) => blockText(l);
+  // Out to whole words, and a word broken over two lines put back
+  // together as the text view has it (pdf.js blocksOf).
+  const pdfWords = (s) => words(s).replace(/([a-zà-ɏ])- (?=[a-zà-ɏ])/g, "$1");
+  // The selection on printed pages, as a highlight to keep:
+  // { page, start, endPage, end, text, rects, box }.
+  function printedSelection(widen) {
+    const sel = doc && doc.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount || !layers.size) return null;
+    const r = sel.getRangeAt(0);
+    const hit = [...layers.values()].filter((l) => r.intersectsNode(l) && layerText(l).trim()).sort((a, b) => a.dataset.page - b.dataset.page);
+    if (!hit.length) return null;
+    const first = hit[0], last = hit[hit.length - 1];
+    let start = first.contains(r.startContainer) ? offsetIn(first, r.startContainer, r.startOffset) : 0;
+    let end = last.contains(r.endContainer) ? offsetIn(last, r.endContainer, r.endOffset) : layerText(last).length;
+    const a = layerText(first), z = layerText(last);
+    if (widen) {
+      const word = /[\p{L}\p{N}'’-]/u;
+      while (start > 0 && word.test(a[start - 1]) && word.test(a[start] || "")) start--;
+      while (end < z.length && end > 0 && word.test(z[end]) && word.test(z[end - 1])) end++;
+    }
+    const m = { page: Number(first.dataset.page), start, endPage: Number(last.dataset.page), end };
+    const parts = hit.map((l) => { const t = layerText(l); return t.slice(l === first ? start : 0, l === last ? end : t.length); });
+    m.text = pdfWords(parts.join(" "));
+    if (!m.text) return null;
+    m.rects = rectsOf(hit, m);
+    // Where the words are on screen: the spaces between pieces sit at a
+    // layer's corner with no size, and are left out.
+    const boxes = [...r.getClientRects()].filter((b) => b.width >= 1 && b.height >= 1);
+    if (!boxes.length) return null;
+    m.box = { top: Math.min(...boxes.map((b) => b.top)), bottom: Math.max(...boxes.map((b) => b.bottom)),
+      left: Math.min(...boxes.map((b) => b.left)), right: Math.max(...boxes.map((b) => b.right)) };
+    return m;
+  }
+  // The boxes a stretch of a layer's words covers, as [page, x, y, w, h]
+  // fractions of the page, one a line, at most 60.
+  function rectsOf(list, m) {
+    const out = [];
+    for (const l of list) {
+      const n = Number(l.dataset.page), t = layerText(l);
+      const s = n === m.page ? m.start : 0, e = n === m.endPage ? m.end : t.length;
+      const range = doc.createRange();
+      const at = (off) => {
+        let k = 0;
+        for (const node of textNodes(l)) { if (off <= k + node.length) return [node, off - k]; k += node.length; }
+        return null;
+      };
+      const a = at(s), b = at(e);
+      if (!a || !b) continue;
+      range.setStart(a[0], a[1]);
+      range.setEnd(b[0], b[1]);
+      const box = l.getBoundingClientRect();
+      if (!box.width || !box.height) continue;
+      const lines = [];
+      for (const r of range.getClientRects()) {
+        if (r.width < 1 || r.height < 1) continue;
+        const x = (r.left - box.left) / box.width, y = (r.top - box.top) / box.height, w = r.width / box.width, h = r.height / box.height;
+        const same = lines.find((q) => Math.abs(q[1] - y) < h * 0.5 && Math.abs(q[3] - h) < h * 0.5 && x <= q[0] + q[2] + h && x + w >= q[0] - h);
+        if (same) {
+          const x2 = Math.max(same[0] + same[2], x + w), y2 = Math.max(same[1] + same[3], y + h);
+          same[0] = Math.min(same[0], x); same[1] = Math.min(same[1], y);
+          same[2] = x2 - same[0]; same[3] = y2 - same[1];
+        } else lines.push([x, y, w, h]);
+      }
+      for (const q of lines) out.push([n, ...q.map((v) => Math.round(Math.min(1, Math.max(0, v)) * 10000) / 10000)]);
+    }
+    return out.slice(0, 60);
+  }
+  // A highlight made in Show as text has no boxes: it's found on a page
+  // shown now by its words.
+  function findRects(text) {
+    for (const l of layers.values()) {
+      const t = layerText(l);
+      // Letter by letter, any run of space read as one and a broken word
+      // put together, with where each letter is in the layer's text.
+      let flat = "";
+      const map = [];
+      for (let i = 0; i < t.length; i++) {
+        if (/\s/.test(t[i])) { if (!flat.endsWith(" ")) { flat += " "; map.push(i); } continue; }
+        if (t[i] === "-" && /[a-zà-ɏ]/.test(t[i - 1] || "") && /^\s+[a-zà-ɏ]/.test(t.slice(i + 1, i + 3))) { while (/\s/.test(t[i + 1] || "")) i++; continue; }
+        flat += t[i];
+        map.push(i);
+      }
+      const at = flat.indexOf(text);
+      if (at < 0) continue;
+      const n = Number(l.dataset.page);
+      return rectsOf([l], { page: n, start: map[at], endPage: n, end: map[at + text.length - 1] + 1 });
+    }
+    return null;
+  }
+  // Paints the printed highlights that fall on page n (all when n is null).
+  function paintPage(n) {
+    for (const b of doc ? doc.querySelectorAll(n == null ? ".co-pm" : '.co-tl[data-page="' + n + '"] .co-pm') : []) b.remove();
+    for (const m of printedMarks) {
+      const rects = m.rects || (m.page ? null : findRects(m.text));
+      for (const [pg, x, y, w, h] of rects || []) {
+        if (n != null && pg !== n) continue;
+        const l = layers.get(pg);
+        if (!l) continue;
+        const mk = doc.createElement("mark");
+        mk.className = "co-mark co-pm" + (m.color ? " co-c-" + m.color : "") + (m.note ? " co-noted" : "");
+        mk.dataset.mark = m.id;
+        mk.style.cssText = "left:" + x * 100 + "%;top:" + y * 100 + "%;width:" + w * 100 + "%;height:" + h * 100 + "%";
+        l.prepend(mk);
+      }
+    }
+  }
+  // The printed highlight under a point on a page, if any.
+  function printedMarkAt(x, y) {
+    for (const mk of doc.querySelectorAll(".co-pm")) {
+      const r = mk.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return mk.dataset.mark;
+    }
+    return null;
+  }
+  const beforeOrAt = (p1, o1, p2, o2) => p1 < p2 || (p1 === p2 && o1 <= o2);
+  // The printed highlights a selection touches, and whether one holds all of it.
+  function printedSelectionMarks() {
+    const m = printedSelection(false);
+    if (!m) return null;
+    const on = printedMarks.filter((x) => x.page && !(beforeOrAt(x.endPage, x.end, m.page, m.start) || beforeOrAt(m.endPage, m.end, x.page, x.start)));
+    const all = on.some((x) => beforeOrAt(x.page, x.start, m.page, m.start) && beforeOrAt(m.endPage, m.end, x.endPage, x.end));
+    return { ids: on.map((x) => x.id), all };
+  }
+
   // The other pages this clip links to (1.38.0), once each, in the
   // order they come: for saving them too. Its own address, links within
   // it and its next and previous links are left out, and so are a
@@ -1080,7 +1303,20 @@
   }
 
   // Scrolls (or turns) to a highlight; false when it isn't in the page.
-  function toMark(id, back) {
+  // On printed pages `page` is the highlight's page, to go to when it
+  // isn't painted yet.
+  function toMark(id, back, page) {
+    if (doc && frame && doc.querySelector(".co-printed")) {
+      const box = [...doc.querySelectorAll(".co-pm")].find((x) => x.dataset.mark === id);
+      const img = box ? pageImg(box.closest(".co-tl").dataset.page) : page ? pageImg(page) : null;
+      if (!img) return false;
+      if (back && onJump) onJump(spot());
+      if (isPaged()) { goPage(pageOf(img), true); return true; }
+      const w = frame.contentWindow;
+      const top = box ? box.getBoundingClientRect().top - 48 : img.getBoundingClientRect().top - 8;
+      w.scrollTo(w.scrollX, Math.max(0, top + w.scrollY - (topSpace ? topSpace() : 0)));
+      return true;
+    }
     const mk = marked().find((x) => x.dataset.mark === id);
     if (!mk || !frame) return false;
     if (back && onJump) onJump(spot());
@@ -1103,6 +1339,7 @@
     if (doc && topSpace) doc.documentElement.style.setProperty("--co-top", topSpace() + "px");
     if (doc && bottomSpace) doc.documentElement.style.setProperty("--co-bottom", bottomSpace() + "px");
     if (isPaged()) relayout();
+    if (layers.size) placeText();
   }
 
   // ---- Pages ----
@@ -1240,6 +1477,7 @@
     const per = two ? 2 : 1;
     root.style.setProperty("--co-tail", ((per - pos % per) % per) * unit + "px");
     root.style.setProperty("--co-screen", w + "px");
+    if (layers.size) placeText();
     if (keepImg) goPage(pageOf(keepImg), true);
     else goPage(Math.round(keep * (pages() - 1)), true);
   }
@@ -1290,7 +1528,7 @@
   // a PDF's pages from moving the spot further off the deeper you are.
   function pageAt(root, x, y) {
     const hit = doc.elementFromPoint(x, y);
-    const el = hit && hit.closest && hit.closest("img, .co-placeholder");
+    const el = hit && hit.closest && (hit.closest("img, .co-placeholder") || (layerAt(hit) && pageImg(layerAt(hit).dataset.page)));
     if (!el || !root.contains(el)) return null;
     const r = el.getBoundingClientRect();
     return r.width && r.height ? { el, fx: (x - r.left) / r.width, fy: (y - r.top) / r.height } : null;
@@ -1316,6 +1554,7 @@
       const r = at.el.getBoundingClientRect();
       w.scrollTo(w.scrollX + r.left + at.fx * r.width - mx, w.scrollY + r.top + at.fy * r.height - my);
     } else w.scrollTo(ox + (px - ox) * q - mx, oy + (py - oy) * q - my);
+    if (layers.size) placeText();
   }
   function zoomInput() {
     doc.addEventListener("touchstart", (e) => {
@@ -1621,6 +1860,8 @@
     blocks = [];
     anchors = [];
     spans = [];
+    layers.clear();
+    printedMarks = [];
     lit = null;
     onImage = image || null;
     onTap = tap || null;
@@ -1811,6 +2052,8 @@
     blocks = [];
     anchors = [];
     spans = [];
+    layers.clear();
+    printedMarks = [];
     lit = null;
   }
 
@@ -1839,5 +2082,5 @@
       return line;
     }));
   }
-  C.reader = { pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
+  C.reader = { pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, textLayer, dropText, hasText, placeText, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
 })();

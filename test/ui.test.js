@@ -2242,6 +2242,100 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("words on a linked PDF's printed pages can be highlighted, and the highlight is kept with the clip's others (1.56.0)", async () => {
+      const maker = await browser.newPage();
+      let html = "<style>@page{size:A4;margin:0} div{padding:60px;font:24px sans-serif;page-break-after:always}</style>";
+      for (let i = 1; i <= 3; i++) html += "<div><p>Page " + i + " opens here.</p><p>" + (i === 2 ? "We watched the marmalade harbour lights come on." : "Nothing much happens on this page.") + "</p></div>";
+      await maker.setContent(html);
+      const bytes = [...await maker.pdf({ format: "A4" })];
+      await maker.close();
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      q.errors = [];
+      // Playwright looking into pdf.js's sandbox (no allow-same-origin) is itself refused there.
+      q.on("pageerror", (e) => { if (!/sandboxed and lacks the 'allow-same-origin'/.test(String(e))) q.errors.push(String(e)); });
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      const bring = (b) => {
+        const file = new File([new Uint8Array(b)], "harbour.pdf", { type: "application/pdf" });
+        window.Waypage.platform.files.blob = async () => file;
+        return file;
+      };
+      const id = await q.evaluate(async ([b, f]) => {
+        const file = eval(f)(b);
+        const meta = await window.Waypage.files.bring(file, "pdf", { has: () => false, link: "content://docs/harbour.pdf" });
+        await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
+        return meta.id;
+      }, [bytes, String(bring)]);
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(([b, f]) => { eval(f)(b); }, [bytes, String(bring)]);
+      await q.evaluate((i) => openPage(i), id);
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      // The Highlights button stays for a PDF's printed pages.
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerMarks").hidden), false);
+      await q.evaluate(() => { const d = document.getElementById("readerFrame").contentDocument; d.defaultView.scrollTo(0, d.querySelector("img[data-page='2']").getBoundingClientRect().top + d.defaultView.scrollY); });
+      await until(q, () => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-tl[data-page='2'] span"));
+      // Select "harbour lights" among the page's words.
+      const picked = await q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument;
+        const layer = d.querySelector(".co-tl[data-page='2']");
+        const walk = d.createTreeWalker(layer, NodeFilter.SHOW_TEXT);
+        const nodes = [];
+        let text = "";
+        for (let t = walk.nextNode(); t; t = walk.nextNode()) { nodes.push([t, text.length]); text += t.data; }
+        const at = text.indexOf("harbour"), end = text.indexOf("lights") + "lights".length;
+        if (at < 0 || end < at) return text;
+        const point = (off) => { for (const [t, n] of nodes) if (off <= n + t.length) return [t, off - n]; return null; };
+        const r = d.createRange();
+        r.setStart(...point(at));
+        r.setEnd(...point(end));
+        const sel = d.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+        return null;
+      });
+      assert.strictEqual(picked, null, "the page's words: " + picked);
+      await q.locator(".read-here .sel-mark:not([hidden])").click();
+      await until(q, () => (state.open.marks || []).length === 1);
+      const kept = await q.evaluate(() => state.open.marks[0]);
+      assert.strictEqual(kept.page, 2);
+      assert.strictEqual(kept.endPage, 2);
+      assert.strictEqual(kept.text, "harbour lights");
+      assert.ok(kept.rects.length >= 1 && kept.rects.every((r) => r[0] === 2 && r.slice(1).every((v) => v >= 0 && v <= 1)), JSON.stringify(kept.rects));
+      await until(q, () => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-tl[data-page='2'] mark.co-pm"));
+      // In the clip's Highlights and the Highlights place, as any other.
+      await q.evaluate(() => document.getElementById("readerMarks").click());
+      await q.locator("#readingSheet .mark-quote", { hasText: "harbour lights" }).waitFor();
+      await q.goBack();
+      await q.locator("#readingSheet").waitFor({ state: "hidden" });
+      const stored = await q.evaluate(async (i) => (await window.Waypage.store.readIndex()).find((p) => p.id === i).marks, id);
+      assert.strictEqual(stored.length, 1);
+      assert.strictEqual(stored[0].page, 2);
+      // It survives a backup's clean-up of the clip.
+      assert.strictEqual(await q.evaluate(() => window.Waypage.backup.cleanMarks(state.open.marks)[0].page), 2);
+      // Show as text finds it by its words.
+      await q.evaluate(() => { const p = state.open; p.view = "text"; return window.Waypage.store.writeIndex(state.pages); });
+      await q.evaluate(() => back());
+      await q.evaluate((i) => openPage(i), id);
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open && !document.getElementById("readerFrame").contentDocument.querySelector(".co-printed"));
+      await until(q, () => !!document.getElementById("readerFrame").contentDocument.querySelector("mark.co-mark"));
+      assert.strictEqual(await q.evaluate(() => [...document.getElementById("readerFrame").contentDocument.querySelectorAll("mark.co-mark")].map((m) => m.textContent).join("")), "harbour lights");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await ctx.close();
+    });
+
+    await test("a comic has no Highlights button (1.56.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async (b) => { askKeep = async () => false; await openFile(new File([new Uint8Array(b)], "v1.cbz"), null, false); }, [...mangaBytes(1)]);
+      await q.evaluate(() => openPage(state.pages[0].id));
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      await q.waitForTimeout(300);
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerMarks").hidden), true);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a pinch deep in a linked PDF keeps the spot under the fingers, gaps and all", async () => {
       const maker = await browser.newPage();
       let html = "<style>@page{size:A4;margin:0} div{height:297mm;box-sizing:border-box;padding:40px;font:28px sans-serif;page-break-after:always}</style>";
@@ -2269,13 +2363,15 @@ function zipOf(files) {
       await q.evaluate(([b, f]) => { eval(f)(b); }, [bytes, String(bring)]);
       await q.evaluate((i) => openPage(i), id);
       await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
-      await q.evaluate(() => { const d = document.getElementById("readerFrame").contentDocument; d.defaultView.scrollTo(0, d.querySelector("img[data-page='25']").offsetTop - 100); });
+      await q.evaluate(() => { const d = document.getElementById("readerFrame").contentDocument; d.defaultView.scrollTo(0, d.querySelector("img[data-page='25']").getBoundingClientRect().top + d.defaultView.scrollY - 100); });
       await q.waitForTimeout(400);
       const fr = await q.evaluate(() => { const r = document.getElementById("readerFrame").getBoundingClientRect(); return [r.left, r.top]; });
       const x = 250, y = 450;
       const under = () => q.evaluate(([x, y]) => {
         const d = document.getElementById("readerFrame").contentDocument;
-        const img = d.elementFromPoint(x, y).closest("img"), r = img.getBoundingClientRect();
+        // The page's words lie over it (1.56.0): the page under them.
+        const hit = d.elementFromPoint(x, y), words = hit.closest(".co-tl");
+        const img = words ? d.querySelector("img[data-page='" + words.dataset.page + "']") : hit.closest("img"), r = img.getBoundingClientRect();
         return { page: img.getAttribute("data-page"), fx: Math.round((x - r.left) / r.width * 100), fy: Math.round((y - r.top) / r.height * 100) };
       }, [x, y]);
       const before = await under();

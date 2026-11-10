@@ -292,7 +292,8 @@ async function openPage(id, fromHistory) {
     markAfterOpen = null;
     // After the reader has gone back to where it was left.
     await (d && d.fonts ? d.fonts.ready : null);
-    requestAnimationFrame(() => { if (state.open === p) C.reader.toMark(id); });
+    const m = (p.marks || []).find((x) => x.id === id);
+    requestAnimationFrame(() => { if (state.open === p && m) jumpToMark(p, m); });
   }
   furtherRead(p);
 }
@@ -1152,6 +1153,11 @@ const pictureBook = () => !!state.open && (!!state.open.comic || wordless);
 function narrateOrScroll(p) {
   const pics = !!p.comic || wordless;
   $("readerAloud").hidden = !speech.available || pics;
+  // A comic or scan has no words to highlight (1.56.0); a PDF's printed
+  // pages have theirs over them.
+  const noMarks = pics && !C.files.printed(p);
+  $("readerMarks").hidden = noMarks;
+  if (noMarks && state.sheet === "marks") closeSheet(true);
   // A comic in Pages turns rather than scrolls.
   const turned = !!p.comic && pagesOn(p);
   if (turned && glide.on) stopGlide();
@@ -1442,7 +1448,8 @@ const translateUrl = (text) => "https://translate.google.com/?sl=auto&tl=" + myL
 function showReadHere() {
   const p = state.open;
   const mark = p && !p.preview && !state.sheet && Date.now() > quietUntil ? C.reader.selectionMark() : null;
-  const spot = p && speech.available && !state.sheet ? C.reader.selectionSpot() : null;
+  // Not on printed pages or a comic, which Narrate doesn't read (1.56.0).
+  const spot = p && speech.available && !state.sheet && !pictureBook() ? C.reader.selectionSpot() : null;
   const picked = p && !state.sheet && Date.now() > quietUntil ? C.reader.selectionText() : null;
   const box = (mark && mark.box) || spot || (picked && picked.box);
   if (!box) { hideReadHere(); return; }
@@ -1508,7 +1515,8 @@ function showReadHere() {
   if (readHere.offsetWidth > innerWidth - 16) readHere.classList.add("tighter");
   // Kept on screen whole, however wide its buttons make it.
   const half = readHere.offsetWidth / 2;
-  readHere.style.left = Math.max(8 + half, Math.min(frame.left + (box.left + box.right) / 2, innerWidth - 8 - half)) + "px";
+  // Inside the reader, clear of the page rail beside a PDF (1.56.0).
+  readHere.style.left = Math.max(Math.max(0, frame.left) + 8 + half, Math.min(frame.left + (box.left + box.right) / 2, innerWidth - 8 - half)) + "px";
   // The reader can be scrolled a little itself, under the frame, which
   // moves the bar with it: it's put back where it was meant to go.
   const off = readHere.getBoundingClientRect().top - top;
@@ -1539,8 +1547,26 @@ function colorChips(list, current, onpick) {
 }
 // Kept on the clip's index entry as `marks`, so they sync, back up and
 // export with it: [{ id, block, start, endBlock, end, text, note, at }].
+// One made on a PDF's printed pages (1.56.0) is kept by page instead:
+// { id, page, start, endPage, end, rects, text, note, at }, where start
+// and end are in the page's words and rects are boxes on the page.
 // reader.js finds and paints them; a tap on one opens it here.
-const byPlace = (a, b) => a.block - b.block || a.start - b.start;
+const byPlace = (a, b) => (a.page ? 1 : 0) - (b.page ? 1 : 0) || (a.page ? a.page - b.page : a.block - b.block) || a.start - b.start;
+// Whether two highlights cover any of the same words, by block or by page.
+function overlaps(x, m) {
+  const [b, eb] = m.page ? ["page", "endPage"] : ["block", "endBlock"];
+  if (!x[b] && x[b] !== 0) return false;
+  if (!!x.page !== !!m.page) return false;
+  return !(x[eb] < m[b] || (x[eb] === m[b] && x.end <= m.start) || x[b] > m[eb] || (x[b] === m[eb] && x.start >= m.end));
+}
+// Goes to a highlight in the open clip. One made in Show as text, on a
+// PDF's printed pages, is looked for by its words first.
+async function jumpToMark(p, m, back) {
+  let page = m.page || 0;
+  if (!page && C.files.printed(p)) page = await C.files.findPage(m.text);
+  if (state.open !== p) return;
+  if (!C.reader.toMark(m.id, back, page) && C.files.printed(p)) toast("Not found on these pages. Show as text finds it in the words.");
+}
 // Ids of the open clip's highlights that this copy of it has no place for.
 let lostMarks = new Set();
 function paintMarks(p) {
@@ -1564,9 +1590,10 @@ async function addMark(color = markColor()) {
   quietUntil = Date.now() + 600;
   if (!p || !m) return;
   // A highlight over one already there takes its place, keeping its note.
-  const over = (p.marks || []).filter((x) => !(x.endBlock < m.block || (x.endBlock === m.block && x.end <= m.start)
-    || x.block > m.endBlock || (x.block === m.endBlock && x.start >= m.end)));
-  const keep = { id: C.save.newId(), block: m.block, start: m.start, endBlock: m.endBlock, end: m.end, text: m.text.slice(0, 4000), at: Date.now() };
+  const over = (p.marks || []).filter((x) => overlaps(x, m));
+  const keep = m.page
+    ? { id: C.save.newId(), page: m.page, start: m.start, endPage: m.endPage, end: m.end, rects: m.rects, text: m.text.slice(0, 4000), at: Date.now() }
+    : { id: C.save.newId(), block: m.block, start: m.start, endBlock: m.endBlock, end: m.end, text: m.text.slice(0, 4000), at: Date.now() };
   if (color !== "yellow") keep.color = color;
   const notes = over.map((x) => x.note).filter(Boolean);
   if (notes.length) keep.note = notes.join("\n\n");
@@ -1629,7 +1656,7 @@ function marksView(p, back) {
       const lost = inReader && lostMarks.has(m.id);
       const go = () => {
         if (lost) { markFocus = m.id; draw(); return; }
-        if (inReader) { history.back(); setTimeout(() => C.reader.toMark(m.id, true), 0); return; }
+        if (inReader) { history.back(); setTimeout(() => jumpToMark(p, m, true), 0); return; }
         markAfterOpen = m.id;
         back(true);
       };
@@ -1679,7 +1706,7 @@ function marksView(p, back) {
           } }, swatchDot(c)))),
       note,
       el("div", { class: "group" },
-        inReader && !lostMarks.has(m.id) ? menuRow("Go to it", () => { keepNote(); markFocus = null; history.back(); setTimeout(() => C.reader.toMark(m.id, true), 0); }) : null,
+        inReader && !lostMarks.has(m.id) ? menuRow("Go to it", () => { keepNote(); markFocus = null; history.back(); setTimeout(() => jumpToMark(p, m, true), 0); }) : null,
         menuRow("Copy", () => copyText(m.text + (m.note ? "\n\n" + m.note : ""), "Copied")),
         menuRow("Remove highlight", () => {
           clearTimeout(timer);
