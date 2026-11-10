@@ -1,6 +1,7 @@
 package io.github.danielnoam.waypage.share;
 
 import android.app.Activity;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.Window;
 import com.getcapacitor.JSObject;
@@ -19,8 +20,10 @@ import java.lang.reflect.Proxy;
  * page, and the page is told when the pen's state changes. Nothing is
  * consumed: the events go on to the WebView as they were.
  *
- *   watch({ on })   look at the pen, or stop
+ *   watch({ on, raw })  look at the pen, or stop; raw also sends every event (Drawings' pen test)
  *   "pen"           { near, down, button, eraser, tool, buttons } when any of them changes
+ *   "raw"           { k: "m", a, tools, b, p, c, n, src } for a MotionEvent (moves thinned out),
+ *                   { k: "k", a, code, name } for a KeyEvent
  *
  * near: a stylus hovering or touching; down: touching; button: a stylus
  * button held; eraser: the eraser end, or a button held (the page erases
@@ -30,13 +33,18 @@ import java.lang.reflect.Proxy;
 @CapacitorPlugin(name = "Pen")
 public class PenPlugin extends Plugin {
     private volatile boolean on;
+    private volatile boolean raw;
     private boolean wrapped;
+    private String rawKey = "";
+    private long rawAt;
+    private int rawSkipped;
     private boolean near, down, button, eraser;
     private int tool, buttons;
 
     @PluginMethod
     public void watch(PluginCall call) {
         on = call.getBoolean("on", false);
+        raw = on && call.getBoolean("raw", false);
         Activity a = getActivity();
         if (a == null || !on || wrapped) { call.resolve(); return; }
         a.runOnUiThread(() -> {
@@ -55,7 +63,12 @@ public class PenPlugin extends Plugin {
                     String name = m.getName();
                     if ("dispatchTouchEvent".equals(name) || "dispatchGenericMotionEvent".equals(name)) {
                         try { look((MotionEvent) args[0]); } catch (RuntimeException ignored) { /* the touch goes on */ }
+                        if (raw) {
+                            try { send((MotionEvent) args[0]); } catch (RuntimeException ignored) { /* as above */ }
+                        }
                     }
+                } else if (raw && args != null && args.length == 1 && args[0] instanceof KeyEvent && "dispatchKeyEvent".equals(m.getName())) {
+                    try { send((KeyEvent) args[0]); } catch (RuntimeException ignored) { /* the key goes on */ }
                 }
                 try {
                     return m.invoke(inner, args);
@@ -63,6 +76,45 @@ public class PenPlugin extends Plugin {
                     throw x.getCause();
                 }
             }));
+    }
+
+    // The pen test's log (raw): each event as the phone made it. A run of
+    // moves that change neither tool nor buttons is thinned to one in 50 ms.
+    private void send(MotionEvent e) {
+        StringBuilder tools = new StringBuilder();
+        for (int i = 0; i < e.getPointerCount(); i++) {
+            if (i > 0) tools.append(',');
+            tools.append(e.getToolType(i));
+        }
+        String action = MotionEvent.actionToString(e.getActionMasked());
+        int act = e.getActionMasked();
+        boolean move = act == MotionEvent.ACTION_MOVE || act == MotionEvent.ACTION_HOVER_MOVE;
+        String key = action + "|" + tools + "|" + e.getButtonState();
+        long now = e.getEventTime();
+        if (move && key.equals(rawKey) && now - rawAt < 50) { rawSkipped++; return; }
+        rawKey = key;
+        rawAt = now;
+        JSObject o = new JSObject();
+        o.put("k", "m");
+        o.put("a", action);
+        o.put("tools", tools.toString());
+        o.put("b", e.getButtonState());
+        o.put("p", e.getPressure());
+        o.put("c", (e.getFlags() & 0x20) != 0);
+        o.put("n", e.getPointerCount());
+        o.put("src", e.getSource());
+        o.put("skipped", rawSkipped);
+        rawSkipped = 0;
+        notifyListeners("raw", o);
+    }
+
+    private void send(KeyEvent e) {
+        JSObject o = new JSObject();
+        o.put("k", "k");
+        o.put("a", e.getAction() == KeyEvent.ACTION_DOWN ? "down" : "up");
+        o.put("code", e.getKeyCode());
+        o.put("name", KeyEvent.keyCodeToString(e.getKeyCode()));
+        notifyListeners("raw", o);
     }
 
     // The stylus in this event, if there is one, and what it's doing.
@@ -97,5 +149,6 @@ public class PenPlugin extends Plugin {
     @Override
     protected void handleOnDestroy() {
         on = false;
+        raw = false;
     }
 }

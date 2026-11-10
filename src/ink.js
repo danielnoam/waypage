@@ -122,7 +122,7 @@
   let clip = null;        // { id, size, pages: { "<n>": [stroke] } }
   let saveTimer = 0;
   let undos = [], redos = [];
-  let onChange = null, onPen = null, onProbe = null;
+  let onChange = null, onPen = null, onProbe = null, logger = null;
   const layers = new Map(); // page -> svg
 
   // A stroke read back from a file: anything else is dropped.
@@ -366,6 +366,10 @@
     }, { passive: false });
     // The pen's button would open a menu.
     svg.addEventListener("contextmenu", (e) => { if (on) e.preventDefault(); });
+    // The pen test's log (app-pentest.js): last, so what was prevented shows.
+    for (const t of ["pointerdown", "pointermove", "pointerup", "pointercancel", "pointerenter", "pointerleave", "touchstart", "touchmove", "touchend", "touchcancel", "contextmenu"]) {
+      svg.addEventListener(t, (e) => { if (logger) logger(e); }, { passive: true });
+    }
   }
   function down(e) {
     if (!on) return;
@@ -520,6 +524,17 @@
     changed();
   }
 
+  // The drawings as they are, to put back (the pen test draws on the page).
+  const snapshot = () => JSON.stringify(clip ? clip.pages : {});
+  function restore(snap) {
+    if (!clip) return;
+    try { clip.pages = JSON.parse(snap) || {}; } catch (e) { return; }
+    undos = []; redos = [];
+    for (const n of [...layers.keys()]) { if (strokes(n).length || on) paint(n); else drop(n); }
+    save();
+    changed();
+  }
+
   // Everything on the clip gone, for good (Remove all drawings).
   function clearAll() {
     if (!clip) return;
@@ -548,6 +563,8 @@
     set onChange(f) { onChange = f; },
     set onPen(f) { onPen = f; },
     set onProbe(f) { onProbe = f; },
+    set onLog(f) { logger = f; },
+    snapshot, restore,
     fromPhone, get nat() { return nat; },
     get on() { return on; },
     get lastStroke() { return lastStroke; },

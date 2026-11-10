@@ -2517,6 +2517,86 @@ function zipOf(files) {
       await ctx.close();
     });
 
+    await test("the pen test in Drawings asks for each thing in turn, records what comes in, and makes a log to save (1.57.0)", async () => {
+      const maker = await browser.newPage();
+      let html = "<style>@page{size:A4;margin:0} div{padding:60px;font:24px sans-serif;page-break-after:always}</style>";
+      for (let i = 1; i <= 3; i++) html += "<div><p>Page " + i + " opens here.</p><p>Nothing much happens on this page, and the margins are wide enough to write in.</p></div>";
+      await maker.setContent(html);
+      const bytes = [...await maker.pdf({ format: "A4" })];
+      await maker.close();
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block", acceptDownloads: true });
+      const q = await ctx.newPage();
+      q.errors = [];
+      q.on("pageerror", (e) => { if (!/sandboxed and lacks the 'allow-same-origin'/.test(String(e))) q.errors.push(String(e)); });
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      const bring = (b) => {
+        const file = new File([new Uint8Array(b)], "logbook.pdf", { type: "application/pdf" });
+        window.Waypage.platform.files.blob = async () => file;
+        return file;
+      };
+      const id = await q.evaluate(async ([b, f]) => {
+        const file = eval(f)(b);
+        const meta = await window.Waypage.files.bring(file, "pdf", { has: () => false, link: "content://docs/logbook.pdf" });
+        await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
+        return meta.id;
+      }, [bytes, String(bring)]);
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(([b, f]) => { eval(f)(b); }, [bytes, String(bring)]);
+      await q.evaluate((i) => openPage(i), id);
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      await q.evaluate(() => openSheet("ink"));
+      await q.locator("#readingSheet .ink-test-box .btn-primary", { hasText: "Start test" }).click();
+      await q.locator("#readingSheet .ink-test-box", { hasText: "Step 1 of 12" }).waitFor();
+      const onPad = (kind, pointerType, buttons) => q.evaluate(([kind, pointerType, buttons]) => {
+        const pad = document.querySelector("#readingSheet .ink-probe-pad"), r = pad.getBoundingClientRect();
+        const pe = (name, f) => pad.dispatchEvent(new PointerEvent(name, { pointerType, pointerId: 7, isPrimary: true, bubbles: true, cancelable: true, buttons: name === "pointerup" ? 0 : buttons, button: name === "pointerdown" ? 0 : -1, pressure: 0.5, clientX: r.left + r.width * f, clientY: r.top + r.height / 2 }));
+        if (kind === "draw") { pe("pointerdown", 0.1); for (let i = 2; i < 8; i++) pe("pointermove", i / 10); pe("pointerup", 0.8); }
+        if (kind === "touch") pad.dispatchEvent(new TouchEvent("touchstart", { bubbles: true, cancelable: true }));
+      }, [kind, pointerType, buttons]);
+      const done = () => q.locator("#readingSheet .ink-test-box .btn-primary").click();
+      const skip = () => q.locator("#readingSheet .ink-test-box button", { hasText: "Skip" }).click();
+      // 1: a finger. 2: the pen hovering, as the phone says it. 3: the pen drawing.
+      await onPad("draw", "touch", 1); await onPad("touch", "touch", 1); await done();
+      await q.evaluate(() => { penTestState({ near: true, down: false, button: false, eraser: false, tool: 2, buttons: 0 }); penTestRaw({ k: "m", a: "ACTION_HOVER_ENTER", tools: "2", b: 0, p: 0, n: 1, c: false, src: 16386 }); penTestRaw({ k: "k", a: "down", code: 308, name: "KEYCODE_STYLUS_BUTTON_PRIMARY" }); });
+      await done();
+      await onPad("draw", "pen", 1); await done();
+      for (let i = 0; i < 6; i++) await skip();
+      await q.locator("#readingSheet .ink-test-box", { hasText: "Step 10 of 12" }).waitFor();
+      await skip();
+      // 11, on the page: the sheet goes, Draw comes on, and the step is on the Draw bar.
+      await q.locator("#readingSheet .ink-test-box button", { hasText: "Go to the page" }).click();
+      await until(q, () => !!document.querySelector(".ink-test") && !document.querySelector(".ink-test").hidden && !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-on='1'][data-page='1']"));
+      await q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument, svg = d.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
+        const pe = (name, f) => svg.dispatchEvent(new PointerEvent(name, { pointerType: "pen", pointerId: 8, isPrimary: true, bubbles: true, cancelable: true, buttons: name === "pointerup" ? 0 : 1, button: name === "pointerdown" ? 0 : -1, pressure: 0.6, clientX: r.left + r.width * f, clientY: r.top + r.width * 0.3 }));
+        pe("pointerdown", 0.2); for (let i = 3; i < 8; i++) pe("pointermove", i / 10); pe("pointerup", 0.8);
+        d.defaultView.scrollBy(0, 40);
+      });
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 1, "the test drew a line on the page");
+      await q.waitForTimeout(300);
+      await q.locator('.ink-bar [data-act="testdone"]').click();
+      await q.locator('.ink-bar .ink-test-text', { hasText: "Step 12 of 12" }).waitFor();
+      await q.locator('.ink-bar [data-act="testskip"]').click();
+      // Over: the sheet is back with the log, and the line drawn for the test is gone.
+      await q.locator("#readingSheet .row", { hasText: "Save the last log" }).waitFor();
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), 0, "what the test drew is taken off again");
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.on), false, "Draw is as it was");
+      const log = await q.evaluate(() => penLogText());
+      for (const want of ["Waypage pen test log", "agent: ", "pen plugin: no", "finger drawing was: ", "== Step 1: Touch the pad with a finger", "pad pointerdown touch button=0 buttons=1",
+        "pad touchstart touchType=n/a", "phone state near=yes", "phone MotionEvent ACTION_HOVER_ENTER tools=2", "phone KeyEvent down 308 KEYCODE_STYLUS_BUTTON_PRIMARY",
+        "pad pointerdown pen button=0 buttons=1", "pad pointermove pen button=-1 buttons=1", "x6 until", "[skipped]", "page pointerdown pen button=0 buttons=1 pressure=0.6", "page scroll y=40"]) {
+        assert.ok(log.includes(want), "the log has: " + want + "\n" + log.slice(0, 1500));
+      }
+      assert.ok(!/clientX|clientY/.test(log), "no positions in the log");
+      const [download] = await Promise.all([q.waitForEvent("download"), q.locator("#readingSheet .row", { hasText: "Save the last log" }).click()]);
+      assert.ok(/^waypage-pen-log-\d{4}-\d\d-\d\d\.txt$/.test(download.suggestedFilename()), download.suggestedFilename());
+      assert.ok(fs.readFileSync(await download.path(), "utf8").startsWith("Waypage pen test log"));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await ctx.close();
+    });
+
     await test("a scanned PDF, which has no words, can be drawn on too (1.57.0)", async () => {
       const maker = await browser.newPage();
       await maker.setContent("<style>@page{size:A4;margin:0} div{height:1100px;page-break-after:always}</style><div></div><div></div>");

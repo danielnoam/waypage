@@ -43,6 +43,8 @@ async function inkSync(p) {
 }
 function inkClose() {
   if (inkClipId == null && !C.ink.on) return;
+  // A pen test going on is stopped, and what it drew on the page taken off.
+  if (penT) penTestEnd(true, true);
   inkSet(false);
   C.ink.unload();
   C.platform.pen.watch(false);
@@ -91,7 +93,12 @@ function inkBuild() {
       el("span", { class: "ink-gap" }),
       btn("Undo", "undo", "undo"), btn("Redo", "redo", "redo"),
       el("button", { type: "button", class: "ink-done", "data-act": "done" }, "Done")),
-    el("div", { class: "ink-row ink-style" }));
+    el("div", { class: "ink-row ink-style" }),
+    // The pen test's page steps (app-pentest.js).
+    el("div", { class: "ink-row ink-test", hidden: true },
+      el("span", { class: "ink-test-text" }),
+      el("button", { type: "button", class: "ink-done", "data-act": "testdone" }, "Next step"),
+      el("button", { type: "button", class: "ink-done", "data-act": "testskip" }, "Skip")));
   inkBar.addEventListener("click", (e) => {
     const b = e.target.closest("button[data-act]");
     if (!b || b.disabled) return;
@@ -102,6 +109,8 @@ function inkBuild() {
     else if (act === "finger") C.ink.setting({ finger: !C.ink.state().finger });
     else if (act === "undo") inkGo(C.ink.undo());
     else if (act === "redo") inkGo(C.ink.redo());
+    else if (act === "testdone") { penTestNext(false); return; }
+    else if (act === "testskip") { penTestNext(true); return; }
     else if (act === "done") { inkSet(false); return; }
     inkKeep();
   });
@@ -141,7 +150,7 @@ C.ink.onPen = () => {
 };
 $("readerInk").addEventListener("click", () => inkSet(!C.ink.on));
 // What the phone says of the pen: near, the eraser end, a button held.
-if (C.platform.pen.available) C.platform.pen.onState((s) => C.ink.fromPhone(s));
+if (C.platform.pen.available) C.platform.pen.onState((s) => { C.ink.fromPhone(s); penTestState(s); });
 
 // ---- Drawings, in ⋯ ----
 
@@ -183,9 +192,10 @@ function inkProbe() {
   }
   pad.addEventListener("touchstart", (e) => { touch = (e.changedTouches[0] && e.changedTouches[0].touchType) || ""; paint(); }, { passive: true });
   pad.addEventListener("contextmenu", (e) => e.preventDefault());
+  penTestPad(pad);
   C.ink.onProbe = paint;
   paint();
-  return el("div", { class: "ink-probe" }, el("h3", { class: "overline" }, "Try your pen"), pad, out);
+  return el("div", { class: "ink-probe" }, el("h3", { class: "overline" }, "Try your pen"), pad, out, penTestView());
 }
 
 // The PDF with the drawings in it as ink annotations, saved where the

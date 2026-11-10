@@ -54,6 +54,7 @@ src/app-draw.js     section heads, a part opened alone, the flip, Continue readi
 src/app-jobs.js     links out of a paste or share, the URL index, savePage, saveAll, Wi-Fi wait, runJob
 src/app-reader.js   moving between screens; the reader around the page: brightness, contents, Narrate, highlights, image viewer
 src/app-ink.js      Draw: the pen button, the bar of tools, the Drawings sheet, saving a copy with them
+src/app-pentest.js  the pen test in Drawings: asks for a dozen things in turn, records what the page and the phone report, makes a log
 src/app-library.js  tags, collections, a clip's sheet, multi-select, export, import, watched folders
 src/app-saving.js   sync screen, saving several, next links and new chapters, feeds, home-screen widgets
 src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestures, a feed's sheets
@@ -495,7 +496,10 @@ area.
   layers get `touch-action: none` (`data-co-pen-near`), since the browser
   decides whether to pan at the touch, and the touch's own events come
   too late and differ from device to device. Drawings › Try your pen shows
-  what the page and the phone each say. iOS and the web copy have only the
+  what the page and the phone each say, and its Start test records a log of
+  a dozen steps (`app-pentest.js`; the Pen plugin's `raw` mode sends every
+  MotionEvent and KeyEvent) to save and send. The log holds only event
+  types, buttons, pressure, tool types and key codes, timed. iOS and the web copy have only the
   browser's `buttons` 2 or 32.
 - **Drawing on a page:** the layer is `pointer-events: none` until Draw
   is on, or words couldn't be selected under it. A pen would scroll the

@@ -1179,8 +1179,10 @@
     // { near, down, button, eraser, tool, buttons } when any changes.
     pen: {
       get available() { return os === "android" && !!plugin("Pen"); },
-      watch(on) { const P = plugin("Pen"); if (P) P.watch({ on: !!on }).catch(() => {}); },
+      // raw: every touch, hover and key too, for the pen test's log.
+      watch(on, raw) { const P = plugin("Pen"); if (P) P.watch({ on: !!on, raw: !!raw }).catch(() => {}); },
       onState(f) { const P = plugin("Pen"); if (P) P.addListener("pen", f); },
+      onRaw(f) { const P = plugin("Pen"); if (P) P.addListener("raw", f); },
     },
     get knowsConnection() { return os === "ios" ? !!plugin("Connection") : os === "android" && !!navigator.connection; },
     onConnection(f) {
