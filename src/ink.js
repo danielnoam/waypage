@@ -721,11 +721,12 @@
     if (c.raf) cancelAnimationFrame(c.raf);
     lastStroke = performance.now();
     if (c.select) { selUp(c, e); return; }
+    // A stroke that turned into an erase (the pen's button) was lifted too.
+    unlift();
     if (c.erase) {
       if (c.gone.length) { undos.push({ k: "del", items: c.gone }); redos = []; save(); changed(); }
       return;
     }
-    unlift();
     if (!clip || !c.s.p.length) { if (c.path) c.path.remove(); return; }
     // On the pages it reaches, a copy on each; on one, as it was drawn.
     const placed = placeOn(c.s, c.n, pagesOf());
