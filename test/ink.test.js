@@ -159,4 +159,58 @@ test("colours go between hex, rgb and hue, saturation, value without drifting", 
   assert.deepStrictEqual(I.hsvRgb(120, 0, 1), [255, 255, 255], "pale is white");
 });
 
+// Two pages 400 px wide, 560 px tall, 20 px apart, one over the other.
+const R1 = { left: 0, top: 0, width: 400, height: 560 }, R2 = { left: 0, top: 580, width: 400, height: 560 };
+const PAGES = [{ n: 1, rect: R1, h: 1.4 }, { n: 2, rect: R2, h: 1.4 }];
+const stroke = (pts, id = "s") => ({ id, t: "p", c: "ink", w: 0.004, p: pts.flatMap(([x, y]) => [x, y, 0.5]) });
+
+test("an item moves between two pages' widths and keeps its size on screen", () => {
+  const wide = { left: 0, top: 580, width: 800, height: 1120 };
+  const c = I.convertItem(stroke([[0.5, 1.5]]), R1, wide);
+  assert.ok(Math.abs(c.p[0] - 0.25) < 1e-3, "x " + c.p[0]);
+  assert.ok(Math.abs(c.p[1] - ((1.5 * 400 - 580) / 800)) < 1e-3, "y " + c.p[1]);
+  assert.ok(Math.abs(c.w - 0.002) < 1e-6, "half the page widths");
+  const img = I.convertItem({ t: "i", f: "a", x: 0.1, y: 1.5, w: 0.4, h: 0.2 }, R1, R2);
+  assert.ok(Math.abs(img.y - ((1.5 * 400 - 580) / 400)) < 1e-3 && img.w === 0.4);
+});
+
+test("a box off a page is shifted back inside it, together; one bigger than the page keeps its corner", () => {
+  const a = stroke([[1.2, 0.5], [1.4, 0.6]]), b = stroke([[1.3, 1.5]]);
+  const [dx, dy] = I.clampInto([a, b], 1.4);
+  assert.ok(dx < 0 && dy < 0, dx + " " + dy);
+  for (const s of [a, b]) for (let i = 0; i < s.p.length; i += 3) assert.ok(s.p[i] <= 1.001 && s.p[i + 1] <= 1.401);
+  assert.ok(Math.abs((a.p[0] - 1.2) - (b.p[0] - 1.3)) < 1e-9, "shifted as one");
+  const inside = stroke([[0.3, 0.3], [0.5, 0.5]]);
+  assert.deepStrictEqual(I.clampInto([inside], 1.4), [0, 0]);
+  const big = { t: "i", f: "a", x: -0.3, y: -0.2, w: 1.6, h: 0.5 };
+  I.clampInto([big], 1.4);
+  assert.ok(Math.abs(big.x) < 0.01, "left edge on the page: " + big.x);
+});
+
+test("a stroke over two pages is kept on both, each in its own widths", () => {
+  // From low on page 1 down to page 2: 1.3 to 1.6 widths down from page 1's top.
+  const s = stroke([[0.3, 1.3], [0.3, 1.5], [0.3, 1.7]]);
+  const out = I.placeOn(s, 1, PAGES);
+  assert.deepStrictEqual(out.map((g) => g.n), [1, 2]);
+  assert.strictEqual(out[0].s, s, "the origin's is the stroke itself");
+  assert.strictEqual(out[1].s.id, s.id, "one id, so they are one thing");
+  assert.ok(Math.abs(out[1].s.p[1] - ((1.3 * 400 - 580) / 400)) < 1e-3, "page 2's copy starts at " + out[1].s.p[1]);
+});
+
+test("a stroke on one page stays as it is; one off every page ends up inside the nearest", () => {
+  const s = stroke([[0.2, 0.2], [0.4, 0.3]]);
+  const one = I.placeOn(s, 1, PAGES);
+  assert.strictEqual(one.length, 1);
+  assert.strictEqual(one[0].s, s);
+  const lost = stroke([[0.3, 5.2], [0.4, 5.3]]);
+  const out = I.placeOn(lost, 1, PAGES);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].n, 2, "the nearest page");
+  assert.ok(out[0].s.p.every((v, i) => i % 3 === 2 || (v >= -0.01 && v <= 1.41)), JSON.stringify(out[0].s.p));
+  // Only a sliver of it on a page: brought in.
+  const sliver = { id: "p", t: "i", f: "a", x: 0.2, y: 1.39, w: 0.4, h: 0.4 };
+  const moved = I.placeOn(sliver, 1, [{ n: 1, rect: R1, h: 1.4 }]);
+  assert.ok(moved[0].s.y + moved[0].s.h <= 1.401, "pulled up: " + moved[0].s.y);
+});
+
 console.log("\n" + passed + " passed");

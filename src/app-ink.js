@@ -21,6 +21,8 @@ const INK_ICONS = {
   cut: '<circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M8.1 8.1L20 20"></path><path d="M20 4L8.1 15.9"></path>',
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V6a2 2 0 0 1 2-2h8"></path>',
   paste: '<rect x="5" y="4" width="14" height="17" rx="2"></rect><path d="M9 4h6v3H9z"></path>',
+  front: '<path d="M12 19V5"></path><path d="M5 12l7-7 7 7"></path>',
+  back: '<path d="M12 5v14"></path><path d="M19 12l-7 7-7-7"></path>',
   trash: '<path d="M4 7h16"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M6 7l1 13h10l1-13"></path><path d="M9 7V4h6v3"></path>',
   drop: '<path d="M20.5 3.5a2.1 2.1 0 0 0-3 0L14 7l-1-1-2 2 1 1-7 7v4h4l7-7 1 1 2-2-1-1 3.5-3.5a2.1 2.1 0 0 0 0-3z"></path>',
   finger: '<path d="M18 11V6a2 2 0 0 0-4 0v1"></path><path d="M14 10V4a2 2 0 0 0-4 0v6"></path><path d="M10 10.5V6a2 2 0 0 0-4 0v8"></path><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-5.9-2.4L3.4 16a2 2 0 0 1 3.2-2.4L8 15"></path>',
@@ -139,6 +141,8 @@ function inkBuild() {
     if (act === "copy") { C.ink.copy(); return; }
     if (act === "paste") { C.ink.paste(); return; }
     if (act === "delete") { C.ink.del(); return; }
+    if (act === "front") { C.ink.front(); return; }
+    if (act === "back") { C.ink.back(); return; }
     inkPopClose();
     if (act === "tool") C.ink.setting({ tool: arg });
     else if (act === "color") C.ink.setting({ color: arg });
@@ -316,7 +320,7 @@ function inkPaint() {
       el("span", { class: "ink-dot", "data-c": mine ? "" : c, "data-t": hl ? "h" : "p", ...(mine ? { style: "background:" + c } : {}) }));
   });
   const act = (label, icon, a, on) => el("button", { type: "button", "aria-label": label, title: label, "data-act": a, ...(on ? {} : { disabled: "" }) }, inkIcon(icon));
-  const editRow = s.tool === "select" ? [act("Cut", "cut", "cut", s.selected), act("Copy", "copy", "copy", s.selected), act("Paste", "paste", "paste", s.canPaste), act("Delete", "trash", "delete", s.selected)] : [];
+  const editRow = s.tool === "select" ? [act("Cut", "cut", "cut", s.selected), act("Copy", "copy", "copy", s.selected), act("Paste", "paste", "paste", s.canPaste), act("Delete", "trash", "delete", s.selected), act("Move to top", "front", "front", s.selected), act("Move to bottom", "back", "back", s.selected)] : [];
   const sizeBtn = s.tool === "eraser" || s.tool === "select" ? null : el("button", { type: "button", "aria-label": "Size " + (s.size + 1) + " of 5", title: "Size", "aria-haspopup": "menu", "aria-expanded": String(!!inkPop && inkPop.kind === "size"), "data-act": "size" },
     el("span", { class: "ink-size", style: "width:" + INK_DOTS[s.size] + "px;height:" + INK_DOTS[s.size] + "px" }));
   const styleBtn = s.tool !== "pen" ? null : el("button", { type: "button", "aria-label": "Pen style: " + inkStyleName(s.style), title: "Pen style", "aria-haspopup": "menu", "aria-expanded": String(!!inkPop && inkPop.kind === "style"), "data-act": "style" },
@@ -555,6 +559,8 @@ document.addEventListener("keydown", (e) => {
   if (mod && key === "c") C.ink.copy();
   else if (mod && key === "x") C.ink.cut();
   else if (mod && key === "v") C.ink.paste();
+  else if (mod && e.shiftKey && e.key === "ArrowUp") C.ink.front();
+  else if (mod && e.shiftKey && e.key === "ArrowDown") C.ink.back();
   else if (e.key === "Delete" || e.key === "Backspace") C.ink.del();
   else if (e.key === "Escape") C.ink.clearSelection();
   else return;

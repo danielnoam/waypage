@@ -264,6 +264,26 @@ kept (`.custom`). The bar's colours are slots (`inkSlots`, kept in
 the colour sheet for one; its eyedropper (`ink.pick`, `colorAt`) takes the
 colour of the stroke tapped, else the pixel of the page's picture there.
 
+The pages are one surface (1.57.0). A stroke or picture that reaches over
+more than one page is kept on each page it touches, whole, in that page's
+own widths, with the same `id` (`ink.js placeOn`, `convertItem`; each layer
+clips what lies past its edge). So an id is one thing: the eraser, Select,
+Cut, Delete and Undo take every copy of it, and a copy on another page is
+found by id (`copiesOf`). While a stroke is drawn or an item dragged, its
+layer has `data-lift` (reader.css: not clipped, above the other layers) so
+it shows over the next page. When it ends, or the drag lets go, `placeOn`
+gives each page its copy; an item with less than a quarter of it on any
+page goes into the nearest page and is shifted inside (`clampInto`), so a
+drop can't leave something where it can't be seen. Anything an earlier
+build left wholly off its page's edge is brought back inside when the
+layer is placed (`rescue`). A drop, a stroke over two pages, a paste and
+Move to top / Move to bottom (the last array item is the front;
+`reorder`) are one `pages` op: whole lists of every page touched, before
+and after. A dragged item always ends at the front of its page. Pages
+with no layer yet (not near the screen) get no copy, and in Pages layout
+(one page a screen) only a side-by-side spread has a neighbour to drop on.
+There's no scrolling while dragging near the screen's edge.
+
 A comic in Pages (reader.js `picsLayout`) is a flex row of its pages, each
 sized in px to a screen or half of one, so the text's own turning
 (`goPage`, `pages()`, the swipe, keys and thirds) works unchanged; a manga

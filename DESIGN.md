@@ -793,6 +793,12 @@ rule, the tool's colours (the one being changed ringed in `--accent`) and
 the eyedropper, then Cancel and Done. The eyedropper hides the card until
 a page is tapped.
 
+Select's second row also has Move to top (arrow up) and Move to bottom
+(arrow down) after Delete, dim until something is taken. A line drawn
+across two pages, or an item dragged from one to the next, shows over both
+while it moves and is kept on each page it reaches; dropped, it comes to
+the front.
+
 Pen colours are the same in every theme (`--pen-*`, `--hl-*`): the page
 under them is white paper in every theme, and reader.css re-paints them for
 Dark PDF pages.
