@@ -1,4 +1,4 @@
-// Waypage's shell (1.57.0): drawing on a PDF with a pen. The pen button
+// Waypage's shell (1.56.0): drawing on a PDF with a pen. The pen button
 // in the reader bar, the bar of tools along the foot of the pages while
 // Draw is on, the Drawings sheet in ⋯ and the copy of the PDF with the
 // drawings in it. The strokes themselves are ink.js; this is what the
@@ -61,7 +61,7 @@ function inkClose() {
 }
 function inkPrefs() {
   const saved = load(INK_KEY, {}) || {};
-  // Three sizes became five (1.57.0): an older saved one keeps its place on the scale.
+  // Three sizes became five (1.56.0): an older saved one keeps its place on the scale.
   const size = saved.v === 2 ? saved.size : [0, 2, 4][saved.size];
   // A computer draws with the mouse; a touch screen with the pen alone,
   // so a hand resting on the page leaves no mark.

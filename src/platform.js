@@ -1173,7 +1173,7 @@
       watch(on) { const V = plugin("VolumeKeys"); if (V) V.watch({ on: !!on }).catch(() => {}); },
       onKey(f) { const V = plugin("VolumeKeys"); if (V) V.addListener("key", (e) => f(e.key)); },
     },
-    // The pen's buttons and eraser end (1.57.0), native/share's Pen plugin
+    // The pen's buttons and eraser end (1.56.0), native/share's Pen plugin
     // on Android: a web page can't tell a stylus's side button from the pen
     // touching, so the touch is read before it reaches the page. `f` hears
     // { near, down, button, eraser, tool, buttons } when any changes.

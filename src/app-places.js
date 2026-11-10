@@ -1032,7 +1032,7 @@ function onKeys(e) {
     return;
   }
   if (state.open && !state.image && (e.ctrlKey || e.metaKey) && !e.altKey && k.toLowerCase() === "f") { e.preventDefault(); openFind(); return; }
-  // Undo and redo for a pen drawing (1.57.0).
+  // Undo and redo for a pen drawing (1.56.0).
   if (state.open && C.ink.on && !state.sheet && !state.menu && (e.ctrlKey || e.metaKey) && !e.altKey && k.toLowerCase() === "z" && !typingIn(e.target)) {
     e.preventDefault();
     inkGo(e.shiftKey ? C.ink.redo() : C.ink.undo());
@@ -1061,7 +1061,7 @@ function onKeys(e) {
       a: () => toggleSheet("reading"),
       h: () => !$("readerMarks").hidden && $("readerMarks").click(),
       d: () => !$("readerInk").hidden && $("readerInk").click(),
-      // While drawing (1.57.0).
+      // While drawing (1.56.0).
       p: () => C.ink.on && (C.ink.setting({ tool: "pen" }), inkKeep()),
       b: () => C.ink.on && (C.ink.setting({ tool: "highlighter" }), inkKeep()),
       e: () => C.ink.on && (C.ink.setting({ tool: "eraser" }), inkKeep()),

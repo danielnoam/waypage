@@ -2436,7 +2436,7 @@ const SHEETS = {
   // Under ⋯, which they're opened from, on a big screen (1.42.0).
   links: { button: "readerMore", label: "Linked pages", build: () => linksSheet(state.open) },
   translate: { button: "readerTranslate", label: "Translation", build: () => translateSheet(state.open) },
-  // A PDF's pen drawings (1.57.0), from This clip's More.
+  // A PDF's pen drawings (1.56.0), from This clip's More.
   ink: { button: "readerMore", label: "Drawings", build: () => inkSheet(state.open) },
 };
 

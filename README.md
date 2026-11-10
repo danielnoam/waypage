@@ -102,6 +102,8 @@ Each section below shows the computer (left) and the phone (right).
 - Brightness by a swipe on the edge, with Auto.
 - Volume buttons turn pages on Android; keyboard shortcuts on a computer.
 - Dark PDF pages: with a PDF open, a switch at the foot of Layout recolours its pages to a dark theme.
+- Highlight words on a PDF read from where it is: select them on its printed pages and tap Highlight; they join the clip's other highlights.
+- Draw on a PDF's pages with a pen (the pen in the reader bar, or D): pen, highlighter, eraser, Undo and Redo. Only the pen draws on a touch screen, drawings stay on this device, and ⋯ › Drawings saves a copy of the PDF with them.
 
 ## Text and themes
 

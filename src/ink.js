@@ -1,4 +1,4 @@
-// Waypage: drawing on a PDF's printed pages with a pen (1.57.0). A page
+// Waypage: drawing on a PDF's printed pages with a pen (1.56.0). A page
 // gets a layer of SVG over its picture, a sibling of its words' layer
 // (reader.js placeText puts both over the picture); a stroke is one path
 // in it. Strokes are kept as points in fractions of the page's width

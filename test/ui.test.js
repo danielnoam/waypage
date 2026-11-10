@@ -2325,7 +2325,7 @@ function zipOf(files) {
       await ctx.close();
     });
 
-    await test("a linked PDF's printed pages can be drawn on with a pen, kept, undone, and saved in a copy as ink annotations (1.57.0)", async () => {
+    await test("a linked PDF's printed pages can be drawn on with a pen, kept, undone, and saved in a copy as ink annotations (1.56.0)", async () => {
       const maker = await browser.newPage();
       let html = "<style>@page{size:A4;margin:0} div{padding:60px;font:24px sans-serif;page-break-after:always}</style>";
       for (let i = 1; i <= 3; i++) html += "<div><p>Page " + i + " opens here.</p><p>Nothing much happens on this page, and the margins are wide enough to write in.</p></div>";
@@ -2586,7 +2586,7 @@ function zipOf(files) {
       await ctx.close();
     });
 
-    await test("the pen test in Drawings asks for each thing in turn, records what comes in, and makes a log to save (1.57.0)", async () => {
+    await test("the pen test in Drawings asks for each thing in turn, records what comes in, and makes a log to save (1.56.0)", async () => {
       const maker = await browser.newPage();
       let html = "<style>@page{size:A4;margin:0} div{padding:60px;font:24px sans-serif;page-break-after:always}</style>";
       for (let i = 1; i <= 3; i++) html += "<div><p>Page " + i + " opens here.</p><p>Nothing much happens on this page, and the margins are wide enough to write in.</p></div>";
@@ -2653,7 +2653,7 @@ function zipOf(files) {
       await ctx.close();
     });
 
-    await test("a scanned PDF, which has no words, can be drawn on too (1.57.0)", async () => {
+    await test("a scanned PDF, which has no words, can be drawn on too (1.56.0)", async () => {
       const maker = await browser.newPage();
       await maker.setContent("<style>@page{size:A4;margin:0} div{height:1100px;page-break-after:always}</style><div></div><div></div>");
       const bytes = [...await maker.pdf({ format: "A4" })];
