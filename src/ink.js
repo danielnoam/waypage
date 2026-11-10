@@ -24,6 +24,25 @@
   const NIB = -Math.PI / 4;
   const MAX_POINTS = 6000, MAX_STROKES = 5000;
 
+  // A colour of your own is "#rrggbb" in place of a name (the colour picker).
+  const isHex = (c) => typeof c === "string" && /^#[0-9a-f]{6}$/.test(c);
+  const hexRgb = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+  const rgbHex = (r, g, b) => "#" + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(Number(v) || 0))).toString(16).padStart(2, "0")).join("");
+  // h 0-360, s and v 0-1, to r, g, b 0-255, and back.
+  function hsvRgb(h, sat, v) {
+    const f = (n) => { const k = (n + h / 60) % 6; return v - v * sat * Math.max(0, Math.min(k, 4 - k, 1)); };
+    return [f(5), f(3), f(1)].map((x) => Math.round(x * 255));
+  }
+  function rgbHsv(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), d = max - Math.min(r, g, b);
+    let h = 0;
+    if (d) h = max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return [Math.round(h * 60 * 10) / 10, max ? d / max : 0, max];
+  }
+  const rgbOf = (s) => (isHex(s.c) ? hexRgb(s.c) : (s.t === "h" ? HIGHLIGHT : PEN)[s.c]);
+  const okColor = (kind, c) => isHex(c) || Object.prototype.hasOwnProperty.call(kind === "highlighter" ? HIGHLIGHT : PEN, c);
+
   const r5 = (v) => Math.round(v * 1e5) / 1e5;
   const r4 = (v) => Math.round(v * 1e4) / 1e4;
   // A pen's radius at a pressure: an even line (0.5) is the size itself.
@@ -132,6 +151,7 @@
 
   // Whether a point is on a stroke, to within `slop` (page widths).
   function hits(s, x, y, slop) {
+    if (s.t === "i") return x >= s.x - slop && x <= s.x + s.w + slop && y >= s.y - slop && y <= s.y + s.h + slop;
     const reach = (s.t === "h" ? s.w : s.w * (s.y === "brush" ? 1.9 : 1.2)) / 2 + slop;
     const p = s.p;
     if (p.length < 6) return Math.hypot(p[0] - x, p[1] - y) <= reach;
@@ -144,19 +164,122 @@
     return false;
   }
 
+  // Whether a point is inside a loop (even-odd), the lasso's test.
+  function inside(poly, x, y) {
+    let in_ = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, yi] = poly[i], [xj, yj] = poly[j];
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) in_ = !in_;
+    }
+    return in_;
+  }
+  // What a loop takes: a stroke with half its points inside, a picture with its middle.
+  function within(poly, s) {
+    if (s.t === "i") return inside(poly, s.x + s.w / 2, s.y + s.h / 2);
+    let n = 0, all = 0;
+    for (let i = 0; i + 2 < s.p.length; i += 3) { all++; if (inside(poly, s.p[i], s.p[i + 1])) n++; }
+    return all > 0 && n * 2 >= all;
+  }
+  // The box round items, in page widths: [x, y, w, h].
+  function boxOf(list) {
+    let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
+    for (const s of list) {
+      if (s.t === "i") { a = Math.min(a, s.x); b = Math.min(b, s.y); c = Math.max(c, s.x + s.w); d = Math.max(d, s.y + s.h); continue; }
+      const pad = s.w / 2;
+      for (let i = 0; i + 2 < s.p.length; i += 3) { a = Math.min(a, s.p[i] - pad); b = Math.min(b, s.p[i + 1] - pad); c = Math.max(c, s.p[i] + pad); d = Math.max(d, s.p[i + 1] + pad); }
+    }
+    return a === Infinity ? null : [a - 0.006, b - 0.006, c - a + 0.012, d - b + 0.012];
+  }
+  const copyOf = (s) => JSON.parse(JSON.stringify(s));
+
+  // ---- Pages as one surface ----
+  // A stroke or picture that reaches over more than one page is kept on each
+  // of them, whole, in that page's own widths and with the same id; each
+  // layer clips what lies past its edge, so the pages show one connected
+  // drawing. `pages` below is [{ n, rect: { left, top, width, height }, h }]
+  // in client px, h being the page's height in its widths.
+
+  // An item moved from one page's widths to another's, as a copy.
+  function convertItem(s, from, to) {
+    const c = copyOf(s), k = from.width / to.width;
+    const ox = (from.left - to.left) / to.width, oy = (from.top - to.top) / to.width;
+    if (c.t === "i") { c.x = r5(c.x * k + ox); c.y = r5(c.y * k + oy); c.w = r5(c.w * k); c.h = r5(c.h * k); return c; }
+    for (let i = 0; i + 2 < c.p.length; i += 3) { c.p[i] = r4(c.p[i] * k + ox); c.p[i + 1] = r4(c.p[i + 1] * k + oy); }
+    c.w = r5(c.w * k);
+    return c;
+  }
+  // Items shifted together so their box lies inside a page of height h (a
+  // box bigger than the page keeps its top left corner on it).
+  function clampInto(items, h) {
+    const b = boxOf(items);
+    if (!b) return [0, 0];
+    const fit = (lo, len, max) => (len >= max ? -lo : lo < 0 ? -lo : lo + len > max ? max - (lo + len) : 0);
+    const dx = fit(b[0], b[2], 1), dy = fit(b[1], b[3], h);
+    if (!dx && !dy) return [0, 0];
+    for (const s of items) {
+      if (s.t === "i") { s.x = r5(s.x + dx); s.y = r5(s.y + dy); continue; }
+      for (let i = 0; i + 2 < s.p.length; i += 3) { s.p[i] = r4(s.p[i] + dx); s.p[i + 1] = r4(s.p[i + 1] + dy); }
+    }
+    return [dx, dy];
+  }
+  // Where an item drawn or dropped on page `origin` belongs: a copy on every
+  // page its box reaches, or, when too little of it is on any page, on the
+  // nearest one, moved inside. [{ n, s }]; the origin's own copy is `s`.
+  function placeOn(s, origin, pages) {
+    const from = pages.find((p) => p.n === origin);
+    const b = boxOf([s]);
+    if (!from || !b) return [{ n: origin, s }];
+    const k = from.rect.width;
+    const cb = { l: from.rect.left + b[0] * k, t: from.rect.top + b[1] * k, r: from.rect.left + (b[0] + b[2]) * k, b: from.rect.top + (b[1] + b[3]) * k };
+    const hit = [];
+    for (const p of pages) {
+      const ox = Math.min(cb.r, p.rect.left + p.rect.width) - Math.max(cb.l, p.rect.left);
+      const oy = Math.min(cb.b, p.rect.top + p.rect.height) - Math.max(cb.t, p.rect.top);
+      if (ox > 0 && oy > 0) hit.push({ p, ox, oy });
+    }
+    let best = null;
+    for (const h of hit) if (!best || h.ox * h.oy > best.ox * best.oy) best = h;
+    const bw = cb.r - cb.l, bh = cb.b - cb.t;
+    if (!best || best.ox < Math.min(bw, best.p.rect.width) * 0.25 || best.oy < Math.min(bh, best.p.rect.height) * 0.25) {
+      let target = best && best.p;
+      if (!target) {
+        const cx = (cb.l + cb.r) / 2, cy = (cb.t + cb.b) / 2;
+        let d = Infinity;
+        for (const p of pages) {
+          const dx = Math.max(p.rect.left - cx, 0, cx - (p.rect.left + p.rect.width)), dy = Math.max(p.rect.top - cy, 0, cy - (p.rect.top + p.rect.height));
+          if (Math.hypot(dx, dy) < d) { d = Math.hypot(dx, dy); target = p; }
+        }
+      }
+      const c = target.n === origin ? s : convertItem(s, from.rect, target.rect);
+      clampInto([c], target.h);
+      return [{ n: target.n, s: c }];
+    }
+    if (hit.length === 1 && hit[0].p.n === origin) return [{ n: origin, s }];
+    return hit.map(({ p }) => ({ n: p.n, s: p.n === origin ? s : convertItem(s, from.rect, p.rect) }));
+  }
+
   // ---- What's drawn on the open clip ----
 
   let clip = null;        // { id, size, pages: { "<n>": [stroke] } }
   let saveTimer = 0;
   let undos = [], redos = [];
+  const imgs = new Map();   // file id -> data: URL of a picture put on a page
+  let sel = null;           // the selection: { n, ids }
+  let board = null;         // Copy and Cut: { items, n, k, imgs }
+  let picker = null;        // the eyedropper waits: the next tap on a page goes to it
   let onChange = null, onPen = null, onProbe = null, onDraw = null, onStroke = null;
   const layers = new Map(); // page -> svg
 
   // A stroke read back from a file: anything else is dropped.
   function clean(s) {
+    if (s && typeof s === "object" && s.t === "i") {
+      const n = [s.x, s.y, s.w, s.h].map(Number);
+      if (typeof s.f !== "string" || !/^[A-Za-z0-9_-]{1,40}$/.test(s.f) || !n.every(Number.isFinite)) return null;
+      if (!(n[2] > 0 && n[2] <= 2 && n[3] > 0 && n[3] <= 4 && n[0] > -2 && n[0] < 3 && n[1] > -2 && n[1] < 20)) return null;
+      return { id: String(s.id || "").slice(0, 40) || C.save.newId(), t: "i", f: s.f, x: n[0], y: n[1], w: n[2], h: n[3] };
+    }
     if (!s || typeof s !== "object" || (s.t !== "p" && s.t !== "h")) return null;
-    const palette = s.t === "h" ? HIGHLIGHT : PEN;
-    if (!Object.prototype.hasOwnProperty.call(palette, s.c)) return null;
+    if (!okColor(s.t === "h" ? "highlighter" : "pen", s.c)) return null;
     const w = Number(s.w);
     if (!(w > 0 && w < 0.2) || !Array.isArray(s.p) || s.p.length < 3 || s.p.length % 3 || s.p.length > MAX_POINTS * 3) return null;
     if (!s.p.every((v) => Number.isFinite(v))) return null;
@@ -184,6 +307,14 @@
     }
     for (const n of shown()) show(n);
     changed();
+    // The pictures put on pages come in after, each when it's read.
+    const want = new Set();
+    for (const list of Object.values(mine.pages)) for (const s of list) if (s.t === "i") want.add(s.f);
+    for (const f of want) {
+      const url = await C.store.readInkImage(mine.id, f);
+      if (clip !== mine) break;
+      if (url) { imgs.set(f, url); for (const n of layers.keys()) paint(n); }
+    }
     return { stale };
   }
   function unload() {
@@ -191,7 +322,8 @@
     clip = null;
     undos = []; redos = [];
     layers.clear();
-    cur = null;
+    imgs.clear();
+    cur = null; sel = null; picker = null;
     changed();
   }
   function changed() { if (onChange) onChange(); }
@@ -205,6 +337,14 @@
     if (!clip) return Promise.resolve();
     const empty = !Object.values(clip.pages).some((l) => l.length);
     const id = clip.id;
+    // A picture no page names any more (undo and redo keep it until now) goes.
+    const used = new Set();
+    for (const list of Object.values(clip.pages)) for (const s of list) if (s.t === "i") used.add(s.f);
+    for (const op of [...undos, ...redos]) {
+      for (const g of [...(op.del || []), ...(op.add || []), ...(op.s ? [{ s: op.s }] : [])]) if (g.s && g.s.t === "i") used.add(g.s.f);
+      for (const lists of [op.before, op.after]) if (lists && !Array.isArray(lists)) for (const l of Object.values(lists)) for (const it of l) if (it.t === "i") used.add(it.f);
+    }
+    for (const f of [...imgs.keys()]) if (!used.has(f)) { imgs.delete(f); C.store.removeInkImage(id, f); }
     return C.store.writeInk(id, empty ? null : { v: 1, size: clip.size, pages: clip.pages }).catch(() => {});
   }
   const strokes = (n) => (clip && clip.pages[n]) || [];
@@ -259,12 +399,38 @@
     svg.style.top = b.top + "px";
     svg.style.width = b.width + "px";
     svg.style.height = b.height + "px";
-    svg.setAttribute("viewBox", "0 0 1 " + r5(b.height / (b.width || 1)));
+    const h = b.height / (b.width || 1);
+    svg.setAttribute("viewBox", "0 0 1 " + r5(h));
+    rescue(svg, h);
+  }
+  // A drag used to leave things off the page's edge, where they couldn't be
+  // seen: anything wholly outside its page comes back inside.
+  function rescue(svg, h) {
+    const n = Number(svg.dataset.page), img = C.reader.pageImg(n);
+    if (!clip || !img || !img.complete || !img.naturalWidth || !(h > 0.1)) return;
+    let moved = false;
+    for (const s of strokes(n)) {
+      const b = boxOf([s]);
+      if (b && (b[0] >= 1.05 || b[0] + b[2] <= -0.05 || b[1] >= h + 0.05 || b[1] + b[3] <= -0.05)) { clampInto([s], h); moved = true; }
+    }
+    if (!moved) return;
+    paint(n);
+    save();
   }
   function el(n, s) {
     const D = frameDoc();
+    if (s.t === "i") {
+      const im = D.createElementNS(NS, "image");
+      im.setAttribute("class", "pic");
+      for (const [k, v] of Object.entries({ x: s.x, y: s.y, width: s.w, height: s.h, preserveAspectRatio: "none" })) im.setAttribute(k, String(v));
+      if (imgs.has(s.f)) im.setAttribute("href", imgs.get(s.f));
+      im.dataset.id = s.id;
+      return im;
+    }
     const path = D.createElementNS(NS, "path");
-    path.setAttribute("class", s.t === "h" ? "hl c-" + s.c : "pen c-" + s.c);
+    const hex = isHex(s.c);
+    path.setAttribute("class", (s.t === "h" ? "hl " : "pen ") + (hex ? "custom" : "c-" + s.c));
+    if (hex) path.setAttribute(s.t === "h" ? "stroke" : "fill", s.c);
     if (s.t === "h") path.setAttribute("stroke-width", String(s.w));
     path.setAttribute("d", pathOf(s));
     path.dataset.id = s.id;
@@ -274,6 +440,7 @@
     const svg = layers.get(n);
     if (!svg) return;
     svg.replaceChildren(...strokes(n).map((s) => el(n, s)));
+    selDraw(n);
   }
   // A page that has its picture gets a layer when it has drawings, or
   // when drawing is on.
@@ -293,7 +460,7 @@
   // ---- Drawing ----
 
   let on = false;
-  let tool = "pen";       // "pen", "highlighter", "eraser"
+  let tool = "pen";       // "pen", "highlighter", "eraser", "select"
   let color = { pen: "ink", highlighter: "yellow" };
   let size = 2;           // 0 to 4
   let style = "ball";     // how the pen writes
@@ -309,7 +476,7 @@
 
   function setOn(v) {
     on = !!v;
-    if (!on) { cur = null; away(); }
+    if (!on) { cur = null; picker = null; selClear(); away(); }
     const D = frameDoc();
     if (D) D.documentElement.toggleAttribute("data-co-inking", on);
     if (on) for (const n of shown()) ensure(n);
@@ -318,15 +485,16 @@
     changed();
   }
   function setting(o) {
-    if (o.tool) tool = o.tool;
-    if (o.color) color[tool === "highlighter" ? "highlighter" : "pen"] = o.color;
-    if (o.colors) for (const k of ["pen", "highlighter"]) if (o.colors[k] in (k === "pen" ? PEN : HIGHLIGHT)) color[k] = o.colors[k];
+    if (o.tool && o.tool !== tool) { tool = o.tool; selClear(); }
+    const kind = tool === "highlighter" ? "highlighter" : "pen";
+    if (o.color && okColor(kind, o.color)) color[kind] = o.color;
+    if (o.colors) for (const k of ["pen", "highlighter"]) if (okColor(k, o.colors[k])) color[k] = o.colors[k];
     if (o.size != null) size = Math.max(0, Math.min(4, Math.round(Number(o.size)) || 0));
     if (STYLES.includes(o.style)) style = o.style;
     if (o.finger != null) finger = !!o.finger;
     changed();
   }
-  const state = () => ({ on, tool, color: color[tool === "highlighter" ? "highlighter" : "pen"], colors: { ...color }, size, style, finger, count: count(), canUndo: !!undos.length, canRedo: !!redos.length });
+  const state = () => ({ on, tool, color: color[tool === "highlighter" ? "highlighter" : "pen"], colors: { ...color }, size, style, finger, selected: sel ? sel.ids.length : 0, canPaste: !!board, count: count(), canUndo: !!undos.length, canRedo: !!redos.length });
 
   const where = (e, svg) => {
     const r = svg.getBoundingClientRect();
@@ -439,6 +607,15 @@
     if (!on) return;
     const svg = e.currentTarget;
     const pen = e.pointerType === "pen";
+    // The eyedropper takes the next tap, whatever draws.
+    if (picker) {
+      e.preventDefault();
+      const done = picker;
+      picker = null;
+      lastStroke = performance.now();
+      done(colorAt(e.clientX, e.clientY));
+      return;
+    }
     // A stroke left over from the same pointer (it never got its end) is
     // dropped, so it can't keep the next one out.
     if (cur && cur.id === e.pointerId) abandon();
@@ -456,6 +633,7 @@
     e.preventDefault();
     try { svg.setPointerCapture(e.pointerId); } catch (err) { /* it draws anyway */ }
     const [x, y] = where(e, svg);
+    if (tool === "select" && !erase) { selDown(e, svg, n, x, y); return; }
     const hl = !erase && tool === "highlighter";
     cur = { id: e.pointerId, kind: pen ? "pen" : e.pointerType, n, svg, erase, gone: [], at: performance.now() };
     if (erase) { wipe(x, y); return; }
@@ -469,6 +647,8 @@
     cur.path = el(n, s);
     cur.path.setAttribute("d", pathOf(s));
     svg.append(cur.path);
+    // Over the next page too, if the line goes on to it.
+    lift(n);
   }
   function add(e, svg, x, y) {
     const s = cur.s;
@@ -482,15 +662,16 @@
     const svg = cur.svg;
     // The button pressed after the pen touched down: what it drew so far
     // is dropped and it erases from here.
+    if (cur.select) { selMove(e); return; }
     if (!cur.erase && cur.kind === "pen" && (penErases(e) || nat.eraser)) toEraser();
     // Every sample the pen made since the last frame, and the next ones
     // it is going to make, when the browser guesses them.
     const list = (e.getCoalescedEvents && e.getCoalescedEvents()) || [];
     const events = list.length ? list : [e];
     for (const c of events) {
+      if (cur.erase) { eraseAtClient(c.clientX, c.clientY, svg); continue; }
       const [x, y] = where(c, svg);
-      if (cur.erase) wipe(x, y);
-      else add(c, svg, x, y);
+      add(c, svg, x, y);
     }
     if (cur.erase) return;
     if (!cur.raf) cur.raf = requestAnimationFrame(() => {
@@ -498,6 +679,13 @@
       cur.raf = 0;
       cur.path.setAttribute("d", pathOf(cur.s));
     });
+  }
+  // The eraser follows the pointer over from one page to the next.
+  function eraseAtClient(cx, cy, svg) {
+    const L = layerAt(cx, cy);
+    if (!L) { cur.last = null; return; }
+    if (L.n !== cur.n) { cur.last = null; cur.n = L.n; cur.svg = L.svg; }
+    wipe((cx - L.r.left) / (L.r.width || 1), (cy - L.r.top) / (L.r.width || 1));
   }
   // A pass of the eraser takes the strokes it crosses, whole.
   function wipe(x, y) {
@@ -510,12 +698,20 @@
   }
   function wipeAt(x, y) {
     for (const s of [...strokes(cur.n)]) {
-      if (!hits(s, x, y, 0.012)) continue;
+      if (s.t === "i" || !hits(s, x, y, 0.012)) continue;
       const took = take(cur.n, s.id);
       if (!took) continue;
       cur.gone.push({ n: cur.n, ...took });
       const node = cur.svg.querySelector('[data-id="' + s.id + '"]');
       if (node) node.remove();
+      // Its copies on the other pages it reaches go with it.
+      for (const g of copiesOf([s.id])) {
+        const t = take(g.n, s.id);
+        if (!t) continue;
+        cur.gone.push({ n: g.n, ...t });
+        const other = layers.get(g.n) && layers.get(g.n).querySelector('[data-id="' + s.id + '"]');
+        if (other) other.remove();
+      }
     }
   }
   function up(e) {
@@ -524,16 +720,26 @@
     cur = null;
     if (c.raf) cancelAnimationFrame(c.raf);
     lastStroke = performance.now();
+    if (c.select) { selUp(c, e); return; }
+    // A stroke that turned into an erase (the pen's button) was lifted too.
+    unlift();
     if (c.erase) {
       if (c.gone.length) { undos.push({ k: "del", items: c.gone }); redos = []; save(); changed(); }
       return;
     }
     if (!clip || !c.s.p.length) { if (c.path) c.path.remove(); return; }
-    // A stroke of one point is a dot; the path is drawn as it ends.
-    c.path.setAttribute("d", pathOf(c.s));
-    put(c.n, c.s);
-    undos.push({ k: "add", n: c.n, id: c.s.id });
-    redos = [];
+    // On the pages it reaches, a copy on each; on one, as it was drawn.
+    const placed = placeOn(c.s, c.n, pagesOf());
+    if (placed.length === 1 && placed[0].n === c.n && placed[0].s === c.s) {
+      // A stroke of one point is a dot; the path is drawn as it ends.
+      c.path.setAttribute("d", pathOf(c.s));
+      put(c.n, c.s);
+      undos.push({ k: "add", n: c.n, id: c.s.id });
+      redos = [];
+    } else {
+      if (c.path) c.path.remove();
+      commitPlaced(placed, [c.n]);
+    }
     save();
     changed();
     if (onStroke) onStroke(c.n);
@@ -544,6 +750,9 @@
     cur = null;
     if (!c) return;
     if (c.path) c.path.remove();
+    unlift();
+    // A drag that was a pinch: the items go back to their pages as they were.
+    if (c.select && c.before) { setPages(c.before); repaintAll(c.touched); selDrawAll(); return; }
     for (const g of c.gone) put(g.n, g.s, g.i);
     paint(c.n);
   }
@@ -552,13 +761,355 @@
     return on && performance.now() - lastStroke < 500;
   }
 
+  // ---- Pages, lists and order ----
+
+  // The pages' shapes on screen, for placing things between them.
+  function pagesOf() {
+    return [...layers].map(([n, svg]) => {
+      const r = svg.getBoundingClientRect();
+      return { n, rect: { left: r.left, top: r.top, width: r.width, height: r.height }, h: r.height / (r.width || 1) };
+    });
+  }
+  // The page under a point, and its rect.
+  function layerAt(cx, cy) {
+    for (const [n, svg] of layers) {
+      const r = svg.getBoundingClientRect();
+      if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) return { n, svg, r };
+    }
+    return null;
+  }
+  // The lists of some pages as they are (to undo to), and put back.
+  function snap(ns) {
+    const out = {};
+    for (const n of ns) out[n] = copyOf(clip.pages[n] || []);
+    return out;
+  }
+  function setPages(o) {
+    for (const [k, list] of Object.entries(o)) {
+      const n = Number(k);
+      if (list.length) clip.pages[n] = copyOf(list); else delete clip.pages[n];
+    }
+  }
+  const repaintAll = (ns) => { for (const n of ns) { if (layers.has(n)) paint(n); else if (on) show(n); } };
+  // While a stroke is drawn or an item dragged its page's layer is lifted
+  // above the others and isn't clipped, so it shows over the next page.
+  const lift = (n) => { const svg = layers.get(n); if (svg) svg.dataset.lift = "1"; };
+  const unlift = () => { for (const svg of layers.values()) delete svg.dataset.lift; };
+  // Items put on their pages, at the front, as one step to undo.
+  function commitPlaced(placed, more) {
+    const ns = [...new Set([...placed.map((g) => g.n), ...(more || [])])];
+    const before = snap(ns);
+    for (const g of placed) put(g.n, g.s);
+    undos.push({ k: "pages", before, after: snap(ns) });
+    redos = [];
+    repaintAll(ns);
+  }
+  // Every copy of the given ids, on every page: [{ n, s }].
+  function copiesOf(ids) {
+    const set = new Set(ids), out = [];
+    if (clip) for (const [k, list] of Object.entries(clip.pages)) for (const s of list) if (set.has(s.id)) out.push({ n: Number(k), s });
+    return out;
+  }
+  // An item in the widths of page n: its copy there, or one from another page moved over.
+  function canonOf(id, n, all) {
+    const mine = all.find((g) => g.n === n && g.s.id === id);
+    if (mine) return mine.s;
+    const other = all.find((g) => g.s.id === id);
+    if (!other) return null;
+    const pages = pagesOf(), a = pages.find((p) => p.n === other.n), b = pages.find((p) => p.n === n);
+    return a && b ? convertItem(other.s, a.rect, b.rect) : copyOf(other.s);
+  }
+  // Items to the front or the back of every page they are on.
+  function reorder(front) {
+    const all = selItems();
+    if (!all.length) return false;
+    const ids = new Set(sel.ids), ns = [...new Set(all.map((g) => g.n))];
+    const before = snap(ns);
+    for (const n of ns) {
+      const list = clip.pages[n], mine = list.filter((x) => ids.has(x.id)), rest = list.filter((x) => !ids.has(x.id));
+      clip.pages[n] = front ? [...rest, ...mine] : [...mine, ...rest];
+    }
+    const after = snap(ns);
+    if (JSON.stringify(before) === JSON.stringify(after)) return false;
+    undos.push({ k: "pages", before, after });
+    redos = [];
+    repaintAll(ns);
+    save();
+    changed();
+    return true;
+  }
+
+  // ---- Select: a loop takes what's inside it ----
+
+  // Everything taken, every copy on every page: [{ n, s }].
+  const selItems = () => (sel ? copiesOf(sel.ids) : []);
+  function selClear() {
+    if (!sel) return;
+    sel = null;
+    selDrawAll();
+    changed();
+  }
+  // `list`: items on page n; their copies on other pages come with them.
+  function selSet(n, list) {
+    sel = list.length ? { n, ids: [...new Set(list.map((s) => s.id))] } : null;
+    selDrawAll();
+    changed();
+  }
+  function selDrawAll() {
+    const by = new Map();
+    for (const g of selItems()) { if (!by.has(g.n)) by.set(g.n, []); by.get(g.n).push(g.s); }
+    for (const n of layers.keys()) drawSel(n, by.get(n) || []);
+  }
+  const selDraw = (n) => drawSel(n, sel ? selItems().filter((g) => g.n === n).map((g) => g.s) : []);
+  // The dashed box, and a handle at its corner when one picture is taken.
+  function drawSel(n, list) {
+    const svg = layers.get(n);
+    if (!svg) return;
+    for (const old of svg.querySelectorAll(".sel, .hnd")) old.remove();
+    if (!list.length) return;
+    const b = boxOf(list);
+    if (!b) return;
+    const D = frameDoc();
+    const r = D.createElementNS(NS, "rect");
+    r.setAttribute("class", "sel");
+    for (const [k, v] of Object.entries({ x: r5(b[0]), y: r5(b[1]), width: r5(b[2]), height: r5(b[3]) })) r.setAttribute(k, String(v));
+    svg.append(r);
+    if (sel.ids.length === 1 && list.length === 1 && list[0].t === "i") {
+      const h = D.createElementNS(NS, "circle");
+      h.setAttribute("class", "hnd");
+      h.setAttribute("cx", String(r5(b[0] + b[2]))); h.setAttribute("cy", String(r5(b[1] + b[3])));
+      h.setAttribute("r", String(r5(7 / (svg.getBoundingClientRect().width || 400))));
+      svg.append(h);
+    }
+  }
+  function selDown(e, svg, n, x, y) {
+    const px = 14 / (svg.getBoundingClientRect().width || 400);
+    cur = { id: e.pointerId, kind: e.pointerType === "pen" ? "pen" : e.pointerType, n, svg, select: true, gone: [], at: performance.now(), x0: x, y0: y, moved: 0 };
+    const mine = sel ? selItems().filter((g) => g.n === n).map((g) => g.s) : [];
+    const b = mine.length ? boxOf(mine) : null;
+    // The corner handle of a picture, or anywhere in the box: drag.
+    if (b && sel.ids.length === 1 && mine.length === 1 && mine[0].t === "i" && Math.hypot(x - (b[0] + b[2]), y - (b[1] + b[3])) <= px * 1.6) cur.mode = "resize";
+    else if (b && x >= b[0] - px && x <= b[0] + b[2] + px && y >= b[1] - px && y <= b[1] + b[3] + px) cur.mode = "drag";
+    if (cur.mode) { selLift(cur); return; }
+    cur.mode = "lasso";
+    cur.pts = [[x, y]];
+    cur.path = frameDoc().createElementNS(NS, "path");
+    cur.path.setAttribute("class", "lasso");
+    svg.append(cur.path);
+  }
+  // A drag picks the items up: every copy leaves its page, and one copy in
+  // the widths of the page touched is moved about, above the others.
+  function selLift(c) {
+    const all = selItems();
+    c.ids = [...sel.ids];
+    c.touched = [...new Set([...all.map((g) => g.n), c.n])];
+    c.before = snap(c.touched);
+    const canon = c.ids.map((id) => canonOf(id, c.n, all)).filter(Boolean);
+    for (const g of all) take(g.n, g.s.id);
+    for (const s of canon) put(c.n, s);
+    c.orig = canon.map(copyOf);
+    repaintAll(c.touched);
+    lift(c.n);
+  }
+  function selMove(e) {
+    const c = cur, svg = c.svg;
+    const list = (e.getCoalescedEvents && e.getCoalescedEvents()) || [];
+    for (const ev of list.length ? list : [e]) {
+      const [x, y] = where(ev, svg);
+      c.moved = Math.max(c.moved, Math.hypot(x - c.x0, y - c.y0));
+      if (c.mode === "lasso") { c.pts.push([x, y]); continue; }
+      const dx = x - c.x0, dy = y - c.y0;
+      for (const o of c.orig) {
+        const t = strokes(c.n).find((s) => s.id === o.id);
+        if (!t) continue;
+        if (c.mode === "resize") {
+          // Keeps the picture's shape: the width follows the corner.
+          const w = Math.max(0.03, Math.min(2, o.w + dx)), k = w / o.w;
+          t.w = w; t.h = o.h * k;
+        } else if (t.t === "i") { t.x = o.x + dx; t.y = o.y + dy; }
+        else for (let i = 0; i + 2 < o.p.length; i += 3) { t.p[i] = r4(o.p[i] + dx); t.p[i + 1] = r4(o.p[i + 1] + dy); }
+      }
+    }
+    if (c.raf) return;
+    c.raf = requestAnimationFrame(() => {
+      if (cur !== c) return;
+      c.raf = 0;
+      if (c.mode === "lasso") c.path.setAttribute("d", "M" + c.pts.map((q) => r4(q[0]) + " " + r4(q[1])).join("L") + "z");
+      else { paint(c.n); lift(c.n); }
+    });
+  }
+  function selUp(c, e) {
+    if (c.raf) cancelAnimationFrame(c.raf);
+    if (c.path) c.path.remove();
+    const tap = c.moved < 0.006;
+    if (c.mode === "lasso") {
+      if (tap) {
+        // A tap on a stroke or a picture takes it, the top one; on nothing, the selection goes.
+        const hit = [...strokes(c.n)].reverse().find((s) => hits(s, c.x0, c.y0, 0.01));
+        if (hit) selSet(c.n, [hit]); else selClear();
+        return;
+      }
+      if (c.pts.length < 3) { selClear(); return; }
+      selSet(c.n, strokes(c.n).filter((s) => within(c.pts, s)));
+      return;
+    }
+    unlift();
+    if (tap) { setPages(c.before); repaintAll(c.touched); selDrawAll(); return; }
+    selDrop(c);
+  }
+  // Let go: the items go to the pages they are over, at the front of each.
+  function selDrop(c) {
+    const items = strokes(c.n).filter((s) => c.ids.includes(s.id));
+    for (const s of items) take(c.n, s.id);
+    const pages = pagesOf();
+    const placed = items.flatMap((s) => placeOn(s, c.n, pages));
+    const before = { ...c.before };
+    for (const g of placed) if (!(g.n in before)) before[g.n] = copyOf(strokes(g.n));
+    for (const g of placed) put(g.n, g.s);
+    const ns = Object.keys(before).map(Number);
+    undos.push({ k: "pages", before, after: snap(ns) });
+    redos = [];
+    sel = { n: placed.length ? placed[0].n : c.n, ids: c.ids };
+    repaintAll(ns);
+    selDrawAll();
+    save();
+    changed();
+  }
+  // Delete what's taken; Cut also keeps it for Paste, Copy only keeps it.
+  function selDelete() {
+    const all = selItems();
+    if (!all.length) return false;
+    const gone = [];
+    for (const g of all) { const t = take(g.n, g.s.id); if (t) gone.push({ n: g.n, ...t }); }
+    undos.push({ k: "many", del: gone, add: [] });
+    redos = [];
+    sel = null;
+    repaintAll([...new Set(all.map((g) => g.n))]);
+    save();
+    changed();
+    return true;
+  }
+  function selCopy() {
+    const all = selItems();
+    if (!all.length) return false;
+    const used = {}, items = [];
+    for (const id of sel.ids) {
+      const s = canonOf(id, sel.n, all);
+      if (!s) continue;
+      items.push(copyOf(s));
+      if (s.t === "i" && imgs.has(s.f)) used[s.f] = imgs.get(s.f);
+    }
+    board = { items, n: sel.n, k: 0, imgs: used };
+    changed();
+    return true;
+  }
+  const selCut = () => selCopy() && selDelete();
+  // Put what was copied on the page most in view, a little to one side of
+  // where it was, taken.
+  function selPaste() {
+    const v = viewPage();
+    if (!board || !clip || !v) return false;
+    const n = v.n;
+    board.k++;
+    const off = board.n === n ? 0.02 * board.k : 0;
+    const items = board.items.map((it) => {
+      const c = copyOf(it);
+      c.id = C.save.newId();
+      if (c.t === "i") { c.x += off; c.y += off; if (!imgs.has(c.f) && board.imgs[c.f]) { imgs.set(c.f, board.imgs[c.f]); C.store.writeInkImage(clip.id, c.f, board.imgs[c.f]).catch(() => {}); } }
+      else for (let i = 0; i + 2 < c.p.length; i += 3) { c.p[i] = r4(c.p[i] + off); c.p[i + 1] = r4(c.p[i + 1] + off); }
+      return c;
+    });
+    const pages = pagesOf();
+    commitPlaced(items.flatMap((s) => placeOn(s, n, pages)));
+    selSet(n, items);
+    save();
+    return true;
+  }
+  // The page most in view that has a layer, and the middle of what shows
+  // of it (in page widths, down from its top).
+  function viewPage() {
+    const D = frameDoc();
+    const vh = (D && D.defaultView && D.defaultView.innerHeight) || 800;
+    let best = null, most = 0;
+    for (const [n, svg] of layers) {
+      const r = svg.getBoundingClientRect();
+      const seen = Math.min(r.bottom, vh) - Math.max(r.top, 0);
+      if (seen > most) { most = seen; best = { n, mid: ((Math.min(r.bottom, vh) + Math.max(r.top, 0)) / 2 - r.top) / (r.width || 1), height: r.height / (r.width || 1) }; }
+    }
+    return best;
+  }
+  // A picture on the page most in view (a data: URL, its shape known): in
+  // the middle of the part shown, no wider than 40% of the page, and taken.
+  function addImage(url, ratio) {
+    const v = viewPage();
+    if (!v || !clip || !/^data:image\//.test(url) || !(ratio > 0)) return false;
+    const n = v.n;
+    const f = C.save.newId().replace(/[^A-Za-z0-9_-]/g, "").slice(0, 30) || "img" + Date.now();
+    const w = Math.min(0.4, 0.4 / Math.max(1, ratio)), h = w * ratio;
+    const s = { id: C.save.newId(), t: "i", f, x: r4(Math.max(0, (1 - w) / 2)), y: r4(Math.max(0, Math.min(v.height - h, v.mid - h / 2))), w: r4(w), h: r4(h) };
+    imgs.set(f, url);
+    C.store.writeInkImage(clip.id, f, url).catch(() => {});
+    put(n, s);
+    undos.push({ k: "many", del: [], add: [{ n, s, i: strokes(n).length - 1 }] });
+    redos = [];
+    if (!layers.has(n)) show(n);
+    paint(n);
+    selSet(n, [s]);
+    save();
+    return true;
+  }
+
+  // ---- The eyedropper ----
+
+  // The colour under a point on a page: a stroke's own, else the page's
+  // picture there. "#rrggbb", or null off the pages.
+  function colorAt(clientX, clientY) {
+    for (const [n, svg] of layers) {
+      const r = svg.getBoundingClientRect();
+      if (clientX < r.left || clientX > r.right || clientY < r.top || clientY > r.bottom) continue;
+      const x = (clientX - r.left) / (r.width || 1), y = (clientY - r.top) / (r.width || 1);
+      const top = [...strokes(n)].reverse().find((s) => s.t !== "i" && hits(s, x, y, 0.004));
+      if (top) { const v = rgbOf(top); return v ? rgbHex(...v) : null; }
+      const img = C.reader.pageImg(n);
+      if (!img || !img.naturalWidth) return null;
+      try {
+        const b = img.getBoundingClientRect();
+        const cv = document.createElement("canvas");
+        cv.width = cv.height = 1;
+        const g = cv.getContext("2d", { willReadFrequently: true });
+        g.drawImage(img, Math.floor(((clientX - b.left) / (b.width || 1)) * img.naturalWidth), Math.floor(((clientY - b.top) / (b.height || 1)) * img.naturalHeight), 1, 1, 0, 0, 1, 1);
+        const d = g.getImageData(0, 0, 1, 1).data;
+        return rgbHex(d[0], d[1], d[2]);
+      } catch (err) { return null; }
+    }
+    return null;
+  }
+  // The next tap on a page is read for its colour and handed to `f`
+  // (null when it fell off the pages); pick(null) stops waiting.
+  function pick(f) { picker = f || null; }
+
   // ---- Undo ----
 
   function step(from, to, undo) {
     const op = from.pop();
     if (!op || !clip) return false;
     const pages = new Set();
-    if (op.k === "add") {
+    if (op.k === "pages") {
+      // Whole lists of the pages touched, as they were or as they became.
+      setPages(undo ? op.before : op.after);
+      for (const k of Object.keys(op.before)) pages.add(Number(k));
+    } else if (op.k === "set") {
+      // Moved or resized: the items as they were, or as they became.
+      for (const it of undo ? op.before : op.after) {
+        const t = strokes(op.n).find((s) => s.id === it.id);
+        if (t) Object.assign(t, copyOf(it));
+      }
+      pages.add(op.n);
+    } else if (op.k === "many") {
+      const gone = undo ? op.add : op.del, back = undo ? op.del : op.add;
+      for (const g of gone) { take(g.n, g.s.id); pages.add(g.n); }
+      for (const g of undo ? [...back].reverse() : back) { put(g.n, g.s, g.i); pages.add(g.n); }
+    } else if (op.k === "add") {
       if (undo) {
         const t = take(op.n, op.id);
         if (t) op.s = t.s, op.i = t.i;
@@ -573,6 +1124,7 @@
       }
     }
     to.push(op);
+    selClear();
     for (const n of pages) { if (layers.has(n)) paint(n); else if (on) show(n); }
     save();
     changed();
@@ -626,15 +1178,16 @@
     const out = {};
     for (const [n, list] of Object.entries(clip ? clip.pages : {})) {
       out[n] = list.map((s) => {
-        const rgb = (s.t === "h" ? HIGHLIGHT : PEN)[s.c];
-        return { pts: s.p, w: s.w, rgb, a: s.t === "h" ? 0.4 : 1, k: s.t === "h" ? 1 : exportWidth(s) };
-      });
+        if (s.t === "i") return { img: imgs.get(s.f) || "", x: s.x, y: s.y, w: s.w, h: s.h };
+        return { pts: s.p, w: s.w, rgb: rgbOf(s), a: s.t === "h" ? 0.4 : 1, k: s.t === "h" ? 1 : exportWidth(s) };
+      }).filter((s) => !("img" in s) || s.img);
     }
     return out;
   }
 
   C.ink = {
-    PEN, HIGHLIGHT, SIZES, STYLES, penPath, linePath, hits, clean,
+    PEN, HIGHLIGHT, SIZES, STYLES, penPath, linePath, rgbOf, imageUrl: (f) => imgs.get(f) || "", hits, clean, inside, within, boxOf, isHex, hexRgb, rgbHex, hsvRgb, rgbHsv,
+    cut: selCut, copy: selCopy, paste: selPaste, del: selDelete, front: () => reorder(true), back: () => reorder(false), convertItem, clampInto, placeOn, addImage, viewPage, pick, colorAt, clearSelection: selClear,
     load, unload, flush, setOn, setting, state, undo, redo, clearPage, clearAll, forPdf, count, drawn, strokes, shown,
     set onChange(f) { onChange = f; },
     set onPen(f) { onPen = f; },

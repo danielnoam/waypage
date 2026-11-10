@@ -252,7 +252,9 @@ secrets, so it can't sign or publish anything.
   screen lists; it goes away with the branch. Only a PR with a test
   label gets one: `test` (APK and IPA), `test-android` or
   `test-ios` (one, sooner). Adding the label builds it; taking it off
-  removes it.
+  removes it. A PR whose title says "manual testing" gets the APK (not
+  the IPA) when it is opened or reopened, and on every push after, with no
+  label to add.
 - On `main`, when `APP_VERSION` has no release yet and the signing secrets
   are set, the Android workflow publishes the release `app-v<version>`
   with `Waypage.apk`, and the iOS workflow attaches an unsigned

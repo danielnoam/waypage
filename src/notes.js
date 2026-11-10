@@ -78,7 +78,13 @@
       // Strokes are in page widths, so one scale puts them on the sheet.
       g.setTransform(w, 0, 0, w, 0, 0);
       for (const s of strokesOf(n)) {
-        const rgb = (s.t === "h" ? C.ink.HIGHLIGHT : C.ink.PEN)[s.c] || [28, 27, 25];
+        // A picture put on the sheet (width and height in page widths).
+        if (s.t === "i") {
+          const url = C.ink.imageUrl(s.f);
+          if (url) { try { const im = await createImageBitmap(await (await fetch(url)).blob()); g.drawImage(im, s.x, s.y, s.w, s.h); im.close(); } catch (e) { /* left out */ } }
+          continue;
+        }
+        const rgb = C.ink.rgbOf(s) || [28, 27, 25];
         const col = "rgb(" + rgb.join(",") + ")";
         if (s.t === "h") {
           g.save();

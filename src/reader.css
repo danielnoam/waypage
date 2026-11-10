@@ -173,10 +173,17 @@ mark.co-mark.co-pm.co-noted { box-shadow: inset 0 -2px var(--muted); }
    that show on the dark page. */
 .co-ink { position: absolute; z-index: 2; overflow: hidden; pointer-events: none; -webkit-user-select: none; user-select: none; }
 .co-ink[data-on="1"] { pointer-events: auto; cursor: crosshair; }
+/* A stroke being drawn or an item being dragged shows over the next page too. */
+.co-ink[data-lift] { overflow: visible; z-index: 3; }
 /* While a pen is near (ink.js near()), no pan under it: it draws. */
 html[data-co-pen-near] .co-ink[data-on="1"], html[data-co-inking][data-co-pen-near], html[data-co-inking][data-co-pen-near] body { touch-action: none; }
 .co-ink path.pen { stroke: none; }
 .co-ink path.hl { fill: none; stroke-linecap: butt; stroke-linejoin: round; opacity: .55; mix-blend-mode: multiply; }
+.co-ink .lasso { fill: color-mix(in srgb, var(--accent) 12%, transparent); stroke: var(--accent); stroke-width: 1.5px; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; stroke-linejoin: round; pointer-events: none; }
+.co-ink .sel { fill: none; stroke: var(--accent); stroke-width: 1.5px; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; pointer-events: none; }
+.co-ink .hnd { fill: var(--accent); stroke: #fff; stroke-width: 2px; vector-effect: non-scaling-stroke; }
+.co-ink .pic { pointer-events: none; }
+html[data-co-pdf-dark] .co-ink .custom.pen, html[data-co-pdf-dark] .co-ink .custom.hl { filter: invert(1) hue-rotate(180deg); }
 .co-ink .pen.c-ink { fill: #1C1B19; }
 .co-ink .pen.c-red { fill: #D0312D; }
 .co-ink .pen.c-blue { fill: #2B61C4; }
