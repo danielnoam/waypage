@@ -1364,6 +1364,35 @@
     return { root, title: got.title, byline: got.byline, lang: got.lang, dir: got.dir, series: got.series };
   }
 
+  // A file's fingerprint (2026-11): its size and its first and last 256 KB,
+  // hashed. Highlights and drawings on a file read from outside sync by it,
+  // and show on another device only on a file with the same one: the same
+  // name alone could be another edition. null when it can't be read.
+  async function fingerprint(file) {
+    try {
+      const N = 256 * 1024, size = file.size;
+      const head = new Uint8Array(await file.slice(0, Math.min(N, size)).arrayBuffer());
+      const tail = size > N ? new Uint8Array(await file.slice(Math.max(N, size - N)).arrayBuffer()) : new Uint8Array(0);
+      const all = new Uint8Array(head.length + tail.length + 16);
+      all.set(new TextEncoder().encode(String(size).padStart(16, "0")));
+      all.set(head, 16);
+      all.set(tail, 16 + head.length);
+      const d = new Uint8Array(await crypto.subtle.digest("SHA-256", all));
+      return [...d.slice(0, 16)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    } catch (e) { return null; }
+  }
+  // A file read from outside from before fingerprints gets one the first
+  // time its highlights or drawings could sync. Resolves to it, or null.
+  async function fingerprintOf(meta) {
+    if (!meta || !meta.link || !meta.file) return null;
+    if (meta.file.fp) return meta.file.fp;
+    let blob;
+    try { blob = await C.platform.files.blob(meta.link, meta.file.size); } catch (e) { return null; }
+    const fp = await fingerprint(blob);
+    if (fp) meta.file.fp = fp;
+    return fp;
+  }
+
   // Makes a clip of `file`, `kind` from kindOf. `link` is the lasting
   // permission on the file (platform.files) when the clip is to read from
   // it; its pictures then stay in the file. Resolves to the clip's index
@@ -1401,7 +1430,11 @@
     }
     // The lasting permission is this device's own: it never syncs, and
     // never goes in a backup another device might read.
-    if (link) meta.link = link;
+    if (link) {
+      meta.link = link;
+      const fp = await fingerprint(file);
+      if (fp) meta.file.fp = fp;
+    }
     if (pics.thumb) meta.thumb = pics.thumb;
     try {
       const html = C.save.savedPageHtml(meta, root, out);
@@ -1415,5 +1448,5 @@
     return meta;
   }
 
-  C.files = { KINDS, LINKABLE, canLink, kindOf, bring, openLinked, openNoteItem, noteSheets, addSheet, printed, drawable, convertible, drawNear, findPage, heldPdf: () => (held && held.pdf) || null, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
+  C.files = { KINDS, LINKABLE, canLink, kindOf, bring, openLinked, openNoteItem, noteSheets, addSheet, printed, drawable, convertible, fingerprint, fingerprintOf, drawNear, findPage, heldPdf: () => (held && held.pdf) || null, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
 })();

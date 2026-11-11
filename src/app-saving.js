@@ -81,6 +81,8 @@ async function syncNow(quiet = true) {
       onProgress: () => { if (state.section === "sync") renderSection(); paintDownloads(); },
       light: syncsPlacesOnly(),
       isMail: (u) => isMail({ url: u }),
+      getOutside: outsideMarks,
+      setOutside: outsideTake,
     });
   } catch (e) {
     if (!joined) unsynced = unsynced || sending;
@@ -94,6 +96,59 @@ async function syncNow(quiet = true) {
   if (res && res.light) { if (!quiet) toast("Places and reading time synced. Clips wait for Wi-Fi."); return res; }
   if (res && !quiet && !C.sync.paused) toast(res.up + res.down + res.removed ? "Synced: " + [res.up ? res.up + " sent" : "", res.down ? res.down + " came in" : "", res.removed ? res.removed + " removed" : ""].filter(Boolean).join(", ") + "." : "Already in step.");
   return res;
+}
+// Highlights and drawings on files read from outside (2026-11) sync by
+// the file's fingerprint (files.js), apart from the files themselves: what
+// each such file here has on it, the same file once.
+async function outsideMarks() {
+  const out = {};
+  for (const p of state.pages) {
+    if (!p.link || !p.file || p.note) continue;
+    const has = (p.marks || []).length || p.ink || (p.drawn || []).length;
+    const fp = p.file.fp || (has ? await C.files.fingerprintOf(p) : null);
+    if (!fp || out[fp]) continue;
+    const o = { name: p.file.name, marks: p.marks || [] };
+    if (p.ink) o.ink = p.ink;
+    if ((p.drawn || []).length) { const d = await C.store.readInk(p.id); if (d && d.pages) o.pages = d.pages; }
+    out[fp] = o;
+  }
+  return out;
+}
+// What came back goes onto every file here with that fingerprint, unless
+// it changed here while sync ran (it goes up next time) or its pen is out.
+async function outsideTake(all, sent) {
+  const now = await outsideMarks();
+  const stamp = (o) => JSON.stringify(C.sync.cleanOutside({ x: o })["x"] || null);
+  let changed = false;
+  for (const [fp, mine] of Object.entries(sent)) {
+    if (!now[fp] || stamp(now[fp]) !== stamp(mine)) continue;
+    const got = all[fp] || {};
+    if (stamp(got) === stamp(mine)) continue;
+    for (const p of state.pages.filter((x) => x.link && x.file && x.file.fp === fp && !x.note)) {
+      if (state.open === p && C.ink.on) continue;
+      if ((got.marks || []).length) p.marks = got.marks; else delete p.marks;
+      if (got.ink) { p.ink = got.ink; p.inkAt = Date.now(); } else delete p.ink;
+      if (got.pages || (p.drawn || []).length) {
+        // A picture put on a page stays on this device: it never syncs.
+        const old = (await C.store.readInk(p.id)) || {};
+        const pages = JSON.parse(JSON.stringify(got.pages || {}));
+        for (const [n, list] of Object.entries(old.pages || {})) {
+          const pics = (list || []).filter((x) => x && x.t === "i");
+          if (pics.length) pages[n] = (pages[n] || []).concat(pics);
+        }
+        const keys = Object.keys(pages).filter((n) => pages[n].length);
+        await C.store.writeInk(p.id, keys.length ? { v: 1, size: p.file.size || 0, pages } : null);
+        const d = keys.map((n) => [Number(n), new Set(pages[n].map((x) => x.id)).size]).sort((a, b) => a[0] - b[0]);
+        if (d.length) p.drawn = d; else delete p.drawn;
+        p.inkAt = Date.now();
+      }
+      changed = true;
+      if (state.open === p) { paintMarks(p); inkClose(); inkSync(p); }
+    }
+  }
+  if (!changed) return;
+  await C.store.writeIndexOnly(state.pages);
+  renderLibrary();
 }
 // Pages that came as links only (0.30.3), saved here one after another
 // like a run, each into its place in the library. In a browser only

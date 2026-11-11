@@ -5,7 +5,9 @@
 // or "same" (whether the merge changed the library on GitHub).
 self.window = self;
 self.Waypage = {};
-importScripts("backup.js" + self.location.search, "sync.js" + self.location.search);
+// ink.js for its stroke check (backup.cleanInk): without it every drawing
+// on a clip dropped out of the merge.
+importScripts("backup.js" + self.location.search, "sync.js" + self.location.search, "ink.js" + self.location.search);
 
 const S = self.Waypage.sync;
 const B = self.Waypage.backup;

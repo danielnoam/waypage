@@ -21,10 +21,13 @@
   const num = (v) => (typeof v === "number" && isFinite(v) ? v : 0);
 
   // A clip made from a file of your own (0.31.0): what the file was.
+  const FP = /^[0-9a-f]{32}$/;
   const FILE_KINDS = ["epub", "md", "txt", "html", "cbz", "pdf"];
   function cleanFile(f) {
     if (!f || typeof f !== "object" || !FILE_KINDS.includes(f.kind) || !/^[a-z0-9]{1,8}$/.test(f.ext || "")) return null;
-    return { name: text(f.name, 200) || "file." + f.ext, kind: f.kind, ext: f.ext, size: num(f.size) };
+    const out = { name: text(f.name, 200) || "file." + f.ext, kind: f.kind, ext: f.ext, size: num(f.size) };
+    if (typeof f.fp === "string" && FP.test(f.fp)) out.fp = f.fp;
+    return out;
   }
   // A note's paper, and the PDF it was made from when it was.
   function cleanNote(n) {

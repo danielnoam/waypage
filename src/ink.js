@@ -281,26 +281,28 @@
   let blockStore = null;    // where a clip's drawings by block are kept: { read(meta), write(id, pages) }
 
   // A stroke read back from a file: anything else is dropped.
+  // sync-worker.js runs clean with no save.js.
+  const freshId = () => (C.save ? C.save.newId() : Math.random().toString(36).slice(2, 12));
   function clean(s) {
     if (s && typeof s === "object" && s.t === "x") {
       const n = [s.x, s.y, s.w, s.h, s.z].map(Number);
       if (typeof s.text !== "string" || !s.text.trim() || s.text.length > MAX_TEXT || !n.every(Number.isFinite)) return null;
       if (!(n[4] >= 0.005 && n[4] <= 0.2 && n[2] > 0 && n[2] <= 3 && n[3] > 0 && n[3] <= 4 && n[0] > -2 && n[0] < 3 && n[1] > -2 && n[1] < 20)) return null;
       if (!okColor("pen", s.c)) return null;
-      return { id: String(s.id || "").slice(0, 40) || C.save.newId(), t: "x", c: s.c, x: n[0], y: n[1], w: n[2], h: n[3], z: n[4], text: s.text };
+      return { id: String(s.id || "").slice(0, 40) || freshId(), t: "x", c: s.c, x: n[0], y: n[1], w: n[2], h: n[3], z: n[4], text: s.text };
     }
     if (s && typeof s === "object" && s.t === "i") {
       const n = [s.x, s.y, s.w, s.h].map(Number);
       if (typeof s.f !== "string" || !/^[A-Za-z0-9_-]{1,40}$/.test(s.f) || !n.every(Number.isFinite)) return null;
       if (!(n[2] > 0 && n[2] <= 2 && n[3] > 0 && n[3] <= 4 && n[0] > -2 && n[0] < 3 && n[1] > -2 && n[1] < 20)) return null;
-      return { id: String(s.id || "").slice(0, 40) || C.save.newId(), t: "i", f: s.f, x: n[0], y: n[1], w: n[2], h: n[3] };
+      return { id: String(s.id || "").slice(0, 40) || freshId(), t: "i", f: s.f, x: n[0], y: n[1], w: n[2], h: n[3] };
     }
     if (!s || typeof s !== "object" || (s.t !== "p" && s.t !== "h")) return null;
     if (!okColor(s.t === "h" ? "highlighter" : "pen", s.c)) return null;
     const w = Number(s.w);
     if (!(w > 0 && w < 0.2) || !Array.isArray(s.p) || s.p.length < 3 || s.p.length % 3 || s.p.length > MAX_POINTS * 3) return null;
     if (!s.p.every((v) => Number.isFinite(v))) return null;
-    const out = { id: String(s.id || "").slice(0, 40) || C.save.newId(), t: s.t, c: s.c, w, p: s.p.map((v, i) => (i % 3 === 2 ? Math.min(1, Math.max(0, v)) : v)) };
+    const out = { id: String(s.id || "").slice(0, 40) || freshId(), t: s.t, c: s.c, w, p: s.p.map((v, i) => (i % 3 === 2 ? Math.min(1, Math.max(0, v)) : v)) };
     // How a pen wrote; a stroke from before styles, or one that names none we know, is a ballpoint's.
     if (s.t === "p" && STYLES.includes(s.y) && s.y !== "ball") out.y = s.y;
     return out;

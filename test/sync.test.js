@@ -298,4 +298,33 @@ test("a note's files on GitHub are kept by name, and only names Waypage writes",
   assert.deepStrictEqual(Object.keys(got.files.a1b2.note).sort(), ["base.pdf", "img-ab12.txt", "ink.json", "note.json"]);
 });
 
+test("drawings on a clip merge stroke by stroke, like highlights (2026-11)", () => {
+  const st = (id, x = 0) => ({ id, t: "p", c: "red", w: 0.01, p: [x, 0, 1, 1, 1, 1] });
+  const base = lib([page("a1b2", { ink: { 3: [st("s1"), st("s2")] } })]);
+  // Here s1 moved and s3 drawn; there s2 erased and s4 drawn.
+  const r = S.merge(base, lib([page("a1b2", { ink: { 3: [st("s1", 0.5), st("s2"), st("s3")] } })]),
+    lib([page("a1b2", { ink: { 3: [st("s1")], 5: [st("s4")] } })]), NOW);
+  assert.deepStrictEqual(r.pages[0].ink, { 3: [st("s1", 0.5), st("s3")], 5: [st("s4")] });
+});
+
+test("highlights and drawings on a file read from outside merge by its fingerprint (2026-11)", () => {
+  const FP = "0123456789abcdef0123456789abcdef", OTHER = "fedcba9876543210fedcba9876543210";
+  const st = (id) => ({ id, t: "p", c: "red", w: 0.01, p: [0, 0, 1, 1, 1, 1] });
+  const mk = (id) => ({ id, block: 1, start: 0, endBlock: 1, end: 4, text: "word", at: 1 });
+  const base = { [FP]: { name: "a.pdf", marks: [mk("m1")], pages: { 2: [st("s1")] } } };
+  // Here: a new highlight. There: s1 erased, a new stroke on page 3.
+  const l = { [FP]: { name: "a.pdf", marks: [mk("m1"), mk("m2")], pages: { 2: [st("s1")] } } };
+  const r = { [FP]: { name: "a.pdf", marks: [mk("m1")], pages: { 3: [st("s2")] } }, [OTHER]: { name: "b.epub", ink: { 4: [st("s3")] } } };
+  const got = S.mergeOutside(base, l, r);
+  assert.deepStrictEqual(got[FP].marks.map((m) => m.id), ["m1", "m2"]);
+  assert.deepStrictEqual(got[FP].pages, { 3: [st("s2")] });
+  // A file this device doesn't have stays as GitHub has it.
+  assert.deepStrictEqual(got[OTHER], r[OTHER]);
+  // Everything erased here, on a file GitHub knew: it goes.
+  const gone = S.mergeOutside(base, { [FP]: { name: "a.pdf", marks: [] } }, base);
+  assert.ok(!gone[FP]);
+  // A device new to the file takes what's on it.
+  assert.deepStrictEqual(S.mergeOutside(null, { [FP]: { name: "a.pdf", marks: [] } }, base)[FP].marks.map((m) => m.id), ["m1"]);
+});
+
 console.log("\n" + passed + " passed");

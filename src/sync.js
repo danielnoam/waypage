@@ -180,6 +180,44 @@
     return Object.keys(out).length ? out : undefined;
   }
 
+  // Highlights and drawings on files read from outside (2026-11), which
+  // never sync themselves: by the file's fingerprint (files.js), so they
+  // show on another device only on the same file. { "<fp>": { name,
+  // marks, ink (by block), pages (a PDF's printed pages) } }. Each part
+  // three ways as on a clip; a file this device doesn't have stays as
+  // GitHub has it, and one with nothing left on it goes.
+  function mergeOutside(b, l, r) {
+    b = b || {}; r = r || {};
+    const out = {};
+    const one = (x, y, z) => {
+      const o = { name: y.name || z.name || "" };
+      const marks = mergeMarks(x.marks, y.marks, z.marks);
+      if (marks.length) o.marks = marks;
+      for (const k of ["ink", "pages"]) { const v = mergeInk(x[k], y[k], z[k]); if (v) o[k] = v; }
+      return o;
+    };
+    for (const [fp, y] of Object.entries(l || {})) {
+      const z = r[fp] || (b[fp] ? {} : null);
+      const o = z ? one(b[fp] || {}, y, z) : one({}, y, {});
+      if (o.marks || o.ink || o.pages) out[fp] = o;
+    }
+    for (const [fp, z] of Object.entries(r)) if (!(l && l[fp])) out[fp] = z;
+    return out;
+  }
+  function cleanOutside(o) {
+    const out = {};
+    if (!o || typeof o !== "object" || Array.isArray(o)) return out;
+    for (const [fp, v] of Object.entries(o).slice(0, 2000)) {
+      if (!/^[0-9a-f]{32}$/.test(fp) || !v || typeof v !== "object") continue;
+      const x = { name: typeof v.name === "string" ? v.name.slice(0, 200) : "" };
+      const marks = C.backup.cleanMarks(v.marks);
+      if (marks.length) x.marks = marks;
+      for (const k of ["ink", "pages"]) { const ink = C.backup.cleanInk(v[k]); if (ink) x[k] = ink; }
+      if (x.marks || x.ink || x.pages) out[fp] = x;
+    }
+    return out;
+  }
+
   // One page changed on both sides since the base.
   function mergeEntry(b, l, r) {
     b = b || {};
@@ -808,14 +846,14 @@
     return false;
   }
 
-  function run({ getPages, setPages, getFeeds, setFeeds, getSeen, setSeen, sameUrl, urlKey, onProgress, light, isMail }) {
+  function run({ getPages, setPages, getFeeds, setFeeds, getSeen, setSeen, sameUrl, urlKey, onProgress, light, isMail, getOutside, setOutside }) {
     if (!cfg || cfg.paused) return Promise.resolve(null);
     if (running) return running;
     const told = (p) => { progress = p; if (onProgress) onProgress(p); };
     running = (async () => {
       try {
         if (await settle().catch(() => false)) throw new SyncError(PUBLIC_REPO);
-        const res = await once(getPages, setPages, sameUrl || ((a, b) => a === b), told, getFeeds, setFeeds, getSeen, setSeen, urlKey, !!light, isMail || (() => false));
+        const res = await once(getPages, setPages, sameUrl || ((a, b) => a === b), told, getFeeds, setFeeds, getSeen, setSeen, urlKey, !!light, isMail || (() => false), getOutside, setOutside);
         last = { at: Date.now(), error: "" };
         if (light) last.light = true;
         cfg.at = last.at;
@@ -832,7 +870,7 @@
     return running;
   }
 
-  async function once(getPages, setPages, sameUrl, onProgress, getFeeds, setFeeds, getSeen, setSeen, urlKey, light, isMail) {
+  async function once(getPages, setPages, sameUrl, onProgress, getFeeds, setFeeds, getSeen, setSeen, urlKey, light, isMail, getOutside, setOutside) {
     // A library Waypage can't reach reads as empty; sent as it is, that
     // would look like every clip deleted (0.33.0).
     if (C.store.problem) throw new Error(C.store.problem);
@@ -848,6 +886,8 @@
     const before = getPages().map((p) => ({ ...p }));
     const feedsBefore = getFeeds ? getFeeds().map(feedShare).filter((f) => !skip(f.url)) : null;
     const snapshot = new Map(before.map((p) => [p.id, JSON.stringify(p)]));
+    // Highlights and drawings on files read from outside, with the clips.
+    const outsideHere = what.clips && !light && getOutside ? cleanOutside(await getOutside()) : null;
     await breathe();
     // Pages a run sent before it was cut off (the app closed or updated)
     // count as sent: library.json goes up only once they all have, so
@@ -924,6 +964,8 @@
         remote ? { ...remote.data, pages: remote.data.pages.filter(ours) } : null, waiting, feedsHere, getSeen ? getSeen() : 0, Date.now(), sameUrl, urlKey);
       merged = got.merged;
       const remoteDoc = got.remoteDoc;
+      const outside = outsideHere ? mergeOutside(baseDoc && baseDoc.outside, outsideHere, remoteDoc && remoteDoc.outside) : (remoteDoc && remoteDoc.outside) || {};
+      if (Object.keys(outside).length) merged.outside = outside;
       // What isn't synced here goes back in as GitHub has it.
       if (rest.length) {
         const back = clean({ pages: rest, files: remote.data.files });
@@ -1199,6 +1241,7 @@
     // Before the library is shown, so a cover that came down is in it.
     try { await syncCovers(out); } catch (e) { if (e instanceof Paused) throw e; }
     await setPages(out);
+    if (outsideHere && setOutside) try { await setOutside(merged.outside || {}, outsideHere); } catch (e) { /* next time */ }
     for (const id of gone) await C.store.removePage(id);
     // Reading stats last (1.39.0), and never the reason a sync failed.
     await stats();
@@ -1292,6 +1335,8 @@
       }
     }
     const out = { format: 1, pages, deleted, files };
+    const outside = cleanOutside(doc.outside);
+    if (Object.keys(outside).length) out.outside = outside;
     if (Array.isArray(doc.feeds)) {
       out.feeds = doc.feeds.map((f) => C.backup.cleanFeed(f)).filter(Boolean).map(feedShare);
       out.feedsGone = {};
@@ -1302,7 +1347,7 @@
   }
 
   C.sync = {
-    merge, mergeTags, mergeMarks, mergeInk, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
+    merge, mergeTags, mergeMarks, mergeInk, mergeOutside, cleanOutside, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
     share, clean, same, urlKey, sameUrl, peek, poll,
     get on() { return !!cfg; },
     // Connected before 1.29.1's steps, so with a token for All
