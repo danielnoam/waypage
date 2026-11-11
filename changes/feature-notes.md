@@ -9,4 +9,3 @@
 
 ### Changed
 - Only a note can be drawn on. A PDF is no longer drawn on itself.
-- Notes stay on this device for now: they are not synced or backed up.

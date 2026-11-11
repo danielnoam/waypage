@@ -1583,6 +1583,112 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a note goes up with its sheets, strokes and PDF, comes down whole on another device, and only while Notes is on (2.0.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t" }));
+        const S = window.Waypage.store;
+        const n = (id, more) => ({ id, url: "", title: "Note " + id, site: "", savedAt: 100, minutes: 0, mode: "full", at: 0, images: 0, note: { paper: "lines" }, ...more });
+        await S.writeIndex([n("note1", { editedAt: 400 })]);
+        await S.writePage("note1", "<!doctype html><html><body><div class=\"co-body\"></div></body></html>", n("note1", { editedAt: 400 }));
+        await S.writeNote("note1", { v: 1, sheets: [{ bg: "paper" }, { bg: "pdf", n: 1 }] });
+        await S.writeInk("note1", { v: 1, size: 0, pages: { 1: [{ id: "s1", t: "p", c: "ink", w: 0.002, p: [0.1, 0.1, 0.5, 0.2, 0.2, 0.5, 0.3, 0.1, 0.5] }] } });
+        await S.writeNoteBase("note1", new Blob(["%PDF-1.4 fake"], { type: "application/pdf" }));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const run = (what) => q.evaluate(async (what) => {
+        window.Waypage.sync.setWhat("notes", what);
+        const b64 = (t) => btoa(unescape(encodeURIComponent(t)));
+        const n = (id, more) => ({ id, url: "", title: "Note " + id, site: "", savedAt: 100, minutes: 0, mode: "full", at: 0, images: 0, note: { paper: "lines" }, ...more });
+        const remote = { format: 1, deleted: {}, files: { note2: { at: 300, sha: "p2", note: { "note.json": "n2", "ink.json": "i2" } } }, pages: [n("note2", { editedAt: 300 })] };
+        const puts = [];
+        let wrote = null;
+        window.fetch = async (url, opts = {}) => {
+          const method = opts.method || "GET";
+          const ok = (j, text) => new Response(text != null ? text : JSON.stringify(j), { status: 200 });
+          if (/\/repos\/me\/waypage-data$/.test(url)) return ok({ name: "waypage-data" });
+          if (/contents\/library\.json/.test(url) && method === "GET") return ok({ sha: "lib1", content: b64(JSON.stringify(remote)) });
+          if (/contents\/library\.json/.test(url) && method === "PUT") { wrote = JSON.parse(decodeURIComponent(escape(atob(JSON.parse(opts.body).content)))); return ok({ content: { sha: "lib2" } }); }
+          if (method === "PUT") { if (!/contents\/stats\//.test(url)) puts.push(decodeURIComponent(String(url).split("/contents/")[1])); return ok({ content: { sha: "x" + puts.length } }); }
+          if (/contents\/pages\/note2\.html/.test(url)) return ok(null, "<!doctype html><html><body><div class=\"co-body\"></div></body></html>");
+          if (/contents\/notes\/note2\/note\.json/.test(url)) return ok(null, JSON.stringify({ v: 1, sheets: [{ bg: "paper" }, { bg: "paper" }] }));
+          if (/contents\/notes\/note2\/ink\.json/.test(url)) return ok(null, JSON.stringify({ v: 1, size: 0, pages: { 2: [{ id: "s9", t: "p", c: "ink", w: 0.002, p: [0.1, 0.1, 0.5, 0.2, 0.2, 0.5, 0.3, 0.1, 0.5] }] } }));
+          return new Response("{}", { status: 404 });
+        };
+        await syncNow(true);
+        const S = window.Waypage.store;
+        const sheets = (await S.readNote("note2") || {}).sheets;
+        return { puts: puts.sort(), sent: wrote && wrote.pages.map((p) => p.id).sort(), files: wrote && Object.keys((wrote.files.note1 || {}).note || {}).sort(),
+          here: state.pages.map((p) => p.id).sort(), sheets: sheets && sheets.length, ink: !!(await S.readInk("note2")) };
+      }, what);
+      // On: this note goes up (its files, then its page), the other comes down.
+      const on = await run(true);
+      assert.deepStrictEqual(on.puts, ["notes/note1/base.pdf", "notes/note1/ink.json", "notes/note1/note.json", "pages/note1.html"], JSON.stringify(on));
+      assert.deepStrictEqual(on.sent, ["note1", "note2"], JSON.stringify(on));
+      assert.deepStrictEqual(on.files, ["base.pdf", "ink.json", "note.json"], JSON.stringify(on));
+      assert.deepStrictEqual(on.here, ["note1", "note2"], JSON.stringify(on));
+      assert.strictEqual(on.sheets, 2, "the other device's note came without its sheets");
+      assert.strictEqual(on.ink, true, "the other device's note came without its strokes");
+      await q.context().close();
+    });
+
+    await test("GitHub sync's What this device syncs has Notes right above Feeds, and turning it off turns off Drive's (2.0.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(() => {
+        localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t", paused: true }));
+        localStorage.setItem("waypage.drive", JSON.stringify({ email: "a@example.com", auto: true, what: { clips: true, notes: true }, last: {}, since: 1, folder: "f" }));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => { openSettings(); openSection("sync"); });
+      const labels = await q.locator("#sectionBody label.row .choice-label").allTextContents();
+      assert.deepStrictEqual(labels.slice(labels.indexOf("Clips"), labels.indexOf("Newsletters") + 1), ["Clips", "Notes", "Feeds", "Newsletters"], labels.join(", "));
+      await q.locator("#sectionBody label.row", { hasText: "What you draw and type on each note" }).locator("input").uncheck();
+      const drive = await q.evaluate(() => window.Waypage.drive.what.notes);
+      assert.strictEqual(drive, false, "Drive's Notes stayed on");
+      await q.context().close();
+    });
+
+    await test("a note isn't sent, taken or forgotten while Notes is off in What this device syncs (2.0.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t", what: { notes: false } }));
+        const c = (id, more) => ({ id, url: "https://example.com/" + id, title: "Clip " + id, site: "example.com", savedAt: 100, minutes: 1, mode: "links", at: 0, ...more });
+        const n = (id) => ({ id, url: "", title: "Note " + id, site: "", savedAt: 100, minutes: 0, mode: "full", at: 0, images: 0, note: { paper: "blank" } });
+        await window.Waypage.store.writeIndex([c("clip1"), n("note1")]);
+        await window.Waypage.store.writePage("clip1", "<!doctype html><html><body><p>Clip.</p></body></html>", c("clip1"));
+        await window.Waypage.store.writePage("note1", "<!doctype html><html><body><div class=\"co-body\"></div></body></html>", n("note1"));
+        await window.Waypage.store.writeNote("note1", { v: 1, sheets: [{ bg: "paper" }] });
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const n = (id) => ({ id, url: "", title: "Note " + id, site: "", savedAt: 100, minutes: 0, mode: "full", at: 0, images: 0, note: { paper: "squares" } });
+        const remote = { format: 1, deleted: {}, files: { note2: { at: 100, sha: "p2", note: { "note.json": "n2" } } }, pages: [n("note2")] };
+        const b64 = (t) => btoa(unescape(encodeURIComponent(t)));
+        const puts = [];
+        let wrote = null;
+        window.fetch = async (url, opts = {}) => {
+          const method = opts.method || "GET";
+          const ok = (j) => new Response(JSON.stringify(j), { status: 200 });
+          if (/\/repos\/me\/waypage-data$/.test(url)) return ok({ name: "waypage-data" });
+          if (/contents\/library\.json/.test(url) && method === "GET") return ok({ sha: "lib1", content: b64(JSON.stringify(remote)) });
+          if (/contents\/library\.json/.test(url) && method === "PUT") { wrote = JSON.parse(decodeURIComponent(escape(atob(JSON.parse(opts.body).content)))); return ok({ content: { sha: "lib2" } }); }
+          if (method === "PUT") { if (!/contents\/stats\//.test(url)) puts.push(String(url).split("/contents/")[1]); return ok({ content: { sha: "x" } }); }
+          return new Response("{}", { status: 404 });
+        };
+        await syncNow(true);
+        return { puts: puts.sort(), sent: wrote && wrote.pages.map((p) => p.id).sort(), kept: wrote && Object.keys(wrote.files), here: state.pages.map((p) => p.id).sort() };
+      });
+      // The clip goes up; GitHub's note stays on GitHub; this device's note stays here.
+      assert.deepStrictEqual(got.puts, ["pages/clip1.html"], JSON.stringify(got));
+      assert.deepStrictEqual(got.sent, ["clip1", "note2"], JSON.stringify(got));
+      assert.deepStrictEqual(got.here, ["clip1", "note1"], JSON.stringify(got));
+      assert.ok(got.kept.includes("note2"), "GitHub's note lost its files");
+      await q.context().close();
+    });
+
     await test("on mobile data with places only, places and finished come and go but clips wait (1.40.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

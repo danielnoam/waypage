@@ -59,7 +59,9 @@
   // dpi, written by pptx.js writePdf as a picture to a page. Sheets after
   // the last one written on are left out (a PDF's own pages all stay).
   // `handle` is the open note's (heldPdf); `strokesOf(n)` is ink.js's.
-  async function toPdf(meta, handle, strokesOf, onProgress) {
+  // The file's name: the note's, without what a file name can't have.
+  const pdfName = (meta) => (meta.title || "Note").replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 120) + ".pdf";
+  async function toPdf(meta, handle, strokesOf, onProgress, images) {
     const count = handle.count;
     let last = 1;
     for (let n = 1; n <= count; n++) if (strokesOf(n).length || handle.sheets[n - 1].bg === "pdf") last = n;
@@ -98,7 +100,7 @@
         }
         // A picture put on the sheet (width and height in page widths).
         if (s.t === "i") {
-          const url = C.ink.imageUrl(s.f);
+          const url = (images && images[s.f]) || C.ink.imageUrl(s.f);
           if (url) { try { const im = await createImageBitmap(await (await fetch(url)).blob()); g.drawImage(im, s.x, s.y, s.w, s.h); im.close(); } catch (e) { /* left out */ } }
           continue;
         }
@@ -117,7 +119,7 @@
       await new Promise((r) => setTimeout(r, 0));
     }
     if (onProgress) onProgress(last, last);
-    return { blob: C.pptx.writePdf(pages), name: (meta.title || "Note").replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 120) + ".pdf", sheets: last };
+    return { blob: C.pptx.writePdf(pages), name: pdfName(meta), sheets: last };
   }
 
   // note.json read back: a sheet is paper or a page of the PDF; anything
@@ -225,5 +227,5 @@
     return keepNew(entry(C.save.newId(), name, { paper: "lines", ...(src.id ? { from: src.id } : {}) }), sheets, blob);
   }
 
-  C.notes = { PAPERS, LABELS, paper, toPdf, create, fromPdf, open, keep, W, H };
+  C.notes = { PAPERS, LABELS, paper, toPdf, pdfName, create, fromPdf, open, keep, W, H };
 })();

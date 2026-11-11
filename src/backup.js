@@ -26,15 +26,23 @@
     if (!f || typeof f !== "object" || !FILE_KINDS.includes(f.kind) || !/^[a-z0-9]{1,8}$/.test(f.ext || "")) return null;
     return { name: text(f.name, 200) || "file." + f.ext, kind: f.kind, ext: f.ext, size: num(f.size) };
   }
+  // A note's paper, and the PDF it was made from when it was.
+  function cleanNote(n) {
+    const out = { paper: ["blank", "lines", "squares"].includes(n.paper) ? n.paper : "blank" };
+    if (typeof n.from === "string" && /^[a-z0-9]{4,24}$/.test(n.from)) out.from = n.from;
+    return out;
+  }
   const sameFile = (a, b) => !!(a.file && b.file && a.file.name === b.file.name && a.file.size === b.file.size);
 
   // An entry from a file, down to the fields an index entry has. null when
   // it has no address to call home, and wasn't made from a file.
   function cleanMeta(m, id) {
     const file = m && typeof m === "object" ? cleanFile(m.file) : null;
-    if (!m || typeof m !== "object" || (!httpUrl(m.url) && !file)) return null;
+    // A note (2.0.0) has no address and no file: it is its own page.
+    const note = m && typeof m === "object" && m.note && typeof m.note === "object" ? cleanNote(m.note) : null;
+    if (!m || typeof m !== "object" || (!httpUrl(m.url) && !file && !note)) return null;
     const out = {
-      id, url: httpUrl(m.url), title: text(m.title, 300) || httpUrl(m.url) || file.name, site: text(m.site, 100), byline: text(m.byline, 200),
+      id, url: httpUrl(m.url), title: text(m.title, 300) || httpUrl(m.url) || (file ? file.name : "Note"), site: text(m.site, 100), byline: text(m.byline, 200),
       licence: m.licence === "wikipedia" ? "wikipedia" : null, savedAt: num(m.savedAt) || Date.now(), minutes: Math.max(1, Math.round(num(m.minutes)) || 1),
       lang: text(m.lang, 20), dir: m.dir === "rtl" ? "rtl" : "", mode: ["previews", "full", "links"].includes(m.mode) ? m.mode : "previews",
       images: num(m.images), missing: num(m.missing), bytes: num(m.bytes),
@@ -67,6 +75,7 @@
     if (folder && typeof m.coverPick === "string" && (COVER_FILE.test(m.coverPick) || /^clip:[a-z0-9]{4,24}$/.test(m.coverPick))) out.coverPick = m.coverPick;
     if (text(m.series, 200)) out.series = text(m.series, 200);
     if (file) out.file = file;
+    if (note) out.note = note;
     const marks = cleanMarks(m.marks);
     if (marks.length) out.marks = marks;
     return out;

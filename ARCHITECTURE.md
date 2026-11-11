@@ -310,8 +310,7 @@ a JPEG and writes them with `pptx.js writePdf`, the text also as its
 invisible words. A clip or note is renamed from the reader's bar (`app-reader.js`:
 `paintReaderName`, `renameInReader`, `renameClip`): the index and the saved
 page's heading change, and `rewriteClip` stamps `editedAt` so sync sends the
-name with the clip. Notes are this device's own for now, like linked files:
-neither sync nor a backup takes them (a line on the to-do list).
+name with the clip. Notes sync and go to Drive as PDFs (see Sync and backups).
 
 A comic in Pages (reader.js `picsLayout`) is a flex row of its pages, each
 sized in px to a screen or half of one, so the text's own turning
@@ -358,6 +357,27 @@ web copy stay links, as before.
   `covers/<name>` before the library naming it, comes down before the
   library is shown, and rides in a backup as `covers.json`. Stored in
   `_covers/` in the app, in the database in a browser.
+- **Notes in sync** (2.0.0): a note is a library entry (`note: { paper,
+  from? }`, no address) whose page is only a shell, so it rides library.json
+  and `pages/<id>.html` like a clip, and its data goes beside it as
+  `notes/<id>/note.json`, `ink.json`, `img-<id>.txt` (a picture put on it)
+  and `base.pdf` (the PDF it was made from, at most 50 MB through the
+  Contents API). Their shas by name are in `files[id].note`, so only what
+  changed is sent, and the files go before the page that names them. Drawing
+  on a note stamps `editedAt` (`ink.onSaved`), which is what makes sync see
+  it: **the copy edited last wins whole**, strokes are not merged. The
+  switch is `what.notes`: a note (or, with Clips off, a clip) this device
+  doesn't sync is left out of the merge and the base, and put back into
+  library.json as GitHub had it (`ours`/`rest` in `once()`), so it never reads
+  as deleted. A note has no address, so `oneCopyEach` skips it and Links only
+  doesn't apply to it. Notes are in no backup zip.
+- **Notes in Drive** (`drive.js putNote`): one PDF a note
+  (`notes.toPdf`, drawn from the stored files without opening the reader) in
+  `Waypage/Notes`, replaced when the note's version or name changed
+  (`cfg.notePdfs`), removed when the note is gone, made at a backup while the
+  app is open (not by the Android background job, which can't run pdf.js).
+  The switch is only usable while GitHub sync's Notes is on, and goes off
+  with it; a restore doesn't read these PDFs.
 - Files read from outside (`link` on the entry) are this device's alone:
   neither sync nor any backup takes them, and a restore skips them.
 - **Backups and exports** (`backup.js`, `epub.js`): one zip of the whole
@@ -510,6 +530,11 @@ adds a line here.
 - Dialogs (Downloads, Sync, Save with options, Settings) fade in and out,
   the one planned exception to "nothing fades" (Daniel's pick over the
   grow and the zoom).
+- **Notes sync whole, the last edit wins.** Two devices writing on the same
+  note between syncs keep one device's version (the one saved last); strokes
+  aren't merged. A note's PDF over 50 MB isn't sent, so that note opens on
+  another device with its PDF missing. Notes sync by default like the other
+  parts, since sync itself is already on.
 
 ## Traps
 

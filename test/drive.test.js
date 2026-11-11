@@ -98,6 +98,19 @@ async function google(route) {
     if (!s.file) return route.fulfill({ status: 308, headers: CORS, body: "" });
     return json(route, 200, pick(s.file));
   }
+  // A file's contents sent again (2.0.0, a note's PDF).
+  const again = /^\/upload\/drive\/v3\/files\/([^/]+)$/.exec(p);
+  if (again && req.method() === "PATCH") {
+    const f = drive.files.get(again[1]);
+    if (!f) return json(route, 404, { error: { code: 404, errors: [{ reason: "notFound" }] } });
+    const body = req.postDataBuffer();
+    const cut = "--" + /boundary=([^;]+)/.exec(req.headers()["content-type"])[1];
+    const first = body.indexOf("\r\n\r\n") + 4;
+    const meta = JSON.parse(body.slice(first, body.indexOf("\r\n" + cut, first)).toString());
+    const second = body.indexOf("\r\n\r\n", body.indexOf(cut, first)) + 4;
+    Object.assign(f, meta, { bytes: body.slice(second, body.lastIndexOf("\r\n" + cut + "--")), patched: (f.patched || 0) + 1 });
+    return json(route, 200, pick(f));
+  }
   if (p === "/upload/drive/v3/files" && req.method() === "POST") {
     drive.uploads++;
     if (drive.slow) await new Promise((go) => setTimeout(go, drive.slow));
@@ -120,7 +133,7 @@ async function google(route) {
   if (p === "/drive/v3/files") {
     const q = url.searchParams.get("q");
     let list = [...drive.files.values()];
-    if (/mimeType='application\/vnd.google-apps.folder'/.test(q)) list = list.filter((f) => f.mimeType === "application/vnd.google-apps.folder" && f.name === "Waypage");
+    if (/mimeType='application\/vnd.google-apps.folder'/.test(q)) list = list.filter((f) => f.mimeType === "application/vnd.google-apps.folder" && f.name === /name='([^']+)'/.exec(q)[1]);
     else {
       const dir = /^'([^']+)' in parents/.exec(q)[1];
       list = list.filter((f) => (f.parents || []).includes(dir) && f.appProperties && f.appProperties.waypage === "backup").sort((a, b) => b.at - a.at);
@@ -138,8 +151,9 @@ async function google(route) {
   return json(route, 400, { error: { code: 400 } });
 }
 
-async function page(browser) {
+async function page(browser, init) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+  if (init) await ctx.addInitScript(init);
   // A test client ID in place of the real one.
   await ctx.route(/\/src\/drive\.js/, async (route) => {
     const res = await route.fetch();
@@ -348,6 +362,58 @@ async function connect(p) {
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.locator(".row", { hasText: "Disconnect Google Drive" }).click();
       await q.locator(".row", { hasText: "Connect Google Drive" }).waitFor();
+      await q.context().close();
+    });
+
+    await test("Notes go to Drive as a PDF each, and only while Notes is on in GitHub sync (2.0.0)", async () => {
+      // Without GitHub sync the switch is there but can't be turned on.
+      const a = await page(browser);
+      await connect(a);
+      const off = a.locator("label.row", { hasText: "Turn on Notes in GitHub sync first" });
+      await off.waitFor();
+      await off.locator("input").click({ force: true });
+      await a.locator("#toast", { hasText: "Turn on Notes in GitHub sync first." }).waitFor();
+      assert.strictEqual(await off.locator("input").isChecked(), false, "Notes turned on without GitHub sync");
+      assert.strictEqual(await a.locator("label.row", { hasText: /^Notes/ }).evaluate((r) => !!r.nextElementSibling && /Feeds/.test(r.nextElementSibling.textContent)), true, "Notes isn't above Feeds");
+      await a.context().close();
+
+      // With it on, a note is sent as a PDF, once, and again when it changes.
+      const q = await page(browser, () => { try { localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t", paused: true })); } catch (e) { /* none */ } });
+      await connect(q);
+      const row = q.locator("label.row", { hasText: "Each note as a PDF" });
+      await row.waitFor();
+      assert.strictEqual(await row.locator("input").getAttribute("aria-disabled"), null);
+      await row.locator("input").check();
+      await q.evaluate(async () => {
+        const m = await window.Waypage.notes.create("lines");
+        state.pages.unshift(m);
+        await window.Waypage.store.writeIndex(state.pages);
+      });
+      const pdfs = () => [...drive.files.values()].filter((f) => f.appProperties && f.appProperties.waypage === "note");
+      await q.locator(".row", { hasText: "Back up now" }).click();
+      await q.locator("#driveStatus", { hasText: "Last backup just now" }).waitFor({ timeout: 20000 });
+      assert.strictEqual(pdfs().length, 1, "no note PDF in Drive");
+      assert.strictEqual(pdfs()[0].bytes.slice(0, 5).toString(), "%PDF-", "not a PDF");
+      const folder = [...drive.files.values()].find((f) => f.name === "Notes" && f.mimeType === "application/vnd.google-apps.folder");
+      assert.ok(folder && pdfs()[0].parents.includes(folder.id), "the PDF isn't in a Notes folder " + JSON.stringify([...drive.files.values()].map((f) => [f.id, f.name, f.parents])));
+      // Nothing changed: not sent again. Written on: the same file is replaced.
+      await q.locator(".row", { hasText: "Back up now" }).click();
+      await until(q, () => !document.querySelector("#sectionBody button[disabled]"), null, 15000);
+      assert.strictEqual(pdfs().length, 1);
+      assert.ok(!pdfs()[0].patched, "an unchanged note was sent again");
+      await q.evaluate(() => { const n = state.pages.find((x) => x.note); n.editedAt = Date.now() + 5; });
+      await q.locator(".row", { hasText: "Back up now" }).click();
+      await until(q, () => !document.querySelector("#sectionBody button[disabled]"), null, 15000);
+      assert.strictEqual(pdfs().length, 1, "a second PDF for the same note");
+      assert.strictEqual(pdfs()[0].patched, 1, "the changed note wasn't sent again");
+      // The note deleted here: its PDF goes from Drive at the next backup.
+      await q.evaluate(() => { state.pages = state.pages.filter((x) => !x.note); });
+      await q.locator(".row", { hasText: "Back up now" }).click();
+      await until(q, () => !document.querySelector("#sectionBody button[disabled]"), null, 15000);
+      assert.strictEqual(pdfs().length, 0, "the PDF of a deleted note stayed");
+      // GitHub sync's Notes turned off turns Drive's off, and greys it.
+      await q.evaluate(() => { window.Waypage.sync.setWhat("notes", false); window.Waypage.drive.setWhat("notes", false); renderSection(); });
+      await q.locator("label.row", { hasText: "Turn on Notes in GitHub sync first" }).waitFor();
       await q.context().close();
     });
 
