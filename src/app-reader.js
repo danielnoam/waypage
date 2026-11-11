@@ -241,7 +241,7 @@ function readerWait(p, fromHistory) {
   $("readerTranslate").hidden = true;
   $("readerNow").textContent = "Contents";
   $("readerContents").setAttribute("aria-label", "Contents");
-  fill($("readerName"), siteOf(p) ? el("span", { class: "reader-site" }, siteOf(p)) : null, el("span", { class: "reader-title" }, p.title));
+  paintReaderName(p);
   if (!fromHistory) swap ? history.replaceState(readerState(p), "") : history.pushState(readerState(p), "");
   pushScreen($("readerView"));
 }
@@ -418,7 +418,7 @@ function show(p, html) {
   $("readerView").classList.toggle("railed", pinned.matches && readingPrefs().rail && !asPane($("readerView")));
   $("readerRail").hidden = !$("readerView").classList.contains("railed");
   fill($("railList"));
-  fill($("readerName"), siteOf(p) ? el("span", { class: "reader-site" }, siteOf(p)) : null, el("span", { class: "reader-title" }, p.title));
+  paintReaderName(p);
   readerScrolled(p.at || 0, 0);
   if (!p.preview) C.stats.opened(p.id);
   return C.reader.open($("readerFrame"), html, p, {
@@ -3403,4 +3403,58 @@ function noteSettings() {
   const tabs = seg("sheet-tab", "Settings", parts.map((x) => ({ value: x.dataset.part, label: names[x.dataset.part] })), tab, show, "sheet-tabs");
   show(tab);
   return el("div", { class: "reader-settings" }, tabs, el("div", { class: "reading-controls" }, ...parts));
+}
+
+// ---- Renaming from the reader's bar (2.0.0) ----
+
+// The clip's name in the bar: a button that renames it in place. A page read
+// without saving (a preview) has nothing to rename.
+function paintReaderName(p) {
+  const title = p.preview ? el("span", { class: "reader-title" }, p.title)
+    : el("button", { class: "reader-title", type: "button", "aria-label": "Rename", title: "Rename", onclick: () => renameInReader(p) }, p.title);
+  fill($("readerName"), siteOf(p) ? el("span", { class: "reader-site" }, siteOf(p)) : null, title);
+}
+// The name becomes a field where it is: Enter or tapping away saves, Escape
+// leaves it as it was.
+function renameInReader(p) {
+  const btn = $("readerName").querySelector("button.reader-title");
+  if (!btn) return;
+  const input = el("input", { class: "reader-title-input", type: "text", value: p.title, maxlength: "300", dir: "auto", enterkeyhint: "done", "aria-label": "Name" });
+  let done = false;
+  const finish = async (save) => {
+    if (done) return;
+    done = true;
+    const name = input.value.replace(/\s+/g, " ").trim();
+    if (save && name && name !== p.title) await renameClip(p, name);
+    if (state.open === p) paintReaderName(p);
+  };
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); finish(true); }
+    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); finish(false); }
+  });
+  input.addEventListener("blur", () => finish(true));
+  btn.replaceWith(input);
+  input.focus();
+  input.select();
+}
+// A clip or note under a new name: the index and the saved page's heading both
+// say it, and the edit time sends it to the other devices with the clip.
+async function renameClip(p, name) {
+  name = name.slice(0, 300);
+  try {
+    const html = await C.store.readPage(p.id);
+    if (!html) throw new Error("no page");
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const h1 = doc.querySelector(".co-head h1");
+    if (h1) h1.textContent = name;
+    p.title = name;
+    await rewriteClip(p, "<!doctype html>\n" + doc.documentElement.outerHTML, html);
+    await C.store.writeIndex(state.pages);
+  } catch (e) {
+    console.error(e);
+    toast("Couldn't rename. Try again.");
+    return;
+  }
+  renderLibrary();
+  if (state.folder) renderFolder();
 }

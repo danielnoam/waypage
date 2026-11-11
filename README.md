@@ -112,6 +112,7 @@ Each section below shows the computer (left) and the phone (right).
 - Minutes left by your own reading pace, for the chapter or the whole clip.
 - Picture viewer with zoom and swipe; footnotes in a sheet; Find in this clip.
 - Previous and Next, and the collection's list, inside the reader.
+- Tap the name at the top left of the reader to rename a clip or a note, on a phone too (Enter saves, Escape cancels). The reader's top bar has smaller icons on a phone.
 - Brightness by a swipe on the edge, with Auto.
 - Volume buttons turn pages on Android; keyboard shortcuts on a computer.
 - Dark PDF pages: with a PDF open, a switch at the foot of Layout recolours its pages to a dark theme.

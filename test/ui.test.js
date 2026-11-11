@@ -4116,6 +4116,68 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("renames a clip or a note from the name in the reader's bar, on a phone too, with smaller icons there (2.0.0)", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ARTICLE);
+      await q.press("#saveUrl", "Enter");
+      await q.locator(".page-card .card-title", { hasText: "The Long Haul Flight" }).waitFor({ timeout: 10000 });
+      await q.locator(".page-card", { hasText: "The Long Haul Flight" }).first().click();
+      await q.locator("#readerView:not([hidden])").waitFor();
+      await frameText(q).getByText("oceanic track").waitFor();
+      await q.waitForTimeout(900);
+      // A phone's reader bar shows the name, with 18 px icons in 38 px buttons.
+      assert.strictEqual(await q.locator("#readerName .reader-title").innerText(), "The Long Haul Flight");
+      const size = await q.evaluate(() => { const b = document.querySelector(".reader-bar .icon-btn").getBoundingClientRect(), v = document.querySelector(".reader-bar .icon-btn svg").getBoundingClientRect(); return [b.width, b.height, v.width, v.height]; });
+      assert.deepStrictEqual(size, [38, 38, 18, 18]);
+      // Escape leaves the name; an empty name does too.
+      await q.locator("#readerName .reader-title").click();
+      await q.keyboard.type("Never kept");
+      await q.keyboard.press("Escape");
+      assert.strictEqual(await q.evaluate(() => state.open.title), "The Long Haul Flight");
+      assert.ok(await q.locator("#readerView:not([hidden])").isVisible(), "Escape ended the edit, not the reading");
+      await q.locator("#readerName .reader-title").click();
+      await q.locator(".reader-title-input").fill("   ");
+      await q.keyboard.press("Enter");
+      assert.strictEqual(await q.evaluate(() => state.open.title), "The Long Haul Flight");
+      // Enter saves: the bar, the library, the saved page's heading, and the edit time that sends it to other devices.
+      await q.locator("#readerName .reader-title").click();
+      await q.locator(".reader-title-input").fill("Flight notes");
+      await q.keyboard.press("Enter");
+      await until(q, () => state.open.title === "Flight notes" && !!state.open.editedAt);
+      assert.strictEqual(await q.locator("#readerName .reader-title").innerText(), "Flight notes");
+      const stored = await q.evaluate(async () => ({ html: await C.store.readPage(state.open.id), idx: (await C.store.readIndex()).find((x) => x.id === state.open.id).title }));
+      assert.ok(/<h1[^>]*>Flight notes<\/h1>/.test(stored.html), "the page's heading");
+      assert.strictEqual(stored.idx, "Flight notes");
+      // Tapping away saves too.
+      await q.locator("#readerName .reader-title").click();
+      await q.locator(".reader-title-input").fill("Flight notes 2");
+      await q.locator(".reader-bar #readerBack").focus();
+      await until(q, () => state.open.title === "Flight notes 2");
+      await q.evaluate(() => closeReader());
+      await q.locator(".page-card .card-title", { hasText: "Flight notes 2" }).waitFor();
+      // A note renames the same way.
+      await q.click("#severalBtn");
+      await q.locator("#batchView .row", { hasText: "New note" }).click();
+      await q.locator(".paper-row", { hasText: "Blank note" }).click();
+      await until(q, () => !!state.open && state.open.note && !!C.reader.frameDoc.querySelector("svg.co-ink"));
+      await q.locator("#readerName .reader-title").click();
+      await q.locator(".reader-title-input").fill("Shopping");
+      await q.keyboard.press("Enter");
+      await until(q, () => state.open.title === "Shopping");
+      assert.strictEqual(await q.evaluate(async () => (await C.store.readIndex()).find((x) => x.id === state.open.id).title), "Shopping");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+      // A computer keeps its 44 px buttons and 22 px icons.
+      const w = await page(browser, 1280);
+      await w.click("#severalBtn");
+      await w.locator("#batchView .row", { hasText: "New note" }).click();
+      await w.locator(".paper-row", { hasText: "Blank note" }).click();
+      await until(w, () => !!state.open && state.open.note);
+      await w.waitForTimeout(900);
+      assert.deepStrictEqual(await w.evaluate(() => { const b = document.querySelector(".reader-bar .icon-btn").getBoundingClientRect(), v = document.querySelector(".reader-bar .icon-btn svg").getBoundingClientRect(); return [b.width, b.height, v.width, v.height]; }), [44, 44, 22, 22]);
+      await w.context().close();
+    });
+
     for (const width of [390, 1280]) {
       for (const theme of THEMES) {
         await test("opens at " + width + " px in " + theme + " with no errors", async () => {

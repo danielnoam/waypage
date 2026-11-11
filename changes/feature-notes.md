@@ -5,6 +5,7 @@
 - Opening a PDF offers Make a note as a third choice beside Keep a copy and Read from where it is. The pen on a PDF asks to make a note from it too: a copy of the PDF's pages you can draw on, in Notes, named as the file is. The PDF itself stays as it is, and drawings made on it before move into the note. ⋯ on a PDF has Make a note from this PDF too.
 - Show in the library has All notes once you have a note, listing them alone.
 - ⋯ › Save as PDF on a note makes a PDF of its sheets with what is drawn, added and typed on them; the typed words can be searched.
+- Rename a clip or a note: tap its name at the top left of the reader, change it where it is, and press Enter (or tap away). Escape leaves it. The name shows on a phone too, and the reader's top bar has smaller icons there (18 px in 38 px buttons) to make room.
 
 ### Changed
 - Only a note can be drawn on. A PDF is no longer drawn on itself.

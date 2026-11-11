@@ -225,6 +225,10 @@ and the page shows above it.
   0.30.8), checked for AA with ink, muted and accent. The
   bottom bar's time or pages left sits `--gutter` + `--s-2` in from the
   edge, centred in a bar at least `--s-7` tall.
+  On a phone (under 700 px) the top bar's buttons are 38 px with 18 px
+  icons, the one exception to 44 px targets (Daniel's ask, 2.0.0), so the
+  clip's name has room; the name is a button that renames it in place
+  (a field over the name, Enter or tapping away saves, Escape cancels).
 - **Collection tile (Now):** its story page's cover when it's linked to
   one (0.27.6), else its first picture, else its icon (the folder, or the
   book for a story) at 44 px, centred on `--preview`, `--muted` (the book
@@ -819,7 +823,7 @@ page. Check the link, or try again when you're online."
 
 ## 7. Accessibility
 
-- Touch targets at least 44 × 44 px.
+- Touch targets at least 44 × 44 px (the reader's top bar on a phone is 38 px, see Reader bars).
 - Real `<button>`, `<a href>`, `<input>` with `<label>`; `aria-label` on
   icon-only buttons.
 - Focus is always visible (`:focus-visible` ring in `--accent`).

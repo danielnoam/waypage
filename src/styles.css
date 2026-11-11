@@ -2519,7 +2519,28 @@ span.update-text { cursor: default; }
 }
 
 /* Phone: none of the big-screen parts show. */
-.reader-rail, .reader-name, .read-keys, .back-label, .close-icon, .pane-note { display: none; }
+.reader-rail, .read-keys, .back-label, .close-icon, .pane-note { display: none; }
+/* The clip's name shows on a phone too (2.0.0), a button that renames it in
+   place; the site waits for a bigger screen. */
+.reader-name { display: flex; align-items: baseline; gap: var(--s-2); flex: 0 1 auto; min-width: 0; margin: 0 0 0 var(--s-1); overflow: hidden; white-space: nowrap; }
+.reader-name:has(.reader-title-input) { flex: 1 1 auto; }
+button.reader-title {
+  appearance: none; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 600;
+  min-width: 0; margin: 0; padding: var(--s-2) var(--s-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-align: start; border-radius: var(--r-sm, 8px); cursor: pointer;
+}
+.reader-title-input {
+  flex: 1; min-width: 0; font: inherit; font-weight: 600; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--r-sm, 8px); padding: var(--s-1) var(--s-2);
+}
+@media (max-width: 699px) {
+  .reader-site { display: none; }
+  /* A smaller reader bar on a phone (Daniel's ask, 2.0.0): 18 px icons in 38 px
+     buttons, so the clip's name has room. */
+  .reader-bar .icon-btn { width: 38px; height: 38px; flex: none; }
+  .reader-bar .icon-btn svg, .reader-bar .section-icon { width: 18px; height: 18px; }
+  .reader-bar .section-btn { min-width: 38px; min-height: 38px; }
+}
 .screen-catch { position: fixed; inset: 0; z-index: 12; background: var(--scrim); }
 .screen-catch.clear { background: transparent; }
 .screen-catch[hidden] { display: none; }

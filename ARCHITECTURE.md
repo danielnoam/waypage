@@ -307,7 +307,10 @@ w, h, z, text }` (`z` the size in page widths, `ink.js addText`, `editText`),
 so Select, move, cut, paste, delete and undo take it with no more code. Save
 as PDF (`notes.toPdf`) draws each sheet, its strokes, pictures and text into
 a JPEG and writes them with `pptx.js writePdf`, the text also as its
-invisible words. Notes are this device's own for now, like linked files:
+invisible words. A clip or note is renamed from the reader's bar (`app-reader.js`:
+`paintReaderName`, `renameInReader`, `renameClip`): the index and the saved
+page's heading change, and `rewriteClip` stamps `editedAt` so sync sends the
+name with the clip. Notes are this device's own for now, like linked files:
 neither sync nor a backup takes them (a line on the to-do list).
 
 A comic in Pages (reader.js `picsLayout`) is a flex row of its pages, each
