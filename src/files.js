@@ -1156,7 +1156,8 @@
     if (!h || !win || !win.document) { if (onFirst) onFirst(); return; }
     // The frame may still show the page that was open before (it slides away
     // while the next one loads): pages are only drawn onto their own.
-    const mine = () => win.document.documentElement.getAttribute("data-held") === h.token;
+    // (A document being replaced has no root for a moment.)
+    const mine = () => { const root = win.document && win.document.documentElement; return !!root && root.getAttribute("data-held") === h.token; };
     if (!mine()) { if (onFirst) onFirst(); return; }
     h.frame = frame;
     if (h.busy) { if (onFirst) onFirst(); return; }

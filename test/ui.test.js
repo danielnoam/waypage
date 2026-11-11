@@ -4106,7 +4106,7 @@ function zipOf(files) {
       const kinds = await q.locator(".paper-row .choice-label").allTextContents();
       assert.deepStrictEqual(kinds, ["Blank note", "Lines note", "Squares note"]);
       await q.locator(".paper-row", { hasText: "Lines note" }).click();
-      await until(q, () => !!state.open && state.open.note && C.ink.on && document.querySelectorAll("#readerFrame").length && C.reader.frameDoc.querySelectorAll("svg.co-ink").length === 1);
+      await until(q, () => !!state.open && state.open.note && C.ink.on && document.querySelectorAll("#readerFrame").length && (C.reader.frameDoc || document).querySelectorAll("svg.co-ink").length === 1);
       await q.waitForTimeout(1200);
       assert.strictEqual(await q.evaluate(() => state.open.note.paper), "lines");
       assert.strictEqual(await q.evaluate(() => C.reader.paged || pagesOn()), false, "a note is always a scroll");
@@ -4118,7 +4118,7 @@ function zipOf(files) {
       await q.mouse.down();
       await q.mouse.move(fb.x + box[0] + 160, fb.y + box[1] + 160, { steps: 8 });
       await q.mouse.up();
-      await until(q, () => C.files.noteSheets() === 2 && C.reader.frameDoc.querySelectorAll(".co-comic > img").length === 2);
+      await until(q, () => C.files.noteSheets() === 2 && (C.reader.frameDoc || document).querySelectorAll(".co-comic > img").length === 2);
       // Its Aa sheet: Layout and Auto-scroll, in the note's words.
       await q.click("#readerAa");
       assert.deepStrictEqual(await q.locator(".sheet-tabs label, .sheet-tabs button").allTextContents(), ["Layout", "Auto-scroll"]);
@@ -4138,7 +4138,7 @@ function zipOf(files) {
       await q.click("#severalBtn");
       await q.locator("#batchView .row", { hasText: "New note" }).click();
       await q.locator(".paper-row", { hasText: "Blank note" }).click();
-      await until(q, () => !!state.open && state.open.note && C.ink.on && C.reader.frameDoc.querySelectorAll("svg.co-ink").length === 1);
+      await until(q, () => !!state.open && state.open.note && C.ink.on && (C.reader.frameDoc || document).querySelectorAll("svg.co-ink").length === 1);
       await q.waitForTimeout(1200);
       await q.locator('.ink-bar [data-act="add"]').click();
       await q.locator(".ink-pop button", { hasText: "Text" }).click();
@@ -4203,7 +4203,7 @@ function zipOf(files) {
       await q.locator("#menuSheet .row").first().waitFor();
       assert.deepStrictEqual(await q.locator("#menuSheet .row .choice-label").allInnerTexts(), ["Keep a copy", "Read from where it is", "Make a note"]);
       await q.locator("#menuSheet .row", { hasText: "Make a note" }).click();
-      await until(q, () => !!state.open && !!state.open.note && C.reader.frameDoc.querySelectorAll("svg.co-ink").length === 2, null, 20000);
+      await until(q, () => !!state.open && !!state.open.note && (C.reader.frameDoc || document).querySelectorAll("svg.co-ink").length === 2, null, 20000);
       assert.strictEqual(await q.evaluate(() => state.open.title), "My sketch", "named as the file is, with no (note)");
       assert.strictEqual(await q.evaluate(() => state.open.link || state.open.file || null), null, "a note has no file to read from");
       await q.evaluate(() => closeReader());
@@ -4265,7 +4265,7 @@ function zipOf(files) {
       await q.click("#severalBtn");
       await q.locator("#batchView .row", { hasText: "New note" }).click();
       await q.locator(".paper-row", { hasText: "Blank note" }).click();
-      await until(q, () => !!state.open && state.open.note && !!C.reader.frameDoc.querySelector("svg.co-ink"));
+      await until(q, () => !!state.open && state.open.note && !!(C.reader.frameDoc || document).querySelector("svg.co-ink"));
       await q.locator("#readerName .reader-title").click();
       await q.locator(".reader-title-input").fill("Shopping");
       await q.keyboard.press("Enter");
