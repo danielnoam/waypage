@@ -809,11 +809,37 @@ body.aloud-bar-up .library, body.aloud-bar-up .screen-body { padding-bottom: cal
 .swatch-dot[data-c="pink"] { background: var(--mark-pink); }
 .swatch-dot[data-c="purple"] { background: var(--mark-purple); }
 .read-here .swatch-dot { box-shadow: 0 0 0 2px var(--accent-ink); }
-.sel-colors { display: none; }
-.read-here.picking > button { display: none; }
-.read-here.picking .sel-colors { display: flex; }
-.read-here .sel-swatch { width: var(--tap); padding: 0; justify-content: center; }
-.read-here .sel-colors .sel-swatch + .sel-swatch { border-inline-start: 0; }
+/* One Highlight button (2026-11): a hold opens the five in a row under the
+   bar. A dot on its pen shows the colour a tap gives; with a mouse the
+   separate dot beside it opens the row instead. */
+.read-here .sel-mark { position: relative; touch-action: none; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+.sel-mark-dot {
+  position: absolute; inset-inline-start: calc(var(--s-3) + 12px); top: calc(50% + 3px);
+  width: 9px; height: 9px; border-radius: var(--r-full);
+  background: var(--mark); box-shadow: 0 0 0 1.5px var(--accent);
+}
+.sel-mark-dot[data-c="green"] { background: var(--mark-green); }
+.sel-mark-dot[data-c="blue"] { background: var(--mark-blue); }
+.sel-mark-dot[data-c="pink"] { background: var(--mark-pink); }
+.sel-mark-dot[data-c="purple"] { background: var(--mark-purple); }
+.read-here.tighter .sel-mark-dot { inset-inline-start: calc(50% + 3px); }
+@media (hover: hover) and (pointer: fine) { .sel-mark-dot { display: none; } }
+@media not ((hover: hover) and (pointer: fine)) { .read-here .sel-color { display: none; } }
+.sel-colors {
+  position: fixed; z-index: 3; display: flex; gap: var(--s-2); padding: var(--s-2);
+  border-radius: var(--r-full); background: var(--surface); border: 1px solid var(--line);
+  box-shadow: 0 8px 24px var(--shadow), 0 1px 4px var(--shadow);
+}
+.sel-colors[hidden] { display: none; }
+.sel-colors .sel-swatch {
+  display: grid; place-items: center; width: var(--tap); height: var(--tap); padding: 0;
+  border: 0; border-radius: var(--r-full); background: none; cursor: pointer;
+}
+.sel-colors .swatch-dot { width: 32px; height: 32px; transition: transform var(--t-quick, 120ms) ease; }
+.sel-colors .sel-swatch[aria-pressed="true"] .swatch-dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+.sel-colors .sel-swatch.over .swatch-dot, .sel-colors .sel-swatch:hover .swatch-dot { transform: scale(1.18); }
+:root[data-motion="off"] .sel-colors .swatch-dot { transition: none; }
+@media (prefers-reduced-motion: reduce) { .sel-colors .swatch-dot { transition: none; } }
 .chip .swatch-dot { width: 14px; height: 14px; }
 .mark-filters { margin-top: var(--s-2); }
 .mark-colors { display: flex; gap: var(--s-1); margin: 0 0 var(--s-3); }
