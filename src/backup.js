@@ -78,6 +78,9 @@
     if (note) out.note = note;
     const marks = cleanMarks(m.marks);
     if (marks.length) out.marks = marks;
+    // Drawings by block (2026-11): with the highlights, on the entry.
+    const ink = cleanInk(m.ink);
+    if (ink) { out.ink = ink; if (num(m.inkAt)) out.inkAt = num(m.inkAt); }
     return out;
   }
 
@@ -85,6 +88,21 @@
   // its note and its colour.
   // Colours other than yellow (1.42.0); yellow has none.
   const MARK_COLORS = ["green", "blue", "pink", "purple"];
+  // A clip's drawings by block: { "<block>": [stroke] }, each stroke as
+  // ink.js keeps it (ink.js clean). null when there are none.
+  function cleanInk(pages) {
+    if (!pages || typeof pages !== "object" || Array.isArray(pages) || !(C.ink && C.ink.clean)) return null;
+    const out = {};
+    let n = 0;
+    for (const [k, list] of Object.entries(pages)) {
+      const b = Math.floor(Number(k));
+      if (!(b >= 1 && b <= 20000) || !Array.isArray(list)) continue;
+      const ok = list.slice(0, 5000).map(C.ink.clean).filter(Boolean).filter((s) => s.t !== "i");
+      if (ok.length) { out[b] = ok; n += ok.length; }
+      if (n > 20000) break;
+    }
+    return n ? out : null;
+  }
   function cleanMarks(list) {
     if (!Array.isArray(list)) return [];
     const ids = new Set();
@@ -693,5 +711,5 @@
     return meta;
   }
 
-  C.backup = { COVER_FILE, holdPack, stopPack, cleanMeta, cleanMarks, marksMarkdown, sameFile, cleanFeed, crc32, zipWriter, zipEntries, zipRead, headFiles, exportLibrary, restoreLibrary, exportPage, exportPages, exportMarkdown, exportMarkdownAll, importPage, imageType, mdBlocks };
+  C.backup = { COVER_FILE, holdPack, stopPack, cleanMeta, cleanMarks, cleanInk, marksMarkdown, sameFile, cleanFeed, crc32, zipWriter, zipEntries, zipRead, headFiles, exportLibrary, restoreLibrary, exportPage, exportPages, exportMarkdown, exportMarkdownAll, importPage, imageType, mdBlocks };
 })();

@@ -278,6 +278,7 @@
   let dirty = false;
   const layers = new Map(); // page -> svg
   let blocks = false;       // drawn on by block (reader.js inkBlock), not by page
+  let blockStore = null;    // where a clip's drawings by block are kept: { read(meta), write(id, pages) }
 
   // A stroke read back from a file: anything else is dropped.
   function clean(s) {
@@ -313,7 +314,9 @@
     watchBlocks(blocks);
     const mine = { id: meta.id, size: (meta.file && meta.file.size) || 0, pages: {} };
     clip = mine;
-    const d = await C.store.readInk(meta.id);
+    // By block, a clip's drawings are on its index entry, with its
+    // highlights, and sync and back up with them (app-ink.js blockStore).
+    const d = blocks && blockStore ? { pages: blockStore.read(meta) } : await C.store.readInk(meta.id);
     if (clip !== mine) return { stale: false };
     let stale = false;
     if (d && d.pages && typeof d.pages === "object") {
@@ -383,7 +386,8 @@
       for (const lists of [op.before, op.after]) if (lists && !Array.isArray(lists)) for (const l of Object.values(lists)) for (const it of l) if (it.t === "i") used.add(it.f);
     }
     for (const f of [...imgs.keys()]) if (!used.has(f)) { imgs.delete(f); C.store.removeInkImage(id, f); }
-    return C.store.writeInk(id, empty ? null : { v: 1, size: clip.size, pages: clip.pages }).then(() => { if (edited && onSaved) onSaved(id); }, () => {});
+    const write = blocks && blockStore ? blockStore.write(id, empty ? null : clip.pages) : C.store.writeInk(id, empty ? null : { v: 1, size: clip.size, pages: clip.pages });
+    return Promise.resolve(write).then(() => { if (edited && onSaved) onSaved(id); }, () => {});
   }
   const strokes = (n) => (clip && clip.pages[n]) || [];
   const count = () => (clip ? Object.values(clip.pages).reduce((a, l) => a + l.length, 0) : 0);
@@ -1333,6 +1337,7 @@
     set onDraw(f) { onDraw = f; },
     set onStroke(f) { onStroke = f; },
     set onSaved(f) { onSaved = f; },
+    set blockStore(f) { blockStore = f; },
     snapshot, restore,
     fromPhone, eraseFrom, get nat() { return nat; },
     get on() { return on; },

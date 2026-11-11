@@ -48,7 +48,7 @@ async function syncNow(quiet = true) {
       // an open menu and the position timer hold on to them.
       setPages: async (list) => {
         const live = new Map(state.pages.map((p) => [p.id, p]));
-        const open = state.open, was = open && placeTime(open);
+        const open = state.open, was = open && placeTime(open), inkWas = open && JSON.stringify(open.ink || null);
         state.pages = list.map((n) => {
           const o = live.get(n.id);
           if (!o || o === n) return n;
@@ -64,6 +64,9 @@ async function syncNow(quiet = true) {
         const follow = () => state.open === open && !movedHere && !C.reader.touched() && Date.now() - openedAt < FOLLOW_MS;
         if (open && placeTime(open) > was && follow()) C.reader.placed().then(() => { if (follow()) C.reader.jump(open.at || 0, open.spot || ""); });
         await C.store.writeIndexOnly(state.pages);
+        // Drawings from another device on the clip open here show at once,
+        // unless a pen is out (2026-11).
+        if (open && state.open === open && !C.ink.on && JSON.stringify(open.ink || null) !== inkWas) { inkClose(); inkSync(open); }
         texts.clear();
         await loadThumbs();
         renderLibrary();

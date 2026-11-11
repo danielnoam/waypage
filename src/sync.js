@@ -40,7 +40,7 @@
   // Every field an index entry can carry through a backup or sync
   // (backup.cleanMeta); anything else on a page stays on its device.
   const SYNCED = new Set(["id", "url", "title", "site", "byline", "licence", "savedAt", "minutes", "lang", "dir", "mode", "images",
-    "at", "finished", "readAt", "readOn", "placeAt", "spot", "comic", "manga", "volume", "turn", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "file", "marks", "cut", "archived", "editedAt", "note"]);
+    "at", "finished", "readAt", "readOn", "placeAt", "spot", "comic", "manga", "volume", "turn", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "file", "marks", "ink", "inkAt", "cut", "archived", "editedAt", "note"]);
   // Where the reader is, which goes with whichever device moved it last:
   // placeAt (1.30.2), or readAt on entries from before it. Opening a clip
   // stamps readAt alone, so a device that opened one at an older place
@@ -159,6 +159,27 @@
     return out.sort((x, y) => (x.page ? 1 : 0) - (y.page ? 1 : 0) || (x.page ? x.page - y.page : x.block - y.block) || x.start - y.start);
   }
 
+  // Drawings (2026-11), stroke by stroke, like highlights: what either
+  // drew stays, what either erased goes, and one moved on one side takes
+  // that move. A stroke over two blocks has a copy on each (ink.js placeOn),
+  // so a stroke is known by its id and its block. { "<block>": [stroke] }.
+  function mergeInk(b, l, r) {
+    const flat = (o) => {
+      const m = new Map();
+      for (const [k, list] of Object.entries(o && typeof o === "object" ? o : {})) for (const s of Array.isArray(list) ? list : []) if (s && s.id) m.set(s.id + "@" + k, { k, s });
+      return m;
+    };
+    const B = flat(b), L = flat(l), R = flat(r), out = {};
+    const add = (x) => (out[x.k] = out[x.k] || []).push(x.s);
+    const eq = (x, y) => JSON.stringify(x.s) === JSON.stringify(y.s);
+    for (const [id, x] of L) {
+      if (R.has(id)) add(!B.has(id) || !eq(B.get(id), x) || eq(x, R.get(id)) ? x : R.get(id));
+      else if (!B.has(id)) add(x);
+    }
+    for (const [id, x] of R) if (!L.has(id) && !B.has(id)) add(x);
+    return Object.keys(out).length ? out : undefined;
+  }
+
   // One page changed on both sides since the base.
   function mergeEntry(b, l, r) {
     b = b || {};
@@ -179,6 +200,8 @@
         : same(l[k], r[k]) ? l[k] : same(l[k], b[k]) ? r[k] : same(r[k], b[k]) ? l[k] : placeFrom[k];
       else if (k === "tags") out[k] = mergeTags(b.tags, l.tags, r.tags);
       else if (k === "marks") out[k] = mergeMarks(b.marks, l.marks, r.marks);
+      else if (k === "ink") out[k] = mergeInk(b.ink, l.ink, r.ink);
+      else if (k === "inkAt") out[k] = Math.max(l.inkAt || 0, r.inkAt || 0) || undefined;
       else out[k] = pick(k);
     }
     for (const k of Object.keys(out)) if (out[k] === undefined || ((k === "tags" || k === "marks") && !out[k].length)) delete out[k];
@@ -208,6 +231,8 @@
       if (tags.length) win.tags = tags;
       const marks = mergeMarks([], win.marks, lose.marks);
       if (marks.length) win.marks = marks;
+      const ink = mergeInk({}, win.ink, lose.ink);
+      if (ink) win.ink = ink;
       if (lose.fav && !win.fav) { win.fav = true; win.favAt = lose.favAt; }
       const moveOver = (ks) => { for (const k of ks) { if (lose[k] === undefined) delete win[k]; else win[k] = lose[k]; } };
       if (placeTime(lose) > placeTime(win)) moveOver(PLACE);
@@ -1277,7 +1302,7 @@
   }
 
   C.sync = {
-    merge, mergeTags, mergeMarks, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
+    merge, mergeTags, mergeMarks, mergeInk, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
     share, clean, same, urlKey, sameUrl, peek, poll,
     get on() { return !!cfg; },
     // Connected before 1.29.1's steps, so with a token for All

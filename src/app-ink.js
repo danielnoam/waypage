@@ -69,6 +69,19 @@ async function inkSync(p) {
   // A note is for writing: its pen is ready when it opens.
   if (p.note) inkSet(true);
 }
+// A clip's drawings by block live on its index entry (`ink`, page -> strokes),
+// beside its highlights, so they sync and back up the same way.
+C.ink.blockStore = {
+  read: (meta) => (meta.ink && typeof meta.ink === "object" ? meta.ink : null),
+  write: async (id, pages) => {
+    const p = state.pages.find((x) => x.id === id);
+    if (!p) return;
+    if (pages) p.ink = JSON.parse(JSON.stringify(pages)); else delete p.ink;
+    p.inkAt = Date.now();
+    await C.store.writeIndex(state.pages);
+    renderLibrary();
+  },
+};
 const inkReady = () => inkClipId != null && !!state.open && state.open.id === inkClipId;
 // Draw from the Highlights sheet or the selection bar.
 function inkStart() {
@@ -250,7 +263,8 @@ function inkPopMenu(kind) {
   }
   if (kind === "add") {
     return el("div", { class: "ink-pop ink-pop-styles", role: "menu", "aria-label": "Add" },
-      el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkFile.click(); } }, inkIcon("image"), el("span", { class: "ink-pop-name" }, "Image")),
+      // A picture stays on this device, so a clip's drawings, which sync, take none.
+      C.ink.blocks ? null : el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkFile.click(); } }, inkIcon("image"), el("span", { class: "ink-pop-name" }, "Image")),
       // Typed text goes on a note (2.0.0).
       el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkText(null); } }, inkIcon("text"), el("span", { class: "ink-pop-name" }, "Text")));
   }
