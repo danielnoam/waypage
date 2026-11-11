@@ -371,7 +371,9 @@ async function connect(p) {
       await connect(a);
       const off = a.locator("label.row", { hasText: "Turn on Notes in GitHub sync first" });
       await off.waitFor();
-      assert.strictEqual(await off.locator("input").isDisabled(), true, "Notes can be turned on without GitHub sync");
+      await off.locator("input").click({ force: true });
+      await a.locator("#toast", { hasText: "Turn on Notes in GitHub sync first." }).waitFor();
+      assert.strictEqual(await off.locator("input").isChecked(), false, "Notes turned on without GitHub sync");
       assert.strictEqual(await a.locator("label.row", { hasText: /^Notes/ }).evaluate((r) => !!r.nextElementSibling && /Feeds/.test(r.nextElementSibling.textContent)), true, "Notes isn't above Feeds");
       await a.context().close();
 
@@ -380,7 +382,7 @@ async function connect(p) {
       await connect(q);
       const row = q.locator("label.row", { hasText: "Each note as a PDF" });
       await row.waitFor();
-      assert.strictEqual(await row.locator("input").isDisabled(), false);
+      assert.strictEqual(await row.locator("input").getAttribute("aria-disabled"), null);
       await row.locator("input").check();
       await q.evaluate(async () => {
         const m = await window.Waypage.notes.create("lines");

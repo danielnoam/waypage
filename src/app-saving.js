@@ -1998,7 +1998,10 @@ function driveNotesRow() {
   return el("label", { class: "row" },
     el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, "Notes"),
       el("span", { class: "choice-note" }, can ? "Each note as a PDF, in a Notes folder" : "Turn on Notes in GitHub sync first")),
-    el("input", { class: "switch", type: "checkbox", role: "switch", checked: driveNotesOn(), ...driveBusy(), ...(can ? {} : { disabled: true }),
+    // Not disabled when it can't be turned on: a disabled switch ignores a
+    // tap, and a tap should say why.
+    el("input", { class: "switch", type: "checkbox", role: "switch", checked: driveNotesOn(), ...driveBusy(), ...(can ? {} : { "aria-disabled": "true" }),
+      onclick: (e) => { if (!can) { e.preventDefault(); toast("Turn on Notes in GitHub sync first."); } },
       onchange: (e) => { C.drive.setWhat("notes", e.target.checked); renderSection(); } }));
 }
 
