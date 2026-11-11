@@ -1464,15 +1464,19 @@ function showReadHere() {
     } });
     aloudBtn.innerHTML = $("readerAloud").innerHTML;
     aloudBtn.append(el("span", { class: "sel-label" }, "Narrate from here"));
-    const markBtn = el("button", { class: "sel-mark", type: "button", onclick: () => (markBtn.dataset.remove ? removeMarks(markBtn.dataset.remove.split(",")) : addMark()) });
+    const markBtn = el("button", { class: "sel-mark", type: "button", onclick: (e) => {
+      // A hold already opened the colours: its click doesn't highlight too.
+      if (markHeld) { markHeld = false; e.preventDefault(); return; }
+      if (markBtn.dataset.remove) removeMarks(markBtn.dataset.remove.split(",")); else addMark();
+    } });
     markBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS.mark + "</svg>";
-    markBtn.append(el("span", { class: "sel-label sel-mark-label" }, "Highlight"));
-    // The colour the next highlight takes (1.42.0): its dot opens the five.
+    markBtn.append(el("span", { class: "sel-mark-dot", "aria-hidden": "true" }), el("span", { class: "sel-label sel-mark-label" }, "Highlight"));
+    markHold(markBtn);
+    // The colour the next highlight takes (1.42.0). With a mouse its dot
+    // opens the five; a touch screen holds Highlight instead (styles.css).
     const colorBtn = el("button", { class: "sel-color sel-icon", type: "button", "aria-label": "Highlight colour", title: "Highlight colour",
-      onclick: () => { readHere.classList.add("picking"); showReadHere(); } }, swatchDot(markColor()));
-    const colors = el("div", { class: "sel-colors", role: "group", "aria-label": "Highlight colours" },
-      ...MARK_COLORS.map((c) => el("button", { class: "sel-swatch", type: "button", "aria-label": MARK_NAMES[c], title: MARK_NAMES[c],
-        onclick: () => pickMarkColor(c) }, swatchDot(c))));
+      onclick: () => (selColors && !selColors.hidden ? closeSelColors() : openSelColors()) }, swatchDot(markColor()));
+    markBtn.addEventListener("contextmenu", (e) => { e.preventDefault(); openSelColors(); });
     const outBtn = (cls, label, icon, act) => {
       const b = el("button", { class: cls + " sel-icon", type: "button", "aria-label": label, title: label, onclick: () => {
         const s = C.reader.selectionText();
@@ -1481,7 +1485,7 @@ function showReadHere() {
       b.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + icon + "</svg>";
       return b;
     };
-    readHere = el("div", { class: "read-here", role: "toolbar", "aria-label": "Selection" }, markBtn, colorBtn, colors, aloudBtn,
+    readHere = el("div", { class: "read-here", role: "toolbar", "aria-label": "Selection" }, markBtn, colorBtn, aloudBtn,
       outBtn("sel-lookup", "Look up", ICONS.lookup, lookUp),
       outBtn("sel-translate", "Translate", ICONS.translate, translate));
     $("readerView").append(readHere);
@@ -1490,7 +1494,8 @@ function showReadHere() {
   markBtn.hidden = !mark;
   readHere.querySelector(".sel-color").hidden = !mark;
   readHere.querySelector(".sel-color").replaceChildren(swatchDot(markColor()));
-  if (!mark) readHere.classList.remove("picking");
+  markBtn.querySelector(".sel-mark-dot").dataset.c = markColor();
+  if (!mark || !markHeld) closeSelColors();
   // Words already highlighted (1.7.1): the button takes the highlight off.
   const on = mark ? C.reader.selectionMarks() : { all: false };
   if (on.all) markBtn.dataset.remove = on.ids.join(","); else delete markBtn.dataset.remove;
@@ -1524,7 +1529,78 @@ function showReadHere() {
   const off = readHere.getBoundingClientRect().top - top;
   if (Math.abs(off) > 1) readHere.style.top = top - off + "px";
 }
-function hideReadHere() { if (readHere) { readHere.hidden = true; readHere.classList.remove("picking"); } }
+function hideReadHere() { if (readHere) readHere.hidden = true; closeSelColors(); }
+
+// The five colours (2026-11, Daniel's ask): one Highlight button. A tap
+// highlights in the last colour; a hold opens the five in a row under the
+// bar (over it when there's no room), and the finger slides to one and
+// lets go. A mouse has the dot beside it, or a right-click; keys 1 to 5.
+let selColors = null, markHeld = false;
+const HOLD_MS = 380;
+function openSelColors() {
+  if (!readHere || readHere.hidden || readHere.querySelector(".sel-mark").hidden) return;
+  if (!selColors) {
+    selColors = el("div", { class: "sel-colors", role: "group", "aria-label": "Highlight colours", hidden: true },
+      ...MARK_COLORS.map((c) => el("button", { class: "sel-swatch", type: "button", "aria-label": MARK_NAMES[c], title: MARK_NAMES[c], "data-c": c,
+        onclick: () => pickMarkColor(c) }, swatchDot(c))));
+    $("readerView").append(selColors);
+  }
+  for (const b of selColors.children) b.setAttribute("aria-pressed", String(b.dataset.c === markColor()));
+  selColors.hidden = false;
+  const bar = readHere.getBoundingClientRect(), from = readHere.querySelector(".sel-mark").getBoundingClientRect();
+  const frame = $("readerFrame").getBoundingClientRect();
+  const w = selColors.offsetWidth, h = selColors.offsetHeight;
+  let top = bar.bottom + 8;
+  if (top + h > frame.bottom - 8) top = bar.top - h - 8;
+  selColors.style.top = top + "px";
+  selColors.style.left = Math.max(8, Math.min(from.left, innerWidth - 8 - w)) + "px";
+  M.appear(selColors);
+}
+function closeSelColors() {
+  if (!selColors || selColors.hidden) return;
+  selColors.hidden = true;
+  for (const b of selColors.children) b.classList.remove("over");
+}
+const swatchAt = (x, y) => { const t = document.elementFromPoint(x, y); return t && t.closest && t.closest(".sel-colors .sel-swatch"); };
+function markHold(btn) {
+  let timer = 0, over = null;
+  const end = () => { clearTimeout(timer); timer = 0; };
+  btn.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse") return;
+    markHeld = false;
+    end();
+    timer = setTimeout(() => {
+      timer = 0;
+      markHeld = true;
+      openSelColors();
+    }, HOLD_MS);
+    try { btn.setPointerCapture(e.pointerId); } catch (err) { /* gone */ }
+  });
+  btn.addEventListener("pointermove", (e) => {
+    if (!markHeld || !selColors) return;
+    const s = swatchAt(e.clientX, e.clientY);
+    if (s === over) return;
+    if (over) over.classList.remove("over");
+    over = s;
+    if (over) over.classList.add("over");
+  });
+  btn.addEventListener("pointerup", (e) => {
+    end();
+    if (!markHeld) return;
+    const s = swatchAt(e.clientX, e.clientY);
+    if (over) over.classList.remove("over");
+    over = null;
+    // Let go off the colours: they stay open for a tap.
+    if (s) pickMarkColor(s.dataset.c);
+  });
+  btn.addEventListener("pointercancel", () => { end(); if (over) over.classList.remove("over"); over = null; });
+}
+// Keys 1 to 5 highlight the selected words in that colour.
+function markKey(n) {
+  if (!readHere || readHere.hidden || readHere.querySelector(".sel-mark").hidden || !MARK_COLORS[n]) return false;
+  pickMarkColor(MARK_COLORS[n]);
+  return true;
+}
 
 // ---- Highlights (1.7.0) ----
 // Colours (1.42.0): yellow is a highlight with no `color`.
@@ -1601,7 +1677,11 @@ async function addMark(color = markColor()) {
   if (notes.length) keep.note = notes.join("\n\n");
   p.marks = [...(p.marks || []).filter((x) => !over.includes(x)), keep].sort(byPlace);
   await saveMarks(p);
-  toast("Highlighted. Tap it to add a note.");
+  // A hold is found by being told (2026-11): once, on a touch screen.
+  if (!matchMedia("(hover: hover) and (pointer: fine)").matches && !load("waypage.holdHint", false)) {
+    store("waypage.holdHint", true);
+    toast("Highlighted. Hold Highlight to pick a colour.");
+  } else toast("Highlighted. Tap it to add a note.");
 }
 async function removeMarks(ids) {
   const p = state.open;

@@ -979,7 +979,7 @@ const KEYS = [
   ["In the library", [["↑ ↓", "Move between clips"], ["Enter", "Open"], ["X", "Pick, to act on several"], ["Shift-click", "Pick a run"],
     ["F", "Favourite"], ["E", "Export"], ["Del", "Delete"]]],
   ["Reading", [["Space  ← →", "Next or previous page"], ["J  K", "Next or previous section"], ["T", "Contents beside the text"],
-    ["S", "Narrate, or auto-scroll a comic"], ["A", "Reader settings"], ["H", "Highlights"], ["D", "Draw on a PDF, then P pen, B highlighter, E eraser, [ ] size"], ["L", "Translate this clip"], ["/", "Find in this clip"], ["+  −", "Text size"], ["O", "Open the original"], ["Esc", "Back"]]],
+    ["S", "Narrate, or auto-scroll a comic"], ["A", "Reader settings"], ["H", "Highlights"], ["1–5", "Highlight the selected words in a colour"], ["D", "Draw on a PDF, then P pen, B highlighter, E eraser, [ ] size"], ["L", "Translate this clip"], ["/", "Find in this clip"], ["+  −", "Text size"], ["O", "Open the original"], ["Esc", "Back"]]],
 ];
 function keysSheet() {
   return el("div", { class: "keys-sheet" },
@@ -1060,6 +1060,7 @@ function onKeys(e) {
       s: () => { const b = $("readerAloud").hidden ? $("readerScroll") : $("readerAloud"); if (!b.hidden) b.click(); },
       a: () => toggleSheet("reading"),
       h: () => !$("readerMarks").hidden && $("readerMarks").click(),
+      ...Object.fromEntries(MARK_COLORS.map((c, i) => [String(i + 1), () => markKey(i)])),
       d: () => !$("readerInk").hidden && $("readerInk").click(),
       // While drawing (1.56.0).
       p: () => C.ink.on && (C.ink.setting({ tool: "pen" }), inkKeep()),
