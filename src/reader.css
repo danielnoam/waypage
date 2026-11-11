@@ -319,3 +319,6 @@ html.co-paged.co-pics .co-comic { display: flex; flex: none; align-self: flex-st
 html.co-paged.co-pics .co-comic img { flex: none; max-width: none; max-height: none; margin-block: 0; object-fit: contain; background: none; }
 html.co-paged.co-pics .co-comic::after { content: ""; flex: none; width: var(--co-tail, 0px); }
 html.co-paged.co-pics .co-next { flex: none; box-sizing: border-box; width: var(--co-screen, 100vw); margin: 0; padding: 0 var(--s-5); align-self: center; }
+/* Drawing by block (2026-11, ink.js): the layers' own box, placed at the
+   top left of the page, so a layer's place is the same whatever the body. */
+.co-inkroot { position: absolute; left: 0; top: 0; width: 0; height: 0; }

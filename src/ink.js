@@ -277,6 +277,7 @@
   // Something changed since the last write: a note then counts as edited (sync).
   let dirty = false;
   const layers = new Map(); // page -> svg
+  let blocks = false;       // drawn on by block (reader.js inkBlock), not by page
 
   // A stroke read back from a file: anything else is dropped.
   function clean(s) {
@@ -306,6 +307,10 @@
   async function load(meta) {
     unload();
     if (!meta || !meta.id) return { stale: false };
+    // A note's sheets and a PDF's printed pages are pages; anything else
+    // (a clip's words, a comic's pictures, a book) is drawn on by block.
+    blocks = !(meta.note || C.files.printed(meta));
+    watchBlocks(blocks);
     const mine = { id: meta.id, size: (meta.file && meta.file.size) || 0, pages: {} };
     clip = mine;
     const d = await C.store.readInk(meta.id);
@@ -348,6 +353,7 @@
   }
   function unload() {
     flush();
+    watchBlocks(false);
     clip = null;
     undos = []; redos = [];
     layers.clear();
@@ -401,7 +407,7 @@
   const frameDoc = () => C.reader.frameDoc;
   function ensure(n) {
     if (layers.has(n)) return layers.get(n);
-    const D = frameDoc(), img = C.reader.pageImg(n), root = img && img.parentNode;
+    const D = frameDoc(), img = blocks ? C.reader.inkBlock(n) : C.reader.pageImg(n), root = img && (blocks ? C.reader.inkRoot() : img.parentNode);
     if (!root) return null;
     const svg = D.createElementNS(NS, "svg");
     svg.setAttribute("class", "co-ink");
@@ -424,9 +430,11 @@
     layers.delete(n);
   }
   function place(svg) {
-    const img = C.reader.pageImg(svg.dataset.page);
+    const img = blocks ? C.reader.inkBlock(svg.dataset.page) : C.reader.pageImg(svg.dataset.page);
     if (!img) return;
-    const b = C.reader.pageBox(img);
+    const b = blocks ? C.reader.inkBlockBox(svg.dataset.page) : C.reader.pageBox(img);
+    if (!b) { svg.style.display = "none"; return; }
+    svg.style.display = "";
     svg.style.left = b.left + "px";
     svg.style.top = b.top + "px";
     svg.style.width = b.width + "px";
@@ -438,6 +446,7 @@
   // A drag used to leave things off the page's edge, where they couldn't be
   // seen: anything wholly outside its page comes back inside.
   function rescue(svg, h) {
+    if (blocks) return;
     const n = Number(svg.dataset.page), img = C.reader.pageImg(n);
     if (!clip || !img || !img.complete || !img.naturalWidth || !(h > 0.1)) return;
     let moved = false;
@@ -489,6 +498,23 @@
     svg.replaceChildren(...strokes(n).map((s) => el(n, s)));
     selDraw(n);
   }
+  // By block, the layers move with the text: placed again when the frame
+  // changes size or its text reflows, and while drawing, layers are made
+  // for the blocks coming on screen.
+  let blockWatch = null;
+  function watchBlocks(want) {
+    if (blockWatch) { blockWatch.stop(); blockWatch = null; }
+    const D = frameDoc(), W = D && D.defaultView;
+    if (!want || !W) return;
+    let raf = 0;
+    const tick = () => { raf = 0; if (!blocks || !clip) return; if (on) for (const n of shown()) show(n); placeAll(); };
+    const soon = () => { if (!raf) raf = W.requestAnimationFrame(tick); };
+    const ro = new W.ResizeObserver(soon);
+    ro.observe(D.body);
+    W.addEventListener("scroll", soon, { passive: true });
+    W.addEventListener("resize", soon);
+    blockWatch = { stop: () => { ro.disconnect(); W.removeEventListener("scroll", soon); W.removeEventListener("resize", soon); if (raf) W.cancelAnimationFrame(raf); } };
+  }
   // A page that has its picture gets a layer when it has drawings, or
   // when drawing is on.
   function show(n) {
@@ -501,6 +527,11 @@
   function shown() {
     const D = frameDoc();
     if (!D) return [];
+    if (blocks) {
+      const near = new Set(on ? C.reader.inkBlocksNear() : []);
+      if (clip) for (const k of Object.keys(clip.pages)) if (C.reader.inkBlock(k)) near.add(Number(k));
+      return [...near].sort((a, b) => a - b);
+    }
     return [...D.querySelectorAll(".co-comic > img[data-page]")].filter((img) => !/^data:/.test(img.getAttribute("src") || "")).map((img) => Number(img.dataset.page));
   }
 
@@ -1294,6 +1325,7 @@
   C.ink = {
     PEN, HIGHLIGHT, SIZES, STYLES, penPath, linePath, rgbOf, imageUrl: (f) => imgs.get(f) || "", TEXT_SIZES, TEXT_LINE, TEXT_FONT, textSize, addText, editText, selectedText, hits, clean, inside, within, boxOf, isHex, hexRgb, rgbHex, hsvRgb, rgbHsv,
     cut: selCut, copy: selCopy, paste: selPaste, del: selDelete, front: () => reorder(true), back: () => reorder(false), convertItem, clampInto, placeOn, addImage, viewPage, pick, colorAt, clearSelection: selClear,
+    get blocks() { return blocks; },
     load, unload, flush, strokesFrom, setOn, setting, state, undo, redo, clearPage, clearAll, forPdf, count, drawn, strokes, shown,
     set onChange(f) { onChange = f; },
     set onPen(f) { onPen = f; },

@@ -880,11 +880,11 @@
   // PDF's pages are drawn: before, every picture was read and decoded
   // before the first page showed, and a 400 MB comic sat whole in memory.
   const printed = (meta) => !!(meta && meta.link && meta.file && meta.file.kind === "pdf" && !meta.comic && meta.view !== "text");
-  // Only a note can be drawn on (2.0.0, notes.js): its sheets are drawn as a
-  // PDF's printed pages are. A PDF shown as its own pages, words or scan,
-  // can be made into one (`convertible`); before 2.0.0 it was drawn on itself.
-  const drawable = (meta) => !!(meta && meta.note);
-  const convertible = (meta) => !!(meta && !meta.note && meta.link && meta.file && meta.file.kind === "pdf" && (meta.comic || meta.view !== "text"));
+  // Anything can be drawn on (2026-11): a note's sheets and a PDF's printed
+  // pages by page, a clip's words and pictures by block (ink.js). A file of
+  // any kind can be made into a note (`convertible`), a copy to write on.
+  const drawable = (meta) => !!(meta && !meta.preview);
+  const convertible = (meta) => !!(meta && !meta.note && !meta.preview && meta.file && KINDS[meta.file.kind]);
   async function openLinked(meta) {
     closeHeld();
     const html = await S().readPage(meta.id);

@@ -50,26 +50,31 @@ function penNativeSet(patch) {
   C.platform.pen.watch(penNative.on, penNative.on && penNative.raw, penNative.on && penNative.grab);
 }
 
-// The pen button follows the clip: shown on a PDF's printed pages, which
-// is where the drawings can go. Called once the reader has the clip up.
+// Drawing goes with highlights (2026-11): any clip or file can be drawn on,
+// from its Highlights sheet or the selection bar. Only a note keeps the pen
+// in the reader bar, since writing is what a note is for. Called once the
+// reader has the clip up.
 async function inkSync(p) {
   const ok = !!p && !p.preview && C.files.drawable(p);
-  // A PDF's pages can't be drawn on, but the pen offers to make a note of
-  // it (2.0.0): drawings made on it before are offered a note too.
-  const convert = !!p && !p.preview && !ok && C.files.convertible(p);
-  $("readerInk").hidden = !(ok || convert);
-  if (convert) C.store.readInk(p.id).then((d) => { if (d && state.open === p) toast("Your drawings on this PDF can go into a note.", "Make a note", () => makeNoteFrom(p)); });
+  $("readerInk").hidden = !(ok && p.note);
   if (!ok) { inkClose(); return; }
   if (inkClipId === p.id) return;
   inkClose();
   inkClipId = p.id;
-  // The pen's buttons are read natively while a PDF's pages are open.
+  // The pen's buttons are read natively while something drawable is open.
   penNativeSet({ on: true });
   const { stale } = await C.ink.load(p);
   if (state.open !== p) return;
   if (stale) toast("This PDF has changed since you drew on it. The drawings may not line up.");
   // A note is for writing: its pen is ready when it opens.
   if (p.note) inkSet(true);
+}
+const inkReady = () => inkClipId != null && !!state.open && state.open.id === inkClipId;
+// Draw from the Highlights sheet or the selection bar.
+function inkStart() {
+  if (!inkReady()) return;
+  const go = () => inkSet(true);
+  if (state.sheet) { history.back(); setTimeout(go, 0); } else go();
 }
 function inkClose() {
   if (inkColor) inkColor.close();
@@ -102,7 +107,7 @@ function inkKeep() {
 }
 
 function inkSet(on) {
-  on = !!on && !$("readerInk").hidden;
+  on = !!on && inkReady();
   if (on === C.ink.on && (!!inkBar && !inkBar.hidden) === on) { $("readerInk").setAttribute("aria-pressed", String(on)); return; }
   if (on) C.ink.setting(inkPrefs());
   C.ink.setOn(on);
@@ -353,18 +358,13 @@ C.ink.onSaved = (id) => {
   p.editedAt = Date.now();
   indexSoon();
 };
-// The first time a pen touches a PDF's pages, Draw is offered, once.
+// The first time a pen touches something drawable, Draw is offered, once.
 C.ink.onPen = () => {
-  if (C.ink.on || $("readerInk").hidden || state.sheet || load(INK_OFFER_KEY, false)) return;
+  if (C.ink.on || !inkReady() || state.sheet || load(INK_OFFER_KEY, false)) return;
   store(INK_OFFER_KEY, true);
-  toast("Draw on this note with your pen?", "Draw", () => inkSet(true));
+  toast(state.open && state.open.note ? "Draw on this note with your pen?" : "Draw here with your pen?", "Draw", () => inkSet(true));
 };
-$("readerInk").addEventListener("click", () => {
-  const p = state.open;
-  // Only a note is drawn on: a PDF asks to be made into one.
-  if (p && C.files.convertible(p)) openMenu("toNote");
-  else inkSet(!C.ink.on);
-});
+$("readerInk").addEventListener("click", () => inkSet(!C.ink.on));
 // A note grows as you write: a stroke on its last sheet adds one.
 C.ink.onStroke = (n) => { if (n === C.files.noteSheets()) C.files.addSheet(); };
 // What the phone says of the pen: near, the eraser end, a button held.

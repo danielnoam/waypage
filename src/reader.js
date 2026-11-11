@@ -1123,6 +1123,68 @@
     const dx = side === "left" ? 0 : side === "right" ? bw - w : (bw - w) / 2;
     return { left: img.offsetLeft + dx, top: img.offsetTop + (bh - h) / 2, width: w, height: h };
   }
+  // Drawing on a clip's words and pictures (ink.js, 2026-11): block n is
+  // anchors[n - 1], the numbering highlights use, so a drawing stays with
+  // its paragraph at any width or type size. A block's layer runs the width
+  // of the text and halfway to the blocks above and below, so the layers
+  // tile the clip and a stroke in a gap still has a home.
+  function inkRoot() {
+    if (!doc) return null;
+    let r = doc.querySelector(":scope > body > .co-inkroot");
+    if (!r) { r = doc.createElement("div"); r.className = "co-inkroot"; doc.body.append(r); }
+    return r;
+  }
+  const inkBlock = (n) => anchors[Number(n) - 1] || null;
+  const inkBlocks = () => anchors.length;
+  const shownRect = (el) => { const r = el && el.getBoundingClientRect(); return r && (r.width || r.height) ? r : null; };
+  function inkBlockBox(n) {
+    n = Number(n);
+    const el = anchors[n - 1], root = inkRoot(), r = shownRect(el);
+    if (!r || !root) return null;
+    const o = root.getBoundingClientRect(), cs = doc.defaultView.getComputedStyle(doc.body), b = doc.body.getBoundingClientRect();
+    const padL = parseFloat(cs.paddingLeft) || 0, padR = parseFloat(cs.paddingRight) || 0;
+    // In Pages the text runs in columns: the column the block is in.
+    const paged = isPaged();
+    const left = paged ? r.left : b.left + padL, width = paged ? r.width : Math.max(r.width, b.width - padL - padR);
+    const sameCol = (q) => q && Math.abs(q.left - r.left) < width * 0.5;
+    let pr = null, nx = null;
+    for (let i = n - 2; i >= 0 && !pr; i--) pr = shownRect(anchors[i]);
+    for (let i = n; i < anchors.length && !nx; i++) nx = shownRect(anchors[i]);
+    const top = sameCol(pr) && pr.bottom <= r.top ? (pr.bottom + r.top) / 2 : r.top - 12;
+    const bottom = sameCol(nx) && nx.top >= r.bottom ? (r.bottom + nx.top) / 2 : r.bottom + 12;
+    return { left: left - o.left, top: top - o.top, width, height: bottom - top };
+  }
+  // The block whose layer is at a point in the frame (client y), or 0.
+  function inkBlockAt(y) {
+    let lo = 0, hi = anchors.length - 1, best = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1, r = shownRect(anchors[mid]);
+      if (!r) { lo = mid + 1; continue; }
+      if (r.bottom < y) lo = mid + 1; else { best = mid + 1; hi = mid - 1; }
+    }
+    return best;
+  }
+  // The block numbers on screen now, give or take a screen either way.
+  function inkBlocksNear() {
+    if (!doc || !anchors.length) return [];
+    const h = doc.defaultView.innerHeight, w = doc.defaultView.innerWidth, out = [];
+    const first = isPaged() ? 1 : Math.max(1, inkBlockAt(-h) - 1);
+    for (let i = first - 1; i < anchors.length; i++) {
+      const r = shownRect(anchors[i]);
+      if (!r) continue;
+      if (isPaged() ? (r.right < -w || r.left > 2 * w) : r.bottom < -h) continue;
+      if (!isPaged() && r.top > 2 * h) break;
+      out.push(i + 1);
+    }
+    return out;
+  }
+  // What a block is, for a list of drawings: its words, or a picture.
+  function inkBlockWords(n) {
+    const el = anchors[Number(n) - 1];
+    if (!el) return null;
+    if (el.tagName === "IMG") return { picture: true, text: "" };
+    return { picture: false, text: el.textContent.replace(/\s+/g, " ").trim().slice(0, 160) };
+  }
   // Pen drawing over the pages (1.56.0, ink.js): told when a page gets or
   // loses its picture, and when the layers should be put in place.
   let inkHook = null;
@@ -2099,5 +2161,5 @@
       return line;
     }));
   }
-  C.reader = { pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
+  C.reader = { pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, inkRoot, inkBlock, inkBlocks, inkBlockBox, inkBlockAt, inkBlocksNear, inkBlockWords, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
 })();
