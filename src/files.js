@@ -1017,6 +1017,9 @@
   // were is where you left it. A PDF with words keeps those words in the
   // clip and has no slots.
   let held = null;
+  // Which open PDF a page is for: written on its <html> (data-held), so pages
+  // aren't drawn onto the document a frame still shows while another opens.
+  let heldSeq = 0;
   const blank = (w, h) => "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '"/>');
   async function fillPdf(doc, slots, blob, meta, into) {
     closeHeld();
@@ -1028,7 +1031,7 @@
       throw new FileError("Waypage can't read " + meta.file.name + " any more.");
     }
     // `words`: its pages get a layer of their words, to select (1.56.0).
-    const h = held = { pdf, urls: new Map(), busy: false, frame: null, words: !!into, texts: new Map(), asking: new Set() };
+    const h = held = { pdf, urls: new Map(), busy: false, frame: null, words: !!into, texts: new Map(), asking: new Set(), token: "h" + (++heldSeq) };
     // A PDF from before 1.2.1 has no card picture: its first page, once
     // the reader is up (1.2.4), so the open isn't held for it.
     if (!meta.thumb) {
@@ -1084,6 +1087,7 @@
       } else unmarkable.add(meta.id);
     }
     pdf.onSizes = () => { if (held === h && h.frame) fixSizes(h); };
+    doc.documentElement.setAttribute("data-held", h.token);
     return "<!doctype html>\n" + doc.documentElement.outerHTML;
   }
   // A drawn page's words over it (1.56.0), asked of pdf.js once a page
@@ -1150,12 +1154,16 @@
     if (h && h.zip) return fillNear(frame, onFirst);
     const win = frame && frame.contentWindow;
     if (!h || !win || !win.document) { if (onFirst) onFirst(); return; }
+    // The frame may still show the page that was open before (it slides away
+    // while the next one loads): pages are only drawn onto their own.
+    const mine = () => win.document.documentElement.getAttribute("data-held") === h.token;
+    if (!mine()) { if (onFirst) onFirst(); return; }
     h.frame = frame;
     if (h.busy) { if (onFirst) onFirst(); return; }
     h.busy = true;
     try {
       for (;;) {
-        if (held !== h) return;
+        if (held !== h || !mine()) return;
         const tall = win.innerHeight || 800;
         const dpr = win.devicePixelRatio || 1;
         const pages = [...win.document.querySelectorAll("img[data-page]")];
@@ -1182,7 +1190,7 @@
         const n = next.getAttribute("data-page");
         let bytes;
         try { bytes = await h.pdf.draw(Number(n), width); } catch (e) { return; }
-        if (held !== h) return;
+        if (held !== h || !mine()) return;
         const was = h.urls.get(n);
         if (was) URL.revokeObjectURL(was.url);
         const url = URL.createObjectURL(new Blob([bytes], { type: "image/jpeg" }));

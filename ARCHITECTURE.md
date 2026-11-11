@@ -635,6 +635,14 @@ area.
   samples, or a quick pass skips a line. Strokes are kept in widths, never
   pixels, and the layer's viewBox is the page's shape, so nothing is
   stretched.
+- **Pages drawn onto the wrong document:** while one page slides out and the
+  next loads, the reader's frame still shows the old document, yet `held`
+  (files.js) is already the new PDF or note. A `drawNear` then found the old
+  document's `img[data-page]` slots, drew the new pages onto them and
+  recorded them as drawn, so the new document kept blank sheets (a note made
+  from a PDF opened with its first page empty, about 6 times in 10). A held PDF's
+  page now carries `data-held` (its token) on `<html>`, and `drawNear` only
+  draws onto a document that has it.
 - **pdf.js frame:** opaque origin, so modules and workers can't load
   across origins; the app posts the library's text in and the frame makes
   its own blob: URLs. Pages draw with `intent: "print"`, because the
