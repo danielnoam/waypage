@@ -1493,7 +1493,12 @@ function showReadHere() {
       b.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + icon + "</svg>";
       return b;
     };
-    readHere = el("div", { class: "read-here", role: "toolbar", "aria-label": "Selection" }, markBtn, colorBtn, aloudBtn,
+    // Draw from here (2026-11): the words stay selected while you draw.
+    const drawBtn = el("button", { class: "sel-draw", type: "button", "aria-label": "Draw", title: "Draw (D)", onclick: () => { hideReadHere(); inkStart(); } });
+    drawBtn.append(inkIcon("pen"), el("span", { class: "sel-label" }, "Draw"));
+    drawBtn.querySelector("svg").setAttribute("width", "20");
+    drawBtn.querySelector("svg").setAttribute("height", "20");
+    readHere = el("div", { class: "read-here", role: "toolbar", "aria-label": "Selection" }, markBtn, colorBtn, drawBtn, aloudBtn,
       outBtn("sel-lookup", "Look up", ICONS.lookup, lookUp),
       outBtn("sel-translate", "Translate", ICONS.translate, translate));
     $("readerView").append(readHere);
@@ -1509,6 +1514,7 @@ function showReadHere() {
   if (on.all) markBtn.dataset.remove = on.ids.join(","); else delete markBtn.dataset.remove;
   markBtn.querySelector(".sel-mark-label").textContent = on.all ? "Remove highlight" : "Highlight";
   markBtn.setAttribute("aria-label", on.all ? "Remove highlight" : "Highlight");
+  readHere.querySelector(".sel-draw").hidden = !mark || !inkReady() || C.ink.on;
   readHere.querySelector(".sel-aloud").hidden = !spot;
   readHere.querySelector(".sel-translate").hidden = !picked;
   readHere.querySelector(".sel-lookup").hidden = !picked || !C.dict.any() || picked.text.trim().split(/\s+/).length > 4;
@@ -1750,22 +1756,43 @@ function marksView(p, back) {
         markAfterOpen = m.id;
         back(true);
       };
-      return el("li", { class: "mark-item" },
+      const row = el("li", { class: "mark-item" },
         el("button", { class: "row mark-row", type: "button", onclick: go },
           el("span", { class: "mark-quote", "data-c": colorOf(m), dir: "auto" }, m.text),
           m.note ? el("span", { class: "mark-note", dir: "auto" }, m.note) : null,
           lost ? el("span", { class: "meta" }, "Not found in this copy of the clip") : null),
         el("button", { class: "icon-btn mark-edit", type: "button", "aria-label": "Note and more", onclick: () => { markFocus = m.id; draw(); } },
           svgIcon("rename", 18)));
+      return { at: m.page ? m.page : m.block || 0, row };
     });
+    // What was drawn (2026-11) goes among the highlights, in the order of
+    // the clip; a colour picked shows highlights alone.
+    const groups = sheetColor ? [] : inkGroups(p);
+    for (const g of groups) {
+      const lost = inReader && !g.page && !C.reader.inkBlock(g.n);
+      const go = () => {
+        if (lost) { toast("Not found in this copy of the clip."); return; }
+        if (inReader) { history.back(); setTimeout(() => inkGoTo(p, g), 0); return; }
+        inkBack().then(() => inkGoTo(p, g));
+      };
+      const row = inkRow(p, g, go, () => inkRemoveGroup(p, g).then(draw));
+      if (lost) row.querySelector(".ink-row-text").append(el("span", { class: "meta" }, "Not found in this copy of the clip"));
+      rows.push({ at: inkOrder(g) + 0.5, row });
+    }
+    rows.sort((a, b) => a.at - b.at);
+    const drawings = groups.reduce((a, g) => a + inkGroupCount(g), 0);
+    const title = [list.length || !drawings ? (list.length === 1 ? "1 highlight" : list.length + " highlights") : null, drawings ? inkWord(drawings) : null].filter(Boolean).join(" · ");
+    const canDraw = inReader && inkReady();
     return el("div", { class: "marks-list" },
       el("div", { class: "export-top" },
         back ? el("button", { class: "btn-quiet export-back", type: "button", onclick: () => back() }, "Back") : null,
-        el("p", { class: "menu-title" }, list.length === 1 ? "1 highlight" : list.length + " highlights"),
+        el("p", { class: "menu-title" }, title),
         list.length ? el("button", { class: "btn-quiet marks-copy", type: "button", onclick: () => copyText(C.backup.marksMarkdown({ ...p, marks: list }), "Highlights copied") }, "Copy all") : null),
+      canDraw ? el("button", { class: "row ink-start", type: "button", onclick: inkStart },
+        inkIcon("pen"), el("span", { class: "row-label" }, "Draw on this " + (p.file ? "file" : "clip"))) : null,
       colorChips(all, sheetColor, (c) => { sheetColor = c; draw(); }),
-      list.length ? el("ol", { class: "group marks-rows" }, ...rows)
-        : el("p", { class: "footnote" }, "Select words in the text and tap Highlight. Highlights go with the clip to your other devices, and into its Markdown export."));
+      rows.length ? el("ol", { class: "group marks-rows" }, ...rows.map((r) => r.row))
+        : el("p", { class: "footnote" }, "Select words in the text and tap Highlight, or tap Draw. Highlights and drawings go with the clip to your other devices."));
   };
   const markOne = (p, m, draw) => {
     const note = el("textarea", { class: "mark-note-field", rows: "3", placeholder: "Add a note", "aria-label": "Note", dir: "auto" });

@@ -660,3 +660,94 @@ function noteTextSheet() {
       el("button", { class: "row", type: "button", onclick: done }, el("span", { class: "row-label accent" }, "Done")),
       el("button", { class: "row", type: "button", onclick: () => back() }, el("span", { class: "row-label" }, "Cancel"))));
 }
+
+// ---- Drawings in Highlights (2026-11) ----
+// Drawing is part of highlights: the Highlights sheet and place list what
+// was drawn, one row per paragraph (or picture) of a clip, or per page of a
+// PDF, however many strokes are on it.
+// From the entry (by block), from what ink.js holds of the open clip, or
+// from the summary an outside file's entry keeps of its pages (`drawn`).
+function inkGroups(p) {
+  if (!p || p.note) return [];
+  if (state.open === p && inkReady()) {
+    if (C.ink.blocks) return C.ink.drawn().map((d) => ({ n: d.page, page: false, strokes: C.ink.strokes(d.page) }));
+    return C.ink.drawn().map((d) => ({ n: d.page, page: true, strokes: C.ink.strokes(d.page) }));
+  }
+  if (p.ink && typeof p.ink === "object") {
+    return Object.keys(p.ink).map(Number).filter((n) => Array.isArray(p.ink[n]) && p.ink[n].length).sort((a, b) => a - b)
+      .map((n) => ({ n, page: false, strokes: p.ink[n] }));
+  }
+  if (Array.isArray(p.drawn)) return p.drawn.filter((d) => Array.isArray(d) && d[0] >= 1).map(([n, k]) => ({ n, page: true, strokes: null, count: k }));
+  return [];
+}
+const inkGroupCount = (g) => (g.strokes ? new Set(g.strokes.map((s) => s.id)).size : g.count || 0);
+const inkTotal = (p) => inkGroups(p).reduce((a, g) => a + inkGroupCount(g), 0);
+// Where a row goes among the highlights: by block (highlights count blocks
+// from 0) or by page.
+const inkOrder = (g) => (g.page ? g.n : g.n - 1);
+const inkWord = (n) => (n === 1 ? "1 drawing" : n + " drawings");
+function inkLabel(p, g) {
+  if (g.page) return (p.note ? "Sheet " : "Page ") + g.n;
+  const w = state.open === p ? C.reader.inkBlockWords(g.n) : null;
+  return w && w.picture ? "Picture" : "Paragraph " + g.n;
+}
+// A small picture of what's drawn there: the strokes alone, fitted.
+function inkThumb(strokes) {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("class", "ink-thumb");
+  svg.setAttribute("aria-hidden", "true");
+  const list = (strokes || []).filter((s) => s.t === "p" || s.t === "h");
+  const b = list.length ? C.ink.boxOf(list) : null;
+  if (!b) { svg.setAttribute("viewBox", "0 0 4 3"); return svg; }
+  const pad = Math.max(b[2], b[3]) * 0.12 + 0.01;
+  svg.setAttribute("viewBox", [b[0] - pad, b[1] - pad, b[2] + pad * 2, b[3] + pad * 2].map((v) => Math.round(v * 10000) / 10000).join(" "));
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  for (const s of list.slice(0, 200)) {
+    const path = document.createElementNS(NS, "path");
+    const rgb = "rgb(" + (C.ink.rgbOf(s) || [28, 27, 25]).join(",") + ")";
+    if (s.t === "h") { path.setAttribute("d", C.ink.linePath(s.p)); path.setAttribute("fill", "none"); path.setAttribute("stroke", rgb); path.setAttribute("stroke-width", String(s.w)); path.setAttribute("opacity", "0.5"); path.setAttribute("stroke-linecap", "butt"); }
+    else { path.setAttribute("d", C.ink.penPath(s.p, Math.max(s.w, (b[2] + b[3]) / 120), s.y)); path.setAttribute("fill", rgb); }
+    svg.append(path);
+  }
+  return svg;
+}
+// To a drawing: in the reader, scroll to it; else open the clip there.
+async function inkGoTo(p, g) {
+  const go = () => {
+    if (state.open !== p) return;
+    if (g.page) C.reader.toPrinted(g.n);
+    else C.reader.jump(0, (g.n - 1) + "/0", true);
+  };
+  if (state.open === p && !$("readerView").hidden) { go(); return; }
+  await openPage(p.id);
+  const t0 = Date.now();
+  const wait = () => { if (state.open !== p || Date.now() - t0 > 4000) return; C.reader.placed().then(() => setTimeout(go, 120)); };
+  wait();
+}
+// Drawings on one row taken away.
+async function inkRemoveGroup(p, g) {
+  if (state.open === p && inkReady()) { C.ink.clearPage(g.n); await C.ink.flush(); return; }
+  if (p.ink && p.ink[g.n]) {
+    delete p.ink[g.n];
+    if (!Object.keys(p.ink).length) delete p.ink;
+    p.inkAt = Date.now();
+    await C.store.writeIndex(state.pages);
+    renderLibrary();
+  }
+}
+function inkRow(p, g, onGo, onRemove) {
+  const k = inkGroupCount(g);
+  const words = !g.page && state.open === p ? C.reader.inkBlockWords(g.n) : null;
+  return el("li", { class: "mark-item ink-item" },
+    el("button", { class: "row mark-row ink-row", type: "button", "aria-label": inkLabel(p, g) + ", " + inkWord(k), onclick: onGo },
+      g.strokes ? inkThumb(g.strokes) : el("span", { class: "ink-thumb ink-thumb-page", "aria-hidden": "true" }),
+      el("span", { class: "ink-row-text" },
+        el("span", { class: "row-label" }, inkLabel(p, g)),
+        el("span", { class: "meta" }, inkWord(k)),
+        words && words.text ? el("span", { class: "mark-note", dir: "auto" }, "“" + words.text.slice(0, 90) + (words.text.length > 90 ? "…" : "") + "”") : null)),
+    onRemove ? el("button", { class: "icon-btn mark-edit", type: "button", "aria-label": "Remove these drawings", title: "Remove these drawings", onclick: onRemove },
+      svgIcon("remove", 18)) : null);
+}
+// Out of an open sheet or menu (app-library.js back), for where `back` means another thing.
+const inkBack = () => back();
