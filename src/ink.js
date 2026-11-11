@@ -273,7 +273,9 @@
   let sel = null;           // the selection: { n, ids }
   let board = null;         // Copy and Cut: { items, n, k, imgs }
   let picker = null;        // the eyedropper waits: the next tap on a page goes to it
-  let onChange = null, onPen = null, onProbe = null, onDraw = null, onStroke = null;
+  let onChange = null, onPen = null, onProbe = null, onDraw = null, onStroke = null, onSaved = null;
+  // Something changed since the last write: a note then counts as edited (sync).
+  let dirty = false;
   const layers = new Map(); // page -> svg
 
   // A stroke read back from a file: anything else is dropped.
@@ -330,6 +332,20 @@
     }
     return { stale };
   }
+  // The strokes of an ink.json read without opening the note (a note's PDF
+  // for Drive): n -> the strokes on page n.
+  function strokesFrom(d) {
+    const pages = {};
+    if (d && d.pages && typeof d.pages === "object") {
+      for (const [k, list] of Object.entries(d.pages)) {
+        const n = Math.floor(Number(k));
+        if (!(n >= 1 && n <= 20000) || !Array.isArray(list)) continue;
+        const ok = list.slice(0, MAX_STROKES).map(clean).filter(Boolean);
+        if (ok.length) pages[n] = ok;
+      }
+    }
+    return (n) => pages[n] || [];
+  }
   function unload() {
     flush();
     clip = null;
@@ -341,6 +357,7 @@
   }
   function changed() { if (onChange) onChange(); }
   function save() {
+    dirty = true;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(flush, 800);
   }
@@ -348,6 +365,8 @@
     clearTimeout(saveTimer);
     saveTimer = 0;
     if (!clip) return Promise.resolve();
+    const edited = dirty;
+    dirty = false;
     const empty = !Object.values(clip.pages).some((l) => l.length);
     const id = clip.id;
     // A picture no page names any more (undo and redo keep it until now) goes.
@@ -358,7 +377,7 @@
       for (const lists of [op.before, op.after]) if (lists && !Array.isArray(lists)) for (const l of Object.values(lists)) for (const it of l) if (it.t === "i") used.add(it.f);
     }
     for (const f of [...imgs.keys()]) if (!used.has(f)) { imgs.delete(f); C.store.removeInkImage(id, f); }
-    return C.store.writeInk(id, empty ? null : { v: 1, size: clip.size, pages: clip.pages }).catch(() => {});
+    return C.store.writeInk(id, empty ? null : { v: 1, size: clip.size, pages: clip.pages }).then(() => { if (edited && onSaved) onSaved(id); }, () => {});
   }
   const strokes = (n) => (clip && clip.pages[n]) || [];
   const count = () => (clip ? Object.values(clip.pages).reduce((a, l) => a + l.length, 0) : 0);
@@ -1275,12 +1294,13 @@
   C.ink = {
     PEN, HIGHLIGHT, SIZES, STYLES, penPath, linePath, rgbOf, imageUrl: (f) => imgs.get(f) || "", TEXT_SIZES, TEXT_LINE, TEXT_FONT, textSize, addText, editText, selectedText, hits, clean, inside, within, boxOf, isHex, hexRgb, rgbHex, hsvRgb, rgbHsv,
     cut: selCut, copy: selCopy, paste: selPaste, del: selDelete, front: () => reorder(true), back: () => reorder(false), convertItem, clampInto, placeOn, addImage, viewPage, pick, colorAt, clearSelection: selClear,
-    load, unload, flush, setOn, setting, state, undo, redo, clearPage, clearAll, forPdf, count, drawn, strokes, shown,
+    load, unload, flush, strokesFrom, setOn, setting, state, undo, redo, clearPage, clearAll, forPdf, count, drawn, strokes, shown,
     set onChange(f) { onChange = f; },
     set onPen(f) { onPen = f; },
     set onProbe(f) { onProbe = f; },
     set onDraw(f) { onDraw = f; },
     set onStroke(f) { onStroke = f; },
+    set onSaved(f) { onSaved = f; },
     snapshot, restore,
     fromPhone, eraseFrom, get nat() { return nat; },
     get on() { return on; },

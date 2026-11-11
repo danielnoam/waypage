@@ -290,13 +290,14 @@
 
   // One multipart request, with XMLHttpRequest for its upload progress:
   // where a resumable session can't be had.
-  function send(blob, meta, t, onProgress, ctl) {
+  // `opts` (2.0.0, note PDFs): { url, method, type } for another file than a backup.
+  function send(blob, meta, t, onProgress, ctl, opts = {}) {
     const cut = "waypage" + Math.random().toString(36).slice(2);
     const body = new Blob(["--" + cut + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(meta) +
-      "\r\n--" + cut + "\r\nContent-Type: application/zip\r\n\r\n", blob, "\r\n--" + cut + "--\r\n"]);
+      "\r\n--" + cut + "\r\nContent-Type: " + (opts.type || "application/zip") + "\r\n\r\n", blob, "\r\n--" + cut + "--\r\n"]);
     return new Promise((ok, no) => {
       const x = new XMLHttpRequest();
-      x.open("POST", UPLOAD);
+      x.open(opts.method || "POST", opts.url || UPLOAD);
       x.setRequestHeader("Authorization", "Bearer " + t);
       x.setRequestHeader("Content-Type", "multipart/related; boundary=" + cut);
       if (onProgress) x.upload.onprogress = (e) => onProgress(e.loaded, e.total);
@@ -371,13 +372,64 @@
     }
   }
 
+  // ---- Notes as PDFs (2.0.0) ----
+  // Each note as a PDF in a Notes folder inside Waypage's, one file a
+  // note, sent again when the note changed. Kept apart from the backups:
+  // list() and prune() only look at files marked as backups. Which file is
+  // which note, and the version of the note it holds, is kept in cfg.
+  const NOTES_FOLDER = "Notes";
+  const FILES = "https://www.googleapis.com/upload/drive/v3/files";
+  async function notesFolder() {
+    const root = await folder();
+    if (cfg.notesFolder) {
+      const f = await api("/files/" + cfg.notesFolder + "?fields=id,trashed,parents").catch((e) => { if (e.code === "gone") return null; throw e; });
+      if (f && !f.trashed) return cfg.notesFolder;
+    }
+    const q = "name=" + quote(NOTES_FOLDER) + " and mimeType='application/vnd.google-apps.folder' and trashed=false and " + quote(root) + " in parents";
+    const found = await api("/files?" + new URLSearchParams({ q, fields: "files(id)", pageSize: "1" }));
+    let id = found && found.files && found.files[0] && found.files[0].id;
+    if (!id) id = (await api("/files?fields=id", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: NOTES_FOLDER, mimeType: "application/vnd.google-apps.folder", parents: [root] }) })).id;
+    cfg.notesFolder = id;
+    save();
+    return id;
+  }
+  const noteRecords = () => (cfg && cfg.notePdfs) || {};
+  // `at` is the note's version. Resolves to whether anything was sent.
+  async function putNote(id, name, blob, at, ctl = {}) {
+    const rec = noteRecords()[id];
+    if (rec && rec.at === at && rec.name === name) return false;
+    const dir = await notesFolder();
+    const meta = { name, mimeType: "application/pdf", description: "A note from Waypage", appProperties: { waypage: "note", note: id } };
+    const opts = { type: "application/pdf" };
+    let made = null;
+    if (rec) {
+      try { made = await send(blob, meta, await getToken(false), null, ctl, { ...opts, method: "PATCH", url: FILES + "/" + rec.file + "?uploadType=multipart&fields=id" }); }
+      catch (e) { if (!(e instanceof DriveError && e.code === "gone")) throw e; }
+    }
+    if (!made) made = await send(blob, { ...meta, parents: [dir] }, await getToken(false), null, ctl, { ...opts, url: UPLOAD });
+    cfg.notePdfs = { ...noteRecords(), [id]: { file: made.id, at, name } };
+    save();
+    return true;
+  }
+  // A note's PDF taken away, for a note deleted here (or no longer synced).
+  async function dropNote(id) {
+    const rec = noteRecords()[id];
+    if (!rec) return;
+    await api("/files/" + rec.file, { method: "DELETE" }).catch((e) => { if (!(e instanceof DriveError && e.code === "gone")) throw e; });
+    const left = { ...noteRecords() };
+    delete left[id];
+    cfg.notePdfs = left;
+    save();
+  }
+
   // ---- Connecting ----
 
   async function connect() {
     await getToken(true, "connect");
     const about = await api("/about?fields=user(emailAddress)", {}, true);
     // The first weekly backup is a week after connecting (1.27.1), not now.
-    cfg = { email: (about && about.user && about.user.emailAddress) || "", auto: true, what: { clips: true, feeds: true, newsletters: true }, last: {}, since: Date.now() };
+    cfg = { email: (about && about.user && about.user.emailAddress) || "", auto: true, what: { clips: true, notes: false, feeds: true, newsletters: true }, last: {}, since: Date.now() };
     save();
     await folder();
     return cfg.email;
@@ -416,7 +468,10 @@
     // What goes in a backup: clips (files copied in among them), feeds,
     // newsletter addresses (1.46.0; a Files switch until then).
     // `links` (1.47.0): clips that can be saved again go in as links only.
-    get what() { return cfg ? { clips: true, links: false, feeds: true, newsletters: true, ...(cfg.what || {}) } : null; },
+    get what() { return cfg ? { clips: true, links: false, notes: false, feeds: true, newsletters: true, ...(cfg.what || {}) } : null; },
+    // The notes whose PDFs are in Drive: { id: { file, at, name } }.
+    get notePdfs() { return noteRecords(); },
+    putNote, dropNote,
     setWhat(k, v) { if (!cfg) return; cfg.what = { ...this.what, [k]: !!v }; save(); },
     get last() { return (cfg && cfg.last) || {}; },
     get since() { return (cfg && cfg.since) || 0; },

@@ -78,7 +78,7 @@ Each section below shows the computer (left) and the phone (right).
 - Opening a PDF offers Make a note beside Keep a copy and Read from where it is; the pen on a PDF asks the same. A note made from a PDF is a copy of its pages you can draw on, named as the file is, in Notes. The PDF stays as it is, and drawings made on it before move over.
 - Notes show in their own part of the library, after Files, and Show › All notes (there once you have a note) lists them alone. Aa on a note has only Layout (All notes or This note, margins, brightness slider, theme, Dark note) and Auto-scroll, which goes on to the next note.
 - ⋯ › Drawings lists the sheets and has Try your pen; ⋯ › Save as PDF makes a PDF of the sheets with what is on them.
-- Notes stay on this device for now (not synced or backed up).
+- Settings › GitHub sync › What this device syncs has Notes: each note goes up whole (sheets, strokes, typed text, pictures and the PDF it was made from, up to 50 MB) and comes down on your other devices; the copy saved last wins. Settings › Google Drive › What goes in has Notes too, which puts each note in Drive as a PDF (in a Notes folder) and can only be turned on while Notes is on in GitHub sync. A restore doesn't bring notes back; sync does.
 
 ## Saving
 

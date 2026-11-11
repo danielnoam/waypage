@@ -346,6 +346,13 @@ C.ink.onChange = () => {
   inkPaint();
   if (state.sheet === "ink") $("readingBody").replaceChildren(SHEETS.ink.build());
 };
+// A note written on counts as edited, so sync sends it again (2.0.0).
+C.ink.onSaved = (id) => {
+  const p = state.pages.find((x) => x.id === id);
+  if (!p || !p.note) return;
+  p.editedAt = Date.now();
+  indexSoon();
+};
 // The first time a pen touches a PDF's pages, Draw is offered, once.
 C.ink.onPen = () => {
   if (C.ink.on || $("readerInk").hidden || state.sheet || load(INK_OFFER_KEY, false)) return;

@@ -275,4 +275,27 @@ test("a collection's picked cover goes to the other device, and only a name Wayp
   assert.strictEqual(keep("uabcd1234.jpg", ""), undefined);
 });
 
+test("a note has no address, and is never taken for a copy of another note (2.0.0)", () => {
+  const note = (id, more) => ({ id, url: "", title: "Note " + id, savedAt: 100, at: 0, finished: false, note: { paper: "lines" }, ...more });
+  const r = S.merge(null, lib([note("a1b2"), note("c3d4")]), null, NOW, undefined, (a, b) => a === b, (u) => u);
+  assert.deepStrictEqual(ids(r), ["a1b2", "c3d4"]);
+  assert.deepStrictEqual(r.pages.map((p) => p.note), [{ paper: "lines" }, { paper: "lines" }]);
+});
+
+test("a note written on one device comes to the other whole, the copy edited last wins", () => {
+  const note = (more) => ({ id: "a1b2", url: "", title: "Note", savedAt: 100, at: 0, finished: false, note: { paper: "squares" }, ...more });
+  const base = lib([note()]);
+  const r = S.merge(base, lib([note()]), lib([note({ editedAt: 500 })]), NOW);
+  assert.strictEqual(r.pages[0].editedAt, 500);
+  const r2 = S.merge(base, lib([note({ editedAt: 700 })]), lib([note({ editedAt: 500 })]), NOW);
+  assert.strictEqual(r2.pages[0].editedAt, 700);
+});
+
+test("a note's files on GitHub are kept by name, and only names Waypage writes", () => {
+  const got = S.clean({ pages: [{ id: "a1b2", url: "", title: "N", savedAt: 1, note: { paper: "lines", from: "c3d4" } }], deleted: {},
+    files: { a1b2: { at: 1, sha: "x", note: { "note.json": "s1", "ink.json": "s2", "base.pdf": "s3", "img-ab12.txt": "s4", "../library.json": "s5", "x.html": "s6" } } } });
+  assert.deepStrictEqual(got.pages[0].note, { paper: "lines", from: "c3d4" });
+  assert.deepStrictEqual(Object.keys(got.files.a1b2.note).sort(), ["base.pdf", "img-ab12.txt", "ink.json", "note.json"]);
+});
+
 console.log("\n" + passed + " passed");
