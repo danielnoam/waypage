@@ -341,7 +341,7 @@ function zipOf(files) {
       }, words);
       await pick("oceanic track");
       await q.locator(".read-here .sel-color:not([hidden])").click();
-      await q.locator('.read-here.picking .sel-swatch[aria-label="Green"]').click();
+      await q.locator('.sel-colors:not([hidden]) .sel-swatch[aria-label="Green"]').click();
       await q.frameLocator("#readerFrame").locator("mark.co-mark.co-c-green").first().waitFor();
       await q.waitForTimeout(700);
       await pick("marmalade sky");
@@ -365,6 +365,51 @@ function zipOf(files) {
       assert.strictEqual(await q.locator("#highlights .mark-row").count(), 2);
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
+    });
+
+    await test("on a touch screen Highlight is one button: a hold opens the colours under the bar, sliding to one and letting go highlights in it; keys 1 to 5 do too", async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      q.errors = [];
+      q.on("pageerror", (e) => q.errors.push(e.message));
+      await q.goto(ROOT);
+      await q.fill("#saveUrl", ARTICLE);
+      await q.press("#saveUrl", "Enter");
+      await q.locator(".page-card", { hasText: "The Long Haul Flight" }).first().click();
+      await frameText(q).getByText("oceanic track").waitFor();
+      const pick = (words) => q.frameLocator("#readerFrame").locator("p", { hasText: words }).first().evaluate((el, w) => {
+        const t = [...el.childNodes].find((n) => n.nodeType === 3 && n.data.includes(w));
+        const r = el.ownerDocument.createRange();
+        r.setStart(t, t.data.indexOf(w));
+        r.setEnd(t, t.data.indexOf(w) + w.length);
+        const sel = el.ownerDocument.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+      }, words);
+      await pick("oceanic track");
+      await q.locator(".read-here .sel-mark:not([hidden])").waitFor();
+      assert.strictEqual(await q.locator(".read-here .sel-color").isVisible(), false, "no separate colour dot on a touch screen");
+      const at = await q.locator(".read-here .sel-mark").boundingBox();
+      const down = (type, x, y) => q.evaluate(([type, x, y]) => document.querySelector(".read-here .sel-mark").dispatchEvent(new PointerEvent(type, { pointerType: "touch", pointerId: 7, clientX: x, clientY: y, bubbles: true })), [type, x, y]);
+      await down("pointerdown", at.x + 20, at.y + 20);
+      await q.locator(".sel-colors:not([hidden])").waitFor();
+      const bar = await q.locator(".read-here").boundingBox(), row = await q.locator(".sel-colors").boundingBox();
+      assert.ok(row.y > bar.y + bar.height - 1 || row.y + row.height < bar.y + 1, "the row sits clear of the bar");
+      assert.ok(row.width > row.height * 3, "the colours are in a row");
+      const pink = await q.locator('.sel-colors .sel-swatch[aria-label="Pink"]').boundingBox();
+      await down("pointermove", pink.x + pink.width / 2, pink.y + pink.height / 2);
+      await down("pointerup", pink.x + pink.width / 2, pink.y + pink.height / 2);
+      await q.frameLocator("#readerFrame").locator("mark.co-mark.co-c-pink").first().waitFor();
+      assert.strictEqual(await q.locator(".sel-colors").isVisible(), false);
+      await q.waitForTimeout(700);
+      await pick("marmalade sky");
+      await q.locator(".read-here .sel-mark:not([hidden])").waitFor();
+      await q.keyboard.press("5");
+      await q.frameLocator("#readerFrame").locator("mark.co-mark.co-c-purple").first().waitFor();
+      const kept = await q.evaluate(async () => (await window.Waypage.store.readIndex()).flatMap((p) => p.marks || []).map((m) => m.color).sort());
+      assert.deepStrictEqual(kept, ["pink", "purple"]);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await ctx.close();
     });
 
     await test("a clip translates on the device, shows under its words, isn't narrated, and keeps after a restart (1.42.0)", async () => {

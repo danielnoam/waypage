@@ -108,8 +108,9 @@ async function highlight(p) {
   const marks = [["Yellow", "separation becomes arithmetic"], ["Green", "the shortest line over a globe"], ["Blue", "the ocean still punishes guesswork"]];
   for (const [color, words] of marks) {
     await pick(p, words);
-    await p.locator(".read-here .sel-color:not([hidden])").click();
-    await p.locator(`.read-here.picking .sel-swatch[aria-label="${color}"]`).click();
+    await p.locator(".read-here .sel-mark:not([hidden])").waitFor();
+    await p.evaluate(() => openSelColors());
+    await p.locator(`.sel-colors:not([hidden]) .sel-swatch[aria-label="${color}"]`).click();
     await p.frameLocator("#readerFrame").locator("mark.co-mark", { hasText: words.split(" ")[0] }).first().waitFor();
     await p.waitForTimeout(400);
   }

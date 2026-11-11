@@ -143,7 +143,7 @@ Each section below shows the computer (left) and the phone (right).
 
 <p><img src="docs/shots/highlights-desktop.jpg" width="74%" alt="Highlights on a computer"> <img src="docs/shots/highlights-phone.jpg" width="21%" alt="Highlights on a phone"></p>
 
-- Highlights in five colours, with notes, picked from the selection bar.
+- Highlights in five colours, with notes: tap Highlight on the selection bar for the last colour, hold it for the five (a mouse has the dot beside it, or keys 1 to 5).
 - The Highlights place: every highlight, searchable, a colour at a time, Copy all or save as Markdown.
 - Translate this clip on the device, under the text or instead of it (ML Kit on Android, Chrome's own translator on a computer); translate selected words.
 - Look up words offline in your own StarDict dictionaries.

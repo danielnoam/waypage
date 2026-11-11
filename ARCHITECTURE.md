@@ -541,6 +541,11 @@ adds a line here.
 Things that broke once and would again. Check here before touching the
 area.
 
+- **The Highlight hold captures the pointer:** `markHold` (app-reader.js)
+  takes the finger on Highlight so the slide to a colour keeps reporting,
+  and the click that follows a hold lands on Highlight too. `markHeld`
+  swallows that click, or a hold would also highlight in the old colour.
+
 - **`src/boot.js` picks the theme twice over:** it runs in `<head>` and
   resolves the saved choice (Auto's light and dark picks included) on its
   own, before app.js exists. A change to how `resolveTheme` or the theme
