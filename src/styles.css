@@ -1678,7 +1678,7 @@ span.update-text { cursor: default; }
 .mark-item + .mark-item { border-top: 1px solid var(--line); }
 /* Drawings among the highlights (2026-11): a picture of the strokes, then
    where they are and how many. */
-.mark-row.ink-row { flex-direction: row; align-items: center; gap: var(--s-3); }
+.mark-row.ink-row { flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--s-3); }
 .ink-row-text { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
 .ink-thumb { flex: none; width: 88px; height: 56px; border-radius: var(--r-sm, 8px); background: var(--bg); border: 1px solid var(--line); }
 .ink-thumb-page { display: block; width: 44px; background: linear-gradient(var(--line) 1px, transparent 1px) 6px 8px / calc(100% - 12px) 7px no-repeat, var(--bg); }

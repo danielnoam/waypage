@@ -629,14 +629,20 @@
     head.push("[" + mdEscape(p.site || p.url) + "](" + webUrl(p.url) + ")");
     const licence = doc.querySelector(".co-licence");
     const foot = licence ? "---\n\n" + mdInline(licence).trim() : "";
-    const marks = (p.marks || []).length ? "## Highlights\n\n" + marksBody(p) : "";
+    const marks = (p.marks || []).length || (p.ink && Object.keys(p.ink).length) ? "## Highlights\n\n" + marksBody(p) : "";
     const text = [...head, ...out, marks, foot].filter(Boolean).join("\n\n").replace(/\n{3,}/g, "\n\n") + "\n";
     return { name: pageSlug(p.title) + ".md", text };
   }
 
   // A clip's highlights as Markdown (1.7.0): each a quote, its note under it.
+  // Highlights, and where something was drawn (2026-11): Markdown can't
+  // hold a drawing, so it says where one is, in the clip's order.
   function marksBody(p) {
-    return (p.marks || []).map((m) => "> " + mdEscape(m.text) + (m.note ? "\n\n" + m.note.split("\n").map((l) => l.trim()).join("\n") : "")).join("\n\n");
+    const rows = (p.marks || []).map((m) => ({ at: m.page ? m.page : m.block || 0,
+      text: "> " + mdEscape(m.text) + (m.note ? "\n\n" + m.note.split("\n").map((l) => l.trim()).join("\n") : "") }));
+    if (!p.note && p.ink && typeof p.ink === "object") for (const k of Object.keys(p.ink)) if (Array.isArray(p.ink[k]) && p.ink[k].length) rows.push({ at: Number(k) - 0.5, text: "_Drawing, paragraph " + k + "_" });
+    if (!p.note && Array.isArray(p.drawn)) for (const d of p.drawn) if (Array.isArray(d)) rows.push({ at: d[0] + 0.5, text: "_Drawing, page " + d[0] + "_" });
+    return rows.sort((a, b) => a.at - b.at).map((r) => r.text).join("\n\n");
   }
   function marksMarkdown(p) {
     const link = p.file ? "" : "[" + mdEscape(p.site || p.url) + "](" + webUrl(p.url) + ")";

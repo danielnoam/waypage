@@ -511,12 +511,14 @@
     const D = frameDoc(), W = D && D.defaultView;
     if (!want || !W) return;
     let raf = 0;
-    const tick = () => { raf = 0; if (!blocks || !clip) return; if (on) for (const n of shown()) show(n); placeAll(); };
+    const tick = () => { raf = 0; if (!blocks || !clip) return; for (const n of shown()) show(n); placeAll(); };
     const soon = () => { if (!raf) raf = W.requestAnimationFrame(tick); };
     const ro = new W.ResizeObserver(soon);
     ro.observe(D.body);
     W.addEventListener("scroll", soon, { passive: true });
     W.addEventListener("resize", soon);
+    // The words may not be laid out yet when the drawings are read.
+    W.setTimeout(soon, 300);
     blockWatch = { stop: () => { ro.disconnect(); W.removeEventListener("scroll", soon); W.removeEventListener("resize", soon); if (raf) W.cancelAnimationFrame(raf); } };
   }
   // A page that has its picture gets a layer when it has drawings, or

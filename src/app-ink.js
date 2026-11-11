@@ -366,10 +366,17 @@ C.ink.onChange = () => {
   if (state.sheet === "ink") $("readingBody").replaceChildren(SHEETS.ink.build());
 };
 // A note written on counts as edited, so sync sends it again (2.0.0).
+// A PDF's pages drawn on keep a summary on its entry (`drawn`: [page,
+// strokes]), so Highlights can list them without opening the PDF.
 C.ink.onSaved = (id) => {
   const p = state.pages.find((x) => x.id === id);
-  if (!p || !p.note) return;
-  p.editedAt = Date.now();
+  if (!p) return;
+  if (p.note) p.editedAt = Date.now();
+  else if (!C.ink.blocks && C.ink.state && state.open === p) {
+    const d = C.ink.drawn().map((x) => [x.page, new Set(C.ink.strokes(x.page).map((s) => s.id)).size]);
+    if (d.length) p.drawn = d; else delete p.drawn;
+    p.inkAt = Date.now();
+  } else return;
   indexSoon();
 };
 // The first time a pen touches something drawable, Draw is offered, once.
