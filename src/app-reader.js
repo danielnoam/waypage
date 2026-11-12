@@ -835,6 +835,7 @@ function readerScrolled(at, y) {
   if (state.open && (state.open.link || state.open.note)) C.files.drawNear($("readerFrame"));
   if (readHere && !readHere.hidden) showReadHere();
   if (!(skim && skim.dragging)) skimShow(at);
+  backCheck(at, y);
   railNow();
   if (!$("readerView").classList.contains("bar-away") || aloudHere()) readerFoot(at);
   if (skim && (skim.dragging || performance.now() - (skim.end || 0) < 600)) { lastY = y; return; }
@@ -2991,15 +2992,39 @@ function paintFrom() {
 }
 function jumped(spot) {
   if (!jumpFrom) jumpFrom = { spot, at: C.reader.position() };
+  showBack();
+}
+// Back goes once it has nothing left to do: you came back to the old spot
+// yourself, or read on BACK_AWAY screens away from it from where the jump
+// put you. Scrolling toward the old spot keeps it. Scrolls in the first
+// BACK_SETTLE ms are the jump's own (a glide, a chunk growing).
+const BACK_SETTLE = 900, BACK_AWAY = 3;
+let backLand = null;
+function showBack() {
   $("jumpBack").hidden = false;
+  backLand = { t: performance.now() };
+}
+function hideBack() {
+  jumpFrom = null;
+  backLand = null;
+  $("jumpBack").hidden = true;
+  paintFrom();
+}
+const spotIndex = (s) => { const m = /^(\d+)\//.exec(s || ""); return m ? Number(m[1]) : -1; };
+function backCheck(at, y) {
+  if (!jumpFrom || !backLand || $("jumpBack").hidden || (skim && skim.dragging)) return;
+  if (performance.now() - backLand.t < BACK_SETTLE) { backLand.at = at; backLand.y = y; return; }
+  if (backLand.y === undefined) { backLand.at = at; backLand.y = y; }
+  const from = spotIndex(jumpFrom.spot), now = spotIndex(C.reader.spot());
+  if (from >= 0 && now >= 0 ? Math.abs(now - from) <= 1 : Math.abs(at - jumpFrom.at) < 0.005) { hideBack(); return; }
+  const w = $("readerFrame").contentWindow, screen = C.reader.paged ? w.innerWidth : w.innerHeight;
+  if ((y - backLand.y) * Math.sign(backLand.at - jumpFrom.at) > BACK_AWAY * screen) hideBack();
 }
 $("jumpBack").addEventListener("click", () => {
   const from = jumpFrom;
   skimDrop();
   closeSkim();
-  jumpFrom = null;
-  $("jumpBack").hidden = true;
-  paintFrom();
+  hideBack();
   if (from && state.open) { C.reader.jump(from.at, from.spot, true); voiceHere(1000); }
 });
 
@@ -3073,7 +3098,7 @@ function skimEnd() {
   me.dragging = false;
   me.end = performance.now();
   $("readerView").classList.remove("skimming");
-  $("jumpBack").hidden = false;
+  showBack();
   voiceHere();
   requestAnimationFrame(() => requestAnimationFrame(() => {
     if (skim !== me) return;
