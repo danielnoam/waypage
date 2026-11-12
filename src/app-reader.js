@@ -2500,15 +2500,17 @@ function readerSettings() {
   const parts = [...box.querySelectorAll(".rc-part")];
   // A comic gets Auto-scroll with its three settings in Narrate's place (1.49.0).
   const comic = pictureBook();
-  if (comic || speech.available) {
-    const a = comic ? scrollControls() : aloudControls();
+  // An audiobook gets its own listening settings there instead.
+  const audio = state.open && state.open.audio && typeof listenSheetPart === "function";
+  if (audio || comic || speech.available) {
+    const a = audio ? listenSheetPart() : comic ? scrollControls() : aloudControls();
     a.classList.add("rc-part");
     a.dataset.part = "aloud";
-    a.prepend(el("h2", { class: "overline" }, comic ? "Auto-scroll" : "Narrate"));
+    if (!audio) a.prepend(el("h2", { class: "overline" }, comic ? "Auto-scroll" : "Narrate"));
     box.append(a);
     parts.push(a);
   }
-  const names = { layout: "Layout", text: "Text", aloud: comic ? "Auto-scroll" : "Narrate" };
+  const names = { layout: "Layout", text: "Text", aloud: audio ? "Audiobook" : comic ? "Auto-scroll" : "Narrate" };
   let tab = load(SHEET_TAB_KEY, "text");
   if (!parts.some((x) => x.dataset.part === tab)) tab = "text";
   const show = (v) => {
