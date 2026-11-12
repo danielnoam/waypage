@@ -430,6 +430,7 @@ public class AudiobookService extends Service {
 
     // Tells the app; `all` redraws the notification and the lock screen too.
     private void report(boolean all) {
+        PipWindow.refresh();
         if (job == null) return;
         long pos = position(), dur = duration();
         job.pos = pos;
@@ -519,6 +520,7 @@ public class AudiobookService extends Service {
         if (session != null) session.release();
         dropFocus();
         if (running == this) running = null;
+        PipWindow.refresh();
         super.onDestroy();
     }
 }

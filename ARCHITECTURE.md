@@ -598,6 +598,12 @@ adds a line here.
 Things that broke once and would again. Check here before touching the
 area.
 
+- The small window outside the app (picture in picture) is one setting
+  on the activity that Narrate and audiobooks share, and Android keeps it
+  armed until told otherwise. Only `PipWindow.java` sets it, and it arms
+  it only while `SpeechService` or `AudiobookService` is playing right
+  now; a page that set it from its own idea of "playing" left it on after
+  a pause, a lost audio focus or a reload, and it popped up on going home.
 - `sync-worker.js` has to load `ink.js`: `backup.cleanInk` checks strokes
   with `C.ink.clean`, and without it every drawing on a clip dropped out
   of a merge made on the worker.

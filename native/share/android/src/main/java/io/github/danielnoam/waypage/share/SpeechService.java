@@ -484,6 +484,7 @@ public class SpeechService extends Service {
 
     // Tells the app, and redraws the notification and the lock screen.
     private void report() {
+        PipWindow.refresh();
         if (listener != null && job != null) listener.onProgress(job.key, index, state, thinking);
         if (job == null || "ended".equals(state) || "stopped".equals(state) || "error".equals(state)) return;
         boolean playing = "playing".equals(state);
@@ -572,6 +573,7 @@ public class SpeechService extends Service {
         if (wake != null && wake.isHeld()) wake.release();
         dropFocus();
         if (running == this) running = null;
+        PipWindow.refresh();
         super.onDestroy();
     }
 }

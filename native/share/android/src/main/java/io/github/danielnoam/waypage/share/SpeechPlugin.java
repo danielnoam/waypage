@@ -1,17 +1,12 @@
 package io.github.danielnoam.waypage.share;
 
-import android.app.PendingIntent;
-import android.app.PictureInPictureParams;
-import android.app.RemoteAction;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.Voice;
-import android.util.Rational;
 import android.view.WindowManager;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -241,20 +236,18 @@ public class SpeechPlugin extends Plugin {
         });
     }
 
-    // Picture in picture (1.25.0): while reading aloud, going home shrinks
-    // the app into a small window (Android 12's auto-enter), with
-    // previous, play or pause and next as the window's own buttons.
+    // Picture in picture (1.25.0): going home shrinks the app into a small
+    // window (Android 12's auto-enter), with previous, play or pause and
+    // next. `on` says the switch is on and a reading is open; PipWindow
+    // arms it only while the voice is actually speaking.
     @PluginMethod
     public void pip(PluginCall call) {
         JSObject o = new JSObject();
         if (Build.VERSION.SDK_INT < 31) { o.put("supported", false); call.resolve(o); return; }
-        boolean on = call.getBoolean("on", false);
-        boolean playing = call.getBoolean("playing", true);
+        boolean on = Boolean.TRUE.equals(call.getBoolean("on", false));
         getActivity().runOnUiThread(() -> {
-            try {
-                getActivity().setPictureInPictureParams(pipParams(on, playing));
-                o.put("supported", true);
-            } catch (Exception e) { o.put("supported", false); }
+            PipWindow.narrate(getActivity(), on);
+            o.put("supported", true);
             call.resolve(o);
         });
     }
@@ -264,26 +257,6 @@ public class SpeechPlugin extends Plugin {
         JSObject o = new JSObject();
         o.put("on", Build.VERSION.SDK_INT >= 26 && getActivity().isInPictureInPictureMode());
         call.resolve(o);
-    }
-
-    private PictureInPictureParams pipParams(boolean on, boolean playing) {
-        List<RemoteAction> actions = new ArrayList<>();
-        actions.add(pipAction(android.R.drawable.ic_media_previous, "Previous paragraph", SpeechService.PREV, 21));
-        actions.add(playing ? pipAction(android.R.drawable.ic_media_pause, "Pause", SpeechService.PAUSE, 22)
-            : pipAction(android.R.drawable.ic_media_play, "Play", SpeechService.RESUME, 22));
-        actions.add(pipAction(android.R.drawable.ic_media_next, "Next paragraph", SpeechService.NEXT, 23));
-        return new PictureInPictureParams.Builder()
-            .setAspectRatio(new Rational(16, 9))
-            .setActions(actions)
-            .setAutoEnterEnabled(on)
-            .build();
-    }
-
-    private RemoteAction pipAction(int icon, String label, String action, int code) {
-        Context ctx = getContext();
-        Intent i = new Intent(ctx, SpeechService.class).setAction(action);
-        PendingIntent pi = PendingIntent.getService(ctx, code, i, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-        return new RemoteAction(Icon.createWithResource(ctx, icon), label, label, pi);
     }
 
     @PluginMethod
@@ -328,6 +301,14 @@ public class SpeechPlugin extends Plugin {
         } catch (Exception e) {
             call.reject("Couldn't reach the reader", e);
         }
+    }
+
+    // Whatever happened while away (the sound taken by another app, the
+    // reading ended), the window is armed again only if it still plays.
+    @Override
+    protected void handleOnResume() {
+        PipWindow.attach(getActivity());
+        PipWindow.refresh();
     }
 
     @Override
