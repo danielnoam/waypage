@@ -67,7 +67,27 @@ async function inkSync(p) {
   if (state.open !== p) return;
   if (stale) toast("This PDF has changed since you drew on it. The drawings may not line up.");
   // A note is for writing: its pen is ready when it opens.
-  if (p.note) inkSet(true);
+  if (p.note) { inkSet(true); if (!p.thumb) noteCoverSoon(p, 1500); }
+}
+// A note's card shows its first sheet (2026-11), drawn again a moment
+// after the first sheet is written on, and once for a note that came
+// from another device (a card picture never syncs).
+let noteCoverTimer = 0;
+function noteCoverSoon(p, ms) {
+  clearTimeout(noteCoverTimer);
+  noteCoverTimer = setTimeout(() => noteCover(p), ms);
+}
+async function noteCover(p) {
+  const handle = C.files.heldPdf();
+  if (state.open !== p || !p.note || !handle || !handle.sheets) return;
+  try {
+    const bytes = await C.notes.cover(handle, C.ink.strokes(1));
+    if (state.open !== p) return;
+    p.thumb = await C.files.thumbnail(p.id, bytes, "image/jpeg");
+    await C.store.writeIndex(state.pages);
+    if (!C.platform.native) await loadThumbs();
+    renderLibrary();
+  } catch (e) { /* the card keeps what it had */ }
 }
 // A clip's drawings by block live on its index entry (`ink`, page -> strokes),
 // beside its highlights, so they sync and back up the same way.
@@ -371,7 +391,7 @@ C.ink.onChange = () => {
 C.ink.onSaved = (id) => {
   const p = state.pages.find((x) => x.id === id);
   if (!p) return;
-  if (p.note) p.editedAt = Date.now();
+  if (p.note) { p.editedAt = Date.now(); if (C.ink.strokes(1).length || p.thumb) noteCoverSoon(p, 2000); }
   else if (!C.ink.blocks && C.ink.state && state.open === p) {
     const d = C.ink.drawn().map((x) => [x.page, new Set(C.ink.strokes(x.page).map((s) => s.id)).size]);
     if (d.length) p.drawn = d; else delete p.drawn;

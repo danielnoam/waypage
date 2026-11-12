@@ -256,7 +256,7 @@ function renderLibrary() {
     // Files are the clips that read from a file of your own; a copy is
     // a clip like any other (0.32.0).
     const apart = !ts.length && state.filter === "all";
-    // Notes (2.0.0) are a part of their own too, after Files.
+    // Notes (2.0.0) are a part of their own too, before Files (2026-11).
     const notes = apart ? loose.filter((p) => p.note) : [];
     const mine = apart ? loose.filter((p) => p.link && !p.note) : [];
     const clips = apart ? loose.filter((p) => !p.link && !p.note) : loose;
@@ -283,17 +283,17 @@ function renderLibrary() {
         keep("q:" + p.id, () => pageCard(p, s), [pageSig(p), s].join("|"));
       } else keep("p:" + p.id, () => pageCard(p), pageSig(p));
     }
-    if (mine.length && (!part || part === "files")) {
-      const label = "Files · " + mine.length;
-      if (part || (!folders.length && !clips.length && !notes.length)) keep("h:files", () => sectionHead(label), label);
-      else keep("h:files", () => partHead("files", label), "link" + label);
-      for (const p of some(mine)) keep("p:" + p.id, () => pageCard(p), pageSig(p));
-    }
     if (notes.length && (!part || part === "notes")) {
       const label = "Notes · " + notes.length;
       if (part || (!folders.length && !clips.length && !mine.length)) keep("h:notes", () => sectionHead(label), label);
       else keep("h:notes", () => partHead("notes", label), "link" + label);
       for (const p of some(notes)) keep("p:" + p.id, () => pageCard(p), pageSig(p));
+    }
+    if (mine.length && (!part || part === "files")) {
+      const label = "Files · " + mine.length;
+      if (part || (!folders.length && !clips.length && !notes.length)) keep("h:files", () => sectionHead(label), label);
+      else keep("h:files", () => partHead("files", label), "link" + label);
+      for (const p of some(mine)) keep("p:" + p.id, () => pageCard(p), pageSig(p));
     }
   }
   if (more) keep("more", () => el("div", { class: "lib-more", "aria-hidden": "true" }));

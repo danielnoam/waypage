@@ -61,65 +61,76 @@
   // `handle` is the open note's (heldPdf); `strokesOf(n)` is ink.js's.
   // The file's name: the note's, without what a file name can't have.
   const pdfName = (meta) => (meta.title || "Note").replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 120) + ".pdf";
+  // One sheet as a canvas `w` px wide: its own picture (paper, or the
+  // PDF's page), then what is drawn on it. `texts` collects typed text as
+  // a PDF's invisible words, when given.
+  async function sheetCanvas(handle, n, w, strokes, images, texts) {
+    const [pw, ph] = handle.sizes[n - 1] || [W, H];
+    const h = Math.round(w * ph / pw);
+    const font = (z) => "400 " + Math.round(z * w * 100) / 100 + "px " + C.ink.TEXT_FONT;
+    const bg = await createImageBitmap(new Blob([await handle.draw(n, w)], { type: "image/jpeg" }));
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const g = c.getContext("2d");
+    g.drawImage(bg, 0, 0, w, h);
+    bg.close();
+    // Strokes are in page widths, so one scale puts them on the sheet.
+    g.setTransform(w, 0, 0, w, 0, 0);
+    for (const s of strokes) {
+      // Typed text: set in pixels (a font that small isn't asked of a scaled canvas), and
+      // also written as the PDF's invisible words, so it can be searched.
+      if (s.t === "x") {
+        const rgb = C.ink.rgbOf(s) || [28, 27, 25];
+        g.save();
+        g.setTransform(1, 0, 0, 1, 0, 0);
+        g.fillStyle = "rgb(" + rgb.join(",") + ")";
+        g.font = font(s.z);
+        s.text.split("\n").forEach((line, i) => {
+          const y = s.y + s.z * (0.95 + i * C.ink.TEXT_LINE);
+          g.fillText(line, s.x * w, y * w);
+          if (texts && line.trim()) texts.push({ text: line, size: s.z * pw, x: s.x * pw, y: y * pw, width: Math.max(1, g.measureText(line).width / w * pw) });
+        });
+        g.restore();
+        continue;
+      }
+      // A picture put on the sheet (width and height in page widths).
+      if (s.t === "i") {
+        const url = (images && images[s.f]) || C.ink.imageUrl(s.f);
+        if (url) { try { const im = await createImageBitmap(await (await fetch(url)).blob()); g.drawImage(im, s.x, s.y, s.w, s.h); im.close(); } catch (e) { /* left out */ } }
+        continue;
+      }
+      const rgb = C.ink.rgbOf(s) || [28, 27, 25];
+      const col = "rgb(" + rgb.join(",") + ")";
+      if (s.t === "h") {
+        g.save();
+        g.globalAlpha = 0.55; g.globalCompositeOperation = "multiply";
+        g.strokeStyle = col; g.lineWidth = s.w; g.lineCap = "butt"; g.lineJoin = "round";
+        g.stroke(new Path2D(C.ink.linePath(s.p)));
+        g.restore();
+      } else { g.fillStyle = col; g.fill(new Path2D(C.ink.penPath(s.p, s.w, s.y))); }
+    }
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    return { c, pw, ph, h };
+  }
   async function toPdf(meta, handle, strokesOf, onProgress, images) {
     const count = handle.count;
     let last = 1;
     for (let n = 1; n <= count; n++) if (strokesOf(n).length || handle.sheets[n - 1].bg === "pdf") last = n;
     const w = 1240, pages = [];
-    const font = (z) => "400 " + Math.round(z * w * 100) / 100 + "px " + C.ink.TEXT_FONT;
     for (let n = 1; n <= last; n++) {
       if (onProgress) onProgress(n - 1, last);
-      const [pw, ph] = handle.sizes[n - 1] || [W, H];
-      const h = Math.round(w * ph / pw);
-      // The sheet's own picture (paper, or the PDF's page), then the strokes.
-      const bg = await createImageBitmap(new Blob([await handle.draw(n, w)], { type: "image/jpeg" }));
-      const c = document.createElement("canvas");
-      c.width = w; c.height = h;
-      const g = c.getContext("2d");
-      g.drawImage(bg, 0, 0, w, h);
-      bg.close();
-      // Strokes are in page widths, so one scale puts them on the sheet.
-      g.setTransform(w, 0, 0, w, 0, 0);
       const texts = [];
-      for (const s of strokesOf(n)) {
-        // Typed text: set in pixels (a font that small isn't asked of a scaled canvas), and
-        // also written as the PDF's invisible words, so it can be searched.
-        if (s.t === "x") {
-          const rgb = C.ink.rgbOf(s) || [28, 27, 25];
-          g.save();
-          g.setTransform(1, 0, 0, 1, 0, 0);
-          g.fillStyle = "rgb(" + rgb.join(",") + ")";
-          g.font = font(s.z);
-          s.text.split("\n").forEach((line, i) => {
-            const y = s.y + s.z * (0.95 + i * C.ink.TEXT_LINE);
-            g.fillText(line, s.x * w, y * w);
-            if (line.trim()) texts.push({ text: line, size: s.z * pw, x: s.x * pw, y: y * pw, width: Math.max(1, g.measureText(line).width / w * pw) });
-          });
-          g.restore();
-          continue;
-        }
-        // A picture put on the sheet (width and height in page widths).
-        if (s.t === "i") {
-          const url = (images && images[s.f]) || C.ink.imageUrl(s.f);
-          if (url) { try { const im = await createImageBitmap(await (await fetch(url)).blob()); g.drawImage(im, s.x, s.y, s.w, s.h); im.close(); } catch (e) { /* left out */ } }
-          continue;
-        }
-        const rgb = C.ink.rgbOf(s) || [28, 27, 25];
-        const col = "rgb(" + rgb.join(",") + ")";
-        if (s.t === "h") {
-          g.save();
-          g.globalAlpha = 0.55; g.globalCompositeOperation = "multiply";
-          g.strokeStyle = col; g.lineWidth = s.w; g.lineCap = "butt"; g.lineJoin = "round";
-          g.stroke(new Path2D(C.ink.linePath(s.p)));
-          g.restore();
-        } else { g.fillStyle = col; g.fill(new Path2D(C.ink.penPath(s.p, s.w, s.y))); }
-      }
-      g.setTransform(1, 0, 0, 1, 0, 0);
+      const { c, pw, ph, h } = await sheetCanvas(handle, n, w, strokesOf(n), images, texts);
       pages.push({ jpeg: await jpeg(c, 0.9), iw: w, ih: h, texts, w: pw, h: ph });
       await new Promise((r) => setTimeout(r, 0));
     }
     if (onProgress) onProgress(last, last);
     return { blob: C.pptx.writePdf(pages), name: pdfName(meta), sheets: last };
+  }
+  // A note's card picture (2026-11): its first sheet as it is now, drawn on.
+  async function cover(handle, strokes) {
+    const { c } = await sheetCanvas(handle, 1, 360, strokes || []);
+    return jpeg(c, 0.8);
   }
 
   // note.json read back: a sheet is paper or a page of the PDF; anything
@@ -227,5 +238,99 @@
     return keepNew(entry(C.save.newId(), name, { paper: "lines", ...(src.id ? { from: src.id } : {}) }), sheets, blob);
   }
 
-  C.notes = { PAPERS, LABELS, paper, toPdf, pdfName, create, fromPdf, open, keep, W, H };
+  // Any clip of a file as a PDF to make a note from (2026-11): a comic's
+  // pictures one to a page; anything else set as a book's pages, its
+  // headings, paragraphs and pictures in order on A4. `root` is the
+  // clip's body, `picture(img)` resolves to an <img>'s bytes or null.
+  // Resolves to the PDF as a Blob.
+  const PX = 1100, PY = Math.round(PX * H / W), MARGIN = 110;
+  const FONT = "Georgia, 'Times New Roman', serif";
+  const SIZE = { H1: 50, H2: 42, H3: 36, H4: 32, H5: 30, H6: 30 };
+  async function layout(root, comic, picture, onProgress, title) {
+    const pages = [];
+    const done = async (c, w, h) => {
+      if (pages.length >= MAX_SHEETS) throw new C.files.FileError("This is over " + MAX_SHEETS + " pages long, too long for a note.");
+      pages.push({ jpeg: await jpeg(c, 0.8), iw: w, ih: h, texts: [], w: W, h: Math.round(W * h / w) });
+      if (onProgress) onProgress(pages.length);
+      await new Promise((r) => setTimeout(r, 0));
+    };
+    const bitmap = async (img) => {
+      try { const b = await picture(img); return b ? await createImageBitmap(new Blob([b], { type: C.backup.imageType(b) || "image/jpeg" })) : null; } catch (e) { return null; }
+    };
+    const imgs = [...root.querySelectorAll("img")];
+    if (comic) {
+      for (const img of imgs) {
+        const bmp = await bitmap(img);
+        if (!bmp) continue;
+        const w = Math.min(PX, bmp.width), h = Math.max(1, Math.round(bmp.height * w / bmp.width));
+        const c = document.createElement("canvas");
+        c.width = w; c.height = h;
+        c.getContext("2d").drawImage(bmp, 0, 0, w, h);
+        bmp.close();
+        await done(c, w, h);
+      }
+      if (!pages.length) throw new C.files.FileError("There are no pictures to make a note from.");
+      return C.pptx.writePdf(pages);
+    }
+    let c = null, g = null, y = 0;
+    const fresh = () => {
+      c = document.createElement("canvas");
+      c.width = PX; c.height = PY;
+      g = c.getContext("2d");
+      g.fillStyle = "#ffffff"; g.fillRect(0, 0, PX, PY);
+      g.fillStyle = "#1c1b19"; g.textBaseline = "alphabetic";
+      y = MARGIN;
+    };
+    const flush = async () => { if (c && y > MARGIN) await done(c, PX, PY); c = null; };
+    const room = async (h) => { if (!c) fresh(); if (y + h > PY - MARGIN && y > MARGIN) { await flush(); fresh(); } };
+    const width = PX - MARGIN * 2;
+    const words = async (text, size, bold, gap, indent = 0) => {
+      g || fresh();
+      const font = (bold ? "700 " : "400 ") + size + "px " + FONT;
+      g.font = font;
+      const line = Math.round(size * 1.45);
+      let cur = "";
+      const lines = [];
+      for (const w of text.split(/\s+/).filter(Boolean)) {
+        const next = cur ? cur + " " + w : w;
+        if (g.measureText(next).width > width - indent && cur) { lines.push(cur); cur = w; } else cur = next;
+      }
+      if (cur) lines.push(cur);
+      for (const l of lines) {
+        await room(line);
+        g.font = font; g.fillStyle = "#1c1b19";
+        g.fillText(l, MARGIN + indent, y + size);
+        y += line;
+      }
+      y += gap;
+    };
+    // The title first, as the reader shows it above the text.
+    if (title && !root.querySelector("h1")) await words(title, SIZE.H1, true, 28);
+    const BLOCK = "h1,h2,h3,h4,h5,h6,p,li,blockquote,pre,dt,dd,figcaption,img";
+    for (const b of root.querySelectorAll(BLOCK)) {
+      // Only the innermost block: a paragraph inside a quote is set once.
+      if (b.tagName !== "IMG" && b.querySelector(BLOCK.replace(",img", ""))) continue;
+      if (b.tagName === "IMG") {
+        const bmp = await bitmap(b);
+        if (!bmp) continue;
+        const w = Math.min(width, bmp.width * 1.5), h = Math.min(PY - MARGIN * 2, Math.round(bmp.height * w / bmp.width));
+        const ww = Math.round(bmp.width * h / bmp.height);
+        await room(h);
+        g.drawImage(bmp, MARGIN + (width - ww) / 2, y, ww, h);
+        bmp.close();
+        y += h + 24;
+        continue;
+      }
+      const text = b.textContent.replace(/\s+/g, " ").trim();
+      if (!text) continue;
+      const head = SIZE[b.tagName];
+      if (head) { await room(head * 3); y += 18; await words(text, head, true, 20); }
+      else await words((b.tagName === "LI" ? "• " : "") + text, 30, false, 22, b.tagName === "BLOCKQUOTE" || b.tagName === "DD" ? 40 : 0);
+    }
+    await flush();
+    if (!pages.length) throw new C.files.FileError("There's nothing in it to make a note from.");
+    return C.pptx.writePdf(pages);
+  }
+
+  C.notes = { PAPERS, LABELS, paper, toPdf, cover, layout, pdfName, create, fromPdf, open, keep, W, H };
 })();

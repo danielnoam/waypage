@@ -1393,6 +1393,30 @@
     return fp;
   }
 
+  // Where a clip's pictures come from, to make a note of it (2026-11):
+  // resolves to (img) => its bytes or null. A file read from outside keeps
+  // its pictures in the file (data-in names them in its zip).
+  async function pictureSource(meta) {
+    let zip = null;
+    if (meta.link && (meta.file.kind === "epub" || meta.file.kind === "cbz")) {
+      try {
+        const blob = await C.platform.files.blob(meta.link, meta.file.size);
+        zip = { blob, entries: await B().zipEntries(blob) };
+      } catch (e) { zip = null; }
+    }
+    const dir = S().pageDirUrl(meta.id);
+    return async (img) => {
+      const at = img.getAttribute("data-in");
+      if (at) { const e = zip && zip.entries.get(at); return e ? B().zipRead(zip.blob, e) : null; }
+      const src = img.getAttribute("src");
+      if (!src) return null;
+      const url = /^(data:|blob:|https?:)/.test(src) ? src : dir ? dir + src : null;
+      if (!url) return null;
+      const r = await fetch(url);
+      return r.ok ? new Uint8Array(await r.arrayBuffer()) : null;
+    };
+  }
+
   // Makes a clip of `file`, `kind` from kindOf. `link` is the lasting
   // permission on the file (platform.files) when the clip is to read from
   // it; its pictures then stay in the file. Resolves to the clip's index
@@ -1448,5 +1472,5 @@
     return meta;
   }
 
-  C.files = { KINDS, LINKABLE, canLink, kindOf, bring, openLinked, openNoteItem, noteSheets, addSheet, printed, drawable, convertible, fingerprint, fingerprintOf, drawNear, findPage, heldPdf: () => (held && held.pdf) || null, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
+  C.files = { KINDS, LINKABLE, canLink, kindOf, bring, openLinked, openNoteItem, noteSheets, addSheet, printed, drawable, convertible, fingerprint, fingerprintOf, thumbnail, pictureSource, drawNear, findPage, heldPdf: () => (held && held.pdf) || null, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
 })();

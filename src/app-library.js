@@ -1260,7 +1260,6 @@ const MENUS = {
   importList: { label: "Import", build: () => importSheet() },
   send: { label: "Saving a page", build: () => sendSheet() },
   newNote: { label: "New note", build: () => newNoteSheet() },
-  toNote: { label: "Make a note", build: () => toNoteSheet() },
   noteText: { label: "Text", build: () => noteTextSheet() },
 };
 let menuUnder = [];
@@ -2405,40 +2404,30 @@ async function noteFromFile(file, open) {
   renderLibrary();
   if (open) openPage(meta.id);
 }
-// The pen on a PDF (2.0.0): only a note is drawn on, so a PDF asks to be
-// made into one.
-function toNoteSheet() {
-  const p = state.open;
-  return el("div", { class: "page-controls" },
-    el("div", { class: "menu-head" },
-      el("p", { class: "menu-title" }, "Make a note from this PDF?"),
-      el("p", { class: "meta" }, "Only a note can be drawn on.")),
-    el("div", { class: "group" },
-      el("button", { class: "row", type: "button", onclick: () => { back().then(() => p && makeNoteFrom(p)); } },
-        el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, "Make a note"),
-          el("span", { class: "choice-note" }, "A copy of the PDF's pages you can draw on, in Notes. The PDF itself stays as it is."))),
-      el("button", { class: "row", type: "button", onclick: () => back() },
-        el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, "Cancel")))));
-}
-// A note made from a PDF: its pages, any drawings made on the PDF before
-// moved over, and opened to draw on.
+// A note made from any file (2026-11): a PDF's own pages, a comic's
+// pictures one to a page, anything else set as pages. It is a copy to
+// write on: the file and anything drawn on it stay as they are.
 async function makeNoteFrom(p) {
   if (!C.files.convertible(p)) return;
-  toast("Making the note…");
+  const say = (n) => toast(n ? "Making the note… " + n + " pages" : "Making the note…");
+  say(0);
   let meta;
   try {
-    const blob = await C.platform.files.blob(p.link, p.file.size);
+    let blob;
+    if (p.link && p.file.kind === "pdf") blob = await C.platform.files.blob(p.link, p.file.size);
+    else {
+      const html = p.link ? await C.files.openLinked(p) : await C.store.readPage(p.id);
+      const root = new DOMParser().parseFromString(html, "text/html").querySelector(".co-body");
+      if (!root) throw new C.files.FileError("Waypage can't read this one to make a note of it.");
+      let last = 0;
+      blob = await C.notes.layout(root, !!p.comic, await C.files.pictureSource(p), (n) => { if (n - last >= 10) { last = n; say(n); } }, p.comic ? "" : p.title);
+    }
     meta = await C.notes.fromPdf(p, blob);
   } catch (e) {
     console.error(e);
-    toast(e instanceof C.files.FileError ? e.message : "Couldn't make the note. Is the PDF still where it was?");
+    toast(e instanceof C.files.FileError ? e.message : "Couldn't make the note." + (p.link ? " Is the file still where it was?" : " Try again."));
     return;
   }
-  // Drawings made on the PDF before 2.0.0 go with it, page for page.
-  try {
-    const old = await C.store.readInk(p.id);
-    if (old) { await C.store.writeInk(meta.id, old); await C.store.writeInk(p.id, null); }
-  } catch (e) { /* the note is made without them */ }
   state.pages.unshift(meta);
   await C.store.writeIndex(state.pages);
   renderLibrary();
