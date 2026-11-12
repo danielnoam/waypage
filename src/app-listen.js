@@ -165,7 +165,7 @@ async function arrived(meta) {
   renderLibrary();
   toast("Added “" + meta.title + "”");
   await openPage(meta.id);
-  if (state.open === meta) openSheet("listen");
+  if (state.open === meta) openSheet("page");
 }
 
 // ---- The audiobook's own page ----
@@ -328,6 +328,7 @@ function paintListen() {
   const here = audioFor(open);
   if (here && isAudiobook(open) && !open.audio.overlay) $("readerAloud").hidden = true;
   const show = !!here;
+  $("readerChapters").hidden = !here || chaptersOf(playerBook()).length < 2;
   const box = $("listenPlayer");
   const was = box.hidden;
   box.hidden = !show;
@@ -391,9 +392,9 @@ function writtenTo(data, t) {
   $("listenBack").addEventListener("click", () => (mine() ? listenSkip(-15) : null));
   $("listenOn").addEventListener("click", () => (mine() ? listenSkip(30) : null));
   $("listenSpeed").addEventListener("click", listenSpeed);
-  $("listenMore").addEventListener("click", () => openSheet("listen"));
-  $("listenSleep").addEventListener("click", () => openSheet("listen"));
-  $("listenChap").addEventListener("click", () => openSheet("listen"));
+  $("listenSleep").addEventListener("click", () => toggleSheet("listenSleep"));
+  $("listenChap").addEventListener("click", () => (chaptersOf(playerBook()).length > 1 ? toggleSheet("listenChapters") : toggleSheet("page")));
+  $("readerChapters").addEventListener("click", () => toggleSheet("listenChapters"));
   $("listenBarPlay").addEventListener("click", listenToggle);
   $("listenBarBack").addEventListener("click", () => listenSkip(-15));
   $("listenBarStop").addEventListener("click", listenStop);
@@ -617,25 +618,25 @@ function listenMode(a, mode, book) {
   C.store.writeIndexOnly(state.pages);
   if (C.sync.on) syncSoon();
 }
-function listenSheet() {
-  const p = state.open;
+// Read along with: under the reader's ⋯, for the audiobook open or the
+// one this book is read along with.
+function listenAlongRows(p) {
   const a = audioFor(p);
-  if (!a) return el("div");
+  if (!a || a.audio.overlay) return null;
   const mode = modeOf(a);
-  const ch = chaptersOf(a);
-  const t = lis.key === a.id ? lis.t : placeOf(a);
-  const now = L.chapterAt(ch, t);
   const close = () => closeSheet();
   const pick = (label, note, on, act, disabled) => el("button", { class: "row", type: "button", "aria-pressed": String(!!on), disabled: disabled ? "" : null, onclick: act },
     el("span", { class: "choice-text" }, el("span", { class: "choice-label" + (on ? " accent" : "") }, label), note ? el("span", { class: "choice-note" }, note) : null),
     on ? el("span", { class: "row-value accent" }, "✓") : null);
   const canWords = A.canTranscribe;
-  const transcriptNote = !canWords ? "Needs the Android app." : "Written on this phone from the sound, a little ahead of where you are.";
+  const head = el("h3", { class: "overline" }, "Read along with");
+  if (!canWords) return [head, el("p", { class: "meta" }, "Reading along with a book or a transcript is in the Android app, which writes the transcript on the phone.")];
   const book = bookOf(a);
-  const kinds = a.audio.overlay ? null : !canWords ? section("Read along with", null, el("p", { class: "meta" }, "Reading along with a book or a transcript is in the Android app, which writes the transcript on the phone.")) : section("Read along with", null, el("div", { class: "group" },
-    pick("Find the book in Discover", "Searches Discover's book sites for “" + a.title + "”.", false, () => { closeSheet(true); openSheet("listenFind"); }, !canWords),
-    pick(book && mode === "book" ? "The book: " + book.title : "A book in your Library", "An EPUB or other book you already have.", mode === "book", () => { closeSheet(true); openSheet("listenBook"); }, !canWords),
-    pick("A transcript", transcriptNote, mode === "transcript", async () => {
+  const data = lis.dataFor === a.id ? lis.data : null;
+  return [head, el("div", { class: "group" },
+    pick("Find the book in Discover", "Searches Discover's book sites for “" + a.title + "”.", false, () => { closeSheet(true); openSheet("listenFind"); }),
+    pick(book && mode === "book" ? "The book: " + book.title : "A book in your Library", "An EPUB or other book you already have.", mode === "book", () => { closeSheet(true); openSheet("listenBook"); }),
+    pick("A transcript", "Written on this phone from the sound, a little ahead of where you are.", mode === "transcript", async () => {
       listenMode(a, "transcript");
       close();
       await writeListenPage(a, await loadListenData(a));
@@ -643,48 +644,72 @@ function listenSheet() {
       else if (state.open === a) show(a, await C.store.readPage(a.id));
       if (!readyPack()) toast("Download a transcript model in Settings › Reading › Transcripts.", "Open", () => openSettings(false, "transcripts"));
       writeAhead();
-    }, !canWords),
+    }),
     pick("Just listen", "The chapters, and no words.", mode === "listen", async () => {
       listenMode(a, "listen");
       close();
       await writeListenPage(a, null);
       if (state.open !== a) openPage(a.id); else show(a, await C.store.readPage(a.id));
-    })));
+    }),
+    data && data.pieces && data.pieces.length ? el("button", { class: "row", type: "button", onclick: async () => {
+      if (!confirm("Write the transcript again from the start? Your fixes stay.")) return;
+      await C.platform.audio.stopTranscribing();
+      data.pieces = []; data.ranges = []; data.sync = null; data.syncKey = "";
+      await C.store.writeListen(a.id, data);
+      lis.sync = null;
+      if (modeOf(a) === "transcript") { await writeListenPage(a, data); if (state.open === a) show(a, await C.store.readPage(a.id)); }
+      close();
+      writeAhead();
+    } }, el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, "Write the transcript again"),
+      el("span", { class: "choice-note" }, "With the model picked in Settings › Transcripts, from where you are."))) : null)];
+}
+
+function listenSleepSheet() {
+  const a = playerBook();
+  if (!a) return el("div");
+  const ch = chaptersOf(a);
+  const t = lis.key === a.id ? lis.t : placeOf(a);
   const sleeps = [["", "Off"], ["15", "15 min"], ["30", "30 min"], ["60", "1 hour"], ["chapter", "End of chapter"]];
-  const sleepNow = lis.sleepAt ? Math.max(1, Math.round((lis.sleepAt - Date.now()) / 60000)) + " min left" : "Off";
   const setSleep = (v) => {
     let at = 0;
     if (v === "chapter") { const next = ch[L.chapterAt(ch, t) + 1]; at = Date.now() + Math.max(10, ((next ? next.t : durOf(a)) - t) / speedOf(a)) * 1000; }
     else if (v) at = Date.now() + Number(v) * 60000;
     lis.sleepAt = at;
     A.sleep(at);
-    close();
+    closeSheet();
     paintListen();
   };
-  const data = lis.dataFor === a.id ? lis.data : null;
   return el("div", { class: "page-controls listen-sheet" },
     el("div", { class: "menu-head" },
-      el("p", { class: "menu-title", dir: "auto" }, a.title),
-      el("p", { class: "meta" }, ["Audiobook", (a.file.ext || "").toUpperCase(), L.lengthText(durOf(a)), ch.length > 1 ? ch.length + " chapters" : "", a.audio.folder ? a.audio.parts.length + " files" : ""].filter(Boolean).join(" · "))),
-    kinds,
-    section("Sleep timer", null, el("p", { class: "meta" }, lis.sleepAt ? "Stops in " + sleepNow.replace(" left", "") : "Off"),
-      el("div", { class: "listen-sleeps", role: "group", "aria-label": "Sleep timer" }, ...sleeps.map(([v, label]) =>
-        el("button", { class: "chip" + ((v === "" && !lis.sleepAt) ? " on" : ""), type: "button", onclick: () => setSleep(v) }, label)))),
-    ch.length > 1 ? section("Chapters", null, el("div", { class: "group listen-chapters" },
-      ...ch.map((c, i) => el("button", { class: "row", type: "button", "aria-current": i === now ? "true" : null, onclick: () => { close(); if (lis.key === a.id) listenSeek(c.t + 0.01); else listenPlay(a, c.t + 0.01); } },
-        el("span", { class: "row-label", dir: "auto" }, c.title || "Chapter " + (i + 1)), el("span", { class: "row-value" }, L.timeText(c.t)))))) : null,
-    data && data.pieces && data.pieces.length && canWords ? section(null, null, el("div", { class: "group" },
-      el("button", { class: "row", type: "button", onclick: async () => {
-        if (!confirm("Write the transcript again from the start? Your fixes stay.")) return;
-        await C.platform.audio.stopTranscribing();
-        data.pieces = []; data.ranges = []; data.sync = null; data.syncKey = "";
-        await C.store.writeListen(a.id, data);
-        lis.sync = null;
-        if (modeOf(a) === "transcript") { await writeListenPage(a, data); if (state.open === a) show(a, await C.store.readPage(a.id)); }
-        close();
-        writeAhead();
-      } }, el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, "Write the transcript again"),
-        el("span", { class: "choice-note" }, "With the model picked in Settings › Transcripts, from where you are."))))) : null);
+      el("p", { class: "menu-title" }, "Sleep timer"),
+      el("p", { class: "meta" }, lis.sleepAt ? "Stops in " + Math.max(1, Math.round((lis.sleepAt - Date.now()) / 60000)) + " min" : "Off")),
+    el("div", { class: "listen-sleeps", role: "group", "aria-label": "Sleep timer" }, ...sleeps.map(([v, label]) =>
+      el("button", { class: "chip" + ((v === "" && !lis.sleepAt) ? " on" : ""), type: "button", onclick: () => setSleep(v) }, label))));
+}
+
+// The chapters, from the top left like a collection's clips.
+function listenChaptersSheet() {
+  const a = playerBook();
+  if (!a) return el("div");
+  const ch = chaptersOf(a);
+  const t = lis.key === a.id ? lis.t : placeOf(a);
+  const now = L.chapterAt(ch, t);
+  const rows = ch.map((c, i) => {
+    const next = ch[i + 1] ? ch[i + 1].t : durOf(a);
+    const b = el("button", { class: "row contents-row folder-row", type: "button", onclick: () => { closeSheet(); if (lis.key === a.id) listenSeek(c.t + 0.01); else listenPlay(a, c.t + 0.01); } },
+      el("span", { class: "folder-n", "aria-hidden": "true" }, String(i + 1)),
+      el("span", { class: "choice-text" },
+        el("span", { class: "row-label", dir: "auto" }, c.title || "Chapter " + (i + 1)),
+        el("span", { class: "choice-note" }, L.timeText(c.t) + " · " + L.lengthText(next - c.t))));
+    if (i === now) b.setAttribute("aria-current", "true");
+    return el("li", null, b);
+  });
+  const nav = el("nav", { class: "contents", "aria-label": a.title },
+    el("p", { class: "menu-title", dir: "auto" }, a.title),
+    el("p", { class: "meta" }, ["Audiobook", L.lengthText(durOf(a)), ch.length + " chapters", a.audio.folder ? a.audio.parts.length + " files" : ""].filter(Boolean).join(" · ")),
+    el("ol", { class: "group contents-list" }, ...rows));
+  requestAnimationFrame(() => centreIn(nav.querySelector("[aria-current]")));
+  return nav;
 }
 
 // A book in the library to read along with, the likeliest first.
@@ -817,9 +842,10 @@ function listenSelection(bar, picked) {
   b.hidden = !(picked && isAudiobook(p) && modeOf(p) === "transcript" && picked.text.trim().split(/\s+/).length <= 6);
 }
 
-SHEETS.listen = { button: "listenMore", label: "Audiobook", build: listenSheet };
-SHEETS.listenBook = { button: "listenMore", label: "A book to read along with", build: listenBookSheet };
-SHEETS.listenFind = { button: "listenMore", label: "Find the book in Discover", build: listenFindSheet };
+SHEETS.listenSleep = { button: "listenSleep", label: "Sleep timer", build: listenSleepSheet };
+SHEETS.listenChapters = { button: "readerChapters", label: "Chapters", build: listenChaptersSheet };
+SHEETS.listenBook = { button: "readerMore", label: "A book to read along with", build: listenBookSheet };
+SHEETS.listenFind = { button: "readerMore", label: "Find the book in Discover", build: listenFindSheet };
 SHEETS.listenFix = { label: "Fix a word", build: listenFixSheet };
 
 // ---- An EPUB's own narration ----

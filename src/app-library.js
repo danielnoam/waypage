@@ -918,6 +918,7 @@ function pageSheet(p, where) {
         p.file ? null : tileButton("original", "Original", () => C.platform.openOutside(p.url)),
         p.link && C.platform.files.canReveal ? tileButton("folder", "Folder", () => showFolder(p)) : null,
         favTile(p, draw)),
+      ...(inReader && !p.preview && typeof listenAlongRows === "function" ? listenAlongRows(p) || [] : []),
       el("h3", { class: "overline" }, p.link ? "This file" : "This clip"),
       p.preview || inReader || !(p.marks || []).length ? null : el("div", { class: "group" },
         el("button", { class: "row", type: "button", onclick: () => { markFocus = null; marking = true; draw(); } },
@@ -960,7 +961,7 @@ function pageSheet(p, where) {
 
 // A PDF read from outside stays as it is: its printed pages are pictures.
 function kindable(p) {
-  if (p.preview || (p.link && p.file && p.file.kind === "pdf")) return false;
+  if (p.preview || p.audio || (p.link && p.file && p.file.kind === "pdf")) return false;
   return !!p.file || /^https?:/.test(p.url || "");
 }
 

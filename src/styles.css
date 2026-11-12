@@ -3028,6 +3028,5 @@ body.listen-bar-up .library, body.listen-bar-up .screen-body { padding-bottom: c
 [dir="rtl"] .listen-badge { right: auto; left: var(--s-1); }
 .listen-sleeps { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-2); }
 .reader.listening .read-progress { display: none; }
-.listen-chapters .row[aria-current="true"] .row-label { color: var(--accent); font-weight: 600; }
 .listen-pack { flex: none; accent-color: var(--accent); width: 20px; height: 20px; margin: 0; }
 .sel-fix[hidden] { display: none; }
