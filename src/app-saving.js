@@ -420,6 +420,13 @@ function syncLeave() {
 // Pages too, or links only: the library and its marks always sync.
 // What this device syncs (1.47.0): switches, like Google Drive's What
 // goes in, with Links only under Clips (0.30.3).
+// A note too big to sync says so under the Notes switch itself (2026-11).
+function notesNote() {
+  const big = state.pages.filter((p) => tooBigLine(p));
+  if (!big.length) return "Every note, whole";
+  return el("span", null, "Every note, whole. ", el("span", { class: "warn" },
+    (big.length === 1 ? "“" + big[0].title + "” isn't" : big.length + " notes aren't") + " synced: over the 50 MB limit"));
+}
 function syncsList() {
   const what = C.sync.what;
   const sw = (key, label, note) => el("label", { class: "row" },
@@ -435,9 +442,7 @@ function syncsList() {
       sw("clips", "Clips", C.sync.links ? "Links, highlights, tags, collections and places" : "Text, highlights, tags, collections and places"),
       what.clips ? el("div", { class: "row" }, seg("sync-what", "What goes up of each clip", [{ value: "pages", label: "Clips too" }, { value: "links", label: "Links only" }],
         C.sync.links ? "links" : "pages", (v) => { C.sync.links = v === "links"; renderSection(); syncSoon(500); })) : null,
-      sw("notes", "Notes", "Every note, whole"),
-      ...(what.notes ? state.pages.filter((p) => tooBigLine(p)).map((p) => el("div", { class: "row" },
-        el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, p.title), el("span", { class: "choice-note warn" }, tooBigLine(p))))) : []),
+      sw("notes", "Notes", notesNote()),
       sw("feeds", "Feeds", "Which you follow and how"),
       sw("newsletters", "Newsletters", "Your addresses and how they're set"),
       sw("stats", "Reading stats", "Reading time from every device, added up"),
