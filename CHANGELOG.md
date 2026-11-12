@@ -2,6 +2,49 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.58.0] - 2026-11-12
+
+### Added
+- Draw on anything: any clip, book, comic or file, not just a PDF. Drawing is part of Highlights: Draw on this clip in the Highlights sheet, Draw on the selection bar, or D. On words a drawing is pinned to its paragraph or picture, so it stays with it when the text size or layout changes; on a PDF's printed pages and on notes it is pinned to the page.
+- Highlights lists drawings among the highlights, in order, each with a small picture of what was drawn and "Paragraph 4", "Picture" or "Page 12". Tap one to go there. The Highlights place shows drawings too, five per clip, then Show all.
+- Drawings on a clip sync and go into backups with its highlights, stroke by stroke: two devices drawing on one clip keep both.
+- Highlights and drawings on a file read from where it is now sync too. They show on another device only on the same file, known by its contents, not its name.
+- Make a note from it, in ⋯, works for every kind of file Waypage reads: a PDF's own pages, a comic's pictures one to a page, and anything else set as pages. Drawings on the file stay on it.
+- A drawing whose paragraph is gone after Update from the site says Not found in this copy, as a highlight does.
+- A note's card shows its first sheet, with what is drawn on it.
+- Notes go into backups whole, with what's written on them and their PDF, and come back with a restore. Google Drive's What goes in has a Notes switch of its own, above Feeds.
+- A note over the 50 MB sync limit says so on its card ("Not synced, too big") and in ⋯, and stays on this device; Sync's Notes switch says notes over 50 MB can't be synced.
+- GitHub sync has a Notes switch above Feeds in What this device syncs. With it on, each note goes up whole (its sheets, what is drawn and typed on them, pictures put on it and the PDF it was made from, up to 50 MB) and comes down on your other devices. With it off, notes are left as they are here and on GitHub.
+- Notes: a page of your own to draw and type on. Save with options › New note asks for blank, lines or squares paper (each shown beside its name) and opens a note with the pen ready. A note grows as you write: drawing on its last sheet adds another. Notes have their own part of the library, above Files, and are always a scroll.
+- A note's Aa has only Layout (All notes or This note, margins, brightness slider, theme, Dark note) and Auto-scroll, which goes on to the next note.
+- Typed text on a note: Add › Text puts words on the sheet in view, in three sizes. Select moves, copies, cuts and deletes it, and Edit text changes it, all undoable.
+- Opening a PDF offers Make a note as a third choice beside Keep a copy and Read from where it is: a copy of the PDF's pages you can draw on, in Notes, named as the file is. The PDF itself stays as it is.
+- Show in the library has All notes once you have a note, listing them alone.
+- ⋯ › Save as PDF on a note makes a PDF of its sheets with what is drawn, added and typed on them; the typed words can be searched.
+- Rename a clip or a note: tap its name at the top left of the reader, change it where it is, and press Enter (or tap away). Escape leaves it. The name shows on a phone too, and the reader's top bar has smaller icons there (18 px in 38 px buttons) to make room.
+- Rename a clip or note from the library: hold it and pick Rename (with Undo after). On a computer it's in the right-click menu too, or F2. The new name syncs to your other devices; the heading inside the saved text stays the page's own.
+
+### Changed
+- Notes sit above Files in the library and the side menu.
+- A note written on two devices keeps what both drew, stroke by stroke, instead of the copy saved last.
+- Markdown exports and Copy all list drawings as lines ("Drawing, paragraph 4"); Save as PDF on a note still has the drawing itself.
+- The reader bar's pen is only on notes. Elsewhere Draw is in Highlights and on the selection bar.
+- ⋯ › Drawings is gone: Try your pen and Remove all drawings are at the foot of the Highlights sheet, and Save a copy with drawings is in ⋯ on a PDF that has some.
+- The selection bar says Mark (was Highlight) and Draw: both make highlights.
+- A note can show as Pages, a sheet at a time like a comic: Aa › Show as, for all notes or just this one.
+- Notes are no longer only on this device.
+- Audiobooks have their own place in Settings, under Reading: Listening (how far back and forward skip, also on the lock screen; back a little after a pause; keep the screen on; allow mixing; the small window outside the app, as Narrate has) and the transcript models.
+- An audiobook's page shows only the chapter you're in, and nothing where nothing is written yet.
+- The chapters list shows a labelled Transcript line under each chapter, a bar and a percentage, and marks the chapter being written now.
+- No "Tap a sentence" line on the player.
+- Write the rest now, in ⋯: the whole transcript, every part not written yet, while the app is open.
+- Read along, in ⋯, is one drop-down (A transcript, The book, Nothing) that shows only what that choice needs.
+- An audiobook page with no words has no Highlights, Translate or Draw button.
+- In an audiobook, the reader settings' Narrate tab is now Audiobook: the listening settings (back, forward, back a little after a pause, screen on, mixing, small window) and a way to Transcripts in Settings.
+
+### Fixed
+- In an audiobook made of several files, the transcript of the second file and on showed under chapter 1. Transcripts already written are put right when opened.
+
 ## [1.57.0] - 2026-11-12
 
 ### Added
