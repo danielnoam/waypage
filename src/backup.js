@@ -29,15 +29,23 @@
     if (typeof f.fp === "string" && FP.test(f.fp)) out.fp = f.fp;
     return out;
   }
+  // A note's paper, and the PDF it was made from when it was.
+  function cleanNote(n) {
+    const out = { paper: ["blank", "lines", "squares"].includes(n.paper) ? n.paper : "blank" };
+    if (typeof n.from === "string" && /^[a-z0-9]{4,24}$/.test(n.from)) out.from = n.from;
+    return out;
+  }
   const sameFile = (a, b) => !!(a.file && b.file && a.file.name === b.file.name && a.file.size === b.file.size);
 
   // An entry from a file, down to the fields an index entry has. null when
   // it has no address to call home, and wasn't made from a file.
   function cleanMeta(m, id) {
     const file = m && typeof m === "object" ? cleanFile(m.file) : null;
-    if (!m || typeof m !== "object" || (!httpUrl(m.url) && !file)) return null;
+    // A note (2.0.0) has no address and no file: it is its own page.
+    const note = m && typeof m === "object" && m.note && typeof m.note === "object" ? cleanNote(m.note) : null;
+    if (!m || typeof m !== "object" || (!httpUrl(m.url) && !file && !note)) return null;
     const out = {
-      id, url: httpUrl(m.url), title: text(m.title, 300) || httpUrl(m.url) || file.name, site: text(m.site, 100), byline: text(m.byline, 200),
+      id, url: httpUrl(m.url), title: text(m.title, 300) || httpUrl(m.url) || (file ? file.name : "Note"), site: text(m.site, 100), byline: text(m.byline, 200),
       licence: m.licence === "wikipedia" ? "wikipedia" : null, savedAt: num(m.savedAt) || Date.now(), minutes: Math.max(1, Math.round(num(m.minutes)) || 1),
       lang: text(m.lang, 20), dir: m.dir === "rtl" ? "rtl" : "", mode: ["previews", "full", "links"].includes(m.mode) ? m.mode : "previews",
       images: num(m.images), missing: num(m.missing), bytes: num(m.bytes),
@@ -70,8 +78,12 @@
     if (folder && typeof m.coverPick === "string" && (COVER_FILE.test(m.coverPick) || /^clip:[a-z0-9]{4,24}$/.test(m.coverPick))) out.coverPick = m.coverPick;
     if (text(m.series, 200)) out.series = text(m.series, 200);
     if (file) out.file = file;
+    if (note) out.note = note;
     const marks = cleanMarks(m.marks);
     if (marks.length) out.marks = marks;
+    // Drawings by block (2026-11): with the highlights, on the entry.
+    const ink = cleanInk(m.ink);
+    if (ink) { out.ink = ink; if (num(m.inkAt)) out.inkAt = num(m.inkAt); }
     // An audiobook's place and fixes (2026-11).
     const listen = cleanListen(m.listen);
     if (listen) out.listen = listen;
@@ -103,6 +115,21 @@
   // its note and its colour.
   // Colours other than yellow (1.42.0); yellow has none.
   const MARK_COLORS = ["green", "blue", "pink", "purple"];
+  // A clip's drawings by block: { "<block>": [stroke] }, each stroke as
+  // ink.js keeps it (ink.js clean). null when there are none.
+  function cleanInk(pages) {
+    if (!pages || typeof pages !== "object" || Array.isArray(pages) || !(C.ink && C.ink.clean)) return null;
+    const out = {};
+    let n = 0;
+    for (const [k, list] of Object.entries(pages)) {
+      const b = Math.floor(Number(k));
+      if (!(b >= 1 && b <= 20000) || !Array.isArray(list)) continue;
+      const ok = list.slice(0, 5000).map(C.ink.clean).filter(Boolean).filter((s) => s.t !== "i");
+      if (ok.length) { out[b] = ok; n += ok.length; }
+      if (n > 20000) break;
+    }
+    return n ? out : null;
+  }
   function cleanMarks(list) {
     if (!Array.isArray(list)) return [];
     const ids = new Set();
@@ -349,6 +376,7 @@
           const id = pages[at + i].id, { html, text } = got[i];
           if (html) await zip.add("pages/" + id + "/page.html", utf8(html));
           if (text != null) await zip.add("pages/" + id + "/text.txt", utf8(text));
+          if (pages[at + i].note) for (const f of await noteFiles(id)) await zip.add("pages/" + id + "/" + f.name, f.bytes);
           if (onProgress) onProgress(++done, pages.length);
         }
         await stop();
@@ -357,6 +385,25 @@
     }
     await zip.finish();
     return native ? { uri: await file.uri(), name } : { blob: new Blob(parts, { type: "application/zip" }), name };
+  }
+
+  // A note's own files, as the app keeps them beside its page (2026-11):
+  // its sheets, its strokes, the pictures put on it and its PDF. In the
+  // app they are in its folder and go in with it.
+  async function noteFiles(id) {
+    const out = [];
+    const note = await S().readNote(id);
+    if (note) out.push({ name: "note.json", bytes: utf8(JSON.stringify(note)) });
+    const ink = await S().readInk(id);
+    if (ink) {
+      out.push({ name: "ink.json", bytes: utf8(JSON.stringify(ink)) });
+      const used = new Set();
+      for (const list of Object.values(ink.pages || {})) for (const s of list || []) if (s && s.t === "i" && typeof s.f === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(s.f)) used.add(s.f);
+      for (const f of used) { const url = await S().readInkImage(id, f); if (url) out.push({ name: "ink/" + f + ".txt", bytes: utf8(url) }); }
+    }
+    const base = await S().readNoteBase(id);
+    if (base) out.push({ name: "base.pdf", bytes: base instanceof Uint8Array ? base : new Uint8Array(await base.arrayBuffer()) });
+    return out;
   }
 
   // In the app, FilesPlugin streams the files into the zip itself
@@ -381,7 +428,7 @@
   const holdPack = (hold) => { if (packing) C.platform.plugin("Files").packHold({ hold: !!hold }).catch(() => {}); };
   const stopPack = () => { if (packing) C.platform.plugin("Files").packStop().catch(() => {}); };
 
-  const PAGE_FILE = /^(page\.html|meta\.json|text\.txt|images\/[A-Za-z0-9._-]{1,80})$/;
+  const PAGE_FILE = /^(page\.html|meta\.json|text\.txt|images\/[A-Za-z0-9._-]{1,80}|note\.json|ink\.json|base\.pdf|ink\/[A-Za-z0-9_-]{1,40}\.txt)$/;
 
   // Merges a backup into the library: a page not here is added, one here
   // already is replaced only by a copy saved later, never the other way.
@@ -411,7 +458,8 @@
         links.push(link);
       }
       if (meta) {
-        const i = pages.findIndex((p) => (meta.file ? sameFile(p, meta) : same(p.url, meta.url)));
+        // A note has no address: it is known by its id.
+        const i = pages.findIndex((p) => (meta.note ? p.id === from && p.note : meta.file ? sameFile(p, meta) : same(p.url, meta.url)));
         if (i >= 0 && (pages[i].savedAt || 0) >= meta.savedAt) kept++;
         else {
           if (i >= 0) { await S().removePage(pages[i].id); taken.delete(pages[i].id); }
@@ -462,6 +510,20 @@
       if (meta.thumb && pics.has(meta.thumb)) await S().writeThumb(meta.id, pics.get(meta.thumb));
       const words = entries.get(prefix + "text.txt");
       if (words) await S().writeText(meta.id, new TextDecoder().decode(await zipRead(blob, words)));
+      if (meta.note) {
+        const read = async (rel) => { const e = entries.get(prefix + rel); return e ? zipRead(blob, e) : null; };
+        const json = async (rel) => { const b = await read(rel); try { return b ? JSON.parse(new TextDecoder().decode(b)) : null; } catch (e) { return null; } };
+        const note = await json("note.json");
+        if (note) await S().writeNote(meta.id, note);
+        const ink = await json("ink.json");
+        if (ink) await S().writeInk(meta.id, ink);
+        for (const [name, e] of entries) {
+          const m = name.startsWith(prefix + "ink/") && /^ink\/([A-Za-z0-9_-]{1,40})\.txt$/.exec(name.slice(prefix.length));
+          if (m) { const url = new TextDecoder().decode(await zipRead(blob, e)); if (/^data:image\//.test(url)) await S().writeInkImage(meta.id, m[1], url); }
+        }
+        const base = await read("base.pdf");
+        if (base) await S().writeNoteBase(meta.id, new Blob([base], { type: "application/pdf" }));
+      }
       return;
     }
     for (const [name, e] of entries) {
@@ -629,14 +691,20 @@
     head.push("[" + mdEscape(p.site || p.url) + "](" + webUrl(p.url) + ")");
     const licence = doc.querySelector(".co-licence");
     const foot = licence ? "---\n\n" + mdInline(licence).trim() : "";
-    const marks = (p.marks || []).length ? "## Highlights\n\n" + marksBody(p) : "";
+    const marks = (p.marks || []).length || (p.ink && Object.keys(p.ink).length) ? "## Highlights\n\n" + marksBody(p) : "";
     const text = [...head, ...out, marks, foot].filter(Boolean).join("\n\n").replace(/\n{3,}/g, "\n\n") + "\n";
     return { name: pageSlug(p.title) + ".md", text };
   }
 
   // A clip's highlights as Markdown (1.7.0): each a quote, its note under it.
+  // Highlights, and where something was drawn (2026-11): Markdown can't
+  // hold a drawing, so it says where one is, in the clip's order.
   function marksBody(p) {
-    return (p.marks || []).map((m) => "> " + mdEscape(m.text) + (m.note ? "\n\n" + m.note.split("\n").map((l) => l.trim()).join("\n") : "")).join("\n\n");
+    const rows = (p.marks || []).map((m) => ({ at: m.page ? m.page : m.block || 0,
+      text: "> " + mdEscape(m.text) + (m.note ? "\n\n" + m.note.split("\n").map((l) => l.trim()).join("\n") : "") }));
+    if (!p.note && p.ink && typeof p.ink === "object") for (const k of Object.keys(p.ink)) if (Array.isArray(p.ink[k]) && p.ink[k].length) rows.push({ at: Number(k) - 0.5, text: "_Drawing, paragraph " + k + "_" });
+    if (!p.note && Array.isArray(p.drawn)) for (const d of p.drawn) if (Array.isArray(d)) rows.push({ at: d[0] + 0.5, text: "_Drawing, page " + d[0] + "_" });
+    return rows.sort((a, b) => a.at - b.at).map((r) => r.text).join("\n\n");
   }
   function marksMarkdown(p) {
     const link = p.file ? "" : "[" + mdEscape(p.site || p.url) + "](" + webUrl(p.url) + ")";
@@ -711,5 +779,5 @@
     return meta;
   }
 
-  C.backup = { COVER_FILE, holdPack, stopPack, cleanMeta, cleanMarks, cleanListen, marksMarkdown, sameFile, cleanFeed, crc32, zipWriter, zipEntries, zipRead, headFiles, exportLibrary, restoreLibrary, exportPage, exportPages, exportMarkdown, exportMarkdownAll, importPage, imageType, mdBlocks };
+  C.backup = { COVER_FILE, holdPack, stopPack, cleanMeta, cleanMarks, cleanListen, cleanInk, marksMarkdown, sameFile, cleanFeed, crc32, zipWriter, zipEntries, zipRead, headFiles, exportLibrary, restoreLibrary, exportPage, exportPages, exportMarkdown, exportMarkdownAll, importPage, imageType, mdBlocks };
 })();

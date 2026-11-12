@@ -53,8 +53,8 @@ src/app-search.js   search, filters, sort orders, the dropdown control
 src/app-draw.js     section heads, a part opened alone, the flip, Continue reading, renderLibrary
 src/app-jobs.js     links out of a paste or share, the URL index, savePage, saveAll, Wi-Fi wait, runJob
 src/app-reader.js   moving between screens; the reader around the page: brightness, contents, Narrate, highlights, image viewer
-src/app-ink.js      Draw: the pen button, the bar of tools, the Drawings sheet, saving a copy with them
-src/app-pentest.js  the pen test in Drawings: asks for ten things in turn, records what the page and the phone report, makes a log
+src/app-ink.js      Draw: the pen button, the bar of tools, Try your pen, saving a copy with drawings
+src/app-pentest.js  the pen test in Try your pen: asks for ten things in turn, records what the page and the phone report, makes a log
 src/app-library.js  tags, collections, a clip's sheet, multi-select, export, import, watched folders
 src/app-saving.js   sync screen, saving several, next links and new chapters, feeds, home-screen widgets
 src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestures, a feed's sheets
@@ -70,7 +70,8 @@ src/platform.js     browser vs app: native fetch, plugins, downloads, speech, op
 src/files.js        EPUB, Kindle (MOBI/AZW3), FB2, CBZ, Markdown, text and HTML files
 src/listen.js       audiobooks' pure parts: chapters from M4B and MP3 tags, transcripts as paragraphs, fixes, heard words matched to a book's, EPUB Media Overlays
 src/pdf.js          PDFs through pdf.js in a locked-down frame
-src/ink.js          pen drawing over a PDF's pages: strokes, layers, undo, what a copy of the PDF is given
+src/ink.js          drawing over a clip's blocks or a PDF's pages: strokes, layers, undo, what a copy of the PDF is given
+src/notes.js        notes: sheets of paper you draw on, opened through the PDF pages pipeline with a stand-in document; any clip laid out as a PDF to make one
 src/pptx.js         PowerPoint decks redrawn on a canvas and written as a PDF (1.49.0)
 src/epub.js         clips as an EPUB 3 book, for e-readers and Send to Kindle
 src/feeds.js        RSS, Atom and JSON Feed, read into one shape
@@ -217,8 +218,29 @@ fallback); one made in Show as text is found on the printed pages the
 same way (`findRects`, and `files.findPage` for Go to it). Comics and
 scans have no words, so the reader hides Highlights for them.
 
-A PDF's pages, words or scan, can be drawn on with a pen (1.56.0).
-`ink.js` gives each page that has a picture a layer of SVG over it
+Anything can be drawn on (2026-11). Drawing is part of Highlights: Draw in
+the Highlights sheet and on the selection bar (`app-ink.js inkStart`), and
+the reader bar's pen only on notes. `ink.load` picks one of two modes.
+Pages mode (a note's sheets, an outside PDF's printed pages) is described
+below. Blocks mode (everything else) numbers a clip's paragraphs and
+pictures as highlights do (`reader.js inkBlock`, block n = the reader's
+anchors[n-1]) and gives each block a layer that reaches halfway to its
+neighbours (`inkBlockBox`), inside `.co-inkroot`; strokes are in the
+block's width, so they follow it through text size and layout. A watch
+(`watchBlocks`) places the layers for the blocks near the view. Strokes by
+block live on the index entry as `ink` (`ink.blockStore`), so they sync
+(`sync.mergeInk`, three ways by stroke id and block) and back up
+(`backup.cleanInk`, pictures left out) like `marks`. An outside PDF's
+printed pages keep `ink.json` and a summary on the entry, `drawn: [[page,
+strokes]]`, for Highlights to list. Highlights and drawings on a file read
+from outside go in library.json's `outside` map, keyed by the file's
+fingerprint (`files.fingerprint`: size and first and last 256 KB, SHA-256),
+merged three ways (`sync.mergeOutside`) and applied to every file here
+with that fingerprint (`app-saving.js outsideTake`). A note's `ink.json`
+merges with GitHub's against `ink-base.json` (`sync.noteInkMerged`), what
+sync last left on both.
+
+In pages mode `ink.js` gives each page that has a picture a layer of SVG over it
 (`.co-ink`, a sibling of the picture like the words' layer, placed by
 `placeText` with the same `pageBox`), and `app-ink.js` is the button, the
 bar of tools and the sheet. A stroke is `{ id, t: "p"|"h", c, w, p, y? }` (`y` is how a pen wrote: "marker",
@@ -286,6 +308,32 @@ with no layer yet (not near the screen) get no copy, and in Pages layout
 (one page a screen) only a side-by-side spread has a neighbour to drop on.
 There's no scrolling while dragging near the screen's edge.
 
+A note (2.0.0, `notes.js`) is a library item with `note: { paper, from? }`
+and no file: a stack of sheets, in `note.json` (`store.readNote`,
+`writeNote`), `{ bg: "paper" }` or `{ bg: "pdf", n }`, with its strokes in
+`ink.json` as before. It opens through `fillPdf` with a stand-in for the
+pdf.js document (`notes.js handle`: `draw(n, width)` paints the paper on a
+canvas, or draws the page from the note's PDF), so drawing, the layers and
+undo are the PDF's own. A stroke on the last sheet adds a sheet of paper
+(`ink.onStroke`, `files.addSheet`). A note shows as Scroll or Pages (`noteLook().layout`, `pagesOn`; Pages turns sheets like a comic),
+has its own margins and Dark note (`waypage.noteLook`, `app-reading.js`),
+and only a note is `drawable`; a linked PDF is `convertible`: its pen asks
+for a note, and `notes.fromPdf` keeps a copy of the PDF beside the note
+(`base.pdf`, `store.writeNoteBase`; a browser keeps a Blob in the database,
+at most 100 MB), one sheet to a page, and moves the PDF's old drawings over.
+Opening a PDF asks Keep a copy, Read from where it is or Make a note too
+(`noteFromFile`, `fileSheet`), in a browser as well; the library's Show has
+All notes (`filter "notes"`) while a note exists.
+Typed text is an item in `ink.json` like a picture, `{ id, t: "x", c, x, y,
+w, h, z, text }` (`z` the size in page widths, `ink.js addText`, `editText`),
+so Select, move, cut, paste, delete and undo take it with no more code. Save
+as PDF (`notes.toPdf`) draws each sheet, its strokes, pictures and text into
+a JPEG and writes them with `pptx.js writePdf`, the text also as its
+invisible words. A clip or note is renamed from the reader's bar (`app-reader.js`:
+`paintReaderName`, `renameInReader`, `renameClip`): the index and the saved
+page's heading change, and `rewriteClip` stamps `editedAt` so sync sends the
+name with the clip. Notes sync and go to Drive as PDFs (see Sync and backups).
+
 A comic in Pages (reader.js `picsLayout`) is a flex row of its pages, each
 sized in px to a screen or half of one, so the text's own turning
 (`goPage`, `pages()`, the swipe, keys and thirds) works unchanged; a manga
@@ -331,10 +379,27 @@ web copy stay links, as before.
   `covers/<name>` before the library naming it, comes down before the
   library is shown, and rides in a backup as `covers.json`. Stored in
   `_covers/` in the app, in the database in a browser.
+- **Notes in sync** (2.0.0): a note is a library entry (`note: { paper,
+  from? }`, no address) whose page is only a shell, so it rides library.json
+  and `pages/<id>.html` like a clip, and its data goes beside it as
+  `notes/<id>/note.json`, `ink.json`, `img-<id>.txt` (a picture put on it)
+  and `base.pdf` (the PDF it was made from, at most 50 MB through the
+  Contents API). Their shas by name are in `files[id].note`, so only what
+  changed is sent, and the files go before the page that names them. Drawing
+  on a note stamps `editedAt` (`ink.onSaved`), which is what makes sync see
+  it: **the copy edited last wins whole**, strokes are not merged. The
+  switch is `what.notes`: a note (or, with Clips off, a clip) this device
+  doesn't sync is left out of the merge and the base, and put back into
+  library.json as GitHub had it (`ours`/`rest` in `once()`), so it never reads
+  as deleted. A note has no address, so `oneCopyEach` skips it and Links only
+  doesn't apply to it. A backup zip holds a note whole, as its folder
+  (`backup.noteFiles` in a browser; the native packer takes the folder),
+  under Drive's own Notes switch (`driveContents`); there are no PDF copies.
 - Files read from outside (`link` on the entry) are this device's alone:
   neither sync nor any backup takes them, and a restore skips them.
-  What's yours on one does sync (2026-11): its place, highlights, tags,
-  collection and favourite go in library.json's `outside` map, keyed by
+  What's yours on one does sync (2026-11): its place, highlights, drawings
+  (`ink`, and a printed PDF's drawn `pages`), tags, collection and
+  favourite go in library.json's `outside` map, keyed by
   the file's fingerprint (`files.fingerprint`: a hash of its size and
   first and last 256 KB), and land only on a device with the same file,
   at once when it's brought in (`outsideKnown`, from the last library
@@ -517,6 +582,11 @@ adds a line here.
 - Dialogs (Downloads, Sync, Save with options, Settings) fade in and out,
   the one planned exception to "nothing fades" (Daniel's pick over the
   grow and the zoom).
+- **Notes sync whole, the last edit wins.** Two devices writing on the same
+  note between syncs keep one device's version (the one saved last); strokes
+  aren't merged. A note's PDF over 50 MB isn't sent, so that note opens on
+  another device with its PDF missing. Notes sync by default like the other
+  parts, since sync itself is already on.
 
 - **Transcripts aren't synced or backed up.** They're remade on each
   phone from the sound (a long book's is a few MB); only the fixes sync.
@@ -527,6 +597,10 @@ adds a line here.
 
 Things that broke once and would again. Check here before touching the
 area.
+
+- `sync-worker.js` has to load `ink.js`: `backup.cleanInk` checks strokes
+  with `C.ink.clean`, and without it every drawing on a clip dropped out
+  of a merge made on the worker.
 
 - **The Highlight hold captures the pointer:** `markHold` (app-reader.js)
   takes the finger on Highlight so the slide to a colour keeps reporting,
@@ -595,7 +669,7 @@ area.
   first, so the button is known before the stroke. While a pen is near the
   layers get `touch-action: none` (`data-co-pen-near`), since the browser
   decides whether to pan at the touch, and the touch's own events come
-  too late and differ from device to device. Drawings › Try your pen shows
+  too late and differ from device to device. Highlights › Try your pen shows
   what the page and the phone each say, and its Start test records a log of
   ten steps (`app-pentest.js`; the Pen plugin's `raw` mode sends every
   MotionEvent and KeyEvent) to save and send. The log holds only event
@@ -627,6 +701,14 @@ area.
   samples, or a quick pass skips a line. Strokes are kept in widths, never
   pixels, and the layer's viewBox is the page's shape, so nothing is
   stretched.
+- **Pages drawn onto the wrong document:** while one page slides out and the
+  next loads, the reader's frame still shows the old document, yet `held`
+  (files.js) is already the new PDF or note. A `drawNear` then found the old
+  document's `img[data-page]` slots, drew the new pages onto them and
+  recorded them as drawn, so the new document kept blank sheets (a note made
+  from a PDF opened with its first page empty, about 6 times in 10). A held PDF's
+  page now carries `data-held` (its token) on `<html>`, and `drawNear` only
+  draws onto a document that has it.
 - **pdf.js frame:** opaque origin, so modules and workers can't load
   across origins; the app posts the library's text in and the frame makes
   its own blob: URLs. Pages draw with `intent: "print"`, because the

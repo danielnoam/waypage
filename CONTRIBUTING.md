@@ -109,7 +109,7 @@ Save with options) are the one exception: they fade in as they settle
 (1.49.0, Daniel's pick).
 
 **Words in the UI.** Library, Clips, Files, Collections, Feeds, Tags,
-Highlights, Narrate (not "Read aloud"). "Pages" is only the reader's
+Highlights, Notes, Narrate (not "Read aloud"). "Pages" is only the reader's
 layout mode.
 
 **Ask first for big things.** A new look, a reworked screen or a big

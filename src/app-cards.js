@@ -35,7 +35,8 @@ function thumbUrl(p) {
   if (/^https?:/.test(p.thumb)) return p.thumb;
   if (webThumbs.has(p.id)) return webThumbs.get(p.id);
   const base = C.store.pageDirUrl(p.id);
-  return base ? base + p.thumb : null;
+  // A note's picture is drawn again as it is written on, at the same name.
+  return base ? base + p.thumb + (p.note && p.editedAt ? "?v=" + p.editedAt : "") : null;
 }
 
 // The site's icon, for a card with no picture (0.27.6): kept beside the
@@ -392,7 +393,7 @@ async function setFileKind(p, kind) {
   if (state.folder) renderFolder();
   toast(comic ? "Shown as a comic." : "Shown as an article.");
   if (state.open !== p) return;
-  const now = await (p.link ? openLinked(p) : C.store.readPage(p.id)).catch(() => null);
+  const now = await (p.link || p.note ? openLinked(p) : C.store.readPage(p.id)).catch(() => null);
   if (now && state.open === p) show(p, now);
 }
 
@@ -474,7 +475,8 @@ function pageCard(p, found, hero) {
   const status = p.missing
     ? el("span", { class: "warn" }, p.missing + (p.missing === 1 ? " preview" : " previews") + " missing")
     : p.cut ? el("span", { class: "warn" }, "Only the start")
-    : p.mode === "links" ? el("span", null, "Images online") : null;
+    : p.mode === "links" ? el("span", null, "Images online")
+    : tooBigLine(p) ? el("span", { class: "warn" }, "Not synced, too big") : null;
   // The whole card opens the page (a button stretched under everything);
   // Retry sits above it, since a button can't hold another.
   const retry = p.missing && C.platform.native && navigator.onLine
@@ -509,6 +511,8 @@ function favThumb(fav, thumb) {
 // A card with no picture shows its site: the icon on the preview tint,
 // or the site's first letter when there's no icon to show.
 function siteMark(p) {
+  // A note shows that it is one (2.0.0).
+  if (p.note) return el("span", { class: "card-thumb site-mark", "aria-hidden": "true" }, el("span", { class: "site-letter file-ext" }, "NOTE"));
   // A file with no picture shows what kind it is (0.31.0).
   if (p.link) return el("span", { class: "card-thumb site-mark", "aria-hidden": "true" }, el("span", { class: "site-letter file-ext" }, p.file.ext.toUpperCase()));
   if (p.file) return el("span", { class: "card-thumb site-mark", "aria-hidden": "true" }, el("span", { class: "site-letter" }, (p.title || "?").trim().charAt(0).toUpperCase()));

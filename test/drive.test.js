@@ -120,7 +120,7 @@ async function google(route) {
   if (p === "/drive/v3/files") {
     const q = url.searchParams.get("q");
     let list = [...drive.files.values()];
-    if (/mimeType='application\/vnd.google-apps.folder'/.test(q)) list = list.filter((f) => f.mimeType === "application/vnd.google-apps.folder" && f.name === "Waypage");
+    if (/mimeType='application\/vnd.google-apps.folder'/.test(q)) list = list.filter((f) => f.mimeType === "application/vnd.google-apps.folder" && f.name === /name='([^']+)'/.exec(q)[1]);
     else {
       const dir = /^'([^']+)' in parents/.exec(q)[1];
       list = list.filter((f) => (f.parents || []).includes(dir) && f.appProperties && f.appProperties.waypage === "backup").sort((a, b) => b.at - a.at);
@@ -138,8 +138,9 @@ async function google(route) {
   return json(route, 400, { error: { code: 400 } });
 }
 
-async function page(browser) {
+async function page(browser, init) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+  if (init) await ctx.addInitScript(init);
   // A test client ID in place of the real one.
   await ctx.route(/\/src\/drive\.js/, async (route) => {
     const res = await route.fetch();
@@ -348,6 +349,47 @@ async function connect(p) {
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.locator(".row", { hasText: "Disconnect Google Drive" }).click();
       await q.locator(".row", { hasText: "Connect Google Drive" }).waitFor();
+      await q.context().close();
+    });
+
+    await test("Notes are their own part of a backup: whole, drawings and all, and a restore brings them back (2026-11)", async () => {
+      const q = await page(browser);
+      await connect(q);
+      assert.strictEqual(await q.locator("label.row", { hasText: /^Notes/ }).evaluate((r) => !!r.nextElementSibling && /Feeds/.test(r.nextElementSibling.textContent)), true, "Notes isn't above Feeds");
+      assert.strictEqual(await q.locator("label.row", { hasText: /as PDFs|as a PDF/ }).count(), 0, "no PDF copies of notes");
+      const id = await q.evaluate(async () => {
+        const m = await window.Waypage.notes.create("lines");
+        await window.Waypage.store.writeInk(m.id, { v: 1, size: 0, pages: { 1: [{ id: "s1", t: "p", c: "red", w: 0.01, p: [0.1, 0.1, 0.5, 0.2, 0.2, 0.5] }] } });
+        state.pages.unshift(m);
+        await window.Waypage.store.writeIndex(state.pages);
+        return m.id;
+      });
+      const backups = () => [...drive.files.values()].filter((f) => f.appProperties && f.appProperties.waypage === "backup");
+      const backUp = async () => {
+        const had = new Set(backups());
+        await q.locator(".row", { hasText: "Back up now" }).click();
+        let made;
+        for (let t = 0; t < 100 && !(made = backups().find((f) => !had.has(f))); t++) await q.waitForTimeout(200);
+        assert.ok(made, "no backup was sent");
+        await until(q, () => !document.querySelector("#sectionBody button[disabled]"), null, 15000);
+        return made;
+      };
+      const withNotes = await backUp();
+      const text = withNotes.bytes.toString("latin1");
+      assert.ok(text.includes("pages/" + id + "/note.json") && text.includes("pages/" + id + "/ink.json"), "the note's files aren't in it");
+      // A restore into an empty library brings the note back, strokes and all.
+      const got = await q.evaluate(async ([bytes, id]) => {
+        await window.Waypage.store.removePage(id);
+        const res = await window.Waypage.backup.restoreLibrary(new Blob([new Uint8Array(bytes)]), [], (a, b) => a === b);
+        const n = res.pages.find((p) => p.note);
+        return { note: !!n, sheets: n && (await window.Waypage.store.readNote(n.id) || {}).sheets.length, strokes: n && Object.keys((await window.Waypage.store.readInk(n.id) || {}).pages || {}).length };
+      }, [[...withNotes.bytes], id]);
+      assert.deepStrictEqual(got, { note: true, sheets: 1, strokes: 1 });
+      // Notes off: left out, so with only a note there is nothing to back up.
+      await q.locator("label.row", { hasText: /^Notes/ }).locator("input").uncheck();
+      await q.locator(".row", { hasText: "Back up now" }).click();
+      await q.locator("text=There's nothing to back up with what's picked.").waitFor();
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });
 

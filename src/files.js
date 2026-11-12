@@ -882,8 +882,11 @@
   // PDF's pages are drawn: before, every picture was read and decoded
   // before the first page showed, and a 400 MB comic sat whole in memory.
   const printed = (meta) => !!(meta && meta.link && meta.file && meta.file.kind === "pdf" && !meta.comic && meta.view !== "text");
-  // A PDF shown as its own pages, words or scan: where a pen can draw (1.56.0).
-  const drawable = (meta) => !!(meta && meta.link && meta.file && meta.file.kind === "pdf" && (meta.comic || meta.view !== "text"));
+  // Anything can be drawn on (2026-11): a note's sheets and a PDF's printed
+  // pages by page, a clip's words and pictures by block (ink.js). A file of
+  // any kind can be made into a note (`convertible`), a copy to write on.
+  const drawable = (meta) => !!(meta && !meta.preview);
+  const convertible = (meta) => !!(meta && !meta.note && !meta.preview && meta.file && KINDS[meta.file.kind]);
   async function openLinked(meta) {
     closeHeld();
     const html = await S().readPage(meta.id);
@@ -917,6 +920,38 @@
     if (body) await epubMarks(blob, entries, body).catch(() => {});
     if (!body || !body.querySelector("[data-toc]")) { unmarkable.add(meta.id); return html; }
     return "<!doctype html>\n" + doc.documentElement.outerHTML;
+  }
+
+  // A note's page, ready to write on (2.0.0): one slot per sheet, drawn as
+  // a PDF's printed pages are, from the note's own handle (notes.js). It
+  // has no words, so nothing is laid over a sheet but what is drawn.
+  async function openNoteItem(meta) {
+    closeHeld();
+    const { data, handle } = await C.notes.open(meta);
+    const doc = new DOMParser().parseFromString(await S().readPage(meta.id), "text/html");
+    for (const x of doc.querySelectorAll(".co-head, .co-licence")) x.remove();
+    const html = await fillPdf(doc, [], handle, meta, doc.querySelector(".co-body"));
+    if (held) { held.words = false; held.note = { id: meta.id, data, handle }; }
+    return html;
+  }
+  // The sheet after the last, once a stroke lands on the last (2.0.0).
+  const noteSheets = () => (held && held.note ? held.note.handle.count : 0);
+  function addSheet() {
+    const h = held, doc = C.reader.frameDoc;
+    const body = doc && doc.querySelector(".co-body.co-comic");
+    if (!h || !h.note || !body || !h.note.handle.add()) return false;
+    const n = h.note.handle.count, W = C.notes.W, H = C.notes.H;
+    const img = doc.createElement("img");
+    img.setAttribute("alt", "Page " + n);
+    img.setAttribute("width", W);
+    img.setAttribute("height", H);
+    img.setAttribute("src", blank(W, H));
+    img.setAttribute("data-page", n);
+    body.append(img);
+    C.notes.keep(h.note.id, h.note.data).catch(() => {});
+    C.reader.placeText();
+    if (h.frame) drawNear(h.frame);
+    return true;
   }
 
   // Fills the picture slots within a screen and a half of what the reader
@@ -984,17 +1019,21 @@
   // were is where you left it. A PDF with words keeps those words in the
   // clip and has no slots.
   let held = null;
+  // Which open PDF a page is for: written on its <html> (data-held), so pages
+  // aren't drawn onto the document a frame still shows while another opens.
+  let heldSeq = 0;
   const blank = (w, h) => "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '"/>');
   async function fillPdf(doc, slots, blob, meta, into) {
     closeHeld();
     let pdf;
     try {
-      pdf = await C.pdf.open(blob);
+      // A note hands over its own stand-in for the open document.
+      pdf = blob && typeof blob.draw === "function" ? blob : await C.pdf.open(blob);
     } catch (e) {
       throw new FileError("Waypage can't read " + meta.file.name + " any more.");
     }
     // `words`: its pages get a layer of their words, to select (1.56.0).
-    const h = held = { pdf, urls: new Map(), busy: false, frame: null, words: !!into, texts: new Map(), asking: new Set() };
+    const h = held = { pdf, urls: new Map(), busy: false, frame: null, words: !!into, texts: new Map(), asking: new Set(), token: "h" + (++heldSeq) };
     // A PDF from before 1.2.1 has no card picture: its first page, once
     // the reader is up (1.2.4), so the open isn't held for it.
     if (!meta.thumb) {
@@ -1050,6 +1089,7 @@
       } else unmarkable.add(meta.id);
     }
     pdf.onSizes = () => { if (held === h && h.frame) fixSizes(h); };
+    doc.documentElement.setAttribute("data-held", h.token);
     return "<!doctype html>\n" + doc.documentElement.outerHTML;
   }
   // A drawn page's words over it (1.56.0), asked of pdf.js once a page
@@ -1116,12 +1156,17 @@
     if (h && h.zip) return fillNear(frame, onFirst);
     const win = frame && frame.contentWindow;
     if (!h || !win || !win.document) { if (onFirst) onFirst(); return; }
+    // The frame may still show the page that was open before (it slides away
+    // while the next one loads): pages are only drawn onto their own.
+    // (A document being replaced has no root for a moment.)
+    const mine = () => { const root = win.document && win.document.documentElement; return !!root && root.getAttribute("data-held") === h.token; };
+    if (!mine()) { if (onFirst) onFirst(); return; }
     h.frame = frame;
     if (h.busy) { if (onFirst) onFirst(); return; }
     h.busy = true;
     try {
       for (;;) {
-        if (held !== h) return;
+        if (held !== h || !mine()) return;
         const tall = win.innerHeight || 800;
         const dpr = win.devicePixelRatio || 1;
         const pages = [...win.document.querySelectorAll("img[data-page]")];
@@ -1148,7 +1193,7 @@
         const n = next.getAttribute("data-page");
         let bytes;
         try { bytes = await h.pdf.draw(Number(n), width); } catch (e) { return; }
-        if (held !== h) return;
+        if (held !== h || !mine()) return;
         const was = h.urls.get(n);
         if (was) URL.revokeObjectURL(was.url);
         const url = URL.createObjectURL(new Blob([bytes], { type: "image/jpeg" }));
@@ -1350,6 +1395,30 @@
     return fp;
   }
 
+  // Where a clip's pictures come from, to make a note of it (2026-11):
+  // resolves to (img) => its bytes or null. A file read from outside keeps
+  // its pictures in the file (data-in names them in its zip).
+  async function pictureSource(meta) {
+    let zip = null;
+    if (meta.link && (meta.file.kind === "epub" || meta.file.kind === "cbz")) {
+      try {
+        const blob = await C.platform.files.blob(meta.link, meta.file.size);
+        zip = { blob, entries: await B().zipEntries(blob) };
+      } catch (e) { zip = null; }
+    }
+    const dir = S().pageDirUrl(meta.id);
+    return async (img) => {
+      const at = img.getAttribute("data-in");
+      if (at) { const e = zip && zip.entries.get(at); return e ? B().zipRead(zip.blob, e) : null; }
+      const src = img.getAttribute("src");
+      if (!src) return null;
+      const url = /^(data:|blob:|https?:)/.test(src) ? src : dir ? dir + src : null;
+      if (!url) return null;
+      const r = await fetch(url);
+      return r.ok ? new Uint8Array(await r.arrayBuffer()) : null;
+    };
+  }
+
   // Makes a clip of `file`, `kind` from kindOf. `link` is the lasting
   // permission on the file (platform.files) when the clip is to read from
   // it; its pictures then stay in the file. Resolves to the clip's index
@@ -1405,5 +1474,5 @@
     return meta;
   }
 
-  C.files = { KINDS, LINKABLE, canLink, kindOf, bring, thumbnail, openLinked, printed, drawable, fingerprint, fingerprintOf, drawNear, findPage, heldPdf: () => (held && held.pdf) || null, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
+  C.files = { KINDS, LINKABLE, canLink, kindOf, bring, openLinked, openNoteItem, noteSheets, addSheet, printed, drawable, convertible, fingerprint, fingerprintOf, thumbnail, pictureSource, drawNear, findPage, heldPdf: () => (held && held.pdf) || null, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
 })();

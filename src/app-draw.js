@@ -174,6 +174,8 @@ function renderLibrary() {
   // A tag filter whose last page lost the tag (or was deleted) falls back to All.
   if (n && state.filter.startsWith("#")
     && !allTags().some((t) => sameTag(t, state.filter.slice(1)))) { state.filter = "all"; store(FILTER_KEY, "all"); }
+  // The same for All notes once the last note is gone (2.0.0).
+  if (loaded && state.filter === "notes" && !state.pages.some((p) => p.note)) { state.filter = "all"; store(FILTER_KEY, "all"); }
   renderTools();
   // Until the library is read nothing is said (1.2.0): the empty state
   // showed for the second it took, as if there were no clips.
@@ -254,8 +256,10 @@ function renderLibrary() {
     // Files are the clips that read from a file of your own; a copy is
     // a clip like any other (0.32.0).
     const apart = !ts.length && state.filter === "all";
-    const mine = apart ? loose.filter((p) => p.link) : [];
-    const clips = apart ? loose.filter((p) => !p.link) : loose;
+    // Notes (2.0.0) are a part of their own too, before Files (2026-11).
+    const notes = apart ? loose.filter((p) => p.note) : [];
+    const mine = apart ? loose.filter((p) => p.link && !p.note) : [];
+    const clips = apart ? loose.filter((p) => !p.link && !p.note) : loose;
     if (folders.length && (!part || part === "collections")) {
       const names = sorted(folders.map(asItem)).map((x) => x.folder);
       const label = "Collections · " + names.length;
@@ -270,7 +274,7 @@ function renderLibrary() {
     if (clips.length && (!part || part === "pages")) {
       const label = (ts.length ? "Found" : state.filter === "all" ? "Clips"
         : (status || favs) && folders.length ? filterName() + " clips" : filterName()) + " · " + clips.length;
-      if (part || ts.length || (!folders.length && !mine.length)) keep("h:pages", () => sectionHead(label), label);
+      if (part || ts.length || (!folders.length && !mine.length && !notes.length)) keep("h:pages", () => sectionHead(label), label);
       else keep("h:pages", () => partHead("pages", label), "link" + label);
     }
     if (!part || part === "pages") for (const p of some(clips)) {
@@ -279,9 +283,15 @@ function renderLibrary() {
         keep("q:" + p.id, () => pageCard(p, s), [pageSig(p), s].join("|"));
       } else keep("p:" + p.id, () => pageCard(p), pageSig(p));
     }
+    if (notes.length && (!part || part === "notes")) {
+      const label = "Notes · " + notes.length;
+      if (part || (!folders.length && !clips.length && !mine.length)) keep("h:notes", () => sectionHead(label), label);
+      else keep("h:notes", () => partHead("notes", label), "link" + label);
+      for (const p of some(notes)) keep("p:" + p.id, () => pageCard(p), pageSig(p));
+    }
     if (mine.length && (!part || part === "files")) {
       const label = "Files · " + mine.length;
-      if (part || (!folders.length && !clips.length)) keep("h:files", () => sectionHead(label), label);
+      if (part || (!folders.length && !clips.length && !notes.length)) keep("h:files", () => sectionHead(label), label);
       else keep("h:files", () => partHead("files", label), "link" + label);
       for (const p of some(mine)) keep("p:" + p.id, () => pageCard(p), pageSig(p));
     }

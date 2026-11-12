@@ -377,7 +377,7 @@
     await getToken(true, "connect");
     const about = await api("/about?fields=user(emailAddress)", {}, true);
     // The first weekly backup is a week after connecting (1.27.1), not now.
-    cfg = { email: (about && about.user && about.user.emailAddress) || "", auto: true, what: { clips: true, feeds: true, newsletters: true }, last: {}, since: Date.now() };
+    cfg = { email: (about && about.user && about.user.emailAddress) || "", auto: true, what: { clips: true, notes: true, feeds: true, newsletters: true }, last: {}, since: Date.now() };
     save();
     await folder();
     return cfg.email;
@@ -416,7 +416,8 @@
     // What goes in a backup: clips (files copied in among them), feeds,
     // newsletter addresses (1.46.0; a Files switch until then).
     // `links` (1.47.0): clips that can be saved again go in as links only.
-    get what() { return cfg ? { clips: true, links: false, feeds: true, newsletters: true, ...(cfg.what || {}) } : null; },
+    // `notes` (2026-11): notes, a part of their own, whole.
+    get what() { return cfg ? { clips: true, links: false, notes: true, feeds: true, newsletters: true, ...(cfg.what || {}) } : null; },
     setWhat(k, v) { if (!cfg) return; cfg.what = { ...this.what, [k]: !!v }; save(); },
     get last() { return (cfg && cfg.last) || {}; },
     get since() { return (cfg && cfg.since) || 0; },

@@ -23,6 +23,10 @@
   const STYLES = ["ball", "marker", "fountain", "brush"];
   const NIB = -Math.PI / 4;
   const MAX_POINTS = 6000, MAX_STROKES = 5000;
+  // Typed text on a note (2.0.0): sizes as fractions of the page's width, and
+  // a line's height in sizes.
+  const TEXT_SIZES = [0.018, 0.026, 0.038], TEXT_LINE = 1.25, MAX_TEXT = 4000;
+  const TEXT_FONT = "Instrument Sans, system-ui, sans-serif";
 
   // A colour of your own is "#rrggbb" in place of a name (the colour picker).
   const isHex = (c) => typeof c === "string" && /^#[0-9a-f]{6}$/.test(c);
@@ -148,10 +152,12 @@
   }
 
   const pathOf = (s) => (s.t === "h" ? linePath(s.p) : penPath(s.p, s.w, s.y));
+  // A picture or a line of typed text (2.0.0, notes) is a box, not a stroke.
+  const boxy = (s) => s.t === "i" || s.t === "x";
 
   // Whether a point is on a stroke, to within `slop` (page widths).
   function hits(s, x, y, slop) {
-    if (s.t === "i") return x >= s.x - slop && x <= s.x + s.w + slop && y >= s.y - slop && y <= s.y + s.h + slop;
+    if (boxy(s)) return x >= s.x - slop && x <= s.x + s.w + slop && y >= s.y - slop && y <= s.y + s.h + slop;
     const reach = (s.t === "h" ? s.w : s.w * (s.y === "brush" ? 1.9 : 1.2)) / 2 + slop;
     const p = s.p;
     if (p.length < 6) return Math.hypot(p[0] - x, p[1] - y) <= reach;
@@ -175,7 +181,7 @@
   }
   // What a loop takes: a stroke with half its points inside, a picture with its middle.
   function within(poly, s) {
-    if (s.t === "i") return inside(poly, s.x + s.w / 2, s.y + s.h / 2);
+    if (boxy(s)) return inside(poly, s.x + s.w / 2, s.y + s.h / 2);
     let n = 0, all = 0;
     for (let i = 0; i + 2 < s.p.length; i += 3) { all++; if (inside(poly, s.p[i], s.p[i + 1])) n++; }
     return all > 0 && n * 2 >= all;
@@ -184,7 +190,7 @@
   function boxOf(list) {
     let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
     for (const s of list) {
-      if (s.t === "i") { a = Math.min(a, s.x); b = Math.min(b, s.y); c = Math.max(c, s.x + s.w); d = Math.max(d, s.y + s.h); continue; }
+      if (boxy(s)) { a = Math.min(a, s.x); b = Math.min(b, s.y); c = Math.max(c, s.x + s.w); d = Math.max(d, s.y + s.h); continue; }
       const pad = s.w / 2;
       for (let i = 0; i + 2 < s.p.length; i += 3) { a = Math.min(a, s.p[i] - pad); b = Math.min(b, s.p[i + 1] - pad); c = Math.max(c, s.p[i] + pad); d = Math.max(d, s.p[i + 1] + pad); }
     }
@@ -203,7 +209,7 @@
   function convertItem(s, from, to) {
     const c = copyOf(s), k = from.width / to.width;
     const ox = (from.left - to.left) / to.width, oy = (from.top - to.top) / to.width;
-    if (c.t === "i") { c.x = r5(c.x * k + ox); c.y = r5(c.y * k + oy); c.w = r5(c.w * k); c.h = r5(c.h * k); return c; }
+    if (boxy(c)) { c.x = r5(c.x * k + ox); c.y = r5(c.y * k + oy); c.w = r5(c.w * k); c.h = r5(c.h * k); if (c.t === "x") c.z = r5(c.z * k); return c; }
     for (let i = 0; i + 2 < c.p.length; i += 3) { c.p[i] = r4(c.p[i] * k + ox); c.p[i + 1] = r4(c.p[i + 1] * k + oy); }
     c.w = r5(c.w * k);
     return c;
@@ -217,7 +223,7 @@
     const dx = fit(b[0], b[2], 1), dy = fit(b[1], b[3], h);
     if (!dx && !dy) return [0, 0];
     for (const s of items) {
-      if (s.t === "i") { s.x = r5(s.x + dx); s.y = r5(s.y + dy); continue; }
+      if (boxy(s)) { s.x = r5(s.x + dx); s.y = r5(s.y + dy); continue; }
       for (let i = 0; i + 2 < s.p.length; i += 3) { s.p[i] = r4(s.p[i] + dx); s.p[i + 1] = r4(s.p[i + 1] + dy); }
     }
     return [dx, dy];
@@ -267,23 +273,36 @@
   let sel = null;           // the selection: { n, ids }
   let board = null;         // Copy and Cut: { items, n, k, imgs }
   let picker = null;        // the eyedropper waits: the next tap on a page goes to it
-  let onChange = null, onPen = null, onProbe = null, onDraw = null;
+  let onChange = null, onPen = null, onProbe = null, onDraw = null, onStroke = null, onSaved = null;
+  // Something changed since the last write: a note then counts as edited (sync).
+  let dirty = false;
   const layers = new Map(); // page -> svg
+  let blocks = false;       // drawn on by block (reader.js inkBlock), not by page
+  let blockStore = null;    // where a clip's drawings by block are kept: { read(meta), write(id, pages) }
 
   // A stroke read back from a file: anything else is dropped.
+  // sync-worker.js runs clean with no save.js.
+  const freshId = () => (C.save ? C.save.newId() : Math.random().toString(36).slice(2, 12));
   function clean(s) {
+    if (s && typeof s === "object" && s.t === "x") {
+      const n = [s.x, s.y, s.w, s.h, s.z].map(Number);
+      if (typeof s.text !== "string" || !s.text.trim() || s.text.length > MAX_TEXT || !n.every(Number.isFinite)) return null;
+      if (!(n[4] >= 0.005 && n[4] <= 0.2 && n[2] > 0 && n[2] <= 3 && n[3] > 0 && n[3] <= 4 && n[0] > -2 && n[0] < 3 && n[1] > -2 && n[1] < 20)) return null;
+      if (!okColor("pen", s.c)) return null;
+      return { id: String(s.id || "").slice(0, 40) || freshId(), t: "x", c: s.c, x: n[0], y: n[1], w: n[2], h: n[3], z: n[4], text: s.text };
+    }
     if (s && typeof s === "object" && s.t === "i") {
       const n = [s.x, s.y, s.w, s.h].map(Number);
       if (typeof s.f !== "string" || !/^[A-Za-z0-9_-]{1,40}$/.test(s.f) || !n.every(Number.isFinite)) return null;
       if (!(n[2] > 0 && n[2] <= 2 && n[3] > 0 && n[3] <= 4 && n[0] > -2 && n[0] < 3 && n[1] > -2 && n[1] < 20)) return null;
-      return { id: String(s.id || "").slice(0, 40) || C.save.newId(), t: "i", f: s.f, x: n[0], y: n[1], w: n[2], h: n[3] };
+      return { id: String(s.id || "").slice(0, 40) || freshId(), t: "i", f: s.f, x: n[0], y: n[1], w: n[2], h: n[3] };
     }
     if (!s || typeof s !== "object" || (s.t !== "p" && s.t !== "h")) return null;
     if (!okColor(s.t === "h" ? "highlighter" : "pen", s.c)) return null;
     const w = Number(s.w);
     if (!(w > 0 && w < 0.2) || !Array.isArray(s.p) || s.p.length < 3 || s.p.length % 3 || s.p.length > MAX_POINTS * 3) return null;
     if (!s.p.every((v) => Number.isFinite(v))) return null;
-    const out = { id: String(s.id || "").slice(0, 40) || C.save.newId(), t: s.t, c: s.c, w, p: s.p.map((v, i) => (i % 3 === 2 ? Math.min(1, Math.max(0, v)) : v)) };
+    const out = { id: String(s.id || "").slice(0, 40) || freshId(), t: s.t, c: s.c, w, p: s.p.map((v, i) => (i % 3 === 2 ? Math.min(1, Math.max(0, v)) : v)) };
     // How a pen wrote; a stroke from before styles, or one that names none we know, is a ballpoint's.
     if (s.t === "p" && STYLES.includes(s.y) && s.y !== "ball") out.y = s.y;
     return out;
@@ -291,9 +310,15 @@
   async function load(meta) {
     unload();
     if (!meta || !meta.id) return { stale: false };
+    // A note's sheets and a PDF's printed pages are pages; anything else
+    // (a clip's words, a comic's pictures, a book) is drawn on by block.
+    blocks = !(meta.note || C.files.printed(meta));
+    watchBlocks(blocks);
     const mine = { id: meta.id, size: (meta.file && meta.file.size) || 0, pages: {} };
     clip = mine;
-    const d = await C.store.readInk(meta.id);
+    // By block, a clip's drawings are on its index entry, with its
+    // highlights, and sync and back up with them (app-ink.js blockStore).
+    const d = blocks && blockStore ? { pages: blockStore.read(meta) } : await C.store.readInk(meta.id);
     if (clip !== mine) return { stale: false };
     let stale = false;
     if (d && d.pages && typeof d.pages === "object") {
@@ -317,8 +342,23 @@
     }
     return { stale };
   }
+  // The strokes of an ink.json read without opening the note (a note's PDF
+  // for Drive): n -> the strokes on page n.
+  function strokesFrom(d) {
+    const pages = {};
+    if (d && d.pages && typeof d.pages === "object") {
+      for (const [k, list] of Object.entries(d.pages)) {
+        const n = Math.floor(Number(k));
+        if (!(n >= 1 && n <= 20000) || !Array.isArray(list)) continue;
+        const ok = list.slice(0, MAX_STROKES).map(clean).filter(Boolean);
+        if (ok.length) pages[n] = ok;
+      }
+    }
+    return (n) => pages[n] || [];
+  }
   function unload() {
     flush();
+    watchBlocks(false);
     clip = null;
     undos = []; redos = [];
     layers.clear();
@@ -328,6 +368,7 @@
   }
   function changed() { if (onChange) onChange(); }
   function save() {
+    dirty = true;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(flush, 800);
   }
@@ -335,6 +376,8 @@
     clearTimeout(saveTimer);
     saveTimer = 0;
     if (!clip) return Promise.resolve();
+    const edited = dirty;
+    dirty = false;
     const empty = !Object.values(clip.pages).some((l) => l.length);
     const id = clip.id;
     // A picture no page names any more (undo and redo keep it until now) goes.
@@ -345,7 +388,8 @@
       for (const lists of [op.before, op.after]) if (lists && !Array.isArray(lists)) for (const l of Object.values(lists)) for (const it of l) if (it.t === "i") used.add(it.f);
     }
     for (const f of [...imgs.keys()]) if (!used.has(f)) { imgs.delete(f); C.store.removeInkImage(id, f); }
-    return C.store.writeInk(id, empty ? null : { v: 1, size: clip.size, pages: clip.pages }).catch(() => {});
+    const write = blocks && blockStore ? blockStore.write(id, empty ? null : clip.pages) : C.store.writeInk(id, empty ? null : { v: 1, size: clip.size, pages: clip.pages });
+    return Promise.resolve(write).then(() => { if (edited && onSaved) onSaved(id); }, () => {});
   }
   const strokes = (n) => (clip && clip.pages[n]) || [];
   const count = () => (clip ? Object.values(clip.pages).reduce((a, l) => a + l.length, 0) : 0);
@@ -369,7 +413,7 @@
   const frameDoc = () => C.reader.frameDoc;
   function ensure(n) {
     if (layers.has(n)) return layers.get(n);
-    const D = frameDoc(), img = C.reader.pageImg(n), root = img && img.parentNode;
+    const D = frameDoc(), img = blocks ? C.reader.inkBlock(n) : C.reader.pageImg(n), root = img && (blocks ? C.reader.inkRoot() : img.parentNode);
     if (!root) return null;
     const svg = D.createElementNS(NS, "svg");
     svg.setAttribute("class", "co-ink");
@@ -392,9 +436,11 @@
     layers.delete(n);
   }
   function place(svg) {
-    const img = C.reader.pageImg(svg.dataset.page);
+    const img = blocks ? C.reader.inkBlock(svg.dataset.page) : C.reader.pageImg(svg.dataset.page);
     if (!img) return;
-    const b = C.reader.pageBox(img);
+    const b = blocks ? C.reader.inkBlockBox(svg.dataset.page) : C.reader.pageBox(img);
+    if (!b) { svg.style.display = "none"; return; }
+    svg.style.display = "";
     svg.style.left = b.left + "px";
     svg.style.top = b.top + "px";
     svg.style.width = b.width + "px";
@@ -406,6 +452,7 @@
   // A drag used to leave things off the page's edge, where they couldn't be
   // seen: anything wholly outside its page comes back inside.
   function rescue(svg, h) {
+    if (blocks) return;
     const n = Number(svg.dataset.page), img = C.reader.pageImg(n);
     if (!clip || !img || !img.complete || !img.naturalWidth || !(h > 0.1)) return;
     let moved = false;
@@ -419,6 +466,21 @@
   }
   function el(n, s) {
     const D = frameDoc();
+    if (s.t === "x") {
+      const t = D.createElementNS(NS, "text");
+      t.setAttribute("class", "txt " + (isHex(s.c) ? "custom" : "c-" + s.c));
+      t.setAttribute("font-size", String(s.z));
+      if (isHex(s.c)) t.setAttribute("fill", s.c);
+      s.text.split("\n").forEach((line, i) => {
+        const sp = D.createElementNS(NS, "tspan");
+        sp.setAttribute("x", String(s.x));
+        sp.setAttribute("y", String(r5(s.y + s.z * (0.95 + i * TEXT_LINE))));
+        sp.textContent = line || " ";
+        t.append(sp);
+      });
+      t.dataset.id = s.id;
+      return t;
+    }
     if (s.t === "i") {
       const im = D.createElementNS(NS, "image");
       im.setAttribute("class", "pic");
@@ -442,6 +504,27 @@
     svg.replaceChildren(...strokes(n).map((s) => el(n, s)));
     selDraw(n);
   }
+  // By block, the layers move with the text: placed again when the frame
+  // changes size or its text reflows, and while drawing, layers are made
+  // for the blocks coming on screen.
+  let blockWatch = null;
+  function watchBlocks(want) {
+    if (blockWatch) { blockWatch.stop(); blockWatch = null; }
+    const D = frameDoc(), W = D && D.defaultView;
+    if (!want || !W) return;
+    let raf = 0;
+    const tick = () => { raf = 0; if (!blocks || !clip) return; for (const n of shown()) show(n); placeAll(); };
+    const soon = () => { if (!raf) raf = W.requestAnimationFrame(tick); };
+    const ro = new W.ResizeObserver(soon);
+    // The body may not grow with its text (a scroll box), but the text does.
+    ro.observe(D.body);
+    for (const x of D.querySelectorAll(".co-body")) ro.observe(x);
+    W.addEventListener("scroll", soon, { passive: true });
+    W.addEventListener("resize", soon);
+    // The words may not be laid out yet when the drawings are read.
+    W.setTimeout(soon, 300);
+    blockWatch = { stop: () => { ro.disconnect(); W.removeEventListener("scroll", soon); W.removeEventListener("resize", soon); if (raf) W.cancelAnimationFrame(raf); } };
+  }
   // A page that has its picture gets a layer when it has drawings, or
   // when drawing is on.
   function show(n) {
@@ -454,6 +537,11 @@
   function shown() {
     const D = frameDoc();
     if (!D) return [];
+    if (blocks) {
+      const near = new Set(on ? C.reader.inkBlocksNear() : []);
+      if (clip) for (const k of Object.keys(clip.pages)) if (C.reader.inkBlock(k)) near.add(Number(k));
+      return [...near].sort((a, b) => a - b);
+    }
     return [...D.querySelectorAll(".co-comic > img[data-page]")].filter((img) => !/^data:/.test(img.getAttribute("src") || "")).map((img) => Number(img.dataset.page));
   }
 
@@ -698,7 +786,7 @@
   }
   function wipeAt(x, y) {
     for (const s of [...strokes(cur.n)]) {
-      if (s.t === "i" || !hits(s, x, y, 0.012)) continue;
+      if (boxy(s) || !hits(s, x, y, 0.012)) continue;
       const took = take(cur.n, s.id);
       if (!took) continue;
       cur.gone.push({ n: cur.n, ...took });
@@ -742,6 +830,7 @@
     }
     save();
     changed();
+    if (onStroke) onStroke(c.n);
   }
   // A finger stroke that turned out to be a pinch.
   function abandon() {
@@ -925,7 +1014,7 @@
           // Keeps the picture's shape: the width follows the corner.
           const w = Math.max(0.03, Math.min(2, o.w + dx)), k = w / o.w;
           t.w = w; t.h = o.h * k;
-        } else if (t.t === "i") { t.x = o.x + dx; t.y = o.y + dy; }
+        } else if (boxy(t)) { t.x = o.x + dx; t.y = o.y + dy; }
         else for (let i = 0; i + 2 < o.p.length; i += 3) { t.p[i] = r4(o.p[i] + dx); t.p[i + 1] = r4(o.p[i + 1] + dy); }
       }
     }
@@ -1015,6 +1104,7 @@
       const c = copyOf(it);
       c.id = C.save.newId();
       if (c.t === "i") { c.x += off; c.y += off; if (!imgs.has(c.f) && board.imgs[c.f]) { imgs.set(c.f, board.imgs[c.f]); C.store.writeInkImage(clip.id, c.f, board.imgs[c.f]).catch(() => {}); } }
+      else if (c.t === "x") { c.x += off; c.y += off; }
       else for (let i = 0; i + 2 < c.p.length; i += 3) { c.p[i] = r4(c.p[i] + off); c.p[i + 1] = r4(c.p[i + 1] + off); }
       return c;
     });
@@ -1058,6 +1148,63 @@
     return true;
   }
 
+  // ---- Typed text (notes) ----
+
+  // How big text sets, in page widths, measured on a canvas: [w, h].
+  let measure = null;
+  function textSize(text, z) {
+    if (!measure) measure = document.createElement("canvas").getContext("2d");
+    measure.font = "400 100px " + TEXT_FONT;
+    const lines = text.split("\n");
+    let w = 0;
+    for (const l of lines) w = Math.max(w, measure.measureText(l).width / 100 * z);
+    return { w: r4(Math.max(w, z)), h: r4(lines.length * z * TEXT_LINE + z * 0.2) };
+  }
+  // Text on the page most in view: in the middle of the part shown, and taken.
+  function addText(text, z, c) {
+    const v = viewPage();
+    text = String(text || "").replace(/\r/g, "").slice(0, MAX_TEXT);
+    if (!v || !clip || !text.trim()) return false;
+    c = okColor("pen", c) ? c : color.pen;
+    z = TEXT_SIZES.includes(z) ? z : TEXT_SIZES[1];
+    const m = textSize(text, z), w = Math.min(m.w, 0.95);
+    const s = { id: C.save.newId(), t: "x", c, x: r4(Math.max(0, (1 - w) / 2)), y: r4(Math.max(0, Math.min(v.height - m.h, v.mid - m.h / 2))), w: m.w, h: m.h, z, text };
+    commitPlaced([{ n: v.n, s }]);
+    selSet(v.n, [s]);
+    save();
+    return true;
+  }
+  // The words, size or colour of the text with this id changed, as one step to undo.
+  // Emptied, it goes.
+  function editText(id, text, z, c) {
+    const all = copiesOf([id]).filter((g) => g.s.t === "x");
+    if (!all.length || !clip) return false;
+    text = String(text || "").replace(/\r/g, "").slice(0, MAX_TEXT);
+    if (!text.trim()) { selSet(all[0].n, [all[0].s]); selDelete(); return true; }
+    const ns = [...new Set(all.map((g) => g.n))], before = snap(ns);
+    for (const g of all) {
+      const s = g.s;
+      s.text = text;
+      if (TEXT_SIZES.includes(z)) s.z = z;
+      if (c && okColor("pen", c)) s.c = c;
+      const m = textSize(text, s.z);
+      s.w = m.w; s.h = m.h;
+    }
+    undos.push({ k: "pages", before, after: snap(ns) });
+    redos = [];
+    repaintAll(ns);
+    selDrawAll();
+    save();
+    changed();
+    return true;
+  }
+  // The one text item that is taken, to edit: { id, text, z, c }, or null.
+  function selectedText() {
+    const items = sel ? selItems() : [];
+    const t = items.length && items.every((g) => g.s.id === items[0].s.id) && items[0].s.t === "x" ? items[0].s : null;
+    return t ? { id: t.id, text: t.text, z: t.z, c: t.c } : null;
+  }
+
   // ---- The eyedropper ----
 
   // The colour under a point on a page: a stroke's own, else the page's
@@ -1067,7 +1214,7 @@
       const r = svg.getBoundingClientRect();
       if (clientX < r.left || clientX > r.right || clientY < r.top || clientY > r.bottom) continue;
       const x = (clientX - r.left) / (r.width || 1), y = (clientY - r.top) / (r.width || 1);
-      const top = [...strokes(n)].reverse().find((s) => s.t !== "i" && hits(s, x, y, 0.004));
+      const top = [...strokes(n)].reverse().find((s) => !boxy(s) && hits(s, x, y, 0.004));
       if (top) { const v = rgbOf(top); return v ? rgbHex(...v) : null; }
       const img = C.reader.pageImg(n);
       if (!img || !img.naturalWidth) return null;
@@ -1177,6 +1324,7 @@
     const out = {};
     for (const [n, list] of Object.entries(clip ? clip.pages : {})) {
       out[n] = list.map((s) => {
+        if (s.t === "x") return { img: "" };
         if (s.t === "i") return { img: imgs.get(s.f) || "", x: s.x, y: s.y, w: s.w, h: s.h };
         return { pts: s.p, w: s.w, rgb: rgbOf(s), a: s.t === "h" ? 0.4 : 1, k: s.t === "h" ? 1 : exportWidth(s) };
       }).filter((s) => !("img" in s) || s.img);
@@ -1185,13 +1333,17 @@
   }
 
   C.ink = {
-    PEN, HIGHLIGHT, SIZES, STYLES, penPath, linePath, hits, clean, inside, within, boxOf, isHex, hexRgb, rgbHex, hsvRgb, rgbHsv,
+    PEN, HIGHLIGHT, SIZES, STYLES, penPath, linePath, rgbOf, imageUrl: (f) => imgs.get(f) || "", TEXT_SIZES, TEXT_LINE, TEXT_FONT, textSize, addText, editText, selectedText, hits, clean, inside, within, boxOf, isHex, hexRgb, rgbHex, hsvRgb, rgbHsv,
     cut: selCut, copy: selCopy, paste: selPaste, del: selDelete, front: () => reorder(true), back: () => reorder(false), convertItem, clampInto, placeOn, addImage, viewPage, pick, colorAt, clearSelection: selClear,
-    load, unload, flush, setOn, setting, state, undo, redo, clearPage, clearAll, forPdf, count, drawn, strokes, shown,
+    get blocks() { return blocks; },
+    load, unload, flush, strokesFrom, setOn, setting, state, undo, redo, clearPage, clearAll, forPdf, count, drawn, strokes, shown,
     set onChange(f) { onChange = f; },
     set onPen(f) { onPen = f; },
     set onProbe(f) { onProbe = f; },
     set onDraw(f) { onDraw = f; },
+    set onStroke(f) { onStroke = f; },
+    set onSaved(f) { onSaved = f; },
+    set blockStore(f) { blockStore = f; },
     snapshot, restore,
     fromPhone, eraseFrom, get nat() { return nat; },
     get on() { return on; },

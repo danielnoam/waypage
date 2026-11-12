@@ -938,6 +938,7 @@ function pageSheet(p, where) {
         el("button", { class: "row", type: "button", onclick: () => back().then(() => signInFor(p)) },
           el("span", { class: "row-label accent" }, (C.platform.signIn.for(p.url) ? "Sign in again to " : "Sign in to ") + C.platform.signIn.host(p.url)),
           el("span", { class: "row-value" }, "Only the start"))) : null,
+      tooBigLine(p) ? el("p", { class: "meta warn" }, tooBigLine(p)) : null,
       tagsRow(p, draw),
       folderRow(p, draw),
       p.file ? null : picturesRow(p, draw),
@@ -948,10 +949,14 @@ function pageSheet(p, where) {
         inReader ? null : menuRow("Rename", () => { renaming = true; draw(); }),
         p.link && p.file && p.file.kind === "pdf" && !p.comic
           ? menuRow(p.view === "text" ? "Show as printed pages" : "Show as text", () => switchView(p, where)) : null,
-        inReader && C.files.drawable(p) && !p.preview ? menuRow("Drawings", () => back().then(() => openSheet("ink"))) : null,
-        inReader && !C.files.printed(p) ? menuRow("Find in this clip", () => back().then(openFind)) : null,
-        inReader && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow("Save linked pages", () => back().then(() => openSheet("links"))) : null,
-        menuRow(p.finished ? "Mark as unread" : "Mark as read", () => markRead([p], !p.finished).then(draw)),
+        inReader && p.note ? menuRow("Save as PDF", () => back().then(() => noteToPdf(p))) : null,
+        // A PDF's drawings as ink annotations in a new file (2026-11).
+        inReader && !p.note && p.file && (p.drawn || []).length && C.files.heldPdf() && C.files.heldPdf().ink
+          ? menuRow("Save a copy with drawings", () => back().then(() => inkCopy(p))) : null,
+        C.files.convertible(p) ? menuRow("Make a note from it", () => back().then(() => makeNoteFrom(p))) : null,
+        inReader && !p.note && !C.files.printed(p) ? menuRow("Find in this clip", () => back().then(openFind)) : null,
+        inReader && !p.note && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow("Save linked pages", () => back().then(() => openSheet("links"))) : null,
+        p.note ? null : menuRow(p.finished ? "Mark as unread" : "Mark as read", () => markRead([p], !p.finished).then(draw)),
         // The page changed since (1.38.0): fetched again in its place.
         p.file || p.preview || !/^https?:/.test(p.url || "") ? null
           : menuRow("Update from the site", () => back().then(() => updateClip(p))),
@@ -963,7 +968,7 @@ function pageSheet(p, where) {
         p.file || p.preview || p.comic || !/^https?:/.test(p.url || "") ? null
           : menuRow(p.archived ? "Find a newer archived copy" : "Use the archived copy", () => back().then(() => archiveClip(p))),
         inReader ? null : menuRow("Select", () => back().then(() => startSelect([p.id]))),
-        menuRow(p.link ? "Remove from Waypage" : "Delete this clip", () => deletePage(p, where), "warn")));
+        menuRow(p.link ? "Remove from Waypage" : p.note ? "Delete this note" : "Delete this clip", () => deletePage(p, where), "warn")));
   };
   draw();
   return box;
@@ -1300,6 +1305,8 @@ const MENUS = {
   keys: { label: "Keyboard shortcuts", build: () => keysSheet() },
   importList: { label: "Import", build: () => importSheet() },
   send: { label: "Saving a page", build: () => sendSheet() },
+  newNote: { label: "New note", build: () => newNoteSheet() },
+  noteText: { label: "Text", build: () => noteTextSheet() },
 };
 let menuUnder = [];
 let menuFrom = null;
@@ -1888,7 +1895,11 @@ function fileSheet() {
         el("span", { class: "choice-text" }, el("span", { class: "choice-label" + (a.can ? " accent" : "") }, "Read from where it is"),
           el("span", { class: "choice-note" }, a.can
             ? "Lives in Files and costs almost nothing here. It needs the file to stay where it is, and doesn't sync."
-            : "Waypage wasn't given lasting access to this file. Open it with Open a file to read it from where it is.")))));
+            : "Waypage wasn't given lasting access to this file. Open it with Open a file to read it from where it is."))),
+      // A PDF can also be made into a note to draw on (2.0.0).
+      a.kind === "pdf" ? el("button", { class: "row", type: "button", onclick: () => answer("note") },
+        el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, "Make a note"),
+          el("span", { class: "choice-note" }, "A copy of its pages you can draw on, in Notes. The PDF itself isn't changed."))) : null));
 }
 // A file dropped on the window, on a computer.
 addEventListener("dragover", (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes("Files")) e.preventDefault(); });
@@ -1960,9 +1971,16 @@ async function openFile(file, btn, open, ref, forced) {
     let link = null;
     // A PDF made from a deck was saved just now, so it isn't asked about.
     if (forced) link = forced.ref || null;
-    else if (C.files.canLink(kind) && (ref || C.platform.files.canLink)) {
+    else if ((C.files.canLink(kind) && (ref || C.platform.files.canLink)) || kind === "pdf") {
       const asked = await askKeep(file, kind, !!ref);
       if (asked == null) { if (btn) { btn.disabled = false; say("Restore"); } return; }
+      // A PDF made into a note (2.0.0): the file is read once and let go.
+      if (asked === "note") {
+        if (ref) C.platform.files.release(ref);
+        await noteFromFile(file, open);
+        if (btn) { btn.disabled = false; say("Restore"); }
+        return;
+      }
       link = asked ? ref : null;
     }
     if (ref && !link) C.platform.files.release(ref);
@@ -2390,4 +2408,85 @@ function importRow() {
           el("span", { class: "choice-note" }, "Pocket, Instapaper, Omnivore, Wallabag, Raindrop, OPML")));
   input.addEventListener("change", () => { const f = input.files[0]; input.value = ""; openFile(f, open); });
   return [open, input];
+}
+
+// ---- Notes (2.0.0) ----
+
+// Paper as a small picture, for the choice of what a new note is on.
+const PAPER_PICS = {
+  blank: "",
+  lines: [10, 18, 26, 34, 42, 50].map((y) => '<path d="M0 ' + y + 'H40"/>').join(""),
+  squares: [8, 16, 24, 32].map((x) => '<path d="M' + x + ' 0V56"/>').join("") + [8, 16, 24, 32, 40, 48].map((y) => '<path d="M0 ' + y + 'H40"/>').join(""),
+};
+function paperPic(kind) {
+  const pic = el("span", { class: "paper-pic", "aria-hidden": "true" });
+  pic.innerHTML = '<svg viewBox="0 0 40 56" width="40" height="56" fill="none" stroke="currentColor" stroke-width="0.8">' + PAPER_PICS[kind] + "</svg>";
+  return pic;
+}
+// The choice of paper for a new note: a picture beside each.
+function newNoteSheet() {
+  return el("div", { class: "page-controls" },
+    el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, "New note")),
+    el("div", { class: "group" }, ...C.notes.PAPERS.map((kind) =>
+      el("button", { class: "row paper-row", type: "button", onclick: () => makeNote(kind) },
+        paperPic(kind),
+        el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, C.notes.LABELS[kind]))))));
+}
+// Makes the note, puts it first in the library and opens it to write on.
+async function makeNote(kind) {
+  let meta;
+  try { meta = await C.notes.create(kind); } catch (e) { console.error(e); toast("Couldn't make the note. Free some space and try again."); return; }
+  state.pages.unshift(meta);
+  await C.store.writeIndex(state.pages);
+  await back(state.batch ? 2 : 1);
+  renderLibrary();
+  openPage(meta.id);
+}
+
+// A PDF picked to open can be made into a note straight away: a copy of its
+// pages, the file itself let go. `open` says to show it once it's made.
+async function noteFromFile(file, open) {
+  toast("Making the note…");
+  let meta;
+  try {
+    meta = await C.notes.fromPdf({ title: file.name.replace(/\.pdf$/i, "") }, file);
+  } catch (e) {
+    console.error(e);
+    toast(e instanceof C.files.FileError ? e.message : "Couldn't make the note. Try again.");
+    return;
+  }
+  state.pages.unshift(meta);
+  await C.store.writeIndex(state.pages);
+  renderLibrary();
+  if (open) openPage(meta.id);
+}
+// A note made from any file (2026-11): a PDF's own pages, a comic's
+// pictures one to a page, anything else set as pages. It is a copy to
+// write on: the file and anything drawn on it stay as they are.
+async function makeNoteFrom(p) {
+  if (!C.files.convertible(p)) return;
+  const say = (n) => toast(n ? "Making the note… " + n + " pages" : "Making the note…");
+  say(0);
+  let meta;
+  try {
+    let blob;
+    if (p.link && p.file.kind === "pdf") blob = await C.platform.files.blob(p.link, p.file.size);
+    else {
+      const html = p.link ? await C.files.openLinked(p) : await C.store.readPage(p.id);
+      const root = new DOMParser().parseFromString(html, "text/html").querySelector(".co-body");
+      if (!root) throw new C.files.FileError("Waypage can't read this one to make a note of it.");
+      let last = 0;
+      blob = await C.notes.layout(root, !!p.comic, await C.files.pictureSource(p), (n) => { if (n - last >= 10) { last = n; say(n); } }, p.comic ? "" : p.title);
+    }
+    meta = await C.notes.fromPdf(p, blob);
+  } catch (e) {
+    console.error(e);
+    toast(e instanceof C.files.FileError ? e.message : "Couldn't make the note." + (p.link ? " Is the file still where it was?" : " Try again."));
+    return;
+  }
+  state.pages.unshift(meta);
+  await C.store.writeIndex(state.pages);
+  renderLibrary();
+  if (state.open) await goTo(meta, true);
+  else openPage(meta.id);
 }

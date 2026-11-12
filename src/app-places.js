@@ -13,13 +13,22 @@ let marksHead = null;
 const MARKS_FIRST = 25, MARKS_MORE = 40;
 let marksUpTo = MARKS_FIRST, marksList = "", marksSeen = null;
 const marksMatch = (p, m, q) => (!marksColor || colorOf(m) === marksColor) && (!q || [m.text, m.note || "", p.title].some((t) => t.toLowerCase().includes(q)));
+// Drawings (2026-11) are listed with each clip's highlights; a search
+// finds them by the clip's title, and a colour picked shows highlights alone.
+const hasDrawings = (p) => !p.note && !!((p.ink && Object.keys(p.ink).length) || (p.drawn && p.drawn.length));
 function marksShown() {
   const q = marksQuery.trim().toLowerCase();
-  return state.pages.filter((p) => (p.marks || []).length)
-    .map((p) => ({ p, last: Math.max(...p.marks.map((m) => m.at || 0)), list: p.marks.filter((m) => marksMatch(p, m, q)) }))
-    .filter((c) => c.list.length)
+  return state.pages.filter((p) => (p.marks || []).length || hasDrawings(p))
+    .map((p) => {
+      const ink = !marksColor && hasDrawings(p) && (!q || p.title.toLowerCase().includes(q)) ? inkGroups(p) : [];
+      return { p, ink, last: Math.max(p.inkAt || 0, ...(p.marks || []).map((m) => m.at || 0)), list: (p.marks || []).filter((m) => marksMatch(p, m, q)) };
+    })
+    .filter((c) => c.list.length || c.ink.length)
     .sort((a, b) => b.last - a.last);
 }
+// Past five drawings, a clip's list stops with Show all (a PDF can have hundreds of pages drawn on).
+const INK_FIRST = 5;
+const inkOpen = new Set();
 function goToMark(p, id) {
   const m = (p.marks || []).find((x) => x.id === id);
   if (state.open === p && !$("readerView").hidden) { if (m) jumpToMark(p, m, true); return; }
@@ -29,6 +38,8 @@ function goToMark(p, id) {
 function renderHighlights() {
   const root = $("highlights");
   const total = state.pages.reduce((n, p) => n + (p.marks || []).length, 0);
+  const drawnIn = state.pages.filter(hasDrawings);
+  const drawings = drawnIn.reduce((n, p) => n + inkTotal(p), 0);
   if (!marksHead) {
     const input = el("input", { type: "search", placeholder: "Search your highlights", "aria-label": "Search your highlights",
       autocomplete: "off", spellcheck: "false", enterkeyhint: "search", dir: "auto" });
@@ -52,23 +63,34 @@ function renderHighlights() {
   const shown = clips.reduce((n, c) => n + c.list.length, 0);
   if (marksQuery !== marksList) { marksList = marksQuery; marksUpTo = MARKS_FIRST; }
   const more = clips.length > marksUpTo;
-  marksHead.hidden = !total;
+  marksHead.hidden = !total && !drawings;
+  const hl = (n) => (n === 1 ? "1 highlight" : n + " highlights");
   marksHead.querySelector(".hl-count").textContent = marksQuery.trim() || marksColor
-    ? (shown === 1 ? "1 highlight" : shown + " highlights") + " found"
-    : (total === 1 ? "1 highlight" : total + " highlights") + " in " + (clips.length === 1 ? "1 clip" : clips.length + " clips");
+    ? hl(shown) + " found"
+    : [total || !drawings ? hl(total) : null, drawings ? inkWord(drawings) : null].filter(Boolean).join(" · ") + " in " + (clips.length === 1 ? "1 clip" : clips.length + " clips");
   marksHead.querySelector(".hl-copy").hidden = !shown;
-  const nodes = clips.slice(0, marksUpTo).map(({ p, list }) => el("section", { class: "hl-clip", "data-key": "hl:" + p.id },
-    el("button", { class: "hl-title", type: "button", onclick: () => openPage(p.id) },
-      el("span", { class: "hl-name", dir: "auto" }, p.title),
-      el("span", { class: "meta" }, siteOf(p))),
-    el("ol", { class: "group marks-rows" }, ...list.map((m) => el("li", { class: "mark-item" },
+  const nodes = clips.slice(0, marksUpTo).map(({ p, list, ink }) => {
+    const rows = list.map((m) => ({ at: m.page ? m.page : m.block || 0, row: el("li", { class: "mark-item" },
       el("button", { class: "row mark-row", type: "button", "aria-label": m.text.slice(0, 120) + ", in " + p.title, onclick: () => goToMark(p, m.id) },
         el("span", { class: "mark-quote", "data-c": colorOf(m), dir: "auto" }, m.text),
-        m.note ? el("span", { class: "mark-note", dir: "auto" }, m.note) : null))))));
-  if (!total) {
+        m.note ? el("span", { class: "mark-note", dir: "auto" }, m.note) : null)) }));
+    const all = inkOpen.has(p.id);
+    for (const g of all ? ink : ink.slice(0, INK_FIRST)) rows.push({ at: inkOrder(g) + 0.5, row: inkRow(p, g, () => inkGoTo(p, g)) });
+    rows.sort((a, b) => a.at - b.at);
+    const more = !all && ink.length > INK_FIRST
+      ? el("li", { class: "mark-item" }, el("button", { class: "row hl-more", type: "button", onclick: () => { inkOpen.add(p.id); renderHighlights(); } },
+        "Show all " + ink.length + (ink[0].page ? " pages" : " drawings")))
+      : null;
+    return el("section", { class: "hl-clip", "data-key": "hl:" + p.id },
+      el("button", { class: "hl-title", type: "button", onclick: () => openPage(p.id) },
+        el("span", { class: "hl-name", dir: "auto" }, p.title),
+        el("span", { class: "meta" }, siteOf(p))),
+      el("ol", { class: "group marks-rows" }, ...rows.map((r) => r.row), more));
+  });
+  if (!total && !drawings) {
     nodes.push(el("div", { class: "empty" },
       el("h2", { class: "empty-title" }, "No highlights yet"),
-      el("p", { class: "empty-text" }, "Select words in a clip and tap Highlight. Every highlight in your library gathers here, with its note.")));
+      el("p", { class: "empty-text" }, "Select words in a clip and tap Mark, or Draw. Every highlight and drawing in your library gathers here.")));
   } else if (!clips.length) nodes.push(el("p", { class: "empty-text hl-none" }, "No highlights match that."));
   if (more) nodes.push(el("div", { class: "lib-more", "aria-hidden": "true" }));
   // The search field stays put, so typing in it keeps its focus.
@@ -829,8 +851,10 @@ function renderSide() {
     // The library's parts (1.14.0), each opening alone.
     hasFolders ? item(sideMark("folder"), "Collections", inLib && state.part === "collections", null, () => partFromSide("collections"), "side-sub") : null,
     item(sideMark("open"), "Clips", inLib && state.part === "pages", null, () => partFromSide("pages"), "side-sub"),
+    // Notes (2.0.0), above Files (2026-11) as in the library.
+    state.pages.some((p) => p.note) ? item(sideMark("open"), "Notes", inLib && state.part === "notes", null, () => partFromSide("notes"), "side-sub") : null,
     // Files of your own (0.31.0), their part of the library.
-    state.pages.some((p) => p.link) ? item(fileMark(), "Files", inLib && state.part === "files", null, () => partFromSide("files"), "side-sub") : null]),
+    state.pages.some((p) => p.link && !p.note) ? item(fileMark(), "Files", inLib && state.part === "files", null, () => partFromSide("files"), "side-sub") : null]),
     ...sideFold("feeds", item(feedIcon("feeds"), "Feeds", inFeeds && !state.feed, fresh ? el("span", { class: "side-pill" }, fresh + " new") : null,
       () => goPlace("feeds")), siteFeeds().sort((a, b) => latest(b) - latest(a)).slice(0, SIDE_MAX).map((f) =>
       withFeed(item(feedMark(f, true), f.title, inFeeds && state.feed === f.url, null, () => goPlace("feeds", f.url), "side-sub"), f))),
@@ -979,7 +1003,7 @@ const KEYS = [
   ["In the library", [["↑ ↓", "Move between clips"], ["Enter", "Open"], ["X", "Pick, to act on several"], ["Shift-click", "Pick a run"],
     ["F", "Favourite"], ["E", "Export"], ["F2", "Rename"], ["Del", "Delete"]]],
   ["Reading", [["Space  ← →", "Next or previous page"], ["J  K", "Next or previous section"], ["T", "Contents beside the text"],
-    ["S", "Narrate, or auto-scroll a comic"], ["A", "Reader settings"], ["H", "Highlights"], ["1–5", "Highlight the selected words in a colour"], ["D", "Draw on a PDF, then P pen, B highlighter, E eraser, [ ] size"], ["L", "Translate this clip"], ["/", "Find in this clip"], ["+  −", "Text size"], ["O", "Open the original"], ["Esc", "Back"]]],
+    ["S", "Narrate, or auto-scroll a comic"], ["A", "Reader settings"], ["H", "Highlights"], ["1–5", "Highlight the selected words in a colour"], ["D", "Draw, then P pen, B highlighter, E eraser, [ ] size"], ["L", "Translate this clip"], ["/", "Find in this clip"], ["+  −", "Text size"], ["O", "Open the original"], ["Esc", "Back"]]],
 ];
 function keysSheet() {
   return el("div", { class: "keys-sheet" },
@@ -1061,7 +1085,7 @@ function onKeys(e) {
       a: () => toggleSheet("reading"),
       h: () => !$("readerMarks").hidden && $("readerMarks").click(),
       ...Object.fromEntries(MARK_COLORS.map((c, i) => [String(i + 1), () => markKey(i)])),
-      d: () => !$("readerInk").hidden && $("readerInk").click(),
+      d: () => inkReady() && inkSet(!C.ink.on),
       // While drawing (1.56.0).
       p: () => C.ink.on && (C.ink.setting({ tool: "pen" }), inkKeep()),
       b: () => C.ink.on && (C.ink.setting({ tool: "highlighter" }), inkKeep()),

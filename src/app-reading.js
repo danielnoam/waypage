@@ -145,7 +145,9 @@ function readingPrefs(p = state.open) {
 }
 
 // Whether a clip shows as Pages: a comic by its own setting.
-const pagesOn = (p = state.open, r = readingPrefs(p)) => (p && p.comic ? r.comicLayout : r.layout) === "pages";
+// A note is always a scroll of sheets, never pages (2.0.0).
+// A note has its own Scroll or Pages (2026-11): a sheet at a time, turned like a comic.
+const pagesOn = (p = state.open, r = readingPrefs(p)) => (p && p.note ? noteLook(p).layout === "pages" : (p && p.comic ? r.comicLayout : r.layout) === "pages");
 
 function fontStack(r) {
   const f = FONTS.find((x) => x.value === r.font);
@@ -245,3 +247,55 @@ function pruneReadingFor(pages) {
 paintReading();
 if (C.reader) C.reader.setSpread(readingPrefs().spread);
 if (darkQuery && darkQuery.addEventListener) darkQuery.addEventListener("change", () => paintTheme());
+
+// A note's own look (2.0.0): margins and dark note, for all notes or one.
+// Kept on this device, like the reading settings.
+const NOTE_LOOK_KEY = "waypage.noteLook";
+const NOTE_MARGINS = { narrow: "0", normal: "3%", wide: "8%" };
+function noteLook(p = state.open) {
+  const o = load(NOTE_LOOK_KEY, {}) || {};
+  const r = { margins: "normal", dark: false, layout: "scroll", ...(o.all || {}), ...((p && o.notes && o.notes[p.id]) || {}) };
+  if (!NOTE_MARGINS[r.margins]) r.margins = "normal";
+  if (r.layout !== "pages") r.layout = "scroll";
+  r.dark = !!r.dark;
+  return r;
+}
+const noteScope = (p) => { const o = load(NOTE_LOOK_KEY, {}) || {}; return o.notes && o.notes[p.id] ? "note" : "all"; };
+function setNoteLook(change) {
+  const p = state.open, o = load(NOTE_LOOK_KEY, {}) || {};
+  if (noteScope(p) === "note") o.notes[p.id] = { ...o.notes[p.id], ...change };
+  else o.all = { ...(o.all || {}), ...change };
+  const paged = pagesOn(p);
+  store(NOTE_LOOK_KEY, o);
+  paintNote();
+  notePaged(paged);
+}
+function notePaged(was) {
+  if (C.reader && state.open && pagesOn() !== was) { C.reader.setPaged(pagesOn()); volumeWatch(); narrateOrScroll(state.open); }
+}
+// This note starts from the look it has now, so nothing jumps; All notes drops its own.
+function setNoteScope(to) {
+  const p = state.open, o = load(NOTE_LOOK_KEY, {}) || {};
+  if (to === noteScope(p)) return;
+  o.notes = o.notes || {};
+  if (to === "note") o.notes[p.id] = noteLook(p);
+  else delete o.notes[p.id];
+  const paged = pagesOn(p);
+  store(NOTE_LOOK_KEY, o);
+  paintNote();
+  notePaged(paged);
+}
+// Puts the open note's margins and dark paper on the page.
+function paintNote() {
+  const p = state.open, D = C.reader && C.reader.frameDoc;
+  if (!p || !p.note) return;
+  const body = D && D.querySelector(".co-body.co-comic");
+  if (body) {
+    // In Pages a sheet is fitted to the screen, so margins are for Scroll.
+    body.style.paddingInline = pagesOn(p) ? "" : NOTE_MARGINS[noteLook(p).margins];
+    C.reader.placeText();
+    C.files.drawNear($("readerFrame"));
+  }
+  paintPdfDark();
+  C.reader.applyTheme();
+}

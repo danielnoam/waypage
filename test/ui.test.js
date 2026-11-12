@@ -480,7 +480,7 @@ function zipOf(files) {
         sel.addRange(r);
       });
       const btn = p.locator(".read-here .sel-mark:not([hidden])");
-      await btn.getByText("Remove highlight").waitFor();
+      await btn.getByText("Unmark").waitFor();
       await btn.click();
       await p.waitForFunction(() => !document.getElementById("readerFrame").contentDocument.querySelector("mark.co-mark"));
       await p.locator(".read-here").waitFor({ state: "hidden" });
@@ -1644,7 +1644,113 @@ function zipOf(files) {
       await q.context().close();
     });
 
-    await test("a file read from outside: where you are, highlights and stats sync by its fingerprint, the file never (2026-11)", async () => {
+    await test("a note goes up with its sheets, strokes and PDF, comes down whole on another device, and only while Notes is on (2.0.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t" }));
+        const S = window.Waypage.store;
+        const n = (id, more) => ({ id, url: "", title: "Note " + id, site: "", savedAt: 100, minutes: 0, mode: "full", at: 0, images: 0, note: { paper: "lines" }, ...more });
+        await S.writeIndex([n("note1", { editedAt: 400 })]);
+        await S.writePage("note1", "<!doctype html><html><body><div class=\"co-body\"></div></body></html>", n("note1", { editedAt: 400 }));
+        await S.writeNote("note1", { v: 1, sheets: [{ bg: "paper" }, { bg: "pdf", n: 1 }] });
+        await S.writeInk("note1", { v: 1, size: 0, pages: { 1: [{ id: "s1", t: "p", c: "ink", w: 0.002, p: [0.1, 0.1, 0.5, 0.2, 0.2, 0.5, 0.3, 0.1, 0.5] }] } });
+        await S.writeNoteBase("note1", new Blob(["%PDF-1.4 fake"], { type: "application/pdf" }));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const run = (what) => q.evaluate(async (what) => {
+        window.Waypage.sync.setWhat("notes", what);
+        const b64 = (t) => btoa(unescape(encodeURIComponent(t)));
+        const n = (id, more) => ({ id, url: "", title: "Note " + id, site: "", savedAt: 100, minutes: 0, mode: "full", at: 0, images: 0, note: { paper: "lines" }, ...more });
+        const remote = { format: 1, deleted: {}, files: { note2: { at: 300, sha: "p2", note: { "note.json": "n2", "ink.json": "i2" } } }, pages: [n("note2", { editedAt: 300 })] };
+        const puts = [];
+        let wrote = null;
+        window.fetch = async (url, opts = {}) => {
+          const method = opts.method || "GET";
+          const ok = (j, text) => new Response(text != null ? text : JSON.stringify(j), { status: 200 });
+          if (/\/repos\/me\/waypage-data$/.test(url)) return ok({ name: "waypage-data" });
+          if (/contents\/library\.json/.test(url) && method === "GET") return ok({ sha: "lib1", content: b64(JSON.stringify(remote)) });
+          if (/contents\/library\.json/.test(url) && method === "PUT") { wrote = JSON.parse(decodeURIComponent(escape(atob(JSON.parse(opts.body).content)))); return ok({ content: { sha: "lib2" } }); }
+          if (method === "PUT") { if (!/contents\/stats\//.test(url)) puts.push(decodeURIComponent(String(url).split("/contents/")[1])); return ok({ content: { sha: "x" + puts.length } }); }
+          if (/contents\/pages\/note2\.html/.test(url)) return ok(null, "<!doctype html><html><body><div class=\"co-body\"></div></body></html>");
+          if (/contents\/notes\/note2\/note\.json/.test(url)) return ok(null, JSON.stringify({ v: 1, sheets: [{ bg: "paper" }, { bg: "paper" }] }));
+          if (/contents\/notes\/note2\/ink\.json/.test(url)) return ok(null, JSON.stringify({ v: 1, size: 0, pages: { 2: [{ id: "s9", t: "p", c: "ink", w: 0.002, p: [0.1, 0.1, 0.5, 0.2, 0.2, 0.5, 0.3, 0.1, 0.5] }] } }));
+          return new Response("{}", { status: 404 });
+        };
+        await syncNow(true);
+        const S = window.Waypage.store;
+        const sheets = (await S.readNote("note2") || {}).sheets;
+        return { puts: puts.sort(), sent: wrote && wrote.pages.map((p) => p.id).sort(), files: wrote && Object.keys((wrote.files.note1 || {}).note || {}).sort(),
+          here: state.pages.map((p) => p.id).sort(), sheets: sheets && sheets.length, ink: !!(await S.readInk("note2")) };
+      }, what);
+      // On: this note goes up (its files, then its page), the other comes down.
+      const on = await run(true);
+      assert.deepStrictEqual(on.puts, ["notes/note1/base.pdf", "notes/note1/ink.json", "notes/note1/note.json", "pages/note1.html"], JSON.stringify(on));
+      assert.deepStrictEqual(on.sent, ["note1", "note2"], JSON.stringify(on));
+      assert.deepStrictEqual(on.files, ["base.pdf", "ink.json", "note.json"], JSON.stringify(on));
+      assert.deepStrictEqual(on.here, ["note1", "note2"], JSON.stringify(on));
+      assert.strictEqual(on.sheets, 2, "the other device's note came without its sheets");
+      assert.strictEqual(on.ink, true, "the other device's note came without its strokes");
+      await q.context().close();
+    });
+
+    await test("GitHub sync's What this device syncs has Notes right above Feeds, and turning it off leaves Drive's as it is (2.0.0, 2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(() => {
+        localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t", paused: true }));
+        localStorage.setItem("waypage.drive", JSON.stringify({ email: "a@example.com", auto: true, what: { clips: true, notes: true }, last: {}, since: 1, folder: "f" }));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => { openSettings(); openSection("sync"); });
+      const labels = await q.locator("#sectionBody label.row .choice-label").allTextContents();
+      assert.deepStrictEqual(labels.slice(labels.indexOf("Clips"), labels.indexOf("Newsletters") + 1), ["Clips", "Notes", "Feeds", "Newsletters"], labels.join(", "));
+      await q.locator("#sectionBody label.row", { hasText: "Over 50 MB can't be synced" }).locator("input").uncheck();
+      const drive = await q.evaluate(() => window.Waypage.drive.what.notes);
+      assert.strictEqual(drive, true, "Drive's Notes went off with it");
+      await q.context().close();
+    });
+
+    await test("a note isn't sent, taken or forgotten while Notes is off in What this device syncs (2.0.0)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t", what: { notes: false } }));
+        const c = (id, more) => ({ id, url: "https://example.com/" + id, title: "Clip " + id, site: "example.com", savedAt: 100, minutes: 1, mode: "links", at: 0, ...more });
+        const n = (id) => ({ id, url: "", title: "Note " + id, site: "", savedAt: 100, minutes: 0, mode: "full", at: 0, images: 0, note: { paper: "blank" } });
+        await window.Waypage.store.writeIndex([c("clip1"), n("note1")]);
+        await window.Waypage.store.writePage("clip1", "<!doctype html><html><body><p>Clip.</p></body></html>", c("clip1"));
+        await window.Waypage.store.writePage("note1", "<!doctype html><html><body><div class=\"co-body\"></div></body></html>", n("note1"));
+        await window.Waypage.store.writeNote("note1", { v: 1, sheets: [{ bg: "paper" }] });
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const n = (id) => ({ id, url: "", title: "Note " + id, site: "", savedAt: 100, minutes: 0, mode: "full", at: 0, images: 0, note: { paper: "squares" } });
+        const remote = { format: 1, deleted: {}, files: { note2: { at: 100, sha: "p2", note: { "note.json": "n2" } } }, pages: [n("note2")] };
+        const b64 = (t) => btoa(unescape(encodeURIComponent(t)));
+        const puts = [];
+        let wrote = null;
+        window.fetch = async (url, opts = {}) => {
+          const method = opts.method || "GET";
+          const ok = (j) => new Response(JSON.stringify(j), { status: 200 });
+          if (/\/repos\/me\/waypage-data$/.test(url)) return ok({ name: "waypage-data" });
+          if (/contents\/library\.json/.test(url) && method === "GET") return ok({ sha: "lib1", content: b64(JSON.stringify(remote)) });
+          if (/contents\/library\.json/.test(url) && method === "PUT") { wrote = JSON.parse(decodeURIComponent(escape(atob(JSON.parse(opts.body).content)))); return ok({ content: { sha: "lib2" } }); }
+          if (method === "PUT") { if (!/contents\/stats\//.test(url)) puts.push(String(url).split("/contents/")[1]); return ok({ content: { sha: "x" } }); }
+          return new Response("{}", { status: 404 });
+        };
+        await syncNow(true);
+        return { puts: puts.sort(), sent: wrote && wrote.pages.map((p) => p.id).sort(), kept: wrote && Object.keys(wrote.files), here: state.pages.map((p) => p.id).sort() };
+      });
+      // The clip goes up; GitHub's note stays on GitHub; this device's note stays here.
+      assert.deepStrictEqual(got.puts, ["pages/clip1.html"], JSON.stringify(got));
+      assert.deepStrictEqual(got.sent, ["clip1", "note2"], JSON.stringify(got));
+      assert.deepStrictEqual(got.here, ["clip1", "note1"], JSON.stringify(got));
+      assert.ok(got.kept.includes("note2"), "GitHub's note lost its files");
+      await q.context().close();
+    });
+
+    await test("a file read from outside: where you are, highlights, drawings and stats sync by its fingerprint, the file never (2026-11)", async () => {
       const FP = "0123456789abcdef0123456789abcdef";
       const q = await page(browser, 390);
       await q.evaluate(async (FP) => {
@@ -1660,7 +1766,7 @@ function zipOf(files) {
         const mk = { id: "m1", block: 0, start: 0, endBlock: 0, end: 4, text: "Text", at: 4000 };
         // The phone has the same file as zzphone1, read further.
         const remote = { format: 1, deleted: {}, files: {}, pages: [],
-          outside: { [FP]: { name: "book1.pdf", ids: ["zzphone1"], at: 0.6, readAt: 5000, placeAt: 5000, readOn: "Phone", marks: [mk], fav: true, favAt: 4000 } } };
+          outside: { [FP]: { name: "book1.pdf", ids: ["zzphone1"], at: 0.6, readAt: 5000, placeAt: 5000, readOn: "Phone", marks: [mk], fav: true, favAt: 4000, ink: { 1: [{ id: "s1", t: "p", c: "red", w: 0.01, p: [0.1, 0.1, 0.5, 0.3, 0.3, 0.5] }] }, inkAt: 5000 } } };
         const b64 = (t) => btoa(unescape(encodeURIComponent(t)));
         const puts = [];
         let wrote = null;
@@ -1678,11 +1784,11 @@ function zipOf(files) {
         const b1 = p("book1");
         return { puts: puts.filter((u) => /pages\//.test(u)), sentPages: wrote.pages.length, sentOut: Object.keys(wrote.outside).length,
           sent2: wrote.outside.fedcba9876543210fedcba9876543210 && wrote.outside.fedcba9876543210fedcba9876543210.tags,
-          sentIds: wrote.outside[FP].ids.sort(), here: [b1.at, b1.readOn, (b1.marks || []).length, !!b1.fav, !!b1.link],
+          sentIds: wrote.outside[FP].ids.sort(), here: [b1.at, b1.readOn, (b1.marks || []).length, !!b1.fav, !!b1.link, Object.keys(b1.ink || {}).length],
           stats: (window.Waypage.stats.clip("book1") || {}).readMs, known: !!C.sync.outsideKnown(FP) };
       }, FP);
       assert.deepStrictEqual(got, { puts: [], sentPages: 0, sentOut: 2, sent2: ["mine"], sentIds: ["book1", "zzphone1"],
-        here: [0.6, "Phone", 1, true, true], stats: 600000, known: true }, JSON.stringify(got));
+        here: [0.6, "Phone", 1, true, true, 1], stats: 600000, known: true }, JSON.stringify(got));
       // The same file brought in fresh on this device takes it at once.
       const fresh = await q.evaluate((FP) => {
         const m = { id: "new1abc", title: "Again", link: "handle:x", file: { name: "again.pdf", kind: "pdf", ext: "pdf", size: 9, fp: FP }, at: 0 };
@@ -2451,7 +2557,7 @@ function zipOf(files) {
       await ctx.close();
     });
 
-    await test("a linked PDF's printed pages can be drawn on with a pen, kept, undone, and saved in a copy as ink annotations (1.56.0)", async () => {
+    await test("a linked PDF is made into a note to draw on with a pen, kept, undone, and saved as a PDF (1.56.0, 2.0.0)", async () => {
       const maker = await browser.newPage();
       let html = "<style>@page{size:A4;margin:0} div{padding:60px;font:24px sans-serif;page-break-after:always}</style>";
       for (let i = 1; i <= 3; i++) html += "<div><p>Page " + i + " opens here.</p><p>Nothing much happens on this page, and the margins are wide enough to write in.</p></div>";
@@ -2475,19 +2581,24 @@ function zipOf(files) {
         await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
         return meta.id;
       }, [bytes, String(bring)]);
+      let target = id;
       const open = async () => {
         await q.reload();
         await q.waitForSelector("#saveUrl");
         await q.evaluate(([b, f]) => { eval(f)(b); }, [bytes, String(bring)]);
-        await q.evaluate((i) => openPage(i), id);
+        await q.evaluate((i) => openPage(i), target);
         await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
       };
       await open();
-      assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").hidden), false, "the pen button is on a PDF's pages");
-      // No layer until Draw is on and no drawings are there.
-      assert.strictEqual(await q.evaluate(() => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink")), false);
-      await q.evaluate(() => document.getElementById("readerInk").click());
-      await until(q, () => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-on='1'][data-page='1']"));
+      // The reader bar's pen is only on notes (2026-11): a PDF is drawn on
+      // from Highlights, and ⋯ makes a note of it.
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").hidden), true, "no pen button on a PDF");
+      await q.evaluate(() => makeNoteFrom(state.open));
+      await until(q, () => !!state.open && !!state.open.note && !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-on='1'][data-page='1']"), null, 20000);
+      const noteId = await q.evaluate(() => state.open.id);
+      target = noteId;
+      assert.ok(await q.evaluate(() => state.open.note.from), "the note says which PDF it was made from");
+      assert.strictEqual(await q.evaluate(() => state.open.title), "sketch", "named as the PDF is");
       assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").getAttribute("aria-pressed")), "true");
       await until(q, () => !document.querySelector(".ink-bar").hidden);
       // The bar: no step row. Size opens a scale of five, and the pen has a style menu of four.
@@ -2684,30 +2795,29 @@ function zipOf(files) {
       assert.ok(fit.slice(0, 4).every((v) => v < 1.5), JSON.stringify(fit));
       // Kept: on this device, beside the clip, and back when the clip is opened again.
       await q.waitForTimeout(1200);
-      const saved = await q.evaluate((i) => Waypage.store.readInk(i), id);
+      const saved = await q.evaluate((i) => Waypage.store.readInk(i), noteId);
       assert.strictEqual(saved.pages["1"].length, 3);
       await open();
       await until(q, () => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1'] path"));
       assert.strictEqual(await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-ink[data-page='1'] path").length), 3);
-      assert.strictEqual(await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelector(".co-ink").dataset.on), "", "words select and links tap again with Draw off");
-      // The Drawings sheet lists the page, and has a pad that says what the pen sends.
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelector(".co-ink").dataset.on), "1", "a note opens with its pen ready");
+      // Try your pen has a pad that says what the pen sends.
       await q.evaluate(() => openSheet("ink"));
       await q.locator("#readingSheet .ink-probe-pad").waitFor();
       assert.ok(/Page: nothing yet\nPhone: no pen reading here/.test(await q.locator("#readingSheet .ink-probe-out").innerText()));
-      await q.locator("#readingSheet .row", { hasText: "Page 1" }).waitFor();
       await q.goBack();
       await q.locator("#readingSheet").waitFor({ state: "hidden" });
-      // A copy has the strokes as ink annotations.
+      // Save as PDF has the PDF's pages with the strokes on them.
       const copy = await q.evaluate(async () => {
-        const out = await Waypage.files.heldPdf().ink(Waypage.ink.forPdf());
-        const s = new TextDecoder("latin1").decode(out);
-        const again = await Waypage.pdf.open(out);
+        const { blob } = await Waypage.notes.toPdf(state.open, Waypage.files.heldPdf(), Waypage.ink.strokes);
+        const head = new TextDecoder("latin1").decode(new Uint8Array(await blob.slice(0, 5).arrayBuffer()));
+        const again = await Waypage.pdf.open(blob);
         const pages = again.pages;
         again.close();
-        return { size: out.length, ink: (s.match(/\/Subtype\s*\/Ink/g) || []).length, list: /\/InkList/.test(s), pages };
+        return { head, pages, size: blob.size };
       });
-      assert.strictEqual(copy.ink, 3, JSON.stringify(copy));
-      assert.ok(copy.list && copy.pages === 3, JSON.stringify(copy));
+      assert.strictEqual(copy.head, "%PDF-", JSON.stringify(copy));
+      assert.strictEqual(copy.pages, 3, JSON.stringify(copy));
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await ctx.close();
     });
@@ -2741,8 +2851,9 @@ function zipOf(files) {
       await q.evaluate(([b, f]) => { eval(f)(b); }, [bytes, String(bring)]);
       await q.evaluate((i) => openPage(i), id);
       await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
-      await q.evaluate(() => document.getElementById("readerInk").click());
-      await until(q, () => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-on='1'][data-page='1']"));
+      await q.evaluate(() => makeNoteFrom(state.open));
+      await until(q, () => !!state.open && !!state.open.note && !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-on='1'][data-page='1']"), null, 20000);
+      const noteId = await q.evaluate(() => state.open.id);
       await until(q, () => !document.querySelector(".ink-bar").hidden);
       await q.evaluate(() => Waypage.ink.setting({ finger: true }));
       // A pointer on page 1, as fractions of its width.
@@ -2788,16 +2899,28 @@ function zipOf(files) {
       await q.evaluate((u) => Waypage.ink.addImage(u, 0.5), png);
       assert.strictEqual(await q.evaluate(() => Waypage.ink.strokes(1).filter((s) => s.t === "i").length), 1);
       assert.strictEqual(await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-ink image.pic[href^='data:image/png']").length), 1);
+      // Save as PDF paints the picture onto its sheet: a red pixel where it was put.
       const copy = await q.evaluate(async () => {
-        const out = await Waypage.files.heldPdf().ink(Waypage.ink.forPdf());
-        const s = new TextDecoder("latin1").decode(out);
-        return { stamp: (s.match(/\/Subtype\s*\/Stamp/g) || []).length, image: /\/Subtype\s*\/Image/.test(s) };
+        const { blob } = await Waypage.notes.toPdf(state.open, Waypage.files.heldPdf(), Waypage.ink.strokes);
+        const head = new TextDecoder("latin1").decode(new Uint8Array(await blob.slice(0, 5).arrayBuffer()));
+        const again = await Waypage.pdf.open(blob);
+        const pages = again.pages;
+        const jpeg = await again.draw(1, 600);
+        again.close();
+        const bm = await createImageBitmap(new Blob([jpeg], { type: "image/jpeg" }));
+        const c = document.createElement("canvas");
+        c.width = bm.width; c.height = bm.height;
+        const g = c.getContext("2d");
+        g.drawImage(bm, 0, 0);
+        const it = Waypage.ink.strokes(1).find((x) => x.t === "i");
+        const px = g.getImageData(Math.round((it.x + it.w / 2) * bm.width), Math.round((it.y + it.h / 2) * bm.width), 1, 1).data;
+        return { head, pages, red: px[0] > 150 && px[1] < 110 && px[2] < 110 };
       });
-      assert.deepStrictEqual(copy, { stamp: 1, image: true });
+      assert.deepStrictEqual(copy, { head: "%PDF-", pages: 2, red: true });
       await q.waitForTimeout(1200);
-      const saved = await q.evaluate((i) => Waypage.store.readInk(i), id);
+      const saved = await q.evaluate((i) => Waypage.store.readInk(i), noteId);
       const file = Object.values(saved.pages).flat().find((s) => s.t === "i").f;
-      assert.ok(/^data:image\/png/.test(await q.evaluate(([i, f]) => Waypage.store.readInkImage(i, f), [id, file])), "the picture is kept beside the drawings");
+      assert.ok(/^data:image\/png/.test(await q.evaluate(([i, f]) => Waypage.store.readInkImage(i, f), [noteId, file])), "the picture is kept beside the drawings");
       // Long press on a colour opens the colour sheet; a colour typed in is the pen's, Cancel changes nothing.
       await q.locator('.ink-bar [data-act="tool:pen"]').click();
       const swatch = q.locator('.ink-bar [data-slot="1"]');
@@ -2857,8 +2980,8 @@ function zipOf(files) {
       await q.evaluate(([b, f]) => { eval(f)(b); }, [bytes, String(bring)]);
       await q.evaluate((i) => openPage(i), id);
       await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
-      await q.evaluate(() => document.getElementById("readerInk").click());
-      await until(q, () => document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-ink[data-on='1']").length === 2);
+      await q.evaluate(() => makeNoteFrom(state.open));
+      await until(q, () => !!state.open && !!state.open.note && document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-ink[data-on='1']").length === 2, null, 20000);
       await until(q, () => !document.querySelector(".ink-bar").hidden);
       await q.evaluate(() => Waypage.ink.setting({ finger: true, tool: "pen", size: 1 }));
       // Where page 2 is, in page 1's widths: its top, and both heights.
@@ -2944,7 +3067,7 @@ function zipOf(files) {
       await ctx.close();
     });
 
-    await test("the pen test in Drawings asks for each thing in turn, records what comes in, and makes a log to save (1.56.0)", async () => {
+    await test("the pen test in Try your pen asks for each thing in turn, records what comes in, and makes a log to save (1.56.0)", async () => {
       const maker = await browser.newPage();
       let html = "<style>@page{size:A4;margin:0} div{padding:60px;font:24px sans-serif;page-break-after:always}</style>";
       for (let i = 1; i <= 3; i++) html += "<div><p>Page " + i + " opens here.</p><p>Nothing much happens on this page, and the margins are wide enough to write in.</p></div>";
@@ -2973,6 +3096,8 @@ function zipOf(files) {
       await q.evaluate(([b, f]) => { eval(f)(b); }, [bytes, String(bring)]);
       await q.evaluate((i) => openPage(i), id);
       await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      await q.evaluate(() => makeNoteFrom(state.open));
+      await until(q, () => !!state.open && !!state.open.note && !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-on='1'][data-page='1']"), null, 20000);
       await q.evaluate(() => openSheet("ink"));
       await q.locator("#readingSheet .ink-test-box .btn-primary", { hasText: "Start test" }).click();
       await q.locator("#readingSheet .ink-test-box", { hasText: "Step 1 of 10" }).waitFor();
@@ -3011,7 +3136,7 @@ function zipOf(files) {
       await ctx.close();
     });
 
-    await test("a scanned PDF, which has no words, can be drawn on too (1.56.0)", async () => {
+    await test("a scanned PDF, which has no words, can be made into a note to draw on (1.56.0, 2.0.0)", async () => {
       const maker = await browser.newPage();
       await maker.setContent("<style>@page{size:A4;margin:0} div{height:1100px;page-break-after:always}</style><div></div><div></div>");
       const bytes = [...await maker.pdf({ format: "A4" })];
@@ -3039,9 +3164,9 @@ function zipOf(files) {
       await q.evaluate((i) => openPage(i), id);
       await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
       assert.strictEqual(await q.evaluate(() => state.open.comic), true, "a PDF with no words is a scan");
-      assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").hidden), false);
-      await q.evaluate(() => document.getElementById("readerInk").click());
-      await until(q, () => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1']"));
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").hidden), true);
+      await q.evaluate(() => makeNoteFrom(state.open));
+      await until(q, () => !!state.open && !!state.open.note && !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-on='1'][data-page='1']"), null, 20000);
       await q.evaluate(() => {
         const d = document.getElementById("readerFrame").contentDocument, svg = d.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
         const fire = (name, fx, fy) => svg.dispatchEvent(new PointerEvent(name, { pointerType: "pen", pointerId: 4, isPrimary: true, bubbles: true, cancelable: true, buttons: name === "pointerup" ? 0 : 1, pressure: 0.5, clientX: r.left + fx * r.width, clientY: r.top + fy * r.width }));
@@ -3058,14 +3183,73 @@ function zipOf(files) {
       await ctx.close();
     });
 
-    await test("a comic has no Highlights button (1.56.0)", async () => {
+    await test("a comic has Highlights, to draw on its pictures, and no pen in the bar (1.56.0, 2026-11)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async (b) => { askKeep = async () => false; await openFile(new File([new Uint8Array(b)], "v1.cbz"), null, false); }, [...mangaBytes(1)]);
       await q.evaluate(() => openPage(state.pages[0].id));
       await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
       await q.waitForTimeout(300);
-      assert.strictEqual(await q.evaluate(() => document.getElementById("readerMarks").hidden), true);
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerMarks").hidden), false);
       assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").hidden), true, "a CBZ comic has no pen");
+      await q.evaluate(() => document.getElementById("readerMarks").click());
+      await q.locator("#readingSheet:not([hidden]) .ink-start", { hasText: "Draw on this file" }).click();
+      await until(q, () => Waypage.ink.on && Waypage.ink.blocks);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a clip is drawn on from its selection bar: the stroke stays with its paragraph, and Highlights lists it (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const md = "# Drawn on\n\n" + Array.from({ length: 12 }, (_, i) => "Paragraph " + (i + 1) + " has words enough to wrap over a few lines on a phone, and then some more.").join("\n\n");
+        const meta = await Waypage.files.bring(new File([md], "drawn.md"), "md", { has: () => false });
+        await Waypage.store.writeIndex([meta, ...await Waypage.store.readIndex()]);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => openPage(state.pages.find((x) => x.title === "Drawn on").id));
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open && Waypage.ink.blocks);
+      // Draw from the selection bar.
+      await q.frameLocator("#readerFrame").locator("p").nth(2).evaluate((el) => {
+        const r = el.ownerDocument.createRange(); r.selectNodeContents(el.firstChild); r.setEnd(el.firstChild, 9);
+        const sel = el.ownerDocument.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+        el.ownerDocument.dispatchEvent(new Event("selectionchange"));
+      });
+      await q.locator(".read-here .sel-draw:not([hidden])").click();
+      await until(q, () => Waypage.ink.on);
+      await q.evaluate(() => Waypage.ink.setting({ finger: true, tool: "pen" }));
+      // The third paragraph, in the page's own coordinates.
+      const [x0, y0] = await q.evaluate(() => {
+        const f = document.getElementById("readerFrame").getBoundingClientRect(), b = document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-body p")[2].getBoundingClientRect();
+        return [f.left + b.left + 10, f.top + b.top + b.height / 2];
+      });
+      await q.mouse.move(x0, y0); await q.mouse.down();
+      for (let i = 1; i <= 12; i++) await q.mouse.move(x0 + i * 15, y0 + (i % 2 ? 6 : -6));
+      await q.mouse.up();
+      await until(q, () => !!state.open.ink && Object.keys(state.open.ink).length === 1);
+      const block = await q.evaluate(() => Object.keys(state.open.ink)[0]);
+      assert.strictEqual(block, "4", "the stroke is on the third paragraph, after the heading");
+      await q.evaluate(() => inkSet(false));
+      // Bigger text: the stroke is still over its paragraph.
+      await q.evaluate(() => setReading({ size: readingPrefs().size + 4 }));
+      await q.waitForTimeout(600);
+      const on = await q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument, svg = d.querySelector(".co-ink path"), p = d.querySelectorAll(".co-body p")[2];
+        const a = svg.getBoundingClientRect(), b = p.getBoundingClientRect();
+        return a.top >= b.top - 30 && a.bottom <= b.bottom + 30;
+      });
+      assert.ok(on, "the stroke moved off its paragraph");
+      // Highlights lists it, with a picture.
+      await q.evaluate(() => document.getElementById("readerMarks").click());
+      await q.locator("#readingSheet:not([hidden]) .ink-row", { hasText: "Paragraph 4" }).waitFor();
+      assert.strictEqual(await q.locator("#readingSheet .ink-row svg.ink-thumb path").count(), 1);
+      assert.match(await q.locator("#readingSheet .menu-title").first().innerText(), /1 drawing/);
+      // What was ⋯ Drawings is at its foot: Try your pen and Remove all drawings.
+      await q.locator("#readingSheet .row", { hasText: "Try your pen" }).waitFor();
+      q.once("dialog", (d) => d.accept());
+      await q.locator("#readingSheet .row", { hasText: "Remove all drawings" }).click();
+      await until(q, () => !state.open.ink);
+      await q.locator("#readingSheet .row", { hasText: "Remove all drawings" }).waitFor({ state: "detached" });
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });
@@ -4080,6 +4264,204 @@ function zipOf(files) {
         assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
         await q.context().close();
       }
+    });
+
+    await test("a note: New note picks paper, opens in Scroll with the pen on, can show as Pages, grows with a stroke on its last sheet, has its own settings, and has its own part of the library (2.0.0)", async () => {
+      const q = await page(browser, 390);
+      await q.click("#severalBtn");
+      await q.locator("#batchView .row", { hasText: "New note" }).click();
+      const kinds = await q.locator(".paper-row .choice-label").allTextContents();
+      assert.deepStrictEqual(kinds, ["Blank note", "Lines note", "Squares note"]);
+      await q.locator(".paper-row", { hasText: "Lines note" }).click();
+      await until(q, () => !!state.open && state.open.note && C.ink.on && document.querySelectorAll("#readerFrame").length && (C.reader.frameDoc || document).querySelectorAll("svg.co-ink").length === 1);
+      await q.waitForTimeout(1200);
+      assert.strictEqual(await q.evaluate(() => state.open.note.paper), "lines");
+      assert.strictEqual(await q.evaluate(() => C.reader.paged || pagesOn()), false, "a note is always a scroll");
+      // A stroke on the last sheet adds one (a touch screen draws with the pen alone, so Finger goes on).
+      await q.evaluate(() => C.ink.setting({ ...inkPrefs(), finger: true }));
+      const box = await q.evaluate(() => { const r = C.reader.frameDoc.querySelector("svg.co-ink").getBoundingClientRect(); return [r.x, r.y]; });
+      const fb = await q.locator("#readerFrame").boundingBox();
+      await q.mouse.move(fb.x + box[0] + 60, fb.y + box[1] + 100);
+      await q.mouse.down();
+      await q.mouse.move(fb.x + box[0] + 160, fb.y + box[1] + 160, { steps: 8 });
+      await q.mouse.up();
+      await until(q, () => C.files.noteSheets() === 2 && (C.reader.frameDoc || document).querySelectorAll(".co-comic > img").length === 2);
+      // Its Aa sheet: Layout and Auto-scroll, in the note's words.
+      await q.click("#readerAa");
+      assert.deepStrictEqual(await q.locator(".sheet-tabs label, .sheet-tabs button").allTextContents(), ["Layout", "Auto-scroll"]);
+      await q.locator(".sheet-tabs", { hasText: "Auto-scroll" }).getByText("Auto-scroll").click();
+      assert.ok(await q.getByText("Go on to the next note").isVisible(), "the note's own wording");
+      // Show as Pages: a sheet at a time, and the pen still draws on it (2026-11).
+      await q.locator(".sheet-tabs").getByText("Layout").click();
+      await q.locator("#readingSheet .rc-row", { hasText: "Show as" }).getByText("Pages").click();
+      await until(q, () => C.reader.paged && pagesOn());
+      await q.evaluate(() => closeSheet(true));
+      await q.waitForTimeout(600);
+      const before = await q.evaluate(() => C.ink.count());
+      const shown = await q.evaluate(() => { const r = [...C.reader.frameDoc.querySelectorAll("svg.co-ink")].map((x) => x.getBoundingClientRect()).find((r) => r.left >= 0 && r.left < innerWidth); return [r.x, r.y]; });
+      await q.mouse.move(fb.x + shown[0] + 60, fb.y + shown[1] + 100);
+      await q.mouse.down();
+      await q.mouse.move(fb.x + shown[0] + 160, fb.y + shown[1] + 160, { steps: 8 });
+      await q.mouse.up();
+      await until(q, (b) => C.ink.count() > b, before);
+      await q.evaluate(() => closeSheet(true));
+      // The library lists it apart from clips and files.
+      await q.evaluate(() => closeReader());
+      await q.locator("#library .overline, #library .section-head", { hasText: "Notes · 1" }).first().waitFor({ timeout: 5000 });
+      assert.strictEqual(await q.locator("#library .page-card", { hasText: "Note," }).count(), 1);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("typed text on a note: Add › Text, edited from Select, undone, kept, and in Save as PDF as words you can search (2.0.0)", async () => {
+      const q = await page(browser, 390);
+      await q.click("#severalBtn");
+      await q.locator("#batchView .row", { hasText: "New note" }).click();
+      await q.locator(".paper-row", { hasText: "Blank note" }).click();
+      await until(q, () => !!state.open && state.open.note && C.ink.on && (C.reader.frameDoc || document).querySelectorAll("svg.co-ink").length === 1);
+      await q.waitForTimeout(1200);
+      await q.locator('.ink-bar [data-act="add"]').click();
+      await q.locator(".ink-pop button", { hasText: "Text" }).click();
+      await q.locator("#menuSheet textarea.note-text").fill("Hello note\nsecond line");
+      await q.locator("#menuSheet .row", { hasText: "Done" }).click();
+      await until(q, () => C.ink.strokes(1).some((x) => x.t === "x"));
+      const t = await q.evaluate(() => C.ink.strokes(1).find((x) => x.t === "x"));
+      assert.strictEqual(t.text, "Hello note\nsecond line");
+      assert.ok(t.w > 0 && t.h > 0 && t.z === 0.026, JSON.stringify(t));
+      assert.strictEqual(await q.evaluate(() => C.reader.frameDoc.querySelectorAll(".co-ink text.txt tspan").length), 2, "one line each");
+      // It is taken, so it can be moved; Edit text changes the words and the size.
+      assert.strictEqual(await q.evaluate(() => C.ink.state().tool), "select");
+      await q.locator('.ink-bar [data-act="edittext"]').click();
+      assert.strictEqual(await q.locator("#menuSheet textarea.note-text").inputValue(), "Hello note\nsecond line");
+      await q.locator("#menuSheet textarea.note-text").fill("Changed");
+      await q.locator("#menuSheet label", { hasText: "Large" }).click();
+      await q.locator("#menuSheet .row", { hasText: "Done" }).click();
+      await until(q, () => C.ink.strokes(1).some((x) => x.t === "x" && x.text === "Changed" && x.z === 0.038));
+      // Undo brings the words and size back, Redo changes them again.
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      assert.deepStrictEqual(await q.evaluate(() => { const x = C.ink.strokes(1).find((y) => y.t === "x"); return [x.text, x.z]; }), ["Hello note\nsecond line", 0.026]);
+      await q.locator('.ink-bar [data-act="redo"]').click();
+      assert.strictEqual(await q.evaluate(() => C.ink.strokes(1).find((y) => y.t === "x").text), "Changed");
+      // Kept with the note, and back when it opens again.
+      await q.waitForTimeout(1200);
+      const saved = await q.evaluate(() => C.store.readInk(state.open.id));
+      assert.strictEqual(saved.pages["1"].find((x) => x.t === "x").text, "Changed");
+      // Save as PDF sets it in the sheet, and as words the PDF can be searched for.
+      const words = await q.evaluate(async () => {
+        const { blob } = await C.notes.toPdf(state.open, C.files.heldPdf(), C.ink.strokes);
+        const doc = await C.pdf.open(blob);
+        const items = await doc.text(1);
+        doc.close();
+        return items.map((i) => i.s).join(" ");
+      });
+      assert.ok(/Changed/.test(words), words);
+      // (Reading the exported PDF back opens pdf.js's sandbox, which says so in the console.)
+      const errs = q.errors.filter((e) => !/sandboxed and lacks the 'allow-same-origin'/.test(e));
+      assert.deepStrictEqual(errs, [], errs.join(" | "));
+      await q.context().close();
+    });
+
+    await test("opening a PDF offers Make a note as a third choice, named as the file is, and Show has All notes only once there is a note (2.0.0)", async () => {
+      const maker = await browser.newPage();
+      await maker.setContent("<style>@page{size:A4;margin:0} div{padding:60px;font:24px sans-serif;page-break-after:always}</style><div><p>One</p></div><div><p>Two</p></div>");
+      const bytes = [...await maker.pdf({ format: "A4" })];
+      await maker.close();
+      const q = await page(browser, 390);
+      await q.evaluate(async (b) => { const real = askKeep; askKeep = async () => false; try { await openFile(new File([new Uint8Array(b)], "plain.pdf", { type: "application/pdf" }), null, false); } finally { askKeep = real; } }, bytes);
+      await until(q, () => !!document.querySelector(".page-card"));
+      const showItems = async () => {
+        await q.locator(".show-wrap .dropdown-btn").click();
+        const items = await q.locator(".show-wrap .dropdown-item").allInnerTexts();
+        // Closed by choosing what is chosen already.
+        await q.locator(".show-wrap .dropdown-item", { hasText: "All clips" }).click();
+        await q.locator(".show-wrap .dropdown-menu").waitFor({ state: "detached" });
+        return items.map((t) => t.trim());
+      };
+      assert.ok(!(await showItems()).includes("All notes"), "no note yet, no All notes");
+      // Opening a PDF: Keep a copy, Read from where it is, and Make a note.
+      q.evaluate(async (b) => { await openFile(new File([new Uint8Array(b)], "My sketch.pdf", { type: "application/pdf" }), null, true); }, bytes).catch(() => {});
+      await q.locator("#menuSheet .row").first().waitFor();
+      assert.deepStrictEqual(await q.locator("#menuSheet .row .choice-label").allInnerTexts(), ["Keep a copy", "Read from where it is", "Make a note"]);
+      await q.locator("#menuSheet .row", { hasText: "Make a note" }).click();
+      await until(q, () => !!state.open && !!state.open.note && (C.reader.frameDoc || document).querySelectorAll("svg.co-ink").length === 2, null, 20000);
+      assert.strictEqual(await q.evaluate(() => state.open.title), "My sketch", "named as the file is, with no (note)");
+      assert.strictEqual(await q.evaluate(() => state.open.link || state.open.file || null), null, "a note has no file to read from");
+      await q.evaluate(() => closeReader());
+      // Now All notes is there, and lists the note alone.
+      const items = await showItems();
+      assert.strictEqual(items.indexOf("All notes"), items.indexOf("All clips") + 1, "right under All clips");
+      await q.locator(".show-wrap .dropdown-btn").click();
+      await q.locator(".show-wrap .dropdown-item", { hasText: "All notes" }).click();
+      await until(q, () => state.filter === "notes");
+      assert.deepStrictEqual(await q.locator("#library .page-card .card-title").allInnerTexts(), ["My sketch"]);
+      // Deleting the last note puts the filter back to All.
+      await q.evaluate(async () => { const n = state.pages.find((x) => x.note); await C.store.removePage(n.id); state.pages = state.pages.filter((x) => !x.note); await C.store.writeIndex(state.pages); renderLibrary(); });
+      await until(q, () => state.filter === "all");
+      const errs = q.errors.filter((e) => !/sandboxed and lacks the 'allow-same-origin'/.test(e));
+      assert.deepStrictEqual(errs, [], errs.join(" | "));
+      await q.context().close();
+    });
+
+    await test("renames a clip or a note from the name in the reader's bar, on a phone too, with smaller icons there (2.0.0)", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ARTICLE);
+      await q.press("#saveUrl", "Enter");
+      await q.locator(".page-card .card-title", { hasText: "The Long Haul Flight" }).waitFor({ timeout: 10000 });
+      await q.locator(".page-card", { hasText: "The Long Haul Flight" }).first().click();
+      await q.locator("#readerView:not([hidden])").waitFor();
+      await frameText(q).getByText("oceanic track").waitFor();
+      await q.waitForTimeout(900);
+      // A phone's reader bar shows the name, with 18 px icons in 38 px buttons.
+      assert.strictEqual(await q.locator("#readerName .reader-title").innerText(), "The Long Haul Flight");
+      const size = await q.evaluate(() => { const b = document.querySelector(".reader-bar .icon-btn").getBoundingClientRect(), v = document.querySelector(".reader-bar .icon-btn svg").getBoundingClientRect(); return [b.width, b.height, v.width, v.height]; });
+      assert.deepStrictEqual(size, [38, 38, 18, 18]);
+      // Escape leaves the name; an empty name does too.
+      await q.locator("#readerName .reader-title").click();
+      await q.keyboard.type("Never kept");
+      await q.keyboard.press("Escape");
+      assert.strictEqual(await q.evaluate(() => state.open.title), "The Long Haul Flight");
+      assert.ok(await q.locator("#readerView:not([hidden])").isVisible(), "Escape ended the edit, not the reading");
+      await q.locator("#readerName .reader-title").click();
+      await q.locator(".reader-title-input").fill("   ");
+      await q.keyboard.press("Enter");
+      assert.strictEqual(await q.evaluate(() => state.open.title), "The Long Haul Flight");
+      // Enter saves: the bar, the library, the saved page's heading, and the edit time that sends it to other devices.
+      await q.locator("#readerName .reader-title").click();
+      await q.locator(".reader-title-input").fill("Flight notes");
+      await q.keyboard.press("Enter");
+      await until(q, () => state.open.title === "Flight notes" && !!state.open.editedAt);
+      assert.strictEqual(await q.locator("#readerName .reader-title").innerText(), "Flight notes");
+      const stored = await q.evaluate(async () => ({ html: await C.store.readPage(state.open.id), idx: (await C.store.readIndex()).find((x) => x.id === state.open.id).title }));
+      assert.ok(/<h1[^>]*>Flight notes<\/h1>/.test(stored.html), "the page's heading");
+      assert.strictEqual(stored.idx, "Flight notes");
+      // Tapping away saves too.
+      await q.locator("#readerName .reader-title").click();
+      await q.locator(".reader-title-input").fill("Flight notes 2");
+      await q.locator(".reader-bar #readerBack").focus();
+      await until(q, () => state.open.title === "Flight notes 2");
+      await q.evaluate(() => closeReader());
+      await q.locator(".page-card .card-title", { hasText: "Flight notes 2" }).waitFor();
+      // A note renames the same way.
+      await q.click("#severalBtn");
+      await q.locator("#batchView .row", { hasText: "New note" }).click();
+      await q.locator(".paper-row", { hasText: "Blank note" }).click();
+      await until(q, () => !!state.open && state.open.note && !!(C.reader.frameDoc || document).querySelector("svg.co-ink"));
+      await q.locator("#readerName .reader-title").click();
+      await q.locator(".reader-title-input").fill("Shopping");
+      await q.keyboard.press("Enter");
+      await until(q, () => state.open.title === "Shopping");
+      assert.strictEqual(await q.evaluate(async () => (await C.store.readIndex()).find((x) => x.id === state.open.id).title), "Shopping");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+      // A computer keeps its 44 px buttons and 22 px icons.
+      const w = await page(browser, 1280);
+      await w.click("#severalBtn");
+      await w.locator("#batchView .row", { hasText: "New note" }).click();
+      await w.locator(".paper-row", { hasText: "Blank note" }).click();
+      await until(w, () => !!state.open && state.open.note);
+      await w.waitForTimeout(900);
+      assert.deepStrictEqual(await w.evaluate(() => { const b = document.querySelector(".reader-bar .icon-btn").getBoundingClientRect(), v = document.querySelector(".reader-bar .icon-btn svg").getBoundingClientRect(); return [b.width, b.height, v.width, v.height]; }), [44, 44, 22, 22]);
+      await w.context().close();
     });
 
     for (const width of [390, 1280]) {

@@ -241,7 +241,7 @@ function readerWait(p, fromHistory) {
   $("readerTranslate").hidden = true;
   $("readerNow").textContent = "Contents";
   $("readerContents").setAttribute("aria-label", "Contents");
-  fill($("readerName"), siteOf(p) ? el("span", { class: "reader-site" }, siteOf(p)) : null, el("span", { class: "reader-title" }, p.title));
+  paintReaderName(p);
   if (!fromHistory) swap ? history.replaceState(readerState(p), "") : history.pushState(readerState(p), "");
   pushScreen($("readerView"));
 }
@@ -260,7 +260,7 @@ async function openPage(id, fromHistory) {
   const wait = !!p.file;
   if (wait) readerWait(p, fromHistory);
   try {
-    html = p.link ? await openLinked(p) : await C.store.readPage(id);
+    html = p.link || p.note ? await openLinked(p) : await C.store.readPage(id);
   } catch (e) {
     html = null;
     trouble = e instanceof C.files.FileError ? e.message : null;
@@ -282,13 +282,13 @@ async function openPage(id, fromHistory) {
     const d = $("readerFrame").contentDocument;
     await Promise.race([Promise.all([
       d && d.fonts ? d.fonts.ready : null,
-      p.link ? new Promise((first) => C.files.drawNear($("readerFrame"), first)) : null,
+      p.link || p.note ? new Promise((first) => C.files.drawNear($("readerFrame"), first)) : null,
     ]), new Promise((r) => setTimeout(r, 4000))]);
     // The place it was left is set the frame after the fonts are in.
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     if (waiting !== id) return;
     stopWaiting();
-  } else if (p.link) C.files.drawNear($("readerFrame"));
+  } else if (p.link || p.note) C.files.drawNear($("readerFrame"));
   $("readerFrame").focus();
   if (markAfterOpen) {
     const id = markAfterOpen, d = $("readerFrame").contentDocument;
@@ -329,7 +329,7 @@ function onDevice(name) {
   return mine ? "on your other device" : "on " + name;
 }
 async function furtherRead(p) {
-  if (!C.sync.on || C.sync.paused || !navigator.onLine || p.link) return;
+  if (!C.sync.on || C.sync.paused || !navigator.onLine || p.link || p.note) return;
   let got;
   try { got = await C.sync.peek(); } catch (e) { got = null; }
   if (!got || state.open !== p) return;
@@ -352,7 +352,7 @@ async function furtherRead(p) {
 
 // A linked PDF from before 1.2.1 gets its cover a moment after it opens
 // (1.2.2, 1.2.4): the card learns of it here.
-const openLinked = (p) => C.files.openLinked(p);
+const openLinked = (p) => (p.note ? C.files.openNoteItem(p) : C.files.openLinked(p));
 C.files.onCover = async (p) => {
   if (!state.pages.includes(p)) return;
   await C.store.writeIndex(state.pages);
@@ -421,7 +421,7 @@ function show(p, html) {
   $("readerView").classList.toggle("railed", pinned.matches && readingPrefs().rail && !asPane($("readerView")));
   $("readerRail").hidden = !$("readerView").classList.contains("railed");
   fill($("railList"));
-  fill($("readerName"), siteOf(p) ? el("span", { class: "reader-site" }, siteOf(p)) : null, el("span", { class: "reader-title" }, p.title));
+  paintReaderName(p);
   readerScrolled(p.at || 0, 0);
   if (!p.preview) C.stats.opened(p.id);
   return C.reader.open($("readerFrame"), html, p, {
@@ -450,6 +450,7 @@ function show(p, html) {
     paintMarks(p);
     loadTranslation(p);
     inkSync(p);
+    paintNote();
     $("readerContents").hidden = C.reader.headings().length < 2;
     wordless = C.reader.wordless();
     narrateOrScroll(p);
@@ -722,8 +723,8 @@ function spentSwitch() {
 // PDF's printed pages are open. In a dark theme the pages take its colours
 // (reader.js, pdfDarkFilter); in a light one there's nothing to darken.
 const PDF_DARK_KEY = "waypage.pdfDark";
-const pdfDarkOn = () => !!load(PDF_DARK_KEY, false);
-const pdfPages = () => !!(state.open && C.files.printed(state.open));
+const pdfDarkOn = () => (state.open && state.open.note ? noteLook().dark : !!load(PDF_DARK_KEY, false));
+const pdfPages = () => !!(state.open && (state.open.note || C.files.printed(state.open)));
 function paintPdfDark() {
   const root = document.documentElement;
   const dark = pdfDarkOn() && pdfPages() && !!(themeOf(root.dataset.theme) || {}).dark;
@@ -734,11 +735,12 @@ function paintPdfDark() {
 }
 function pdfDarkSwitch() {
   const row = el("label", { class: "rc-row switch-row pdf-dark-row" },
-    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Dark PDF pages"),
-      el("span", { class: "choice-note" }, "In a dark theme, pages take its colours")),
+    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, state.open && state.open.note ? "Dark note" : "Dark PDF pages"),
+      el("span", { class: "choice-note" }, state.open && state.open.note ? "In a dark theme, the paper takes its colours" : "In a dark theme, pages take its colours")),
     el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "pdfDark", checked: pdfDarkOn(),
       onchange: (e) => {
-        store(PDF_DARK_KEY, e.target.checked);
+        if (state.open && state.open.note) setNoteLook({ dark: e.target.checked });
+        else store(PDF_DARK_KEY, e.target.checked);
         document.querySelectorAll('input[data-pref="pdfDark"]').forEach((i) => { i.checked = e.target.checked; });
         paintPdfDark();
         C.reader.applyTheme();
@@ -830,7 +832,7 @@ let lastY = 0, readerY = 0;
 function readerScrolled(at, y) {
   readerY = y;
   C.stats.active();
-  if (state.open && state.open.link) C.files.drawNear($("readerFrame"));
+  if (state.open && (state.open.link || state.open.note)) C.files.drawNear($("readerFrame"));
   if (readHere && !readHere.hidden) showReadHere();
   if (!(skim && skim.dragging)) skimShow(at);
   railNow();
@@ -975,6 +977,12 @@ function contentsList() {
 // site's next page (saved already, or to save now and open).
 function endLink(p) {
   if (p.preview) return null;
+  // A note goes on to the next one in the library's Notes (2.0.0).
+  if (p.note) {
+    const notes = state.pages.filter((x) => x.note), i = notes.findIndex((x) => x.id === p.id);
+    const nx = i >= 0 ? notes[i + 1] : null;
+    return nx ? { over: "Next note", title: nx.title, go: () => goTo(nx, true) } : null;
+  }
   const next = neighbour(p, 1);
   if (next) return { over: "Next in " + p.folder, title: next.title, go: () => goTo(next, true) };
   if (!p.next) return null;
@@ -1017,7 +1025,7 @@ let heading = "";
 async function goTo(p, turn) {
   heading = p.id;
   let html;
-  try { html = await C.store.readPage(p.id); } catch (e) { html = null; }
+  try { html = p.note ? await openLinked(p) : await C.store.readPage(p.id); } catch (e) { html = null; }
   if (!html) {
     if (heading === p.id) { heading = ""; showAloudBar(); }
     toast("This clip's file is missing. Delete it and save it again.");
@@ -1161,9 +1169,9 @@ const pictureBook = () => !!state.open && (!!state.open.comic || wordless);
 function narrateOrScroll(p) {
   const pics = !!p.comic || wordless;
   $("readerAloud").hidden = !speech.available || pics;
-  // A comic or scan has no words to highlight (1.56.0); a PDF's printed
-  // pages have theirs over them.
-  const noMarks = pics && !C.files.printed(p);
+  // A comic or scan has no words to highlight (1.56.0), but can be drawn
+  // on, from Highlights (2026-11).
+  const noMarks = pics && !C.files.printed(p) && !C.files.drawable(p);
   $("readerMarks").hidden = noMarks;
   if (noMarks && state.sheet === "marks") closeSheet(true);
   // A comic in Pages turns rather than scrolls.
@@ -1481,11 +1489,11 @@ function showReadHere() {
       if (markBtn.dataset.remove) removeMarks(markBtn.dataset.remove.split(",")); else addMark();
     } });
     markBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS.mark + "</svg>";
-    markBtn.append(el("span", { class: "sel-mark-dot", "aria-hidden": "true" }), el("span", { class: "sel-label sel-mark-label" }, "Highlight"));
+    markBtn.append(el("span", { class: "sel-mark-dot", "aria-hidden": "true" }), el("span", { class: "sel-label sel-mark-label" }, "Mark"));
     markHold(markBtn);
     // The colour the next highlight takes (1.42.0). With a mouse its dot
     // opens the five; a touch screen holds Highlight instead (styles.css).
-    const colorBtn = el("button", { class: "sel-color sel-icon", type: "button", "aria-label": "Highlight colour", title: "Highlight colour",
+    const colorBtn = el("button", { class: "sel-color sel-icon", type: "button", "aria-label": "Mark colour", title: "Mark colour",
       onclick: () => (selColors && !selColors.hidden ? closeSelColors() : openSelColors()) }, swatchDot(markColor()));
     markBtn.addEventListener("contextmenu", (e) => { e.preventDefault(); openSelColors(); });
     const outBtn = (cls, label, icon, act) => {
@@ -1496,7 +1504,12 @@ function showReadHere() {
       b.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + icon + "</svg>";
       return b;
     };
-    readHere = el("div", { class: "read-here", role: "toolbar", "aria-label": "Selection" }, markBtn, colorBtn, aloudBtn,
+    // Draw from here (2026-11): the words stay selected while you draw.
+    const drawBtn = el("button", { class: "sel-draw", type: "button", "aria-label": "Draw", title: "Draw (D)", onclick: () => { hideReadHere(); inkStart(); } });
+    drawBtn.append(inkIcon("pen"), el("span", { class: "sel-label" }, "Draw"));
+    drawBtn.querySelector("svg").setAttribute("width", "20");
+    drawBtn.querySelector("svg").setAttribute("height", "20");
+    readHere = el("div", { class: "read-here", role: "toolbar", "aria-label": "Selection" }, markBtn, colorBtn, drawBtn, aloudBtn,
       outBtn("sel-lookup", "Look up", ICONS.lookup, lookUp),
       outBtn("sel-translate", "Translate", ICONS.translate, translate));
     $("readerView").append(readHere);
@@ -1510,8 +1523,9 @@ function showReadHere() {
   // Words already highlighted (1.7.1): the button takes the highlight off.
   const on = mark ? C.reader.selectionMarks() : { all: false };
   if (on.all) markBtn.dataset.remove = on.ids.join(","); else delete markBtn.dataset.remove;
-  markBtn.querySelector(".sel-mark-label").textContent = on.all ? "Remove highlight" : "Highlight";
-  markBtn.setAttribute("aria-label", on.all ? "Remove highlight" : "Highlight");
+  markBtn.querySelector(".sel-mark-label").textContent = on.all ? "Unmark" : "Mark";
+  markBtn.setAttribute("aria-label", on.all ? "Unmark" : "Mark");
+  readHere.querySelector(".sel-draw").hidden = !mark || !inkReady() || C.ink.on;
   readHere.querySelector(".sel-aloud").hidden = !spot;
   readHere.querySelector(".sel-aloud .sel-label").textContent = heard ? "Play from here" : "Narrate from here";
   readHere.querySelector(".sel-aloud").setAttribute("aria-label", heard ? "Play from here" : "Narrate from here");
@@ -1756,22 +1770,51 @@ function marksView(p, back) {
         markAfterOpen = m.id;
         back(true);
       };
-      return el("li", { class: "mark-item" },
+      const row = el("li", { class: "mark-item" },
         el("button", { class: "row mark-row", type: "button", onclick: go },
           el("span", { class: "mark-quote", "data-c": colorOf(m), dir: "auto" }, m.text),
           m.note ? el("span", { class: "mark-note", dir: "auto" }, m.note) : null,
           lost ? el("span", { class: "meta" }, "Not found in this copy of the clip") : null),
         el("button", { class: "icon-btn mark-edit", type: "button", "aria-label": "Note and more", onclick: () => { markFocus = m.id; draw(); } },
           svgIcon("rename", 18)));
+      return { at: m.page ? m.page : m.block || 0, row };
     });
+    // What was drawn (2026-11) goes among the highlights, in the order of
+    // the clip; a colour picked shows highlights alone.
+    const groups = sheetColor ? [] : inkGroups(p);
+    for (const g of groups) {
+      const lost = inReader && !g.page && !C.reader.inkBlock(g.n);
+      const go = () => {
+        if (lost) { toast("Not found in this copy of the clip."); return; }
+        if (inReader) { history.back(); setTimeout(() => inkGoTo(p, g), 0); return; }
+        inkBack().then(() => inkGoTo(p, g));
+      };
+      const row = inkRow(p, g, go, () => inkRemoveGroup(p, g).then(draw));
+      if (lost) row.querySelector(".ink-row-text").append(el("span", { class: "meta" }, "Not found in this copy of the clip"));
+      rows.push({ at: inkOrder(g) + 0.5, row });
+    }
+    rows.sort((a, b) => a.at - b.at);
+    const drawings = groups.reduce((a, g) => a + inkGroupCount(g), 0);
+    const title = [list.length || !drawings ? (list.length === 1 ? "1 highlight" : list.length + " highlights") : null, drawings ? inkWord(drawings) : null].filter(Boolean).join(" · ");
+    const canDraw = inReader && inkReady();
     return el("div", { class: "marks-list" },
       el("div", { class: "export-top" },
         back ? el("button", { class: "btn-quiet export-back", type: "button", onclick: () => back() }, "Back") : null,
-        el("p", { class: "menu-title" }, list.length === 1 ? "1 highlight" : list.length + " highlights"),
+        el("p", { class: "menu-title" }, title),
         list.length ? el("button", { class: "btn-quiet marks-copy", type: "button", onclick: () => copyText(C.backup.marksMarkdown({ ...p, marks: list }), "Highlights copied") }, "Copy all") : null),
+      // A note has its pen in the reader bar already.
+      canDraw && !p.note ? el("button", { class: "row ink-start", type: "button", onclick: inkStart },
+        inkIcon("pen"), el("span", { class: "row-label" }, "Draw on this " + (p.file ? "file" : "clip"))) : null,
       colorChips(all, sheetColor, (c) => { sheetColor = c; draw(); }),
-      list.length ? el("ol", { class: "group marks-rows" }, ...rows)
-        : el("p", { class: "footnote" }, "Select words in the text and tap Highlight. Highlights go with the clip to your other devices, and into its Markdown export."));
+      rows.length ? el("ol", { class: "group marks-rows" }, ...rows.map((r) => r.row))
+        : el("p", { class: "footnote" }, (pictureBook() && state.open === p ? "Tap Draw on this " + (p.file ? "file" : "clip") + " to draw on its pictures."
+          : "Select words in the text and tap Mark or Draw.") + " Highlights and drawings go with the clip to your other devices."),
+      // What was on ⋯ Drawings (2026-11): drawings are highlights now.
+      (drawings || canDraw) && !sheetColor ? el("div", { class: "group" },
+        canDraw ? menuRow("Try your pen", () => { history.back(); setTimeout(() => openSheet("ink"), 0); }) : null,
+        drawings ? menuRow("Remove all drawings", () => {
+          if (confirm("Remove all drawings from “" + p.title + "”? This can't be undone.")) inkRemoveAll(p, groups).then(draw);
+        }, "warn") : null) : null);
   };
   const markOne = (p, m, draw) => {
     const note = el("textarea", { class: "mark-note-field", rows: "3", placeholder: "Add a note", "aria-label": "Note", dir: "auto" });
@@ -2305,7 +2348,8 @@ function scrollControls() {
   return el("div", { class: "aloud-controls" },
     el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Speed", shown),
       el("div", { class: "stepper" }, speed)),
-    aloudSwitch(GO_ON_KEY, "Go on to the next clip", "At the end, the next chapter starts scrolling by itself.", false),
+    state.open && state.open.note ? aloudSwitch(GO_ON_KEY, "Go on to the next note", "At the end, the next note starts scrolling by itself.", false)
+      : aloudSwitch(GO_ON_KEY, "Go on to the next clip", "At the end, the next chapter starts scrolling by itself.", false),
     aloudSwitch(AWAKE_KEY, "Keep the screen on", "While it scrolls, so you can follow along.", false));
 }
 
@@ -2496,6 +2540,7 @@ function syncThemeInputs() {
 // time behind tabs, the last one opened coming back.
 const SHEET_TAB_KEY = "waypage.sheetTab";
 function readerSettings() {
+  if (state.open && state.open.note) return noteSettings();
   const box = readingControls(true);
   const parts = [...box.querySelectorAll(".rc-part")];
   // A comic gets Auto-scroll with its three settings in Narrate's place (1.49.0).
@@ -2542,7 +2587,7 @@ const SHEETS = {
   links: { button: "readerMore", label: "Linked pages", build: () => linksSheet(state.open) },
   translate: { button: "readerTranslate", label: "Translation", build: () => translateSheet(state.open) },
   // A PDF's pen drawings (1.56.0), from This clip's More.
-  ink: { button: "readerMore", label: "Drawings", build: () => inkSheet(state.open) },
+  ink: { button: "readerMore", label: "Try your pen", build: () => inkSheet() },
 };
 
 function openSheet(kind, fromHistory) {
@@ -2708,7 +2753,7 @@ const trMode = (data) => !data ? "off" : data.mode || (data.show === false ? "of
 // translate and this device can, or a translation is already kept.
 function translateButton(p) {
   const b = $("readerTranslate");
-  b.hidden = !(p && !C.files.printed(p) && !p.comic && (C.platform.translator.available || translationOf(p))) || (typeof audioWordless === "function" && audioWordless(p));
+  b.hidden = !(p && !p.note && !C.files.printed(p) && !p.comic && (C.platform.translator.available || translationOf(p))) || (typeof audioWordless === "function" && audioWordless(p));
   const label = translationOf(p) ? "Translation" : "Translate this clip";
   b.setAttribute("aria-label", label);
   b.title = label + " (L)";
@@ -3465,3 +3510,94 @@ $("viewerPrev").addEventListener("click", () => stepImage(-1));
 $("viewerNext").addEventListener("click", () => stepImage(1));
 $("viewerZoomIn").addEventListener("click", () => zoomStep(1));
 $("viewerZoomOut").addEventListener("click", () => zoomStep(-1));
+
+// A note's own settings (2.0.0): only Layout (where they apply, Scroll or
+// Pages, margins, brightness slider, theme, dark note) and Auto-scroll. A
+// note is sheets, so it has no text to set.
+function noteSettings() {
+  const p = state.open, id = "nc" + ++readingGroups, r = noteLook(p);
+  const row = (text, control) => el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, text), control);
+  const stack = (text, control) => el("div", { class: "rc-row stack" }, el("span", { class: "rc-label" }, text), control);
+  const scope = el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Applies to"),
+    dropdown({ label: "Applies to", cls: "field-pick font-pick scope-pick", value: noteScope(p), onpick: setNoteScope,
+      options: [{ value: "all", label: "All notes" }, { value: "note", label: "This note" }] }));
+  const layout = el("div", { class: "rc-part", "data-part": "layout" }, el("h2", { class: "overline" }, "Layout"),
+    scope,
+    row("Show as", seg(id + "-layout", "Show as", [
+      { value: "scroll", label: "Scroll" }, { value: "pages", label: "Pages" },
+    ], r.layout, (v) => setNoteLook({ layout: v }))),
+    row("Margins", seg(id + "-margins", "Margins", [
+      { value: "narrow", label: "Narrow" }, { value: "normal", label: "Normal" }, { value: "wide", label: "Wide" },
+    ], r.margins, (v) => setNoteLook({ margins: v }))),
+    ...(brightSwitch(id) || []),
+    stack("Theme", seg(id + "-theme", "Theme",
+      [{ value: "system", label: "Auto", swatch: autoSwatch(), auto: true }, ...themeOptions(THEMES)],
+      readerThemeOn() ? state.readerTheme : state.theme, (v) => { (readerThemeOn() ? setReaderTheme : setTheme)(v); syncThemeInputs(); }, "themes scroll")),
+    pdfDarkSwitch());
+  const a = scrollControls();
+  a.classList.add("rc-part");
+  a.dataset.part = "aloud";
+  a.prepend(el("h2", { class: "overline" }, "Auto-scroll"));
+  const parts = [layout, a];
+  const names = { layout: "Layout", aloud: "Auto-scroll" };
+  let tab = load(SHEET_TAB_KEY, "layout");
+  if (!names[tab]) tab = "layout";
+  const show = (v) => { tab = v; store(SHEET_TAB_KEY, v); for (const x of parts) x.hidden = x.dataset.part !== v; };
+  const tabs = seg("sheet-tab", "Settings", parts.map((x) => ({ value: x.dataset.part, label: names[x.dataset.part] })), tab, show, "sheet-tabs");
+  show(tab);
+  return el("div", { class: "reader-settings" }, tabs, el("div", { class: "reading-controls" }, ...parts));
+}
+
+// ---- Renaming from the reader's bar (2.0.0) ----
+
+// The clip's name in the bar: a button that renames it in place. A page read
+// without saving (a preview) has nothing to rename.
+function paintReaderName(p) {
+  const title = p.preview ? el("span", { class: "reader-title" }, p.title)
+    : el("button", { class: "reader-title", type: "button", "aria-label": "Rename", title: "Rename", onclick: () => renameInReader(p) }, p.title);
+  fill($("readerName"), siteOf(p) ? el("span", { class: "reader-site" }, siteOf(p)) : null, title);
+}
+// The name becomes a field where it is: Enter or tapping away saves, Escape
+// leaves it as it was.
+function renameInReader(p) {
+  const btn = $("readerName").querySelector("button.reader-title");
+  if (!btn) return;
+  const input = el("input", { class: "reader-title-input", type: "text", value: p.title, maxlength: "300", dir: "auto", enterkeyhint: "done", "aria-label": "Name" });
+  let done = false;
+  const finish = async (save) => {
+    if (done) return;
+    done = true;
+    const name = input.value.replace(/\s+/g, " ").trim();
+    if (save && name && name !== p.title) await renameClip(p, name);
+    if (state.open === p) paintReaderName(p);
+  };
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); finish(true); }
+    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); finish(false); }
+  });
+  input.addEventListener("blur", () => finish(true));
+  btn.replaceWith(input);
+  input.focus();
+  input.select();
+}
+// A clip or note under a new name: the index and the saved page's heading both
+// say it, and the edit time sends it to the other devices with the clip.
+async function renameClip(p, name) {
+  name = name.slice(0, 300);
+  try {
+    const html = await C.store.readPage(p.id);
+    if (!html) throw new Error("no page");
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const h1 = doc.querySelector(".co-head h1");
+    if (h1) h1.textContent = name;
+    p.title = name;
+    await rewriteClip(p, "<!doctype html>\n" + doc.documentElement.outerHTML, html);
+    await C.store.writeIndex(state.pages);
+  } catch (e) {
+    console.error(e);
+    toast("Couldn't rename. Try again.");
+    return;
+  }
+  renderLibrary();
+  if (state.folder) renderFolder();
+}

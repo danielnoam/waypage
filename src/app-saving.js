@@ -24,6 +24,9 @@ function syncSoon(ms = runs.size ? 20000 : 4000) {
 // app sends it even when no sync was due, and one made while a sync ran
 // goes in another right after it.
 let unsynced = false;
+const syncsPage = (p) => (p.note ? C.sync.what.notes && !C.sync.tooBig(p) : C.sync.what.clips);
+// Said on a note's card, in its ⋯ and in Sync (2026-11).
+const tooBigLine = (p) => (C.sync.on && C.sync.tooBig(p) ? "Over 50 MB, can't be synced" : "");
 async function syncNow(quiet = true) {
   if (!C.sync.on || C.sync.paused) return null;
   if (!navigator.onLine && quiet) return null;
@@ -39,19 +42,21 @@ async function syncNow(quiet = true) {
       // A clip that reads from a file on this device can't be read from
       // another one, so it stays here (0.32.0). A copy syncs like any
       // other clip, with its pictures inside it.
-      getPages: () => state.pages.filter((p) => !p.link),
+      // A note or a clip this device doesn't sync (the switches in What
+      // this device syncs) stays out of it.
+      getPages: () => state.pages.filter((p) => !p.link && syncsPage(p)),
       urlKey,
       // The same objects are kept and updated in place: the open page,
       // an open menu and the position timer hold on to them.
       setPages: async (list) => {
         const live = new Map(state.pages.map((p) => [p.id, p]));
-        const open = state.open, was = open && placeTime(open);
+        const open = state.open, was = open && placeTime(open), inkWas = open && JSON.stringify(open.ink || null);
         state.pages = list.map((n) => {
           const o = live.get(n.id);
           if (!o || o === n) return n;
           for (const k of Object.keys(o)) if (!(k in n)) delete o[k];
           return Object.assign(o, n);
-        }).concat(state.pages.filter((p) => p.link)).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+        }).concat(state.pages.filter((p) => p.link || !syncsPage(p))).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
         // A place read further on another device is followed when it
         // comes in just after the clip opened, before it was scrolled here
         // at all (1.31.0): a clip opened from a widget before sync came in
@@ -61,6 +66,9 @@ async function syncNow(quiet = true) {
         const follow = () => state.open === open && !movedHere && !C.reader.touched() && Date.now() - openedAt < FOLLOW_MS;
         if (open && placeTime(open) > was && follow()) C.reader.placed().then(() => { if (follow()) C.reader.jump(open.at || 0, open.spot || ""); });
         await C.store.writeIndexOnly(state.pages);
+        // Drawings from another device on the clip open here show at once,
+        // unless a pen is out (2026-11).
+        if (open && state.open === open && !C.ink.on && JSON.stringify(open.ink || null) !== inkWas) { inkClose(); inkSync(open); }
         texts.clear();
         await loadThumbs();
         renderLibrary();
@@ -92,41 +100,48 @@ async function syncNow(quiet = true) {
   return res;
 }
 // Files read from outside (2026-11): the file stays here, and where you
-// are in it, its highlights, tags, collection and favourite sync by its
+// are in it, its highlights and drawings, tags, collection and favourite
+// sync by its
 // fingerprint (sync.js, outsideOf). One from before fingerprints gets its
 // own the first time it has something to send.
 async function outsidePages() {
   const list = [];
   let found = false;
   for (const p of state.pages) {
-    if (!p.link || !p.file) continue;
+    if (!p.link || !p.file || p.note) continue;
     if (!p.file.fp) {
-      const has = p.at > 0 || p.finished || (p.marks || []).length || (p.tags || []).length || p.folder || p.fav || (p.listen && p.listen.t > 0);
+      const has = p.at > 0 || p.finished || (p.marks || []).length || p.ink || (p.drawn || []).length || (p.tags || []).length || p.folder || p.fav || (p.listen && p.listen.t > 0);
       if (!has || !(await C.files.fingerprintOf(p))) continue;
       found = true;
     }
-    list.push({ ...p, file: { ...p.file } });
+    const copy = { ...p, file: { ...p.file } };
+    // A printed PDF's drawings live beside the clip; pictures stay here.
+    if ((p.drawn || []).length) { const pages = C.backup.cleanInk(((await C.store.readInk(p.id)) || {}).pages); if (pages) copy.pages = pages; }
+    list.push(copy);
   }
   if (found) await C.store.writeIndexOnly(state.pages);
   return list;
 }
 // What came back goes onto each file here with that fingerprint, unless
-// it changed here while sync ran (it goes up next time).
+// it changed here while sync ran (it goes up next time) or its pen is out.
 async function outsideTake(all, sent) {
-  const now = C.sync.outsideOf(state.pages);
+  const now = C.sync.outsideOf(await outsidePages());
   const bare = (o) => { const x = { ...(o || {}) }; delete x.ids; delete x.name; return JSON.stringify(x); };
   let changed = false;
   for (const [fp, o] of Object.entries(all)) {
     if (sent[fp] && bare(now[fp]) !== bare(sent[fp])) continue;
-    for (const p of state.pages.filter((x) => x.link && x.file && x.file.fp === fp)) {
+    for (const p of state.pages.filter((x) => x.link && x.file && x.file.fp === fp && !x.note)) {
+      if (state.open === p && C.ink.on) continue;
+      const drew = await outsideDrawn(p, o.pages);
       const next = C.sync.outsideOnto(p, o);
-      if (!next) continue;
+      if (!next) { if (drew) { changed = true; if (state.open === p) { inkClose(); inkSync(p); } } continue; }
       const was = placeTime(p);
       for (const k of Object.keys(p)) if (!(k in next)) delete p[k];
       Object.assign(p, next);
       changed = true;
       if (state.open === p) {
         paintMarks(p);
+        inkClose(); inkSync(p);
         if (placeTime(p) > was && !movedHere && !C.reader.touched() && Date.now() - openedAt < FOLLOW_MS) C.reader.placed().then(() => { if (state.open === p) C.reader.jump(p.at || 0, p.spot || ""); });
       }
     }
@@ -155,9 +170,28 @@ function outsideKnown(p) {
   const fp = p && p.link && p.file && p.file.fp;
   const o = fp && C.sync.on && C.sync.what.clips && C.sync.outsideKnown(fp);
   if (!o) return false;
-  for (const [k, v] of Object.entries(o)) if (k !== "ids" && k !== "name") p[k] = v;
+  for (const [k, v] of Object.entries(o)) if (k !== "ids" && k !== "name" && k !== "pages") p[k] = v;
+  if (o.pages) outsideDrawn(p, o.pages).then((drew) => { if (drew) C.store.writeIndexOnly(state.pages); }).catch(() => {});
   outsideStats({ [fp]: o });
   return true;
+}
+// A printed PDF's drawn pages as they came back, keeping the pictures put
+// on them here, which never sync. True when they changed.
+async function outsideDrawn(p, got) {
+  if (!got && !(p.drawn || []).length) return false;
+  const old = (await C.store.readInk(p.id)) || {};
+  if (JSON.stringify(C.backup.cleanInk(old.pages) || null) === JSON.stringify(got || null)) return false;
+  const pages = JSON.parse(JSON.stringify(got || {}));
+  for (const [n, list] of Object.entries(old.pages || {})) {
+    const pics = (list || []).filter((x) => x && x.t === "i");
+    if (pics.length) pages[n] = (pages[n] || []).concat(pics);
+  }
+  const keys = Object.keys(pages).filter((n) => pages[n].length);
+  await C.store.writeInk(p.id, keys.length ? { v: 1, size: p.file.size || 0, pages } : null);
+  const d = keys.map((n) => [Number(n), new Set(pages[n].map((x) => x.id)).size]).sort((a, b) => a[0] - b[0]);
+  if (d.length) p.drawn = d; else delete p.drawn;
+  return true;
+
 }
 // Pages that came as links only (0.30.3), saved here one after another
 // like a run, each into its place in the library. In a browser only
@@ -447,12 +481,13 @@ function syncsList() {
     el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, label), el("span", { class: "choice-note" }, note)),
     el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!what[key],
       onchange: (e) => { C.sync.setWhat(key, e.target.checked); renderSection(); syncSoon(500); } }));
-  return section("What this device syncs", "Clips go with their highlights, tags, collections, favourites and where you were. With Clips too, each clip's text goes up, so another device gets it as you saved it even if the site changes; pictures come from the clip's site, or from GitHub when it has none, up to 100 MB a clip. With Links only, clips new to a device are saved again from their links, so one that changed or went away comes back different or not at all. A part turned off here is left as it is on GitHub for your other devices. A file read from outside stays on its device, but your place, highlights, tags and reading time in it sync to the same file on your other devices. Watched folders and settings don't sync."
+  return section("What this device syncs", "Clips go with their highlights, tags, collections, favourites and where you were. With Clips too, each clip's text goes up, so another device gets it as you saved it even if the site changes; pictures come from the clip's site, or from GitHub when it has none, up to 100 MB a clip. With Links only, clips new to a device are saved again from their links, so one that changed or went away comes back different or not at all. A part turned off here is left as it is on GitHub for your other devices. Notes go up whole, with the PDF one was made from (up to 50 MB); what two devices wrote on one note is kept from both. A file read from outside stays on its device, but your place, highlights, tags and reading time in it sync to the same file on your other devices. Watched folders and settings don't sync."
       + (C.platform.knowsConnection ? " On mobile data, Places and reading time only moves where you are in each clip, what you finished and your reading time on any connection, while new clips, tags and collections wait for Wi-Fi." : ""),
     el("div", { class: "group" },
       sw("clips", "Clips", C.sync.links ? "Links, highlights, tags, collections and places" : "Text, highlights, tags, collections and places"),
       what.clips ? el("div", { class: "row" }, seg("sync-what", "What goes up of each clip", [{ value: "pages", label: "Clips too" }, { value: "links", label: "Links only" }],
         C.sync.links ? "links" : "pages", (v) => { C.sync.links = v === "links"; renderSection(); syncSoon(500); })) : null,
+      sw("notes", "Notes", "Pages and highlights. Over 50 MB can't be synced"),
       sw("feeds", "Feeds", "Which you follow and how"),
       sw("newsletters", "Newsletters", "Your addresses and how they're set"),
       sw("stats", "Reading stats", "Reading time from every device, added up"),
@@ -783,7 +818,9 @@ function renderBatch(text, preset, from) {
     el("div", { class: "group" }, el("button", { class: "row", type: "button", onclick: () => pickFile(() => back()) },
       el("span", { class: "row-label accent" }, "Open a file")),
       C.platform.files.canPickFolder ? el("button", { class: "row", type: "button", onclick: () => back().then(addAudiobookFolder) },
-        el("span", { class: "row-label accent" }, "Open an audiobook folder")) : null),
+        el("span", { class: "row-label accent" }, "Open an audiobook folder")) : null,
+      el("button", { class: "row", type: "button", onclick: () => openMenu("newNote") },
+        el("span", { class: "row-label accent" }, "New note"))),
     el("p", { class: "meta" }, "An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3, or a folder of them). It stays " + ON_HERE + "."));
   const form = el("form", { class: "batch-form" }, asPage, fromFile,
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, "Links"), area, count, finder, skipRow),
@@ -2052,6 +2089,7 @@ function driveSections() {
         sw("clips", "Clips", what.links ? "Links, highlights and places" : "Text, pictures, highlights and places"),
         what.clips ? el("div", { class: "row" }, seg("drive-links", "What goes in of each clip", [{ value: "pages", label: "Clips too" }, { value: "links", label: "Links only" }],
           what.links ? "links" : "pages", (v) => { C.drive.setWhat("links", v === "links"); renderSection(); })) : null,
+        sw("notes", "Notes", "Every note, whole"),
         sw("feeds", "Feeds", "Which you follow and how"),
         sw("newsletters", "Newsletters", "Your addresses and how they're set"))),
     section("Restore", "Restoring adds what isn't here and keeps whichever copy of a clip was saved last. Nothing here is deleted. A clip or feed you deleted since comes back, on your synced devices too. The bin deletes a backup from Drive for good.",
@@ -2117,7 +2155,8 @@ async function driveRefresh() {
 const savableAgain = (p) => !!p.url && !p.file && !p.url.startsWith(MAIL_ENTRY);
 function driveContents() {
   const w = C.drive.what;
-  const pages = w.clips ? state.pages.filter((p) => !p.link) : [];
+  // Notes are a part of their own (2026-11), whole, PDF and all.
+  const pages = state.pages.filter((p) => !p.link && (p.note ? w.notes : w.clips));
   const bare = w.clips && w.links ? new Set(pages.filter(savableAgain).map((p) => p.id)) : null;
   return { pages, bare, feeds: [...(w.feeds ? siteFeeds() : []), ...(w.newsletters ? mailBoxes() : [])] };
 }
@@ -2132,7 +2171,7 @@ async function driveHandOver() {
   const from = await C.store.packSource().catch(() => null);
   if (!from) return;
   const { pages, bare, feeds: fs } = driveContents();
-  const kept = pages.filter((p) => !p.link);
+  const kept = pages.filter((p) => !p.link && !p.note);
   const ids = kept.filter((p) => !bare || !bare.has(p.id)).map((p) => p.id);
   const l = C.drive.last;
   const plan = { every: C.drive.every, last: Math.max(l.at || 0, C.drive.since), tried: l.tried || 0, folder: C.drive.folder,
@@ -2155,7 +2194,8 @@ async function driveTakeBackground() {
 async function driveBackUp(auto) {
   if (driveRun || !C.drive.on) return;
   const { pages, bare, feeds: fs } = driveContents();
-  if (!pages.length && !fs.length) { if (!auto) toast("There's nothing to back up with what's picked."); return; }
+  const zip = pages.length > 0 || fs.length > 0;
+  if (!zip) { if (!auto) toast("There's nothing to back up with what's picked."); return; }
   const run = driveRun = { restore: false, text: "Getting ready…", share: null, paused: false, stopped: false, ctl: {} };
   drivePaint();
   let out = null;
@@ -2163,20 +2203,22 @@ async function driveBackUp(auto) {
     // Asked for first: a browser can open Google's window only straight
     // from the tap.
     await C.drive.getToken(!auto, "backup");
-    out = await C.backup.exportLibrary(pages, (done, total) => driveSay("Packing, " + done + " of " + total, (done / total) * 0.3), fs, driveGate, bare);
-    if (!(await driveGate())) throw new C.drive.DriveError("Stopped.", "cancelled");
-    driveSay("Sending to Drive…", 0.3);
-    const info = { device: load(DEVICE_KEY, "") || guessedName(), clips: pages.length };
-    const sent = (done, total) => driveSay("Sending to Drive, " + (total ? Math.round((done / total) * 100) + "%" : formatSize(done)), total ? 0.3 + 0.7 * (done / total) : null);
-    let made;
-    for (;;) {
-      try { made = await C.drive.upload(out, info, sent, run.ctl); break; }
-      catch (e) {
-        if (e && e.code === "cancelled" && run.paused && await driveGate()) { driveSay("Sending to Drive…"); continue; }
-        throw e;
+    let made = null;
+    if (zip) {
+      out = await C.backup.exportLibrary(pages, (done, total) => driveSay("Packing, " + done + " of " + total, (done / total) * 0.3), fs, driveGate, bare);
+      if (!(await driveGate())) throw new C.drive.DriveError("Stopped.", "cancelled");
+      driveSay("Sending to Drive…", 0.3);
+      const info = { device: load(DEVICE_KEY, "") || guessedName(), clips: pages.length };
+      const sent = (done, total) => driveSay("Sending to Drive, " + (total ? Math.round((done / total) * 100) + "%" : formatSize(done)), total ? 0.3 + 0.7 * (done / total) : null);
+      for (;;) {
+        try { made = await C.drive.upload(out, info, sent, run.ctl); break; }
+        catch (e) {
+          if (e && e.code === "cancelled" && run.paused && await driveGate()) { driveSay("Sending to Drive…"); continue; }
+          throw e;
+        }
       }
     }
-    C.drive.last = { at: Date.now(), size: made.size || (out.blob ? out.blob.size : 0) };
+    C.drive.last = { at: Date.now(), size: made ? made.size || (out.blob ? out.blob.size : 0) : 0 };
     driveFiles = null;
     if (!auto) toast("Backed up to Google Drive");
   } catch (e) {

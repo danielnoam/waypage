@@ -307,7 +307,7 @@
       for (const list of Object.values((d && d.pages) || {})) for (const it of list || []) if (it && it.f) files.add(String(it.f));
       for (const f of files) await removeInkImage(id, f);
     } catch (e) { /* none */ }
-    try { await idbDo("readwrite", (s) => { s.delete(id + ":text"); s.delete(id + ":thumb"); s.delete(id + ":translation"); s.delete(id + ":ink"); s.delete(id + ":listen"); return s.delete(id); }); } catch (e) { /* already gone */ }
+    try { await idbDo("readwrite", (s) => { s.delete(id + ":text"); s.delete(id + ":thumb"); s.delete(id + ":translation"); s.delete(id + ":ink"); s.delete(id + ":note"); s.delete(id + ":base"); s.delete(id + ":inkbase"); s.delete(id + ":listen"); return s.delete(id); }); } catch (e) { /* already gone */ }
   }
 
   // The page's words as plain text (text.txt), for searching the library.
@@ -399,6 +399,50 @@
     try {
       const t = FS() ? await (await B()).read("pages/" + id + "/ink.json") : await idbDo("readonly", (s) => s.get(id + ":ink"));
       return typeof t === "string" && t ? JSON.parse(t) : null;
+    } catch (e) { return null; }
+  }
+
+  // A note's strokes as sync last left them on both sides (2026-11), so two
+  // devices' drawing on one note merge stroke by stroke.
+  async function writeInkBase(id, data) {
+    const text = data ? JSON.stringify(data) : "";
+    if (FS()) {
+      if (text) await (await B()).write("pages/" + id + "/ink-base.json", text, true);
+      else try { await (await B()).remove("pages/" + id + "/ink-base.json"); } catch (e) { /* none */ }
+    } else await idbDo("readwrite", (s) => (text ? s.put(text, id + ":inkbase") : s.delete(id + ":inkbase")));
+  }
+  async function readInkBase(id) {
+    try {
+      const t = FS() ? await (await B()).read("pages/" + id + "/ink-base.json") : await idbDo("readonly", (s) => s.get(id + ":inkbase"));
+      return typeof t === "string" && t ? JSON.parse(t) : null;
+    } catch (e) { return null; }
+  }
+
+  // A note's sheets (2.0.0), as JSON beside the clip: { v, sheets, texts }.
+  // null when there is none. A note's strokes are in ink.json as on a PDF.
+  async function writeNote(id, data) {
+    const text = JSON.stringify(data);
+    if (FS()) await (await B()).write("pages/" + id + "/note.json", text, true);
+    else await idbDo("readwrite", (s) => s.put(text, id + ":note"));
+  }
+  async function readNote(id) {
+    try {
+      const t = FS() ? await (await B()).read("pages/" + id + "/note.json") : await idbDo("readonly", (s) => s.get(id + ":note"));
+      return typeof t === "string" && t ? JSON.parse(t) : null;
+    } catch (e) { return null; }
+  }
+
+  // The PDF a note was made from, kept whole beside the note (2.0.0): a
+  // file in the app, a Blob in the browser's database. Resolves to its size.
+  async function writeNoteBase(id, blob) {
+    if (FS()) await writeBytes(id, "base.pdf", new Uint8Array(await blob.arrayBuffer()));
+    else await idbDo("readwrite", (s) => s.put(blob, id + ":base"));
+    return blob.size;
+  }
+  async function readNoteBase(id) {
+    try {
+      const b = FS() ? await readBytes(id, "base.pdf") : await idbDo("readonly", (s) => s.get(id + ":base"));
+      return b || null;
     } catch (e) { return null; }
   }
 
@@ -724,7 +768,7 @@
   }
 
   window.Waypage.store = { ready,
-    get place() { return cur ? cur.place : savedPlace(); }, placeName, get problem() { return problem; }, moveTo, readIndex, writeIndex, writeIndexOnly, set onIndex(f) { onIndex = f; }, writeThumb, readThumbs, storageInfo, keepStored, writePage, readPage, readPages, removePage, writeText, readText, writeTranslation, readTranslation, writeListen, readListen, writeInk, readInk, writeInkImage, readInkImage, removeInkImage, download, removeFile, sizeOf, shrink, squeeze, pageDirUrl, bytesOf,
+    get place() { return cur ? cur.place : savedPlace(); }, placeName, get problem() { return problem; }, moveTo, readIndex, writeIndex, writeIndexOnly, set onIndex(f) { onIndex = f; }, writeThumb, readThumbs, storageInfo, keepStored, writePage, readPage, readPages, removePage, writeText, readText, writeTranslation, readTranslation, writeListen, readListen, writeInk, readInk, writeInkBase, readInkBase, writeNote, readNote, writeNoteBase, readNoteBase, writeInkImage, readInkImage, removeInkImage, download, removeFile, sizeOf, shrink, squeeze, pageDirUrl, bytesOf,
     listFiles, listSized, readBytes, writeBytes, cacheFile, packSource, toBase64, listFonts, readFont, addFont, removeFont,
     readCovers, coverUrl, readCover, writeCover, removeCover };
 })();

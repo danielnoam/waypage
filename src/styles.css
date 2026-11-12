@@ -1105,6 +1105,8 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
   border-radius: var(--r-lg) var(--r-lg) 0 0;
   box-shadow: 0 -8px 24px var(--shadow);
 }
+/* Above the bar of Draw tools (z-index 3), which a note keeps up (2.0.0). */
+#readingSheet { z-index: 4; }
 .sheet-grip { display: block; width: 36px; height: 4px; margin: 0 auto var(--s-3); border-radius: var(--r-full); background: var(--line); }
 .sheet-body, .reading-controls, .rc-list { display: flex; flex-direction: column; gap: var(--s-3); }
 .sheet-body { max-height: min(76dvh, 40rem); overflow-y: auto; overscroll-behavior: contain; margin: 0 calc(-1 * var(--s-4)); padding: 0 var(--s-4) var(--s-1); }
@@ -1673,8 +1675,18 @@ span.update-text { cursor: default; }
 
 /* Highlights (1.7.0): the clip's list, and one with its note. */
 .marks-rows { list-style: none; margin: 0; padding: 0; }
+.marks-list > .group + .group, .marks-list > .footnote + .group { margin-top: var(--s-3); }
 .mark-item { display: flex; align-items: center; }
 .mark-item + .mark-item { border-top: 1px solid var(--line); }
+/* Drawings among the highlights (2026-11): a picture of the strokes, then
+   where they are and how many. */
+.mark-row.ink-row { flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--s-3); }
+.ink-row-text { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
+.ink-thumb { flex: none; width: 88px; height: 56px; border-radius: var(--r-sm, 8px); background: var(--bg); border: 1px solid var(--line); }
+.ink-thumb-page { display: block; width: 44px; background: linear-gradient(var(--line) 1px, transparent 1px) 6px 8px / calc(100% - 12px) 7px no-repeat, var(--bg); }
+.ink-start { gap: var(--s-2); margin: var(--s-2) 0; border: 1px solid var(--line); border-radius: var(--r-md, 12px); color: var(--accent); justify-content: center; }
+.ink-start .row-label { color: var(--accent); font-weight: 600; }
+.hl-more { justify-content: center; color: var(--accent); font-weight: 600; }
 .mark-row { flex: 1; min-width: 0; flex-direction: column; align-items: stretch; gap: var(--s-1); padding-block: var(--s-3); text-align: start; }
 .mark-quote {
   font: 400 var(--fs-label)/1.45 var(--serif); color: var(--ink);
@@ -1735,6 +1747,7 @@ span.update-text { cursor: default; }
    stretches toward where it's going (1.48.0). */
 .dropdown-face.changed { animation: face-pop var(--spring-control-ms, 300ms) var(--spring-control, ease-out); }
 @keyframes face-pop { from { transform: scale(0.8); } to { transform: none; } }
+.switch[aria-disabled="true"] { opacity: 0.45; }
 .switch:active::before { width: 26px; }
 .switch:checked:active::before { transform: translateX(14px); }
 [dir="rtl"] .switch:checked:active::before { transform: translateX(-14px); }
@@ -1810,6 +1823,9 @@ span.update-text { cursor: default; }
 .cover-choice-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .cover-choice-pic .folder-icon, .cover-choice-pic .book-icon { color: var(--accent); }
 .cover-choice[aria-pressed="true"] .cover-choice-pic { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.paper-row { gap: var(--s-4); }
+.note-text { display: block; width: 100%; box-sizing: border-box; min-height: 7rem; margin: 0 0 var(--s-3); padding: var(--s-3); font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-md, 12px); resize: vertical; }
+.paper-pic { flex: none; width: 40px; height: 56px; display: grid; background: #fdfcf8; color: #c8d2e2; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
 .cover-choice-name { font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cover-choice[aria-pressed="true"] .cover-choice-name { color: var(--accent); font-weight: 600; }
 .source-row { display: flex; gap: var(--s-2); align-items: center; }
@@ -2549,7 +2565,28 @@ span.update-text { cursor: default; }
 }
 
 /* Phone: none of the big-screen parts show. */
-.reader-rail, .reader-name, .read-keys, .back-label, .close-icon, .pane-note { display: none; }
+.reader-rail, .read-keys, .back-label, .close-icon, .pane-note { display: none; }
+/* The clip's name shows on a phone too (2.0.0), a button that renames it in
+   place; the site waits for a bigger screen. */
+.reader-name { display: flex; align-items: baseline; gap: var(--s-2); flex: 0 1 auto; min-width: 0; margin: 0 0 0 var(--s-1); overflow: hidden; white-space: nowrap; }
+.reader-name:has(.reader-title-input) { flex: 1 1 auto; }
+button.reader-title {
+  appearance: none; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 600;
+  min-width: 0; margin: 0; padding: var(--s-2) var(--s-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-align: start; border-radius: var(--r-sm, 8px); cursor: pointer;
+}
+.reader-title-input {
+  flex: 1; min-width: 0; font: inherit; font-weight: 600; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--r-sm, 8px); padding: var(--s-1) var(--s-2);
+}
+@media (max-width: 699px) {
+  .reader-site { display: none; }
+  /* A smaller reader bar on a phone (Daniel's ask, 2.0.0): 18 px icons in 38 px
+     buttons, so the clip's name has room. */
+  .reader-bar .icon-btn { width: 38px; height: 38px; flex: none; }
+  .reader-bar .icon-btn svg, .reader-bar .section-icon { width: 18px; height: 18px; }
+  .reader-bar .section-btn { min-width: 38px; min-height: 38px; }
+}
 .screen-catch { position: fixed; inset: 0; z-index: 12; background: var(--scrim); }
 .screen-catch.clear { background: transparent; }
 .screen-catch[hidden] { display: none; }

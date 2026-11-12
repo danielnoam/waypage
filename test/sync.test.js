@@ -275,6 +275,54 @@ test("a collection's picked cover goes to the other device, and only a name Wayp
   assert.strictEqual(keep("uabcd1234.jpg", ""), undefined);
 });
 
+test("a note has no address, and is never taken for a copy of another note (2.0.0)", () => {
+  const note = (id, more) => ({ id, url: "", title: "Note " + id, savedAt: 100, at: 0, finished: false, note: { paper: "lines" }, ...more });
+  const r = S.merge(null, lib([note("a1b2"), note("c3d4")]), null, NOW, undefined, (a, b) => a === b, (u) => u);
+  assert.deepStrictEqual(ids(r), ["a1b2", "c3d4"]);
+  assert.deepStrictEqual(r.pages.map((p) => p.note), [{ paper: "lines" }, { paper: "lines" }]);
+});
+
+test("a note written on one device comes to the other whole, the copy edited last wins", () => {
+  const note = (more) => ({ id: "a1b2", url: "", title: "Note", savedAt: 100, at: 0, finished: false, note: { paper: "squares" }, ...more });
+  const base = lib([note()]);
+  const r = S.merge(base, lib([note()]), lib([note({ editedAt: 500 })]), NOW);
+  assert.strictEqual(r.pages[0].editedAt, 500);
+  const r2 = S.merge(base, lib([note({ editedAt: 700 })]), lib([note({ editedAt: 500 })]), NOW);
+  assert.strictEqual(r2.pages[0].editedAt, 700);
+});
+
+test("a note's files on GitHub are kept by name, and only names Waypage writes", () => {
+  const got = S.clean({ pages: [{ id: "a1b2", url: "", title: "N", savedAt: 1, note: { paper: "lines", from: "c3d4" } }], deleted: {},
+    files: { a1b2: { at: 1, sha: "x", note: { "note.json": "s1", "ink.json": "s2", "base.pdf": "s3", "img-ab12.txt": "s4", "../library.json": "s5", "x.html": "s6" } } } });
+  assert.deepStrictEqual(got.pages[0].note, { paper: "lines", from: "c3d4" });
+  assert.deepStrictEqual(Object.keys(got.files.a1b2.note).sort(), ["base.pdf", "img-ab12.txt", "ink.json", "note.json"]);
+});
+
+test("drawings on a clip merge stroke by stroke, like highlights (2026-11)", () => {
+  const st = (id, x = 0) => ({ id, t: "p", c: "red", w: 0.01, p: [x, 0, 1, 1, 1, 1] });
+  const base = lib([page("a1b2", { ink: { 3: [st("s1"), st("s2")] } })]);
+  // Here s1 moved and s3 drawn; there s2 erased and s4 drawn.
+  const r = S.merge(base, lib([page("a1b2", { ink: { 3: [st("s1", 0.5), st("s2"), st("s3")] } })]),
+    lib([page("a1b2", { ink: { 3: [st("s1")], 5: [st("s4")] } })]), NOW);
+  assert.deepStrictEqual(r.pages[0].ink, { 3: [st("s1", 0.5), st("s3")], 5: [st("s4")] });
+});
+
+test("drawings on a file read from outside merge by its fingerprint, stroke by stroke (2026-11)", () => {
+  const FP = "0123456789abcdef0123456789abcdef";
+  const st = (id) => ({ id, t: "p", c: "red", w: 0.01, p: [0, 0, 1, 1, 1, 1] });
+  const base = { [FP]: { name: "a.pdf", ids: ["a1b2"], pages: { 2: [st("s1")] }, ink: { 4: [st("s5")] } } };
+  // Here: a new stroke by block. There: s1 erased, a new stroke on page 3.
+  const l = { [FP]: { name: "a.pdf", ids: ["a1b2"], pages: { 2: [st("s1")] }, ink: { 4: [st("s5")], 6: [st("s6")] } } };
+  const r = { [FP]: { name: "a.pdf", ids: ["zz99"], pages: { 3: [st("s2")] }, ink: { 4: [st("s5")] } } };
+  const got = S.mergeOutside(base, l, r);
+  assert.deepStrictEqual(got[FP].pages, { 3: [st("s2")] });
+  assert.deepStrictEqual(got[FP].ink, { 4: [st("s5")], 6: [st("s6")] });
+  // A page's drawings come from the copy outsidePages makes.
+  const here = S.outsideOf([page("a1b2", { link: "content://x", file: { name: "a.pdf", kind: "pdf", ext: "pdf", size: 9, fp: FP }, pages: { 3: [st("s2")] }, ink: { 6: [st("s6")] } })]);
+  assert.deepStrictEqual(here[FP].pages, { 3: [st("s2")] });
+  assert.deepStrictEqual(here[FP].ink, { 6: [st("s6")] });
+});
+
 
 test("what's yours on a file read from outside syncs by its fingerprint (2026-11)", () => {
   const FP = "0123456789abcdef0123456789abcdef", OTHER = "fedcba9876543210fedcba9876543210";

@@ -17,6 +17,7 @@ const INK_ICONS = {
   redo: '<path d="M15 14l5-5-5-5"></path><path d="M20 9H10a6 6 0 0 0 0 12h3"></path>',
   select: '<path d="M12 4c4.4 0 8 1.8 8 4s-3.6 4-8 4-8-1.8-8-4 3.6-4 8-4z" stroke-dasharray="3 3"></path><path d="M9 12.5c-.6 2.2.4 4 2 5.2 1.1.8 1.2 2.3-.2 3.3"></path>',
   add: '<path d="M12 5v14"></path><path d="M5 12h14"></path>',
+  text: '<path d="M5 7V4h14v3"></path><path d="M12 4v16"></path><path d="M9 20h6"></path>',
   image: '<rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="9" cy="10" r="1.6"></circle><path d="M21 16l-5-5-9 9"></path>',
   cut: '<circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M8.1 8.1L20 20"></path><path d="M20 4L8.1 15.9"></path>',
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V6a2 2 0 0 1 2-2h8"></path>',
@@ -49,20 +50,64 @@ function penNativeSet(patch) {
   C.platform.pen.watch(penNative.on, penNative.on && penNative.raw, penNative.on && penNative.grab);
 }
 
-// The pen button follows the clip: shown on a PDF's printed pages, which
-// is where the drawings can go. Called once the reader has the clip up.
+// Drawing goes with highlights (2026-11): any clip or file can be drawn on,
+// from its Highlights sheet or the selection bar. Only a note keeps the pen
+// in the reader bar, since writing is what a note is for. Called once the
+// reader has the clip up.
 async function inkSync(p) {
   const ok = !!p && !p.preview && C.files.drawable(p);
-  $("readerInk").hidden = !ok;
+  $("readerInk").hidden = !(ok && p.note);
   if (!ok) { inkClose(); return; }
   if (inkClipId === p.id) return;
   inkClose();
   inkClipId = p.id;
-  // The pen's buttons are read natively while a PDF's pages are open.
+  // The pen's buttons are read natively while something drawable is open.
   penNativeSet({ on: true });
   const { stale } = await C.ink.load(p);
   if (state.open !== p) return;
   if (stale) toast("This PDF has changed since you drew on it. The drawings may not line up.");
+  // A note is for writing: its pen is ready when it opens.
+  if (p.note) { inkSet(true); if (!p.thumb) noteCoverSoon(p, 1500); }
+}
+// A note's card shows its first sheet (2026-11), drawn again a moment
+// after the first sheet is written on, and once for a note that came
+// from another device (a card picture never syncs).
+let noteCoverTimer = 0;
+function noteCoverSoon(p, ms) {
+  clearTimeout(noteCoverTimer);
+  noteCoverTimer = setTimeout(() => noteCover(p), ms);
+}
+async function noteCover(p) {
+  const handle = C.files.heldPdf();
+  if (state.open !== p || !p.note || !handle || !handle.sheets) return;
+  try {
+    const bytes = await C.notes.cover(handle, C.ink.strokes(1));
+    if (state.open !== p) return;
+    p.thumb = await C.files.thumbnail(p.id, bytes, "image/jpeg");
+    await C.store.writeIndex(state.pages);
+    if (!C.platform.native) await loadThumbs();
+    renderLibrary();
+  } catch (e) { /* the card keeps what it had */ }
+}
+// A clip's drawings by block live on its index entry (`ink`, page -> strokes),
+// beside its highlights, so they sync and back up the same way.
+C.ink.blockStore = {
+  read: (meta) => (meta.ink && typeof meta.ink === "object" ? meta.ink : null),
+  write: async (id, pages) => {
+    const p = state.pages.find((x) => x.id === id);
+    if (!p) return;
+    if (pages) p.ink = JSON.parse(JSON.stringify(pages)); else delete p.ink;
+    p.inkAt = Date.now();
+    await C.store.writeIndex(state.pages);
+    renderLibrary();
+  },
+};
+const inkReady = () => inkClipId != null && !!state.open && state.open.id === inkClipId;
+// Draw from the Highlights sheet or the selection bar.
+function inkStart() {
+  if (!inkReady()) return;
+  const go = () => inkSet(true);
+  if (state.sheet) { history.back(); setTimeout(go, 0); } else go();
 }
 function inkClose() {
   if (inkColor) inkColor.close();
@@ -95,7 +140,7 @@ function inkKeep() {
 }
 
 function inkSet(on) {
-  on = !!on && !$("readerInk").hidden;
+  on = !!on && inkReady();
   if (on === C.ink.on && (!!inkBar && !inkBar.hidden) === on) { $("readerInk").setAttribute("aria-pressed", String(on)); return; }
   if (on) C.ink.setting(inkPrefs());
   C.ink.setOn(on);
@@ -143,6 +188,7 @@ function inkBuild() {
     if (act === "delete") { C.ink.del(); return; }
     if (act === "front") { C.ink.front(); return; }
     if (act === "back") { C.ink.back(); return; }
+    if (act === "edittext") { const t = C.ink.selectedText(); if (t) inkText(t); return; }
     inkPopClose();
     if (act === "tool") C.ink.setting({ tool: arg });
     else if (act === "color") C.ink.setting({ color: arg });
@@ -190,8 +236,9 @@ async function inkAddImage(file) {
     let see = false;
     for (let i = 3; i < px.length; i += 16) if (px[i] < 250) { see = true; break; }
     const url = cv.toDataURL(see ? "image/png" : "image/jpeg", 0.85);
-    if (!C.ink.addImage(url, h / w)) throw new Error("no page");
+    // Select first: changing tool lets go of what is taken, and the new picture is.
     inkSelect();
+    if (!C.ink.addImage(url, h / w)) throw new Error("no page");
   } catch (e) {
     toast("Couldn't add that picture. Try another.");
   }
@@ -236,7 +283,10 @@ function inkPopMenu(kind) {
   }
   if (kind === "add") {
     return el("div", { class: "ink-pop ink-pop-styles", role: "menu", "aria-label": "Add" },
-      el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkFile.click(); } }, inkIcon("image"), el("span", { class: "ink-pop-name" }, "Image")));
+      // A picture stays on this device, so a clip's drawings, which sync, take none.
+      C.ink.blocks ? null : el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkFile.click(); } }, inkIcon("image"), el("span", { class: "ink-pop-name" }, "Image")),
+      // Typed text goes on a note (2.0.0).
+      el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkText(null); } }, inkIcon("text"), el("span", { class: "ink-pop-name" }, "Text")));
   }
   return el("div", { class: "ink-pop ink-pop-styles", role: "menu", "aria-label": "Pen style" },
     ...INK_STYLES.map(([y, name]) => el("button", { type: "button", role: "menuitemradio", "aria-checked": String(s.style === y), "aria-pressed": String(s.style === y), onclick: () => pick({ style: y }) },
@@ -320,7 +370,7 @@ function inkPaint() {
       el("span", { class: "ink-dot", "data-c": mine ? "" : c, "data-t": hl ? "h" : "p", ...(mine ? { style: "background:" + c } : {}) }));
   });
   const act = (label, icon, a, on) => el("button", { type: "button", "aria-label": label, title: label, "data-act": a, ...(on ? {} : { disabled: "" }) }, inkIcon(icon));
-  const editRow = s.tool === "select" ? [act("Cut", "cut", "cut", s.selected), act("Copy", "copy", "copy", s.selected), act("Paste", "paste", "paste", s.canPaste), act("Delete", "trash", "delete", s.selected), act("Move to top", "front", "front", s.selected), act("Move to bottom", "back", "back", s.selected)] : [];
+  const editRow = s.tool === "select" ? [...(C.ink.selectedText() ? [act("Edit text", "text", "edittext", true)] : []), act("Cut", "cut", "cut", s.selected), act("Copy", "copy", "copy", s.selected), act("Paste", "paste", "paste", s.canPaste), act("Delete", "trash", "delete", s.selected), act("Move to top", "front", "front", s.selected), act("Move to bottom", "back", "back", s.selected)] : [];
   const sizeBtn = s.tool === "eraser" || s.tool === "select" ? null : el("button", { type: "button", "aria-label": "Size " + (s.size + 1) + " of 5", title: "Size", "aria-haspopup": "menu", "aria-expanded": String(!!inkPop && inkPop.kind === "size"), "data-act": "size" },
     el("span", { class: "ink-size", style: "width:" + INK_DOTS[s.size] + "px;height:" + INK_DOTS[s.size] + "px" }));
   const styleBtn = s.tool !== "pen" ? null : el("button", { type: "button", "aria-label": "Pen style: " + inkStyleName(s.style), title: "Pen style", "aria-haspopup": "menu", "aria-expanded": String(!!inkPop && inkPop.kind === "style"), "data-act": "style" },
@@ -335,13 +385,29 @@ C.ink.onChange = () => {
   inkPaint();
   if (state.sheet === "ink") $("readingBody").replaceChildren(SHEETS.ink.build());
 };
-// The first time a pen touches a PDF's pages, Draw is offered, once.
+// A note written on counts as edited, so sync sends it again (2.0.0).
+// A PDF's pages drawn on keep a summary on its entry (`drawn`: [page,
+// strokes]), so Highlights can list them without opening the PDF.
+C.ink.onSaved = (id) => {
+  const p = state.pages.find((x) => x.id === id);
+  if (!p) return;
+  if (p.note) { p.editedAt = Date.now(); if (C.ink.strokes(1).length || p.thumb) noteCoverSoon(p, 2000); }
+  else if (!C.ink.blocks && C.ink.state && state.open === p) {
+    const d = C.ink.drawn().map((x) => [x.page, new Set(C.ink.strokes(x.page).map((s) => s.id)).size]);
+    if (d.length) p.drawn = d; else delete p.drawn;
+    p.inkAt = Date.now();
+  } else return;
+  indexSoon();
+};
+// The first time a pen touches something drawable, Draw is offered, once.
 C.ink.onPen = () => {
-  if (C.ink.on || $("readerInk").hidden || state.sheet || load(INK_OFFER_KEY, false)) return;
+  if (C.ink.on || !inkReady() || state.sheet || load(INK_OFFER_KEY, false)) return;
   store(INK_OFFER_KEY, true);
-  toast("Draw on this PDF with your pen?", "Draw", () => inkSet(true));
+  toast(state.open && state.open.note ? "Draw on this note with your pen?" : "Draw here with your pen?", "Draw", () => inkSet(true));
 };
 $("readerInk").addEventListener("click", () => inkSet(!C.ink.on));
+// A note grows as you write: a stroke on its last sheet adds one.
+C.ink.onStroke = (n) => { if (n === C.files.noteSheets()) C.files.addSheet(); };
 // What the phone says of the pen: near, the eraser end, a button held.
 if (C.platform.pen.available) {
   C.platform.pen.onState((s) => { C.ink.fromPhone(s); penTestState(s); });
@@ -355,23 +421,14 @@ if (C.platform.pen.available) {
 
 // ---- Drawings, in ⋯ ----
 
-function inkSheet(p) {
-  const box = el("div", { class: "ink-sheet" });
-  const go = (n) => { history.back(); setTimeout(() => C.reader.toPrinted(n), 0); };
-  const total = C.ink.count(), list = C.ink.drawn();
-  const word = (n, one, many) => n + " " + (n === 1 ? one : many);
-  fill(box,
-    el("p", { class: "meta" }, total
-      ? word(total, "stroke", "strokes") + " on " + word(list.length, "page", "pages") + ". They stay on this device. Save a copy to keep them with the PDF."
-      : "Nothing drawn yet. Tap the pen in the reader bar and draw."),
-    list.length ? el("div", { class: "group" }, ...list.map((d) =>
-      el("button", { class: "row", type: "button", onclick: () => go(d.page) },
-        el("span", { class: "row-label" }, "Page " + d.page), el("span", { class: "row-value" }, String(d.strokes))))) : null,
-    total ? el("div", { class: "group" },
-      menuRow("Save a copy with drawings", () => inkCopy(p)),
-      menuRow("Remove all drawings", () => { if (confirm("Remove all drawings from “" + p.title + "”? This can't be undone.")) C.ink.clearAll(); }, "warn")) : null,
-    inkProbe());
-  return box;
+// Try your pen (from Highlights): what the page and the phone each say of
+// a pen, and the pen test.
+function inkSheet() {
+  return el("div", { class: "ink-sheet" }, inkProbe());
+}
+// Every drawing on the clip gone, page by page or block by block.
+async function inkRemoveAll(p, groups) {
+  for (const g of groups) await inkRemoveGroup(p, g);
 }
 
 // A pad to try the pen on, with what the page and the phone each say of
@@ -396,7 +453,7 @@ function inkProbe() {
   penTestPad(pad);
   C.ink.onProbe = paint;
   paint();
-  return el("div", { class: "ink-probe" }, el("h3", { class: "overline" }, "Try your pen"), pad, out, penTestView());
+  return el("div", { class: "ink-probe" }, pad, out, penTestView());
 }
 
 // The PDF with the drawings in it as ink annotations, saved where the
@@ -566,3 +623,148 @@ document.addEventListener("keydown", (e) => {
   else return;
   e.preventDefault();
 });
+
+// A note saved as a PDF (2.0.0): every sheet with what is drawn on it, as a
+// picture to a page. Saved or shared the way the copy of a PDF is.
+async function noteToPdf(p) {
+  if (!p.note || state.open !== p) return;
+  toast("Making the PDF…");
+  try {
+    await C.ink.flush();
+    const { blob, name } = await C.notes.toPdf(p, C.files.heldPdf(), C.ink.strokes);
+    if (!C.platform.canSaveFiles) { C.platform.download(name, blob); return; }
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const cache = await C.store.cacheFile(name);
+    for (let i = 0; i < bytes.length; i += 1 << 20) await cache.append(bytes.subarray(i, i + (1 << 20)));
+    const uri = await cache.uri();
+    const saved = await C.platform.saveFile(uri, name, "application/pdf");
+    if (saved === null) await C.platform.shareFile(uri, name);
+    else if (saved) toast("Saved " + name);
+  } catch (e) {
+    console.error(e);
+    toast("Couldn't make the PDF. Try again.");
+  }
+}
+
+// ---- Typed text on a note (2.0.0) ----
+
+// What the text sheet is for: a new text, or the one taken ({ id, text, z }).
+let inkTextFor = null;
+function inkText(existing) {
+  inkTextFor = existing ? { ...existing } : { id: null, text: "", z: C.ink.TEXT_SIZES[1] };
+  openMenu("noteText");
+}
+// The words in a box, a size, and Done; empty, a text is taken off.
+function noteTextSheet() {
+  const t = inkTextFor || { id: null, text: "", z: C.ink.TEXT_SIZES[1] };
+  const box = el("textarea", { class: "note-text", rows: "5", "aria-label": "Text", placeholder: "Type here", maxlength: "4000", dir: "auto" });
+  box.value = t.text;
+  const names = ["Small", "Medium", "Large"];
+  const sizes = seg("note-text-size", "Size", C.ink.TEXT_SIZES.map((v, i) => ({ value: String(v), label: names[i] })), String(t.z), (v) => { t.z = Number(v); });
+  const done = () => {
+    const text = box.value, z = t.z, id = t.id;
+    back().then(() => {
+      if (id) C.ink.editText(id, text, z);
+      else if (text.trim()) { inkSelect(); C.ink.addText(text, z); }
+    });
+  };
+  setTimeout(() => box.focus(), 80);
+  return el("div", { class: "page-controls" },
+    el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, t.id ? "Edit text" : "Add text")),
+    box,
+    el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Size"), sizes),
+    el("div", { class: "group" },
+      el("button", { class: "row", type: "button", onclick: done }, el("span", { class: "row-label accent" }, "Done")),
+      el("button", { class: "row", type: "button", onclick: () => back() }, el("span", { class: "row-label" }, "Cancel"))));
+}
+
+// ---- Drawings in Highlights (2026-11) ----
+// Drawing is part of highlights: the Highlights sheet and place list what
+// was drawn, one row per paragraph (or picture) of a clip, or per page of a
+// PDF, however many strokes are on it.
+// From the entry (by block), from what ink.js holds of the open clip, or
+// from the summary an outside file's entry keeps of its pages (`drawn`).
+function inkGroups(p) {
+  if (!p || p.note) return [];
+  if (state.open === p && inkReady()) {
+    if (C.ink.blocks) return C.ink.drawn().map((d) => ({ n: d.page, page: false, strokes: C.ink.strokes(d.page) }));
+    return C.ink.drawn().map((d) => ({ n: d.page, page: true, strokes: C.ink.strokes(d.page) }));
+  }
+  if (p.ink && typeof p.ink === "object") {
+    return Object.keys(p.ink).map(Number).filter((n) => Array.isArray(p.ink[n]) && p.ink[n].length).sort((a, b) => a - b)
+      .map((n) => ({ n, page: false, strokes: p.ink[n] }));
+  }
+  if (Array.isArray(p.drawn)) return p.drawn.filter((d) => Array.isArray(d) && d[0] >= 1).map(([n, k]) => ({ n, page: true, strokes: null, count: k }));
+  return [];
+}
+const inkGroupCount = (g) => (g.strokes ? new Set(g.strokes.map((s) => s.id)).size : g.count || 0);
+const inkTotal = (p) => inkGroups(p).reduce((a, g) => a + inkGroupCount(g), 0);
+// Where a row goes among the highlights: by block (highlights count blocks
+// from 0) or by page.
+const inkOrder = (g) => (g.page ? g.n : g.n - 1);
+const inkWord = (n) => (n === 1 ? "1 drawing" : n + " drawings");
+function inkLabel(p, g) {
+  if (g.page) return (p.note ? "Sheet " : "Page ") + g.n;
+  const w = state.open === p ? C.reader.inkBlockWords(g.n) : null;
+  return w && w.picture ? "Picture" : "Paragraph " + g.n;
+}
+// A small picture of what's drawn there: the strokes alone, fitted.
+function inkThumb(strokes) {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("class", "ink-thumb");
+  svg.setAttribute("aria-hidden", "true");
+  const list = (strokes || []).filter((s) => s.t === "p" || s.t === "h");
+  const b = list.length ? C.ink.boxOf(list) : null;
+  if (!b) { svg.setAttribute("viewBox", "0 0 4 3"); return svg; }
+  const pad = Math.max(b[2], b[3]) * 0.12 + 0.01;
+  svg.setAttribute("viewBox", [b[0] - pad, b[1] - pad, b[2] + pad * 2, b[3] + pad * 2].map((v) => Math.round(v * 10000) / 10000).join(" "));
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  for (const s of list.slice(0, 200)) {
+    const path = document.createElementNS(NS, "path");
+    const rgb = "rgb(" + (C.ink.rgbOf(s) || [28, 27, 25]).join(",") + ")";
+    if (s.t === "h") { path.setAttribute("d", C.ink.linePath(s.p)); path.setAttribute("fill", "none"); path.setAttribute("stroke", rgb); path.setAttribute("stroke-width", String(s.w)); path.setAttribute("opacity", "0.5"); path.setAttribute("stroke-linecap", "butt"); }
+    else { path.setAttribute("d", C.ink.penPath(s.p, Math.max(s.w, (b[2] + b[3]) / 120), s.y)); path.setAttribute("fill", rgb); }
+    svg.append(path);
+  }
+  return svg;
+}
+// To a drawing: in the reader, scroll to it; else open the clip there.
+async function inkGoTo(p, g) {
+  const go = () => {
+    if (state.open !== p) return;
+    if (g.page) C.reader.toPrinted(g.n);
+    else C.reader.jump(0, (g.n - 1) + "/0", true);
+  };
+  if (state.open === p && !$("readerView").hidden) { go(); return; }
+  await openPage(p.id);
+  const t0 = Date.now();
+  const wait = () => { if (state.open !== p || Date.now() - t0 > 4000) return; C.reader.placed().then(() => setTimeout(go, 120)); };
+  wait();
+}
+// Drawings on one row taken away.
+async function inkRemoveGroup(p, g) {
+  if (state.open === p && inkReady()) { C.ink.clearPage(g.n); await C.ink.flush(); return; }
+  if (p.ink && p.ink[g.n]) {
+    delete p.ink[g.n];
+    if (!Object.keys(p.ink).length) delete p.ink;
+    p.inkAt = Date.now();
+    await C.store.writeIndex(state.pages);
+    renderLibrary();
+  }
+}
+function inkRow(p, g, onGo, onRemove) {
+  const k = inkGroupCount(g);
+  const words = !g.page && state.open === p ? C.reader.inkBlockWords(g.n) : null;
+  return el("li", { class: "mark-item ink-item" },
+    el("button", { class: "row mark-row ink-row", type: "button", "aria-label": inkLabel(p, g) + ", " + inkWord(k), onclick: onGo },
+      g.strokes ? inkThumb(g.strokes) : el("span", { class: "ink-thumb ink-thumb-page", "aria-hidden": "true" }),
+      el("span", { class: "ink-row-text" },
+        el("span", { class: "row-label" }, inkLabel(p, g)),
+        el("span", { class: "meta" }, inkWord(k)),
+        words && words.text ? el("span", { class: "mark-note", dir: "auto" }, "“" + words.text.slice(0, 90) + (words.text.length > 90 ? "…" : "") + "”") : null)),
+    onRemove ? el("button", { class: "icon-btn mark-edit", type: "button", "aria-label": "Remove these drawings", title: "Remove these drawings", onclick: onRemove },
+      svgIcon("remove", 18)) : null);
+}
+// Out of an open sheet or menu (app-library.js back), for where `back` means another thing.
+const inkBack = () => back();

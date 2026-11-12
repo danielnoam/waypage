@@ -23,6 +23,10 @@
   const COVERS_KEY = "waypage.syncCovers"; // picked covers this device knows are on GitHub
   const STATS_KEY = "waypage.syncStats"; // { device: sha of its stats file as last read, _sent: what this device last wrote }
   const DAY = 24 * 3600 * 1000;
+  // The files a note keeps on GitHub beside its page: notes/<id>/<name>.
+  const NOTE_FILE = /^(note\.json|ink\.json|base\.pdf|img-[a-z0-9]{1,40}\.txt)$/;
+  // A note's PDF goes up whole through the Contents API, which takes 100 MB at most.
+  const NOTE_BASE_MAX = 50 * 1024 * 1024;
   const LOCAL = /^images\//;
   const KEEP_DELETED = 90 * 24 * 3600 * 1000;
 
@@ -32,11 +36,11 @@
   // Fields that come with the page's text, so the copy saved last wins
   // them all together.
   const CONTENT = ["url", "title", "site", "byline", "licence", "savedAt", "minutes", "lang", "dir", "mode", "images",
-    "comic", "manga", "volume", "next", "prev", "requested", "series", "source", "file", "cut", "archived", "editedAt"];
+    "comic", "manga", "volume", "next", "prev", "requested", "series", "source", "file", "cut", "archived", "editedAt", "note"];
   // Every field an index entry can carry through a backup or sync
   // (backup.cleanMeta); anything else on a page stays on its device.
   const SYNCED = new Set(["id", "url", "title", "site", "byline", "licence", "savedAt", "minutes", "lang", "dir", "mode", "images",
-    "at", "finished", "readAt", "readOn", "placeAt", "spot", "comic", "manga", "volume", "turn", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "file", "marks", "cut", "archived", "editedAt"]);
+    "at", "finished", "readAt", "readOn", "placeAt", "spot", "comic", "manga", "volume", "turn", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "file", "marks", "ink", "inkAt", "cut", "archived", "editedAt", "note"]);
   // Where the reader is, which goes with whichever device moved it last:
   // placeAt (1.30.2), or readAt on entries from before it. Opening a clip
   // stamps readAt alone, so a device that opened one at an older place
@@ -155,6 +159,26 @@
     return out.sort((x, y) => (x.page ? 1 : 0) - (y.page ? 1 : 0) || (x.page ? x.page - y.page : x.block - y.block) || x.start - y.start);
   }
 
+  // Drawings (2026-11), stroke by stroke, like highlights: what either
+  // drew stays, what either erased goes, and one moved on one side takes
+  // that move. A stroke over two blocks has a copy on each (ink.js placeOn),
+  // so a stroke is known by its id and its block. { "<block>": [stroke] }.
+  function mergeInk(b, l, r) {
+    const flat = (o) => {
+      const m = new Map();
+      for (const [k, list] of Object.entries(o && typeof o === "object" ? o : {})) for (const s of Array.isArray(list) ? list : []) if (s && s.id) m.set(s.id + "@" + k, { k, s });
+      return m;
+    };
+    const B = flat(b), L = flat(l), R = flat(r), out = {};
+    const add = (x) => (out[x.k] = out[x.k] || []).push(x.s);
+    const eq = (x, y) => JSON.stringify(x.s) === JSON.stringify(y.s);
+    for (const [id, x] of L) {
+      if (R.has(id)) add(!B.has(id) || !eq(B.get(id), x) || eq(x, R.get(id)) ? x : R.get(id));
+      else if (!B.has(id)) add(x);
+    }
+    for (const [id, x] of R) if (!L.has(id) && !B.has(id)) add(x);
+    return Object.keys(out).length ? out : undefined;
+  }
   // An audiobook's listening (2026-11).
   const fixKey = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
   // Both sides changed it: the place from the one listened last, fixes
@@ -200,6 +224,8 @@
         : same(l[k], r[k]) ? l[k] : same(l[k], b[k]) ? r[k] : same(r[k], b[k]) ? l[k] : placeFrom[k];
       else if (k === "tags") out[k] = mergeTags(b.tags, l.tags, r.tags);
       else if (k === "marks") out[k] = mergeMarks(b.marks, l.marks, r.marks);
+      else if (k === "ink" || k === "pages") out[k] = mergeInk(b[k], l[k], r[k]);
+      else if (k === "inkAt") out[k] = Math.max(l.inkAt || 0, r.inkAt || 0) || undefined;
       else if (k === "listen") out[k] = same(l[k], r[k]) ? l[k] : mergeListen(b.listen, l.listen, r.listen);
       else out[k] = pick(k);
     }
@@ -215,8 +241,10 @@
   // favourite, in library.json's outside map keyed by the file's
   // fingerprint (files.js), so they land only on a device with the same
   // file. `ids` are the file's clip ids on every device, so its reading
-  // stats add up as one.
-  const OUTSIDE = ["at", "finished", "readAt", "readOn", "placeAt", "spot", "turn", "tags", "folder", "folderAt", "fav", "favAt", "folderFav", "folderFavAt", "marks", "listen"];
+  // stats add up as one. Drawings go too: `ink` by block, and `pages`,
+  // a printed PDF's drawn pages, which live beside the clip (store.readInk)
+  // and so come in on the copies outsidePages makes.
+  const OUTSIDE = ["at", "finished", "readAt", "readOn", "placeAt", "spot", "turn", "tags", "folder", "folderAt", "fav", "favAt", "folderFav", "folderFavAt", "marks", "listen", "ink", "inkAt"];
   const FP = /^[0-9a-f]{32}$/;
   const OUT_MAX = 2000;
   // This device's outside files as entries: one a fingerprint, the copy
@@ -228,6 +256,7 @@
       if (!fp || !FP.test(fp)) continue;
       const o = { name: (p.file.name || "").slice(0, 200), ids: [p.id] };
       for (const k of OUTSIDE) if (p[k] !== undefined && p[k] !== false && !(Array.isArray(p[k]) && !p[k].length)) o[k] = p[k];
+      if (p.pages) o.pages = p.pages;
       const was = out[fp];
       if (was) { o.ids = [...new Set(was.ids.concat(p.id))]; if (placeTime(was) > placeTime(o)) { out[fp] = { ...was, ids: o.ids }; continue; } }
       out[fp] = o;
@@ -262,6 +291,8 @@
       if (!m) continue;
       const x = { name: typeof v.name === "string" ? v.name.slice(0, 200) : "", ids: (Array.isArray(v.ids) ? v.ids : []).filter((i) => typeof i === "string" && /^[a-z0-9]{4,24}$/.test(i)).slice(-20) };
       for (const k of OUTSIDE) if (v[k] !== undefined && m[k] !== undefined && m[k] !== false && !(Array.isArray(m[k]) && !m[k].length)) x[k] = m[k];
+      const pages = C.backup.cleanInk(v.pages);
+      if (pages) x.pages = pages;
       out[fp] = x;
     }
     return out;
@@ -285,6 +316,8 @@
     const at = key ? new Map() : null;
     for (const p of pages) {
       let i;
+      // A note has no address: two of them are not two copies of one page.
+      if (p.note) { kept.push(p); continue; }
       if (at) { const k = key(p.url); i = at.has(k) ? at.get(k) : -1; if (i < 0) at.set(k, kept.length); }
       else i = kept.findIndex((x) => same(x.url, p.url));
       if (i < 0) { kept.push(p); continue; }
@@ -293,6 +326,8 @@
       if (tags.length) win.tags = tags;
       const marks = mergeMarks([], win.marks, lose.marks);
       if (marks.length) win.marks = marks;
+      const ink = mergeInk({}, win.ink, lose.ink);
+      if (ink) win.ink = ink;
       if (lose.fav && !win.fav) { win.fav = true; win.favAt = lose.favAt; }
       const moveOver = (ks) => { for (const k of ks) { if (lose[k] === undefined) delete win[k]; else win[k] = lose[k]; } };
       if (placeTime(lose) > placeTime(win)) moveOver(PLACE);
@@ -664,6 +699,106 @@
   const PACK = 16 * 1024 * 1024;
   const PACKED = /^sync:(\d+):(\d+):(\d+):([a-z]+\/[a-z+.-]+)$/;
 
+  // A note's data files (2.0.0): its sheets, strokes and typed text, the
+  // pictures put on it and the PDF it was made from, as notes/<id>/<name>.
+  // Resolves to [{ name, bytes }]; null when the note has no sheets here.
+  async function noteFilesOut(p) {
+    const note = await C.store.readNote(p.id);
+    if (!note) return null;
+    const out = [{ name: "note.json", bytes: utf8(JSON.stringify(note)) }];
+    const ink = await C.store.readInk(p.id);
+    if (ink) {
+      out.push({ name: "ink.json", bytes: utf8(JSON.stringify(ink)) });
+      const used = new Set();
+      for (const list of Object.values(ink.pages || {})) for (const s of list || []) if (s && s.t === "i" && typeof s.f === "string") used.add(s.f);
+      for (const f of used) {
+        const name = "img-" + f + ".txt";
+        const url = NOTE_FILE.test(name) ? await C.store.readInkImage(p.id, f) : null;
+        if (url) out.push({ name, bytes: utf8(url) });
+      }
+    }
+    const base = await C.store.readNoteBase(p.id);
+    if (base) {
+      const bytes = base instanceof Uint8Array ? base : new Uint8Array(await base.arrayBuffer());
+      if (bytes.length <= NOTE_BASE_MAX) out.push({ name: "base.pdf", bytes });
+    }
+    return out;
+  }
+  // Two devices writing on one note (2026-11): its strokes merge three ways,
+  // against what sync last left on both (store ink base, with GitHub's sha
+  // of it), as a clip's drawings do. Resolves to the merged strokes, or
+  // null when there is nothing to merge.
+  async function noteInkMerged(id, theirs) {
+    const mine = await C.store.readInk(id), base = await C.store.readInkBase(id);
+    if (!mine || !theirs) return null;
+    const pages = mergeInk(base && base.pages, mine.pages, theirs.pages) || {};
+    // A sheet the other device added to write on is added here too.
+    const last = Math.max(0, ...Object.keys(pages).map(Number));
+    const note = await C.store.readNote(id);
+    if (note && Array.isArray(note.sheets) && note.sheets.length < last) {
+      while (note.sheets.length < last) note.sheets.push({ bg: "paper" });
+      await C.store.writeNote(id, note);
+    }
+    return { ...mine, pages };
+  }
+  // Sends what changed of a note's files and takes away what it no longer
+  // has. `was` is the shas GitHub had; resolves to the shas it has now.
+  // Strokes drawn elsewhere since this device last saw them are merged in
+  // first, so neither side's are lost.
+  async function sendNoteFiles(p, was) {
+    const base = await C.store.readInkBase(p.id);
+    const theirSha = was && was["ink.json"];
+    if (theirSha && (!base || base.sha !== theirSha)) {
+      const text = await readText("notes/" + p.id + "/ink.json").catch(() => null);
+      let theirs = null;
+      try { theirs = text ? JSON.parse(text) : null; } catch (e) { theirs = null; }
+      const merged = await noteInkMerged(p.id, theirs);
+      if (merged) await C.store.writeInk(p.id, merged);
+    }
+    const files = await noteFilesOut(p);
+    if (!files) return was || {};
+    was = was || {};
+    const now = {};
+    const canSha = !!(globalThis.crypto && crypto.subtle);
+    for (const f of files) {
+      halt();
+      const sha = canSha ? await blobSha(f.bytes) : null;
+      if (sha && was[f.name] === sha) { now[f.name] = sha; continue; }
+      now[f.name] = await put("notes/" + p.id + "/" + f.name, null, was[f.name], "Note: " + p.title.slice(0, 50), f.bytes);
+    }
+    for (const [name, sha] of Object.entries(was)) if (!now[name]) await remove("notes/" + p.id + "/" + name, sha).catch(() => {});
+    const sent = await C.store.readInk(p.id);
+    await C.store.writeInkBase(p.id, sent && now["ink.json"] ? { pages: sent.pages || {}, sha: now["ink.json"] } : null);
+    return now;
+  }
+  // A note's files from GitHub, read before the note's old copy goes.
+  // null when its sheets aren't there (yet).
+  async function noteFilesIn(id, names) {
+    if (!names || !names["note.json"]) return null;
+    const got = { imgs: {} };
+    for (const name of Object.keys(names)) {
+      halt();
+      const path = "notes/" + id + "/" + name;
+      if (name === "base.pdf") got.base = await readBytes(path);
+      else {
+        const text = await readText(path);
+        if (text == null) { if (name === "note.json") return null; continue; }
+        if (name === "note.json") got.note = JSON.parse(text);
+        else if (name === "ink.json") got.ink = JSON.parse(text);
+        else got.imgs[name.slice(4, -4)] = text;
+      }
+    }
+    return got.note ? got : null;
+  }
+  async function noteFilesKeep(id, got) {
+    await C.store.writeNote(id, got.note);
+    if (got.ink) await C.store.writeInk(id, got.ink);
+    for (const [f, url] of Object.entries(got.imgs)) await C.store.writeInkImage(id, f, url);
+    let size = 0;
+    if (got.base) size = await C.store.writeNoteBase(id, new Blob([got.base], { type: "application/pdf" }));
+    return size;
+  }
+
   // The page's HTML with its pictures marked missing: the other device
   // gets them from the site itself. A file's clip takes its pictures with
   // it instead, when they're small enough.
@@ -848,7 +983,11 @@
     // What this device syncs (1.47.0). A part turned off is neither sent
     // nor taken: GitHub keeps what it has of it, as another device left it.
     const what = C.sync.what;
-    const noClips = !what.clips && !light;
+    // Notes are their own part (2.0.0): one this device doesn't sync is
+    // left out of the merge and put back as GitHub has it, so it reads as
+    // neither new, changed nor deleted here. Clips off works the same.
+    const ours = (p) => (p && p.note ? what.notes : what.clips);
+    const noClips = !what.clips && !what.notes && !light;
     const skip = (u) => (isMail(u) ? !what.newsletters : !what.feeds);
     const before = getPages().map((p) => ({ ...p }));
     const feedsBefore = getFeeds ? getFeeds().map(feedShare).filter((f) => !skip(f.url)) : null;
@@ -901,7 +1040,7 @@
       const early = new Map();
       for (const m of merged.pages) {
         const have = byId.get(m.id);
-        if (!have || !(ver(have) === ver(m) || links)) continue;
+        if (!have || !(ver(have) === ver(m) || (links && !m.note))) continue;
         const next = { ...m };
         for (const k of Object.keys(have)) if (DEVICE.includes(k) || !SYNCED.has(k)) next[k] = have[k];
         if (JSON.stringify(next) !== JSON.stringify(have)) early.set(m.id, next);
@@ -926,12 +1065,23 @@
       // A feed or newsletter this device doesn't sync goes in as GitHub
       // has it, so it reads as neither changed nor unfollowed here.
       const feedsHere = feedsBefore && feedsBefore.concat(((remote && remote.data && remote.data.feeds) || []).filter((f) => f && skip(f.url)));
-      const base = load(BASE_KEY, null);
-      const got = await mergeOff(before, base, remote ? remote.data : null, waiting, feedsHere, getSeen ? getSeen() : 0, Date.now(), sameUrl, urlKey);
+      const rest = remote ? remote.data.pages.filter((r) => !ours(r)) : [];
+      const baseDoc = load(BASE_KEY, null);
+      const got = await mergeOff(before, baseDoc && { ...baseDoc, pages: baseDoc.pages.filter(ours) },
+        remote ? { ...remote.data, pages: remote.data.pages.filter(ours) } : null, waiting, feedsHere, getSeen ? getSeen() : 0, Date.now(), sameUrl, urlKey);
       merged = got.merged;
       const remoteDoc = got.remoteDoc;
-      const outside = outsideHere ? mergeOutside(base && base.outside, outsideHere, remoteDoc && remoteDoc.outside) : remoteDoc && remoteDoc.outside;
+      const outside = outsideHere ? mergeOutside(baseDoc && baseDoc.outside, outsideHere, remoteDoc && remoteDoc.outside) : remoteDoc && remoteDoc.outside;
       if (outside && Object.keys(outside).length) merged.outside = outside;
+      // What isn't synced here goes back in as GitHub has it.
+      if (rest.length) {
+        const back = clean({ pages: rest, files: remote.data.files });
+        for (const doc of [merged, remoteDoc]) {
+          if (!doc) continue;
+          doc.pages = doc.pages.concat(back.pages).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0) || (a.id < b.id ? -1 : 1));
+          for (const [id, f] of Object.entries(back.files)) doc.files[id] = f;
+        }
+      }
       // Clips not synced here: only the feeds, newsletters and their seen
       // mark go up, onto GitHub's library as it is; base and waiting stay.
       if (noClips) {
@@ -975,7 +1125,10 @@
       // Text this device has and GitHub doesn't: every page saved here, or
       // saved again since.
       const mine = new Map(before.map((p) => [p.id, p]));
-      const todo = links ? [] : merged.pages.filter((p) => mine.has(p.id) && ver(mine.get(p.id)) === ver(p) && (!merged.files[p.id] || merged.files[p.id].at !== ver(p)));
+      const todoAll = merged.pages.filter((p) => (!links || p.note) && mine.has(p.id) && ver(mine.get(p.id)) === ver(p) && (!merged.files[p.id] || merged.files[p.id].at !== ver(p)));
+      // A note goes one by one, its data files first, below.
+      const todo = todoAll.filter((p) => !p.note);
+      const noteTodo = todoAll.filter((p) => p.note);
       const sentOne = (p, sha, packShas) => {
         merged.files[p.id] = uploaded[p.id] = { at: ver(p), sha };
         if (packShas.length) merged.files[p.id].packs = packShas;
@@ -1027,9 +1180,25 @@
         for (const [k, s] of ((was && was.packs) || []).entries()) if (k >= packs.length) await remove("pages/" + p.id + "/pack-" + k, s).catch(() => {});
         sentOne(p, sha, packShas);
       }
+      for (const [k, p] of noteTodo.entries()) {
+        halt();
+        if (onProgress) onProgress({ stage: "up", done: todo.length + k, total: todoAll.length });
+        let html;
+        try { html = await C.store.readPage(p.id); } catch (e) { html = null; }
+        if (!html) continue;
+        const was = merged.files[p.id] || (remoteDoc && remoteDoc.files && remoteDoc.files[p.id]);
+        const { html: body } = await outgoing(html, mine.get(p.id));
+        // The data first, so a page never names files that aren't there.
+        const note = await sendNoteFiles(p, was && was.note);
+        const sha = await put("pages/" + p.id + ".html", body, was && was.sha, "Note: " + p.title.slice(0, 60));
+        merged.files[p.id] = uploaded[p.id] = { at: ver(p), sha, note };
+        keep(SENT_KEY, uploaded);
+        up++;
+      }
       // Text of deleted pages goes too.
       const gone = Object.entries((remoteDoc && remoteDoc.files) || {}).filter(([id]) => merged.deleted[id]);
       for (const [id, f] of gone) {
+        for (const [name, sha] of Object.entries(f.note || {})) await remove("notes/" + id + "/" + name, sha).catch(() => {});
         await remove("pages/" + id + ".html", f.sha).catch(() => {});
         for (const [k, s] of (f.packs || []).entries()) await remove("pages/" + id + "/pack-" + k, s).catch(() => {});
       }
@@ -1082,13 +1251,14 @@
     const fromLinks = [];
     const at = new Map(before.map((p) => [p.id, p]));
     for (const m of merged.pages) {
+      if (!ours(m)) continue;
       const have = at.get(m.id);
       // Saved again elsewhere, with links only: the copy here stays.
-      if (have && (ver(have) === ver(m) || links)) {
+      if (have && (ver(have) === ver(m) || (links && !m.note))) {
         const next = { ...m };
         for (const k of Object.keys(have)) if (DEVICE.includes(k) || !SYNCED.has(k)) next[k] = have[k];
         decided.set(m.id, next);
-      } else if (!links && merged.files[m.id] && merged.files[m.id].at === ver(m)) want.push({ m, have });
+      } else if ((!links || m.note) && merged.files[m.id] && merged.files[m.id].at === ver(m)) want.push({ m, have });
       else if (have) {
         // Saved again or edited elsewhere, its text not on GitHub (that
         // device syncs links only, or hasn't sent it yet): the copy here
@@ -1099,7 +1269,7 @@
       } else {
         stillWaiting.push(m.id);
         // No text on GitHub (its device syncs links only) or not wanted.
-        if (links || !merged.files[m.id]) fromLinks.push(m);
+        if (!m.note && (links || !merged.files[m.id])) fromLinks.push(m);
       }
     }
     for (const id of Object.keys(merged.deleted)) if (at.has(id)) decided.set(id, null);
@@ -1111,7 +1281,8 @@
     // Written only when it changed (1.2.0): a library of hundreds is a
     // few hundred kilobytes, and localStorage writes on the main thread.
     await breathe();
-    const mergedText = JSON.stringify(merged);
+    // The base is what both sides had of what this device syncs.
+    const mergedText = JSON.stringify({ ...merged, pages: merged.pages.filter(ours) });
     let baseText = null;
     try { baseText = localStorage.getItem(BASE_KEY); } catch (e) { baseText = null; }
     if (mergedText !== baseText) { try { localStorage.setItem(BASE_KEY, mergedText); } catch (e) { /* not kept */ } }
@@ -1142,11 +1313,44 @@
         continue;
       }
       if (have && goneHere(m.id, getPages())) continue;
+      // A note's data is read before its old copy goes; without it the
+      // note waits for the next sync.
+      let noteData = null;
+      if (m.note) {
+        try { noteData = await noteFilesIn(m.id, merged.files[m.id].note); } catch (e) { if (e instanceof Paused) throw e; noteData = null; }
+        if (!noteData) {
+          if (!have) stillWaiting.push(m.id);
+          continue;
+        }
+      }
+      // This device's own strokes since sync last saw the note, and the
+      // pictures they use, merged into what came down.
+      let localImgs = null, mergedHere = false;
+      if (noteData && have && noteData.ink) {
+        const merged = await noteInkMerged(m.id, noteData.ink).catch(() => null);
+        if (merged && JSON.stringify(merged.pages) !== JSON.stringify(noteData.ink.pages || {})) {
+          noteData.theirs = noteData.ink.pages || {};
+          noteData.ink = merged;
+          mergedHere = true;
+          const last = Math.max(0, ...Object.keys(merged.pages).map(Number));
+          if (noteData.note && Array.isArray(noteData.note.sheets)) while (noteData.note.sheets.length < last) noteData.note.sheets.push({ bg: "paper" });
+          localImgs = {};
+          for (const list of Object.values(merged.pages)) for (const s of list || []) if (s && s.t === "i" && !noteData.imgs[s.f]) { const u = await C.store.readInkImage(m.id, s.f); if (u) localImgs[s.f] = u; }
+        }
+      }
+      if (localImgs) Object.assign(noteData.imgs, localImgs);
       if (have) await C.store.removePage(m.id);
       const got = await incoming(html, m);
       const meta = { ...m, missing: got.missing };
       if (m.file && m.imageBytes != null) meta.imageBytes = m.imageBytes;
       meta.bytes = await C.store.writePage(m.id, got.html, meta);
+      if (noteData) {
+        meta.bytes += await noteFilesKeep(m.id, noteData);
+        const sha = merged.files[m.id] && merged.files[m.id].note && merged.files[m.id].note["ink.json"];
+        await C.store.writeInkBase(m.id, noteData.ink && sha ? { pages: noteData.theirs || noteData.ink.pages || {}, sha } : null);
+        // Merged with strokes from here: a new version, sent next time.
+        if (mergedHere) meta.editedAt = Date.now();
+      }
       decided.set(m.id, meta);
       fresh.set(m.id, meta);
       if (got.missing) downloads.push(meta);
@@ -1254,6 +1458,12 @@
       if (!f || typeof f.at !== "number" || typeof f.sha !== "string") continue;
       files[id] = { at: f.at, sha: f.sha };
       if (Array.isArray(f.packs) && f.packs.every((s) => typeof s === "string")) files[id].packs = f.packs.slice(0, 64);
+      // A note's data files (notes/<id>/<name>): their shas by name.
+      if (f.note && typeof f.note === "object") {
+        const n = {};
+        for (const [name, sha] of Object.entries(f.note).slice(0, 600)) if (NOTE_FILE.test(name) && typeof sha === "string") n[name] = sha;
+        files[id].note = n;
+      }
     }
     const out = { format: 1, pages, deleted, files };
     const outside = cleanOutside(doc.outside);
@@ -1268,7 +1478,10 @@
   }
 
   C.sync = {
-    merge, mergeTags, mergeMarks, mergeListen, mergeOutside, cleanOutside, outsideOf, outsideOnto, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
+    NOTE_MAX: NOTE_BASE_MAX,
+    // A note whose PDF is over the cap stays on its device (2026-11).
+    tooBig: (p) => !!(p && p.note && (p.noteBytes || 0) > NOTE_BASE_MAX),
+    merge, mergeTags, mergeMarks, mergeInk, mergeListen, mergeOutside, cleanOutside, outsideOf, outsideOnto, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
     share, clean, same, urlKey, sameUrl, peek, poll,
     // What this device last saw on GitHub for a file read from outside.
     outsideKnown(fp) { const b = load(BASE_KEY, null); return (b && b.outside && b.outside[fp] && cleanOutside({ [fp]: b.outside[fp] })[fp]) || null; },
@@ -1284,7 +1497,7 @@
     get progress() { return progress; },
     get links() { return !!(cfg && cfg.links); },
     // What this device syncs (1.47.0): clips, feeds, newsletters, stats.
-    get what() { return { clips: true, feeds: true, newsletters: true, stats: true, ...((cfg && cfg.what) || {}) }; },
+    get what() { return { clips: true, notes: true, feeds: true, newsletters: true, stats: true, ...((cfg && cfg.what) || {}) }; },
     setWhat(k, v) { if (!cfg) return; cfg.what = { ...this.what, [k]: !!v }; keep(CFG_KEY, cfg); },
     get paused() { return !!(cfg && cfg.paused); },
     set paused(v) { if (!cfg) return; if (v) cfg.paused = true; else delete cfg.paused; keep(CFG_KEY, cfg); },
