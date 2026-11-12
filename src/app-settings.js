@@ -1170,7 +1170,7 @@ const updateOut = () => UPD_OUT.includes(upd.phase) && upd.latest;
 const SECTIONS = {
   appearance: { title: "Appearance", build: () => [themeGroup(), autoGroup(), readerThemeGroup(), looksGroup()],
     value: () => themeName(state.theme) },
-  reading: { title: "Reading", build: () => [readingGroup(), fontsGroup(), dictsGroup(), aloudGroup(), listenGroup()],
+  reading: { title: "Reading", build: () => [readingGroup(), fontsGroup(), dictsGroup(), aloudGroup()],
     value: () => { const r = readingPrefs(null); return (FONTS.find((f) => f.value === r.font) || FONTS[0]).label + " · " + r.size + " px"; } },
   library: { title: "Library", build: () => [
     section("Layout", null,
@@ -1212,7 +1212,7 @@ function renderSettings() {
         el("div", { class: "row update-row out" },
           el("span", { class: "row-label accent" }, "Waypage " + upd.latest + " is out"),
           el("button", { class: "btn-small", type: "button", onclick: () => (upd.tag ? openSection("updates") : openNews(false, true)) }, "View"))) : null,
-      el("div", { class: "group" }, row("appearance"), row("reading"), row("library"), C.platform.native ? row("notifications") : null, row("lock")),
+      el("div", { class: "group" }, row("appearance"), row("reading"), row("audiobooks"), row("library"), C.platform.native ? row("notifications") : null, row("lock")),
       el("div", { class: "group" }, row("saving"), row("sync"), C.drive.available ? row("drive") : null, row("storage")),
       el("div", { class: "group" }, row("updates"), row("report"))));
 }

@@ -19,8 +19,9 @@ const L = C.listen;
 const A = C.platform.audio;
 const READ_OPTS = { footnotes: true, edges: false };
 const LISTEN_KEY = "waypage.listen";
-const listenPrefs = () => ({ pack: "", pauses: true, chapters: true, charging: true, ...(load(LISTEN_KEY, {}) || {}) });
-const setListenPref = (k, v) => store(LISTEN_KEY, { ...listenPrefs(), [k]: v });
+const listenPrefs = () => ({ pack: "", pauses: true, chapters: true, charging: true, back: 15, on: 30, rewind: true, awake: false, mix: false, pip: true, ...(load(LISTEN_KEY, {}) || {}) });
+const setListenPref = (k, v) => { store(LISTEN_KEY, { ...listenPrefs(), [k]: v }); if (["mix", "back", "on"].includes(k)) listenOptions(); if (k === "pip") listenFloat(); };
+const listenOptions = () => { const p = listenPrefs(); C.platform.audio.options({ mix: p.mix, back: p.back, on: p.on }); };
 const SPEEDS = [0.8, 1, 1.1, 1.2, 1.3, 1.5, 1.75, 2, 2.5, 3];
 const AHEAD = 10 * 60, CHUNK = 3 * 60;
 
@@ -170,34 +171,37 @@ async function arrived(meta) {
 
 // ---- The audiobook's own page ----
 
-// Its text: the transcript, with the chapters as headings, or the
-// chapters alone while there are no words.
+// Its text: the transcript of the chapter you're in, under its name.
+// Nothing at all where nothing is written yet: no chapter's words
+// standing in for another's.
 function heardWords(a, data) {
   return L.applyFixes(L.timedWords((data && data.pieces) || []), (a.listen && a.listen.fixes) || []);
+}
+const pageCh = {};
+const placeNow = (a) => (lis.key === a.id ? lis.t : placeOf(a));
+function chapterNow(a, t) {
+  const ch = chaptersOf(a);
+  return ch.length > 1 ? Math.max(0, L.chapterAt(ch, t)) : -1;
+}
+function inChapter(a, words, ci) {
+  if (ci < 0) return words;
+  const ch = chaptersOf(a), from = ch[ci].t - 0.3, to = ch[ci + 1] ? ch[ci + 1].t - 0.3 : Infinity;
+  return words.filter((w) => w.t >= from && w.t < to);
 }
 async function writeListenPage(a, data) {
   const out = document.implementation.createHTMLDocument("");
   const prefs = listenPrefs();
-  const words = heardWords(a, data);
-  const chapters = prefs.chapters || !words.length ? chaptersOf(a) : [];
-  let root;
-  if (words.length) root = L.transcriptBody(out, L.paragraphs(words, { chapters, pauses: prefs.pauses, ranges: (data && data.ranges) || [] }));
-  else {
-    root = out.createElement("div");
-    root.className = "co-body";
-    const note = out.createElement("p");
-    note.textContent = [L.lengthText(durOf(a)), chaptersOf(a).length > 1 ? chaptersOf(a).length + " chapters" : ""].filter(Boolean).join(" · ") + ".";
-    root.append(note);
-    if (chaptersOf(a).length > 1) {
-      const list = out.createElement("ol");
-      for (const c of chaptersOf(a)) { const li = out.createElement("li"); li.textContent = (c.title || "Chapter") + " · " + L.timeText(c.t); list.append(li); }
-      root.append(list);
-    }
-  }
+  const all = heardWords(a, data);
+  const ci = chapterNow(a, placeNow(a));
+  pageCh[a.id] = ci;
+  const words = inChapter(a, all, ci);
+  const chapters = !prefs.chapters ? [] : ci < 0 ? chaptersOf(a) : [chaptersOf(a)[ci]];
+  const root = words.length ? L.transcriptBody(out, L.paragraphs(words, { chapters, pauses: prefs.pauses, ranges: (data && data.ranges) || [] })) : out.createElement("div");
+  root.className = "co-body";
   const html = C.save.savedPageHtml(a, root, out);
   const text = C.save.plainText(root);
   a.bytes = (await C.store.writePage(a.id, html, a)) + C.store.bytesOf(text);
-  if (words.length) a.minutes = Math.max(1, Math.round(durOf(a) / 60));
+  if (all.length) a.minutes = Math.max(1, Math.round(durOf(a) / 60));
   await C.store.writeText(a.id, text);
   return html;
 }
@@ -246,8 +250,12 @@ async function listenPlay(a, at) {
 function listenToggle() {
   const a = listenPage();
   if (lis.state === "playing") A.pause();
-  else if (lis.state === "paused" && a) A.resume();
-  else listenPlay(audioFor(state.open) || a);
+  else if (lis.state === "paused" && a) {
+    // Back a little after a pause, more after a long one.
+    const away = lis.pausedAt ? Date.now() - lis.pausedAt : 0;
+    if (listenPrefs().rewind && away > 10000) listenSeek(Math.max(0, lis.t - (away > 10 * 60000 ? 10 : 3)));
+    A.resume();
+  } else listenPlay(audioFor(state.open) || a);
 }
 function listenStop() {
   if (!lis.key) return;
@@ -297,11 +305,31 @@ A.on((s) => {
   if (s.state === "ended") { lis.t = durOf(a); a.finished = true; }
   C.stats.aloud(lis.state === "playing", a.id);
   if (s.state === "stopped") { Object.assign(lis, { key: "", state: "stopped" }); C.reader.say(-1); }
+  if (was !== lis.state) {
+    lis.pausedAt = lis.state === "paused" ? Date.now() : 0;
+    listenFloat();
+    if (listenPrefs().awake) speech.keepScreen(lis.state === "playing");
+  }
   saveListenPlace(was !== lis.state);
   paintListen();
   readAlong(false);
   if (lis.state === "playing" && Date.now() - lis.seen > 20000) { lis.seen = Date.now(); writeAhead(); }
 });
+// The small window outside the app while an audiobook plays (Android),
+// like Narrate's: its name, the chapter, and the paragraph being said.
+function listenFloat() {
+  A.pip(listening() && listenPrefs().pip, lis.state !== "paused");
+  if (document.body.classList.contains("pip")) paintPip();
+}
+function listenPipView() {
+  const a = listenPage();
+  if (!a || !listening()) return null;
+  const mine = state.open && shownFor(a) === state.open;
+  const b = mine && lis.sync && lis.said >= 0 ? lis.sync.b[lis.said] : -1;
+  const text = b >= 0 ? C.reader.readable(READ_OPTS)[b] || "" : "";
+  return { title: a.title, over: chapterName(a, lis.t) || "Audiobook", text, paused: lis.state === "paused" };
+}
+listenOptions();
 A.onSleep((at) => { lis.sleepAt = at; paintListen(); });
 // Playing when the app opened (the phone kept it going).
 A.state().then((s) => { if (s && s.key && (s.state === "playing" || s.state === "paused") && !lis.key) { lis.key = s.key; lis.state = s.state; lis.sleepAt = s.sleep || 0; } });
@@ -327,7 +355,10 @@ function paintListen() {
   const mine = open && (a ? shownFor(a) === open : !!audioFor(open));
   const here = audioFor(open);
   if (here && isAudiobook(open) && !open.audio.overlay) $("readerAloud").hidden = true;
+  // No words on the page yet: nothing to highlight, draw on or translate.
+  if (audioWordless(open)) for (const id of ["readerMarks", "readerTranslate", "readerInk"]) $(id).hidden = true;
   const show = !!here;
+  if (here && !here.audio.overlay && modeOf(here) === "transcript" && state.open === here && chapterNow(here, placeNow(here)) !== pageCh[here.id]) turnPage(here);
   $("readerChapters").hidden = !here || chaptersOf(playerBook()).length < 2;
   const box = $("listenPlayer");
   const was = box.hidden;
@@ -347,6 +378,11 @@ function paintListen() {
     $("listenAt").textContent = L.timeText(t - from);
     $("listenLeft").textContent = "−" + L.timeText(Math.max(0, to - t));
     $("listenSpeed").textContent = (Math.round(speedOf(b) * 100) / 100) + "×";
+    const { back, on } = listenPrefs();
+    $("listenBack").lastChild.textContent = String(back);
+    $("listenBack").setAttribute("aria-label", "Back " + back + " seconds");
+    $("listenOn").lastChild.textContent = String(on);
+    $("listenOn").setAttribute("aria-label", "Forward " + on + " seconds");
     const playing = !!(a && mine && lis.state === "playing");
     $("listenPlay").classList.toggle("paused", !playing);
     $("listenPlay").setAttribute("aria-label", playing ? "Pause" : "Play");
@@ -367,16 +403,33 @@ function paintListen() {
     placeAloudBar(bar);
   }
 }
+// Into another chapter: the page becomes that chapter's.
+let turning = false;
+async function turnPage(a) {
+  if (turning) return;
+  turning = true;
+  try {
+    const html = await writeListenPage(a, await loadListenData(a));
+    lis.sync = null;
+    if (state.open === a) await show(a, html);
+  } finally { turning = false; }
+}
+function audioWordless(p) {
+  if (!isAudiobook(p) || state.open !== p) return false;
+  const d = $("readerFrame").contentDocument, body = d && d.querySelector(".co-body");
+  return !!body && !body.textContent.trim();
+}
 function listenNoteFor(a) {
   const m = modeOf(a);
   if (a.audio.overlay) return "Read along with the book's own narration";
   if (m === "listen") return "Tap ⋯ to read along";
   if (!A.canTranscribe) return "Read along needs the Android app";
+  if (lis.job && lis.job.id === a.id) return "Writing the transcript…";
   const data = lis.dataFor === a.id ? lis.data : null;
   const upto = data && data.ranges && data.ranges.length ? writtenTo(data, lis.t) : 0;
   if (m === "book" && !bookOf(a)) return "The book isn't in your library";
   if (!readyPack()) return "Download a transcript model in Settings";
-  return upto > lis.t + 5 ? "Written to " + L.timeText(upto) + (m === "book" ? ", matched to the book" : "") : lis.writing ? "Writing the transcript…" : "Tap a sentence to play from it";
+  return upto > lis.t + 5 ? "Written to " + L.timeText(upto) + (m === "book" ? ", matched to the book" : "") : lis.writing ? "Writing the transcript…" : "";
 }
 // How far the transcript goes on unbroken from `t`.
 function writtenTo(data, t) {
@@ -389,14 +442,14 @@ function writtenTo(data, t) {
   // Another book playing: this one's play button switches to it.
   const mine = () => lis.key && playerBook() === listenPage();
   $("listenPlay").addEventListener("click", () => (mine() || !lis.key ? listenToggle() : listenPlay(playerBook())));
-  $("listenBack").addEventListener("click", () => (mine() ? listenSkip(-15) : null));
-  $("listenOn").addEventListener("click", () => (mine() ? listenSkip(30) : null));
+  $("listenBack").addEventListener("click", () => (mine() ? listenSkip(-listenPrefs().back) : null));
+  $("listenOn").addEventListener("click", () => (mine() ? listenSkip(listenPrefs().on) : null));
   $("listenSpeed").addEventListener("click", listenSpeed);
   $("listenSleep").addEventListener("click", () => toggleSheet("listenSleep"));
   $("listenChap").addEventListener("click", () => (chaptersOf(playerBook()).length > 1 ? toggleSheet("listenChapters") : toggleSheet("page")));
   $("readerChapters").addEventListener("click", () => toggleSheet("listenChapters"));
   $("listenBarPlay").addEventListener("click", listenToggle);
-  $("listenBarBack").addEventListener("click", () => listenSkip(-15));
+  $("listenBarBack").addEventListener("click", () => listenSkip(-listenPrefs().back));
   $("listenBarStop").addEventListener("click", listenStop);
   $("listenBarOpen").addEventListener("click", () => { const a = listenPage(); if (a) openPage(shownFor(a).id); });
   // Dragging along the track moves within the chapter.
@@ -414,14 +467,19 @@ function writtenTo(data, t) {
   };
   track.addEventListener("pointerdown", (e) => { track.setPointerCapture(e.pointerId); seekTo(e.clientX); });
   track.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowRight" || e.key === "ArrowLeft") { e.preventDefault(); listenSkip((e.key === "ArrowRight") === (getComputedStyle(track).direction !== "rtl") ? 15 : -15); }
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") { e.preventDefault(); listenSkip((e.key === "ArrowRight") === (getComputedStyle(track).direction !== "rtl") ? listenPrefs().on : -listenPrefs().back); }
   });
   addEventListener("resize", () => { if (!$("listenBar").hidden) placeAloudBar($("listenBar")); });
 }
 
 // ---- Reading along ----
 
-const listenData = async (a) => (await C.store.readListen(a.id)) || { pieces: [], ranges: [] };
+const listenData = async (a) => {
+  const data = (await C.store.readListen(a.id)) || { pieces: [], ranges: [] };
+  const mended = L.mendTimes(data.pieces || [], a.audio.parts);
+  if (mended.some((x, i) => x !== data.pieces[i])) { data.pieces = mended; data.sync = null; data.syncKey = ""; await C.store.writeListen(a.id, data); }
+  return data;
+};
 async function loadListenData(a) {
   if (lis.dataFor === a.id && lis.data) return lis.data;
   lis.data = await listenData(a);
@@ -448,7 +506,8 @@ let syncing = null;
 async function syncFor(a, page) {
   const data = await loadListenData(a);
   const fixes = JSON.stringify((a.listen && a.listen.fixes) || []);
-  const key = page.id + ":" + (page.editedAt || page.savedAt || 0) + ":" + (data.pieces || []).length + ":" + fixes.length + ":" + listenPrefs().pauses + listenPrefs().chapters;
+  const ci = page === a ? pageCh[a.id] : undefined;
+  const key = page.id + ":" + (ci == null ? "" : "c" + ci + ":") + (page.editedAt || page.savedAt || 0) + ":" + (data.pieces || []).length + ":" + fixes.length + ":" + listenPrefs().pauses + listenPrefs().chapters;
   if (lis.syncFor === key && lis.sync) return lis.sync;
   if (data.syncKey === key && data.sync) { lis.sync = data.sync; lis.syncFor = key; return lis.sync; }
   if (syncing && syncing.key === key) return syncing.run;
@@ -459,7 +518,7 @@ async function syncFor(a, page) {
       C.reader.readable(READ_OPTS);
       sync = L.overlaySync(a.audio.pars || [], a.audio.parts, (id) => C.reader.spotOfId(id));
     } else {
-      const words = heardWords(a, data);
+      const words = ci == null ? heardWords(a, data) : inChapter(a, heardWords(a, data), ci);
       if (!words.length) return null;
       const html = page === a ? await C.store.readPage(a.id) : page.link ? await C.files.openLinked(page) : await C.store.readPage(page.id);
       const texts = C.reader.readableIn(html, READ_OPTS);
@@ -500,6 +559,7 @@ async function readAlong(force) {
   if (C.reader.blockCount() === 0) C.reader.readable(READ_OPTS);
   if (i < 0) { C.reader.say(-1); maybeReshow(a); return; }
   C.reader.say(s.b[i], s.o[i], s.o[i] + s.l[i]);
+  if (s.b[i] !== lis.pipBlock) { lis.pipBlock = s.b[i]; if (document.body.classList.contains("pip")) paintPip(); }
 }
 // A transcript that's grown past what's shown is shown again, now and
 // then, when you're at its end.
@@ -544,6 +604,7 @@ const wantsWords = (a) => !!a && !a.audio.overlay && (modeOf(a) === "transcript"
 // next AHEAD seconds are.
 function nextGap(a, data, t, ahead) {
   const end = Math.min(durOf(a), t + ahead);
+  if (ahead === Infinity) t = 0;
   let at = t;
   for (const [x, y] of [...(data.ranges || [])].sort((m, n) => m[0] - n[0])) if (x <= at + 1 && y > at) at = y;
   return at < end - 1 ? at : null;
@@ -559,32 +620,46 @@ let aheadTimer = 0;
 async function writeAhead() {
   clearTimeout(aheadTimer);
   if (lis.writing || !A.canTranscribe) return;
-  const playing = listenPage();
-  // The one playing, else (charging, with the switch on) the one heard last.
-  let a = wantsWords(playing) ? playing : null;
-  let whole = false;
   if (!packs) await listenModels();
-  if (!a && listenPrefs().charging && packs && packs.charging) {
-    a = state.pages.filter((p) => isAudiobook(p) && wantsWords(p)).sort((x, y) => ((y.listen && y.listen.tAt) || 0) - ((x.listen && x.listen.tAt) || 0))[0] || null;
-    whole = true;
-  }
   const pack = readyPack();
-  if (!a || !pack) return;
-  const data = a.id === lis.dataFor ? lis.data : await listenData(a);
+  if (!pack) return;
+  // The one playing, a little ahead; then one asked to be written whole
+  // (Write the rest now); then, charging with the switch on, the one
+  // heard last.
+  const playing = listenPage();
+  let a = null, data = null, from = null;
+  const tryBook = async (b, t, ahead) => {
+    if (!b || a) return;
+    const d = b.id === lis.dataFor ? lis.data : await listenData(b);
+    const f = nextGap(b, d, Math.max(0, t), ahead);
+    if (f != null) { a = b; data = d; from = f; }
+  };
+  if (wantsWords(playing)) await tryBook(playing, lis.t - 2, AHEAD);
+  const whole = lis.wholeFor && state.pages.find((p) => p.id === lis.wholeFor && wantsWords(p));
+  if (lis.wholeFor && !a) {
+    await tryBook(whole, 0, Infinity);
+    if (!a) {
+      if (whole) toast("The transcript of “" + whole.title + "” is all written.");
+      lis.wholeFor = "";
+    }
+  }
+  if (!a && listenPrefs().charging && packs && packs.charging) {
+    const last = state.pages.filter((p) => isAudiobook(p) && wantsWords(p)).sort((x, y) => ((y.listen && y.listen.tAt) || 0) - ((x.listen && x.listen.tAt) || 0))[0];
+    await tryBook(last, 0, Infinity);
+  }
+  if (!a) return;
   if (data.pack && data.pack !== pack.id && !data.pieces.length) data.pack = pack.id;
-  const t = whole && lis.key !== a.id ? 0 : a.id === lis.key ? lis.t : placeOf(a);
-  const from = nextGap(a, data, Math.max(0, t - 2), whole && packs.charging ? durOf(a) : AHEAD);
-  if (from == null) return;
   const { part, pos } = L.partAt(a.audio.parts, from);
   const partStart = L.startOf(a.audio.parts, part), partEnd = partStart + (a.audio.parts[part].dur || 0);
   const to = Math.min(partEnd, from + CHUNK);
-  if (to - from < 0.5) { data.ranges = addRange(data.ranges || [], from, to); return; }
+  if (to - from < 0.5) { data.ranges = addRange(data.ranges || [], from, to); aheadTimer = setTimeout(writeAhead, 100); return; }
   const p = a.audio.parts[part];
   lis.writing = true;
+  lis.job = { id: a.id, from, to };
   paintListen();
   try {
     const res = await A.transcribe({ uri: a.audio.overlay ? a.link : p.ref, from: Math.round(pos * 1000), to: Math.round((pos + (to - from)) * 1000), pack: pack.id, lang: (a.lang || "").split("-")[0] });
-    const pieces = (res.pieces || []).map((x) => ({ ...x, t0: x.t0 + partStart, t1: x.t1 + partStart }));
+    const pieces = L.onBookClock(res.pieces || [], partStart);
     data.pieces = (data.pieces || []).filter((x) => x.t1 <= from + 0.05 || x.t0 >= to - 0.05).concat(pieces).sort((x, y) => x.t0 - y.t0);
     data.ranges = addRange(data.ranges || [], from, to);
     data.pack = pack.id;
@@ -600,6 +675,7 @@ async function writeAhead() {
     if (why !== "stopped" && why !== "model") aheadTimer = setTimeout(writeAhead, why === "busy" ? 5000 : 60000);
   } finally {
     lis.writing = false;
+    lis.job = null;
     paintListen();
   }
 }
@@ -607,6 +683,20 @@ async function writeAhead() {
 addEventListener("online", () => setTimeout(writeAhead, 5000));
 setTimeout(() => { if (A.canTranscribe) listenModels().then(() => writeAhead()); }, 15000);
 setInterval(() => { if (A.canTranscribe && !lis.writing && lis.state !== "playing") listenModels().then(() => writeAhead()); }, 5 * 60 * 1000);
+
+// Write the rest now: every part of the book not written yet, from the
+// start, until it's all there (or Stop).
+function writeRest(a, on) {
+  lis.wholeFor = on ? a.id : "";
+  if (on) { if (!readyPack()) { toast("Download a transcript model in Settings › Audiobooks first.", "Open", () => openSettings(false, "audiobooks")); lis.wholeFor = ""; return; } writeAhead(); }
+  else if (lis.job && lis.job.id === a.id && lis.key !== a.id) C.platform.audio.stopTranscribing();
+}
+function writeRestButton(a, after) {
+  const on = lis.wholeFor === a.id;
+  return el("button", { class: "row", type: "button", onclick: () => { writeRest(a, !on); if (after) after(); } },
+    el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, on ? "Stop writing the rest" : "Write the rest now"),
+      el("span", { class: "choice-note" }, on ? "Back to writing a little ahead of where you are" : "Every part not written yet, while the app is open")));
+}
 
 // ---- The audiobook's sheet in the reader ----
 
@@ -623,45 +713,57 @@ function listenMode(a, mode, book) {
 function listenAlongRows(p) {
   const a = audioFor(p);
   if (!a || a.audio.overlay) return null;
-  const mode = modeOf(a);
-  const close = () => closeSheet();
-  const pick = (label, note, on, act, disabled) => el("button", { class: "row", type: "button", "aria-pressed": String(!!on), disabled: disabled ? "" : null, onclick: act },
-    el("span", { class: "choice-text" }, el("span", { class: "choice-label" + (on ? " accent" : "") }, label), note ? el("span", { class: "choice-note" }, note) : null),
-    on ? el("span", { class: "row-value accent" }, "✓") : null);
-  const canWords = A.canTranscribe;
-  const head = el("h3", { class: "overline" }, "Read along with");
-  if (!canWords) return [head, el("p", { class: "meta" }, "Reading along with a book or a transcript is in the Android app, which writes the transcript on the phone.")];
-  const book = bookOf(a);
-  const data = lis.dataFor === a.id ? lis.data : null;
-  return [head, el("div", { class: "group" },
-    pick("Find the book in Discover", "Searches Discover's book sites for “" + a.title + "”.", false, () => { closeSheet(true); openSheet("listenFind"); }),
-    pick(book && mode === "book" ? "The book: " + book.title : "A book in your Library", "An EPUB or other book you already have.", mode === "book", () => { closeSheet(true); openSheet("listenBook"); }),
-    pick("A transcript", "Written on this phone from the sound, a little ahead of where you are.", mode === "transcript", async () => {
-      listenMode(a, "transcript");
-      close();
-      await writeListenPage(a, await loadListenData(a));
-      if (state.open && state.open !== a) openPage(a.id);
-      else if (state.open === a) show(a, await C.store.readPage(a.id));
-      if (!readyPack()) toast("Download a transcript model in Settings › Reading › Transcripts.", "Open", () => openSettings(false, "transcripts"));
-      writeAhead();
-    }),
-    pick("Just listen", "The chapters, and no words.", mode === "listen", async () => {
-      listenMode(a, "listen");
-      close();
-      await writeListenPage(a, null);
-      if (state.open !== a) openPage(a.id); else show(a, await C.store.readPage(a.id));
-    }),
-    data && data.pieces && data.pieces.length ? el("button", { class: "row", type: "button", onclick: async () => {
-      if (!confirm("Write the transcript again from the start? Your fixes stay.")) return;
-      await C.platform.audio.stopTranscribing();
-      data.pieces = []; data.ranges = []; data.sync = null; data.syncKey = "";
-      await C.store.writeListen(a.id, data);
-      lis.sync = null;
-      if (modeOf(a) === "transcript") { await writeListenPage(a, data); if (state.open === a) show(a, await C.store.readPage(a.id)); }
-      close();
-      writeAhead();
-    } }, el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, "Write the transcript again"),
-      el("span", { class: "choice-note" }, "With the model picked in Settings › Transcripts, from where you are."))) : null)];
+  const head = el("h3", { class: "overline" }, "Read along");
+  if (!A.canTranscribe) return [head, el("p", { class: "meta" }, "Reading along with a book or a transcript is in the Android app, which writes the transcript on the phone.")];
+  const row = (label, note, act, accent) => el("button", { class: "row", type: "button", onclick: act },
+    el("span", { class: "choice-text" }, el("span", { class: "choice-label" + (accent ? " accent" : "") }, label), note ? el("span", { class: "choice-note" }, note) : null));
+  // The drop-down picks what it reads along with; under it, only what
+  // that one needs. The book waits to be found before it's picked.
+  let view = modeOf(a);
+  const box = el("div", { class: "listen-along" });
+  const reshow = async () => {
+    await writeListenPage(a, modeOf(a) === "transcript" ? await loadListenData(a) : null);
+    if (state.open === a) show(a, await C.store.readPage(a.id));
+  };
+  const draw = () => {
+    const mode = modeOf(a), book = bookOf(a);
+    const data = lis.dataFor === a.id ? lis.data : null;
+    const pick = pickRow({ label: "Read along with", options: [
+      { value: "transcript", label: "A transcript", note: "Written on this phone from the sound" },
+      { value: "book", label: "The book", note: book ? book.title : "Find it below" },
+      { value: "listen", label: "Nothing", note: "Just listen, with the chapters" }],
+      get: () => view,
+      set: async (v) => {
+        view = v;
+        if (v === "transcript" && mode !== "transcript") {
+          listenMode(a, "transcript");
+          if (!readyPack()) toast("Download a transcript model in Settings › Audiobooks.", "Open", () => openSettings(false, "audiobooks"));
+          writeAhead();
+          reshow();
+        } else if (v === "listen" && mode !== "listen") { listenMode(a, "listen"); reshow(); }
+        else if (v === "book" && book && mode !== "book") { closeSheet(true); pairWith(a, book); return; }
+        draw();
+      } });
+    const transcriptRows = () => [
+      writeRestButton(a, () => closeSheet()),
+      data && data.pieces && data.pieces.length ? row("Write the transcript again", "From the start, with the model picked in Settings › Audiobooks", async () => {
+        if (!confirm("Write the transcript again from the start? Your fixes stay.")) return;
+        await C.platform.audio.stopTranscribing();
+        data.pieces = []; data.ranges = []; data.sync = null; data.syncKey = "";
+        await C.store.writeListen(a.id, data);
+        lis.sync = null;
+        if (modeOf(a) === "transcript") await reshow();
+        closeSheet();
+        writeAhead();
+      }, true) : null];
+    const findRows = () => [
+      row(book ? "Another book in Discover" : "Find it in Discover", "Searches Discover's book sites for “" + a.title + "”", () => { closeSheet(true); openSheet("listenFind"); }, true),
+      row(book ? "Another book in your Library" : "Pick it from your Library", "An EPUB or other book you already have", () => { closeSheet(true); openSheet("listenBook"); }, true)];
+    box.replaceChildren(el("div", { class: "group" }, pick,
+      ...(view === "transcript" ? transcriptRows() : view === "book" ? [...findRows(), ...(mode === "book" ? transcriptRows() : [])] : [])));
+  };
+  draw();
+  return [head, box];
 }
 
 function listenSleepSheet() {
@@ -687,6 +789,23 @@ function listenSleepSheet() {
       el("button", { class: "chip" + ((v === "" && !lis.sleepAt) ? " on" : ""), type: "button", onclick: () => setSleep(v) }, label))));
 }
 
+// A chapter's transcript, in a few words: written, being written, or not.
+function chapterState(a, data, i) {
+  const ch = chaptersOf(a);
+  const from = ch.length ? ch[i].t : 0, to = ch[i + 1] ? ch[i + 1].t : durOf(a);
+  if (lis.job && lis.job.id === a.id && lis.job.from >= from - 0.5 && lis.job.from < to) return { now: true, text: "Writing now" };
+  const f = L.covered(data && data.ranges, from, to);
+  return f >= 0.98 ? { done: true, text: "Written" } : f > 0.01 ? { text: Math.floor(f * 100) + "% written" } : { text: "Not written yet" };
+}
+function transcriptLine(a, data) {
+  const ch = chaptersOf(a);
+  const n = ch.length > 1 ? ch.length : 1;
+  let done = 0;
+  for (let i = 0; i < n; i++) if (chapterState(a, data, i).done) done++;
+  const f = Math.round(L.covered(data && data.ranges, 0, durOf(a)) * 100);
+  return n > 1 ? "Transcript: " + done + " of " + n + " chapters written" : "Transcript: " + f + "% written";
+}
+
 // The chapters, from the top left like a collection's clips.
 function listenChaptersSheet() {
   const a = playerBook();
@@ -700,7 +819,11 @@ function listenChaptersSheet() {
       el("span", { class: "folder-n", "aria-hidden": "true" }, String(i + 1)),
       el("span", { class: "choice-text" },
         el("span", { class: "row-label", dir: "auto" }, c.title || "Chapter " + (i + 1)),
-        el("span", { class: "choice-note" }, L.timeText(c.t) + " · " + L.lengthText(next - c.t))));
+        el("span", { class: "choice-note", "data-ch": String(i) }, L.timeText(c.t) + " · " + L.lengthText(next - c.t)),
+        wantsWords(a) && A.canTranscribe ? el("span", { class: "listen-ch-tr" },
+          el("span", null, "Transcript"),
+          el("span", { class: "listen-ch-bar", "aria-hidden": "true" }, el("span", { class: "listen-ch-fill" })),
+          el("span", { class: "listen-ch-pc" })) : null));
     if (i === now) b.setAttribute("aria-current", "true");
     return el("li", null, b);
   });
@@ -709,6 +832,34 @@ function listenChaptersSheet() {
     el("p", { class: "meta" }, ["Audiobook", L.lengthText(durOf(a)), ch.length + " chapters", a.audio.folder ? a.audio.parts.length + " files" : ""].filter(Boolean).join(" · ")),
     el("ol", { class: "group contents-list" }, ...rows));
   requestAnimationFrame(() => centreIn(nav.querySelector("[aria-current]")));
+  // Each chapter's transcript, kept up while the sheet is open.
+  if (wantsWords(a) && A.canTranscribe) {
+    const head = el("p", { class: "meta" });
+    nav.querySelector(".meta").after(head);
+    let timer = 0;
+    const fill = async () => {
+      clearTimeout(timer);
+      if (!nav.isConnected && nav.dataset.drawn) return;
+      nav.dataset.drawn = "1";
+      const data = await loadListenData(a);
+      head.textContent = transcriptLine(a, data);
+      nav.querySelectorAll("[data-ch]").forEach((n) => {
+        const i = Number(n.dataset.ch), c = ch[i], next = ch[i + 1] ? ch[i + 1].t : durOf(a), st = chapterState(a, data, i);
+        n.textContent = L.timeText(c.t) + " · " + L.lengthText(next - c.t) + (st.now ? " · " + st.text : "");
+        n.classList.toggle("accent", !!st.now);
+        // Labelled, so it doesn't read as how far you've listened.
+        const tr = n.closest(".row").querySelector(".listen-ch-tr");
+        if (tr) {
+          const f = Math.min(1, L.covered(data.ranges, c.t, next));
+          tr.classList.toggle("now", !!st.now);
+          tr.querySelector(".listen-ch-fill").style.width = f * 100 + "%";
+          tr.querySelector(".listen-ch-pc").textContent = (st.done ? 100 : Math.floor(f * 100)) + "%";
+        }
+      });
+      timer = setTimeout(fill, 2000);
+    };
+    fill();
+  }
   return nav;
 }
 
@@ -730,7 +881,7 @@ function listenBookSheet() {
 async function pairWith(a, book) {
   listenMode(a, "book", book);
   closeSheet(true);
-  if (!readyPack()) toast("Download a transcript model in Settings › Reading › Transcripts to match the book.", "Open", () => openSettings(false, "transcripts"));
+  if (!readyPack()) toast("Download a transcript model in Settings › Audiobooks to match the book.", "Open", () => openSettings(false, "audiobooks"));
   await openPage(book.id);
   writeAhead();
 }
@@ -888,17 +1039,26 @@ function listenBadge(p, thumb) {
   return box;
 }
 
-// ---- Settings › Reading › Transcripts ----
+// ---- Settings › Audiobooks ----
 
-function listenGroup() {
-  return section("Audiobooks", null, el("div", { class: "group" },
-    A.canTranscribe ? navRow("Transcripts", "For reading along: the model, and when it writes", () => openSection("transcripts", false, true)) : null,
-    el("p", { class: "footnote" }, "Open an M4B or MP3 with Open a file" + (C.platform.files.canPickFolder ? ", or a folder of them with Open an audiobook folder" : "") + ". It's played from where it is, and shows under Files.")));
+// Listening: Narrate's settings, as they apply to an audiobook.
+function listeningGroup() {
+  const prefs = listenPrefs();
+  const secs = (list) => list.map((v) => ({ value: String(v), label: v + " seconds" }));
+  return section("Listening", null, el("div", { class: "group" },
+    pickRow({ label: "Back", options: secs([5, 10, 15, 30, 60]), get: () => String(listenPrefs().back), set: (v) => { setListenPref("back", Number(v)); paintListen(); } }),
+    pickRow({ label: "Forward", options: secs([10, 15, 30, 45, 60]), get: () => String(listenPrefs().on), set: (v) => { setListenPref("on", Number(v)); paintListen(); } }),
+    switchRow("Back a little after a pause", "3 seconds, or 10 after a long one, so you pick up the sentence", prefs.rewind, (on) => setListenPref("rewind", on)),
+    switchRow("Keep the screen on", "While it plays, so you can read along", prefs.awake, (on) => { setListenPref("awake", on); speech.keepScreen(on && lis.state === "playing"); }),
+    A.native ? switchRow("Allow mixing", "Music or a podcast in another app keeps playing under the book. Off: they pause while it plays", prefs.mix, (on) => setListenPref("mix", on)) : null,
+    A.native ? switchRow("Small window outside the app", "Going home, the book stays in a window you can move, with back, play and forward", prefs.pip, (on) => setListenPref("pip", on)) : null));
 }
-function transcriptSections() {
+function audiobookSections() {
+  const adding = el("p", { class: "footnote" }, "Open an M4B or MP3 with Open a file" + (C.platform.files.canPickFolder ? ", or a folder of them with Open an audiobook folder" : "") + ". It's played from where it is, and shows under Files.");
+  if (!A.canTranscribe) return [listeningGroup(), adding, el("p", { class: "footnote" }, "Reading along with a book or a transcript is in the Android app.")];
   const slot = el("div", { class: "kokoro-slot" }, el("p", { class: "footnote" }, "Looking…"));
   fillTranscripts(slot);
-  return [slot];
+  return [listeningGroup(), slot, adding];
 }
 async function fillTranscripts(slot) {
   const s = await listenModels();
@@ -929,7 +1089,7 @@ async function fillTranscripts(slot) {
   });
   const prefs = listenPrefs();
   slot.replaceChildren(
-    section("Quality", "Each one is a download, made on Wi-Fi. Fast writes well ahead and is easy on the battery. Better has punctuation and capitals and knows 25 European languages. Most languages is the slowest and needs a recent phone.", el("div", { class: "group" }, ...rows)),
+    section("Transcripts", "Each one is a download, made on Wi-Fi. Fast writes well ahead and is easy on the battery. Better has punctuation and capitals and knows 25 European languages. Most languages is the slowest and needs a recent phone.", el("div", { class: "group" }, ...rows)),
     section("Make it better", null, el("div", { class: "group" },
       switchRow("Write ahead while charging", "The rest of the book gets written while the phone charges", prefs.charging, (on) => { setListenPref("charging", on); if (on) writeAhead(); }),
       switchRow("Paragraphs from pauses", "A long pause from the narrator starts a new paragraph", prefs.pauses, (on) => setListenPref("pauses", on)),
@@ -937,4 +1097,4 @@ async function fillTranscripts(slot) {
     el("p", { class: "footnote" }, "Transcripts stay on this phone, written while you listen and never when the battery is low or the phone is hot. To fix a word heard wrong, select it in the transcript and tap the pen: it's fixed everywhere it's heard, and the fix syncs."));
   if (busy) setTimeout(() => { if (slot.isConnected) again(); }, 1000);
 }
-SECTIONS.transcripts = { title: "Transcripts", build: transcriptSections, value: () => "", parent: "reading" };
+SECTIONS.audiobooks = { title: "Audiobooks", build: audiobookSections, value: () => (readyPack() || {}).title || "" };
