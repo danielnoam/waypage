@@ -241,6 +241,22 @@
     return { part: 0, pos: 0 };
   }
   const startOf = (parts, i) => parts.slice(0, i).reduce((s, p) => s + (p.dur || 0), 0);
+  // A stretch of one file, heard: its times moved on to the book's clock.
+  const onBookClock = (pieces, start) => pieces.map((x) => ({ ...x, t0: x.t0 + start, t1: x.t1 + start, ...(x.times ? { times: x.times.map((t) => t + start) } : {}) }));
+  // Transcripts written before onBookClock (12 Nov 2026) left a later
+  // file's word times on that file's own clock, under chapter 1's.
+  const mendTimes = (pieces, parts) => pieces.map((x) => {
+    if (!x.times || !x.times.length || x.times[0] >= x.t0 - 1) return x;
+    const start = startOf(parts, partAt(parts, x.t0).part);
+    return start > 0 ? { ...x, times: x.times.map((t) => t + start) } : x;
+  });
+  // How much of from..to the written ranges cover, 0 to 1.
+  function covered(ranges, from, to) {
+    if (!(to > from)) return 0;
+    let n = 0;
+    for (const [a, b] of ranges || []) n += Math.max(0, Math.min(b, to) - Math.max(a, from));
+    return Math.min(1, n / (to - from));
+  }
   const chapterAt = (chapters, t) => { let i = -1; for (let k = 0; k < chapters.length; k++) if (chapters[k].t <= t + 0.25) i = k; return i; };
 
   // ---- Transcripts ----
@@ -592,7 +608,7 @@
     return m >= 60 ? Math.floor(m / 60) + " h" + (m % 60 ? " " + (m % 60) + " min" : "") : m + " min";
   };
 
-  C.listen = { EXTS, MIMES, extOf, isAudioName, sniff, tags, id3, mp4Chapters, inOrder, baseName, partAt, startOf, chapterAt,
+  C.listen = { EXTS, MIMES, extOf, isAudioName, sniff, tags, id3, mp4Chapters, inOrder, baseName, partAt, startOf, onBookClock, mendTimes, covered, chapterAt,
     timedWords, applyFixes, countHeard, norm, paragraphs, transcriptBody, bookWords, align, syncOf, matched, wordAt, timeAt,
     clock, overlays, overlaySync, timeText, lengthText };
 })();
