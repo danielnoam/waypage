@@ -4483,7 +4483,13 @@ function zipOf(files) {
       await q.evaluate((i) => { openPage(i); }, id);
       await until(q, () => !document.getElementById("listenPlayer").hidden);
       // "Added" sits over the track for a moment, and the reader slides in.
-      await q.evaluate(() => { document.getElementById("toast").hidden = true; });
+      // and a new file's first sheet can come up over it.
+      await until(q, () => {
+        document.getElementById("toast").hidden = true;
+        if (state.sheet) closeSheet(true);
+        const r = document.getElementById("listenTrack").getBoundingClientRect();
+        return !!document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2).closest("#listenTrack");
+      });
       let r = null;
       for (let was = null, i = 0; i < 20; was = r, i++) {
         await q.waitForTimeout(200);
