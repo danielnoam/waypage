@@ -24,7 +24,9 @@ function syncSoon(ms = runs.size ? 20000 : 4000) {
 // app sends it even when no sync was due, and one made while a sync ran
 // goes in another right after it.
 let unsynced = false;
-const syncsPage = (p) => (p.note ? C.sync.what.notes : C.sync.what.clips);
+const syncsPage = (p) => (p.note ? C.sync.what.notes && !C.sync.tooBig(p) : C.sync.what.clips);
+// Said on a note's card, in its ⋯ and in Sync (2026-11).
+const tooBigLine = (p) => (C.sync.on && C.sync.tooBig(p) ? "Not synced: " + formatSize(p.noteBytes) + ", over the " + formatSize(C.sync.NOTE_MAX) + " limit" : "");
 async function syncNow(quiet = true) {
   if (!C.sync.on || C.sync.paused) return null;
   if (!navigator.onLine && quiet) return null;
@@ -406,7 +408,6 @@ function disconnectSync() {
   syncQueue = [];
   keepQueue();
   C.sync.disconnect();
-  if (C.drive.on) C.drive.setWhat("notes", false);
   renderSection();
   paintDownloads();
   toast("Disconnected. Your clips stay here and on GitHub.");
@@ -426,16 +427,17 @@ function syncsList() {
     el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!what[key],
       onchange: (e) => {
         C.sync.setWhat(key, e.target.checked);
-        if (key === "notes" && !e.target.checked && C.drive.on) C.drive.setWhat("notes", false);
         renderSection(); syncSoon(500);
       } }));
-  return section("What this device syncs", "Clips go with their highlights, tags, collections, favourites and where you were. With Clips too, each clip's text goes up, so another device gets it as you saved it even if the site changes; pictures come from the clip's site, or from GitHub when it has none, up to 100 MB a clip. With Links only, clips new to a device are saved again from their links, so one that changed or went away comes back different or not at all. A part turned off here is left as it is on GitHub for your other devices. Notes go up whole, with their drawings, typed text, pictures and the PDF one was made from (up to 50 MB); the copy saved last wins. Files read from outside, watched folders and settings don't sync."
+  return section("What this device syncs", "Clips go with their highlights, tags, collections, favourites and where you were. With Clips too, each clip's text goes up, so another device gets it as you saved it even if the site changes; pictures come from the clip's site, or from GitHub when it has none, up to 100 MB a clip. With Links only, clips new to a device are saved again from their links, so one that changed or went away comes back different or not at all. A part turned off here is left as it is on GitHub for your other devices. Notes go up whole, with their drawings, typed text, pictures and the PDF one was made from (up to 50 MB); what two devices drew on one note is kept from both. Files read from outside, watched folders and settings don't sync, but the highlights and drawings on them do, and show on another device that has the same file."
       + (C.platform.knowsConnection ? " On mobile data, Places and reading time only moves where you are in each clip, what you finished and your reading time on any connection, while new clips, tags and collections wait for Wi-Fi." : ""),
     el("div", { class: "group" },
       sw("clips", "Clips", C.sync.links ? "Links, highlights, tags, collections and places" : "Text, highlights, tags, collections and places"),
       what.clips ? el("div", { class: "row" }, seg("sync-what", "What goes up of each clip", [{ value: "pages", label: "Clips too" }, { value: "links", label: "Links only" }],
         C.sync.links ? "links" : "pages", (v) => { C.sync.links = v === "links"; renderSection(); syncSoon(500); })) : null,
       sw("notes", "Notes", "What you draw and type on each note"),
+      ...(what.notes ? state.pages.filter((p) => tooBigLine(p)).map((p) => el("div", { class: "row" },
+        el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, p.title), el("span", { class: "choice-note warn" }, tooBigLine(p))))) : []),
       sw("feeds", "Feeds", "Which you follow and how"),
       sw("newsletters", "Newsletters", "Your addresses and how they're set"),
       sw("stats", "Reading stats", "Reading time from every device, added up"),
@@ -2030,7 +2032,7 @@ function driveSections() {
           set: (v) => { if (v === "off") C.drive.auto = false; else { C.drive.every = Number(v); C.drive.auto = true; } renderSection(); },
           options: [...C.drive.EVERY.map((d) => ({ value: String(d), label: DRIVE_EVERY[d], note: "And whenever you ask" })),
             { value: "off", label: "Only when I ask", note: "Back up now, above" }] }))),
-    section("What goes in", "Tags, collections, favourites and your reading stats go with the clips. Links only makes a backup much smaller, but a clip whose page changed or went away comes back different or not at all" + (C.platform.native ? "" : ", and this browser can only save Wikipedia pages again") + "; books you copied in and newsletter mails still go in whole. Files read from outside and watched folders stay where they are, and settings don't go in. Notes go as a PDF each, in a Notes folder, while Waypage is open; they come back through GitHub sync, not a restore.",
+    section("What goes in", "Tags, collections, favourites and your reading stats go with the clips. Links only makes a backup much smaller, but a clip whose page changed or went away comes back different or not at all" + (C.platform.native ? "" : ", and this browser can only save Wikipedia pages again") + "; books you copied in and newsletter mails still go in whole. Files read from outside and watched folders stay where they are, and settings don't go in. Notes go in with the clips, drawings and all, and come back with a restore. With Notes as PDFs on, each note also goes as a PDF to read, in a Notes folder, while Waypage is open.",
       el("div", { class: "group" },
         sw("clips", "Clips", what.links ? "Links, highlights and places" : "Text, pictures, highlights and places"),
         what.clips ? el("div", { class: "row" }, seg("drive-links", "What goes in of each clip", [{ value: "pages", label: "Clips too" }, { value: "links", label: "Links only" }],
@@ -2049,17 +2051,13 @@ function driveSections() {
   ];
 }
 
-// Notes need GitHub sync's Notes on: a note's PDF is for reading, and its
-// drawings come back through sync (2.0.0).
+// Each note as a PDF to read in Drive (2.0.0), on its own (2026-11): the
+// notes themselves, drawings and all, are in every backup.
 function driveNotesRow() {
-  const can = C.sync.on && C.sync.what.notes;
   return el("label", { class: "row" },
-    el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, "Notes"),
-      el("span", { class: "choice-note" }, can ? "Each note as a PDF, in a Notes folder" : "Turn on Notes in GitHub sync first")),
-    // Not disabled when it can't be turned on: a disabled switch ignores a
-    // tap, and a tap should say why.
-    el("input", { class: "switch", type: "checkbox", role: "switch", checked: driveNotesOn(), ...driveBusy(), ...(can ? {} : { "aria-disabled": "true" }),
-      onclick: (e) => { if (!can) { e.preventDefault(); toast("Turn on Notes in GitHub sync first."); } },
+    el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, "Notes as PDFs"),
+      el("span", { class: "choice-note" }, "Each note as a PDF, in a Notes folder")),
+    el("input", { class: "switch", type: "checkbox", role: "switch", checked: driveNotesOn(), ...driveBusy(),
       onchange: (e) => { C.drive.setWhat("notes", e.target.checked); renderSection(); } }));
 }
 
@@ -2115,7 +2113,8 @@ async function driveRefresh() {
 const savableAgain = (p) => !!p.url && !p.file && !p.url.startsWith(MAIL_ENTRY);
 function driveContents() {
   const w = C.drive.what;
-  const pages = w.clips ? state.pages.filter((p) => !p.link && !p.note) : [];
+  // Notes go in with the clips (2026-11), drawings, PDF and all.
+  const pages = w.clips ? state.pages.filter((p) => !p.link) : [];
   const bare = w.clips && w.links ? new Set(pages.filter(savableAgain).map((p) => p.id)) : null;
   return { pages, bare, feeds: [...(w.feeds ? siteFeeds() : []), ...(w.newsletters ? mailBoxes() : [])] };
 }
@@ -2153,7 +2152,7 @@ async function driveTakeBackground() {
 async function driveBackUp(auto) {
   if (driveRun || !C.drive.on) return;
   const { pages, bare, feeds: fs } = driveContents();
-  // Notes go as PDFs of their own, not into the backup (2.0.0).
+  // Notes also go as PDFs of their own, to read in Drive (2.0.0).
   const withNotes = driveNotesOn();
   const zip = pages.length > 0 || fs.length > 0;
   if (!zip && !withNotes) { if (!auto) toast("There's nothing to back up with what's picked."); return; }
@@ -2201,9 +2200,8 @@ async function driveBackUp(auto) {
   drivePaint();
 }
 
-// Notes in Drive (2.0.0): only while GitHub sync's Notes is on, since a
-// note's PDF is for reading and its drawings come back through sync.
-const driveNotesOn = () => !!(C.drive.on && C.drive.what.notes && C.sync.on && C.sync.what.notes);
+// Notes as PDFs in Drive (2.0.0), whether or not GitHub sync is on (2026-11).
+const driveNotesOn = () => !!(C.drive.on && C.drive.what.notes);
 // Each note changed since its PDF was sent goes to Drive as a PDF, and the
 // PDF of a note that's gone from here is taken away.
 async function driveSendNotes() {

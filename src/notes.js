@@ -207,7 +207,7 @@
       meta.bytes = await C.store.writePage(meta.id, C.save.savedPageHtml(meta, root, out), meta);
       await C.store.writeNote(meta.id, { v: 1, sheets });
       await C.store.writeText(meta.id, "");
-      if (base) meta.bytes += await C.store.writeNoteBase(meta.id, base);
+      if (base) { meta.bytes += await C.store.writeNoteBase(meta.id, base); meta.noteBytes = base.size; }
     } catch (e) {
       await C.store.removePage(meta.id);
       throw e;

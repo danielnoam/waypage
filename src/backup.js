@@ -317,7 +317,7 @@
   // files stay out: they go in the list alone, to be saved again from
   // their links on restore.
   async function exportLibrary(pages, onProgress, feeds, gate, bare) {
-    pages = pages.filter((p) => !p.link && !p.note);
+    pages = pages.filter((p) => !p.link);
     const listed = pages;
     if (bare && bare.size) pages = pages.filter((p) => !bare.has(p.id));
     const native = C.platform.native;
@@ -352,6 +352,7 @@
           const id = pages[at + i].id, { html, text } = got[i];
           if (html) await zip.add("pages/" + id + "/page.html", utf8(html));
           if (text != null) await zip.add("pages/" + id + "/text.txt", utf8(text));
+          if (pages[at + i].note) for (const f of await noteFiles(id)) await zip.add("pages/" + id + "/" + f.name, f.bytes);
           if (onProgress) onProgress(++done, pages.length);
         }
         await stop();
@@ -360,6 +361,25 @@
     }
     await zip.finish();
     return native ? { uri: await file.uri(), name } : { blob: new Blob(parts, { type: "application/zip" }), name };
+  }
+
+  // A note's own files, as the app keeps them beside its page (2026-11):
+  // its sheets, its strokes, the pictures put on it and its PDF. In the
+  // app they are in its folder and go in with it.
+  async function noteFiles(id) {
+    const out = [];
+    const note = await S().readNote(id);
+    if (note) out.push({ name: "note.json", bytes: utf8(JSON.stringify(note)) });
+    const ink = await S().readInk(id);
+    if (ink) {
+      out.push({ name: "ink.json", bytes: utf8(JSON.stringify(ink)) });
+      const used = new Set();
+      for (const list of Object.values(ink.pages || {})) for (const s of list || []) if (s && s.t === "i" && typeof s.f === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(s.f)) used.add(s.f);
+      for (const f of used) { const url = await S().readInkImage(id, f); if (url) out.push({ name: "ink/" + f + ".txt", bytes: utf8(url) }); }
+    }
+    const base = await S().readNoteBase(id);
+    if (base) out.push({ name: "base.pdf", bytes: base instanceof Uint8Array ? base : new Uint8Array(await base.arrayBuffer()) });
+    return out;
   }
 
   // In the app, FilesPlugin streams the files into the zip itself
@@ -384,7 +404,7 @@
   const holdPack = (hold) => { if (packing) C.platform.plugin("Files").packHold({ hold: !!hold }).catch(() => {}); };
   const stopPack = () => { if (packing) C.platform.plugin("Files").packStop().catch(() => {}); };
 
-  const PAGE_FILE = /^(page\.html|meta\.json|text\.txt|images\/[A-Za-z0-9._-]{1,80})$/;
+  const PAGE_FILE = /^(page\.html|meta\.json|text\.txt|images\/[A-Za-z0-9._-]{1,80}|note\.json|ink\.json|base\.pdf|ink\/[A-Za-z0-9_-]{1,40}\.txt)$/;
 
   // Merges a backup into the library: a page not here is added, one here
   // already is replaced only by a copy saved later, never the other way.
@@ -414,7 +434,8 @@
         links.push(link);
       }
       if (meta) {
-        const i = pages.findIndex((p) => (meta.file ? sameFile(p, meta) : same(p.url, meta.url)));
+        // A note has no address: it is known by its id.
+        const i = pages.findIndex((p) => (meta.note ? p.id === from && p.note : meta.file ? sameFile(p, meta) : same(p.url, meta.url)));
         if (i >= 0 && (pages[i].savedAt || 0) >= meta.savedAt) kept++;
         else {
           if (i >= 0) { await S().removePage(pages[i].id); taken.delete(pages[i].id); }
@@ -465,6 +486,20 @@
       if (meta.thumb && pics.has(meta.thumb)) await S().writeThumb(meta.id, pics.get(meta.thumb));
       const words = entries.get(prefix + "text.txt");
       if (words) await S().writeText(meta.id, new TextDecoder().decode(await zipRead(blob, words)));
+      if (meta.note) {
+        const read = async (rel) => { const e = entries.get(prefix + rel); return e ? zipRead(blob, e) : null; };
+        const json = async (rel) => { const b = await read(rel); try { return b ? JSON.parse(new TextDecoder().decode(b)) : null; } catch (e) { return null; } };
+        const note = await json("note.json");
+        if (note) await S().writeNote(meta.id, note);
+        const ink = await json("ink.json");
+        if (ink) await S().writeInk(meta.id, ink);
+        for (const [name, e] of entries) {
+          const m = name.startsWith(prefix + "ink/") && /^ink\/([A-Za-z0-9_-]{1,40})\.txt$/.exec(name.slice(prefix.length));
+          if (m) { const url = new TextDecoder().decode(await zipRead(blob, e)); if (/^data:image\//.test(url)) await S().writeInkImage(meta.id, m[1], url); }
+        }
+        const base = await read("base.pdf");
+        if (base) await S().writeNoteBase(meta.id, new Blob([base], { type: "application/pdf" }));
+      }
       return;
     }
     for (const [name, e] of entries) {

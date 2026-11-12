@@ -667,9 +667,37 @@
     }
     return out;
   }
+  // Two devices writing on one note (2026-11): its strokes merge three ways,
+  // against what sync last left on both (store ink base, with GitHub's sha
+  // of it), as a clip's drawings do. Resolves to the merged strokes, or
+  // null when there is nothing to merge.
+  async function noteInkMerged(id, theirs) {
+    const mine = await C.store.readInk(id), base = await C.store.readInkBase(id);
+    if (!mine || !theirs) return null;
+    const pages = mergeInk(base && base.pages, mine.pages, theirs.pages) || {};
+    // A sheet the other device added to write on is added here too.
+    const last = Math.max(0, ...Object.keys(pages).map(Number));
+    const note = await C.store.readNote(id);
+    if (note && Array.isArray(note.sheets) && note.sheets.length < last) {
+      while (note.sheets.length < last) note.sheets.push({ bg: "paper" });
+      await C.store.writeNote(id, note);
+    }
+    return { ...mine, pages };
+  }
   // Sends what changed of a note's files and takes away what it no longer
   // has. `was` is the shas GitHub had; resolves to the shas it has now.
+  // Strokes drawn elsewhere since this device last saw them are merged in
+  // first, so neither side's are lost.
   async function sendNoteFiles(p, was) {
+    const base = await C.store.readInkBase(p.id);
+    const theirSha = was && was["ink.json"];
+    if (theirSha && (!base || base.sha !== theirSha)) {
+      const text = await readText("notes/" + p.id + "/ink.json").catch(() => null);
+      let theirs = null;
+      try { theirs = text ? JSON.parse(text) : null; } catch (e) { theirs = null; }
+      const merged = await noteInkMerged(p.id, theirs);
+      if (merged) await C.store.writeInk(p.id, merged);
+    }
     const files = await noteFilesOut(p);
     if (!files) return was || {};
     was = was || {};
@@ -682,6 +710,8 @@
       now[f.name] = await put("notes/" + p.id + "/" + f.name, null, was[f.name], "Note: " + p.title.slice(0, 50), f.bytes);
     }
     for (const [name, sha] of Object.entries(was)) if (!now[name]) await remove("notes/" + p.id + "/" + name, sha).catch(() => {});
+    const sent = await C.store.readInk(p.id);
+    await C.store.writeInkBase(p.id, sent && now["ink.json"] ? { pages: sent.pages || {}, sha: now["ink.json"] } : null);
     return now;
   }
   // A note's files from GitHub, read before the note's old copy goes.
@@ -1214,12 +1244,34 @@
           continue;
         }
       }
+      // This device's own strokes since sync last saw the note, and the
+      // pictures they use, merged into what came down.
+      let localImgs = null, mergedHere = false;
+      if (noteData && have && noteData.ink) {
+        const merged = await noteInkMerged(m.id, noteData.ink).catch(() => null);
+        if (merged && JSON.stringify(merged.pages) !== JSON.stringify(noteData.ink.pages || {})) {
+          noteData.theirs = noteData.ink.pages || {};
+          noteData.ink = merged;
+          mergedHere = true;
+          const last = Math.max(0, ...Object.keys(merged.pages).map(Number));
+          if (noteData.note && Array.isArray(noteData.note.sheets)) while (noteData.note.sheets.length < last) noteData.note.sheets.push({ bg: "paper" });
+          localImgs = {};
+          for (const list of Object.values(merged.pages)) for (const s of list || []) if (s && s.t === "i" && !noteData.imgs[s.f]) { const u = await C.store.readInkImage(m.id, s.f); if (u) localImgs[s.f] = u; }
+        }
+      }
+      if (localImgs) Object.assign(noteData.imgs, localImgs);
       if (have) await C.store.removePage(m.id);
       const got = await incoming(html, m);
       const meta = { ...m, missing: got.missing };
       if (m.file && m.imageBytes != null) meta.imageBytes = m.imageBytes;
       meta.bytes = await C.store.writePage(m.id, got.html, meta);
-      if (noteData) meta.bytes += await noteFilesKeep(m.id, noteData);
+      if (noteData) {
+        meta.bytes += await noteFilesKeep(m.id, noteData);
+        const sha = merged.files[m.id] && merged.files[m.id].note && merged.files[m.id].note["ink.json"];
+        await C.store.writeInkBase(m.id, noteData.ink && sha ? { pages: noteData.theirs || noteData.ink.pages || {}, sha } : null);
+        // Merged with strokes from here: a new version, sent next time.
+        if (mergedHere) meta.editedAt = Date.now();
+      }
       decided.set(m.id, meta);
       fresh.set(m.id, meta);
       if (got.missing) downloads.push(meta);
@@ -1347,6 +1399,9 @@
   }
 
   C.sync = {
+    NOTE_MAX: NOTE_BASE_MAX,
+    // A note whose PDF is over the cap stays on its device (2026-11).
+    tooBig: (p) => !!(p && p.note && (p.noteBytes || 0) > NOTE_BASE_MAX),
     merge, mergeTags, mergeMarks, mergeInk, mergeOutside, cleanOutside, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
     share, clean, same, urlKey, sameUrl, peek, poll,
     get on() { return !!cfg; },

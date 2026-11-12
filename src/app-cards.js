@@ -473,7 +473,8 @@ function pageCard(p, found, hero) {
   const status = p.missing
     ? el("span", { class: "warn" }, p.missing + (p.missing === 1 ? " preview" : " previews") + " missing")
     : p.cut ? el("span", { class: "warn" }, "Only the start")
-    : p.mode === "links" ? el("span", null, "Images online") : null;
+    : p.mode === "links" ? el("span", null, "Images online")
+    : tooBigLine(p) ? el("span", { class: "warn" }, "Not synced, too big") : null;
   // The whole card opens the page (a button stretched under everything);
   // Retry sits above it, since a button can't hold another.
   const retry = p.missing && C.platform.native && navigator.onLine
