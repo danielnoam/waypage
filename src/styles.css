@@ -2975,3 +2975,58 @@ html.locked body > :not(.lock-view):not(script) { visibility: hidden !important;
 .ic-btn { flex: 1; height: var(--tap); border: 0; background: none; color: var(--ink); font: 600 var(--fs-label)/1 var(--sans); cursor: pointer; }
 .ic-btn:last-child { color: var(--accent); }
 .ic-btn:active, .ic-slots button:active { background-image: linear-gradient(var(--press), var(--press)); }
+
+/* ---- Audiobooks (2026-11, app-listen.js) ---- */
+/* The player under the text: the chapter, a track through it, and the
+   controls. The reader's foot sits above it while it shows. */
+.listen-player {
+  flex: none; display: flex; flex-direction: column; gap: 2px;
+  padding: var(--s-2) calc(var(--gutter) + var(--s-1)) calc(var(--s-2) + env(safe-area-inset-bottom));
+  background: var(--bar); border-top: 1px solid var(--line); color: var(--ink);
+}
+.listen-player[hidden] { display: none; }
+.reader.listening .read-left { display: none; }
+.listen-chap {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2); min-width: 0;
+  padding: 0; border: 0; background: none; color: inherit; text-align: start; cursor: pointer;
+}
+.listen-chap-name { font: 600 var(--fs-meta)/var(--lh-meta) var(--sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.listen-note { flex: none; max-width: 55%; font: var(--fs-meta)/var(--lh-meta) var(--sans); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.listen-track { position: relative; height: 28px; touch-action: none; cursor: pointer; }
+.listen-track:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
+.listen-rail { position: absolute; left: 0; right: 0; top: 50%; height: 4px; margin-top: -2px; border-radius: var(--r-full); background: var(--line); overflow: hidden; }
+.listen-fill { display: block; height: 100%; background: var(--accent); transform: scaleX(0); transform-origin: left; }
+[dir="rtl"] .listen-fill { transform-origin: right; }
+.listen-knob { position: absolute; top: 50%; width: 14px; height: 14px; margin-top: -7px; margin-inline-start: -7px; border-radius: var(--r-full); background: var(--accent); box-shadow: 0 0 0 3px var(--bar); }
+.listen-times { display: flex; justify-content: space-between; font: var(--fs-meta)/1 var(--sans); color: var(--muted); font-variant-numeric: tabular-nums; }
+.listen-ctl { display: flex; align-items: center; justify-content: space-between; gap: var(--s-1); margin-top: var(--s-1); }
+.listen-ctl .icon-btn { border-radius: var(--r-full); color: var(--ink); }
+.listen-ctl .listen-play { width: 52px; height: 52px; background: var(--accent); color: var(--accent-ink); }
+.listen-speed {
+  min-width: var(--tap); height: var(--tap); padding: 0 var(--s-1); border: 0; border-radius: var(--r-full); background: none;
+  color: var(--ink); font: 600 var(--fs-meta)/1 var(--sans); font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.listen-skip { position: relative; }
+.listen-skip > span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 700 9px/1 var(--sans); padding-top: 1px; }
+.listen-sleep.on { color: var(--accent); }
+.listen-sleep.on svg { fill: currentColor; }
+/* The bar along the bottom while it plays from elsewhere: Narrate's card,
+   with the chapter and what's left under the name. */
+.listen-bar { width: min(320px, calc(100vw - 2 * var(--gutter))); cursor: default; touch-action: auto; }
+.listen-bar .aloud-bar-text { flex-direction: column; align-items: flex-start; justify-content: center; }
+.listen-bar-note { max-width: 100%; font: var(--fs-meta)/var(--lh-meta) var(--sans); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.listen-bar .listen-skip { color: var(--ink); }
+body.listen-bar-up .library, body.listen-bar-up .screen-body { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+/* Headphones on an audiobook's cover. */
+.card-thumb.has-listen { position: relative; display: block; }
+.card-thumb.has-listen > img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.listen-badge {
+  position: absolute; right: var(--s-1); bottom: var(--s-1); z-index: 1;
+  display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
+  border-radius: var(--r-full); background: var(--surface); color: var(--accent); box-shadow: 0 1px 3px var(--shadow);
+}
+[dir="rtl"] .listen-badge { right: auto; left: var(--s-1); }
+.listen-sleeps { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-2); }
+.reader.listening .read-progress { display: none; }
+.listen-pack { flex: none; accent-color: var(--accent); width: 20px; height: 20px; margin: 0; }
+.sel-fix[hidden] { display: none; }

@@ -902,8 +902,11 @@
     "text/csv", "text/comma-separated-values", "application/json",
     // Kindle books and FB2 (1.42.0). Many phones call an AZW3 just data.
     "application/x-mobipocket-ebook", "application/vnd.amazon.ebook", "application/x-mobi8-ebook", "application/x-fictionbook+xml",
-    "application/x-fictionbook", "text/xml", "application/xml", "application/octet-stream"];
-  const FILE_EXTS = [".epub", ".mobi", ".azw", ".azw3", ".prc", ".fb2", ".md", ".markdown", ".txt", ".html", ".htm", ".eml", ".pdf", ".pptx", ".cbz", ".csv", ".json", ".zip"];
+    "application/x-fictionbook", "text/xml", "application/xml", "application/octet-stream",
+    // Audiobooks (2026-11).
+    "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/x-m4b", "audio/m4b", "audio/aac", "audio/ogg", "audio/opus", "audio/flac", "audio/x-flac", "audio/wav", "audio/x-wav"];
+  const FILE_EXTS = [".epub", ".mobi", ".azw", ".azw3", ".prc", ".fb2", ".md", ".markdown", ".txt", ".html", ".htm", ".eml", ".pdf", ".pptx", ".cbz", ".csv", ".json", ".zip",
+    ".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".oga", ".opus", ".flac", ".wav"];
   const PIECE = 4 << 20;
   const KEEP = 64 << 20;
 
@@ -1110,6 +1113,113 @@
   })();
 
   window.Waypage = window.Waypage || {};
+  // ---- Audiobooks (2026-11) ----
+  // The phone's own player in the app (AudiobookPlugin: it keeps playing
+  // with the screen off and answers the lock screen and earbuds); a
+  // browser's <audio> elsewhere, which stops when the page is put away on
+  // iOS. Times are milliseconds into a part (one sound file, or one
+  // stretch of an EPUB). `on(fn)` hears { key, part, pos, dur, state }.
+  const audio = (() => {
+    const A = () => plugin("Audiobook");
+    const heard = new Set(), sleepHeard = new Set();
+    const tell = (s) => { for (const f of heard) f(s); };
+    let el = null, job = null, sleepAt = 0, sleepTimer = 0, tick = 0;
+    if (A()) {
+      A().addListener("state", tell);
+      A().addListener("sleep", (s) => { for (const f of sleepHeard) f(s.at || 0); });
+    }
+    const webState = (state) => job && tell({ key: job.key, part: job.part, pos: Math.round(((el && el.currentTime) || 0) * 1000), dur: Math.round(((el && el.duration) || 0) * 1000) || 0, state });
+    async function webLoad(part, pos, play) {
+      const p = job.parts[part];
+      if (!p) return;
+      job.part = part;
+      if (!el) {
+        el = new Audio();
+        el.preload = "auto";
+        el.addEventListener("ended", () => { if (job && job.part + 1 < job.parts.length) webLoad(job.part + 1, 0, true); else webState("ended"); });
+        el.addEventListener("pause", () => { if (job && !el.ended) webState("paused"); });
+        el.addEventListener("playing", () => webState("playing"));
+        el.addEventListener("error", () => webState("error"));
+      }
+      if (el.dataset.url) URL.revokeObjectURL(el.dataset.url);
+      const src = await p.src();
+      el.dataset.url = src.startsWith("blob:") ? src : "";
+      el.src = src;
+      el.playbackRate = job.rate || 1;
+      await new Promise((done) => { el.addEventListener("loadedmetadata", done, { once: true }); el.addEventListener("error", done, { once: true }); });
+      el.currentTime = pos < 0 ? Math.max(0, (el.duration || 0) + pos / 1000) : pos / 1000;
+      if (play) { try { await el.play(); } catch (e) { webState("paused"); } }
+      clearInterval(tick);
+      tick = setInterval(() => { if (el && !el.paused) webState("playing"); }, 500);
+    }
+    function webSleep(at) {
+      clearTimeout(sleepTimer);
+      sleepAt = at || 0;
+      if (sleepAt) sleepTimer = setTimeout(() => { if (el) el.pause(); sleepAt = 0; for (const f of sleepHeard) f(0); }, Math.max(0, sleepAt - Date.now()));
+    }
+    return {
+      get native() { return !!A(); },
+      on(fn) { heard.add(fn); return () => heard.delete(fn); },
+      onSleep(fn) { sleepHeard.add(fn); },
+      // parts: [{ uri, offset, length }] in the app; [{ src: async () => url }] elsewhere.
+      async play({ parts, part = 0, pos = 0, rate = 1, title = "", subtitle = "", key = "" }) {
+        if (A()) return A().play({ parts: parts.map((p) => ({ uri: p.uri, offset: p.offset == null ? -1 : p.offset, length: p.length == null ? -1 : p.length })), part, pos: Math.round(pos), rate, title, subtitle, key });
+        job = { parts, part, rate, key };
+        tell({ key, part, pos, dur: 0, state: "loading" });
+        await webLoad(part, pos, true);
+      },
+      pause() { if (A()) return A().pause(); if (el) el.pause(); },
+      async resume() { if (A()) return A().resume(); if (el) { try { await el.play(); } catch (e) { /* not now */ } } },
+      stop() {
+        if (A()) return A().stop();
+        if (el) { el.pause(); el.removeAttribute("src"); el.load(); }
+        clearInterval(tick);
+        const k = job && job.key;
+        webSleep(0);
+        if (job) tell({ key: k, part: job.part, pos: 0, dur: 0, state: "stopped" });
+        job = null;
+      },
+      async seek(part, pos) {
+        if (A()) return A().seek({ part, pos: Math.round(pos) });
+        if (!job) return;
+        if (part !== job.part) await webLoad(part, pos, el && !el.paused);
+        else if (el) el.currentTime = pos < 0 ? Math.max(0, el.duration + pos / 1000) : pos / 1000;
+        webState(el && !el.paused ? "playing" : "paused");
+      },
+      rate(r) { if (A()) return A().rate({ rate: r }); if (job) job.rate = r; if (el) el.playbackRate = r; },
+      sleep(at) { if (A()) return A().sleep({ at: at || 0 }); webSleep(at); },
+      async state() {
+        if (A()) { try { return await A().state(); } catch (e) { return null; } }
+        return job ? { key: job.key, part: job.part, pos: Math.round(((el && el.currentTime) || 0) * 1000), state: el && !el.paused ? "playing" : "paused", sleep: sleepAt } : null;
+      },
+      // { duration (ms), title, artist, album, cover (base64) } or null.
+      async probe(uri, offset, length) {
+        if (!A()) return null;
+        try { return await A().probe({ uri, offset: offset == null ? -1 : offset, length: length == null ? -1 : length }); } catch (e) { return null; }
+      },
+      // A sound's length in a browser, in seconds: 0 when it can't tell.
+      length(url) {
+        return new Promise((done) => {
+          const a = new Audio();
+          a.preload = "metadata";
+          const end = (v) => { a.removeAttribute("src"); done(v); };
+          a.addEventListener("loadedmetadata", () => end(Number.isFinite(a.duration) ? a.duration : 0), { once: true });
+          a.addEventListener("error", () => end(0), { once: true });
+          setTimeout(() => end(0), 15000);
+          a.src = url;
+        });
+      },
+      // Transcripts, made on the phone (Android).
+      get canTranscribe() { return !!A(); },
+      async models() { if (!A()) return { supported: false }; try { return await A().models(); } catch (e) { return { supported: false }; } },
+      download: (id) => A().download({ id }),
+      cancel: () => A().cancel(),
+      remove: (id) => A().remove({ id }),
+      transcribe: (o) => A().transcribe(o),
+      stopTranscribing: () => (A() ? A().stopTranscribing().catch(() => {}) : null),
+    };
+  })();
+
   window.Waypage.platform = {
     native,
     os,
@@ -1233,6 +1343,7 @@
     // https://localhost, which another device can't open.
     webUrl() { return (build && build.webUrl) || null; },
     files,
+    audio,
     get canScan() { return !!scanner(); },
     scanQr,
   };

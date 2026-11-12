@@ -1127,8 +1127,11 @@ const CREDITS = {
     { name: "Capacitor", by: "Ionic", licence: "MIT", url: "https://capacitorjs.com", note: "Wraps the app for Android and iOS" },
     { name: "Capacitor File Opener", by: "Capawesome", licence: "MIT", url: "https://github.com/capawesome-team/capacitor-plugins", note: "Opens the downloaded update" },
     { name: "Capacitor ML Kit Barcode Scanning", by: "Capawesome", licence: "Apache 2.0", url: "https://github.com/capawesome-team/capacitor-mlkit", note: "Scans the sync setup code" },
-    { name: "sherpa-onnx", by: "k2-fsa", licence: "Apache 2.0", url: "https://github.com/k2-fsa/sherpa-onnx", note: "Runs the Kokoro and Piper voices, on Android" },
+    { name: "sherpa-onnx", by: "k2-fsa", licence: "Apache 2.0", url: "https://github.com/k2-fsa/sherpa-onnx", note: "Runs the Kokoro and Piper voices, and audiobook transcripts, on Android" },
     { name: "Kokoro", by: "hexgrad", licence: "Apache 2.0", url: "https://huggingface.co/hexgrad/Kokoro-82M", note: "Voices for Narrate, downloaded" },
+    { name: "Parakeet TDT 0.6B v3", by: "NVIDIA", licence: "CC BY 4.0", url: "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3", note: "Better transcripts of audiobooks, downloaded" },
+    { name: "Moonshine", by: "Useful Sensors", licence: "MIT", url: "https://github.com/usefulsensors/moonshine", note: "Fast transcripts of audiobooks, downloaded" },
+    { name: "Whisper", by: "OpenAI", licence: "MIT", url: "https://github.com/openai/whisper", note: "Transcripts in most languages, downloaded" },
     { name: "Piper voices", by: "Open Home Foundation", licence: "CC0, CC BY 4.0", url: "https://github.com/OHF-Voice/piper1-gpl", note: "Voices for Narrate, downloaded; French from the SIWIS corpus (CC BY 4.0)" },
   ],
   fonts: [
@@ -1167,7 +1170,7 @@ const updateOut = () => UPD_OUT.includes(upd.phase) && upd.latest;
 const SECTIONS = {
   appearance: { title: "Appearance", build: () => [themeGroup(), autoGroup(), readerThemeGroup(), looksGroup()],
     value: () => themeName(state.theme) },
-  reading: { title: "Reading", build: () => [readingGroup(), fontsGroup(), dictsGroup(), aloudGroup()],
+  reading: { title: "Reading", build: () => [readingGroup(), fontsGroup(), dictsGroup(), aloudGroup(), listenGroup()],
     value: () => { const r = readingPrefs(null); return (FONTS.find((f) => f.value === r.font) || FONTS[0]).label + " · " + r.size + " px"; } },
   library: { title: "Library", build: () => [
     section("Layout", null,
@@ -1226,6 +1229,7 @@ const FIND_ALIASES = {
   "Where your library is": "storage folder documents sd card", "App lock": "passcode pin fingerprint face biometric", Notifications: "alerts",
   "Google Drive": "backup cloud", "GitHub sync": "sync devices token", Credits: "about licence licenses open source thanks",
   Version: "update check app", Changelog: "what's new release notes", "Continue reading": "last clip resume",
+  Audiobooks: "audio listen m4b mp3 read along", Transcripts: "transcribe speech to text audiobook read along",
   "Test builds": "beta branch preview pull request",
 };
 let settingsIdx = null;

@@ -155,6 +155,31 @@
     return out.sort((x, y) => (x.page ? 1 : 0) - (y.page ? 1 : 0) || (x.page ? x.page - y.page : x.block - y.block) || x.start - y.start);
   }
 
+  // An audiobook's listening (2026-11).
+  const fixKey = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
+  // Both sides changed it: the place from the one listened last, fixes
+  // from both (the newer of two for the same words), the rest from the
+  // side that changed last.
+  function mergeListen(b, l, r) {
+    if (!l || !r) return l || r;
+    const newer = (r.tAt || 0) > (l.tAt || 0) ? r : l;
+    const out = { ...newer };
+    const fixes = new Map();
+    for (const f of [...(l.fixes || []), ...(r.fixes || [])]) {
+      const k = fixKey(f.from);
+      const was = fixes.get(k);
+      if (!was || (f.at || 0) > (was.at || 0)) fixes.set(k, f);
+    }
+    // A fix taken away on one side since the base stays away.
+    const base = new Set(((b && b.fixes) || []).map((f) => fixKey(f.from)));
+    for (const side of [l, r]) {
+      const has = new Set((side.fixes || []).map((f) => fixKey(f.from)));
+      for (const k of base) if (!has.has(k)) fixes.delete(k);
+    }
+    if (fixes.size) out.fixes = [...fixes.values()]; else delete out.fixes;
+    return out;
+  }
+
   // One page changed on both sides since the base.
   function mergeEntry(b, l, r) {
     b = b || {};
@@ -175,6 +200,7 @@
         : same(l[k], r[k]) ? l[k] : same(l[k], b[k]) ? r[k] : same(r[k], b[k]) ? l[k] : placeFrom[k];
       else if (k === "tags") out[k] = mergeTags(b.tags, l.tags, r.tags);
       else if (k === "marks") out[k] = mergeMarks(b.marks, l.marks, r.marks);
+      else if (k === "listen") out[k] = same(l[k], r[k]) ? l[k] : mergeListen(b.listen, l.listen, r.listen);
       else out[k] = pick(k);
     }
     for (const k of Object.keys(out)) if (out[k] === undefined || ((k === "tags" || k === "marks") && !out[k].length)) delete out[k];
@@ -190,7 +216,7 @@
   // fingerprint (files.js), so they land only on a device with the same
   // file. `ids` are the file's clip ids on every device, so its reading
   // stats add up as one.
-  const OUTSIDE = ["at", "finished", "readAt", "readOn", "placeAt", "spot", "turn", "tags", "folder", "folderAt", "fav", "favAt", "folderFav", "folderFavAt", "marks"];
+  const OUTSIDE = ["at", "finished", "readAt", "readOn", "placeAt", "spot", "turn", "tags", "folder", "folderAt", "fav", "favAt", "folderFav", "folderFavAt", "marks", "listen"];
   const FP = /^[0-9a-f]{32}$/;
   const OUT_MAX = 2000;
   // This device's outside files as entries: one a fingerprint, the copy
@@ -1242,7 +1268,7 @@
   }
 
   C.sync = {
-    merge, mergeTags, mergeMarks, mergeOutside, cleanOutside, outsideOf, outsideOnto, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
+    merge, mergeTags, mergeMarks, mergeListen, mergeOutside, cleanOutside, outsideOf, outsideOnto, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
     share, clean, same, urlKey, sameUrl, peek, poll,
     // What this device last saw on GitHub for a file read from outside.
     outsideKnown(fp) { const b = load(BASE_KEY, null); return (b && b.outside && b.outside[fp] && cleanOutside({ [fp]: b.outside[fp] })[fp]) || null; },

@@ -106,6 +106,9 @@
         <button class="icon-btn" id="readerFolder" type="button" aria-label="Clips in this collection" aria-expanded="false" aria-controls="readingSheet" hidden>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
         </button>
+        <button class="icon-btn" id="readerChapters" type="button" aria-label="Chapters" aria-expanded="false" aria-controls="readingSheet" hidden>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"></path></svg>
+        </button>
         <p class="reader-name" id="readerName" dir="auto"></p>
       </div>
       <div class="reader-actions">
@@ -147,6 +150,21 @@
       <button class="btn-text find-done" id="findDone" type="button">Done</button>
     </div>
     <iframe class="reader-frame" id="readerFrame" sandbox="allow-same-origin" title="Saved clip"></iframe>
+    <div class="listen-player" id="listenPlayer" role="group" aria-label="Audiobook" hidden>
+      <button class="listen-chap" id="listenChap" type="button"><span class="listen-chap-name" id="listenChapName" dir="auto"></span><span class="listen-note" id="listenNote"></span></button>
+      <div class="listen-track" id="listenTrack" role="slider" tabindex="0" aria-label="Place in the chapter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="listen-rail"><span class="listen-fill" id="listenFill"></span></span><span class="listen-knob" id="listenKnob"></span></div>
+      <div class="listen-times"><span id="listenAt">0:00</span><span id="listenLeft">−0:00</span></div>
+      <div class="listen-ctl">
+        <button class="listen-speed" id="listenSpeed" type="button" aria-label="Speed">1×</button>
+        <button class="icon-btn listen-skip" id="listenBack" type="button" aria-label="Back 15 seconds"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v4h4"></path></svg><span>15</span></button>
+        <button class="icon-btn aloud-play listen-play" id="listenPlay" type="button" aria-label="Play">
+            <svg class="aloud-pause-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"></path></svg>
+            <svg class="aloud-play-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg>
+        </button>
+        <button class="icon-btn listen-skip" id="listenOn" type="button" aria-label="Forward 30 seconds"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-3-6.2M20 4v4h-4"></path></svg><span>30</span></button>
+        <button class="icon-btn listen-sleep" id="listenSleep" type="button" aria-label="Sleep timer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path></svg></button>
+      </div>
+    </div>
     <div class="reader-wait" id="readerWait" role="status" aria-label="Opening"><span class="spinner" aria-hidden="true"></span></div>
     <div class="bright" id="bright" hidden>
       <svg class="bright-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
@@ -362,6 +380,20 @@
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
     </button>
   </div>
+  <div class="aloud-bar listen-bar" id="listenBar" role="region" aria-label="Audiobook" hidden>
+    <button class="icon-btn listen-skip" id="listenBarBack" type="button" aria-label="Back 15 seconds"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v4h4"></path></svg><span>15</span></button>
+    <button class="icon-btn aloud-play" id="listenBarPlay" type="button" aria-label="Pause">
+      <svg class="aloud-pause-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"></path></svg>
+            <svg class="aloud-play-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg>
+    </button>
+    <button class="aloud-bar-text" id="listenBarOpen" type="button" title="Open the audiobook">
+      <span class="aloud-bar-title" id="listenBarTitle" dir="auto"></span>
+      <span class="listen-bar-note" id="listenBarNote" dir="auto"></span>
+    </button>
+    <button class="icon-btn" id="listenBarStop" type="button" aria-label="Stop the audiobook">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+    </button>
+  </div>
   <div class="drop-zone" id="dropZone" aria-hidden="true" hidden>
     <div class="drop-card">
       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10.5M7.5 10l4.5 4.5 4.5-4.5M5 19.5h14"></path></svg>
@@ -410,6 +442,7 @@
   <script src="src/stats.js?v=1.56.0"></script>
   <script src="src/epub.js?v=1.56.0"></script>
   <script src="src/files.js?v=1.56.0"></script>
+  <script src="src/listen.js?v=1.56.0"></script>
   <script src="src/pdf.js?v=1.56.0"></script>
   <script src="src/pptx.js?v=1.56.0"></script>
   <script src="src/reader.js?v=1.56.0"></script>
@@ -429,6 +462,7 @@
   <script src="src/app-places.js?v=1.56.0"></script>
   <script src="src/app-discover.js?v=1.56.0"></script>
   <script src="src/app-settings.js?v=1.56.0"></script>
+  <script src="src/app-listen.js?v=1.56.0"></script>
   <script src="src/app-lock.js?v=1.56.0"></script>
   <script src="src/app-start.js?v=1.56.0"></script>
 </body>

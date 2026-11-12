@@ -22,7 +22,7 @@
 
   // A clip made from a file of your own (0.31.0): what the file was.
   const FP = /^[0-9a-f]{32}$/;
-  const FILE_KINDS = ["epub", "md", "txt", "html", "cbz", "pdf"];
+  const FILE_KINDS = ["epub", "md", "txt", "html", "cbz", "pdf", "audio"];
   function cleanFile(f) {
     if (!f || typeof f !== "object" || !FILE_KINDS.includes(f.kind) || !/^[a-z0-9]{1,8}$/.test(f.ext || "")) return null;
     const out = { name: text(f.name, 200) || "file." + f.ext, kind: f.kind, ext: f.ext, size: num(f.size) };
@@ -72,9 +72,33 @@
     if (file) out.file = file;
     const marks = cleanMarks(m.marks);
     if (marks.length) out.marks = marks;
+    // An audiobook's place and fixes (2026-11).
+    const listen = cleanListen(m.listen);
+    if (listen) out.listen = listen;
     return out;
   }
 
+  // The listening part of an index entry, as read from sync or a backup:
+  // where you are (t seconds, at tAt), how fast, what you read along
+  // with, and your fixes. null when there's nothing usable.
+  function cleanListen(v) {
+    if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+    const out = { t: Math.max(0, num(v.t)), tAt: Math.max(0, num(v.tAt)) };
+    if (num(v.dur) > 0) out.dur = num(v.dur);
+    if (num(v.speed) >= 0.5 && num(v.speed) <= 3) out.speed = Math.round(num(v.speed) * 100) / 100;
+    if (["transcript", "book", "listen"].includes(v.mode)) out.mode = v.mode;
+    if (v.book && typeof v.book === "object") {
+      const b = {};
+      if (typeof v.book.id === "string" && /^[a-z0-9]{4,24}$/.test(v.book.id)) b.id = v.book.id;
+      if (typeof v.book.fp === "string" && /^[0-9a-f]{32}$/.test(v.book.fp)) b.fp = v.book.fp;
+      if (typeof v.book.url === "string" && /^https?:\/\//i.test(v.book.url)) b.url = v.book.url.slice(0, 2000);
+      if (b.id || b.fp || b.url) out.book = b;
+    }
+    const fixes = Array.isArray(v.fixes) ? v.fixes.slice(0, 500).filter((f) => f && typeof f.from === "string" && typeof f.to === "string" && f.from.trim() && f.to.trim())
+      .map((f) => ({ from: f.from.replace(/\s+/g, " ").trim().slice(0, 100), to: f.to.replace(/\s+/g, " ").trim().slice(0, 100), at: num(f.at) })) : [];
+    if (fixes.length) out.fixes = fixes;
+    return out;
+  }
   // Highlights (1.7.0): where each is in the clip's text blocks, its words,
   // its note and its colour.
   // Colours other than yellow (1.42.0); yellow has none.
@@ -687,5 +711,5 @@
     return meta;
   }
 
-  C.backup = { COVER_FILE, holdPack, stopPack, cleanMeta, cleanMarks, marksMarkdown, sameFile, cleanFeed, crc32, zipWriter, zipEntries, zipRead, headFiles, exportLibrary, restoreLibrary, exportPage, exportPages, exportMarkdown, exportMarkdownAll, importPage, imageType, mdBlocks };
+  C.backup = { COVER_FILE, holdPack, stopPack, cleanMeta, cleanMarks, cleanListen, marksMarkdown, sameFile, cleanFeed, crc32, zipWriter, zipEntries, zipRead, headFiles, exportLibrary, restoreLibrary, exportPage, exportPages, exportMarkdown, exportMarkdownAll, importPage, imageType, mdBlocks };
 })();

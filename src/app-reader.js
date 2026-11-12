@@ -252,6 +252,9 @@ function stopWaiting() {
 async function openPage(id, fromHistory) {
   const p = state.pages.find((x) => x.id === id);
   if (!p || (!fromHistory && opening === id)) return;
+  // An audiobook read along with a book opens the book (app-listen.js).
+  const to = listenRedirect(p);
+  if (to) return openPage(to, fromHistory);
   let html, trouble = null;
   opening = id;
   const wait = !!p.file;
@@ -460,6 +463,8 @@ function show(p, html) {
     glide.carry = 0;
     if (aloudAuto === "here") { aloudAuto = false; C.reader.placed().then(() => { if (state.open === p) startAloud(); }); }
     else if (aloudAuto) { aloudAuto = false; startAloud(0); }
+    listenOpened(p);
+    lookForNarration(p);
   });
 }
 
@@ -1108,6 +1113,7 @@ function closeReader() {
   stopGlide();
   inkClose();
   state.open = null;
+  listenClosed();
   paintReading(false);
   paintTheme();
   volumeWatch();
@@ -1328,6 +1334,8 @@ const voiceFor = (p) => load(VOICE_KEY, {})[voiceKey(primary(langOf(p)))] || "";
 async function startAloud(from, spot) {
   const p = state.open;
   if (!p) return;
+  // One voice at a time: Narrate stops an audiobook (app-listen.js).
+  if (lis.key) listenStop();
   // Pressed just after opening: from the place, once the clip is back at it.
   if (from == null && !spot) { await C.reader.placed(); if (state.open !== p) return; }
   const texts = C.reader.readable({ footnotes: !!load(FOOTNOTES_KEY, false), edges: !!load(EDGES_KEY, false) });
@@ -1451,7 +1459,8 @@ function showReadHere() {
   const p = state.open;
   const mark = p && !p.preview && !state.sheet && Date.now() > quietUntil ? C.reader.selectionMark() : null;
   // Not on printed pages or a comic, which Narrate doesn't read (1.56.0).
-  const spot = p && speech.available && !state.sheet && !pictureBook() ? C.reader.selectionSpot() : null;
+  const heard = !!audioFor(p);
+  const spot = p && (speech.available || heard) && !state.sheet && !pictureBook() ? C.reader.selectionSpot() : null;
   const picked = p && !state.sheet && Date.now() > quietUntil ? C.reader.selectionText() : null;
   const box = (mark && mark.box) || spot || (picked && picked.box);
   if (!box) { hideReadHere(); return; }
@@ -1460,7 +1469,9 @@ function showReadHere() {
       const s = C.reader.selectionSpot();
       hideReadHere();
       C.reader.clearSelection();
-      if (s) startAloud(null, s);
+      // An audiobook's clip plays its sound from there instead.
+      if (s && audioFor(state.open)) listenFrom(s);
+      else if (s) startAloud(null, s);
     } });
     aloudBtn.innerHTML = $("readerAloud").innerHTML;
     aloudBtn.append(el("span", { class: "sel-label" }, "Narrate from here"));
@@ -1502,6 +1513,9 @@ function showReadHere() {
   markBtn.querySelector(".sel-mark-label").textContent = on.all ? "Remove highlight" : "Highlight";
   markBtn.setAttribute("aria-label", on.all ? "Remove highlight" : "Highlight");
   readHere.querySelector(".sel-aloud").hidden = !spot;
+  readHere.querySelector(".sel-aloud .sel-label").textContent = heard ? "Play from here" : "Narrate from here";
+  readHere.querySelector(".sel-aloud").setAttribute("aria-label", heard ? "Play from here" : "Narrate from here");
+  listenSelection(readHere, picked);
   readHere.querySelector(".sel-translate").hidden = !picked;
   readHere.querySelector(".sel-lookup").hidden = !picked || !C.dict.any() || picked.text.trim().split(/\s+/).length > 4;
   const frame = $("readerFrame").getBoundingClientRect();
@@ -1981,8 +1995,7 @@ function nearEdge(el) {
 // are remembered; until it's moved it sits at the bottom right, above
 // the library's bottom field when that's what's on screen.
 const ALOUD_BAR_KEY = "waypage.aloudBar";
-function placeAloudBar() {
-  const bar = $("aloudBar");
+function placeAloudBar(bar = $("aloudBar")) {
   if (bar.hidden) return;
   const gutter = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--gutter")) || 16;
   const safe = parseFloat(getComputedStyle(bar).getPropertyValue("--safe-bottom")) || 0;

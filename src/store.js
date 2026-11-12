@@ -307,7 +307,7 @@
       for (const list of Object.values((d && d.pages) || {})) for (const it of list || []) if (it && it.f) files.add(String(it.f));
       for (const f of files) await removeInkImage(id, f);
     } catch (e) { /* none */ }
-    try { await idbDo("readwrite", (s) => { s.delete(id + ":text"); s.delete(id + ":thumb"); s.delete(id + ":translation"); s.delete(id + ":ink"); return s.delete(id); }); } catch (e) { /* already gone */ }
+    try { await idbDo("readwrite", (s) => { s.delete(id + ":text"); s.delete(id + ":thumb"); s.delete(id + ":translation"); s.delete(id + ":ink"); s.delete(id + ":listen"); return s.delete(id); }); } catch (e) { /* already gone */ }
   }
 
   // The page's words as plain text (text.txt), for searching the library.
@@ -341,6 +341,24 @@
   async function readTranslation(id) {
     try {
       const t = FS() ? await (await B()).read("pages/" + id + "/translation.json") : await idbDo("readonly", (s) => s.get(id + ":translation"));
+      return typeof t === "string" && t ? JSON.parse(t) : null;
+    } catch (e) { return null; }
+  }
+
+  // An audiobook's transcript and read-along timings (2026-11), as JSON
+  // beside it: this device's own, made again on another. null when none.
+  async function writeListen(id, data) {
+    const text = data ? JSON.stringify(data) : "";
+    if (FS()) {
+      if (text) await (await B()).write("pages/" + id + "/listen.json", text, true);
+      else try { await (await B()).remove("pages/" + id + "/listen.json"); } catch (e) { /* none */ }
+    } else {
+      await idbDo("readwrite", (s) => (text ? s.put(text, id + ":listen") : s.delete(id + ":listen")));
+    }
+  }
+  async function readListen(id) {
+    try {
+      const t = FS() ? await (await B()).read("pages/" + id + "/listen.json") : await idbDo("readonly", (s) => s.get(id + ":listen"));
       return typeof t === "string" && t ? JSON.parse(t) : null;
     } catch (e) { return null; }
   }
@@ -706,7 +724,7 @@
   }
 
   window.Waypage.store = { ready,
-    get place() { return cur ? cur.place : savedPlace(); }, placeName, get problem() { return problem; }, moveTo, readIndex, writeIndex, writeIndexOnly, set onIndex(f) { onIndex = f; }, writeThumb, readThumbs, storageInfo, keepStored, writePage, readPage, readPages, removePage, writeText, readText, writeTranslation, readTranslation, writeInk, readInk, writeInkImage, readInkImage, removeInkImage, download, removeFile, sizeOf, shrink, squeeze, pageDirUrl, bytesOf,
+    get place() { return cur ? cur.place : savedPlace(); }, placeName, get problem() { return problem; }, moveTo, readIndex, writeIndex, writeIndexOnly, set onIndex(f) { onIndex = f; }, writeThumb, readThumbs, storageInfo, keepStored, writePage, readPage, readPages, removePage, writeText, readText, writeTranslation, readTranslation, writeListen, readListen, writeInk, readInk, writeInkImage, readInkImage, removeInkImage, download, removeFile, sizeOf, shrink, squeeze, pageDirUrl, bytesOf,
     listFiles, listSized, readBytes, writeBytes, cacheFile, packSource, toBase64, listFonts, readFont, addFont, removeFont,
     readCovers, coverUrl, readCover, writeCover, removeCover };
 })();
