@@ -63,6 +63,7 @@
     if (m.cut === true) out.cut = true;
     if (num(m.archived)) out.archived = num(m.archived);
     if (num(m.editedAt)) out.editedAt = num(m.editedAt);
+    if (num(m.published)) out.published = num(m.published);
     if (num(m.back)) out.back = num(m.back);
     if (m.fav === true) { out.fav = true; out.favAt = num(m.favAt) || out.savedAt; }
     if (typeof m.next === "string") out.next = httpUrl(m.next);

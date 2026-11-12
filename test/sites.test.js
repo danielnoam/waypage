@@ -380,6 +380,25 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       await ctx.close();
     });
 
+    await test("a page's release date: meta, JSON-LD, Royal Road's unixtime, never a comment's", async () => {
+      const ctx = await browser.newContext({ serviceWorkers: "block" });
+      const p = await ctx.newPage();
+      await p.goto(ROOT);
+      await p.waitForFunction(() => window.Waypage && window.Waypage.save);
+      const got = await p.evaluate(() => {
+        const at = (html) => Waypage.save.publishedAt(new DOMParser().parseFromString(html, "text/html"), html);
+        return [
+          at('<meta property="article:published_time" content="2026-03-01T10:00:00Z"><p>x</p>'),
+          at('<script type="application/ld+json">{"datePublished":"2025-12-24T08:00:00Z"}</script>'),
+          at('<div class="fic-header"><time unixtime="1700000000">x</time></div>'),
+          at('<div class="comments"><time unixtime="1700000000">x</time></div>'),
+          at('<meta property="article:published_time" content="2999-01-01T00:00:00Z">'),
+        ];
+      });
+      assert.deepStrictEqual(got, [Date.parse("2026-03-01T10:00:00Z"), Date.parse("2025-12-24T08:00:00Z"), 1700000000000, 0, 0]);
+      await ctx.close();
+    });
+
   } finally {
     await browser.close();
     server.kill();
