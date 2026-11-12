@@ -695,7 +695,7 @@ function writeRestButton(a, after) {
   const on = lis.wholeFor === a.id;
   return el("button", { class: "row", type: "button", onclick: () => { writeRest(a, !on); if (after) after(); } },
     el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, on ? "Stop writing the rest" : "Write the rest now"),
-      el("span", { class: "choice-note" }, on ? "Back to writing a little ahead of where you are" : "Every part not written yet, from the start, while the app is open")));
+      el("span", { class: "choice-note" }, on ? "Back to writing a little ahead of where you are" : "Every part not written yet, while the app is open")));
 }
 
 // ---- The audiobook's sheet in the reader ----
@@ -723,10 +723,21 @@ function listenAlongRows(p) {
   if (!canWords) return [head, el("p", { class: "meta" }, "Reading along with a book or a transcript is in the Android app, which writes the transcript on the phone.")];
   const book = bookOf(a);
   const data = lis.dataFor === a.id ? lis.data : null;
+  const again = data && data.pieces && data.pieces.length ? el("button", { class: "row", type: "button", onclick: async () => {
+    if (!confirm("Write the transcript again from the start? Your fixes stay.")) return;
+    await C.platform.audio.stopTranscribing();
+    data.pieces = []; data.ranges = []; data.sync = null; data.syncKey = "";
+    await C.store.writeListen(a.id, data);
+    lis.sync = null;
+    if (modeOf(a) === "transcript") { await writeListenPage(a, data); if (state.open === a) show(a, await C.store.readPage(a.id)); }
+    close();
+    writeAhead();
+  } }, el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, "Write the transcript again"),
+    el("span", { class: "choice-note" }, "From the start, with the model picked in Settings › Audiobooks"))) : null;
+  // What it reads along with; where the book comes from; the transcript's
+  // own actions.
   return [head, el("div", { class: "group" },
-    pick("Find the book in Discover", "Searches Discover's book sites for “" + a.title + "”.", false, () => { closeSheet(true); openSheet("listenFind"); }),
-    pick(book && mode === "book" ? "The book: " + book.title : "A book in your Library", "An EPUB or other book you already have.", mode === "book", () => { closeSheet(true); openSheet("listenBook"); }),
-    pick("A transcript", "Written on this phone from the sound, a little ahead of where you are.", mode === "transcript", async () => {
+    pick("A transcript", "Written on this phone from the sound", mode === "transcript", async () => {
       listenMode(a, "transcript");
       close();
       await writeListenPage(a, await loadListenData(a));
@@ -735,24 +746,18 @@ function listenAlongRows(p) {
       if (!readyPack()) toast("Download a transcript model in Settings › Audiobooks.", "Open", () => openSettings(false, "audiobooks"));
       writeAhead();
     }),
-    pick("Just listen", "The chapters, and no words.", mode === "listen", async () => {
+    pick(book ? "The book: " + book.title : "The book", book ? "Its words, matched to the sound" : "Find it below first", mode === "book", () => (book ? pairWith(a, book) : null), !book),
+    pick("Just listen", "The chapters, and no words", mode === "listen", async () => {
       listenMode(a, "listen");
       close();
       await writeListenPage(a, null);
       if (state.open !== a) openPage(a.id); else show(a, await C.store.readPage(a.id));
-    }),
-    data && data.pieces && data.pieces.length ? el("button", { class: "row", type: "button", onclick: async () => {
-      if (!confirm("Write the transcript again from the start? Your fixes stay.")) return;
-      await C.platform.audio.stopTranscribing();
-      data.pieces = []; data.ranges = []; data.sync = null; data.syncKey = "";
-      await C.store.writeListen(a.id, data);
-      lis.sync = null;
-      if (modeOf(a) === "transcript") { await writeListenPage(a, data); if (state.open === a) show(a, await C.store.readPage(a.id)); }
-      close();
-      writeAhead();
-    } }, el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, "Write the transcript again"),
-      el("span", { class: "choice-note" }, "With the model picked in Settings › Audiobooks, from where you are."))) : null,
-    mode !== "listen" ? writeRestButton(a, close) : null)];
+    })),
+    el("h3", { class: "overline" }, "Find the book"),
+    el("div", { class: "group" },
+      pick("In Discover", "Searches Discover's book sites for “" + a.title + "”", false, () => { closeSheet(true); openSheet("listenFind"); }),
+      pick("In your Library", "An EPUB or other book you already have", false, () => { closeSheet(true); openSheet("listenBook"); })),
+    ...(mode !== "listen" ? [el("h3", { class: "overline" }, "Transcript"), el("div", { class: "group" }, writeRestButton(a, close), again)] : [])];
 }
 
 function listenSleepSheet() {
@@ -808,8 +813,8 @@ function listenChaptersSheet() {
       el("span", { class: "folder-n", "aria-hidden": "true" }, String(i + 1)),
       el("span", { class: "choice-text" },
         el("span", { class: "row-label", dir: "auto" }, c.title || "Chapter " + (i + 1)),
-        el("span", { class: "choice-note", "data-ch": String(i) }, L.timeText(c.t) + " · " + L.lengthText(next - c.t))),
-      wantsWords(a) && A.canTranscribe ? el("span", { class: "listen-ch-bar", "aria-hidden": "true" }, el("span", { class: "listen-ch-fill" })) : null);
+        el("span", { class: "choice-note", "data-ch": String(i) }, L.timeText(c.t) + " · " + L.lengthText(next - c.t)),
+        wantsWords(a) && A.canTranscribe ? el("span", { class: "listen-ch-bar", "aria-hidden": "true" }, el("span", { class: "listen-ch-fill" })) : null));
     if (i === now) b.setAttribute("aria-current", "true");
     return el("li", null, b);
   });
@@ -837,7 +842,7 @@ function listenChaptersSheet() {
         const bar = n.closest(".row").querySelector(".listen-ch-bar");
         if (bar) {
           bar.classList.toggle("now", !!st.now);
-          bar.firstChild.style.transform = "scaleX(" + L.covered(data.ranges, c.t, next) + ")";
+          bar.firstChild.style.width = L.covered(data.ranges, c.t, next) * 100 + "%";
         }
       });
       timer = setTimeout(fill, 2000);
