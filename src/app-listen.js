@@ -19,8 +19,9 @@ const L = C.listen;
 const A = C.platform.audio;
 const READ_OPTS = { footnotes: true, edges: false };
 const LISTEN_KEY = "waypage.listen";
-const listenPrefs = () => ({ pack: "", pauses: true, chapters: true, charging: true, speed: 1, back: 15, on: 30, rewind: true, awake: false, ...(load(LISTEN_KEY, {}) || {}) });
-const setListenPref = (k, v) => store(LISTEN_KEY, { ...listenPrefs(), [k]: v });
+const listenPrefs = () => ({ pack: "", pauses: true, chapters: true, charging: true, back: 15, on: 30, rewind: true, awake: false, mix: false, pip: true, ...(load(LISTEN_KEY, {}) || {}) });
+const setListenPref = (k, v) => { store(LISTEN_KEY, { ...listenPrefs(), [k]: v }); if (["mix", "back", "on"].includes(k)) listenOptions(); if (k === "pip") listenFloat(); };
+const listenOptions = () => { const p = listenPrefs(); C.platform.audio.options({ mix: p.mix, back: p.back, on: p.on }); };
 const SPEEDS = [0.8, 1, 1.1, 1.2, 1.3, 1.5, 1.75, 2, 2.5, 3];
 const AHEAD = 10 * 60, CHUNK = 3 * 60;
 
@@ -34,7 +35,7 @@ const listenPage = () => state.pages.find((p) => p.id === lis.key) || null;
 const playerBook = () => { const a = listenPage(), here = audioFor(state.open); return here && !(a && shownFor(a) === state.open) ? here : a || here; };
 const listening = () => lis.state === "playing" || lis.state === "paused" || lis.state === "loading";
 const modeOf = (a) => (a && a.listen && a.listen.mode) || (a && a.audio && a.audio.overlay ? "book" : "listen");
-const speedOf = (a) => (a && a.listen && a.listen.speed) || listenPrefs().speed || 1;
+const speedOf = (a) => (a && a.listen && a.listen.speed) || 1;
 const placeOf = (a) => (a && a.listen && a.listen.t) || 0;
 const durOf = (a) => (a && a.audio && a.audio.dur) || (a && a.listen && a.listen.dur) || 0;
 const chaptersOf = (a) => (a && a.audio && a.audio.chapters) || [];
@@ -306,6 +307,7 @@ A.on((s) => {
   if (s.state === "stopped") { Object.assign(lis, { key: "", state: "stopped" }); C.reader.say(-1); }
   if (was !== lis.state) {
     lis.pausedAt = lis.state === "paused" ? Date.now() : 0;
+    listenFloat();
     if (listenPrefs().awake) speech.keepScreen(lis.state === "playing");
   }
   saveListenPlace(was !== lis.state);
@@ -313,6 +315,21 @@ A.on((s) => {
   readAlong(false);
   if (lis.state === "playing" && Date.now() - lis.seen > 20000) { lis.seen = Date.now(); writeAhead(); }
 });
+// The small window outside the app while an audiobook plays (Android),
+// like Narrate's: its name, the chapter, and the paragraph being said.
+function listenFloat() {
+  A.pip(listening() && listenPrefs().pip, lis.state !== "paused");
+  if (document.body.classList.contains("pip")) paintPip();
+}
+function listenPipView() {
+  const a = listenPage();
+  if (!a || !listening()) return null;
+  const mine = state.open && shownFor(a) === state.open;
+  const b = mine && lis.sync && lis.said >= 0 ? lis.sync.b[lis.said] : -1;
+  const text = b >= 0 ? C.reader.readable(READ_OPTS)[b] || "" : "";
+  return { title: a.title, over: chapterName(a, lis.t) || "Audiobook", text, paused: lis.state === "paused" };
+}
+listenOptions();
 A.onSleep((at) => { lis.sleepAt = at; paintListen(); });
 // Playing when the app opened (the phone kept it going).
 A.state().then((s) => { if (s && s.key && (s.state === "playing" || s.state === "paused") && !lis.key) { lis.key = s.key; lis.state = s.state; lis.sleepAt = s.sleep || 0; } });
@@ -338,6 +355,8 @@ function paintListen() {
   const mine = open && (a ? shownFor(a) === open : !!audioFor(open));
   const here = audioFor(open);
   if (here && isAudiobook(open) && !open.audio.overlay) $("readerAloud").hidden = true;
+  // No words on the page yet: nothing to highlight, draw on or translate.
+  if (audioWordless(open)) for (const id of ["readerMarks", "readerTranslate", "readerInk"]) $(id).hidden = true;
   const show = !!here;
   if (here && !here.audio.overlay && modeOf(here) === "transcript" && state.open === here && chapterNow(here, placeNow(here)) !== pageCh[here.id]) turnPage(here);
   $("readerChapters").hidden = !here || chaptersOf(playerBook()).length < 2;
@@ -394,6 +413,11 @@ async function turnPage(a) {
     lis.sync = null;
     if (state.open === a) await show(a, html);
   } finally { turning = false; }
+}
+function audioWordless(p) {
+  if (!isAudiobook(p) || state.open !== p) return false;
+  const d = $("readerFrame").contentDocument, body = d && d.querySelector(".co-body");
+  return !!body && !body.textContent.trim();
 }
 function listenNoteFor(a) {
   const m = modeOf(a);
@@ -535,6 +559,7 @@ async function readAlong(force) {
   if (C.reader.blockCount() === 0) C.reader.readable(READ_OPTS);
   if (i < 0) { C.reader.say(-1); maybeReshow(a); return; }
   C.reader.say(s.b[i], s.o[i], s.o[i] + s.l[i]);
+  if (s.b[i] !== lis.pipBlock) { lis.pipBlock = s.b[i]; if (document.body.classList.contains("pip")) paintPip(); }
 }
 // A transcript that's grown past what's shown is shown again, now and
 // then, when you're at its end.
@@ -579,6 +604,7 @@ const wantsWords = (a) => !!a && !a.audio.overlay && (modeOf(a) === "transcript"
 // next AHEAD seconds are.
 function nextGap(a, data, t, ahead) {
   const end = Math.min(durOf(a), t + ahead);
+  if (ahead === Infinity) t = 0;
   let at = t;
   for (const [x, y] of [...(data.ranges || [])].sort((m, n) => m[0] - n[0])) if (x <= at + 1 && y > at) at = y;
   return at < end - 1 ? at : null;
@@ -594,26 +620,39 @@ let aheadTimer = 0;
 async function writeAhead() {
   clearTimeout(aheadTimer);
   if (lis.writing || !A.canTranscribe) return;
-  const playing = listenPage();
-  // The one playing, else (charging, with the switch on) the one heard last.
-  let a = wantsWords(playing) ? playing : null;
-  let whole = false;
   if (!packs) await listenModels();
-  if (!a && listenPrefs().charging && packs && packs.charging) {
-    a = state.pages.filter((p) => isAudiobook(p) && wantsWords(p)).sort((x, y) => ((y.listen && y.listen.tAt) || 0) - ((x.listen && x.listen.tAt) || 0))[0] || null;
-    whole = true;
-  }
   const pack = readyPack();
-  if (!a || !pack) return;
-  const data = a.id === lis.dataFor ? lis.data : await listenData(a);
+  if (!pack) return;
+  // The one playing, a little ahead; then one asked to be written whole
+  // (Write the rest now); then, charging with the switch on, the one
+  // heard last.
+  const playing = listenPage();
+  let a = null, data = null, from = null;
+  const tryBook = async (b, t, ahead) => {
+    if (!b || a) return;
+    const d = b.id === lis.dataFor ? lis.data : await listenData(b);
+    const f = nextGap(b, d, Math.max(0, t), ahead);
+    if (f != null) { a = b; data = d; from = f; }
+  };
+  if (wantsWords(playing)) await tryBook(playing, lis.t - 2, AHEAD);
+  const whole = lis.wholeFor && state.pages.find((p) => p.id === lis.wholeFor && wantsWords(p));
+  if (lis.wholeFor && !a) {
+    await tryBook(whole, 0, Infinity);
+    if (!a) {
+      if (whole) toast("The transcript of “" + whole.title + "” is all written.");
+      lis.wholeFor = "";
+    }
+  }
+  if (!a && listenPrefs().charging && packs && packs.charging) {
+    const last = state.pages.filter((p) => isAudiobook(p) && wantsWords(p)).sort((x, y) => ((y.listen && y.listen.tAt) || 0) - ((x.listen && x.listen.tAt) || 0))[0];
+    await tryBook(last, 0, Infinity);
+  }
+  if (!a) return;
   if (data.pack && data.pack !== pack.id && !data.pieces.length) data.pack = pack.id;
-  const t = whole && lis.key !== a.id ? 0 : a.id === lis.key ? lis.t : placeOf(a);
-  const from = nextGap(a, data, Math.max(0, t - 2), whole && packs.charging ? durOf(a) : AHEAD);
-  if (from == null) return;
   const { part, pos } = L.partAt(a.audio.parts, from);
   const partStart = L.startOf(a.audio.parts, part), partEnd = partStart + (a.audio.parts[part].dur || 0);
   const to = Math.min(partEnd, from + CHUNK);
-  if (to - from < 0.5) { data.ranges = addRange(data.ranges || [], from, to); return; }
+  if (to - from < 0.5) { data.ranges = addRange(data.ranges || [], from, to); aheadTimer = setTimeout(writeAhead, 100); return; }
   const p = a.audio.parts[part];
   lis.writing = true;
   lis.job = { id: a.id, from, to };
@@ -644,6 +683,20 @@ async function writeAhead() {
 addEventListener("online", () => setTimeout(writeAhead, 5000));
 setTimeout(() => { if (A.canTranscribe) listenModels().then(() => writeAhead()); }, 15000);
 setInterval(() => { if (A.canTranscribe && !lis.writing && lis.state !== "playing") listenModels().then(() => writeAhead()); }, 5 * 60 * 1000);
+
+// Write the rest now: every part of the book not written yet, from the
+// start, until it's all there (or Stop).
+function writeRest(a, on) {
+  lis.wholeFor = on ? a.id : "";
+  if (on) { if (!readyPack()) { toast("Download a transcript model in Settings › Audiobooks first.", "Open", () => openSettings(false, "audiobooks")); lis.wholeFor = ""; return; } writeAhead(); }
+  else if (lis.job && lis.job.id === a.id && lis.key !== a.id) C.platform.audio.stopTranscribing();
+}
+function writeRestButton(a, after) {
+  const on = lis.wholeFor === a.id;
+  return el("button", { class: "row", type: "button", onclick: () => { writeRest(a, !on); if (after) after(); } },
+    el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, on ? "Stop writing the rest" : "Write the rest now"),
+      el("span", { class: "choice-note" }, on ? "Back to writing a little ahead of where you are" : "Every part not written yet, from the start, while the app is open")));
+}
 
 // ---- The audiobook's sheet in the reader ----
 
@@ -698,7 +751,8 @@ function listenAlongRows(p) {
       close();
       writeAhead();
     } }, el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, "Write the transcript again"),
-      el("span", { class: "choice-note" }, "With the model picked in Settings › Audiobooks, from where you are."))) : null)];
+      el("span", { class: "choice-note" }, "With the model picked in Settings › Audiobooks, from where you are."))) : null,
+    mode !== "listen" ? writeRestButton(a, close) : null)];
 }
 
 function listenSleepSheet() {
@@ -767,17 +821,24 @@ function listenChaptersSheet() {
   if (wantsWords(a) && A.canTranscribe) {
     const head = el("p", { class: "meta" });
     nav.querySelector(".meta").after(head);
+    const rest = el("div", { class: "group" });
+    nav.append(rest);
+    let timer = 0;
     const fill = async () => {
+      clearTimeout(timer);
       if (!nav.isConnected && nav.dataset.drawn) return;
       nav.dataset.drawn = "1";
       const data = await loadListenData(a);
       head.textContent = transcriptLine(a, data);
+      const all = L.covered(data.ranges, 0, durOf(a)) >= 0.99;
+      rest.hidden = all && lis.wholeFor !== a.id;
+      if (!rest.hidden) rest.replaceChildren(writeRestButton(a, () => setTimeout(fill, 50)));
       nav.querySelectorAll("[data-ch]").forEach((n) => {
         const i = Number(n.dataset.ch), c = ch[i], next = ch[i + 1] ? ch[i + 1].t : durOf(a), st = chapterState(a, data, i);
         n.textContent = L.timeText(c.t) + " · " + L.lengthText(next - c.t) + " · " + st.text;
         n.classList.toggle("accent", !!st.now);
       });
-      setTimeout(fill, 2000);
+      timer = setTimeout(fill, 2000);
     };
     fill();
   }
@@ -993,12 +1054,12 @@ function listeningGroup() {
   const prefs = listenPrefs();
   const secs = (list) => list.map((v) => ({ value: String(v), label: v + " seconds" }));
   return section("Listening", null, el("div", { class: "group" },
-    pickRow({ label: "Speed", note: "For a new audiobook; the player's speed button changes one", options: SPEEDS.map((v) => ({ value: String(v), label: v + "×" })),
-      get: () => String(listenPrefs().speed), set: (v) => { setListenPref("speed", Number(v)); paintListen(); } }),
     pickRow({ label: "Back", options: secs([5, 10, 15, 30, 60]), get: () => String(listenPrefs().back), set: (v) => { setListenPref("back", Number(v)); paintListen(); } }),
     pickRow({ label: "Forward", options: secs([10, 15, 30, 45, 60]), get: () => String(listenPrefs().on), set: (v) => { setListenPref("on", Number(v)); paintListen(); } }),
     switchRow("Back a little after a pause", "3 seconds, or 10 after a long one, so you pick up the sentence", prefs.rewind, (on) => setListenPref("rewind", on)),
-    switchRow("Keep the screen on", "While it plays, so you can read along", prefs.awake, (on) => { setListenPref("awake", on); speech.keepScreen(on && lis.state === "playing"); })));
+    switchRow("Keep the screen on", "While it plays, so you can read along", prefs.awake, (on) => { setListenPref("awake", on); speech.keepScreen(on && lis.state === "playing"); }),
+    A.native ? switchRow("Allow mixing", "Music or a podcast in another app keeps playing under the book. Off: they pause while it plays", prefs.mix, (on) => setListenPref("mix", on)) : null,
+    A.native ? switchRow("Small window outside the app", "Going home, the book stays in a window you can move, with back, play and forward", prefs.pip, (on) => setListenPref("pip", on)) : null));
 }
 function audiobookSections() {
   const adding = el("p", { class: "footnote" }, "Open an M4B or MP3 with Open a file" + (C.platform.files.canPickFolder ? ", or a folder of them with Open an audiobook folder" : "") + ". It's played from where it is, and shows under Files.");

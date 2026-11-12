@@ -1188,6 +1188,13 @@
       },
       rate(r) { if (A()) return A().rate({ rate: r }); if (job) job.rate = r; if (el) el.playbackRate = r; },
       sleep(at) { if (A()) return A().sleep({ at: at || 0 }); webSleep(at); },
+      // Allow mixing, and skip lengths in seconds (the app only).
+      options({ mix = false, back = 15, on = 30 } = {}) { if (A()) return A().options({ mix, back: back * 1000, on: on * 1000 }).catch(() => {}); },
+      // The small window outside the app; false where there is none.
+      async pip(on, playing) {
+        if (!A()) return false;
+        try { return !!(await A().pip({ on, playing })).supported; } catch (e) { return false; }
+      },
       async state() {
         if (A()) { try { return await A().state(); } catch (e) { return null; } }
         return job ? { key: job.key, part: job.part, pos: Math.round(((el && el.currentTime) || 0) * 1000), state: el && !el.paused ? "playing" : "paused", sleep: sleepAt } : null;
