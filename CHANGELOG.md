@@ -2,6 +2,30 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.57.0] - 2026-11-12
+
+### Added
+- Audiobooks. Open an M4B or MP3 with Open a file, or a folder of them with Open an audiobook folder (Android). It plays from where it is, never copied in, and shows under Files with headphones on its cover. The player under the text has the chapter, a track through it, back 15 and on 30 seconds, speed and a sleep timer (the moon). The chapters, and the files of a folder, are at the top left like a collection's clips; Read along with is in ⋯. It goes on with the screen off, and the lock screen, earbuds and a car control it. Elsewhere in the app a small bar carries it.
+- Where you are in an audiobook syncs, with its speed, what it reads along with and your fixes, by the file, like other files read from outside.
+- Read along with an audiobook (Android). Find the book in Discover searches Project Gutenberg and Standard Ebooks for it and downloads the one you pick, or pick a book already in your library. The phone writes a transcript a little ahead of where you are and matches it to the book's words: the paragraph being read lights up and the word being said is marked. Select a word and tap Play from here to jump the sound there.
+- A transcript of an audiobook with no book: its words, with the chapters as headings and paragraphs where the narrator pauses. Select a word heard wrong and tap the pen to fix it everywhere, now and as the transcript goes on.
+- Settings › Reading › Transcripts: three models to download on Wi-Fi (Fast, English; Better, 25 European languages with punctuation; Most languages, Hebrew too), and writing the rest of a book while the phone charges. Never on a low battery or a hot phone.
+- An EPUB with its own narration (Media Overlays) reads along by itself when it's read from where it is: press play.
+- Pages in Draw are one surface: a line you draw from one page onto the next is on both, and so is a picture dragged over the gap. Erasing, selecting and undoing take it from both.
+- When something is selected, Move to top and Move to bottom (arrows) put it in front of or behind the rest. What you drag always comes to the front.
+- Draw has a Select tool. Draw a loop round your strokes (or tap one) to take them, then Cut, Copy, Paste or Delete them, or drag them somewhere else. Ctrl or Cmd with X, C and V and Delete work on a computer.
+- Draw has a + for putting a picture from your phone on a PDF's page. Drag it, make it bigger or smaller by its corner, and it goes into the copy you save with drawings.
+- Hold a colour in Draw to make it your own: a spectrum, a slider for how light it is, Hex and Red, Green and Blue, and an eyedropper that takes a colour from the PDF.
+- Files read from outside sync what's yours on them: where you are, highlights, tags, collection, favourite and reading time. The file itself stays on its device; open the same file on another device and it picks up there.
+- GitHub sync shows how much room is left in your waypage-data repo, out of GitHub's 5 GB.
+
+### Changed
+- The selection bar has one Highlight button on a phone or tablet. A tap highlights in the colour you used last, shown by a small dot on its pen. Hold it and the five colours open in a row under the bar (above it when there's no room): slide to one and let go. With a mouse, the colour dot beside Highlight (or a right-click on it) opens the same row.
+- Keys 1 to 5 highlight the selected words in yellow, green, blue, pink or purple.
+
+### Fixed
+- A selection dragged to another page no longer vanishes behind it: it stays visible while you drag, lands on the page you drop it on, and always stays on a page. Anything an earlier test build lost off a page's edge comes back.
+
 ## [1.56.0] - 2026-11-10
 
 ### Added
