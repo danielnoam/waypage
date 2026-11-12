@@ -390,16 +390,12 @@ web copy stay links, as before.
   doesn't sync is left out of the merge and the base, and put back into
   library.json as GitHub had it (`ours`/`rest` in `once()`), so it never reads
   as deleted. A note has no address, so `oneCopyEach` skips it and Links only
-  doesn't apply to it. Notes are in no backup zip.
-- **Notes in Drive** (`drive.js putNote`): one PDF a note
-  (`notes.toPdf`, drawn from the stored files without opening the reader) in
-  `Waypage/Notes`, replaced when the note's version or name changed
-  (`cfg.notePdfs`), removed when the note is gone, made at a backup while the
-  app is open (not by the Android background job, which can't run pdf.js).
-  The switch is only usable while GitHub sync's Notes is on, and goes off
-  with it; a restore doesn't read these PDFs.
+  doesn't apply to it. A backup zip holds a note whole, as its folder
+  (`backup.noteFiles` in a browser; the native packer takes the folder),
+  under Drive's own Notes switch (`driveContents`); there are no PDF copies.
 - Files read from outside (`link` on the entry) are this device's alone:
-  neither sync nor any backup takes them, and a restore skips them.
+  neither sync nor any backup takes them, and a restore skips them. Only
+  their highlights and drawings sync, by fingerprint (`outside`, above).
 - **Backups and exports** (`backup.js`, `epub.js`): one zip of the whole
   library, one HTML file per clip, an EPUB of chosen clips.
 - **Imports** (`imports.js`): other read-later apps' exports become

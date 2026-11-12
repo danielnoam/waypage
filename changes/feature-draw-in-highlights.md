@@ -6,12 +6,11 @@
 - Make a note from it, in ⋯, works for every kind of file Waypage reads: a PDF's own pages, a comic's pictures one to a page, and anything else set as pages. Drawings on the file stay on it.
 - A drawing whose paragraph is gone after Update from the site says Not found in this copy, as a highlight does.
 - A note's card shows its first sheet, with what is drawn on it.
-- Notes go into backups (the file and Google Drive), drawings, PDF and all, and come back with a restore.
+- Notes go into backups whole, with what's written on them and their PDF, and come back with a restore. Google Drive's What goes in has a Notes switch of its own, above Feeds.
 - A note over the 50 MB sync limit says so on its card ("Not synced, too big"), in ⋯ and in Sync, and stays on this device.
 
 ### Changed
 - Notes sit above Files in the library and the side menu.
 - A note written on two devices keeps what both drew, stroke by stroke, instead of the copy saved last.
-- Google Drive's Notes as PDFs switch no longer needs GitHub sync.
 - Markdown exports and Copy all list drawings as lines ("Drawing, paragraph 4"); Save as PDF on a note still has the drawing itself.
 - The reader bar's pen is only on notes. Elsewhere Draw is in Highlights and on the selection bar.
