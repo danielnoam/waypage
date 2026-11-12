@@ -75,6 +75,8 @@ async function syncNow(quiet = true) {
       onProgress: () => { if (state.section === "sync") renderSection(); paintDownloads(); },
       light: syncsPlacesOnly(),
       isMail: (u) => isMail({ url: u }),
+      getOutside: outsidePages,
+      setOutside: outsideTake,
     });
   } catch (e) {
     if (!joined) unsynced = unsynced || sending;
@@ -88,6 +90,74 @@ async function syncNow(quiet = true) {
   if (res && res.light) { if (!quiet) toast("Places and reading time synced. Clips wait for Wi-Fi."); return res; }
   if (res && !quiet && !C.sync.paused) toast(res.up + res.down + res.removed ? "Synced: " + [res.up ? res.up + " sent" : "", res.down ? res.down + " came in" : "", res.removed ? res.removed + " removed" : ""].filter(Boolean).join(", ") + "." : "Already in step.");
   return res;
+}
+// Files read from outside (2026-11): the file stays here, and where you
+// are in it, its highlights, tags, collection and favourite sync by its
+// fingerprint (sync.js, outsideOf). One from before fingerprints gets its
+// own the first time it has something to send.
+async function outsidePages() {
+  const list = [];
+  let found = false;
+  for (const p of state.pages) {
+    if (!p.link || !p.file) continue;
+    if (!p.file.fp) {
+      const has = p.at > 0 || p.finished || (p.marks || []).length || (p.tags || []).length || p.folder || p.fav;
+      if (!has || !(await C.files.fingerprintOf(p))) continue;
+      found = true;
+    }
+    list.push({ ...p, file: { ...p.file } });
+  }
+  if (found) await C.store.writeIndexOnly(state.pages);
+  return list;
+}
+// What came back goes onto each file here with that fingerprint, unless
+// it changed here while sync ran (it goes up next time).
+async function outsideTake(all, sent) {
+  const now = C.sync.outsideOf(state.pages);
+  const bare = (o) => { const x = { ...(o || {}) }; delete x.ids; delete x.name; return JSON.stringify(x); };
+  let changed = false;
+  for (const [fp, o] of Object.entries(all)) {
+    if (sent[fp] && bare(now[fp]) !== bare(sent[fp])) continue;
+    for (const p of state.pages.filter((x) => x.link && x.file && x.file.fp === fp)) {
+      const next = C.sync.outsideOnto(p, o);
+      if (!next) continue;
+      const was = placeTime(p);
+      for (const k of Object.keys(p)) if (!(k in next)) delete p[k];
+      Object.assign(p, next);
+      changed = true;
+      if (state.open === p) {
+        paintMarks(p);
+        if (placeTime(p) > was && !movedHere && !C.reader.touched() && Date.now() - openedAt < FOLLOW_MS) C.reader.placed().then(() => { if (state.open === p) C.reader.jump(p.at || 0, p.spot || ""); });
+      }
+    }
+  }
+  outsideStats(all);
+  if (!changed) return;
+  await C.store.writeIndexOnly(state.pages);
+  renderLibrary();
+  if (state.folder) renderFolder();
+  updateWidgets();
+}
+// The same file's clip on another device counts as this one in the
+// reading stats.
+function outsideStats(all) {
+  const same = {};
+  for (const [fp, o] of Object.entries(all || {})) {
+    const here = state.pages.filter((p) => p.link && p.file && p.file.fp === fp).map((p) => p.id);
+    if (!here.length) continue;
+    for (const id of (o.ids || []).concat(here.slice(1))) if (id !== here[0]) same[id] = here[0];
+  }
+  C.stats.same(same);
+}
+// A file read from outside, just brought in, takes what another device
+// left on the same file, as this device last saw it.
+function outsideKnown(p) {
+  const fp = p && p.link && p.file && p.file.fp;
+  const o = fp && C.sync.on && C.sync.what.clips && C.sync.outsideKnown(fp);
+  if (!o) return false;
+  for (const [k, v] of Object.entries(o)) if (k !== "ids" && k !== "name") p[k] = v;
+  outsideStats({ [fp]: o });
+  return true;
 }
 // Pages that came as links only (0.30.3), saved here one after another
 // like a run, each into its place in the library. In a browser only
@@ -188,7 +258,7 @@ function syncSteps() {
   const connect = async () => { note.textContent = (await connectSync(input.value, go)) || ""; };
   go.addEventListener("click", connect);
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); connect(); } });
-  return section("Sync with GitHub", "Keeps your clips, feeds and newsletters the same on every device, through a private repo on your GitHub. Files read from outside stay on the device that has them. The token stays on this device and goes only to GitHub; made for waypage-data only, it can't touch anything else on your account. Sync stops if that repo is ever made public.",
+  return section("Sync with GitHub", "Keeps your clips, feeds and newsletters the same on every device, through a private repo on your GitHub. Files read from outside stay on their device; your place and highlights in them sync. The token stays on this device and goes only to GitHub; made for waypage-data only, it can't touch anything else on your account. Sync stops if that repo is ever made public.",
     el("div", { class: "group" },
       outRow("https://github.com/signup", "1", "Make a free GitHub account", "Skip this if you have one"),
       outRow(C.sync.NEW_REPO_URL, "2", "Make a private repo for your library", "GitHub fills it in: keep it Private, then Create"),
@@ -325,10 +395,24 @@ function syncState() {
         after ? el("span", { class: "choice-note accent" }, after) : null,
         C.sync.running ? el("span", { class: "progress thin" + (now.part == null ? " busy" : ""), "aria-hidden": "true" },
           el("span", { class: "progress-fill", style: "transform: scaleX(" + (now.part == null ? 1 : now.part) + ")" })) : null)),
+      syncSpace(),
       paused ? null : el("button", { class: "row", type: "button", ...(C.sync.running ? { disabled: "" } : {}), onclick: () => syncNow(false) },
         el("span", { class: "row-label accent" }, "Sync now")),
       el("button", { class: "row", type: "button", onclick: () => pauseSync(!paused) },
         el("span", { class: "row-label accent" }, paused ? "Resume syncing" : "Pause syncing"))));
+}
+// How much room the repo has left (2026-11), against GitHub's 5 GB.
+function syncSpace() {
+  C.sync.space().then((changed) => { if (changed && state.section === "sync") renderSection(); });
+  const used = C.sync.used;
+  if (used == null) return null;
+  const part = Math.min(1, used / C.sync.SPACE);
+  const left = Math.max(0, C.sync.SPACE - used);
+  return el("div", { class: "row sync-space" }, el("span", { class: "choice-text" },
+    el("span", { class: "choice-label" }, formatSize(left) + " left"),
+    el("span", { class: "choice-note" + (part > 0.9 ? " warn" : "") }, formatSize(Math.max(used, 1000)) + " of " + formatSize(C.sync.SPACE) + " used"),
+    el("span", { class: "progress thin", role: "progressbar", "aria-label": "Space used on GitHub", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.round(part * 100)) },
+      el("span", { class: "progress-fill", style: "transform: scaleX(" + part + ")" }))));
 }
 // Pause stops a sync at the next page and starts none until Resume;
 // pages saving from their links and pictures wait too (0.30.4).
@@ -363,7 +447,7 @@ function syncsList() {
     el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, label), el("span", { class: "choice-note" }, note)),
     el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!what[key],
       onchange: (e) => { C.sync.setWhat(key, e.target.checked); renderSection(); syncSoon(500); } }));
-  return section("What this device syncs", "Clips go with their highlights, tags, collections, favourites and where you were. With Clips too, each clip's text goes up, so another device gets it as you saved it even if the site changes; pictures come from the clip's site, or from GitHub when it has none, up to 100 MB a clip. With Links only, clips new to a device are saved again from their links, so one that changed or went away comes back different or not at all. A part turned off here is left as it is on GitHub for your other devices. Files read from outside, watched folders and settings don't sync."
+  return section("What this device syncs", "Clips go with their highlights, tags, collections, favourites and where you were. With Clips too, each clip's text goes up, so another device gets it as you saved it even if the site changes; pictures come from the clip's site, or from GitHub when it has none, up to 100 MB a clip. With Links only, clips new to a device are saved again from their links, so one that changed or went away comes back different or not at all. A part turned off here is left as it is on GitHub for your other devices. A file read from outside stays on its device, but your place, highlights, tags and reading time in it sync to the same file on your other devices. Watched folders and settings don't sync."
       + (C.platform.knowsConnection ? " On mobile data, Places and reading time only moves where you are in each clip, what you finished and your reading time on any connection, while new clips, tags and collections wait for Wi-Fi." : ""),
     el("div", { class: "group" },
       sw("clips", "Clips", C.sync.links ? "Links, highlights, tags, collections and places" : "Text, highlights, tags, collections and places"),
