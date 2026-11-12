@@ -688,6 +688,22 @@ function zipOf(files) {
       await card.locator(".thumb-fav").waitFor({ state: "detached" });
     });
 
+    await test("a clip renames from its long-press sheet, and Undo puts the name back", async () => {
+      if (await p.evaluate(() => !!state.open)) { await p.goBack(); await p.waitForFunction(() => !state.open); }
+      await p.evaluate(() => openMenu("page", state.pages.find((x) => /Long Haul/.test(x.title))));
+      await p.locator("#menuSheet .row", { hasText: "Rename" }).click();
+      const field = p.locator("#menuSheet .rename-input");
+      await field.waitFor();
+      assert.strictEqual(await field.inputValue(), "The Long Haul Flight");
+      await field.fill("  Flights,   long  ");
+      await field.press("Enter");
+      await p.waitForFunction(() => !state.menu);
+      await p.locator(".page-card .card-title", { hasText: "Flights, long" }).waitFor();
+      assert.ok(await p.evaluate(() => state.pages.some((x) => x.title === "Flights, long")));
+      await p.locator("#toast .toast-act", { hasText: "Undo" }).click();
+      await p.locator(".page-card .card-title", { hasText: "The Long Haul Flight" }).waitFor();
+    });
+
     await test("a book opens to a spinner, then its text (1.16.0)", async () => {
       await p.evaluate(() => {
         const c = state.pages.find((x) => /Long Haul/.test(x.title));
