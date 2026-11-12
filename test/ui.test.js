@@ -4250,7 +4250,7 @@ function zipOf(files) {
       }
     });
 
-    await test("a note: New note picks paper, opens in Scroll with the pen on, grows with a stroke on its last sheet, has its own settings, and has its own part of the library (2.0.0)", async () => {
+    await test("a note: New note picks paper, opens in Scroll with the pen on, can show as Pages, grows with a stroke on its last sheet, has its own settings, and has its own part of the library (2.0.0)", async () => {
       const q = await page(browser, 390);
       await q.click("#severalBtn");
       await q.locator("#batchView .row", { hasText: "New note" }).click();
@@ -4275,6 +4275,19 @@ function zipOf(files) {
       assert.deepStrictEqual(await q.locator(".sheet-tabs label, .sheet-tabs button").allTextContents(), ["Layout", "Auto-scroll"]);
       await q.locator(".sheet-tabs", { hasText: "Auto-scroll" }).getByText("Auto-scroll").click();
       assert.ok(await q.getByText("Go on to the next note").isVisible(), "the note's own wording");
+      // Show as Pages: a sheet at a time, and the pen still draws on it (2026-11).
+      await q.locator(".sheet-tabs").getByText("Layout").click();
+      await q.locator("#readingSheet .rc-row", { hasText: "Show as" }).getByText("Pages").click();
+      await until(q, () => C.reader.paged && pagesOn());
+      await q.evaluate(() => closeSheet(true));
+      await q.waitForTimeout(600);
+      const before = await q.evaluate(() => C.ink.count());
+      const shown = await q.evaluate(() => { const r = [...C.reader.frameDoc.querySelectorAll("svg.co-ink")].map((x) => x.getBoundingClientRect()).find((r) => r.left >= 0 && r.left < innerWidth); return [r.x, r.y]; });
+      await q.mouse.move(fb.x + shown[0] + 60, fb.y + shown[1] + 100);
+      await q.mouse.down();
+      await q.mouse.move(fb.x + shown[0] + 160, fb.y + shown[1] + 160, { steps: 8 });
+      await q.mouse.up();
+      await until(q, (b) => C.ink.count() > b, before);
       await q.evaluate(() => closeSheet(true));
       // The library lists it apart from clips and files.
       await q.evaluate(() => closeReader());

@@ -73,7 +73,7 @@ Each section below shows the computer (left) and the phone (right).
 <p><img src="docs/shots/notes-desktop.jpg" width="74%" alt="A lines note with a line written and typed text, on a computer"> <img src="docs/shots/notes-phone.jpg" width="21%" alt="A lines note with a line written and typed text, on a phone"></p>
 
 - A note is a page of your own to draw and type on. Save with options › New note asks for Blank, Lines or Squares paper, each shown beside its name.
-- It grows as you write: drawing on its last sheet adds another. A note is always a scroll, never Pages.
+- It grows as you write: drawing on its last sheet adds another. Aa › Show as Pages shows it a sheet at a time.
 - Pen, highlighter, eraser, Undo and Redo as before, and Select (loop, cut, copy, paste, move), Add › Image and Add › Text. Only a pen draws on a touch screen unless Finger is on.
 - Opening a PDF offers Make a note beside Keep a copy and Read from where it is, and ⋯ › Make a note from it works on any file: a PDF's own pages, a comic's pictures, anything else set as pages. The file stays as it is. A note's card shows its first sheet.
 - Notes show in their own part of the library, above Files, and Show › All notes (there once you have a note) lists them alone. Aa on a note has only Layout (All notes or This note, margins, brightness slider, theme, Dark note) and Auto-scroll, which goes on to the next note.

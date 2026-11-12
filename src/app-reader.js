@@ -3499,9 +3499,9 @@ $("viewerNext").addEventListener("click", () => stepImage(1));
 $("viewerZoomIn").addEventListener("click", () => zoomStep(1));
 $("viewerZoomOut").addEventListener("click", () => zoomStep(-1));
 
-// A note's own settings (2.0.0): only Layout (where they apply, margins,
-// brightness slider, theme, dark note) and Auto-scroll. A note is always a
-// scroll of sheets, so it has no Show as, and no text to set.
+// A note's own settings (2.0.0): only Layout (where they apply, Scroll or
+// Pages, margins, brightness slider, theme, dark note) and Auto-scroll. A
+// note is sheets, so it has no text to set.
 function noteSettings() {
   const p = state.open, id = "nc" + ++readingGroups, r = noteLook(p);
   const row = (text, control) => el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, text), control);
@@ -3511,6 +3511,9 @@ function noteSettings() {
       options: [{ value: "all", label: "All notes" }, { value: "note", label: "This note" }] }));
   const layout = el("div", { class: "rc-part", "data-part": "layout" }, el("h2", { class: "overline" }, "Layout"),
     scope,
+    row("Show as", seg(id + "-layout", "Show as", [
+      { value: "scroll", label: "Scroll" }, { value: "pages", label: "Pages" },
+    ], r.layout, (v) => setNoteLook({ layout: v }))),
     row("Margins", seg(id + "-margins", "Margins", [
       { value: "narrow", label: "Narrow" }, { value: "normal", label: "Normal" }, { value: "wide", label: "Wide" },
     ], r.margins, (v) => setNoteLook({ margins: v }))),

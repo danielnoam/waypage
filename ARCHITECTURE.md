@@ -315,7 +315,7 @@ and no file: a stack of sheets, in `note.json` (`store.readNote`,
 pdf.js document (`notes.js handle`: `draw(n, width)` paints the paper on a
 canvas, or draws the page from the note's PDF), so drawing, the layers and
 undo are the PDF's own. A stroke on the last sheet adds a sheet of paper
-(`ink.onStroke`, `files.addSheet`). A note is always a scroll (`pagesOn`),
+(`ink.onStroke`, `files.addSheet`). A note shows as Scroll or Pages (`noteLook().layout`, `pagesOn`; Pages turns sheets like a comic),
 has its own margins and Dark note (`waypage.noteLook`, `app-reading.js`),
 and only a note is `drawable`; a linked PDF is `convertible`: its pen asks
 for a note, and `notes.fromPdf` keeps a copy of the PDF beside the note

@@ -16,3 +16,4 @@
 - The reader bar's pen is only on notes. Elsewhere Draw is in Highlights and on the selection bar.
 - ⋯ › Drawings is gone: Try your pen and Remove all drawings are at the foot of the Highlights sheet, and Save a copy with drawings is in ⋯ on a PDF that has some.
 - The selection bar says Mark (was Highlight) and Draw: both make highlights.
+- A note can show as Pages, a sheet at a time like a comic: Aa › Show as, for all notes or just this one.
