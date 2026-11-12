@@ -1722,7 +1722,7 @@ async function saveHighlights(btn) {
 // (0.31.0): a backup is restored, a clip sent as a file comes back, and
 // a book, a note, a page or a comic becomes a clip of its own. `open`
 // opens it once it's in.
-const FILE_ACCEPT = ".epub,.mobi,.azw,.azw3,.prc,.fb2,.md,.markdown,.txt,.html,.htm,.eml,.cbz,.pdf,.pptx,.csv,.json,.zip,.opml,.xml,application/epub+zip,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,text/html,message/rfc822,text/csv,application/json,application/zip";
+const FILE_ACCEPT = ".m4b,.m4a,.mp3,.aac,.ogg,.opus,.flac,.wav,audio/*,.epub,.mobi,.azw,.azw3,.prc,.fb2,.md,.markdown,.txt,.html,.htm,.eml,.cbz,.pdf,.pptx,.csv,.json,.zip,.opml,.xml,application/epub+zip,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,text/html,message/rfc822,text/csv,application/json,application/zip";
 // The system's picker where there is one (it also grants a lasting
 // permission, for a clip that reads from the file); the browser's own
 // otherwise.
@@ -1867,7 +1867,7 @@ addEventListener("drop", async (e) => {
 // other way this time (a copy of one read from where it is, or back).
 const hasFile = (name, size, link) => state.pages.some((p) => p.file && p.file.name === name && p.file.size === size && !p.link === !link);
 const fileLike = (name, size, link) => state.pages.find((p) => p.file && p.file.name === name && p.file.size === size && !p.link === !link);
-const FILE_KINDS_LINE = "EPUB, PDF, PowerPoint, Markdown, text, HTML, email (.eml) and CBZ comic files";
+const FILE_KINDS_LINE = "EPUB, PDF, PowerPoint, Markdown, text, HTML, email (.eml) and CBZ comic files, and audiobooks (M4B, MP3)";
 async function openFile(file, btn, open, ref, forced) {
   if (!file) return;
   const label = btn ? btn.querySelector(".row-label") : null;
@@ -1896,6 +1896,12 @@ async function openFile(file, btn, open, ref, forced) {
     if (kind === "pptx") {
       if (btn) { btn.disabled = false; say("Restore or open a file"); }
       await convertDeck(file, ref, open);
+      return;
+    }
+    // An audiobook (2026-11) is played from where it is (app-listen.js).
+    if (kind === "audio") {
+      if (btn) { btn.disabled = false; say("Restore"); }
+      await addAudiobook(file, ref);
       return;
     }
     // Already here from the watched folder (1.1.3), copy or not.
@@ -1946,6 +1952,7 @@ async function openFile(file, btn, open, ref, forced) {
         fileSeries(meta);
         outsideKnown(meta);
         state.pages.unshift(meta);
+        pairArrived(meta);
         await C.store.writeIndex(state.pages);
         await loadThumbs();
         C.store.keepStored();

@@ -60,6 +60,7 @@ src/app-saving.js   sync screen, saving several, next links and new chapters, fe
 src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestures, a feed's sheets
 src/app-discover.js the Discover place: Wikipedia today, the list, its search, the Sites grid (stories, books, texts), the story and sign-up sheets
 src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
+src/app-listen.js   audiobooks: bringing one in, the player and its bar, reading along, transcripts written ahead, fixes, Find the book in Discover, Settings › Transcripts
 src/app-lock.js     app lock: passcode (PBKDF2 hash), fingerprint or face on Android
 src/app-start.js    wiring at launch, what other apps share in, self-update, Test builds, What's new
 src/save.js         link to saved page: fetch, Wikipedia adapter or Readability, allowlist cleaner, picture previews, video cards
@@ -67,6 +68,7 @@ src/reader.js       a saved page in the sandboxed iframe: place, find, highlight
 src/store.js        one directory per clip and library.json; IndexedDB in a browser
 src/platform.js     browser vs app: native fetch, plugins, downloads, speech, opening links
 src/files.js        EPUB, Kindle (MOBI/AZW3), FB2, CBZ, Markdown, text and HTML files
+src/listen.js       audiobooks' pure parts: chapters from M4B and MP3 tags, transcripts as paragraphs, fixes, heard words matched to a book's, EPUB Media Overlays
 src/pdf.js          PDFs through pdf.js in a locked-down frame
 src/ink.js          pen drawing over a PDF's pages: strokes, layers, undo, what a copy of the PDF is given
 src/pptx.js         PowerPoint decks redrawn on a canvas and written as a PDF (1.49.0)
@@ -89,7 +91,7 @@ src/vendor/         Readability, pdf.js, foliate-js's MOBI reader, each with its
 assets/             icon and splash sources for the apps
 icons/, icon.svg    app icons
 worker/             the web copy's fetch proxy, a Cloudflare Worker (worker.js, wrangler.toml, README.md has the setup)
-native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Pen, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
+native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Pen, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes), Audiobook (AudiobookService plays with the screen off; Listen writes transcripts with sherpa-onnx's offline recognizer), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
 tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-build.json
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
 tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
@@ -417,13 +419,37 @@ bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `pptx.test.js` and `ink.test.js` test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `pptx.test.js`, `ink.test.js` and `listen.test.js` test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
 changes Markdown runs just `build.test.js` and `docs.test.js`.
 
 `node tools/shots.js` retakes the README's pictures at 1280 px and 390 px
 into `docs/shots/`, from a demo library it saves through the app itself
 (`tools/shots/demo/`). `node tools/shots.js reader skim` retakes only
 those sections.
+
+## Audiobooks
+
+An audiobook is a file read from outside (`file.kind` "audio", never
+copied in), so it's under Files and syncs by fingerprint like one: its
+`listen` field (`{ t, tAt, speed, mode, book, fixes }`) is in sync.js's
+OUTSIDE list, merged by `mergeListen` (the place from the newer `tAt`,
+fixes from both). `audio` (`{ parts, chapters, dur }`, each part a sound
+file's ref) is this device's own. A folder is one book; its fingerprint
+is its files' names and sizes. Playing is AudiobookService (a foreground
+mediaPlayback service, one MediaPlayer, parts played in turn, a stretch
+of a zip by fd offset for an EPUB's narration); a browser uses <audio>.
+
+Reading along needs words with times. The phone writes a transcript a
+little ahead of where you are (`writeAhead`, three minutes at a time,
+ten minutes ahead, the whole book while charging if asked) with
+sherpa-onnx's offline recognizer, kept in `listen.json` beside the clip.
+`listen.align` puts the heard words on the shown clip's words (runs of
+three heard in order, then the gaps between them shared out), into a
+sync of `{ t, b, o, l }` in Narrate's blocks (`reader.readable` with
+footnotes and headers in); `reader.say` lights the block and the word
+with the CSS Custom Highlight API. A transcript clip is aligned to its
+own text the same way, so both read along through one path. An EPUB's
+Media Overlays (SMIL) give the times themselves (`overlaySync`).
 
 ## Trade-offs
 
@@ -491,6 +517,11 @@ adds a line here.
 - Dialogs (Downloads, Sync, Save with options, Settings) fade in and out,
   the one planned exception to "nothing fades" (Daniel's pick over the
   grow and the zoom).
+
+- **Transcripts aren't synced or backed up.** They're remade on each
+  phone from the sound (a long book's is a few MB); only the fixes sync.
+  No unsure-word marks: the models give no confidence. Fixes are find and
+  replace on what's heard, not hotwords for the model.
 
 ## Traps
 

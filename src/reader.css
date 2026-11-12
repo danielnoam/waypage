@@ -224,6 +224,9 @@ html[data-co-pdf-dark] .co-ink .pen.c-green { fill: #5CCB8A; }
   -webkit-box-decoration-break: clone; box-decoration-break: clone;
 }
 
+/* An audiobook read along (2026-11): the word being said, in its block. */
+::highlight(co-say) { background-color: var(--mark); color: inherit; }
+
 /* Where a paywalled article stops (1.7.0). */
 .co-cut {
   margin: var(--s-6) 0 0; padding: var(--s-3) var(--s-4);

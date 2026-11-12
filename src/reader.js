@@ -849,6 +849,62 @@
     }
   }
 
+  // An audiobook read along (2026-11): the block being heard lit as
+  // Narrate lights it, and the word being said in it underlined through
+  // the CSS Custom Highlight API (::highlight(co-say), reader.css). `start`
+  // and `end` count the block's text as read (speechText). say(-1) clears.
+  const SAID = "style, script, button, .co-placeholder, .co-tr";
+  function rangeIn(el, start, end) {
+    const unsaid = (t) => {
+      const up = t.parentElement;
+      if (!up || up.closest(SAID)) return true;
+      const sup = up.closest("sup");
+      return !!sup && /^\s*\[[^\]]*\]\s*$/.test(sup.textContent);
+    };
+    const r = doc.createRange();
+    const walk = doc.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let n = 0, space = true, began = false, last = null;
+    for (let t = walk.nextNode(); t; t = walk.nextNode()) {
+      if (unsaid(t)) continue;
+      const d = t.data;
+      for (let k = 0; k < d.length; k++) {
+        const sp = /\s/.test(d[k]);
+        if (sp && space) continue;
+        if (!began && n === start) { r.setStart(t, k); began = true; }
+        if (began && n === end) { r.setEnd(t, k); return r; }
+        n++; space = sp; last = t;
+      }
+    }
+    if (!began || !last) return null;
+    r.setEnd(last, last.data.length);
+    return r;
+  }
+  let saidAt = -1;
+  function say(i, start, end) {
+    const w = frame && frame.contentWindow;
+    const hl = w && w.CSS && w.CSS.highlights && w.Highlight ? w.CSS.highlights : null;
+    if (i == null || i < 0) { if (hl) hl.delete("co-say"); if (saidAt >= 0) light(-1); saidAt = -1; return; }
+    if (i !== saidAt || !lit) { light(i); saidAt = i; }
+    if (!hl || !blocks[i] || start == null) return;
+    const r = rangeIn(blocks[i].el, start, end);
+    if (r) hl.set("co-say", new w.Highlight(r)); else hl.delete("co-say");
+  }
+  // Where an element of the clip is among the blocks: the block it's in
+  // (or the first one in it), and its words' place in that block's text.
+  function spotOfId(id) {
+    const el = doc && doc.getElementById(id);
+    if (!el) return null;
+    let b = blocks.findIndex((x) => x.el === el || x.el.contains(el));
+    if (b >= 0) {
+      const o = spokenOffset(blocks[b].el, el, 0);
+      return { b, o, l: Math.max(1, speechText(el).length) };
+    }
+    b = blocks.findIndex((x) => el.contains(x.el));
+    return b >= 0 ? { b, o: 0, l: blocks[b].text.length } : null;
+  }
+  // The block a tap or selection is in, for Play from here: { index, offset }.
+  const blockCount = () => blocks.length;
+
   // Where a selection starts, for "Read from here": its block, how far
   // into the block's text, and where it is on screen (the frame's own
   // coordinates).
@@ -2099,5 +2155,5 @@
       return line;
     }));
   }
-  C.reader = { pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
+  C.reader = { say, spotOfId, blockCount, pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
 })();
