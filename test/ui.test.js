@@ -2039,26 +2039,31 @@ function zipOf(files) {
         const wait = (f) => new Promise((ok) => { const t = setInterval(() => { if (f()) { clearInterval(t); ok(); } }, 50); });
         const playing = () => Object.assign(lis, { key: "book", state: "playing" });
         const out = {};
-        // On (the default): leaving the clip and opening another keep it.
+        // Off (the default): going back stops it, and so does opening another clip.
         out.on = listenPrefs().keep;
+        openPage("k1");
+        await wait(() => state.open && state.open.id === "k1");
+        playing();
+        closeReader();
+        await wait(() => !state.open);
+        out.stoppedOnClose = lis.key === "" && stops === 1;
+        playing();
+        openPage("k2");
+        await wait(() => state.open && state.open.id === "k2");
+        out.stoppedOnOpen = lis.key === "" && stops === 2;
+        closeReader();
+        await wait(() => !state.open);
+        // On: leaving the clip and opening another keep it.
+        setListenPref("keep", true);
         playing();
         openPage("k1");
         await wait(() => state.open && state.open.id === "k1");
         closeReader();
         await wait(() => !state.open);
-        out.keptOnClose = lis.key === "book" && stops === 0;
-        // Off: going back stops it, and so does opening another clip.
-        setListenPref("keep", false);
-        openPage("k1");
-        await wait(() => state.open && state.open.id === "k1");
-        out.stoppedOnOpen = lis.key === "" && stops === 1;
-        playing();
-        closeReader();
-        await wait(() => !state.open);
-        out.stoppedOnClose = lis.key === "" && stops === 2;
+        out.keptOn = lis.key === "book" && stops === 2;
         return out;
       });
-      assert.deepStrictEqual(got, { on: true, keptOnClose: true, stoppedOnOpen: true, stoppedOnClose: true });
+      assert.deepStrictEqual(got, { on: false, stoppedOnClose: true, stoppedOnOpen: true, keptOn: true });
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

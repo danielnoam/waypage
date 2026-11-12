@@ -19,7 +19,7 @@ const L = C.listen;
 const A = C.platform.audio;
 const READ_OPTS = { footnotes: true, edges: false };
 const LISTEN_KEY = "waypage.listen";
-const listenPrefs = () => ({ pack: "", pauses: true, chapters: true, charging: true, back: 15, on: 30, rewind: true, awake: false, keep: true, mix: false, volume: 1, pip: true, ...(load(LISTEN_KEY, {}) || {}) });
+const listenPrefs = () => ({ pack: "", pauses: true, chapters: true, charging: true, back: 15, on: 30, rewind: true, awake: false, keep: false, mix: false, volume: 1, pip: true, ...(load(LISTEN_KEY, {}) || {}) });
 const setListenPref = (k, v) => { store(LISTEN_KEY, { ...listenPrefs(), [k]: v }); if (["mix", "volume", "back", "on"].includes(k)) listenOptions(); if (k === "pip") listenFloat(); };
 const listenOptions = () => { const p = listenPrefs(); C.platform.audio.options({ mix: p.mix, volume: p.mix ? Math.max(0, Math.min(2, Number(p.volume) || 0)) : 1, back: p.back, on: p.on }); };
 const SPEEDS = [0.8, 1, 1.1, 1.2, 1.3, 1.5, 1.75, 2, 2.5, 3];
