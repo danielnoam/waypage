@@ -110,7 +110,7 @@ async function outsidePages() {
   for (const p of state.pages) {
     if (!p.link || !p.file || p.note) continue;
     if (!p.file.fp) {
-      const has = p.at > 0 || p.finished || (p.marks || []).length || p.ink || (p.drawn || []).length || (p.tags || []).length || p.folder || p.fav;
+      const has = p.at > 0 || p.finished || (p.marks || []).length || p.ink || (p.drawn || []).length || (p.tags || []).length || p.folder || p.fav || (p.listen && p.listen.t > 0);
       if (!has || !(await C.files.fingerprintOf(p))) continue;
       found = true;
     }
@@ -817,9 +817,11 @@ function renderBatch(text, preset, from) {
   const fromFile = preset || from ? null : el("section", { class: "settings-section batch-file" }, el("h2", { class: "overline" }, "File"),
     el("div", { class: "group" }, el("button", { class: "row", type: "button", onclick: () => pickFile(() => back()) },
       el("span", { class: "row-label accent" }, "Open a file")),
+      C.platform.files.canPickFolder ? el("button", { class: "row", type: "button", onclick: () => back().then(addAudiobookFolder) },
+        el("span", { class: "row-label accent" }, "Open an audiobook folder")) : null,
       el("button", { class: "row", type: "button", onclick: () => openMenu("newNote") },
         el("span", { class: "row-label accent" }, "New note"))),
-    el("p", { class: "meta" }, "An EPUB book, a Markdown or text note, an HTML page, an email (.eml) or a CBZ comic. It stays " + ON_HERE + "."));
+    el("p", { class: "meta" }, "An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3, or a folder of them). It stays " + ON_HERE + "."));
   const form = el("form", { class: "batch-form" }, asPage, fromFile,
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, "Links"), area, count, finder, skipRow),
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, "Save as"),

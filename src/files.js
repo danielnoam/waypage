@@ -63,6 +63,8 @@
     const ext = EXTS[extOf(file.name)] || extOf(file.name);
     if (head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46) return "pdf";
     if (String.fromCharCode(...head.subarray(60, 68)) === "BOOKMOBI") return ext === "azw3" ? "azw3" : "mobi";
+    // An audiobook, or one of its parts (2026-11): app-listen.js.
+    if (head[0] !== 0x50 && C.listen && C.listen.sniff(head, file.name) && (C.listen.isAudioName(file.name) || /^(ID3|....ftyp|OggS|fLaC)/s.test(String.fromCharCode(...head.subarray(0, 8))))) return "audio";
     if (head[0] === 0x50 && head[1] === 0x4b) {
       let entries;
       try { entries = await B().zipEntries(file); } catch (e) { return "zip"; }

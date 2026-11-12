@@ -457,6 +457,7 @@ function clipMinutes(p) {
 const clipLeft = (p, at) => Math.max(1, Math.ceil(clipMinutes(p) * (1 - at)));
 // "Finished" once read to the end, "6 min left" part way, else the length.
 function readingLine(p) {
+  if (isAudiobook(p)) return listenLine(p);
   if (p.finished) return "Finished";
   if (p.at > 0.02) return clipLeft(p, p.at) + " min left";
   return clipMinutes(p) + " min";
@@ -468,8 +469,9 @@ function readingLine(p) {
 function pageCard(p, found, hero) {
   const cover = hero && p.folder ? coverUrl(folderPages(p.folder)) : null;
   const thumb = thumbUrl(p);
-  const facts = [readingLine(p), formatSize(p.bytes || 0)].join(" · ");
-  const started = !p.finished && p.at > 0.02;
+  const facts = isAudiobook(p) ? readingLine(p) : [readingLine(p), formatSize(p.bytes || 0)].join(" · ");
+  const done = isAudiobook(p) ? listenDone(p) : p.at;
+  const started = isAudiobook(p) ? done > 0.02 && done < 0.995 : !p.finished && done > 0.02;
   const status = p.missing
     ? el("span", { class: "warn" }, p.missing + (p.missing === 1 ? " preview" : " previews") + " missing")
     : p.cut ? el("span", { class: "warn" }, "Only the start")
@@ -483,16 +485,16 @@ function pageCard(p, found, hero) {
   return el("div", { class: "card page-card" + (hero ? " continue wide" : "") + (cover ? " has-cover" : ""), "data-ids": p.id },
     el("button", { class: "card-open", type: "button", "aria-label": p.title + (p.fav ? ", favourite" : ""), onclick: () => tapPages([p.id], () => openPage(p.id)) }),
     pickMark(),
-    favThumb(p.fav, cover ? el("img", { class: "card-thumb cover", src: cover, alt: "", loading: "lazy" })
-      : thumb ? el("img", { class: "card-thumb", src: thumb, alt: "", loading: "lazy" }) : siteMark(p)),
+    favThumb(p.fav, listenBadge(p, cover ? el("img", { class: "card-thumb cover", src: cover, alt: "", loading: "lazy" })
+      : thumb ? el("img", { class: "card-thumb", src: thumb, alt: "", loading: "lazy" }) : siteMark(p))),
     el("span", { class: "card-body" },
       el("span", { class: "card-site", dir: "auto" }, ...dotted(siteOf(p), p.folder, ...(p.tags || []).map((t) => el("span", { class: "card-tag" }, "#" + t)))),
       el("span", { class: "card-title", dir: "auto" }, p.title),
       found ? el("span", { class: "card-found", dir: "auto" }, found) : null,
       el("span", { class: "card-status" }, facts, status ? " · " : null, status, retry ? " · " : null, retry),
       started ? el("span", { class: "progress thin", role: "progressbar", "aria-label": "Read so far",
-        "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.round(p.at * 100)) },
-        el("span", { class: "progress-fill", style: "transform: scaleX(" + p.at + ")" })) : null));
+        "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.round(done * 100)) },
+        el("span", { class: "progress-fill", style: "transform: scaleX(" + done + ")" })) : null));
 }
 
 // A favourite's star sits on its picture's corner (1.16.0), not by its

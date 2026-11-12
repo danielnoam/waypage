@@ -23,6 +23,11 @@
             android:name="io.github.danielnoam.waypage.share.SpeechService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+        <!-- Audiobooks: a book read from its sound files with the screen off. -->
+        <service
+            android:name="io.github.danielnoam.waypage.share.AudiobookService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
         <!-- Kokoro voices: Waypage's own speech engine, off until the
              voices are downloaded in Settings (Kokoro.java turns it on). -->
         <service
