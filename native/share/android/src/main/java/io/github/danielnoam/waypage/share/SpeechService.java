@@ -14,9 +14,11 @@ import android.media.AudioFormat;
 import android.media.AudioTrack;
 import android.media.AudioManager;
 import android.media.MediaMetadata;
+import android.media.audiofx.LoudnessEnhancer;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -38,7 +40,7 @@ import java.util.Locale;
  */
 public class SpeechService extends Service {
 
-    static final String PLAY = "play", PAUSE = "pause", RESUME = "resume", NEXT = "next", PREV = "prev", STOP = "stop", SEEK = "seek", RATE = "rate", SLEEP = "sleep", SLEEP_MORE = "sleepmore";
+    static final String PLAY = "play", PAUSE = "pause", RESUME = "resume", NEXT = "next", PREV = "prev", STOP = "stop", SEEK = "seek", RATE = "rate", VOLUME = "volume", SLEEP = "sleep", SLEEP_MORE = "sleepmore";
     private static final String CHANNEL = "waypage-aloud";
     private static final int NOTE = 27;
 
@@ -51,6 +53,8 @@ public class SpeechService extends Service {
         float rate = 1f;
         // Allow mixing (1.42.0): no audio focus, so other apps play on.
         boolean mix;
+        // Volume under Allow mixing: 0 to 2, 1 is the voice as it comes.
+        float volume = 1f;
     }
 
     interface Listener {
@@ -91,6 +95,10 @@ public class SpeechService extends Service {
     private AudioFocusRequest focus;
     // Paused by a call or another app's sound, to go on when it's over.
     private boolean pausedForFocus;
+    // The voice's own audio session, so a LoudnessEnhancer on it can lift
+    // it above the engine's loudest (TextToSpeech's volume stops at 1).
+    private int voiceSession;
+    private LoudnessEnhancer louder;
 
     static void send(Context ctx, String action, Integer value, Float rate) {
         Intent i = new Intent(ctx, SpeechService.class).setAction(action);
@@ -196,6 +204,9 @@ public class SpeechService extends Service {
         else if (RATE.equals(action) && intent != null && job != null) {
             job.rate = intent.getFloatExtra("rate", job.rate);
             if ("playing".equals(state)) play();
+        } else if (VOLUME.equals(action) && intent != null && job != null) {
+            job.volume = intent.getFloatExtra("rate", job.volume);
+            if ("playing".equals(state)) play();
         } else if (SLEEP.equals(action) && intent != null) {
             int seconds = intent.getIntExtra("value", 0);
             setSleep(seconds > 0 ? System.currentTimeMillis() + seconds * 1000L : 0);
@@ -241,7 +252,7 @@ public class SpeechService extends Service {
         String id = generation + ":" + index;
         String text = job.items[index];
         makeAhead(index);
-        if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) {
+        if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, params(), id) != TextToSpeech.SUCCESS) {
             main.postDelayed(() -> said(id), 300);
         }
         guard(id, text);
@@ -273,7 +284,29 @@ public class SpeechService extends Service {
         ahead = -1;
         if (job == null || n >= job.items.length) return;
         makeAhead(n);
-        if (tts.speak(job.items[n], TextToSpeech.QUEUE_ADD, null, generation + ":" + n) == TextToSpeech.SUCCESS) ahead = n;
+        if (tts.speak(job.items[n], TextToSpeech.QUEUE_ADD, params(), generation + ":" + n) == TextToSpeech.SUCCESS) ahead = n;
+    }
+
+    // Below 1 the engine turns the piece down; above 1 it plays in this
+    // service's session, lifted by up to 6 dB (2x) with a limiter.
+    private Bundle params() {
+        Bundle b = new Bundle();
+        float v = job == null ? 1f : Math.max(0f, Math.min(2f, job.volume));
+        b.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, Math.min(1f, v));
+        if (voiceSession == 0 && audio != null) voiceSession = audio.generateAudioSessionId();
+        if (voiceSession > 0) b.putInt(TextToSpeech.Engine.KEY_PARAM_SESSION_ID, voiceSession);
+        lift(v);
+        return b;
+    }
+
+    private void lift(float v) {
+        try {
+            if (v <= 1f) { if (louder != null) louder.setEnabled(false); return; }
+            if (voiceSession <= 0) return;
+            if (louder == null) louder = new LoudnessEnhancer(voiceSession);
+            louder.setTargetGain(Math.round(2000 * (float) Math.log10(v)));
+            louder.setEnabled(true);
+        } catch (Exception e) { louder = null; }
     }
 
     // Thinking: playing, but no sound yet for this piece (the engine is
@@ -314,6 +347,7 @@ public class SpeechService extends Service {
                 queued = null;
                 queuedAfter = null;
                 next.rate = job.rate;
+                next.volume = job.volume;
                 job = next;
                 index = Math.max(0, Math.min(job.start, job.items.length - 1));
                 // Another language can have its own engine; the new
@@ -534,6 +568,7 @@ public class SpeechService extends Service {
         tts = null;
         if (session != null) session.release();
         if (hush != null) { hush.release(); hush = null; }
+        if (louder != null) { louder.release(); louder = null; }
         if (wake != null && wake.isHeld()) wake.release();
         dropFocus();
         if (running == this) running = null;

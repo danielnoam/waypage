@@ -1233,6 +1233,9 @@ const PIP_KEY = "waypage.aloudPip";
 const KEEP_KEY = "waypage.aloudKeepGoing";
 // Allow mixing (1.42.0): other apps' sound goes on under the voice.
 const MIX_KEY = "waypage.aloudMix";
+// Its volume (2026-11), 0 to 2 with 1 the voice as it is; only while mixing.
+const MIX_VOLUME_KEY = "waypage.aloudVolume";
+const aloudVolume = () => (load(MIX_KEY, false) ? clamp(Number(load(MIX_VOLUME_KEY, 1)), 0, 2) : 1);
 let wentOnFrom = "";
 const PIECE = 600;
 
@@ -1364,7 +1367,7 @@ async function startAloud(from, spot) {
   setAloud("playing", start);
   queued = null;
   try {
-    await speech.play({ items, start, lang: p.lang || "", voice: voiceFor(p), engine: engineFor(p), rate: load(RATE_KEY, 1), mix: !!load(MIX_KEY, false),
+    await speech.play({ items, start, lang: p.lang || "", voice: voiceFor(p), engine: engineFor(p), rate: load(RATE_KEY, 1), mix: !!load(MIX_KEY, false), volume: aloudVolume(),
       key: p.id, blocks: map, ...mediaInfo(p) });
     queueNext();
   } catch (e) {
@@ -1406,7 +1409,7 @@ async function queueNext() {
   if (!texts.length) return;
   const { items, map } = pieces(texts.map((text, block) => ({ text, block })));
   queued = { key: next.id, after: p.id, map };
-  const ok = await speech.queue({ after: p.id, items, start: 0, lang: next.lang || "", voice: voiceFor(next), engine: engineFor(next), mix: !!load(MIX_KEY, false),
+  const ok = await speech.queue({ after: p.id, items, start: 0, lang: next.lang || "", voice: voiceFor(next), engine: engineFor(next), mix: !!load(MIX_KEY, false), volume: aloudVolume(),
     key: next.id, blocks: map, ...mediaInfo(next) });
   if (!ok) queued = null;
 }
@@ -2300,6 +2303,12 @@ function aloudControls() {
     onchange: (e) => { const v = Number(e.target.value); store(RATE_KEY, v); if (aloud.state !== "stopped") speech.rate(v); } });
   speed.value = rate;
   const check = aloudSwitch;
+  const mixRow = speech.background ? check(MIX_KEY, "Allow mixing", "Music or a podcast in another app keeps playing under the voice. Off: they pause while it narrates.") : null;
+  const volRow = speech.background ? volumeRow(Number(load(MIX_VOLUME_KEY, 1)), (v) => { store(MIX_VOLUME_KEY, v); if (aloud.state !== "stopped") speech.volume(aloudVolume()); }, "rc-row") : null;
+  if (mixRow) {
+    volRow.hidden = !load(MIX_KEY, false);
+    mixRow.querySelector("input").addEventListener("change", (e) => { volRow.hidden = !e.target.checked; });
+  }
   const box = el("div", { class: "aloud-controls" },
     engineSlot,
     voiceRow,
@@ -2311,13 +2320,27 @@ function aloudControls() {
     check(GO_ON_KEY, "Go on to the next clip", "At the end, the next chapter or the page it links to starts by itself.", false),
     check(AWAKE_KEY, "Keep the screen on", "While narrating, so you can follow along.", false),
     check(KEEP_KEY, "Keep reading when you leave the clip", "Off: it stops when you go back or open another clip.", false, true),
-    speech.background ? check(MIX_KEY, "Allow mixing", "Music or a podcast in another app keeps playing under the voice. Off: they pause while it narrates.") : null,
+    mixRow,
+    volRow,
     speech.background ? check(PIP_KEY, "Small window outside the app", "Going home, the reading stays in a window you can move. Off: only in the app.", false, true) : null,
     note);
   box.ready = Promise.all([enginesIn, voicesIn, kokoro]).catch(() => {});
   return box;
 }
 const rateText = (v) => (Math.round(v * 10) / 10) + "×";
+// Volume under Allow mixing (2026-11, Narrate and audiobooks): 0 to 2,
+// normal in the middle; past it the app lifts the sound (Android).
+function volumeRow(value, set, cls) {
+  const v0 = clamp(Number(value) || 0, 0, 2);
+  const shown = el("span", { class: "rc-value" }, rateText(v0));
+  const input = el("input", { class: "range volume-range", type: "range", min: 0, max: 2, step: 0.1, value: v0, "aria-label": "Volume", "aria-valuetext": rateText(v0),
+    oninput: (e) => { const v = Number(e.target.value); shown.textContent = rateText(v); e.target.setAttribute("aria-valuetext", rateText(v)); },
+    onchange: (e) => set(Number(e.target.value)) });
+  input.value = v0;
+  return cls === "rc-row"
+    ? el("div", { class: "rc-row volume-row" }, el("span", { class: "rc-label" }, "Volume", shown), el("div", { class: "stepper" }, input))
+    : el("div", { class: "row volume-row" }, el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, "Volume"), el("span", { class: "choice-note" }, shown)), el("div", { class: "stepper" }, input));
+}
 function aloudSwitch(key, text, note, restart = true, on = false) {
   const input = el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!load(key, on),
     onchange: () => {

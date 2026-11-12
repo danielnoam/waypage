@@ -306,7 +306,7 @@ final class Listen {
     private static final int WIN = 20 * RATE, MIN_WIN = 8 * RATE, FRAME = RATE / 50;
 
     /** The stretch's pieces, each with its words and, where the model gives them, their times (seconds from the stretch's `fromSec`). */
-    static List<Piece> recognize(OfflineRecognizer r, float[] all, double fromSec) {
+    static List<Piece> recognize(OfflineRecognizer r, float[] all, double fromSec, java.util.function.Consumer<Piece> each) {
         List<Piece> out = new ArrayList<>();
         int at = 0;
         double quietBefore = 0;
@@ -335,7 +335,7 @@ final class Listen {
                 OfflineRecognizerResult res = r.recognize(win, RATE);
                 if (res != null) fill(p, res);
             }
-            if (!p.text.isEmpty()) out.add(p);
+            if (!p.text.isEmpty()) { out.add(p); if (each != null) each.accept(p); }
             quietBefore = quietAfter;
             at = end;
         }

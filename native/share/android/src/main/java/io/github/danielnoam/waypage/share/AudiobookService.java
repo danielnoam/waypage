@@ -15,6 +15,7 @@ import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.media.MediaMetadata;
 import android.media.MediaPlayer;
+import android.media.audiofx.LoudnessEnhancer;
 import android.media.PlaybackParams;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
@@ -72,6 +73,8 @@ public class AudiobookService extends Service {
     // on) and how far back and on skip, for the lock screen and the window too.
     static volatile boolean mix;
     static volatile long backMs = 15000, onMs = 30000;
+    // Volume under Allow mixing: 0 to 2, 1 is the file as it is.
+    static volatile float volume = 1f;
 
     static Job pending;
     static Listener listener;
@@ -89,6 +92,9 @@ public class AudiobookService extends Service {
     private final Runnable sleeper = () -> { setSleep(0); pause(); };
     private Job job;
     private MediaPlayer player;
+    // Above 1: a limiter lifting the player's session by up to 6 dB (2x),
+    // since MediaPlayer's own volume stops at 1.
+    private LoudnessEnhancer louder;
     private ParcelFileDescriptor fd;
     private boolean prepared;
     private long startAt;
@@ -116,12 +122,14 @@ public class AudiobookService extends Service {
         ctx.startService(new Intent(ctx, AudiobookService.class).setAction(SEEK).putExtra("part", part).putExtra("value", pos));
     }
 
-    static void options(boolean mixing, long back, long on) {
+    static void options(boolean mixing, long back, long on, float vol) {
         mix = mixing;
         if (back > 0) backMs = back;
         if (on > 0) onMs = on;
+        volume = Math.max(0f, Math.min(2f, vol));
         AudiobookService s = running;
         if (s != null && mixing) s.main.post(s::dropFocus);
+        if (s != null) s.main.post(s::applyVolume);
     }
 
     static String stateOf() { return running == null ? "stopped" : running.state; }
@@ -200,6 +208,7 @@ public class AudiobookService extends Service {
             if (startAt < 0) startAt = Math.max(0, duration() + startAt);
             if (startAt > 0) mp.seekTo((int) Math.min(startAt, Integer.MAX_VALUE));
             applyRate();
+            applyVolume();
             if (playWhenReady) go();
             else report(true);
         });
@@ -318,6 +327,22 @@ public class AudiobookService extends Service {
         } catch (Exception e) { /* the phone's own speed */ }
     }
 
+    private void applyVolume() {
+        if (player == null) return;
+        float v = volume;
+        try { player.setVolume(Math.min(1f, v), Math.min(1f, v)); } catch (Exception e) { /* as it was */ }
+        try {
+            if (v <= 1f) { if (louder != null) louder.setEnabled(false); return; }
+            if (louder == null) louder = new LoudnessEnhancer(player.getAudioSessionId());
+            louder.setTargetGain(Math.round(2000 * (float) Math.log10(v)));
+            louder.setEnabled(true);
+        } catch (Exception e) { dropLouder(); }
+    }
+
+    private void dropLouder() {
+        if (louder != null) { try { louder.release(); } catch (Exception e) { /* gone */ } louder = null; }
+    }
+
     private void setSleep(long at) {
         main.removeCallbacks(sleeper);
         sleepAt = at > System.currentTimeMillis() ? at : 0;
@@ -348,6 +373,7 @@ public class AudiobookService extends Service {
     }
 
     private void release() {
+        dropLouder();
         if (player != null) {
             try { player.reset(); } catch (Exception e) { /* gone */ }
             player.release();

@@ -1,5 +1,8 @@
 package io.github.danielnoam.waypage.share;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.PictureInPictureParams;
 import android.app.RemoteAction;
@@ -7,6 +10,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.drawable.Icon;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Rational;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
@@ -35,7 +40,7 @@ import org.json.JSONObject;
  *                                pos in ms into the part
  *   pause() resume() stop() seek({ part, pos }) skip({ by }) rate({ rate }) sleep({ at })
  *   state()                      { key, part, pos, state }
- *   options({ mix, back, on })   mix: no audio focus; back and on in ms
+ *   options({ mix, back, on, volume })   mix: no audio focus; back and on in ms; volume 0 to 2
  *   pip({ on, playing })         { supported } going home goes on in a small
  *                                window with back, play or pause and on
  *   probe({ uri, offset, length })  { duration (ms), title, artist, album, cover (base64) }
@@ -43,8 +48,11 @@ import org.json.JSONObject;
  *   models()                     { supported, step, busy, done, total, charging,
  *                                  packs: [{ id, title, note, bytes, ready, size, langs }] }
  *   download({ id }) cancel() remove({ id })
- *   transcribe({ uri, offset, length, from, to, pack, lang })   from and to in ms;
+ *   transcribe({ uri, offset, length, from, to, pack, lang, title, text, done, end })   from and to in ms;
  *                                { pieces: [{ t0, t1, quiet, text, words, times }] } in seconds,
+ *                                each also told as it's written, a "piece" event { piece, from, to };
+ *                                title and text for the notification while it writes, done and end
+ *                                (0 to 1) how far its bar is at this stretch's start and end,
  *                                or rejects "battery", "hot", "busy", "stopped" or "model"
  *   stopTranscribing()
  *
@@ -63,9 +71,19 @@ public class AudiobookPlugin extends Plugin {
         return t;
     });
     private static volatile boolean working;
+    private static final String WRITING = "waypage-transcripts";
+    private static final int WRITING_NOTE = 31;
+    private static final Handler main = new Handler(Looper.getMainLooper());
+    // Gone a few seconds after a stretch, unless the next one starts.
+    private static final Runnable writingDone = () -> {
+        NotificationManager nm = noteManager();
+        if (nm != null) nm.cancel(WRITING_NOTE);
+    };
+    private static Context appContext;
 
     @Override
     public void load() {
+        appContext = getContext().getApplicationContext();
         AudiobookService.listener = (key, part, pos, dur, state) -> {
             JSObject o = new JSObject();
             o.put("key", key);
@@ -139,7 +157,7 @@ public class AudiobookPlugin extends Plugin {
 
     @PluginMethod
     public void options(PluginCall call) {
-        AudiobookService.options(Boolean.TRUE.equals(call.getBoolean("mix", false)), call.getData().optLong("back", 0L), call.getData().optLong("on", 0L));
+        AudiobookService.options(Boolean.TRUE.equals(call.getBoolean("mix", false)), call.getData().optLong("back", 0L), call.getData().optLong("on", 0L), call.getFloat("volume", 1f));
         call.resolve();
     }
 
@@ -349,7 +367,10 @@ public class AudiobookPlugin extends Plugin {
         s.length = call.getData().optLong("length", -1L);
         final long from = call.getData().optLong("from", 0L), to = call.getData().optLong("to", 0L);
         final String lang = call.getString("lang", "");
+        final String title = call.getString("title", ""), text = call.getString("text", "");
+        final double done = call.getData().optDouble("done", -1), end = call.getData().optDouble("end", -1);
         working = true;
+        writing(title, text, done);
         Listen.stop = false;
         worker.execute(() -> {
             try {
@@ -358,21 +379,18 @@ public class AudiobookPlugin extends Plugin {
                 float[] all = Listen.decode(c, s, from, to);
                 if (Listen.stop) { call.reject("stopped"); return; }
                 if (all == null) { call.reject("Waypage can't read this file's sound."); return; }
-                List<Listen.Piece> pieces = Listen.recognize(r, all, from / 1000.0);
+                final double span = Math.max(1, to - from) / 1000.0;
+                List<Listen.Piece> pieces = Listen.recognize(r, all, from / 1000.0, (x) -> {
+                    JSObject e = new JSObject();
+                    try { e.put("piece", pieceJson(x)); } catch (Exception err) { return; }
+                    e.put("from", from);
+                    e.put("to", to);
+                    notifyListeners("piece", e);
+                    writing(title, text, done + (end - done) * Math.min(1, Math.max(0, (x.t1 - from / 1000.0) / span)));
+                });
                 if (Listen.stop) { call.reject("stopped"); return; }
                 JSONArray out = new JSONArray();
-                for (Listen.Piece x : pieces) {
-                    JSONObject o = new JSONObject();
-                    o.put("t0", x.t0);
-                    o.put("t1", x.t1);
-                    o.put("quiet", x.quiet);
-                    o.put("text", x.text);
-                    o.put("words", new JSONArray(x.words));
-                    JSONArray times = new JSONArray();
-                    for (Double t : x.times) times.put(Math.round(t * 100) / 100.0);
-                    o.put("times", times);
-                    out.put(o);
-                }
+                for (Listen.Piece x : pieces) out.put(pieceJson(x));
                 JSObject res = new JSObject();
                 res.put("pieces", out);
                 call.resolve(res);
@@ -380,8 +398,62 @@ public class AudiobookPlugin extends Plugin {
                 call.reject("Couldn't write this part's transcript.");
             } finally {
                 working = false;
+                main.removeCallbacks(writingDone);
+                main.postDelayed(writingDone, 4000);
             }
         });
+    }
+
+    private static JSONObject pieceJson(Listen.Piece x) throws Exception {
+        JSONObject o = new JSONObject();
+        o.put("t0", x.t0);
+        o.put("t1", x.t1);
+        o.put("quiet", x.quiet);
+        o.put("text", x.text);
+        o.put("words", new JSONArray(x.words));
+        JSONArray times = new JSONArray();
+        for (Double t : x.times) times.put(Math.round(t * 100) / 100.0);
+        o.put("times", times);
+        return o;
+    }
+
+    private static NotificationManager noteManager() {
+        return appContext == null ? null : (NotificationManager) appContext.getSystemService(Context.NOTIFICATION_SERVICE);
+    }
+
+    // "Writing the transcript" in the notifications while a stretch is
+    // written, with how far the chapter has got (0 to 1, below 0: no bar).
+    @SuppressWarnings("deprecation")
+    private static void writing(String title, String text, double f) {
+        main.removeCallbacks(writingDone);
+        NotificationManager nm = noteManager();
+        if (nm == null) return;
+        try {
+            Context c = appContext;
+            Notification.Builder b;
+            if (Build.VERSION.SDK_INT >= 26) {
+                if (nm.getNotificationChannel(WRITING) == null) {
+                    NotificationChannel ch = new NotificationChannel(WRITING, "Transcripts", NotificationManager.IMPORTANCE_LOW);
+                    ch.setShowBadge(false);
+                    nm.createNotificationChannel(ch);
+                }
+                b = new Notification.Builder(c, WRITING);
+            } else b = new Notification.Builder(c);
+            Intent open = c.getPackageManager().getLaunchIntentForPackage(c.getPackageName());
+            if (open != null) {
+                open.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                b.setContentIntent(PendingIntent.getActivity(c, 1, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+            }
+            b.setSmallIcon(android.R.drawable.stat_sys_download)
+                .setContentTitle(title.isEmpty() ? "Writing the transcript" : "Writing the transcript of " + title)
+                .setContentText(text)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setShowWhen(false);
+            if (f >= 0) b.setProgress(1000, (int) Math.round(Math.min(1, f) * 1000), false);
+            else b.setProgress(0, 0, true);
+            nm.notify(WRITING_NOTE, b.build());
+        } catch (Exception e) { /* no notifications allowed */ }
     }
 
     @PluginMethod

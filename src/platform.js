@@ -478,6 +478,11 @@
       web.opts = { ...web.opts, rate };
       if (web.state === "playing") webSpeak();
     },
+    // Volume under Allow mixing, 0 to 2 (the app only; iOS stops at 1).
+    async volume(volume) {
+      const S = plugin("Speech");
+      if (S) return S.volume({ volume }).catch(() => {});
+    },
     // The sleep timer (1.32.0): pause after `seconds`, 0 to cancel. The
     // Android service keeps the time itself, put away; elsewhere the page
     // does. Resolves whether the phone took it.
@@ -1188,8 +1193,8 @@
       },
       rate(r) { if (A()) return A().rate({ rate: r }); if (job) job.rate = r; if (el) el.playbackRate = r; },
       sleep(at) { if (A()) return A().sleep({ at: at || 0 }); webSleep(at); },
-      // Allow mixing, and skip lengths in seconds (the app only).
-      options({ mix = false, back = 15, on = 30 } = {}) { if (A()) return A().options({ mix, back: back * 1000, on: on * 1000 }).catch(() => {}); },
+      // Allow mixing, its volume (0 to 2), and skip lengths in seconds (the app only).
+      options({ mix = false, volume = 1, back = 15, on = 30 } = {}) { if (A()) return A().options({ mix, volume, back: back * 1000, on: on * 1000 }).catch(() => {}); },
       // The small window outside the app; false where there is none.
       async pip(on, playing) {
         if (!A()) return false;
@@ -1224,6 +1229,8 @@
       remove: (id) => A().remove({ id }),
       transcribe: (o) => A().transcribe(o),
       stopTranscribing: () => (A() ? A().stopTranscribing().catch(() => {}) : null),
+      // Each piece of a transcript as it's written: fn({ piece, from, to }).
+      onPiece(fn) { if (A()) A().addListener("piece", fn); },
     };
   })();
 
