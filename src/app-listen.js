@@ -808,7 +808,8 @@ function listenChaptersSheet() {
       el("span", { class: "folder-n", "aria-hidden": "true" }, String(i + 1)),
       el("span", { class: "choice-text" },
         el("span", { class: "row-label", dir: "auto" }, c.title || "Chapter " + (i + 1)),
-        el("span", { class: "choice-note", "data-ch": String(i) }, L.timeText(c.t) + " · " + L.lengthText(next - c.t))));
+        el("span", { class: "choice-note", "data-ch": String(i) }, L.timeText(c.t) + " · " + L.lengthText(next - c.t))),
+      wantsWords(a) && A.canTranscribe ? el("span", { class: "listen-ch-bar", "aria-hidden": "true" }, el("span", { class: "listen-ch-fill" })) : null);
     if (i === now) b.setAttribute("aria-current", "true");
     return el("li", null, b);
   });
@@ -821,8 +822,6 @@ function listenChaptersSheet() {
   if (wantsWords(a) && A.canTranscribe) {
     const head = el("p", { class: "meta" });
     nav.querySelector(".meta").after(head);
-    const rest = el("div", { class: "group" });
-    nav.append(rest);
     let timer = 0;
     const fill = async () => {
       clearTimeout(timer);
@@ -830,13 +829,16 @@ function listenChaptersSheet() {
       nav.dataset.drawn = "1";
       const data = await loadListenData(a);
       head.textContent = transcriptLine(a, data);
-      const all = L.covered(data.ranges, 0, durOf(a)) >= 0.99;
-      rest.hidden = all && lis.wholeFor !== a.id;
-      if (!rest.hidden) rest.replaceChildren(writeRestButton(a, () => setTimeout(fill, 50)));
       nav.querySelectorAll("[data-ch]").forEach((n) => {
         const i = Number(n.dataset.ch), c = ch[i], next = ch[i + 1] ? ch[i + 1].t : durOf(a), st = chapterState(a, data, i);
         n.textContent = L.timeText(c.t) + " · " + L.lengthText(next - c.t) + " · " + st.text;
         n.classList.toggle("accent", !!st.now);
+        // The transcript's progress, a bar along the bottom of the row.
+        const bar = n.closest(".row").querySelector(".listen-ch-bar");
+        if (bar) {
+          bar.classList.toggle("now", !!st.now);
+          bar.firstChild.style.transform = "scaleX(" + L.covered(data.ranges, c.t, next) + ")";
+        }
       });
       timer = setTimeout(fill, 2000);
     };
@@ -1023,32 +1025,6 @@ function listenBadge(p, thumb) {
 
 // ---- Settings › Audiobooks ----
 
-// What the phone is writing, and how far each audiobook's transcript
-// has got, kept up while the screen is open.
-function writingNow() {
-  const box = el("div", { class: "group" });
-  const draw = async () => {
-    if (!box.isConnected && box.dataset.drawn) return;
-    box.dataset.drawn = "1";
-    const job = lis.job && state.pages.find((p) => p.id === lis.job.id);
-    const ch = job ? chaptersOf(job) : [];
-    const ci = job ? L.chapterAt(ch, lis.job.from) : -1;
-    const status = job ? "Writing “" + job.title + "”" + (ci >= 0 && ch.length > 1 ? ", " + (ch[ci].title || "chapter " + (ci + 1)) : "") + ", at " + L.timeText(lis.job.from)
-      : lis.note ? lis.note
-      : !readyPack() ? "Download a model below to start"
-      : "Waiting. It writes while an audiobook set to read along plays" + (listenPrefs().charging ? ", and while the phone charges" : "");
-    const books = state.pages.filter((p) => isAudiobook(p) && wantsWords(p)).sort((x, y) => ((y.listen && y.listen.tAt) || 0) - ((x.listen && x.listen.tAt) || 0)).slice(0, 8);
-    const rows = [];
-    for (const b of books) rows.push(el("button", { class: "row", type: "button", onclick: () => openPage(b.id) },
-      el("span", { class: "choice-text" }, el("span", { class: "choice-label", dir: "auto" }, b.title), el("span", { class: "choice-note" }, transcriptLine(b, await listenData(b)).replace("Transcript: ", "")))));
-    box.replaceChildren(
-      el("div", { class: "row" }, el("span", { class: "choice-text" }, el("span", { class: "choice-label" + (job ? " accent" : "") }, job ? "Writing" : "Not writing now"), el("span", { class: "choice-note" }, status))),
-      ...rows);
-    setTimeout(draw, job ? 2000 : 5000);
-  };
-  draw();
-  return box;
-}
 // Listening: Narrate's settings, as they apply to an audiobook.
 function listeningGroup() {
   const prefs = listenPrefs();
@@ -1097,7 +1073,6 @@ async function fillTranscripts(slot) {
   });
   const prefs = listenPrefs();
   slot.replaceChildren(
-    section("Now", null, writingNow()),
     section("Transcripts", "Each one is a download, made on Wi-Fi. Fast writes well ahead and is easy on the battery. Better has punctuation and capitals and knows 25 European languages. Most languages is the slowest and needs a recent phone.", el("div", { class: "group" }, ...rows)),
     section("Make it better", null, el("div", { class: "group" },
       switchRow("Write ahead while charging", "The rest of the book gets written while the phone charges", prefs.charging, (on) => { setListenPref("charging", on); if (on) writeAhead(); }),

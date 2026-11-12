@@ -1,9 +1,9 @@
 ### Changed
-- Audiobooks have their own place in Settings, under Reading: Listening (how far back and forward skip, also on the lock screen; back a little after a pause; keep the screen on; allow mixing; the small window outside the app, as Narrate has), what's being written now and how far each audiobook's transcript has got, and the transcript models.
+- Audiobooks have their own place in Settings, under Reading: Listening (how far back and forward skip, also on the lock screen; back a little after a pause; keep the screen on; allow mixing; the small window outside the app, as Narrate has) and the transcript models.
 - An audiobook's page shows only the chapter you're in, and nothing where nothing is written yet.
-- The chapters list says which chapters' transcripts are written, which is being written now, and which aren't yet.
+- The chapters list shows each chapter's transcript as a bar along the bottom of its row, and says which is written, being written now or not yet.
 - No "Tap a sentence" line on the player.
-- Write the rest now, in the chapters list and in ⋯: the whole transcript, every part not written yet, while the app is open.
+- Write the rest now, in ⋯: the whole transcript, every part not written yet, while the app is open.
 - An audiobook page with no words has no Highlights, Translate or Draw button.
 
 ### Fixed
