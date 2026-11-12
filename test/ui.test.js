@@ -1390,6 +1390,41 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a collection sorts by release date, date added and title, shows as covers, and says what it holds", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const rr = (id, t, saved, extra) => ({ id: "rr" + id, url: "https://www.royalroad.com/fiction/9/s/chapter/" + id + "/c", title: t, site: "Royal Road", savedAt: saved, minutes: 1, mode: "links", at: 0, finished: false, folder: "Serial", folderAt: -saved, ...extra });
+        const list = [rr(500, "Beta", 3), rr(100, "alpha 10", 1), rr(300, "Alpha 2", 2, { note: { paper: "blank" } })];
+        await S.writeIndex(list);
+        for (const c of list) await S.writePage(c.id, "<!doctype html><html><body><p>" + c.title + "</p></body></html>", c);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await until(q, () => !!document.querySelector('.tile[data-name="Serial"]'));
+      assert.strictEqual(await q.locator('.tile[data-name="Serial"] .tile-holds').innerText(), "2 clips, 1 note");
+      await q.evaluate(() => { openFolder("Serial"); setFolderMode("order"); });
+      const order = () => q.evaluate(() => folderPages("Serial").map((p) => p.id).join());
+      await q.locator('[data-sort="released"]').click();
+      await until(q, () => folderPages("Serial")[0].id === "rr100");
+      assert.strictEqual(await order(), "rr100,rr300,rr500");
+      await q.locator('[data-sort="released"]').click();
+      await until(q, () => folderPages("Serial")[0].id === "rr500");
+      await q.locator('[data-sort="title"]').click();
+      await until(q, () => folderPages("Serial")[0].id === "rr300");
+      assert.strictEqual(await order(), "rr300,rr100,rr500");
+      await q.locator('[data-sort="added"]').click();
+      await until(q, () => folderPages("Serial")[0].id === "rr100");
+      assert.strictEqual(await order(), "rr100,rr300,rr500");
+      await q.evaluate(() => { setFolderMode(""); setFolderLook("Serial", "covers"); });
+      assert.strictEqual(await q.locator("#folderBody .folder-covers .cover-item").count(), 3);
+      assert.strictEqual(await q.locator("#folderBody .folder-list").count(), 0);
+      // Opening a serial looks for its next chapter, which has nowhere to go here.
+      const errors = q.errors.filter((e) => !/workers\.dev/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a clip in a collection has Previous at the top and the collection's clips by Contents (1.23.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
