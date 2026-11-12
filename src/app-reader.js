@@ -1794,7 +1794,14 @@ function marksView(p, back) {
       colorChips(all, sheetColor, (c) => { sheetColor = c; draw(); }),
       rows.length ? el("ol", { class: "group marks-rows" }, ...rows.map((r) => r.row))
         : el("p", { class: "footnote" }, (pictureBook() && state.open === p ? "Tap Draw on this " + (p.file ? "file" : "clip") + " to draw on its pictures."
-          : "Select words in the text and tap Highlight, or tap Draw.") + " Highlights and drawings go with the clip to your other devices."));
+          : "Select words in the text and tap Highlight, or tap Draw.") + " Highlights and drawings go with the clip to your other devices."),
+      // What was on ⋯ Drawings (2026-11): drawings are highlights now.
+      (drawings || canDraw) && !sheetColor ? el("div", { class: "group" },
+        drawings && inReader && !p.note && p.file && C.files.heldPdf() && C.files.heldPdf().ink ? menuRow("Save a copy with drawings", () => inkCopy(p)) : null,
+        canDraw ? menuRow("Try your pen", () => { history.back(); setTimeout(() => openSheet("ink"), 0); }) : null,
+        drawings ? menuRow("Remove all drawings", () => {
+          if (confirm("Remove all drawings from “" + p.title + "”? This can't be undone.")) inkRemoveAll(p, groups).then(draw);
+        }, "warn") : null) : null);
   };
   const markOne = (p, m, draw) => {
     const note = el("textarea", { class: "mark-note-field", rows: "3", placeholder: "Add a note", "aria-label": "Note", dir: "auto" });
@@ -2556,7 +2563,7 @@ const SHEETS = {
   links: { button: "readerMore", label: "Linked pages", build: () => linksSheet(state.open) },
   translate: { button: "readerTranslate", label: "Translation", build: () => translateSheet(state.open) },
   // A PDF's pen drawings (1.56.0), from This clip's More.
-  ink: { button: "readerMore", label: "Drawings", build: () => inkSheet(state.open) },
+  ink: { button: "readerMore", label: "Try your pen", build: () => inkSheet() },
 };
 
 function openSheet(kind, fromHistory) {

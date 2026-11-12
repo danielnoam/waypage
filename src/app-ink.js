@@ -421,24 +421,14 @@ if (C.platform.pen.available) {
 
 // ---- Drawings, in ⋯ ----
 
-function inkSheet(p) {
-  const box = el("div", { class: "ink-sheet" });
-  const go = (n) => { history.back(); setTimeout(() => C.reader.toPrinted(n), 0); };
-  const total = C.ink.count(), list = C.ink.drawn();
-  const word = (n, one, many) => n + " " + (n === 1 ? one : many);
-  const note = !!p.note;
-  fill(box,
-    el("p", { class: "meta" }, total
-      ? word(total, "stroke", "strokes") + " on " + word(list.length, note ? "sheet" : "page", note ? "sheets" : "pages") + ". They stay on this device." + (note ? " Save as PDF keeps them with the pages." : " Save a copy to keep them with the PDF.")
-      : "Nothing drawn yet. Tap the pen in the reader bar and draw."),
-    list.length ? el("div", { class: "group" }, ...list.map((d) =>
-      el("button", { class: "row", type: "button", onclick: () => go(d.page) },
-        el("span", { class: "row-label" }, (note ? "Sheet " : "Page ") + d.page), el("span", { class: "row-value" }, String(d.strokes))))) : null,
-    total ? el("div", { class: "group" },
-      note ? menuRow("Save as PDF", () => { history.back(); setTimeout(() => noteToPdf(p), 0); }) : menuRow("Save a copy with drawings", () => inkCopy(p)),
-      menuRow("Remove all drawings", () => { if (confirm("Remove all drawings from “" + p.title + "”? This can't be undone.")) C.ink.clearAll(); }, "warn")) : null,
-    inkProbe());
-  return box;
+// Try your pen (from Highlights): what the page and the phone each say of
+// a pen, and the pen test.
+function inkSheet() {
+  return el("div", { class: "ink-sheet" }, inkProbe());
+}
+// Every drawing on the clip gone, page by page or block by block.
+async function inkRemoveAll(p, groups) {
+  for (const g of groups) await inkRemoveGroup(p, g);
 }
 
 // A pad to try the pen on, with what the page and the phone each say of
@@ -463,7 +453,7 @@ function inkProbe() {
   penTestPad(pad);
   C.ink.onProbe = paint;
   paint();
-  return el("div", { class: "ink-probe" }, el("h3", { class: "overline" }, "Try your pen"), pad, out, penTestView());
+  return el("div", { class: "ink-probe" }, pad, out, penTestView());
 }
 
 // The PDF with the drawings in it as ink annotations, saved where the

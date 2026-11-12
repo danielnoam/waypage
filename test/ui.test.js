@@ -2785,11 +2785,10 @@ function zipOf(files) {
       await until(q, () => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-page='1'] path"));
       assert.strictEqual(await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-ink[data-page='1'] path").length), 3);
       assert.strictEqual(await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelector(".co-ink").dataset.on), "1", "a note opens with its pen ready");
-      // The Drawings sheet lists the page, and has a pad that says what the pen sends.
+      // Try your pen has a pad that says what the pen sends.
       await q.evaluate(() => openSheet("ink"));
       await q.locator("#readingSheet .ink-probe-pad").waitFor();
       assert.ok(/Page: nothing yet\nPhone: no pen reading here/.test(await q.locator("#readingSheet .ink-probe-out").innerText()));
-      await q.locator("#readingSheet .row", { hasText: "Sheet 1" }).waitFor();
       await q.goBack();
       await q.locator("#readingSheet").waitFor({ state: "hidden" });
       // Save as PDF has the PDF's pages with the strokes on them.
@@ -3052,7 +3051,7 @@ function zipOf(files) {
       await ctx.close();
     });
 
-    await test("the pen test in Drawings asks for each thing in turn, records what comes in, and makes a log to save (1.56.0)", async () => {
+    await test("the pen test in Try your pen asks for each thing in turn, records what comes in, and makes a log to save (1.56.0)", async () => {
       const maker = await browser.newPage();
       let html = "<style>@page{size:A4;margin:0} div{padding:60px;font:24px sans-serif;page-break-after:always}</style>";
       for (let i = 1; i <= 3; i++) html += "<div><p>Page " + i + " opens here.</p><p>Nothing much happens on this page, and the margins are wide enough to write in.</p></div>";
@@ -3229,6 +3228,12 @@ function zipOf(files) {
       await q.locator("#readingSheet:not([hidden]) .ink-row", { hasText: "Paragraph 4" }).waitFor();
       assert.strictEqual(await q.locator("#readingSheet .ink-row svg.ink-thumb path").count(), 1);
       assert.match(await q.locator("#readingSheet .menu-title").first().innerText(), /1 drawing/);
+      // What was ⋯ Drawings is at its foot: Try your pen and Remove all drawings.
+      await q.locator("#readingSheet .row", { hasText: "Try your pen" }).waitFor();
+      q.once("dialog", (d) => d.accept());
+      await q.locator("#readingSheet .row", { hasText: "Remove all drawings" }).click();
+      await until(q, () => !state.open.ink);
+      await q.locator("#readingSheet .row", { hasText: "Remove all drawings" }).waitFor({ state: "detached" });
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

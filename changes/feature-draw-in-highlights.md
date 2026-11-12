@@ -14,3 +14,4 @@
 - A note written on two devices keeps what both drew, stroke by stroke, instead of the copy saved last.
 - Markdown exports and Copy all list drawings as lines ("Drawing, paragraph 4"); Save as PDF on a note still has the drawing itself.
 - The reader bar's pen is only on notes. Elsewhere Draw is in Highlights and on the selection bar.
+- ⋯ › Drawings is gone: Save a copy with drawings, Try your pen and Remove all drawings are at the foot of the Highlights sheet.

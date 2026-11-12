@@ -1674,6 +1674,7 @@ span.update-text { cursor: default; }
 
 /* Highlights (1.7.0): the clip's list, and one with its note. */
 .marks-rows { list-style: none; margin: 0; padding: 0; }
+.marks-list > .group + .group, .marks-list > .footnote + .group { margin-top: var(--s-3); }
 .mark-item { display: flex; align-items: center; }
 .mark-item + .mark-item { border-top: 1px solid var(--line); }
 /* Drawings among the highlights (2026-11): a picture of the strokes, then

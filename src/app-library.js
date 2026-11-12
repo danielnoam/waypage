@@ -939,7 +939,6 @@ function pageSheet(p, where) {
         p.link && p.file && p.file.kind === "pdf" && !p.comic
           ? menuRow(p.view === "text" ? "Show as printed pages" : "Show as text", () => switchView(p, where)) : null,
         inReader && p.note ? menuRow("Save as PDF", () => back().then(() => noteToPdf(p))) : null,
-        inReader && C.files.drawable(p) && !p.preview ? menuRow("Drawings", () => back().then(() => openSheet("ink"))) : null,
         C.files.convertible(p) ? menuRow("Make a note from it", () => back().then(() => makeNoteFrom(p))) : null,
         inReader && !p.note && !C.files.printed(p) ? menuRow("Find in this clip", () => back().then(openFind)) : null,
         inReader && !p.note && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow("Save linked pages", () => back().then(() => openSheet("links"))) : null,
