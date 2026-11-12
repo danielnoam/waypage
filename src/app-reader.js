@@ -1802,7 +1802,8 @@ function marksView(p, back) {
         back ? el("button", { class: "btn-quiet export-back", type: "button", onclick: () => back() }, "Back") : null,
         el("p", { class: "menu-title" }, title),
         list.length ? el("button", { class: "btn-quiet marks-copy", type: "button", onclick: () => copyText(C.backup.marksMarkdown({ ...p, marks: list }), "Highlights copied") }, "Copy all") : null),
-      canDraw ? el("button", { class: "row ink-start", type: "button", onclick: inkStart },
+      // A note has its pen in the reader bar already.
+      canDraw && !p.note ? el("button", { class: "row ink-start", type: "button", onclick: inkStart },
         inkIcon("pen"), el("span", { class: "row-label" }, "Draw on this " + (p.file ? "file" : "clip"))) : null,
       colorChips(all, sheetColor, (c) => { sheetColor = c; draw(); }),
       rows.length ? el("ol", { class: "group marks-rows" }, ...rows.map((r) => r.row))
