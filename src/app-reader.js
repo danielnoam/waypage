@@ -1868,6 +1868,16 @@ function floatOut() {
   if (document.body.classList.contains("pip")) paintPip();
 }
 function paintPip() {
+  // An audiobook playing has the window (app-listen.js).
+  const heard = typeof listenPipView === "function" ? listenPipView() : null;
+  if (heard) {
+    $("pipText").textContent = heard.text;
+    $("pipTitle").textContent = heard.title;
+    $("pipOver").textContent = heard.over;
+    $("pipView").classList.toggle("has-text", !!heard.text);
+    $("pipState").textContent = heard.paused ? "Paused" : "";
+    return;
+  }
   const p = aloudPage();
   let text = "";
   if (p && state.open && state.open.id === p.id) {
@@ -2696,7 +2706,7 @@ const trMode = (data) => !data ? "off" : data.mode || (data.show === false ? "of
 // translate and this device can, or a translation is already kept.
 function translateButton(p) {
   const b = $("readerTranslate");
-  b.hidden = !(p && !C.files.printed(p) && !p.comic && (C.platform.translator.available || translationOf(p)));
+  b.hidden = !(p && !C.files.printed(p) && !p.comic && (C.platform.translator.available || translationOf(p))) || (typeof audioWordless === "function" && audioWordless(p));
   const label = translationOf(p) ? "Translation" : "Translate this clip";
   b.setAttribute("aria-label", label);
   b.title = label + " (L)";

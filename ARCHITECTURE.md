@@ -60,7 +60,7 @@ src/app-saving.js   sync screen, saving several, next links and new chapters, fe
 src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestures, a feed's sheets
 src/app-discover.js the Discover place: Wikipedia today, the list, its search, the Sites grid (stories, books, texts), the story and sign-up sheets
 src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
-src/app-listen.js   audiobooks: bringing one in, the player and its bar, reading along, transcripts written ahead, fixes, Find the book in Discover, Settings › Transcripts
+src/app-listen.js   audiobooks: bringing one in, the player and its bar, reading along, transcripts written ahead, fixes, Find the book in Discover, Settings › Audiobooks
 src/app-lock.js     app lock: passcode (PBKDF2 hash), fingerprint or face on Android
 src/app-start.js    wiring at launch, what other apps share in, self-update, Test builds, What's new
 src/save.js         link to saved page: fetch, Wikipedia adapter or Readability, allowlist cleaner, picture previews, video cards

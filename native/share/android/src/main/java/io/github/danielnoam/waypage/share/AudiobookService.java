@@ -68,6 +68,11 @@ public class AudiobookService extends Service {
         void onSleep(long at);
     }
 
+    // Settings › Audiobooks: allow mixing (no audio focus, other apps play
+    // on) and how far back and on skip, for the lock screen and the window too.
+    static volatile boolean mix;
+    static volatile long backMs = 15000, onMs = 30000;
+
     static Job pending;
     static Listener listener;
     static SleepListener sleepListener;
@@ -111,6 +116,14 @@ public class AudiobookService extends Service {
         ctx.startService(new Intent(ctx, AudiobookService.class).setAction(SEEK).putExtra("part", part).putExtra("value", pos));
     }
 
+    static void options(boolean mixing, long back, long on) {
+        mix = mixing;
+        if (back > 0) backMs = back;
+        if (on > 0) onMs = on;
+        AudiobookService s = running;
+        if (s != null && mixing) s.main.post(s::dropFocus);
+    }
+
     static String stateOf() { return running == null ? "stopped" : running.state; }
     static String keyOf() { return running == null || running.job == null ? "" : running.job.key; }
     static int partOf() { return running == null || running.job == null ? 0 : running.job.part; }
@@ -128,10 +141,10 @@ public class AudiobookService extends Service {
         session.setCallback(new MediaSession.Callback() {
             @Override public void onPlay() { resume(); }
             @Override public void onPause() { pause(); }
-            @Override public void onSkipToNext() { skip(30000); }
-            @Override public void onSkipToPrevious() { skip(-15000); }
-            @Override public void onFastForward() { skip(30000); }
-            @Override public void onRewind() { skip(-15000); }
+            @Override public void onSkipToNext() { skip(onMs); }
+            @Override public void onSkipToPrevious() { skip(-backMs); }
+            @Override public void onFastForward() { skip(onMs); }
+            @Override public void onRewind() { skip(-backMs); }
             @Override public void onSeekTo(long pos) { seekIn(job == null ? 0 : job.part, pos); }
             @Override public void onStop() { finish("stopped"); }
             @Override public void onCustomAction(String action, android.os.Bundle extras) { if (SLEEP_MORE.equals(action)) sleepMore(); }
@@ -150,8 +163,8 @@ public class AudiobookService extends Service {
                 break;
             case PAUSE: pause(); break;
             case RESUME: resume(); break;
-            case BACK: skip(-15000); break;
-            case ON: skip(30000); break;
+            case BACK: skip(-backMs); break;
+            case ON: skip(onMs); break;
             case SKIP: skip(intent.getLongExtra("value", 0)); break;
             case SEEK: seekIn(intent.getIntExtra("part", job == null ? 0 : job.part), intent.getLongExtra("value", 0)); break;
             case RATE: setRate(intent.getFloatExtra("rate", 1f)); break;
@@ -220,7 +233,8 @@ public class AudiobookService extends Service {
 
     private void go() {
         if (player == null || !prepared) { playWhenReady = true; return; }
-        if (!takeFocus()) { state = "paused"; report(true); return; }
+        if (mix) dropFocus();
+        else if (!takeFocus()) { state = "paused"; report(true); return; }
         try { player.start(); } catch (Exception e) { finish("error"); return; }
         state = "playing";
         noisyOn(true);
@@ -460,10 +474,10 @@ public class AudiobookService extends Service {
             .setOngoing(playing)
             .setShowWhen(false)
             .setDeleteIntent(action(STOP, 15))
-            .addAction(new Notification.Action.Builder(android.R.drawable.ic_media_rew, "Back 15 seconds", action(BACK, 11)).build())
+            .addAction(new Notification.Action.Builder(android.R.drawable.ic_media_rew, "Back " + backMs / 1000 + " seconds", action(BACK, 11)).build())
             .addAction(new Notification.Action.Builder(playing ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play,
                 playing ? "Pause" : "Play", action(playing ? PAUSE : RESUME, 12)).build())
-            .addAction(new Notification.Action.Builder(android.R.drawable.ic_media_ff, "On 30 seconds", action(ON, 13)).build())
+            .addAction(new Notification.Action.Builder(android.R.drawable.ic_media_ff, "Forward " + onMs / 1000 + " seconds", action(ON, 13)).build())
             .addAction(new Notification.Action.Builder(R.drawable.waypage_sleep, sleepLabel(), action(SLEEP_MORE, 16)).build())
             .addAction(new Notification.Action.Builder(android.R.drawable.ic_menu_close_clear_cancel, "Stop", action(STOP, 14)).build())
             .setStyle(new Notification.MediaStyle().setMediaSession(session.getSessionToken()).setShowActionsInCompactView(0, 1, 2))

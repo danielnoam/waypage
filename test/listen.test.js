@@ -193,6 +193,26 @@ test("sync: the place from the device that listened last, fixes from both", () =
   assert.strictEqual(onto.listen.t, 90);
 });
 
+test("a folder's later files keep their words on the book's clock", () => {
+  const parts = [{ dur: 600 }, { dur: 500 }];
+  const heard = [{ t0: 10, t1: 12, text: "Chapter two begins", words: ["Chapter", "two", "begins"], times: [10, 10.5, 11] }];
+  const [x] = L.onBookClock(heard, 600);
+  assert.deepStrictEqual([x.t0, x.t1, x.times], [610, 612, [610, 610.5, 611]]);
+  // An old transcript: t0 moved on, the word times left behind.
+  const old = [{ t0: 5, t1: 6, words: ["a"], times: [5] }, { t0: 610, t1: 612, words: ["b", "c"], times: [10, 11] }];
+  const mended = L.mendTimes(old, parts);
+  assert.deepStrictEqual(mended.map((p) => p.times), [[5], [610, 611]]);
+  assert.strictEqual(L.mendTimes(mended, parts)[1].times[0], 610);
+  assert.deepStrictEqual(L.timedWords(mended).map((w) => w.t), [5, 610, 611]);
+});
+
+test("how much of a chapter is written", () => {
+  assert.strictEqual(L.covered([[0, 30], [50, 60]], 0, 100), 0.4);
+  assert.strictEqual(L.covered([[0, 300]], 100, 200), 1);
+  assert.strictEqual(L.covered([], 0, 10), 0);
+  assert.strictEqual(L.covered([[0, 5]], 10, 10), 0);
+});
+
 test("times and lengths as words", () => {
   assert.strictEqual(L.timeText(42), "0:42");
   assert.strictEqual(L.timeText(3725), "1:02:05");

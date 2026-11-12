@@ -2111,6 +2111,14 @@ span.update-text { cursor: default; }
 .choice-note.warn { color: var(--warn); }
 /* The Kokoro voices screen fills in once the phone answers. */
 .kokoro-slot { display: contents; }
+/* An audiobook chapter's transcript, written so far. */
+.listen-ch-tr { display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-2); font: var(--fs-meta)/var(--lh-meta) var(--sans); color: var(--muted); }
+.listen-ch-bar { flex: 1; height: 4px; border-radius: 999px; background: color-mix(in srgb, var(--line) 70%, transparent); overflow: hidden; }
+.listen-ch-fill { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--accent); transition: width var(--spring-control-ms, 300ms) var(--spring-control, ease-out); }
+.listen-ch-pc { min-width: 3.2em; text-align: end; font-variant-numeric: tabular-nums; }
+.listen-ch-tr.now .listen-ch-fill { opacity: .7; }
+/* A slot's first section after one outside it: the same gap as between two. */
+.settings-section + .kokoro-slot > .settings-section:first-child { margin-top: var(--s-6); }
 
 /* ---- 0.27.12: the browser release ---- */
 .empty-open { margin-top: var(--s-4); }
