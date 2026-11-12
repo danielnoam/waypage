@@ -26,6 +26,7 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
         CAPPluginMethod(name: "seek", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "skip", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "rate", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "volume", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "state", returnType: CAPPluginReturnPromise)
     ]
 
@@ -46,6 +47,9 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
     // Allow mixing (1.42.0): other apps' sound goes on under the voice.
     // iOS shows no lock-screen controls for a mixing app.
     private var mix = false
+    // Volume under Allow mixing. An utterance's volume stops at 1, so iOS
+    // can turn the voice down but not above normal.
+    private var volume: Float = 1
     private var commandsSet = false
 
     override public func load() {
@@ -76,6 +80,7 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
             self.rate = Float(call.getDouble("rate") ?? 1)
             self.title = call.getString("title") ?? "Narrate"
             self.mix = call.getBool("mix") ?? false
+            self.volume = Float(call.getDouble("volume") ?? 1)
             self.subtitle = call.getString("subtitle") ?? ""
             self.index = max(0, min(call.getInt("start") ?? 0, list.count - 1))
             self.setUpCommands()
@@ -113,6 +118,14 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
         }
     }
 
+    @objc func volume(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            self.volume = Float(call.getDouble("volume") ?? 1)
+            if self.state == "playing" { self.queue(from: self.index) }
+            call.resolve()
+        }
+    }
+
     @objc func state(_ call: CAPPluginCall) {
         DispatchQueue.main.async { call.resolve(["key": self.key, "index": self.index, "state": self.state]) }
     }
@@ -127,6 +140,7 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
         // 1 is the app's normal speed, iOS's default rate.
         u.rate = min(AVSpeechUtteranceMaximumSpeechRate,
                      max(AVSpeechUtteranceMinimumSpeechRate, AVSpeechUtteranceDefaultSpeechRate * rate))
+        u.volume = max(0, min(1, volume))
         return u
     }
 

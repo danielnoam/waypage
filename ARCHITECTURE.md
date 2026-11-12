@@ -766,6 +766,13 @@ area.
   the window before the section, or the section vanishes first.
 - **Dragging the list/post line:** iframes take `pointer-events: none`
   while it moves (`body.resizing`), or the reader swallows the drag.
+- **Volume above 1 (Allow mixing):** TextToSpeech's `KEY_PARAM_VOLUME`
+  and MediaPlayer's `setVolume` stop at 1. SpeechService speaks in an
+  audio session of its own (`KEY_PARAM_SESSION_ID`) and AudiobookService
+  uses the player's, each with a `LoudnessEnhancer` for 1 to 2x (up to
+  +6 dB). A new MediaPlayer per part means a new session: `release()`
+  drops the enhancer and `applyVolume()` makes it again. iOS's
+  utterance volume also stops at 1, so iPhone Narrate can't go louder.
 
 ## The docs
 

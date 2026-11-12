@@ -32,7 +32,7 @@ import org.json.JSONArray;
  *   engines()                    { engines: [{ name, label }], default } (1.33.0)
  *   moreVoices({ engine })       opens the engine's own page for adding voices
  *   play({ items, start, lang, voice, engine, rate, title, subtitle, key, blocks, album, track, tracks })
- *   pause() resume() stop() seek({ index }) skip({ by }) rate({ rate })
+ *   pause() resume() stop() seek({ index }) skip({ by }) rate({ rate }) volume({ volume })
  *   state()                      { key, index, state }
  *   queue({ after, items, start, lang, voice, title, subtitle, key })
  *                                the clip to go on to when `after` ends
@@ -211,6 +211,7 @@ public class SpeechPlugin extends Plugin {
         job.tracks = call.getInt("tracks", 0);
         job.key = call.getString("key", "");
         job.mix = Boolean.TRUE.equals(call.getBoolean("mix", false));
+        job.volume = call.getFloat("volume", 1f);
         return job;
     }
 
@@ -307,6 +308,9 @@ public class SpeechPlugin extends Plugin {
 
     @PluginMethod
     public void rate(PluginCall call) { send(call, SpeechService.RATE, null, call.getFloat("rate", 1f)); }
+
+    @PluginMethod
+    public void volume(PluginCall call) { send(call, SpeechService.VOLUME, null, call.getFloat("volume", 1f)); }
 
     @PluginMethod
     public void state(PluginCall call) {
