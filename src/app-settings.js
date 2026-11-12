@@ -897,7 +897,9 @@ const editClips = () => {
 };
 function editPattern() {
   if (!edit.find) return null;
-  const src = edit.regex ? edit.find : edit.find.split("*").map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[\\s\\S]*?");
+  // A space typed in Find matches any run of white space, a no-break
+  // space too, as Find in this clip does.
+  const src = edit.regex ? edit.find : edit.find.split("*").map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")).join("[\\s\\S]*?");
   try { return new RegExp(src, "g" + (edit.matchCase ? "" : "i")); } catch (e) { return null; }
 }
 // What a match becomes: `put` as typed, or with $1 and the like when
@@ -946,7 +948,8 @@ function editGroup() {
     el("div", { class: "group" },
       toggle("matchCase", "Match case", "Capital and small letters count as different"),
       toggle("regex", "Regular expression", "Find is a pattern, with $1 and so on in Replace with")),
-    el("p", { class: "footnote" }, edit.regex ? "A match stays within one paragraph." : "* stands for any words in the same paragraph: ~~*~~ finds two pairs of tildes and everything between them."));
+    el("p", { class: "footnote" }, edit.regex ? "A match stays within one paragraph." : "* stands for any words in the same paragraph: ~~*~~ finds two pairs of tildes and everything between them."),
+    edit.what === "text" ? el("p", { class: "footnote" }, "Find looks in link addresses too. With nothing to replace it, the link is removed and its words stay.") : null);
 
   return [scope, change, el("section", { class: "settings-section edit-sec edit-result", id: "editResult" }, ...editResultNodes(clips))];
 }
