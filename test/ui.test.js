@@ -4464,6 +4464,44 @@ function zipOf(files) {
       await w.context().close();
     });
 
+    await test("an audiobook's dot drags along the chapter and seeks once, on letting go (1.58.2)", async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      const id = await q.evaluate(async () => {
+        const A = window.Waypage.platform.audio;
+        window.heard = [];
+        A.play = async (o) => { heard.push("play " + o.pos / 1000); };
+        A.seek = (part, ms) => { heard.push("seek " + ms / 1000); };
+        const m = await newAudiobook({ title: "Drag", byline: "", file: { name: "d.mp3", kind: "audio", ext: "mp3", size: 10 }, link: "x",
+          audio: { parts: [{ ref: "x", name: "d.mp3", size: 10, dur: 600 }], chapters: [{ t: 0, title: "One" }, { t: 300, title: "Two" }], dur: 600 } }, null);
+        arrived(m);
+        return m.id;
+      });
+      await q.evaluate((i) => openPage(i), id);
+      await until(q, () => !document.getElementById("listenPlayer").hidden);
+      await q.waitForTimeout(1200);
+      const r = await q.locator("#listenTrack").boundingBox();
+      assert.ok(r.height >= 44, "a finger-sized track");
+      const cdp = await ctx.newCDPSession(q);
+      const touch = (type, f) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x: r.x + r.width * f, y: r.y + r.height / 2 }] });
+      const now = () => q.evaluate(() => [document.getElementById("listenAt").textContent, heard.join(", ")]);
+      await touch("touchStart", 0.1);
+      for (const f of [0.2, 0.4, 0.6]) { await touch("touchMove", f); await q.waitForTimeout(30); }
+      assert.deepStrictEqual(await now(), ["3:00", ""], "the dot and time follow the finger, nothing plays yet");
+      await touch("touchEnd");
+      await until(q, () => heard.length > 0);
+      assert.deepStrictEqual(await now(), ["3:00", "play 180"]);
+      await q.evaluate(() => { lis.state = "playing"; });
+      await touch("touchStart", 0.5);
+      await touch("touchMove", 0.25);
+      await touch("touchEnd");
+      await until(q, () => heard.length > 1);
+      assert.deepStrictEqual(await now(), ["1:15", "play 180, seek 75"]);
+      await ctx.close();
+    });
+
     for (const width of [390, 1280]) {
       for (const theme of THEMES) {
         await test("opens at " + width + " px in " + theme + " with no errors", async () => {

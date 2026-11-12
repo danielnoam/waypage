@@ -219,6 +219,8 @@ html[data-co-pdf-dark] .co-ink .pen.c-green { fill: #5CCB8A; }
 .co-spent p { margin: 0; }
 .co-spent-time { font: 600 var(--fs-label)/var(--lh-label) var(--sans); color: var(--ink); }
 .co-spent-more { margin-top: 2px !important; }
+/* Right under a file's "Opened from" line: one footer, one rule (1.58.2). */
+.co-licence + .co-spent { margin-top: var(--s-3); padding-top: 0; border-top: 0; }
 .co-licence {
   margin-top: var(--s-6); padding-top: var(--s-2);
   border-top: 1px solid var(--line);
