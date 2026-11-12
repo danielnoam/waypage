@@ -1810,7 +1810,6 @@ function marksView(p, back) {
           : "Select words in the text and tap Mark or Draw.") + " Highlights and drawings go with the clip to your other devices."),
       // What was on ⋯ Drawings (2026-11): drawings are highlights now.
       (drawings || canDraw) && !sheetColor ? el("div", { class: "group" },
-        drawings && inReader && !p.note && p.file && C.files.heldPdf() && C.files.heldPdf().ink ? menuRow("Save a copy with drawings", () => inkCopy(p)) : null,
         canDraw ? menuRow("Try your pen", () => { history.back(); setTimeout(() => openSheet("ink"), 0); }) : null,
         drawings ? menuRow("Remove all drawings", () => {
           if (confirm("Remove all drawings from “" + p.title + "”? This can't be undone.")) inkRemoveAll(p, groups).then(draw);
