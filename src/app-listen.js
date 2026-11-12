@@ -820,7 +820,10 @@ function listenChaptersSheet() {
       el("span", { class: "choice-text" },
         el("span", { class: "row-label", dir: "auto" }, c.title || "Chapter " + (i + 1)),
         el("span", { class: "choice-note", "data-ch": String(i) }, L.timeText(c.t) + " · " + L.lengthText(next - c.t)),
-        wantsWords(a) && A.canTranscribe ? el("span", { class: "listen-ch-bar", "aria-hidden": "true" }, el("span", { class: "listen-ch-fill" })) : null));
+        wantsWords(a) && A.canTranscribe ? el("span", { class: "listen-ch-tr" },
+          el("span", null, "Transcript"),
+          el("span", { class: "listen-ch-bar", "aria-hidden": "true" }, el("span", { class: "listen-ch-fill" })),
+          el("span", { class: "listen-ch-pc" })) : null));
     if (i === now) b.setAttribute("aria-current", "true");
     return el("li", null, b);
   });
@@ -842,13 +845,15 @@ function listenChaptersSheet() {
       head.textContent = transcriptLine(a, data);
       nav.querySelectorAll("[data-ch]").forEach((n) => {
         const i = Number(n.dataset.ch), c = ch[i], next = ch[i + 1] ? ch[i + 1].t : durOf(a), st = chapterState(a, data, i);
-        n.textContent = L.timeText(c.t) + " · " + L.lengthText(next - c.t) + " · " + st.text;
+        n.textContent = L.timeText(c.t) + " · " + L.lengthText(next - c.t) + (st.now ? " · " + st.text : "");
         n.classList.toggle("accent", !!st.now);
-        // The transcript's progress, a bar along the bottom of the row.
-        const bar = n.closest(".row").querySelector(".listen-ch-bar");
-        if (bar) {
-          bar.classList.toggle("now", !!st.now);
-          bar.firstChild.style.width = L.covered(data.ranges, c.t, next) * 100 + "%";
+        // Labelled, so it doesn't read as how far you've listened.
+        const tr = n.closest(".row").querySelector(".listen-ch-tr");
+        if (tr) {
+          const f = Math.min(1, L.covered(data.ranges, c.t, next));
+          tr.classList.toggle("now", !!st.now);
+          tr.querySelector(".listen-ch-fill").style.width = f * 100 + "%";
+          tr.querySelector(".listen-ch-pc").textContent = (st.done ? 100 : Math.floor(f * 100)) + "%";
         }
       });
       timer = setTimeout(fill, 2000);
