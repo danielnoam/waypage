@@ -1163,9 +1163,9 @@ const pictureBook = () => !!state.open && (!!state.open.comic || wordless);
 function narrateOrScroll(p) {
   const pics = !!p.comic || wordless;
   $("readerAloud").hidden = !speech.available || pics;
-  // A comic or scan has no words to highlight (1.56.0); a PDF's printed
-  // pages have theirs over them.
-  const noMarks = pics && !C.files.printed(p);
+  // A comic or scan has no words to highlight (1.56.0), but can be drawn
+  // on, from Highlights (2026-11).
+  const noMarks = pics && !C.files.printed(p) && !C.files.drawable(p);
   $("readerMarks").hidden = noMarks;
   if (noMarks && state.sheet === "marks") closeSheet(true);
   // A comic in Pages turns rather than scrolls.
@@ -1495,7 +1495,8 @@ function showReadHere() {
     };
     // Draw from here (2026-11): the words stay selected while you draw.
     const drawBtn = el("button", { class: "sel-draw", type: "button", "aria-label": "Draw", title: "Draw (D)", onclick: () => { hideReadHere(); inkStart(); } });
-    drawBtn.append(inkIcon("pen"), el("span", { class: "sel-label" }, "Draw"));
+    // An icon alone, so the bar keeps its words on a phone.
+    drawBtn.append(inkIcon("pen"));
     drawBtn.querySelector("svg").setAttribute("width", "20");
     drawBtn.querySelector("svg").setAttribute("height", "20");
     readHere = el("div", { class: "read-here", role: "toolbar", "aria-label": "Selection" }, markBtn, colorBtn, drawBtn, aloudBtn,
@@ -1792,7 +1793,8 @@ function marksView(p, back) {
         inkIcon("pen"), el("span", { class: "row-label" }, "Draw on this " + (p.file ? "file" : "clip"))) : null,
       colorChips(all, sheetColor, (c) => { sheetColor = c; draw(); }),
       rows.length ? el("ol", { class: "group marks-rows" }, ...rows.map((r) => r.row))
-        : el("p", { class: "footnote" }, "Select words in the text and tap Highlight, or tap Draw. Highlights and drawings go with the clip to your other devices."));
+        : el("p", { class: "footnote" }, (pictureBook() && state.open === p ? "Tap Draw on this " + (p.file ? "file" : "clip") + " to draw on its pictures."
+          : "Select words in the text and tap Highlight, or tap Draw.") + " Highlights and drawings go with the clip to your other devices."));
   };
   const markOne = (p, m, draw) => {
     const note = el("textarea", { class: "mark-note-field", rows: "3", placeholder: "Add a note", "aria-label": "Note", dir: "auto" });

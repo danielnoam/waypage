@@ -365,21 +365,11 @@ async function connect(p) {
       await q.context().close();
     });
 
-    await test("Notes go to Drive as a PDF each, and only while Notes is on in GitHub sync (2.0.0)", async () => {
-      // Without GitHub sync the switch is there but can't be turned on.
-      const a = await page(browser);
-      await connect(a);
-      const off = a.locator("label.row", { hasText: "Turn on Notes in GitHub sync first" });
-      await off.waitFor();
-      await off.locator("input").click({ force: true });
-      await a.locator("#toast", { hasText: "Turn on Notes in GitHub sync first." }).waitFor();
-      assert.strictEqual(await off.locator("input").isChecked(), false, "Notes turned on without GitHub sync");
-      assert.strictEqual(await a.locator("label.row", { hasText: /^Notes/ }).evaluate((r) => !!r.nextElementSibling && /Feeds/.test(r.nextElementSibling.textContent)), true, "Notes isn't above Feeds");
-      await a.context().close();
-
-      // With it on, a note is sent as a PDF, once, and again when it changes.
-      const q = await page(browser, () => { try { localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t", paused: true })); } catch (e) { /* none */ } });
+    await test("Notes go to Drive as a PDF each, with GitHub sync or without it (2.0.0, 2026-11)", async () => {
+      // No GitHub sync needed: a note is sent as a PDF, once, and again when it changes.
+      const q = await page(browser);
       await connect(q);
+      assert.strictEqual(await q.locator("label.row", { hasText: /^Notes as PDFs/ }).evaluate((r) => !!r.nextElementSibling && /Feeds/.test(r.nextElementSibling.textContent)), true, "Notes isn't above Feeds");
       const row = q.locator("label.row", { hasText: "Each note as a PDF" });
       await row.waitFor();
       assert.strictEqual(await row.locator("input").getAttribute("aria-disabled"), null);
@@ -411,9 +401,6 @@ async function connect(p) {
       await q.locator(".row", { hasText: "Back up now" }).click();
       await until(q, () => !document.querySelector("#sectionBody button[disabled]"), null, 15000);
       assert.strictEqual(pdfs().length, 0, "the PDF of a deleted note stayed");
-      // GitHub sync's Notes turned off turns Drive's off, and greys it.
-      await q.evaluate(() => { window.Waypage.sync.setWhat("notes", false); window.Waypage.drive.setWhat("notes", false); renderSection(); });
-      await q.locator("label.row", { hasText: "Turn on Notes in GitHub sync first" }).waitFor();
       await q.context().close();
     });
 

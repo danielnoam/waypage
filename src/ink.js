@@ -516,7 +516,9 @@
     const tick = () => { raf = 0; if (!blocks || !clip) return; for (const n of shown()) show(n); placeAll(); };
     const soon = () => { if (!raf) raf = W.requestAnimationFrame(tick); };
     const ro = new W.ResizeObserver(soon);
+    // The body may not grow with its text (a scroll box), but the text does.
     ro.observe(D.body);
+    for (const x of D.querySelectorAll(".co-body")) ro.observe(x);
     W.addEventListener("scroll", soon, { passive: true });
     W.addEventListener("resize", soon);
     // The words may not be laid out yet when the drawings are read.

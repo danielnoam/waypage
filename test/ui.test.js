@@ -1678,7 +1678,7 @@ function zipOf(files) {
       await q.context().close();
     });
 
-    await test("GitHub sync's What this device syncs has Notes right above Feeds, and turning it off turns off Drive's (2.0.0)", async () => {
+    await test("GitHub sync's What this device syncs has Notes right above Feeds, and turning it off leaves Drive's as it is (2.0.0, 2026-11)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(() => {
         localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t", paused: true }));
@@ -1691,7 +1691,7 @@ function zipOf(files) {
       assert.deepStrictEqual(labels.slice(labels.indexOf("Clips"), labels.indexOf("Newsletters") + 1), ["Clips", "Notes", "Feeds", "Newsletters"], labels.join(", "));
       await q.locator("#sectionBody label.row", { hasText: "What you draw and type on each note" }).locator("input").uncheck();
       const drive = await q.evaluate(() => window.Waypage.drive.what.notes);
-      assert.strictEqual(drive, false, "Drive's Notes stayed on");
+      assert.strictEqual(drive, true, "Drive's Notes went off with it");
       await q.context().close();
     });
 
@@ -2509,13 +2509,10 @@ function zipOf(files) {
         await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
       };
       await open();
-      assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").hidden), false, "the pen button is on a PDF's pages");
-      // The pen on a PDF asks to make a note of it: only a note is drawn on (2.0.0).
-      assert.strictEqual(await q.evaluate(() => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink")), false, "a PDF has no drawing layer");
-      await q.evaluate(() => document.getElementById("readerInk").click());
-      await q.locator("#menuSheet .row", { hasText: "Make a note" }).first().waitFor();
-      assert.strictEqual(await q.evaluate(() => Waypage.ink.on), false, "the pen didn't turn Draw on");
-      await q.locator("#menuSheet .row", { hasText: "Make a note" }).first().click();
+      // The reader bar's pen is only on notes (2026-11): a PDF is drawn on
+      // from Highlights, and ⋯ makes a note of it.
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").hidden), true, "no pen button on a PDF");
+      await q.evaluate(() => makeNoteFrom(state.open));
       await until(q, () => !!state.open && !!state.open.note && !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-on='1'][data-page='1']"), null, 20000);
       const noteId = await q.evaluate(() => state.open.id);
       target = noteId;
@@ -2774,9 +2771,7 @@ function zipOf(files) {
       await q.evaluate(([b, f]) => { eval(f)(b); }, [bytes, String(bring)]);
       await q.evaluate((i) => openPage(i), id);
       await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
-      // The pen on a PDF asks to make a note of it: only a note is drawn on (2.0.0).
-      await q.evaluate(() => document.getElementById("readerInk").click());
-      await q.locator("#menuSheet .row", { hasText: "Make a note" }).first().click();
+      await q.evaluate(() => makeNoteFrom(state.open));
       await until(q, () => !!state.open && !!state.open.note && !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-on='1'][data-page='1']"), null, 20000);
       const noteId = await q.evaluate(() => state.open.id);
       await until(q, () => !document.querySelector(".ink-bar").hidden);
@@ -2905,9 +2900,7 @@ function zipOf(files) {
       await q.evaluate(([b, f]) => { eval(f)(b); }, [bytes, String(bring)]);
       await q.evaluate((i) => openPage(i), id);
       await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
-      // The pen on a PDF asks to make a note of it: only a note is drawn on (2.0.0).
-      await q.evaluate(() => document.getElementById("readerInk").click());
-      await q.locator("#menuSheet .row", { hasText: "Make a note" }).first().click();
+      await q.evaluate(() => makeNoteFrom(state.open));
       await until(q, () => !!state.open && !!state.open.note && document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-ink[data-on='1']").length === 2, null, 20000);
       await until(q, () => !document.querySelector(".ink-bar").hidden);
       await q.evaluate(() => Waypage.ink.setting({ finger: true, tool: "pen", size: 1 }));
@@ -3023,12 +3016,7 @@ function zipOf(files) {
       await q.evaluate(([b, f]) => { eval(f)(b); }, [bytes, String(bring)]);
       await q.evaluate((i) => openPage(i), id);
       await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
-      // The pen on a PDF asks to make a note of it: only a note is drawn on (2.0.0).
-      assert.strictEqual(await q.evaluate(() => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink")), false, "a PDF has no drawing layer");
-      await q.evaluate(() => document.getElementById("readerInk").click());
-      await q.locator("#menuSheet .row", { hasText: "Make a note" }).first().waitFor();
-      assert.strictEqual(await q.evaluate(() => Waypage.ink.on), false, "the pen didn't turn Draw on");
-      await q.locator("#menuSheet .row", { hasText: "Make a note" }).first().click();
+      await q.evaluate(() => makeNoteFrom(state.open));
       await until(q, () => !!state.open && !!state.open.note && !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-on='1'][data-page='1']"), null, 20000);
       await q.evaluate(() => openSheet("ink"));
       await q.locator("#readingSheet .ink-test-box .btn-primary", { hasText: "Start test" }).click();
@@ -3096,13 +3084,8 @@ function zipOf(files) {
       await q.evaluate((i) => openPage(i), id);
       await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
       assert.strictEqual(await q.evaluate(() => state.open.comic), true, "a PDF with no words is a scan");
-      assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").hidden), false);
-      // The pen on a PDF asks to make a note of it: only a note is drawn on (2.0.0).
-      assert.strictEqual(await q.evaluate(() => !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink")), false, "a PDF has no drawing layer");
-      await q.evaluate(() => document.getElementById("readerInk").click());
-      await q.locator("#menuSheet .row", { hasText: "Make a note" }).first().waitFor();
-      assert.strictEqual(await q.evaluate(() => Waypage.ink.on), false, "the pen didn't turn Draw on");
-      await q.locator("#menuSheet .row", { hasText: "Make a note" }).first().click();
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").hidden), true);
+      await q.evaluate(() => makeNoteFrom(state.open));
       await until(q, () => !!state.open && !!state.open.note && !!document.getElementById("readerFrame").contentDocument.querySelector(".co-ink[data-on='1'][data-page='1']"), null, 20000);
       await q.evaluate(() => {
         const d = document.getElementById("readerFrame").contentDocument, svg = d.querySelector(".co-ink[data-page='1']"), r = svg.getBoundingClientRect();
@@ -3120,14 +3103,67 @@ function zipOf(files) {
       await ctx.close();
     });
 
-    await test("a comic has no Highlights button (1.56.0)", async () => {
+    await test("a comic has Highlights, to draw on its pictures, and no pen in the bar (1.56.0, 2026-11)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async (b) => { askKeep = async () => false; await openFile(new File([new Uint8Array(b)], "v1.cbz"), null, false); }, [...mangaBytes(1)]);
       await q.evaluate(() => openPage(state.pages[0].id));
       await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
       await q.waitForTimeout(300);
-      assert.strictEqual(await q.evaluate(() => document.getElementById("readerMarks").hidden), true);
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerMarks").hidden), false);
       assert.strictEqual(await q.evaluate(() => document.getElementById("readerInk").hidden), true, "a CBZ comic has no pen");
+      await q.evaluate(() => document.getElementById("readerMarks").click());
+      await q.locator("#readingSheet:not([hidden]) .ink-start", { hasText: "Draw on this file" }).click();
+      await until(q, () => Waypage.ink.on && Waypage.ink.blocks);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a clip is drawn on from its selection bar: the stroke stays with its paragraph, and Highlights lists it (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const md = "# Drawn on\n\n" + Array.from({ length: 12 }, (_, i) => "Paragraph " + (i + 1) + " has words enough to wrap over a few lines on a phone, and then some more.").join("\n\n");
+        const meta = await Waypage.files.bring(new File([md], "drawn.md"), "md", { has: () => false });
+        await Waypage.store.writeIndex([meta, ...await Waypage.store.readIndex()]);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => openPage(state.pages.find((x) => x.title === "Drawn on").id));
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open && Waypage.ink.blocks);
+      // Draw from the selection bar.
+      await q.frameLocator("#readerFrame").locator("p").nth(2).evaluate((el) => {
+        const r = el.ownerDocument.createRange(); r.selectNodeContents(el.firstChild); r.setEnd(el.firstChild, 9);
+        const sel = el.ownerDocument.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+        el.ownerDocument.dispatchEvent(new Event("selectionchange"));
+      });
+      await q.locator(".read-here .sel-draw:not([hidden])").click();
+      await until(q, () => Waypage.ink.on);
+      await q.evaluate(() => Waypage.ink.setting({ finger: true, tool: "pen" }));
+      // The third paragraph, in the page's own coordinates.
+      const [x0, y0] = await q.evaluate(() => {
+        const f = document.getElementById("readerFrame").getBoundingClientRect(), b = document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-body p")[2].getBoundingClientRect();
+        return [f.left + b.left + 10, f.top + b.top + b.height / 2];
+      });
+      await q.mouse.move(x0, y0); await q.mouse.down();
+      for (let i = 1; i <= 12; i++) await q.mouse.move(x0 + i * 15, y0 + (i % 2 ? 6 : -6));
+      await q.mouse.up();
+      await until(q, () => !!state.open.ink && Object.keys(state.open.ink).length === 1);
+      const block = await q.evaluate(() => Object.keys(state.open.ink)[0]);
+      assert.strictEqual(block, "4", "the stroke is on the third paragraph, after the heading");
+      await q.evaluate(() => inkSet(false));
+      // Bigger text: the stroke is still over its paragraph.
+      await q.evaluate(() => setReading({ size: readingPrefs().size + 4 }));
+      await q.waitForTimeout(600);
+      const on = await q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument, svg = d.querySelector(".co-ink path"), p = d.querySelectorAll(".co-body p")[2];
+        const a = svg.getBoundingClientRect(), b = p.getBoundingClientRect();
+        return a.top >= b.top - 30 && a.bottom <= b.bottom + 30;
+      });
+      assert.ok(on, "the stroke moved off its paragraph");
+      // Highlights lists it, with a picture.
+      await q.evaluate(() => document.getElementById("readerMarks").click());
+      await q.locator("#readingSheet:not([hidden]) .ink-row", { hasText: "Paragraph 4" }).waitFor();
+      assert.strictEqual(await q.locator("#readingSheet .ink-row svg.ink-thumb path").count(), 1);
+      assert.match(await q.locator("#readingSheet .menu-title").first().innerText(), /1 drawing/);
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

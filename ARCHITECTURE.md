@@ -68,8 +68,8 @@ src/store.js        one directory per clip and library.json; IndexedDB in a brow
 src/platform.js     browser vs app: native fetch, plugins, downloads, speech, opening links
 src/files.js        EPUB, Kindle (MOBI/AZW3), FB2, CBZ, Markdown, text and HTML files
 src/pdf.js          PDFs through pdf.js in a locked-down frame
-src/ink.js          pen drawing over a PDF's pages: strokes, layers, undo, what a copy of the PDF is given
-src/notes.js        notes: sheets of paper you draw on, opened through the PDF pages pipeline with a stand-in document
+src/ink.js          drawing over a clip's blocks or a PDF's pages: strokes, layers, undo, what a copy of the PDF is given
+src/notes.js        notes: sheets of paper you draw on, opened through the PDF pages pipeline with a stand-in document; any clip laid out as a PDF to make one
 src/pptx.js         PowerPoint decks redrawn on a canvas and written as a PDF (1.49.0)
 src/epub.js         clips as an EPUB 3 book, for e-readers and Send to Kindle
 src/feeds.js        RSS, Atom and JSON Feed, read into one shape
@@ -216,9 +216,29 @@ fallback); one made in Show as text is found on the printed pages the
 same way (`findRects`, and `files.findPage` for Go to it). Comics and
 scans have no words, so the reader hides Highlights for them.
 
-Only a note is drawn on (2.0.0); a PDF's pages, words or scan, were drawn on
-with a pen before (1.56.0), and the pen on a PDF now makes a note of it.
-`ink.js` gives each page that has a picture a layer of SVG over it
+Anything can be drawn on (2026-11). Drawing is part of Highlights: Draw in
+the Highlights sheet and on the selection bar (`app-ink.js inkStart`), and
+the reader bar's pen only on notes. `ink.load` picks one of two modes.
+Pages mode (a note's sheets, an outside PDF's printed pages) is described
+below. Blocks mode (everything else) numbers a clip's paragraphs and
+pictures as highlights do (`reader.js inkBlock`, block n = the reader's
+anchors[n-1]) and gives each block a layer that reaches halfway to its
+neighbours (`inkBlockBox`), inside `.co-inkroot`; strokes are in the
+block's width, so they follow it through text size and layout. A watch
+(`watchBlocks`) places the layers for the blocks near the view. Strokes by
+block live on the index entry as `ink` (`ink.blockStore`), so they sync
+(`sync.mergeInk`, three ways by stroke id and block) and back up
+(`backup.cleanInk`, pictures left out) like `marks`. An outside PDF's
+printed pages keep `ink.json` and a summary on the entry, `drawn: [[page,
+strokes]]`, for Highlights to list. Highlights and drawings on a file read
+from outside go in library.json's `outside` map, keyed by the file's
+fingerprint (`files.fingerprint`: size and first and last 256 KB, SHA-256),
+merged three ways (`sync.mergeOutside`) and applied to every file here
+with that fingerprint (`app-saving.js outsideTake`). A note's `ink.json`
+merges with GitHub's against `ink-base.json` (`sync.noteInkMerged`), what
+sync last left on both.
+
+In pages mode `ink.js` gives each page that has a picture a layer of SVG over it
 (`.co-ink`, a sibling of the picture like the words' layer, placed by
 `placeText` with the same `pageBox`), and `app-ink.js` is the button, the
 bar of tools and the sheet. A stroke is `{ id, t: "p"|"h", c, w, p, y? }` (`y` is how a pen wrote: "marker",
@@ -540,6 +560,10 @@ adds a line here.
 
 Things that broke once and would again. Check here before touching the
 area.
+
+- `sync-worker.js` has to load `ink.js`: `backup.cleanInk` checks strokes
+  with `C.ink.clean`, and without it every drawing on a clip dropped out
+  of a merge made on the worker.
 
 - **The Highlight hold captures the pointer:** `markHold` (app-reader.js)
   takes the finger on Highlight so the slide to a colour keeps reporting,

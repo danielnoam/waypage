@@ -75,10 +75,10 @@ Each section below shows the computer (left) and the phone (right).
 - A note is a page of your own to draw and type on. Save with options › New note asks for Blank, Lines or Squares paper, each shown beside its name.
 - It grows as you write: drawing on its last sheet adds another. A note is always a scroll, never Pages.
 - Pen, highlighter, eraser, Undo and Redo as before, and Select (loop, cut, copy, paste, move), Add › Image and Add › Text. Only a pen draws on a touch screen unless Finger is on.
-- Opening a PDF offers Make a note beside Keep a copy and Read from where it is; the pen on a PDF asks the same. A note made from a PDF is a copy of its pages you can draw on, named as the file is, in Notes. The PDF stays as it is, and drawings made on it before move over.
-- Notes show in their own part of the library, after Files, and Show › All notes (there once you have a note) lists them alone. Aa on a note has only Layout (All notes or This note, margins, brightness slider, theme, Dark note) and Auto-scroll, which goes on to the next note.
+- Opening a PDF offers Make a note beside Keep a copy and Read from where it is, and ⋯ › Make a note from it works on any file: a PDF's own pages, a comic's pictures, anything else set as pages. The file stays as it is. A note's card shows its first sheet.
+- Notes show in their own part of the library, above Files, and Show › All notes (there once you have a note) lists them alone. Aa on a note has only Layout (All notes or This note, margins, brightness slider, theme, Dark note) and Auto-scroll, which goes on to the next note.
 - ⋯ › Drawings lists the sheets and has Try your pen; ⋯ › Save as PDF makes a PDF of the sheets with what is on them.
-- Settings › GitHub sync › What this device syncs has Notes: each note goes up whole (sheets, strokes, typed text, pictures and the PDF it was made from, up to 50 MB) and comes down on your other devices; the copy saved last wins. Settings › Google Drive › What goes in has Notes too, which puts each note in Drive as a PDF (in a Notes folder) and can only be turned on while Notes is on in GitHub sync. A restore doesn't bring notes back; sync does.
+- Settings › GitHub sync › What this device syncs has Notes: each note goes up whole (sheets, strokes, typed text, pictures and the PDF it was made from, up to 50 MB) and comes down on your other devices; what two devices drew is merged stroke by stroke. A bigger note says Not synced, too big. Notes go into backups; Google Drive's Notes as PDFs also puts each one in Drive as a PDF to read.
 
 ## Saving
 
@@ -117,7 +117,6 @@ Each section below shows the computer (left) and the phone (right).
 - Volume buttons turn pages on Android; keyboard shortcuts on a computer.
 - Dark PDF pages: with a PDF open, a switch at the foot of Layout recolours its pages to a dark theme.
 - Highlight words on a PDF read from where it is: select them on its printed pages and tap Highlight; they join the clip's other highlights.
-- The pen on a PDF offers to make a note from it, which you draw on (see Notes).
 
 ## Text and themes
 
@@ -144,7 +143,9 @@ Each section below shows the computer (left) and the phone (right).
 <p><img src="docs/shots/highlights-desktop.jpg" width="74%" alt="Highlights on a computer"> <img src="docs/shots/highlights-phone.jpg" width="21%" alt="Highlights on a phone"></p>
 
 - Highlights in five colours, with notes: tap Highlight on the selection bar for the last colour, hold it for the five (a mouse has the dot beside it, or keys 1 to 5).
-- The Highlights place: every highlight, searchable, a colour at a time, Copy all or save as Markdown.
+- Draw on any clip or file: Draw on the selection bar, in the Highlights sheet, or D. On words a drawing stays with its paragraph or picture; on a PDF's pages, with the page.
+- The Highlights place: every highlight and drawing, searchable, a colour at a time, Copy all or save as Markdown. Drawings show as small pictures, five per clip, then Show all.
+- Highlights and drawings sync, stroke by stroke; on a file read from where it is, they show on another device with the same file.
 - Translate this clip on the device, under the text or instead of it (ML Kit on Android, Chrome's own translator on a computer); translate selected words.
 - Look up words offline in your own StarDict dictionaries.
 
