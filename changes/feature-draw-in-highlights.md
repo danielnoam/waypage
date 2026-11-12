@@ -7,7 +7,7 @@
 - A drawing whose paragraph is gone after Update from the site says Not found in this copy, as a highlight does.
 - A note's card shows its first sheet, with what is drawn on it.
 - Notes go into backups whole, with what's written on them and their PDF, and come back with a restore. Google Drive's What goes in has a Notes switch of its own, above Feeds.
-- A note over the 50 MB sync limit says so on its card ("Not synced, too big"), in ⋯ and in Sync, and stays on this device.
+- A note over the 50 MB sync limit says so on its card ("Not synced, too big") and in ⋯, and stays on this device; Sync's Notes switch says notes over 50 MB can't be synced.
 
 ### Changed
 - Notes sit above Files in the library and the side menu.

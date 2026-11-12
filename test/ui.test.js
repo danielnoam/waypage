@@ -1689,7 +1689,7 @@ function zipOf(files) {
       await q.evaluate(() => { openSettings(); openSection("sync"); });
       const labels = await q.locator("#sectionBody label.row .choice-label").allTextContents();
       assert.deepStrictEqual(labels.slice(labels.indexOf("Clips"), labels.indexOf("Newsletters") + 1), ["Clips", "Notes", "Feeds", "Newsletters"], labels.join(", "));
-      await q.locator("#sectionBody label.row", { hasText: "Every note, whole" }).locator("input").uncheck();
+      await q.locator("#sectionBody label.row", { hasText: "Notes over 50 MB" }).locator("input").uncheck();
       const drive = await q.evaluate(() => window.Waypage.drive.what.notes);
       assert.strictEqual(drive, true, "Drive's Notes went off with it");
       await q.context().close();

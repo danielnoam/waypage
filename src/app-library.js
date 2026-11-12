@@ -928,7 +928,7 @@ function pageSheet(p, where) {
         el("button", { class: "row", type: "button", onclick: () => back().then(() => signInFor(p)) },
           el("span", { class: "row-label accent" }, (C.platform.signIn.for(p.url) ? "Sign in again to " : "Sign in to ") + C.platform.signIn.host(p.url)),
           el("span", { class: "row-value" }, "Only the start"))) : null,
-      tooBigLine(p) ? el("p", { class: "meta warn" }, tooBigLine(p) + ". It stays on this device.") : null,
+      tooBigLine(p) ? el("p", { class: "meta warn" }, tooBigLine(p)) : null,
       tagsRow(p, draw),
       folderRow(p, draw),
       p.file ? null : picturesRow(p, draw),

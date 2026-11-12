@@ -26,7 +26,7 @@ function syncSoon(ms = runs.size ? 20000 : 4000) {
 let unsynced = false;
 const syncsPage = (p) => (p.note ? C.sync.what.notes && !C.sync.tooBig(p) : C.sync.what.clips);
 // Said on a note's card, in its ⋯ and in Sync (2026-11).
-const tooBigLine = (p) => (C.sync.on && C.sync.tooBig(p) ? "Not synced: " + formatSize(p.noteBytes) + ", over the 50 MB limit" : "");
+const tooBigLine = (p) => (C.sync.on && C.sync.tooBig(p) ? "Over 50 MB, can't be synced" : "");
 async function syncNow(quiet = true) {
   if (!C.sync.on || C.sync.paused) return null;
   if (!navigator.onLine && quiet) return null;
@@ -420,13 +420,6 @@ function syncLeave() {
 // Pages too, or links only: the library and its marks always sync.
 // What this device syncs (1.47.0): switches, like Google Drive's What
 // goes in, with Links only under Clips (0.30.3).
-// A note too big to sync says so under the Notes switch itself (2026-11).
-function notesNote() {
-  const big = state.pages.filter((p) => tooBigLine(p));
-  if (!big.length) return "Every note, whole";
-  return el("span", null, "Every note, whole. ", el("span", { class: "warn" },
-    (big.length === 1 ? "“" + big[0].title + "” isn't" : big.length + " notes aren't") + " synced: over the 50 MB limit"));
-}
 function syncsList() {
   const what = C.sync.what;
   const sw = (key, label, note) => el("label", { class: "row" },
@@ -442,7 +435,7 @@ function syncsList() {
       sw("clips", "Clips", C.sync.links ? "Links, highlights, tags, collections and places" : "Text, highlights, tags, collections and places"),
       what.clips ? el("div", { class: "row" }, seg("sync-what", "What goes up of each clip", [{ value: "pages", label: "Clips too" }, { value: "links", label: "Links only" }],
         C.sync.links ? "links" : "pages", (v) => { C.sync.links = v === "links"; renderSection(); syncSoon(500); })) : null,
-      sw("notes", "Notes", notesNote()),
+      sw("notes", "Notes", "Notes over 50 MB can't be synced"),
       sw("feeds", "Feeds", "Which you follow and how"),
       sw("newsletters", "Newsletters", "Your addresses and how they're set"),
       sw("stats", "Reading stats", "Reading time from every device, added up"),
