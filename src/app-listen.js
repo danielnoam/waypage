@@ -400,6 +400,7 @@ function listenNoteFor(a) {
   if (a.audio.overlay) return "Read along with the book's own narration";
   if (m === "listen") return "Tap ⋯ to read along";
   if (!A.canTranscribe) return "Read along needs the Android app";
+  if (lis.job && lis.job.id === a.id) return "Writing the transcript…";
   const data = lis.dataFor === a.id ? lis.data : null;
   const upto = data && data.ranges && data.ranges.length ? writtenTo(data, lis.t) : 0;
   if (m === "book" && !bookOf(a)) return "The book isn't in your library";
@@ -727,7 +728,7 @@ function listenSleepSheet() {
 function chapterState(a, data, i) {
   const ch = chaptersOf(a);
   const from = ch.length ? ch[i].t : 0, to = ch[i + 1] ? ch[i + 1].t : durOf(a);
-  if (lis.job && lis.job.id === a.id && lis.job.from < to && lis.job.to > from) return { now: true, text: "Writing now" };
+  if (lis.job && lis.job.id === a.id && lis.job.from >= from - 0.5 && lis.job.from < to) return { now: true, text: "Writing now" };
   const f = L.covered(data && data.ranges, from, to);
   return f >= 0.98 ? { done: true, text: "Written" } : f > 0.01 ? { text: Math.floor(f * 100) + "% written" } : { text: "Not written yet" };
 }
