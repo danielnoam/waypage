@@ -3063,12 +3063,15 @@ html.locked body > :not(.lock-view):not(script) { visibility: hidden !important;
 }
 .listen-player[hidden] { display: none; }
 .reader.listening .read-left { display: none; }
-.listen-track { position: relative; height: 28px; touch-action: none; cursor: pointer; }
+.listen-track { position: relative; height: var(--tap); margin: -8px 0; touch-action: none; cursor: pointer; }
 .listen-track:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
 .listen-rail { position: absolute; left: 0; right: 0; top: 50%; height: 4px; margin-top: -2px; border-radius: var(--r-full); background: var(--line); overflow: hidden; }
 .listen-fill { display: block; height: 100%; background: var(--accent); transform: scaleX(0); transform-origin: left; }
 [dir="rtl"] .listen-fill { transform-origin: right; }
-.listen-knob { position: absolute; top: 50%; width: 14px; height: 14px; margin-top: -7px; margin-inline-start: -7px; border-radius: var(--r-full); background: var(--accent); box-shadow: 0 0 0 3px var(--bar); }
+.listen-knob { position: absolute; top: 50%; width: 14px; height: 14px; margin-top: -7px; margin-inline-start: -7px; border-radius: var(--r-full); background: var(--accent); box-shadow: 0 0 0 3px var(--bar); transition: transform 120ms ease-out; }
+.listen-track.dragging .listen-knob { transform: scale(1.4); }
+@media (prefers-reduced-motion: reduce) { .listen-knob { transition: none; } }
+:root[data-motion="off"] .listen-knob { transition: none; }
 .listen-times { display: flex; justify-content: space-between; font: var(--fs-meta)/1 var(--sans); color: var(--muted); font-variant-numeric: tabular-nums; }
 .listen-ctl { display: flex; align-items: center; justify-content: space-between; gap: var(--s-1); margin-top: var(--s-1); }
 .listen-ctl .icon-btn { border-radius: var(--r-full); color: var(--ink); }

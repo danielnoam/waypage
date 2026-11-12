@@ -25,6 +25,8 @@ const listenOptions = () => { const p = listenPrefs(); C.platform.audio.options(
 const SPEEDS = [0.8, 1, 1.1, 1.2, 1.3, 1.5, 1.75, 2, 2.5, 3];
 const AHEAD = 10 * 60, CHUNK = 3 * 60;
 
+// Where the finger is on the player's track while it drags, shown before it seeks.
+let trackDrag = null;
 const lis = { key: "", state: "stopped", part: 0, t: 0, data: null, dataFor: "", sync: null, syncFor: "", said: -1, savedAt: 0, writing: false, note: "", seen: 0 };
 // An audiobook of its own; hasSound also takes an EPUB with narration.
 const hasSound = (p) => !!(p && p.audio && p.audio.parts);
@@ -375,7 +377,10 @@ function paintListen() {
   const here = audioFor(open);
   if (here && isAudiobook(open) && !open.audio.overlay) $("readerAloud").hidden = true;
   // No words on the page yet: nothing to highlight, draw on or translate.
-  if (audioWordless(open)) for (const id of ["readerMarks", "readerTranslate", "readerInk"]) $(id).hidden = true;
+  if (audioWordless(open)) {
+    for (const id of ["readerMarks", "readerTranslate", "readerInk"]) $(id).hidden = true;
+    coverIn(open);
+  }
   const show = !!here;
   if (here && !here.audio.overlay && modeOf(here) === "transcript" && state.open === here && chapterNow(here, placeNow(here)) !== pageCh[here.id]) turnPage(here);
   $("readerChapters").hidden = !here || chaptersOf(playerBook()).length < 2;
@@ -385,7 +390,7 @@ function paintListen() {
   $("readerView").classList.toggle("listening", show);
   if (show) {
     const b = a && mine ? a : here;
-    const t = a && mine ? lis.t : placeOf(b);
+    const t = trackDrag ? trackDrag.at : a && mine ? lis.t : placeOf(b);
     const ch = chaptersOf(b), ci = L.chapterAt(ch, t);
     const from = ci >= 0 ? ch[ci].t : 0, to = ci >= 0 && ch[ci + 1] ? ch[ci + 1].t : durOf(b);
     const f = to > from ? Math.min(1, Math.max(0, (t - from) / (to - from))) : 0;
@@ -436,6 +441,16 @@ function audioWordless(p) {
   const d = $("readerFrame").contentDocument, body = d && d.querySelector(".co-body");
   return !!body && !body.textContent.trim();
 }
+// Nothing to read yet: the book's cover fills the page instead.
+function coverIn(p) {
+  const d = $("readerFrame").contentDocument, body = d && d.querySelector(".co-body"), src = thumbUrl(p);
+  if (!body || !src || body.querySelector(".co-listen-cover")) return;
+  const img = d.createElement("img");
+  img.className = "co-listen-cover";
+  img.alt = "";
+  img.src = src;
+  body.append(img);
+}
 // How far the transcript goes on unbroken from `t`.
 function writtenTo(data, t) {
   let to = t;
@@ -456,20 +471,37 @@ function writtenTo(data, t) {
   $("listenBarBack").addEventListener("click", () => listenSkip(-listenPrefs().back));
   $("listenBarStop").addEventListener("click", listenStop);
   $("listenBarOpen").addEventListener("click", () => { const a = listenPage(); if (a) openPage(shownFor(a).id); });
-  // Dragging along the track moves within the chapter.
+  // Dragging along the track moves within the chapter: the dot and the
+  // times follow the finger, and it seeks once, on letting go.
   const track = $("listenTrack");
-  const seekTo = (x) => {
+  const placeAt = (x) => {
     const a = playerBook();
-    if (!a) return;
+    if (!a) return null;
     const r = track.getBoundingClientRect();
     let f = Math.min(1, Math.max(0, (x - r.left) / r.width));
     if (getComputedStyle(track).direction === "rtl") f = 1 - f;
     const ch = chaptersOf(a), t = lis.key === a.id ? lis.t : placeOf(a), ci = L.chapterAt(ch, t);
     const from = ci >= 0 ? ch[ci].t : 0, to = ci >= 0 && ch[ci + 1] ? ch[ci + 1].t : durOf(a);
-    const at = from + f * (to - from);
-    if (lis.key === a.id) listenSeek(at); else listenPlay(a, at);
+    return { a, at: Math.min(from + f * (to - from), Math.max(from, to - 0.5)) };
   };
-  track.addEventListener("pointerdown", (e) => { track.setPointerCapture(e.pointerId); seekTo(e.clientX); });
+  const dragTo = (e) => { const p = placeAt(e.clientX); if (p) { trackDrag = p; paintListen(); } };
+  const endDrag = (go) => {
+    const p = trackDrag;
+    trackDrag = null;
+    track.classList.remove("dragging");
+    if (!go || !p) { paintListen(); return; }
+    if (lis.key === p.a.id) listenSeek(p.at); else listenPlay(p.a, p.at);
+  };
+  track.addEventListener("pointerdown", (e) => {
+    if (e.button > 0) return;
+    track.setPointerCapture(e.pointerId);
+    track.classList.add("dragging");
+    dragTo(e);
+  });
+  track.addEventListener("pointermove", (e) => { if (trackDrag) dragTo(e); });
+  track.addEventListener("pointerup", () => endDrag(true));
+  track.addEventListener("pointercancel", () => endDrag(false));
+  track.addEventListener("lostpointercapture", () => { if (trackDrag) endDrag(true); });
   track.addEventListener("keydown", (e) => {
     if (e.key === "ArrowRight" || e.key === "ArrowLeft") { e.preventDefault(); listenSkip((e.key === "ArrowRight") === (getComputedStyle(track).direction !== "rtl") ? listenPrefs().on : -listenPrefs().back); }
   });

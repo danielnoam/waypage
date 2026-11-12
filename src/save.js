@@ -2559,7 +2559,7 @@
     const foot = out.createElement("footer");
     foot.className = "co-licence";
     // A file of your own (0.31.0) has no address to go back to.
-    if (meta.file && meta.link) foot.append("Opened from " + meta.file.name + (on ? " on " + on : "") + ".");
+    if (meta.file && meta.link && !(meta.audio && !meta.audio.overlay)) foot.append("Opened from " + meta.file.name + (on ? " on " + on : "") + ".");
     const link = out.createElement("a");
     link.href = meta.url;
     link.textContent = "Read the original";
