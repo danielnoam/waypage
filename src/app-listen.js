@@ -1042,16 +1042,26 @@ function listenBadge(p, thumb) {
 // ---- Settings › Audiobooks ----
 
 // Listening: Narrate's settings, as they apply to an audiobook.
-function listeningGroup() {
+function listeningGroup(title = "Listening") {
   const prefs = listenPrefs();
   const secs = (list) => list.map((v) => ({ value: String(v), label: v + " seconds" }));
-  return section("Listening", null, el("div", { class: "group" },
+  return section(title, null, el("div", { class: "group" },
     pickRow({ label: "Back", options: secs([5, 10, 15, 30, 60]), get: () => String(listenPrefs().back), set: (v) => { setListenPref("back", Number(v)); paintListen(); } }),
     pickRow({ label: "Forward", options: secs([10, 15, 30, 45, 60]), get: () => String(listenPrefs().on), set: (v) => { setListenPref("on", Number(v)); paintListen(); } }),
     switchRow("Back a little after a pause", "3 seconds, or 10 after a long one, so you pick up the sentence", prefs.rewind, (on) => setListenPref("rewind", on)),
     switchRow("Keep the screen on", "While it plays, so you can read along", prefs.awake, (on) => { setListenPref("awake", on); speech.keepScreen(on && lis.state === "playing"); }),
     A.native ? switchRow("Allow mixing", "Music or a podcast in another app keeps playing under the book. Off: they pause while it plays", prefs.mix, (on) => setListenPref("mix", on)) : null,
     A.native ? switchRow("Small window outside the app", "Going home, the book stays in a window you can move, with back, play and forward", prefs.pip, (on) => setListenPref("pip", on)) : null));
+}
+// The reader sheet's tab for an audiobook, in Narrate's place.
+function listenSheetPart() {
+  const part = el("div", null, el("h2", { class: "overline" }, "Audiobook"), listeningGroup(null));
+  if (A.canTranscribe) {
+    const pack = readyPack();
+    part.append(el("div", { class: "group" }, el("button", { class: "row", type: "button", onclick: () => { closeSheet(true); openSettings(false, "audiobooks"); } },
+      el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, "Transcripts"), el("span", { class: "choice-note" }, pack ? pack.title + " · in Settings › Audiobooks" : "Download a model in Settings › Audiobooks")))));
+  }
+  return part;
 }
 function audiobookSections() {
   const adding = el("p", { class: "footnote" }, "Open an M4B or MP3 with Open a file" + (C.platform.files.canPickFolder ? ", or a folder of them with Open an audiobook folder" : "") + ". It's played from where it is, and shows under Files.");
