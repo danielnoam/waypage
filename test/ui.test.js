@@ -1628,6 +1628,71 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a file read from outside: where you are, highlights and stats sync by its fingerprint, the file never (2026-11)", async () => {
+      const FP = "0123456789abcdef0123456789abcdef";
+      const q = await page(browser, 390);
+      await q.evaluate(async (FP) => {
+        localStorage.setItem("waypage.statsOthers", JSON.stringify({ phonephone12: { v: 1, since: 1, days: {}, clips: { zzphone1: { readMs: 600000, opened: 2 } }, moved: {} } }));
+        localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t" }));
+        const f = (id, fp, more) => ({ id, url: "", title: "Book " + id, site: "PDF", savedAt: 100, minutes: 30, mode: "previews", at: 0.1, readAt: 1000, placeAt: 1000, link: "handle:" + id, file: { name: id + ".pdf", kind: "pdf", ext: "pdf", size: 9, fp }, ...more });
+        await window.Waypage.store.writeIndex([f("book1", FP), f("book2", "fedcba9876543210fedcba9876543210", { at: 0.3, tags: ["mine"] })]);
+        for (const id of ["book1", "book2"]) await window.Waypage.store.writePage(id, "<!doctype html><html><body><p>Text of " + id + ".</p></body></html>", f(id));
+      }, FP);
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async (FP) => {
+        const mk = { id: "m1", block: 0, start: 0, endBlock: 0, end: 4, text: "Text", at: 4000 };
+        // The phone has the same file as zzphone1, read further.
+        const remote = { format: 1, deleted: {}, files: {}, pages: [],
+          outside: { [FP]: { name: "book1.pdf", ids: ["zzphone1"], at: 0.6, readAt: 5000, placeAt: 5000, readOn: "Phone", marks: [mk], fav: true, favAt: 4000 } } };
+        const b64 = (t) => btoa(unescape(encodeURIComponent(t)));
+        const puts = [];
+        let wrote = null;
+        window.fetch = async (url, opts = {}) => {
+          const method = opts.method || "GET";
+          const ok = (j) => new Response(JSON.stringify(j), { status: 200 });
+          if (/\/repos\/me\/waypage-data$/.test(url)) return ok({ name: "waypage-data", private: true, size: 2048 });
+          if (/contents\/library\.json/.test(url) && method === "GET") return ok({ sha: "lib1", content: b64(JSON.stringify(remote)) });
+          if (/contents\/library\.json/.test(url) && method === "PUT") { wrote = JSON.parse(decodeURIComponent(escape(atob(JSON.parse(opts.body).content)))); return ok({ content: { sha: "lib2" } }); }
+          if (method === "PUT") { puts.push(url); return ok({ content: { sha: "x" } }); }
+          return new Response("{}", { status: 404 });
+        };
+        await syncNow(true);
+        const p = (id) => state.pages.find((x) => x.id === id);
+        const b1 = p("book1");
+        return { puts: puts.filter((u) => /pages\//.test(u)), sentPages: wrote.pages.length, sentOut: Object.keys(wrote.outside).length,
+          sent2: wrote.outside.fedcba9876543210fedcba9876543210 && wrote.outside.fedcba9876543210fedcba9876543210.tags,
+          sentIds: wrote.outside[FP].ids.sort(), here: [b1.at, b1.readOn, (b1.marks || []).length, !!b1.fav, !!b1.link],
+          stats: (window.Waypage.stats.clip("book1") || {}).readMs, known: !!C.sync.outsideKnown(FP) };
+      }, FP);
+      assert.deepStrictEqual(got, { puts: [], sentPages: 0, sentOut: 2, sent2: ["mine"], sentIds: ["book1", "zzphone1"],
+        here: [0.6, "Phone", 1, true, true], stats: 600000, known: true }, JSON.stringify(got));
+      // The same file brought in fresh on this device takes it at once.
+      const fresh = await q.evaluate((FP) => {
+        const m = { id: "new1abc", title: "Again", link: "handle:x", file: { name: "again.pdf", kind: "pdf", ext: "pdf", size: 9, fp: FP }, at: 0 };
+        return [outsideKnown(m), m.at, (m.marks || []).length];
+      }, FP);
+      assert.deepStrictEqual(fresh, [true, 0.6, 1]);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Sync shows how much room is left on GitHub (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(() => localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t", paused: true })));
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => {
+        window.fetch = async (url) => /\/repos\/me\/waypage-data$/.test(url) ? new Response(JSON.stringify({ name: "waypage-data", private: true, size: 1200000 }), { status: 200 }) : new Response("{}", { status: 404 });
+        openSettings(false, "sync");
+      });
+      await q.waitForSelector(".sync-space");
+      const text = await q.locator(".sync-space").innerText();
+      assert.ok(/3\.8 GB left/.test(text) && /1\.2 GB of 5\.0 GB used/.test(text), text);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("on mobile data with places only, places and finished come and go but clips wait (1.40.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

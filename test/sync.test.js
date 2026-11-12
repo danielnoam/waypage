@@ -275,4 +275,42 @@ test("a collection's picked cover goes to the other device, and only a name Wayp
   assert.strictEqual(keep("uabcd1234.jpg", ""), undefined);
 });
 
+
+test("what's yours on a file read from outside syncs by its fingerprint (2026-11)", () => {
+  const FP = "0123456789abcdef0123456789abcdef", OTHER = "fedcba9876543210fedcba9876543210";
+  const mk = (id, at = 1) => ({ id, block: 1, start: 0, endBlock: 1, end: 4, text: "word", at });
+  const file = (fp, name) => ({ name, kind: "pdf", ext: "pdf", size: 9, fp });
+  // Only files read from outside with a fingerprint go in; a copy is a clip.
+  const here = S.outsideOf([
+    page("a1b2", { link: "content://x", file: file(FP, "a.pdf"), at: 0.4, placeAt: 50, marks: [mk("m1")], tags: ["work"] }),
+    page("c3d4", { file: file(OTHER, "b.pdf"), at: 0.9 }),
+    page("e5f6", { link: "content://y", file: { name: "old.pdf", kind: "pdf", ext: "pdf", size: 1 }, at: 0.2 }),
+  ]);
+  assert.deepStrictEqual(Object.keys(here), [FP]);
+  assert.deepStrictEqual(here[FP], { name: "a.pdf", ids: ["a1b2"], at: 0.4, placeAt: 50, marks: [mk("m1")], tags: ["work"] });
+
+  // The phone read further later and added a highlight; here a tag came.
+  const base = { [FP]: here[FP] };
+  const phone = { [FP]: { name: "a.pdf", ids: ["zz99"], at: 0.7, placeAt: 90, marks: [mk("m1"), mk("m2")], tags: ["work"] }, [OTHER]: { name: "c.epub", ids: ["yy88"], at: 0.1, placeAt: 5 } };
+  const got = S.mergeOutside(base, { [FP]: { ...here[FP], tags: ["work", "plane"] } }, phone);
+  assert.strictEqual(got[FP].at, 0.7);
+  assert.deepStrictEqual(got[FP].marks.map((m) => m.id), ["m1", "m2"]);
+  assert.deepStrictEqual(got[FP].tags, ["work", "plane"]);
+  assert.deepStrictEqual(got[FP].ids.sort(), ["a1b2", "zz99"]);
+  // A file this device doesn't have stays as GitHub has it.
+  assert.deepStrictEqual(got[OTHER], phone[OTHER]);
+  // A device new to the file takes all of it.
+  const fresh = S.mergeOutside(null, { [FP]: { name: "a.pdf", ids: ["q1w2"], at: 0 } }, phone);
+  assert.strictEqual(fresh[FP].at, 0.7);
+  assert.strictEqual(fresh[FP].marks.length, 2);
+
+  // And onto the file here: what it says, and nothing else touched.
+  const p = page("a1b2", { link: "content://x", file: file(FP, "a.pdf"), at: 0.4, placeAt: 50, bytes: 7 });
+  const next = S.outsideOnto(p, got[FP]);
+  assert.strictEqual(next.at, 0.7);
+  assert.strictEqual(next.bytes, 7);
+  assert.strictEqual(next.link, "content://x");
+  assert.strictEqual(S.outsideOnto(next, got[FP]), null);
+});
+
 console.log("\n" + passed + " passed");
