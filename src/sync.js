@@ -180,44 +180,6 @@
     return Object.keys(out).length ? out : undefined;
   }
 
-  // Highlights and drawings on files read from outside (2026-11), which
-  // never sync themselves: by the file's fingerprint (files.js), so they
-  // show on another device only on the same file. { "<fp>": { name,
-  // marks, ink (by block), pages (a PDF's printed pages) } }. Each part
-  // three ways as on a clip; a file this device doesn't have stays as
-  // GitHub has it, and one with nothing left on it goes.
-  function mergeOutside(b, l, r) {
-    b = b || {}; r = r || {};
-    const out = {};
-    const one = (x, y, z) => {
-      const o = { name: y.name || z.name || "" };
-      const marks = mergeMarks(x.marks, y.marks, z.marks);
-      if (marks.length) o.marks = marks;
-      for (const k of ["ink", "pages"]) { const v = mergeInk(x[k], y[k], z[k]); if (v) o[k] = v; }
-      return o;
-    };
-    for (const [fp, y] of Object.entries(l || {})) {
-      const z = r[fp] || (b[fp] ? {} : null);
-      const o = z ? one(b[fp] || {}, y, z) : one({}, y, {});
-      if (o.marks || o.ink || o.pages) out[fp] = o;
-    }
-    for (const [fp, z] of Object.entries(r)) if (!(l && l[fp])) out[fp] = z;
-    return out;
-  }
-  function cleanOutside(o) {
-    const out = {};
-    if (!o || typeof o !== "object" || Array.isArray(o)) return out;
-    for (const [fp, v] of Object.entries(o).slice(0, 2000)) {
-      if (!/^[0-9a-f]{32}$/.test(fp) || !v || typeof v !== "object") continue;
-      const x = { name: typeof v.name === "string" ? v.name.slice(0, 200) : "" };
-      const marks = C.backup.cleanMarks(v.marks);
-      if (marks.length) x.marks = marks;
-      for (const k of ["ink", "pages"]) { const ink = C.backup.cleanInk(v[k]); if (ink) x[k] = ink; }
-      if (x.marks || x.ink || x.pages) out[fp] = x;
-    }
-    return out;
-  }
-
   // One page changed on both sides since the base.
   function mergeEntry(b, l, r) {
     b = b || {};
@@ -238,7 +200,7 @@
         : same(l[k], r[k]) ? l[k] : same(l[k], b[k]) ? r[k] : same(r[k], b[k]) ? l[k] : placeFrom[k];
       else if (k === "tags") out[k] = mergeTags(b.tags, l.tags, r.tags);
       else if (k === "marks") out[k] = mergeMarks(b.marks, l.marks, r.marks);
-      else if (k === "ink") out[k] = mergeInk(b.ink, l.ink, r.ink);
+      else if (k === "ink" || k === "pages") out[k] = mergeInk(b[k], l[k], r[k]);
       else if (k === "inkAt") out[k] = Math.max(l.inkAt || 0, r.inkAt || 0) || undefined;
       else out[k] = pick(k);
     }
@@ -247,6 +209,76 @@
     if (!out.fav) delete out.favAt;
     if (!out.folderFav) delete out.folderFavAt;
     return out;
+  }
+
+  // Files read from outside (2026-11) never sync themselves, but what's
+  // yours on them does: where you are, highlights, tags, collection and
+  // favourite, in library.json's outside map keyed by the file's
+  // fingerprint (files.js), so they land only on a device with the same
+  // file. `ids` are the file's clip ids on every device, so its reading
+  // stats add up as one. Drawings go too: `ink` by block, and `pages`,
+  // a printed PDF's drawn pages, which live beside the clip (store.readInk)
+  // and so come in on the copies outsidePages makes.
+  const OUTSIDE = ["at", "finished", "readAt", "readOn", "placeAt", "spot", "turn", "tags", "folder", "folderAt", "fav", "favAt", "folderFav", "folderFavAt", "marks", "ink", "inkAt"];
+  const FP = /^[0-9a-f]{32}$/;
+  const OUT_MAX = 2000;
+  // This device's outside files as entries: one a fingerprint, the copy
+  // read last when the same file is here twice.
+  function outsideOf(pages) {
+    const out = {};
+    for (const p of pages || []) {
+      const fp = p && p.link && p.file && p.file.fp;
+      if (!fp || !FP.test(fp)) continue;
+      const o = { name: (p.file.name || "").slice(0, 200), ids: [p.id] };
+      for (const k of OUTSIDE) if (p[k] !== undefined && p[k] !== false && !(Array.isArray(p[k]) && !p[k].length)) o[k] = p[k];
+      if (p.pages) o.pages = p.pages;
+      const was = out[fp];
+      if (was) { o.ids = [...new Set(was.ids.concat(p.id))]; if (placeTime(was) > placeTime(o)) { out[fp] = { ...was, ids: o.ids }; continue; } }
+      out[fp] = o;
+    }
+    return out;
+  }
+  // Three ways, like a clip's entry. A file this device doesn't have
+  // stays as GitHub has it: it comes back with the file.
+  function mergeOutside(b, l, r) {
+    b = b || {}; l = l || {}; r = r || {};
+    const out = {};
+    for (const fp of new Set([...Object.keys(l), ...Object.keys(r)])) {
+      const x = l[fp], y = r[fp];
+      if (x && y) {
+        const o = same(x, y) ? { ...x } : mergeEntry(b[fp], x, y);
+        o.ids = [...new Set((y.ids || []).concat(x.ids || []))].slice(-20);
+        o.name = x.name || y.name || "";
+        out[fp] = o;
+      } else out[fp] = x || y;
+    }
+    const keys = Object.keys(out);
+    if (keys.length > OUT_MAX) keys.sort((a, c) => placeTime(out[c]) - placeTime(out[a])).slice(OUT_MAX).forEach((k) => delete out[k]);
+    return out;
+  }
+  // The outside map as read from a file: anything else is dropped.
+  function cleanOutside(o) {
+    const out = {};
+    if (!o || typeof o !== "object" || Array.isArray(o)) return out;
+    for (const [fp, v] of Object.entries(o).slice(0, OUT_MAX)) {
+      if (!FP.test(fp) || !v || typeof v !== "object") continue;
+      const m = C.backup.cleanMeta({ ...v, file: { name: "f.txt", kind: "txt", ext: "txt", size: 0 }, url: "" }, "x");
+      if (!m) continue;
+      const x = { name: typeof v.name === "string" ? v.name.slice(0, 200) : "", ids: (Array.isArray(v.ids) ? v.ids : []).filter((i) => typeof i === "string" && /^[a-z0-9]{4,24}$/.test(i)).slice(-20) };
+      for (const k of OUTSIDE) if (v[k] !== undefined && m[k] !== undefined && m[k] !== false && !(Array.isArray(m[k]) && !m[k].length)) x[k] = m[k];
+      const pages = C.backup.cleanInk(v.pages);
+      if (pages) x.pages = pages;
+      out[fp] = x;
+    }
+    return out;
+  }
+  // An outside file here with what the entry says, or null when nothing
+  // changes.
+  function outsideOnto(p, o) {
+    const next = { ...p };
+    for (const k of OUTSIDE) { if (o[k] === undefined) delete next[k]; else next[k] = o[k]; }
+    if (next.finished === undefined && p.finished === false) next.finished = false;
+    return OUTSIDE.some((k) => !same(next[k], p[k])) ? next : null;
   }
 
   // Two copies of one address, saved separately on two devices: the one
@@ -870,10 +902,29 @@
     if (!r.ok) return false;
     const j = await r.json();
     if (j.name && j.name !== cfg.repo) cfg.repo = j.name;
+    took(j);
     if (j.private === false) return true;
     cfg.looked = Date.now();
     keep(CFG_KEY, cfg);
     return false;
+  }
+
+  // How much the repo holds (2026-11), as GitHub counts it: its size in
+  // KB, history and all, which GitHub updates a while after a push. It
+  // has no hard cap; it asks that a repo stay under 5 GB.
+  const SPACE = 5e9;
+  const took = (j) => { if (typeof j.size === "number" && j.size >= 0) { cfg.size = j.size; cfg.sizeAt = Date.now(); keep(CFG_KEY, cfg); } };
+  let asking = null;
+  function space() {
+    if (!cfg || asking || (cfg.sizeAt && Date.now() - cfg.sizeAt < 10 * 60 * 1000)) return asking || Promise.resolve(false);
+    asking = (async () => {
+      const r = await call(API + "/repos/" + cfg.owner + "/" + cfg.repo, { headers: headers() });
+      if (!r.ok) return false;
+      const was = cfg.size;
+      took(await r.json());
+      return cfg.size !== was;
+    })().catch(() => false).finally(() => { asking = null; });
+    return asking;
   }
 
   function run({ getPages, setPages, getFeeds, setFeeds, getSeen, setSeen, sameUrl, urlKey, onProgress, light, isMail, getOutside, setOutside }) {
@@ -916,8 +967,9 @@
     const before = getPages().map((p) => ({ ...p }));
     const feedsBefore = getFeeds ? getFeeds().map(feedShare).filter((f) => !skip(f.url)) : null;
     const snapshot = new Map(before.map((p) => [p.id, JSON.stringify(p)]));
-    // Highlights and drawings on files read from outside, with the clips.
-    const outsideHere = what.clips && !light && getOutside ? cleanOutside(await getOutside()) : null;
+    // What's yours on files read from outside, with the clips.
+    const outsideHere = what.clips && getOutside ? outsideOf(await getOutside()) : null;
+    const takeOutside = async () => { if (outsideHere && setOutside && merged.outside) try { await setOutside(merged.outside, outsideHere); } catch (e) { /* next time */ } };
     await breathe();
     // Pages a run sent before it was cut off (the app closed or updated)
     // count as sent: library.json goes up only once they all have, so
@@ -994,8 +1046,8 @@
         remote ? { ...remote.data, pages: remote.data.pages.filter(ours) } : null, waiting, feedsHere, getSeen ? getSeen() : 0, Date.now(), sameUrl, urlKey);
       merged = got.merged;
       const remoteDoc = got.remoteDoc;
-      const outside = outsideHere ? mergeOutside(baseDoc && baseDoc.outside, outsideHere, remoteDoc && remoteDoc.outside) : (remoteDoc && remoteDoc.outside) || {};
-      if (Object.keys(outside).length) merged.outside = outside;
+      const outside = outsideHere ? mergeOutside(baseDoc && baseDoc.outside, outsideHere, remoteDoc && remoteDoc.outside) : remoteDoc && remoteDoc.outside;
+      if (outside && Object.keys(outside).length) merged.outside = outside;
       // What isn't synced here goes back in as GitHub has it.
       if (rest.length) {
         const back = clean({ pages: rest, files: remote.data.files });
@@ -1036,6 +1088,7 @@
         }
         if (!remote) break;
         const doc = placesOnto(remoteDoc, merged);
+        if (merged.outside) doc.outside = merged.outside;
         if (await sameOff(doc, remoteDoc)) break;
         halt();
         try { await write("library.json", JSON.stringify(doc), remote.sha, "Places: " + merged.pages.length + " pages"); break; } catch (e) {
@@ -1155,6 +1208,7 @@
       setFeeds(list);
     };
     if (light) {
+      await takeOutside();
       await stats();
       return { up: 0, down: 0, removed: 0, downloads: [], fromLinks: [], light: true };
     }
@@ -1293,7 +1347,7 @@
     // Before the library is shown, so a cover that came down is in it.
     try { await syncCovers(out); } catch (e) { if (e instanceof Paused) throw e; }
     await setPages(out);
-    if (outsideHere && setOutside) try { await setOutside(merged.outside || {}, outsideHere); } catch (e) { /* next time */ }
+    await takeOutside();
     for (const id of gone) await C.store.removePage(id);
     // Reading stats last (1.39.0), and never the reason a sync failed.
     await stats();
@@ -1402,9 +1456,13 @@
     NOTE_MAX: NOTE_BASE_MAX,
     // A note whose PDF is over the cap stays on its device (2026-11).
     tooBig: (p) => !!(p && p.note && (p.noteBytes || 0) > NOTE_BASE_MAX),
-    merge, mergeTags, mergeMarks, mergeInk, mergeOutside, cleanOutside, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
+    merge, mergeTags, mergeMarks, mergeInk, mergeOutside, cleanOutside, outsideOf, outsideOnto, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
     share, clean, same, urlKey, sameUrl, peek, poll,
+    // What this device last saw on GitHub for a file read from outside.
+    outsideKnown(fp) { const b = load(BASE_KEY, null); return (b && b.outside && b.outside[fp] && cleanOutside({ [fp]: b.outside[fp] })[fp]) || null; },
     get on() { return !!cfg; },
+    space, SPACE,
+    get used() { return cfg && typeof cfg.size === "number" ? cfg.size * 1024 : null; },
     // Connected before 1.29.1's steps, so with a token for All
     // repositories (1.30.1). Gone once a new token is connected.
     get oldToken() { return !!cfg && !cfg.scoped; },

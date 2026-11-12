@@ -1960,6 +1960,7 @@ async function openFile(file, btn, open, ref, forced) {
         if (had) openPage(had.id);
       } else {
         fileSeries(meta);
+        outsideKnown(meta);
         state.pages.unshift(meta);
         await C.store.writeIndex(state.pages);
         await loadThumbs();
@@ -2170,6 +2171,7 @@ async function lookInOne(w, said, scan) {
         const dir = w.into || f.path.split("/").slice(-2, -1)[0];
         if (dir) { meta.folder = folderName(dir); meta.folderAt = Date.now(); }
         fileSeries(meta);
+        outsideKnown(meta);
         state.pages.unshift(meta);
         await C.store.writeIndex(state.pages);
         added++;

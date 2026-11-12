@@ -26,6 +26,7 @@
   const KEY = "waypage.stats";
   const DEVICE_KEY = "waypage.statsDevice";
   const OTHERS_KEY = "waypage.statsOthers"; // { device: data } from sync or a backup
+  const SAME_KEY = "waypage.statsSame"; // { other id: id here }, a file read from outside on another device (2026-11)
   const IDLE_MIN = 20000, IDLE_MAX = 90000, IDLE_DEFAULT = 60000;
   const TICK_MS = 15000;
   // More words than this in one move is a jump, not reading.
@@ -267,11 +268,30 @@
     for (const [dev, d] of Object.entries(b.others || {})) if (!othersNow()[dev]) take(dev, d);
   }
 
+  // The same file read from outside has its own clip id on each device
+  // (2026-11): sync says which ids are this device's, and their numbers
+  // add up under it here. Kept to this device; never written to its stats.
+  let sameIds = null;
+  const sameNow = () => {
+    if (sameIds) return sameIds;
+    try { sameIds = JSON.parse(localStorage.getItem(SAME_KEY)); } catch (e) { sameIds = null; }
+    if (!sameIds || typeof sameIds !== "object") sameIds = {};
+    return sameIds;
+  };
+  function same(map) {
+    const next = { ...sameNow() };
+    for (const [a, b] of Object.entries(map || {})) if (ID.test(a) && ID.test(b) && a !== b && next[b] !== a) next[a] = b;
+    if (JSON.stringify(next) === JSON.stringify(sameNow())) return;
+    sameIds = next;
+    try { localStorage.setItem(SAME_KEY, JSON.stringify(next)); } catch (e) { /* not kept */ }
+    tell();
+  }
+
   // ---- The totals: every device added up ----
   function sum() {
     if (combined) return combined;
     const all_ = [mine(), ...Object.values(othersNow())];
-    const moves = {};
+    const moves = { ...sameNow() };
     for (const d of all_) Object.assign(moves, d.moved || {});
     const to = (id) => { for (let n = 0; moves[id] && n < 20; n++) id = moves[id]; return id; };
     const days = {}, clips = {};
@@ -315,7 +335,7 @@
     if (combined) return combined.clips[id] || null;
     if (Date.now() - freshAt > 2000) { count(); aloudCount(); freshAt = Date.now(); }
     const all_ = [mine(), ...Object.values(othersNow())];
-    const moves = {};
+    const moves = { ...sameNow() };
     for (const d of all_) Object.assign(moves, d.moved || {});
     const to = (x) => { for (let n = 0; moves[x] && n < 20; n++) x = moves[x]; return x; };
     const ids = [id, ...Object.keys(moves).filter((x) => x !== id && to(x) === id)];
@@ -363,7 +383,7 @@
   }
   const onChange = (fn) => heard.push(fn);
 
-  window.Waypage.stats = { opened, closed, active, position, screen, pace, paceKnown, finished, saved, moved, aloud, all, flush,
+  window.Waypage.stats = { opened, closed, active, position, screen, pace, paceKnown, finished, saved, moved, same, aloud, all, flush,
     get device() { return device(); }, mine, take, backup, restore, clean,
     day: dayOf, days, clip: clipOf, top, finishedIn, streak, since: () => sum().since, dayKey, onChange, READ_DAY };
 })();

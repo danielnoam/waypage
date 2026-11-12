@@ -394,8 +394,18 @@ web copy stay links, as before.
   (`backup.noteFiles` in a browser; the native packer takes the folder),
   under Drive's own Notes switch (`driveContents`); there are no PDF copies.
 - Files read from outside (`link` on the entry) are this device's alone:
-  neither sync nor any backup takes them, and a restore skips them. Only
-  their highlights and drawings sync, by fingerprint (`outside`, above).
+  neither sync nor any backup takes them, and a restore skips them.
+  What's yours on one does sync (2026-11): its place, highlights, drawings
+  (`ink`, and a printed PDF's drawn `pages`), tags, collection and
+  favourite go in library.json's `outside` map, keyed by
+  the file's fingerprint (`files.fingerprint`: a hash of its size and
+  first and last 256 KB), and land only on a device with the same file,
+  at once when it's brought in (`outsideKnown`, from the last library
+  seen). An entry's `ids` are that file's clip ids on each device; stats
+  add them up under this device's own (`stats.same`, kept here only).
+- The Sync screen shows the repo's size against GitHub's 5 GB (its
+  advice; it has no hard cap), from `/repos`, asked at most every 10
+  minutes. GitHub updates it a while after a push.
 - **Backups and exports** (`backup.js`, `epub.js`): one zip of the whole
   library, one HTML file per clip, an EPUB of chosen clips.
 - **Imports** (`imports.js`): other read-later apps' exports become

@@ -307,24 +307,58 @@ test("drawings on a clip merge stroke by stroke, like highlights (2026-11)", () 
   assert.deepStrictEqual(r.pages[0].ink, { 3: [st("s1", 0.5), st("s3")], 5: [st("s4")] });
 });
 
-test("highlights and drawings on a file read from outside merge by its fingerprint (2026-11)", () => {
-  const FP = "0123456789abcdef0123456789abcdef", OTHER = "fedcba9876543210fedcba9876543210";
+test("drawings on a file read from outside merge by its fingerprint, stroke by stroke (2026-11)", () => {
+  const FP = "0123456789abcdef0123456789abcdef";
   const st = (id) => ({ id, t: "p", c: "red", w: 0.01, p: [0, 0, 1, 1, 1, 1] });
-  const mk = (id) => ({ id, block: 1, start: 0, endBlock: 1, end: 4, text: "word", at: 1 });
-  const base = { [FP]: { name: "a.pdf", marks: [mk("m1")], pages: { 2: [st("s1")] } } };
-  // Here: a new highlight. There: s1 erased, a new stroke on page 3.
-  const l = { [FP]: { name: "a.pdf", marks: [mk("m1"), mk("m2")], pages: { 2: [st("s1")] } } };
-  const r = { [FP]: { name: "a.pdf", marks: [mk("m1")], pages: { 3: [st("s2")] } }, [OTHER]: { name: "b.epub", ink: { 4: [st("s3")] } } };
+  const base = { [FP]: { name: "a.pdf", ids: ["a1b2"], pages: { 2: [st("s1")] }, ink: { 4: [st("s5")] } } };
+  // Here: a new stroke by block. There: s1 erased, a new stroke on page 3.
+  const l = { [FP]: { name: "a.pdf", ids: ["a1b2"], pages: { 2: [st("s1")] }, ink: { 4: [st("s5")], 6: [st("s6")] } } };
+  const r = { [FP]: { name: "a.pdf", ids: ["zz99"], pages: { 3: [st("s2")] }, ink: { 4: [st("s5")] } } };
   const got = S.mergeOutside(base, l, r);
-  assert.deepStrictEqual(got[FP].marks.map((m) => m.id), ["m1", "m2"]);
   assert.deepStrictEqual(got[FP].pages, { 3: [st("s2")] });
+  assert.deepStrictEqual(got[FP].ink, { 4: [st("s5")], 6: [st("s6")] });
+  // A page's drawings come from the copy outsidePages makes.
+  const here = S.outsideOf([page("a1b2", { link: "content://x", file: { name: "a.pdf", kind: "pdf", ext: "pdf", size: 9, fp: FP }, pages: { 3: [st("s2")] }, ink: { 6: [st("s6")] } })]);
+  assert.deepStrictEqual(here[FP].pages, { 3: [st("s2")] });
+  assert.deepStrictEqual(here[FP].ink, { 6: [st("s6")] });
+});
+
+
+test("what's yours on a file read from outside syncs by its fingerprint (2026-11)", () => {
+  const FP = "0123456789abcdef0123456789abcdef", OTHER = "fedcba9876543210fedcba9876543210";
+  const mk = (id, at = 1) => ({ id, block: 1, start: 0, endBlock: 1, end: 4, text: "word", at });
+  const file = (fp, name) => ({ name, kind: "pdf", ext: "pdf", size: 9, fp });
+  // Only files read from outside with a fingerprint go in; a copy is a clip.
+  const here = S.outsideOf([
+    page("a1b2", { link: "content://x", file: file(FP, "a.pdf"), at: 0.4, placeAt: 50, marks: [mk("m1")], tags: ["work"] }),
+    page("c3d4", { file: file(OTHER, "b.pdf"), at: 0.9 }),
+    page("e5f6", { link: "content://y", file: { name: "old.pdf", kind: "pdf", ext: "pdf", size: 1 }, at: 0.2 }),
+  ]);
+  assert.deepStrictEqual(Object.keys(here), [FP]);
+  assert.deepStrictEqual(here[FP], { name: "a.pdf", ids: ["a1b2"], at: 0.4, placeAt: 50, marks: [mk("m1")], tags: ["work"] });
+
+  // The phone read further later and added a highlight; here a tag came.
+  const base = { [FP]: here[FP] };
+  const phone = { [FP]: { name: "a.pdf", ids: ["zz99"], at: 0.7, placeAt: 90, marks: [mk("m1"), mk("m2")], tags: ["work"] }, [OTHER]: { name: "c.epub", ids: ["yy88"], at: 0.1, placeAt: 5 } };
+  const got = S.mergeOutside(base, { [FP]: { ...here[FP], tags: ["work", "plane"] } }, phone);
+  assert.strictEqual(got[FP].at, 0.7);
+  assert.deepStrictEqual(got[FP].marks.map((m) => m.id), ["m1", "m2"]);
+  assert.deepStrictEqual(got[FP].tags, ["work", "plane"]);
+  assert.deepStrictEqual(got[FP].ids.sort(), ["a1b2", "zz99"]);
   // A file this device doesn't have stays as GitHub has it.
-  assert.deepStrictEqual(got[OTHER], r[OTHER]);
-  // Everything erased here, on a file GitHub knew: it goes.
-  const gone = S.mergeOutside(base, { [FP]: { name: "a.pdf", marks: [] } }, base);
-  assert.ok(!gone[FP]);
-  // A device new to the file takes what's on it.
-  assert.deepStrictEqual(S.mergeOutside(null, { [FP]: { name: "a.pdf", marks: [] } }, base)[FP].marks.map((m) => m.id), ["m1"]);
+  assert.deepStrictEqual(got[OTHER], phone[OTHER]);
+  // A device new to the file takes all of it.
+  const fresh = S.mergeOutside(null, { [FP]: { name: "a.pdf", ids: ["q1w2"], at: 0 } }, phone);
+  assert.strictEqual(fresh[FP].at, 0.7);
+  assert.strictEqual(fresh[FP].marks.length, 2);
+
+  // And onto the file here: what it says, and nothing else touched.
+  const p = page("a1b2", { link: "content://x", file: file(FP, "a.pdf"), at: 0.4, placeAt: 50, bytes: 7 });
+  const next = S.outsideOnto(p, got[FP]);
+  assert.strictEqual(next.at, 0.7);
+  assert.strictEqual(next.bytes, 7);
+  assert.strictEqual(next.link, "content://x");
+  assert.strictEqual(S.outsideOnto(next, got[FP]), null);
 });
 
 console.log("\n" + passed + " passed");
