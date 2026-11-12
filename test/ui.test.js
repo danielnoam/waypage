@@ -4481,8 +4481,14 @@ function zipOf(files) {
       });
       await q.evaluate((i) => openPage(i), id);
       await until(q, () => !document.getElementById("listenPlayer").hidden);
-      await q.waitForTimeout(1200);
-      const r = await q.locator("#listenTrack").boundingBox();
+      // "Added" sits over the track for a moment, and the reader slides in.
+      await q.evaluate(() => { document.getElementById("toast").hidden = true; });
+      let r = null;
+      for (let was = null; ; was = r) {
+        await q.waitForTimeout(200);
+        r = await q.locator("#listenTrack").boundingBox();
+        if (was && was.x === r.x && was.y === r.y) break;
+      }
       assert.ok(r.height >= 44, "a finger-sized track");
       const cdp = await ctx.newCDPSession(q);
       const touch = (type, f) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x: r.x + r.width * f, y: r.y + r.height / 2 }] });
