@@ -1390,6 +1390,30 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("Edit clips finds a site in link addresses and removes the links, keeping their words", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = { id: "lk1", url: "https://example.com/lk1", title: "Links", site: "example.com", savedAt: 1001, minutes: 1, mode: "links", at: 0, finished: false };
+        await S.writeIndex([c]);
+        await S.writePage("lk1", '<!doctype html><html><body><p>Get <a href="https://oceanofpdf.com/a">book one</a> and <a href="https://example.org/b">book two</a>.</p><p>Also <a href="https://www.oceanofpdf.com/c"><b>three</b></a></p></body></html>', c);
+      });
+      await q.reload();
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Library" }).click();
+      await q.locator("#sectionBody .nav-row", { hasText: "Edit clips" }).click();
+      await q.fill("#editFind", "oceanofpdf.com");
+      await q.locator("#editResult .row", { hasText: "Find" }).click();
+      await q.locator("#editResult .section-lead", { hasText: "Found" }).waitFor();
+      assert.strictEqual(await q.textContent("#editResult .section-lead"), "Found 2 times in 1 clip.");
+      await q.locator("#editResult .row", { hasText: "Remove from 1 clip" }).click();
+      await until(q, () => !!document.querySelector("#editResult") && /Undo/.test(document.querySelector("#editResult").textContent));
+      const html = await q.evaluate(() => window.Waypage.store.readPage("lk1"));
+      assert.ok(!/oceanofpdf/.test(html) && /Get book one and <a href="https:\/\/example.org\/b">book two<\/a>/.test(html) && /Also <b>three<\/b>/.test(html), html);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a clip in a collection has Previous at the top and the collection's clips by Contents (1.23.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

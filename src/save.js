@@ -2581,13 +2581,35 @@
 
   // Edit clips (1.22.0): each match of `re` (global) in the clip's text
   // becomes rep(match), "" removing it, even across bold or links inside
-  // one paragraph. The app's own lines (header, licence, next) stay as
-  // they are, and a paragraph left with nothing in it goes. Resolves to
+  // one paragraph, and in link addresses. The app's own lines (header,
+  // licence, next) stay as they are, and a paragraph left with nothing in
+  // it goes. Resolves to
   // the number changed; `samples` collects a few, before and after.
   const LEAVES = "p, li, h1, h2, h3, h4, h5, h6, figcaption, blockquote, pre, td, th, dt, dd, caption, summary";
   const OURS = ".co-head, .co-licence, .co-next, .co-credit, script, style";
   function replaceText(body, re, rep, samples) {
     const doc = body.ownerDocument;
+    // Link addresses (a clip full of links to one site): a match in one
+    // rewrites the address, or with nothing to put instead the link goes
+    // and its words stay.
+    let count = 0;
+    for (const a of [...body.querySelectorAll("a[href]")]) {
+      if (a.closest(OURS)) continue;
+      const href = a.getAttribute("href");
+      re.lastIndex = 0;
+      const found = [...href.matchAll(re)].filter((m) => m[0]);
+      if (!found.length) continue;
+      const put = found.map((m) => rep(m));
+      if (samples && samples.length < 5) {
+        const m = found[0], words = a.textContent.replace(/\s+/g, " ").trim().slice(0, 40);
+        samples.push({ before: (words ? words + " → " : "") + href.slice(Math.max(0, m.index - 30), m.index), found: m[0], put: put[0], after: href.slice(m.index + m[0].length).slice(0, 30) });
+      }
+      count += found.length;
+      if (put.every((x) => !x)) { a.replaceWith(...a.childNodes); continue; }
+      let at = 0, out = "";
+      found.forEach((m, k) => { out += href.slice(at, m.index) + put[k]; at = m.index + m[0].length; });
+      a.setAttribute("href", out + href.slice(at));
+    }
     const units = new Map();
     const walk = doc.createTreeWalker(body, 4);
     for (let n = walk.nextNode(); n; n = walk.nextNode()) {
@@ -2596,7 +2618,6 @@
       if (!units.has(key)) units.set(key, []);
       units.get(key).push(n);
     }
-    let count = 0;
     for (const [key, nodes] of units) {
       const lens = nodes.map((n) => n.data.length);
       const starts = [];
