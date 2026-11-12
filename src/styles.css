@@ -1176,6 +1176,7 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
   background: var(--bg); color: var(--ink); font: inherit;
 }
 .tag-input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+.rename-input { display: block; width: 100%; margin: var(--s-2) 0 var(--s-4); }
 .sign-in-field { display: block; width: 100%; margin-top: var(--s-2); }
 .sign-in-field[hidden] { display: none; }
 .sheet-row {

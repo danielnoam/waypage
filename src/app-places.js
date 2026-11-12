@@ -977,7 +977,7 @@ const KEYS = [
     ["1  2  3  4  5  6", "Library, Feeds, Newsletters, Highlights, Stats, Discover"], ["G then L", "Go to the library"],
     ["G then F", "Go to Feeds"], ["G then N", "Go to Newsletters"], ["G then H", "Go to Highlights"], ["G then S", "Go to Stats"], ["G then E", "Go to Discover"], ["D", "Downloads"], [",", "Settings"], ["?", "These shortcuts"]]],
   ["In the library", [["↑ ↓", "Move between clips"], ["Enter", "Open"], ["X", "Pick, to act on several"], ["Shift-click", "Pick a run"],
-    ["F", "Favourite"], ["E", "Export"], ["Del", "Delete"]]],
+    ["F", "Favourite"], ["E", "Export"], ["F2", "Rename"], ["Del", "Delete"]]],
   ["Reading", [["Space  ← →", "Next or previous page"], ["J  K", "Next or previous section"], ["T", "Contents beside the text"],
     ["S", "Narrate, or auto-scroll a comic"], ["A", "Reader settings"], ["H", "Highlights"], ["1–5", "Highlight the selected words in a colour"], ["D", "Draw on a PDF, then P pen, B highlighter, E eraser, [ ] size"], ["L", "Translate this clip"], ["/", "Find in this clip"], ["+  −", "Text size"], ["O", "Open the original"], ["Esc", "Back"]]],
 ];
@@ -1106,6 +1106,7 @@ function onKeys(e) {
     x: () => node && (state.select ? tapPages(node.dataset.ids.split(",")) : startSelect(node.dataset.ids.split(","))),
     f: () => p && setFavourite([p], !p.fav),
     e: () => p && !p.link && openMenu("export", p),
+    F2: () => p && openMenu("rename", p),
     Delete: () => (state.select ? deletePicked() : p && deletePage(p, "keys")),
     Backspace: () => (state.select ? deletePicked() : p && deletePage(p, "keys")),
   };
