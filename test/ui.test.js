@@ -1414,6 +1414,41 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a collection sorts by release date, date added and title, shows as covers, and says what it holds", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const rr = (id, t, saved, extra) => ({ id: "rr" + id, url: "https://www.royalroad.com/fiction/9/s/chapter/" + id + "/c", title: t, site: "Royal Road", savedAt: saved, minutes: 1, mode: "links", at: 0, finished: false, folder: "Serial", folderAt: -saved, ...extra });
+        const list = [rr(500, "Beta", 3), rr(100, "alpha 10", 1), rr(300, "Alpha 2", 2, { note: { paper: "blank" } })];
+        await S.writeIndex(list);
+        for (const c of list) await S.writePage(c.id, "<!doctype html><html><body><p>" + c.title + "</p></body></html>", c);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await until(q, () => !!document.querySelector('.tile[data-name="Serial"]'));
+      assert.strictEqual(await q.locator('.tile[data-name="Serial"] .tile-holds').innerText(), "2 clips, 1 note");
+      await q.evaluate(() => { openFolder("Serial"); setFolderMode("order"); });
+      const order = () => q.evaluate(() => folderPages("Serial").map((p) => p.id).join());
+      await q.locator('[data-sort="released"]').click();
+      await until(q, () => folderPages("Serial")[0].id === "rr100");
+      assert.strictEqual(await order(), "rr100,rr300,rr500");
+      await q.locator('[data-sort="released"]').click();
+      await until(q, () => folderPages("Serial")[0].id === "rr500");
+      await q.locator('[data-sort="title"]').click();
+      await until(q, () => folderPages("Serial")[0].id === "rr300");
+      assert.strictEqual(await order(), "rr300,rr100,rr500");
+      await q.locator('[data-sort="added"]').click();
+      await until(q, () => folderPages("Serial")[0].id === "rr100");
+      assert.strictEqual(await order(), "rr100,rr300,rr500");
+      await q.evaluate(() => { setFolderMode(""); setFolderLook("Serial", "covers"); });
+      assert.strictEqual(await q.locator("#folderBody .folder-covers .cover-item").count(), 3);
+      assert.strictEqual(await q.locator("#folderBody .folder-list").count(), 0);
+      // Opening a serial looks for its next chapter, which has nowhere to go here.
+      const errors = q.errors.filter((e) => !/workers\.dev/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a clip in a collection has Previous at the top and the collection's clips by Contents (1.23.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
@@ -2042,6 +2077,52 @@ function zipOf(files) {
       assert.deepStrictEqual(got.media, { blocks: true, album: "Saga", track: 1, tracks: 2, title: "Chapter 1" });
       assert.strictEqual(got.after, "stopped");
       assert.strictEqual(got.offPip, "false:true");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("an audiobook's Keep playing when you leave the book (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (i) => ({ id: "k" + i, url: "https://example.com/k" + i, title: "Clip " + i, site: "example.com", savedAt: 1000 + i, minutes: 1, mode: "links", at: 0 });
+        await S.writeIndex([c(1), c(2)]);
+        for (const i of [1, 2]) await S.writePage("k" + i, "<!doctype html><html><body><h1>Clip " + i + "</h1><p>Words.</p></body></html>", c(i));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const A = window.Waypage.platform.audio;
+        let stops = 0;
+        A.stop = () => { stops++; return Promise.resolve(); };
+        const wait = (f) => new Promise((ok) => { const t = setInterval(() => { if (f()) { clearInterval(t); ok(); } }, 50); });
+        const playing = () => Object.assign(lis, { key: "book", state: "playing" });
+        const out = {};
+        // Off (the default): going back stops it, and so does opening another clip.
+        out.on = listenPrefs().keep;
+        openPage("k1");
+        await wait(() => state.open && state.open.id === "k1");
+        playing();
+        closeReader();
+        await wait(() => !state.open);
+        out.stoppedOnClose = lis.key === "" && stops === 1;
+        playing();
+        openPage("k2");
+        await wait(() => state.open && state.open.id === "k2");
+        out.stoppedOnOpen = lis.key === "" && stops === 2;
+        closeReader();
+        await wait(() => !state.open);
+        // On: leaving the clip and opening another keep it.
+        setListenPref("keep", true);
+        playing();
+        openPage("k1");
+        await wait(() => state.open && state.open.id === "k1");
+        closeReader();
+        await wait(() => !state.open);
+        out.keptOn = lis.key === "book" && stops === 2;
+        return out;
+      });
+      assert.deepStrictEqual(got, { on: false, stoppedOnClose: true, stoppedOnOpen: true, keptOn: true });
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

@@ -2017,6 +2017,24 @@
     return (t && CHECK_TITLE.test(t[1].trim())) || /challenge-platform|cf-chl-|cf_chl_/i.test(String(html || "").slice(0, 20000));
   };
 
+  // When the page says it was first put out (ms), or 0: a news story's
+  // or a chapter's release, for sorting a collection by it. Royal Road
+  // writes its dates as <time unixtime> (seconds).
+  function publishedAt(doc, html) {
+    const ok = (t) => (Number.isFinite(t) && t > 0 && t < Date.now() + 864e5 ? t : 0);
+    for (const sel of ['meta[property="article:published_time"]', 'meta[name="article:published_time"]', 'meta[itemprop="datePublished"]', 'meta[property="og:published_time"]', 'meta[name="pubdate"]', 'meta[name="date"]']) {
+      const m = doc.querySelector(sel);
+      const t = m && ok(Date.parse(m.getAttribute("content") || ""));
+      if (t) return t;
+    }
+    const ld = /"datePublished"\s*:\s*"([^"]+)"/.exec(html || "");
+    if (ld && ok(Date.parse(ld[1]))) return ok(Date.parse(ld[1]));
+    const unix = doc.querySelector(".fic-header time[unixtime]");
+    if (unix && ok(Number(unix.getAttribute("unixtime")) * 1000)) return ok(Number(unix.getAttribute("unixtime")) * 1000);
+    const el = doc.querySelector("time[itemprop='datePublished'], time[pubdate], article time[datetime]");
+    return el ? ok(Date.parse(el.getAttribute("datetime") || "")) : 0;
+  }
+
   // Reads the article out of a page's HTML, or with `comic` its pictures.
   // null when there isn't enough text (or no pictures), or the page is a
   // browser check, so the caller can try drawing it.
@@ -2042,7 +2060,7 @@
       if (own.prev !== undefined) prev = own.prev;
       const t = own.content.textContent;
       const article = { content: own.content.innerHTML, title: own.title, byline: own.byline, siteName: own.siteName || site.name, textContent: t, lang: "", dir: "" };
-      return { doc, docTitle, headline: own.title || headline, next, prev, article, series: own.series || "", licence: own.licence || null };
+      return { doc, docTitle, headline: own.title || headline, next, prev, article, series: own.series || "", licence: own.licence || null, published: publishedAt(doc, html) };
     }
     if (comic) {
       let panels = comicPanels(doc, finalUrl);
@@ -2050,7 +2068,7 @@
       if (listed && listed.length > (panels ? panels.length : 0)) panels = listed;
       if (own && own.next !== undefined) next = own.next;
       if (own && own.prev !== undefined) prev = own.prev;
-      return panels ? { doc, docTitle, headline: (own && own.title) || headline, next, prev, panels, series: (own && own.series) || "", byline: (own && own.byline) || "", blanks: standIns(doc) } : null;
+      return panels ? { published: publishedAt(doc, html), doc, docTitle, headline: (own && own.title) || headline, next, prev, panels, series: (own && own.series) || "", byline: (own && own.byline) || "", blanks: standIns(doc) } : null;
     }
     if (typeof window.Readability !== "function") throw new SaveError("The reader part of the app didn't load. Restart Waypage.");
     const article = new window.Readability(doc, { charThreshold: 500, keepClasses: false }).parse();
@@ -2061,13 +2079,13 @@
       if (group) {
         if (own && own.next !== undefined) next = own.next;
         if (own && own.prev !== undefined) prev = own.prev;
-        return { doc, docTitle, headline: (own && own.title) || headline, next, prev, panels: group.srcs, series: (own && own.series) || "", byline: (own && own.byline) || "", blanks: standIns(doc) };
+        return { published: publishedAt(doc, html), doc, docTitle, headline: (own && own.title) || headline, next, prev, panels: group.srcs, series: (own && own.series) || "", byline: (own && own.byline) || "", blanks: standIns(doc) };
       }
     }
     if (!article || (article.textContent || "").trim().length < MIN_TEXT) return null;
     if (own && own.next !== undefined) next = own.next;
     if (own && own.prev !== undefined) prev = own.prev;
-    return { doc, docTitle, headline: (own && own.title) || headline, next, prev, article, series: (own && own.series) || "" };
+    return { doc, docTitle, headline: (own && own.title) || headline, next, prev, article, series: (own && own.series) || "", published: publishedAt(doc, html) };
   }
 
   // A page cut short for subscribers or signed-in readers (1.7.0). Waypage
@@ -2166,7 +2184,7 @@
         url: finalUrl, comic: true, series: series || "",
         title: (headline.trim() || docTitle || siteName(finalUrl)).trim().replace(/\s+/g, " "),
         site: site && site.comic ? site.name : siteName(finalUrl), byline: byline || "", body, base: finalUrl, licence: null,
-        lang: (doc.documentElement.getAttribute("lang") || "").trim(), dir: "", next, prev, icon: siteIcon(doc, finalUrl),
+        lang: (doc.documentElement.getAttribute("lang") || "").trim(), dir: "", next, prev, icon: siteIcon(doc, finalUrl), published: got.published,
       };
     }
     const { doc, docTitle, headline, next, prev, article, series, licence } = got;
@@ -2179,7 +2197,7 @@
       body, base: finalUrl, licence: licence || null,
       lang: (doc.documentElement.getAttribute("lang") || article.lang || "").trim(),
       dir: article.dir === "rtl" || textDir(doc, article.textContent) === "rtl" ? "rtl" : "",
-      next, prev, icon: siteIcon(doc, finalUrl), cut: cutShort(html, article.textContent),
+      next, prev, icon: siteIcon(doc, finalUrl), cut: cutShort(html, article.textContent), published: got.published,
     };
   }
 
@@ -2696,6 +2714,7 @@
     };
     if (got.series) meta.series = got.series;
     if (got.cut) meta.cut = true;
+    if (got.published) meta.published = got.published;
     if (archived) meta.archived = archived.at;
     if (got.comic) Object.assign(meta, { comic: true, minutes: Math.max(1, Math.round(media.length / 10)) });
     if (onProgress) onProgress({ stage: "images", done: 0, total: media.length });
@@ -2896,7 +2915,7 @@
   C.save = {
     get compress() { return compress; }, set compress(v) { compress = v !== false; }, compressPictures,
     pageSource, preview,
-    save, findArchived, unWayback, formatDate, SaveError, ContentsPage, cutShort, findChapters, pageImage, siteIcon, keepCover, siteRule, removeHidden, scriptJson, chapterNumber, pickChapters, comicGroup, isPanel, retryMissing, saveFullImages, setPictures, findNext, creditLine, cleanSaved, savedPageHtml, newId, textDir, isNextText, isPrevText, plainText, replaceText,
+    save, findArchived, unWayback, formatDate, publishedAt, SaveError, ContentsPage, cutShort, findChapters, pageImage, siteIcon, keepCover, siteRule, removeHidden, scriptJson, chapterNumber, pickChapters, comicGroup, isPanel, retryMissing, saveFullImages, setPictures, findNext, creditLine, cleanSaved, savedPageHtml, newId, textDir, isNextText, isPrevText, plainText, replaceText,
     wikipediaPage, wikimediaThumb, parseSrcset, pickWidth, youtubeId, vimeoId, extOf, isTrackingPixel, readingMinutes, WORDS_PER_MINUTE, siteName,
   };
 })();

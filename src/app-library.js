@@ -149,6 +149,17 @@ async function setFolder(p, name) {
 
 // A folder in the library's Folders row: its first picture, its name and
 // how much of it is read.
+// What a collection is made of, by the library's own parts: "8 clips,
+// 2 files". A copy made from a file is a clip, as in the library.
+const HOLDS = [["note", "note", "notes"], ["audio", "audiobook", "audiobooks"], ["file", "file", "files"], ["clip", "clip", "clips"]];
+const holdKind = (p) => (p.note ? "note" : isAudiobook(p) ? "audio" : p.link ? "file" : "clip");
+function holdsLine(list) {
+  const n = new Map();
+  for (const p of list) n.set(holdKind(p), (n.get(holdKind(p)) || 0) + 1);
+  return HOLDS.filter(([k]) => n.get(k)).sort((a, b) => n.get(b[0]) - n.get(a[0]))
+    .map(([k, one, many]) => n.get(k) + " " + (n.get(k) === 1 ? one : many)).join(", ");
+}
+
 function folderTile(name) {
   const list = folderPages(name);
   const done = list.filter((p) => p.finished).length;
@@ -158,7 +169,7 @@ function folderTile(name) {
   const fresh = freshCount(name);
   const fav = list.some((p) => p.folderFav);
   const tile = el("div", { class: "tile", role: "listitem", "data-ids": list.map((p) => p.id).join(","), "data-name": name },
-    el("button", { class: "card-open", type: "button", "aria-label": name + (fav ? ", favourite" : "") + ", collection, " + list.length + " clips, " + done + " read" + (fresh ? ", " + newCountText(fresh) + " chapters" : ""),
+    el("button", { class: "card-open", type: "button", "aria-label": name + (fav ? ", favourite" : "") + ", collection, " + holdsLine(list) + ", " + done + " read" + (fresh ? ", " + newCountText(fresh) + " chapters" : ""),
       onclick: () => tapPages(list.map((p) => p.id), () => openFolder(name)) }),
     pickMark(),
     el("span", { class: "tile-thumb" + (thumb ? "" : " blank") },
@@ -174,6 +185,7 @@ function folderTile(name) {
           saveNewChapters(name, e.currentTarget);
         } }, "+" + (fresh >= NEW_MAX ? NEW_MAX : fresh)) : null),
     el("span", { class: "tile-name", dir: "auto" }, name),
+    el("span", { class: "tile-meta tile-holds" }, holdsLine(list)),
     el("span", { class: "tile-meta" }, el("span", { class: "tile-kind" }, "Collection · "), (done === list.length ? "All read" : done + " of " + list.length + " read"), el("span", { class: "tile-size" }, " · " + formatSize(sizeOf(list)))),
     el("span", { class: "progress thin", "aria-hidden": "true" },
       el("span", { class: "progress-fill", style: "transform: scaleX(" + done / list.length + ")" })));
@@ -392,14 +404,19 @@ function renderFolder() {
   else if (ordering) {
     top = [el("div", { class: "order-hint" },
       el("p", { class: "meta" }, "Drag a chapter by its handle, or use the arrows."),
-      el("button", { class: "btn-quiet sort-chapters", type: "button", onclick: () => sortByChapter(list) }, "Sort by chapter"))];
+      el("div", { class: "chips sort-chips", role: "group", "aria-label": "Sort by" },
+        el("span", { class: "meta" }, "Sort by"),
+        ...Object.entries(FOLDER_SORTS).map(([key, s]) =>
+          el("button", { class: "chip", type: "button", "data-sort": key, onclick: () => sortFolder(list, key) }, el("span", { class: "chip-label" }, s.label)))))];
   // On a big screen the book's cover and facts stand beside its list.
   } else top = [el("div", { class: "book-side" }, ...bookHead(list, next, done))];
   const showList = folderMode !== "export" && folderMode !== "cover";
+  const covers = showList && !ordering && folderLook(state.folder) === "covers";
   fill($("folderBody"),
     ...top,
     showList && !ordering ? sectionHead((isSeries(list) ? "Chapters" : "Clips") + " · " + list.length) : null,
-    showList ? el("ol", { class: "group folder-list" + (ordering ? " ordering" : "") },
+    covers ? el("ol", { class: "folder-covers" }, ...list.map((p) => coverItem(p, p === next && done < list.length))) : null,
+    showList && !covers ? el("ol", { class: "group folder-list" + (ordering ? " ordering" : "") },
       ...list.map((p, i) => el("li", folderMode ? { "data-id": p.id } : { "data-id": p.id, "data-ids": p.id },
         el("button", { class: "row chapter" + (p === next && done < list.length ? " now" : ""), type: "button",
           onclick: () => (folderMode ? null : tapPages([p.id], () => openPage(p.id))) },
@@ -414,6 +431,36 @@ function renderFolder() {
         ordering ? dragHandle(p) : null))) : null);
   paintFolderBar();
   paintPicks();
+}
+
+// How a collection shows what's in it, kept on this device: a list of
+// chapters (the default), or covers, for a shelf of books.
+const LOOK_KEY = "waypage.collectionLook";
+const folderLook = (name) => (load(LOOK_KEY, {})[name] === "covers" ? "covers" : "list");
+function setFolderLook(name, look) {
+  const all = load(LOOK_KEY, {});
+  if (look === "covers") all[name] = "covers"; else delete all[name];
+  store(LOOK_KEY, all);
+  renderFolder();
+}
+function renameFolderLook(old, name) {
+  const all = load(LOOK_KEY, {});
+  if (!(old in all)) return;
+  all[name] = all[old];
+  delete all[old];
+  store(LOOK_KEY, all);
+}
+
+// One clip as a cover in that view: its picture (or its site's mark),
+// its title and how far it's read.
+function coverItem(p, now) {
+  const src = thumbUrl(p);
+  return el("li", { "data-id": p.id, "data-ids": p.id },
+    el("button", { class: "cover-item" + (now ? " now" : ""), type: "button", onclick: () => tapPages([p.id], () => openPage(p.id)) },
+      pickMark(),
+      el("span", { class: "tile-thumb" + (src ? "" : " blank") }, src ? el("img", { src, alt: "", loading: "lazy" }) : siteMark(p)),
+      el("span", { class: "tile-name", dir: "auto" }, p.title),
+      el("span", { class: "tile-meta" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, readingLine(p))));
 }
 
 // A tick once read, a filling ring part way.
@@ -515,24 +562,52 @@ async function movePage(p, step) {
   if (focus) focus.focus();
 }
 
-// Chapter numbers from the titles (or addresses) put the folder in
-// order; pages without one keep their place relative to each other, at
-// the end. The folder's own places are reused, as in moveInFolder.
-async function sortByChapter(list) {
-  const nums = new Map(list.map((p) => [p, C.save.chapterNumber(p.title, p.url)]));
-  if ([...nums.values()].filter((n) => n != null).length < 2) { toast("These clips don't have chapter numbers to sort by."); return; }
+// Royal Road numbers its chapters as it puts them out, so a chapter's
+// id is its release order even on clips saved before release dates were
+// kept.
+const royalRoadChapter = (url) => {
+  const m = /^https?:\/\/(?:www\.)?royalroadl?\.com\/fiction\/\d+\/[^/]+\/chapter\/(\d+)/i.exec(url || "");
+  return m ? Number(m[1]) : null;
+};
+
+// The ways a collection can be put in order, each a key per clip (null
+// when the clip has none: those keep their place, at the end).
+const FOLDER_SORTS = {
+  chapter: { label: "Chapter", none: "These clips don't have chapter numbers to sort by.",
+    keys: (list) => list.map((p) => C.save.chapterNumber(p.title, p.url)) },
+  released: { label: "Release date", none: "These clips don't say when they came out. Saving one again picks up its date where the site gives one.",
+    keys: (list) => (list.every((p) => royalRoadChapter(p.url) != null) ? list.map((p) => royalRoadChapter(p.url)) : list.map((p) => p.published || null)) },
+  added: { label: "Date added", keys: (list) => list.map((p) => p.savedAt || null) },
+  title: { label: "Title", keys: (list) => list.map((p) => p.title || "") },
+};
+
+// Puts the folder in one of FOLDER_SORTS' orders, oldest (or A) first;
+// sorting again when it's already in that order turns it around. The
+// folder's own places are reused, as in moveInFolder.
+async function sortFolder(list, how) {
+  const sort = FOLDER_SORTS[how];
+  const keys = sort.keys(list);
+  if (keys.filter((k) => k != null).length < 2) { toast(sort.none); return; }
+  const cmp = (x, y) => (typeof x === "string" ? x.localeCompare(y, undefined, { numeric: true, sensitivity: "base" }) : x - y);
+  const order = (dir) => list.map((p, i) => [p, i]).sort((a, b) => {
+    const x = keys[a[1]], y = keys[b[1]];
+    if (x == null || y == null) return (x == null) - (y == null) || a[1] - b[1];
+    return dir * cmp(x, y) || a[1] - b[1];
+  }).map(([p]) => p);
+  let sorted = order(1);
+  const back = !sorted.some((p, i) => p !== list[i]);
+  if (back) sorted = order(-1);
   const places = list.map((q) => q.folderAt || q.savedAt || 0);
   for (let k = 1; k < places.length; k++) if (places[k] <= places[k - 1]) places[k] = places[k - 1] + 1;
-  const sorted = list.map((p, i) => [p, i]).sort((a, b) => {
-    const x = nums.get(a[0]), y = nums.get(b[0]);
-    return (x == null ? Infinity : x) - (y == null ? Infinity : y) || a[1] - b[1];
-  }).map(([p]) => p);
-  const moved = sorted.some((p, i) => p !== list[i]);
   sorted.forEach((q, k) => { q.folderAt = places[k]; });
   await C.store.writeIndex(state.pages);
   renderFolder();
   renderLibrary();
-  toast(moved ? "Sorted by chapter." : "Already in chapter order.");
+  const missing = keys.filter((k) => k == null).length;
+  const said = how === "title" ? (back ? "Sorted Z to A." : "Sorted A to Z.")
+    : how === "chapter" ? (back ? "Sorted by chapter, last first." : "Sorted by chapter.")
+    : (back ? "Sorted newest first." : "Sorted oldest first.");
+  toast(said + (missing ? " " + missing + (missing === 1 ? " clip has" : " clips have") + " no " + (how === "released" ? "date" : "number") + ", so " + (missing === 1 ? "it stays" : "they stay") + " at the end." : ""));
 }
 
 // ---- The collection's ⋯ menu ----
@@ -561,6 +636,9 @@ function openFolderMenu() {
     item("rename", "Rename", () => setFolderMode("rename")),
     item("cover", "Cover", () => setFolderMode("cover")),
     item("reorder", "Reorder", () => setFolderMode("order"), { disabled: list.length < 2 }),
+    folderLook(state.folder) === "covers"
+      ? item("chapters", "Show as a list", () => setFolderLook(state.folder, "list"))
+      : item("grid", "Show as covers", () => setFolderLook(state.folder, "covers")),
     item("select", "Select", () => startSelect([])),
     item("send", "Export", () => setFolderMode("export")),
     item("star", folderFav(state.folder) ? "Unfavourite" : "Favourite", () => favFolder(state.folder, !folderFav(state.folder))),
@@ -841,6 +919,7 @@ const ICONS = {
   star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.7l5.9-.9z"/>',
   mark: '<path d="M14.5 4.5l5 5L11 18H6v-5z"/><path d="M4 21h16"/>',
   translate: '<path d="M4 5h9M8.5 3v2M11 5c-1 4-3.5 7-7 8.5M6.5 8.5c1.2 2 3 3.5 5 4.5"/><path d="M13 21l4-9 4 9M14.5 18h5"/>',
+  grid: '<rect x="4" y="4" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1"/>',
   cover: '<rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.5"/><path d="M20 15l-4.5-4.5L6 20"/>',
   lookup: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/><path d="M9 8h7M9 11.5h5"/>',
 };

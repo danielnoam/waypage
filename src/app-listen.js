@@ -19,7 +19,7 @@ const L = C.listen;
 const A = C.platform.audio;
 const READ_OPTS = { footnotes: true, edges: false };
 const LISTEN_KEY = "waypage.listen";
-const listenPrefs = () => ({ pack: "", pauses: true, chapters: true, charging: true, back: 15, on: 30, rewind: true, awake: false, mix: false, volume: 1, pip: true, ...(load(LISTEN_KEY, {}) || {}) });
+const listenPrefs = () => ({ pack: "", pauses: true, chapters: true, charging: true, back: 15, on: 30, rewind: true, awake: false, keep: false, mix: false, volume: 1, pip: true, ...(load(LISTEN_KEY, {}) || {}) });
 const setListenPref = (k, v) => { store(LISTEN_KEY, { ...listenPrefs(), [k]: v }); if (["mix", "volume", "back", "on"].includes(k)) listenOptions(); if (k === "pip") listenFloat(); };
 const listenOptions = () => { const p = listenPrefs(); C.platform.audio.options({ mix: p.mix, volume: p.mix ? Math.max(0, Math.min(2, Number(p.volume) || 0)) : 1, back: p.back, on: p.on }); };
 const SPEEDS = [0.8, 1, 1.1, 1.2, 1.3, 1.5, 1.75, 2, 2.5, 3];
@@ -492,6 +492,10 @@ async function loadListenData(a) {
 }
 // Called by the reader when a clip has opened (show, app-reader.js).
 function listenOpened(p) {
+  // Another clip opened by hand stops the book when "Keep playing when
+  // you leave the book" is off, as Narrate's switch does (app-reader.js).
+  const a0 = audioFor(p);
+  if (lis.key && !listenPrefs().keep && (!a0 || a0.id !== lis.key)) listenStop();
   lis.said = -1;
   lis.sync = null; lis.syncFor = "";
   const a = audioFor(p);
@@ -499,6 +503,7 @@ function listenOpened(p) {
   paintListen();
 }
 function listenClosed() {
+  if (lis.key && !listenPrefs().keep) listenStop();
   C.reader.say(-1);
   lis.said = -1;
   paintListen();
@@ -1096,6 +1101,7 @@ function listeningGroup(title = "Listening") {
     pickRow({ label: "Forward", options: secs([10, 15, 30, 45, 60]), get: () => String(listenPrefs().on), set: (v) => { setListenPref("on", Number(v)); paintListen(); } }),
     switchRow("Back a little after a pause", "3 seconds, or 10 after a long one, so you pick up the sentence", prefs.rewind, (on) => setListenPref("rewind", on)),
     switchRow("Keep the screen on", "While it plays, so you can read along", prefs.awake, (on) => { setListenPref("awake", on); speech.keepScreen(on && lis.state === "playing"); }),
+    switchRow("Keep playing when you leave the book", "Off: it stops when you go back or open another clip", prefs.keep, (on) => setListenPref("keep", on)),
     A.native ? switchRow("Allow mixing", "Music or a podcast in another app keeps playing under the book. Off: they pause while it plays", prefs.mix, (on) => { setListenPref("mix", on); volRow.hidden = !on; }) : null,
     volRow,
     A.native ? switchRow("Small window outside the app", "Going home, the book stays in a window you can move, with back, play and forward", prefs.pip, (on) => setListenPref("pip", on)) : null));
