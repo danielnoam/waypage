@@ -888,8 +888,17 @@ const menuRow = (label, onclick, cls) => el("button", { class: "row", type: "but
 function pageSheet(p, where) {
   const box = el("div", { class: "page-controls" });
   const inReader = where === "reader";
-  let exporting = false, marking = false;
+  let exporting = false, marking = false, renaming = false;
   const draw = () => {
+    if (renaming) {
+      fill(box, renameControls(p, (saved) => {
+        renaming = false;
+        if (saved) { back(); return; }
+        draw();
+        focusFirst(box);
+      }));
+      return;
+    }
     if (marking) {
       fill(box, marksView(p, (open) => {
         marking = false;
@@ -936,6 +945,7 @@ function pageSheet(p, where) {
       ...series,
       el("h3", { class: "overline" }, "More"),
       el("div", { class: "group" },
+        inReader ? null : menuRow("Rename", () => { renaming = true; draw(); }),
         p.link && p.file && p.file.kind === "pdf" && !p.comic
           ? menuRow(p.view === "text" ? "Show as printed pages" : "Show as text", () => switchView(p, where)) : null,
         inReader && C.files.drawable(p) && !p.preview ? menuRow("Drawings", () => back().then(() => openSheet("ink"))) : null,
@@ -957,6 +967,37 @@ function pageSheet(p, where) {
   };
   draw();
   return box;
+}
+
+// A clip's or note's name in the library (Daniel's ask, 2026-11-12). Only
+// the name changes: the heading in the saved text stays the page's own.
+const TITLE_MAX = 300;
+function renameControls(p, done) {
+  const input = el("input", { class: "tag-input rename-input", type: "text", value: p.title, "aria-label": "Name",
+    maxlength: String(TITLE_MAX), enterkeyhint: "done", autocapitalize: "sentences", spellcheck: "false", dir: "auto" });
+  const save = async () => {
+    const t = input.value.replace(/\s+/g, " ").trim().slice(0, TITLE_MAX);
+    if (!t || t === p.title) { done(false); return; }
+    const was = p.title;
+    await setTitle(p, t);
+    done(true);
+    toast("Renamed", "Undo", () => setTitle(p, was));
+  };
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); save(); } });
+  setTimeout(() => { if (!input.isConnected) return; input.focus({ preventScroll: true }); input.select(); }, 0);
+  return el("div", { class: "rename" },
+    el("div", { class: "export-top" },
+      el("button", { class: "btn-quiet export-back", type: "button", onclick: () => done(false) }, "Back"),
+      el("p", { class: "menu-title" }, "Rename")),
+    input,
+    el("button", { class: "btn-primary menu-done", type: "button", onclick: save }, "Save"));
+}
+async function setTitle(p, title) {
+  p.title = title;
+  await C.store.writeIndex(state.pages);
+  renderLibrary();
+  if (state.folder) renderFolder();
+  updateWidgets();
 }
 
 // A PDF read from outside stays as it is: its printed pages are pictures.
@@ -1255,6 +1296,7 @@ const MENUS = {
   feed: { label: "Feed", build: () => feedSheet() },
   newMail: { label: "New newsletter address", build: () => newMailSheet() },
   export: { label: "Export", build: () => exportControls(state.menu.page, () => history.back()) },
+  rename: { label: "Rename", build: () => renameControls(state.menu.page, () => history.back()) },
   keys: { label: "Keyboard shortcuts", build: () => keysSheet() },
   importList: { label: "Import", build: () => importSheet() },
   send: { label: "Saving a page", build: () => sendSheet() },
@@ -1444,6 +1486,7 @@ function clipMenu(node, x, y) {
     p.link && C.platform.files.canReveal ? item("folder", "Show in folder", () => showFolder(p)) : null,
     sep(),
     item("star", p.fav ? "Unfavourite" : "Favourite", () => setFavourite([p], !p.fav), { key: "F" }),
+    item("rename", "Rename…", () => openMenu("rename", p), { key: "F2" }),
     item("tag", "Tags and collection…", () => openMenu("page", p)),
     item("check", p.finished ? "Mark as unread" : "Mark as read", () => markRead([p], !p.finished)),
     sep(),
