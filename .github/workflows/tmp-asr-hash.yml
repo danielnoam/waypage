@@ -1,0 +1,19 @@
+name: tmp asr hashes
+on:
+  push:
+    branches: [feature/audiobooks]
+    paths: [.github/workflows/tmp-asr-hash.yml]
+jobs:
+  hash:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for n in sherpa-onnx-moonshine-tiny-en-int8 sherpa-onnx-moonshine-base-en-int8 sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8 sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8 sherpa-onnx-whisper-small sherpa-onnx-whisper-base sherpa-onnx-whisper-turbo; do
+            echo "=== $n"
+            if curl -fsSL --retry 3 -o /tmp/m.tar.bz2 "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/$n.tar.bz2"; then
+              echo "BYTES $(stat -c %s /tmp/m.tar.bz2)"
+              echo "SHA $(sha256sum /tmp/m.tar.bz2 | cut -d' ' -f1)"
+              tar tvjf /tmp/m.tar.bz2 | awk '{print $3, $6}'
+            else echo MISSING; fi
+            rm -f /tmp/m.tar.bz2
+          done
