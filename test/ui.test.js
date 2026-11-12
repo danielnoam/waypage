@@ -4479,12 +4479,13 @@ function zipOf(files) {
         arrived(m);
         return m.id;
       });
-      await q.evaluate((i) => openPage(i), id);
+      // Opening a linked file can wait on its first page being drawn; the player is up before that.
+      await q.evaluate((i) => { openPage(i); }, id);
       await until(q, () => !document.getElementById("listenPlayer").hidden);
       // "Added" sits over the track for a moment, and the reader slides in.
       await q.evaluate(() => { document.getElementById("toast").hidden = true; });
       let r = null;
-      for (let was = null; ; was = r) {
+      for (let was = null, i = 0; i < 20; was = r, i++) {
         await q.waitForTimeout(200);
         r = await q.locator("#listenTrack").boundingBox();
         if (was && was.x === r.x && was.y === r.y) break;
