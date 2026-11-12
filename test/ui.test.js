@@ -530,6 +530,13 @@ function zipOf(files) {
       await p.frameLocator("#readerFrame").locator("a", { hasText: "the crossing" }).click();
       await p.locator("#jumpBack:not([hidden])").click();
       await p.locator("#jumpBack").waitFor({ state: "hidden" });
+      // Scrolling back to the old spot yourself takes it away too.
+      await p.waitForTimeout(1500);
+      await p.frameLocator("#readerFrame").locator("a", { hasText: "the crossing" }).click();
+      await p.locator("#jumpBack:not([hidden])").waitFor();
+      await p.waitForTimeout(1000);
+      await p.frameLocator("#readerFrame").locator("body").evaluate(() => window.scrollTo(0, 0));
+      await p.locator("#jumpBack").waitFor({ state: "hidden" });
     });
 
     await test("a link out of a clip asks what to do with it (1.14.0)", async () => {
@@ -791,6 +798,19 @@ function zipOf(files) {
       await until(q, () => (state.open.at || 0) > 0.5);
       await q.locator("#jumpBack").click();
       await until(q, () => Waypage.reader.position() < 0.05);
+      // Reading on a few screens from where a jump put you takes Back away;
+      // scrolling toward the old spot doesn't.
+      await q.waitForTimeout(1500);
+      await q.evaluate(() => Waypage.reader.jumpTo(Math.floor(Waypage.reader.headings().length / 2)));
+      await q.locator("#jumpBack:not([hidden])").waitFor();
+      await q.waitForTimeout(1000);
+      await q.frameLocator("#readerFrame").locator("body").evaluate(() => window.scrollBy(0, -innerHeight * 2));
+      await q.waitForTimeout(300);
+      assert.strictEqual(await q.locator("#jumpBack").isVisible(), true, "Back went on the way back");
+      await q.frameLocator("#readerFrame").locator("body").evaluate(() => window.scrollBy(0, innerHeight * 6));
+      await q.locator("#jumpBack").waitFor({ state: "hidden" });
+      assert.strictEqual(await q.locator("#skimFrom").isHidden(), true, "the mark stayed");
+      await q.frameLocator("#readerFrame").locator("body").evaluate(() => window.scrollTo(0, 0));
       // The skim grows the bar itself, and Back rides above it.
       await q.locator("#readSection").click();
       await q.locator("#skimBar:not([hidden])").waitFor();
