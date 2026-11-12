@@ -90,7 +90,7 @@ function renderHighlights() {
   if (!total && !drawings) {
     nodes.push(el("div", { class: "empty" },
       el("h2", { class: "empty-title" }, "No highlights yet"),
-      el("p", { class: "empty-text" }, "Select words in a clip and tap Highlight, or draw on it. Every highlight and drawing in your library gathers here.")));
+      el("p", { class: "empty-text" }, "Select words in a clip and tap Mark, or Draw. Every highlight and drawing in your library gathers here.")));
   } else if (!clips.length) nodes.push(el("p", { class: "empty-text hl-none" }, "No highlights match that."));
   if (more) nodes.push(el("div", { class: "lib-more", "aria-hidden": "true" }));
   // The search field stays put, so typing in it keeps its focus.

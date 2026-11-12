@@ -480,7 +480,7 @@ function zipOf(files) {
         sel.addRange(r);
       });
       const btn = p.locator(".read-here .sel-mark:not([hidden])");
-      await btn.getByText("Remove highlight").waitFor();
+      await btn.getByText("Unmark").waitFor();
       await btn.click();
       await p.waitForFunction(() => !document.getElementById("readerFrame").contentDocument.querySelector("mark.co-mark"));
       await p.locator(".read-here").waitFor({ state: "hidden" });

@@ -116,7 +116,7 @@ Each section below shows the computer (left) and the phone (right).
 - Brightness by a swipe on the edge, with Auto.
 - Volume buttons turn pages on Android; keyboard shortcuts on a computer.
 - Dark PDF pages: with a PDF open, a switch at the foot of Layout recolours its pages to a dark theme.
-- Highlight words on a PDF read from where it is: select them on its printed pages and tap Highlight; they join the clip's other highlights.
+- Highlight words on a PDF read from where it is: select them on its printed pages and tap Mark; they join the clip's other highlights.
 
 ## Text and themes
 
@@ -142,7 +142,7 @@ Each section below shows the computer (left) and the phone (right).
 
 <p><img src="docs/shots/highlights-desktop.jpg" width="74%" alt="Highlights on a computer"> <img src="docs/shots/highlights-phone.jpg" width="21%" alt="Highlights on a phone"></p>
 
-- Highlights in five colours, with notes: tap Highlight on the selection bar for the last colour, hold it for the five (a mouse has the dot beside it, or keys 1 to 5).
+- Highlights in five colours, with notes: tap Mark on the selection bar for the last colour, hold it for the five (a mouse has the dot beside it, or keys 1 to 5).
 - Draw on any clip or file: Draw on the selection bar, in the Highlights sheet, or D. On words a drawing stays with its paragraph or picture; on a PDF's pages, with the page.
 - The Highlights place: every highlight and drawing, searchable, a colour at a time, Copy all or save as Markdown. Drawings show as small pictures, five per clip, then Show all.
 - Highlights and drawings sync, stroke by stroke; on a file read from where it is, they show on another device with the same file.

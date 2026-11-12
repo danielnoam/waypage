@@ -1489,11 +1489,11 @@ function showReadHere() {
       if (markBtn.dataset.remove) removeMarks(markBtn.dataset.remove.split(",")); else addMark();
     } });
     markBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS.mark + "</svg>";
-    markBtn.append(el("span", { class: "sel-mark-dot", "aria-hidden": "true" }), el("span", { class: "sel-label sel-mark-label" }, "Highlight"));
+    markBtn.append(el("span", { class: "sel-mark-dot", "aria-hidden": "true" }), el("span", { class: "sel-label sel-mark-label" }, "Mark"));
     markHold(markBtn);
     // The colour the next highlight takes (1.42.0). With a mouse its dot
     // opens the five; a touch screen holds Highlight instead (styles.css).
-    const colorBtn = el("button", { class: "sel-color sel-icon", type: "button", "aria-label": "Highlight colour", title: "Highlight colour",
+    const colorBtn = el("button", { class: "sel-color sel-icon", type: "button", "aria-label": "Mark colour", title: "Mark colour",
       onclick: () => (selColors && !selColors.hidden ? closeSelColors() : openSelColors()) }, swatchDot(markColor()));
     markBtn.addEventListener("contextmenu", (e) => { e.preventDefault(); openSelColors(); });
     const outBtn = (cls, label, icon, act) => {
@@ -1506,8 +1506,7 @@ function showReadHere() {
     };
     // Draw from here (2026-11): the words stay selected while you draw.
     const drawBtn = el("button", { class: "sel-draw", type: "button", "aria-label": "Draw", title: "Draw (D)", onclick: () => { hideReadHere(); inkStart(); } });
-    // An icon alone, so the bar keeps its words on a phone.
-    drawBtn.append(inkIcon("pen"));
+    drawBtn.append(inkIcon("pen"), el("span", { class: "sel-label" }, "Draw"));
     drawBtn.querySelector("svg").setAttribute("width", "20");
     drawBtn.querySelector("svg").setAttribute("height", "20");
     readHere = el("div", { class: "read-here", role: "toolbar", "aria-label": "Selection" }, markBtn, colorBtn, drawBtn, aloudBtn,
@@ -1524,8 +1523,8 @@ function showReadHere() {
   // Words already highlighted (1.7.1): the button takes the highlight off.
   const on = mark ? C.reader.selectionMarks() : { all: false };
   if (on.all) markBtn.dataset.remove = on.ids.join(","); else delete markBtn.dataset.remove;
-  markBtn.querySelector(".sel-mark-label").textContent = on.all ? "Remove highlight" : "Highlight";
-  markBtn.setAttribute("aria-label", on.all ? "Remove highlight" : "Highlight");
+  markBtn.querySelector(".sel-mark-label").textContent = on.all ? "Unmark" : "Mark";
+  markBtn.setAttribute("aria-label", on.all ? "Unmark" : "Mark");
   readHere.querySelector(".sel-draw").hidden = !mark || !inkReady() || C.ink.on;
   readHere.querySelector(".sel-aloud").hidden = !spot;
   readHere.querySelector(".sel-aloud .sel-label").textContent = heard ? "Play from here" : "Narrate from here";
@@ -1808,7 +1807,7 @@ function marksView(p, back) {
       colorChips(all, sheetColor, (c) => { sheetColor = c; draw(); }),
       rows.length ? el("ol", { class: "group marks-rows" }, ...rows.map((r) => r.row))
         : el("p", { class: "footnote" }, (pictureBook() && state.open === p ? "Tap Draw on this " + (p.file ? "file" : "clip") + " to draw on its pictures."
-          : "Select words in the text and tap Highlight, or tap Draw.") + " Highlights and drawings go with the clip to your other devices."),
+          : "Select words in the text and tap Mark or Draw.") + " Highlights and drawings go with the clip to your other devices."),
       // What was on ⋯ Drawings (2026-11): drawings are highlights now.
       (drawings || canDraw) && !sheetColor ? el("div", { class: "group" },
         drawings && inReader && !p.note && p.file && C.files.heldPdf() && C.files.heldPdf().ink ? menuRow("Save a copy with drawings", () => inkCopy(p)) : null,
