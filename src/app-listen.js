@@ -642,7 +642,7 @@ function listenAlongRows(p) {
       await writeListenPage(a, await loadListenData(a));
       if (state.open && state.open !== a) openPage(a.id);
       else if (state.open === a) show(a, await C.store.readPage(a.id));
-      if (!readyPack()) toast("Download a transcript model in Settings › Reading › Transcripts.", "Open", () => openSettings(false, "transcripts"));
+      if (!readyPack()) toast("Download a transcript model in Settings › Audiobooks.", "Open", () => openSettings(false, "audiobooks"));
       writeAhead();
     }),
     pick("Just listen", "The chapters, and no words.", mode === "listen", async () => {
@@ -661,7 +661,7 @@ function listenAlongRows(p) {
       close();
       writeAhead();
     } }, el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, "Write the transcript again"),
-      el("span", { class: "choice-note" }, "With the model picked in Settings › Transcripts, from where you are."))) : null)];
+      el("span", { class: "choice-note" }, "With the model picked in Settings › Audiobooks, from where you are."))) : null)];
 }
 
 function listenSleepSheet() {
@@ -730,7 +730,7 @@ function listenBookSheet() {
 async function pairWith(a, book) {
   listenMode(a, "book", book);
   closeSheet(true);
-  if (!readyPack()) toast("Download a transcript model in Settings › Reading › Transcripts to match the book.", "Open", () => openSettings(false, "transcripts"));
+  if (!readyPack()) toast("Download a transcript model in Settings › Audiobooks to match the book.", "Open", () => openSettings(false, "audiobooks"));
   await openPage(book.id);
   writeAhead();
 }
@@ -888,17 +888,14 @@ function listenBadge(p, thumb) {
   return box;
 }
 
-// ---- Settings › Reading › Transcripts ----
+// ---- Settings › Audiobooks ----
 
-function listenGroup() {
-  return section("Audiobooks", null, el("div", { class: "group" },
-    A.canTranscribe ? navRow("Transcripts", "For reading along: the model, and when it writes", () => openSection("transcripts", false, true)) : null,
-    el("p", { class: "footnote" }, "Open an M4B or MP3 with Open a file" + (C.platform.files.canPickFolder ? ", or a folder of them with Open an audiobook folder" : "") + ". It's played from where it is, and shows under Files.")));
-}
-function transcriptSections() {
+function audiobookSections() {
+  const adding = el("p", { class: "footnote" }, "Open an M4B or MP3 with Open a file" + (C.platform.files.canPickFolder ? ", or a folder of them with Open an audiobook folder" : "") + ". It's played from where it is, and shows under Files.");
+  if (!A.canTranscribe) return [adding, el("p", { class: "footnote" }, "Reading along with a book or a transcript is in the Android app.")];
   const slot = el("div", { class: "kokoro-slot" }, el("p", { class: "footnote" }, "Looking…"));
   fillTranscripts(slot);
-  return [slot];
+  return [slot, adding];
 }
 async function fillTranscripts(slot) {
   const s = await listenModels();
@@ -929,7 +926,7 @@ async function fillTranscripts(slot) {
   });
   const prefs = listenPrefs();
   slot.replaceChildren(
-    section("Quality", "Each one is a download, made on Wi-Fi. Fast writes well ahead and is easy on the battery. Better has punctuation and capitals and knows 25 European languages. Most languages is the slowest and needs a recent phone.", el("div", { class: "group" }, ...rows)),
+    section("Transcripts", "Each one is a download, made on Wi-Fi. Fast writes well ahead and is easy on the battery. Better has punctuation and capitals and knows 25 European languages. Most languages is the slowest and needs a recent phone.", el("div", { class: "group" }, ...rows)),
     section("Make it better", null, el("div", { class: "group" },
       switchRow("Write ahead while charging", "The rest of the book gets written while the phone charges", prefs.charging, (on) => { setListenPref("charging", on); if (on) writeAhead(); }),
       switchRow("Paragraphs from pauses", "A long pause from the narrator starts a new paragraph", prefs.pauses, (on) => setListenPref("pauses", on)),
@@ -937,4 +934,4 @@ async function fillTranscripts(slot) {
     el("p", { class: "footnote" }, "Transcripts stay on this phone, written while you listen and never when the battery is low or the phone is hot. To fix a word heard wrong, select it in the transcript and tap the pen: it's fixed everywhere it's heard, and the fix syncs."));
   if (busy) setTimeout(() => { if (slot.isConnected) again(); }, 1000);
 }
-SECTIONS.transcripts = { title: "Transcripts", build: transcriptSections, value: () => "", parent: "reading" };
+SECTIONS.audiobooks = { title: "Audiobooks", build: audiobookSections, value: () => (readyPack() || {}).title || "" };
