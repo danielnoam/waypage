@@ -2022,6 +2022,47 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("an audiobook's Keep playing when you leave the book (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (i) => ({ id: "k" + i, url: "https://example.com/k" + i, title: "Clip " + i, site: "example.com", savedAt: 1000 + i, minutes: 1, mode: "links", at: 0 });
+        await S.writeIndex([c(1), c(2)]);
+        for (const i of [1, 2]) await S.writePage("k" + i, "<!doctype html><html><body><h1>Clip " + i + "</h1><p>Words.</p></body></html>", c(i));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const A = window.Waypage.platform.audio;
+        let stops = 0;
+        A.stop = () => { stops++; return Promise.resolve(); };
+        const wait = (f) => new Promise((ok) => { const t = setInterval(() => { if (f()) { clearInterval(t); ok(); } }, 50); });
+        const playing = () => Object.assign(lis, { key: "book", state: "playing" });
+        const out = {};
+        // On (the default): leaving the clip and opening another keep it.
+        out.on = listenPrefs().keep;
+        playing();
+        openPage("k1");
+        await wait(() => state.open && state.open.id === "k1");
+        closeReader();
+        await wait(() => !state.open);
+        out.keptOnClose = lis.key === "book" && stops === 0;
+        // Off: going back stops it, and so does opening another clip.
+        setListenPref("keep", false);
+        openPage("k1");
+        await wait(() => state.open && state.open.id === "k1");
+        out.stoppedOnOpen = lis.key === "" && stops === 1;
+        playing();
+        closeReader();
+        await wait(() => !state.open);
+        out.stoppedOnClose = lis.key === "" && stops === 2;
+        return out;
+      });
+      assert.deepStrictEqual(got, { on: true, keptOnClose: true, stoppedOnOpen: true, stoppedOnClose: true });
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("Read from here starts at the picked word, and the play button at the middle of the screen (1.40.1)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
