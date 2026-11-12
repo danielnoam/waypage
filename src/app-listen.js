@@ -376,7 +376,7 @@ function listenNoteFor(a) {
   const upto = data && data.ranges && data.ranges.length ? writtenTo(data, lis.t) : 0;
   if (m === "book" && !bookOf(a)) return "The book isn't in your library";
   if (!readyPack()) return "Download a transcript model in Settings";
-  return upto > lis.t + 5 ? "Written to " + L.timeText(upto) + (m === "book" ? ", matched to the book" : "") : lis.writing ? "Writing the transcript…" : "Tap a sentence to play from it";
+  return upto > lis.t + 5 ? "Written to " + L.timeText(upto) + (m === "book" ? ", matched to the book" : "") : lis.writing ? "Writing the transcript…" : "";
 }
 // How far the transcript goes on unbroken from `t`.
 function writtenTo(data, t) {
