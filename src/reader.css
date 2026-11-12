@@ -208,6 +208,9 @@ html[data-co-pdf-dark] .co-ink .pen.c-red { fill: #FF6B63; }
 html[data-co-pdf-dark] .co-ink .pen.c-blue { fill: #6FA0FF; }
 html[data-co-pdf-dark] .co-ink .pen.c-green { fill: #5CCB8A; }
 
+/* An audiobook with no transcript yet shows its cover (1.58.2). */
+.co-listen-cover { width: min(100%, 300px); margin: var(--s-6) auto 0; box-shadow: 0 2px 12px rgb(0 0 0 / 0.25); }
+
 /* Your time in the clip (1.39.0), under its very last thing. */
 .co-spent {
   margin: var(--s-6) 0 var(--s-2); padding-top: var(--s-4);

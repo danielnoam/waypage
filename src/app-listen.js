@@ -377,7 +377,10 @@ function paintListen() {
   const here = audioFor(open);
   if (here && isAudiobook(open) && !open.audio.overlay) $("readerAloud").hidden = true;
   // No words on the page yet: nothing to highlight, draw on or translate.
-  if (audioWordless(open)) for (const id of ["readerMarks", "readerTranslate", "readerInk"]) $(id).hidden = true;
+  if (audioWordless(open)) {
+    for (const id of ["readerMarks", "readerTranslate", "readerInk"]) $(id).hidden = true;
+    coverIn(open);
+  }
   const show = !!here;
   if (here && !here.audio.overlay && modeOf(here) === "transcript" && state.open === here && chapterNow(here, placeNow(here)) !== pageCh[here.id]) turnPage(here);
   $("readerChapters").hidden = !here || chaptersOf(playerBook()).length < 2;
@@ -437,6 +440,16 @@ function audioWordless(p) {
   if (!isAudiobook(p) || state.open !== p) return false;
   const d = $("readerFrame").contentDocument, body = d && d.querySelector(".co-body");
   return !!body && !body.textContent.trim();
+}
+// Nothing to read yet: the book's cover fills the page instead.
+function coverIn(p) {
+  const d = $("readerFrame").contentDocument, body = d && d.querySelector(".co-body"), src = thumbUrl(p);
+  if (!body || !src || body.querySelector(".co-listen-cover")) return;
+  const img = d.createElement("img");
+  img.className = "co-listen-cover";
+  img.alt = "";
+  img.src = src;
+  body.append(img);
 }
 // How far the transcript goes on unbroken from `t`.
 function writtenTo(data, t) {
