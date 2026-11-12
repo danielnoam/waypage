@@ -2112,7 +2112,7 @@ span.update-text { cursor: default; }
 /* The Kokoro voices screen fills in once the phone answers. */
 .kokoro-slot { display: contents; }
 /* An audiobook chapter's transcript, written so far. */
-.listen-ch-bar { display: block; width: min(100%, 10rem); height: 4px; margin-top: var(--s-1); border-radius: 999px; background: color-mix(in srgb, var(--line) 70%, transparent); overflow: hidden; }
+.listen-ch-bar { display: block; width: 100%; height: 5px; margin-top: var(--s-2); border-radius: 999px; background: color-mix(in srgb, var(--line) 70%, transparent); overflow: hidden; }
 .listen-ch-fill { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--accent); transition: width var(--spring-control-ms, 300ms) var(--spring-control, ease-out); }
 .listen-ch-bar.now .listen-ch-fill { opacity: .7; }
 /* A slot's first section after one outside it: the same gap as between two. */
