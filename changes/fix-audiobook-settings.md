@@ -4,6 +4,7 @@
 - The chapters list shows each chapter's transcript as a bar along the bottom of its row, and says which is written, being written now or not yet.
 - No "Tap a sentence" line on the player.
 - Write the rest now, in ⋯: the whole transcript, every part not written yet, while the app is open.
+- Read along, in ⋯, is one drop-down (A transcript, The book, Nothing) that shows only what that choice needs.
 - An audiobook page with no words has no Highlights, Translate or Draw button.
 
 ### Fixed

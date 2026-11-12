@@ -713,51 +713,57 @@ function listenMode(a, mode, book) {
 function listenAlongRows(p) {
   const a = audioFor(p);
   if (!a || a.audio.overlay) return null;
-  const mode = modeOf(a);
-  const close = () => closeSheet();
-  const pick = (label, note, on, act, disabled) => el("button", { class: "row", type: "button", "aria-pressed": String(!!on), disabled: disabled ? "" : null, onclick: act },
-    el("span", { class: "choice-text" }, el("span", { class: "choice-label" + (on ? " accent" : "") }, label), note ? el("span", { class: "choice-note" }, note) : null),
-    on ? el("span", { class: "row-value accent" }, "✓") : null);
-  const canWords = A.canTranscribe;
-  const head = el("h3", { class: "overline" }, "Read along with");
-  if (!canWords) return [head, el("p", { class: "meta" }, "Reading along with a book or a transcript is in the Android app, which writes the transcript on the phone.")];
-  const book = bookOf(a);
-  const data = lis.dataFor === a.id ? lis.data : null;
-  const again = data && data.pieces && data.pieces.length ? el("button", { class: "row", type: "button", onclick: async () => {
-    if (!confirm("Write the transcript again from the start? Your fixes stay.")) return;
-    await C.platform.audio.stopTranscribing();
-    data.pieces = []; data.ranges = []; data.sync = null; data.syncKey = "";
-    await C.store.writeListen(a.id, data);
-    lis.sync = null;
-    if (modeOf(a) === "transcript") { await writeListenPage(a, data); if (state.open === a) show(a, await C.store.readPage(a.id)); }
-    close();
-    writeAhead();
-  } }, el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, "Write the transcript again"),
-    el("span", { class: "choice-note" }, "From the start, with the model picked in Settings › Audiobooks"))) : null;
-  // What it reads along with; where the book comes from; the transcript's
-  // own actions.
-  return [head, el("div", { class: "group" },
-    pick("A transcript", "Written on this phone from the sound", mode === "transcript", async () => {
-      listenMode(a, "transcript");
-      close();
-      await writeListenPage(a, await loadListenData(a));
-      if (state.open && state.open !== a) openPage(a.id);
-      else if (state.open === a) show(a, await C.store.readPage(a.id));
-      if (!readyPack()) toast("Download a transcript model in Settings › Audiobooks.", "Open", () => openSettings(false, "audiobooks"));
-      writeAhead();
-    }),
-    pick(book ? "The book: " + book.title : "The book", book ? "Its words, matched to the sound" : "Find it below first", mode === "book", () => (book ? pairWith(a, book) : null), !book),
-    pick("Just listen", "The chapters, and no words", mode === "listen", async () => {
-      listenMode(a, "listen");
-      close();
-      await writeListenPage(a, null);
-      if (state.open !== a) openPage(a.id); else show(a, await C.store.readPage(a.id));
-    })),
-    el("h3", { class: "overline" }, "Find the book"),
-    el("div", { class: "group" },
-      pick("In Discover", "Searches Discover's book sites for “" + a.title + "”", false, () => { closeSheet(true); openSheet("listenFind"); }),
-      pick("In your Library", "An EPUB or other book you already have", false, () => { closeSheet(true); openSheet("listenBook"); })),
-    ...(mode !== "listen" ? [el("h3", { class: "overline" }, "Transcript"), el("div", { class: "group" }, writeRestButton(a, close), again)] : [])];
+  const head = el("h3", { class: "overline" }, "Read along");
+  if (!A.canTranscribe) return [head, el("p", { class: "meta" }, "Reading along with a book or a transcript is in the Android app, which writes the transcript on the phone.")];
+  const row = (label, note, act, accent) => el("button", { class: "row", type: "button", onclick: act },
+    el("span", { class: "choice-text" }, el("span", { class: "choice-label" + (accent ? " accent" : "") }, label), note ? el("span", { class: "choice-note" }, note) : null));
+  // The drop-down picks what it reads along with; under it, only what
+  // that one needs. The book waits to be found before it's picked.
+  let view = modeOf(a);
+  const box = el("div", { class: "listen-along" });
+  const reshow = async () => {
+    await writeListenPage(a, modeOf(a) === "transcript" ? await loadListenData(a) : null);
+    if (state.open === a) show(a, await C.store.readPage(a.id));
+  };
+  const draw = () => {
+    const mode = modeOf(a), book = bookOf(a);
+    const data = lis.dataFor === a.id ? lis.data : null;
+    const pick = pickRow({ label: "Read along with", options: [
+      { value: "transcript", label: "A transcript", note: "Written on this phone from the sound" },
+      { value: "book", label: "The book", note: book ? book.title : "Find it below" },
+      { value: "listen", label: "Nothing", note: "Just listen, with the chapters" }],
+      get: () => view,
+      set: async (v) => {
+        view = v;
+        if (v === "transcript" && mode !== "transcript") {
+          listenMode(a, "transcript");
+          if (!readyPack()) toast("Download a transcript model in Settings › Audiobooks.", "Open", () => openSettings(false, "audiobooks"));
+          writeAhead();
+          reshow();
+        } else if (v === "listen" && mode !== "listen") { listenMode(a, "listen"); reshow(); }
+        else if (v === "book" && book && mode !== "book") { closeSheet(true); pairWith(a, book); return; }
+        draw();
+      } });
+    const transcriptRows = () => [
+      writeRestButton(a, () => closeSheet()),
+      data && data.pieces && data.pieces.length ? row("Write the transcript again", "From the start, with the model picked in Settings › Audiobooks", async () => {
+        if (!confirm("Write the transcript again from the start? Your fixes stay.")) return;
+        await C.platform.audio.stopTranscribing();
+        data.pieces = []; data.ranges = []; data.sync = null; data.syncKey = "";
+        await C.store.writeListen(a.id, data);
+        lis.sync = null;
+        if (modeOf(a) === "transcript") await reshow();
+        closeSheet();
+        writeAhead();
+      }, true) : null];
+    const findRows = () => [
+      row(book ? "Another book in Discover" : "Find it in Discover", "Searches Discover's book sites for “" + a.title + "”", () => { closeSheet(true); openSheet("listenFind"); }, true),
+      row(book ? "Another book in your Library" : "Pick it from your Library", "An EPUB or other book you already have", () => { closeSheet(true); openSheet("listenBook"); }, true)];
+    box.replaceChildren(el("div", { class: "group" }, pick,
+      ...(view === "transcript" ? transcriptRows() : view === "book" ? [...findRows(), ...(mode === "book" ? transcriptRows() : [])] : [])));
+  };
+  draw();
+  return [head, box];
 }
 
 function listenSleepSheet() {
