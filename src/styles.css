@@ -3010,7 +3010,6 @@ html.locked body > :not(.lock-view):not(script) { visibility: hidden !important;
 .listen-skip > span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 700 9px/1 var(--sans); padding-top: 1px; }
 .listen-sleep.on { color: var(--accent); }
 .listen-sleep.on svg { fill: currentColor; }
-#readerListen[aria-pressed="true"] { color: var(--accent); }
 /* The bar along the bottom while it plays from elsewhere: Narrate's card,
    with the chapter and what's left under the name. */
 .listen-bar { width: min(320px, calc(100vw - 2 * var(--gutter))); cursor: default; touch-action: auto; }

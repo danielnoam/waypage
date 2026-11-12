@@ -29,6 +29,9 @@ const lis = { key: "", state: "stopped", part: 0, t: 0, data: null, dataFor: "",
 const hasSound = (p) => !!(p && p.audio && p.audio.parts);
 const isAudiobook = (p) => hasSound(p) && !p.audio.overlay;
 const listenPage = () => state.pages.find((p) => p.id === lis.key) || null;
+// The book the player in the reader is for: the one playing if it is
+// this page's, else this page's own.
+const playerBook = () => { const a = listenPage(), here = audioFor(state.open); return here && !(a && shownFor(a) === state.open) ? here : a || here; };
 const listening = () => lis.state === "playing" || lis.state === "paused" || lis.state === "loading";
 const modeOf = (a) => (a && a.listen && a.listen.mode) || (a && a.audio && a.audio.overlay ? "book" : "listen");
 const speedOf = (a) => (a && a.listen && a.listen.speed) || 1;
@@ -268,7 +271,7 @@ function listenSeek(t) {
 }
 const listenSkip = (s) => listenSeek(lis.t + s);
 function listenSpeed() {
-  const a = listenPage() || audioFor(state.open);
+  const a = playerBook();
   if (!a) return;
   const now = speedOf(a);
   const next = SPEEDS[(SPEEDS.indexOf(now) + 1) % SPEEDS.length] || 1;
@@ -323,10 +326,8 @@ function paintListen() {
   const open = state.open;
   const mine = open && (a ? shownFor(a) === open : !!audioFor(open));
   const here = audioFor(open);
-  $("readerListen").hidden = !here;
-  $("readerListen").setAttribute("aria-pressed", String(!!(a && mine && listening())));
   if (here && isAudiobook(open) && !open.audio.overlay) $("readerAloud").hidden = true;
-  const show = !!here && (mine || !a);
+  const show = !!here;
   const box = $("listenPlayer");
   const was = box.hidden;
   box.hidden = !show;
@@ -354,7 +355,7 @@ function paintListen() {
   } else $("readFoot").style.bottom = "";
   // The bar along the bottom while it plays from somewhere else.
   const bar = $("listenBar");
-  const away = !!a && listening() && !mine;
+  const away = !!a && listening() && !mine && !here;
   bar.hidden = !away;
   document.body.classList.toggle("listen-bar-up", away);
   if (away) {
@@ -384,14 +385,15 @@ function writtenTo(data, t) {
 }
 
 {
-  $("listenPlay").addEventListener("click", listenToggle);
-  $("listenBack").addEventListener("click", () => (lis.key ? listenSkip(-15) : null));
-  $("listenOn").addEventListener("click", () => (lis.key ? listenSkip(30) : null));
+  // Another book playing: this one's play button switches to it.
+  const mine = () => lis.key && playerBook() === listenPage();
+  $("listenPlay").addEventListener("click", () => (mine() || !lis.key ? listenToggle() : listenPlay(playerBook())));
+  $("listenBack").addEventListener("click", () => (mine() ? listenSkip(-15) : null));
+  $("listenOn").addEventListener("click", () => (mine() ? listenSkip(30) : null));
   $("listenSpeed").addEventListener("click", listenSpeed);
   $("listenMore").addEventListener("click", () => openSheet("listen"));
   $("listenSleep").addEventListener("click", () => openSheet("listen"));
   $("listenChap").addEventListener("click", () => openSheet("listen"));
-  $("readerListen").addEventListener("click", () => (lis.key && shownFor(listenPage()) === state.open && lis.state === "playing" ? A.pause() : listenToggle()));
   $("listenBarPlay").addEventListener("click", listenToggle);
   $("listenBarBack").addEventListener("click", () => listenSkip(-15));
   $("listenBarStop").addEventListener("click", listenStop);
@@ -399,7 +401,7 @@ function writtenTo(data, t) {
   // Dragging along the track moves within the chapter.
   const track = $("listenTrack");
   const seekTo = (x) => {
-    const a = listenPage() || audioFor(state.open);
+    const a = playerBook();
     if (!a) return;
     const r = track.getBoundingClientRect();
     let f = Math.min(1, Math.max(0, (x - r.left) / r.width));
