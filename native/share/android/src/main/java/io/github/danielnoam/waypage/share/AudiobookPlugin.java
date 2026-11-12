@@ -4,15 +4,11 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.app.PictureInPictureParams;
-import android.app.RemoteAction;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Rational;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
@@ -161,33 +157,18 @@ public class AudiobookPlugin extends Plugin {
         call.resolve();
     }
 
-    // The small window outside the app, like Narrate's (SpeechPlugin), its
-    // buttons going to AudiobookService.
+    // The small window outside the app, like Narrate's, its buttons going
+    // to AudiobookService (PipWindow).
     @PluginMethod
     public void pip(PluginCall call) {
         JSObject o = new JSObject();
         if (Build.VERSION.SDK_INT < 31) { o.put("supported", false); call.resolve(o); return; }
         boolean on = Boolean.TRUE.equals(call.getBoolean("on", false));
-        boolean playing = Boolean.TRUE.equals(call.getBoolean("playing", true));
         getActivity().runOnUiThread(() -> {
-            try {
-                List<RemoteAction> actions = new ArrayList<>();
-                actions.add(pipAction(android.R.drawable.ic_media_rew, "Back", AudiobookService.BACK, 31));
-                actions.add(playing ? pipAction(android.R.drawable.ic_media_pause, "Pause", AudiobookService.PAUSE, 32)
-                    : pipAction(android.R.drawable.ic_media_play, "Play", AudiobookService.RESUME, 32));
-                actions.add(pipAction(android.R.drawable.ic_media_ff, "Forward", AudiobookService.ON, 33));
-                getActivity().setPictureInPictureParams(new PictureInPictureParams.Builder()
-                    .setAspectRatio(new Rational(16, 9)).setActions(actions).setAutoEnterEnabled(on).build());
-                o.put("supported", true);
-            } catch (Exception e) { o.put("supported", false); }
+            PipWindow.audiobook(getActivity(), on);
+            o.put("supported", true);
             call.resolve(o);
         });
-    }
-
-    private RemoteAction pipAction(int icon, String label, String action, int code) {
-        Context ctx = getContext();
-        PendingIntent pi = PendingIntent.getService(ctx, code, new Intent(ctx, AudiobookService.class).setAction(action), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-        return new RemoteAction(Icon.createWithResource(ctx, icon), label, label, pi);
     }
 
     @PluginMethod
