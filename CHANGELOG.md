@@ -2,6 +2,31 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.59.0] - 2026-11-13
+
+### Added
+- A collection's cover can be a mosaic of its first two to four pictures. Picking it again draws it again from what's there now.
+- Each clip, file, audiobook and note in a collection has its own star, at the end of its row or on its cover's corner, so it can be made a favourite without opening its menu.
+- Narrate's Speech engine list has All: the Voice list then shows the voices of every engine on the phone, under each engine's name, and picking one switches to its engine. Picking one engine shows only its voices, as before.
+- A new note made inside a collection (⋯ › Add clips › New note) joins that collection.
+- A new note made while the library is filtered by a tag has that tag.
+- Share reading activity: Settings › GitHub sync › Other apps. When it's on, sync writes what you're reading (title, author, how far, how long it is, when you started, last read and finished) and your minutes a day, reading and listening apart and by book for the last 90 days, to activity/reading.json in your own sync repo, so other apps you connect to it can use them. Off by default; each kind (books, audiobooks, comics, serials, articles) has its own switch.
+- In other apps in a clip's or collection's ⋯ keeps it out of that file. Shown while sharing is on.
+- Favourites in the sidebar, under Library with Collections and Clips: it opens the library's favourites, the favourite collections and every favourite clip. It's always there now, not only once you have more than six favourites.
+
+### Changed
+- A collection has an Edit button in its top bar: its name, cover and order in one place, with what each clip keeps beside it. Rename, Cover, Reorder and What's saved left the ⋯ menu for it.
+- Favourite moved from a collection's ⋯ menu to a star in its top bar.
+- Putting a collection in order is by the handle alone: the up and down arrows and the hint line are gone. From a keyboard, the handle takes the arrow keys.
+- Try your pen moved from the Highlights sheet to ⋯ (the three dots on the right of the reader bar).
+
+### Fixed
+- A collection's What's saved counted the pictures inside its books as saved pictures. It now says what it holds by kind: clips (with their pictures and text), files copied in, files read from their folder, audiobooks and notes. Save again shows only when it has clips from the web, and counts only those.
+- A clip renamed on one device and its text edited on another kept the old name after syncing. The rename now stays.
+- A clip deleted on one device while it was highlighted, drawn on or edited on another was deleted with that work. The newer work now keeps it, on every device.
+- A clip moved into two different collections on two devices now ends in the one it was moved to last, not the one that synced last.
+- Two devices syncing the same edited clip at the same moment could each keep a different text for good. The losing copy no longer stays on GitHub under the winner's name; the winning device sends its text again.
+
 ## [1.58.2] - 2026-11-13
 
 ### Added

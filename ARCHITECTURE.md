@@ -706,7 +706,7 @@ area.
   first, so the button is known before the stroke. While a pen is near the
   layers get `touch-action: none` (`data-co-pen-near`), since the browser
   decides whether to pan at the touch, and the touch's own events come
-  too late and differ from device to device. Highlights › Try your pen shows
+  too late and differ from device to device. ⋯ › Try your pen shows
   what the page and the phone each say, and its Start test records a log of
   ten steps (`app-pentest.js`; the Pen plugin's `raw` mode sends every
   MotionEvent and KeyEvent) to save and send. The log holds only event

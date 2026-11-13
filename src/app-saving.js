@@ -826,13 +826,16 @@ function renderBatch(text, preset, from) {
     el("button", { class: "btn-quiet batch-as-page", type: "button", onclick: () => { history.back(); savePage(from, null, { asPage: true }); } },
       "Save it as one clip instead")) : null;
   // A file of your own comes in from here too (0.31.0).
-  const fromFile = preset || from ? null : el("section", { class: "settings-section batch-file" }, el("h2", { class: "overline" }, "File"),
+  const newNoteRow = el("button", { class: "row", type: "button", onclick: () => openMenu("newNote") },
+    el("span", { class: "row-label accent" }, "New note"));
+  // Inside a collection only a new note is offered: it joins the collection.
+  const fromFile = from ? null : preset ? el("section", { class: "settings-section batch-file" }, el("h2", { class: "overline" }, "Note"),
+    el("div", { class: "group" }, newNoteRow)) : el("section", { class: "settings-section batch-file" }, el("h2", { class: "overline" }, "File"),
     el("div", { class: "group" }, el("button", { class: "row", type: "button", onclick: () => pickFile(() => back()) },
       el("span", { class: "row-label accent" }, "Open a file")),
       C.platform.files.canPickFolder ? el("button", { class: "row", type: "button", onclick: () => back().then(addAudiobookFolder) },
         el("span", { class: "row-label accent" }, "Open an audiobook folder")) : null,
-      el("button", { class: "row", type: "button", onclick: () => openMenu("newNote") },
-        el("span", { class: "row-label accent" }, "New note"))),
+      newNoteRow),
     el("p", { class: "meta" }, "An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3, or a folder of them). It stays " + ON_HERE + "."));
   const form = el("form", { class: "batch-form" }, asPage, fromFile,
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, "Links"), area, count, finder, skipRow),
