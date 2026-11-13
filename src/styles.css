@@ -1866,7 +1866,7 @@ span.update-text { cursor: default; }
 /* What a collection holds: a mark per kind on its cover's other corner. */
 .tile-kinds {
   position: absolute; right: var(--s-1); bottom: var(--s-1); z-index: 1;
-  display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 6px;
+  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 5px;
   border-radius: var(--r-sm); background: var(--surface); color: var(--accent);
   box-shadow: 0 1px 3px var(--shadow);
 }
