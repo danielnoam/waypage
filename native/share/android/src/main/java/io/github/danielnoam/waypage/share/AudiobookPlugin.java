@@ -4,8 +4,10 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -76,6 +78,9 @@ public class AudiobookPlugin extends Plugin {
         if (nm != null) nm.cancel(WRITING_NOTE);
     };
     private static Context appContext;
+    // Stop on the "Writing the transcript" notification.
+    private static final String STOP_WRITING = "io.github.danielnoam.waypage.STOP_WRITING";
+    private BroadcastReceiver stopWriting;
 
     @Override
     public void load() {
@@ -94,6 +99,18 @@ public class AudiobookPlugin extends Plugin {
             o.put("at", at);
             notifyListeners("sleep", o);
         };
+        stopWriting = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context c, Intent i) {
+                Listen.stop = true;
+                main.removeCallbacks(writingDone);
+                writingDone.run();
+                notifyListeners("writingStopped", new JSObject());
+            }
+        };
+        IntentFilter f = new IntentFilter(STOP_WRITING);
+        if (Build.VERSION.SDK_INT >= 33) appContext.registerReceiver(stopWriting, f, Context.RECEIVER_NOT_EXPORTED);
+        else appContext.registerReceiver(stopWriting, f);
     }
 
     // ---- Playing
@@ -431,6 +448,9 @@ public class AudiobookPlugin extends Plugin {
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setShowWhen(false);
+            Intent stop = new Intent(STOP_WRITING).setPackage(c.getPackageName());
+            b.addAction(new Notification.Action.Builder(android.R.drawable.ic_menu_close_clear_cancel, "Stop",
+                PendingIntent.getBroadcast(c, 2, stop, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT)).build());
             if (f >= 0) b.setProgress(1000, (int) Math.round(Math.min(1, f) * 1000), false);
             else b.setProgress(0, 0, true);
             nm.notify(WRITING_NOTE, b.build());

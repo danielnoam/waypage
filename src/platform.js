@@ -1231,6 +1231,8 @@
       stopTranscribing: () => (A() ? A().stopTranscribing().catch(() => {}) : null),
       // Each piece of a transcript as it's written: fn({ piece, from, to }).
       onPiece(fn) { if (A()) A().addListener("piece", fn); },
+      // Stop pressed on the "Writing the transcript" notification.
+      onWritingStopped(fn) { if (A()) A().addListener("writingStopped", fn); },
     };
   })();
 
