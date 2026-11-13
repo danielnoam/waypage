@@ -1446,7 +1446,8 @@ function zipOf(files) {
       await q.reload();
       await q.waitForSelector("#saveUrl");
       await until(q, () => !!document.querySelector('.tile[data-name="Serial"]'));
-      assert.strictEqual(await q.locator('.tile[data-name="Serial"] .tile-holds').innerText(), "2 clips, 1 note");
+      assert.deepStrictEqual(await q.locator('.tile[data-name="Serial"] .tile-kinds svg').evaluateAll((s) => s.map((x) => x.dataset.kind)), ["clip", "note"]);
+      assert.ok(/collection, 2 clips, 1 note,/.test(await q.locator('.tile[data-name="Serial"] .card-open').getAttribute("aria-label")));
       await q.evaluate(() => { openFolder("Serial"); setFolderMode("order"); });
       const order = () => q.evaluate(() => folderPages("Serial").map((p) => p.id).join());
       await q.locator('[data-sort="released"]').click();
