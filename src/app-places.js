@@ -1119,8 +1119,8 @@ function onKeys(e) {
     ...Object.fromEntries(PLACE_KEYS.map((to, i) => [String(i + 1), () => (state.folder ? toLibrary() : Promise.resolve()).then(() => goPlace(to))])),
     "/": () => (state.folder ? toLibrary() : Promise.resolve()).then(() => {
       if (state.place === "highlights") { $("highlights").querySelector(".hl-search input").focus(); return; }
-      if (state.place === "discover") { $("discover").querySelector(".dz-search input").focus(); return; }
-      if (postPlace() && !$("searchBtn").hidden) { openPostSearch(); return; }
+      if (state.place === "discover") { openDzSearch(); return; }
+      if (postPlace() && (state.place === "feeds" ? siteFeeds() : mailBoxes()).length) { openPostSearch(); return; }
       return (["feeds", "newsletters", "reading"].includes(state.place) ? goPlace("library") : Promise.resolve()).then(openSearch);
     }),
     d: () => openDownloads(),

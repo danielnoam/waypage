@@ -58,6 +58,8 @@ const FILTER_KEY = "waypage.filter";
 const SEEN_KEY = "waypage.seenVersion";
 const SORT_KEY = "waypage.sort";
 const CONTINUE_KEY = "waypage.continue";
+// Each place's View options: { library, feeds, newsletters, discover } → search behind the bar's icon (true) or always shown.
+const SEARCH_ICON_KEY = "waypage.searchIcon";
 // Settings, Appearance, Animations (1.12.0): false turns every animation off.
 const MOTION_KEY = "waypage.animations";
 const LAYOUT_KEY = "waypage.layout";
