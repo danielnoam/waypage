@@ -20,7 +20,7 @@
 // words), finished(id), saved(), moved(from, to), aloud(playing, id),
 // all(), flush(); device, mine(), take(device, data), backup(), restore(b);
 // and the totals: day(key), days(from, to), clip(id), top(from, to, n),
-// streak(), since(), dayKey(t), onChange(fn).
+// streak(), since(), dayKey(t), onChange(fn); totals() for Share reading activity.
 (function () {
   "use strict";
   const KEY = "waypage.stats";
@@ -385,5 +385,5 @@
 
   window.Waypage.stats = { opened, closed, active, position, screen, pace, paceKnown, finished, saved, moved, same, aloud, all, flush,
     get device() { return device(); }, mine, take, backup, restore, clean,
-    day: dayOf, days, clip: clipOf, top, finishedIn, streak, since: () => sum().since, dayKey, onChange, READ_DAY };
+    day: dayOf, days, clip: clipOf, totals: fresh, top, finishedIn, streak, since: () => sum().since, dayKey, onChange, READ_DAY };
 })();

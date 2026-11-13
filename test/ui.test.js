@@ -1939,6 +1939,62 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("Share reading activity writes activity/reading.json, and turned off removes only it (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t", what: { activity: true }, shareKinds: { article: true } }));
+        const c = (id, more) => ({ id, url: "https://example.com/" + id, title: "Clip " + id, site: "example.com", savedAt: 100, minutes: 1, mode: "links", ...more });
+        await window.Waypage.store.writeIndex([c("art1", { at: 0.5 }), c("away1", { at: 0.5, noShare: true }),
+c("bk1", { at: 0.01 })]);
+        for (const id of ["art1", "away1", "bk1"]) await window.Waypage.store.writePage(id, "<!doctype html><html><body><p>Text of " + id + ".</p></body></html>", c(id));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const b64 = (t) => btoa(unescape(encodeURIComponent(t)));
+        const calls = [];
+        let activity = null;
+        let remote = { format: 1, deleted: {}, files: { art1: { at: 100, sha: "s1" }, away1: { at: 100, sha: "s2" }, bk1: { at: 100, sha: "s3" } },
+          pages: state.pages.map((p) => ({ ...p })) };
+        window.fetch = async (url, opts = {}) => {
+          const method = opts.method || "GET";
+          const ok = (j) => new Response(JSON.stringify(j), { status: 200 });
+          const path = (url.split("/contents/")[1] || "").split("?")[0];
+          if (/\/repos\/me\/waypage-data$/.test(url)) return ok({ name: "waypage-data" });
+          if (method !== "GET") calls.push(method + " " + path);
+          if (path === "activity/reading.json") {
+            if (method === "PUT") { activity = JSON.parse(decodeURIComponent(escape(atob(JSON.parse(opts.body).content)))); return ok({ content: { sha: "a1" } }); }
+            if (method === "DELETE") { activity = null; return ok({}); }
+            return activity ? ok({ sha: "a1", content: b64(JSON.stringify(activity)) }) : new Response("{}", { status: 404 });
+          }
+          if (path === "library.json" && method === "GET") return ok({ sha: "lib1", content: b64(JSON.stringify(remote)) });
+          if (path === "library.json" && method === "PUT") { remote = JSON.parse(decodeURIComponent(escape(atob(JSON.parse(opts.body).content)))); return ok({ content: { sha: "lib1" } }); }
+          if (method === "PUT") return ok({ content: { sha: "x" } });
+          return new Response("{}", { status: 404 });
+        };
+        await syncNow(true);
+        const first = activity && { app: activity.app, schema: activity.schema, ids: activity.items.map((i) => i.id + ":" + i.kind) };
+        const written = calls.slice();
+        calls.length = 0;
+        await syncNow(true);
+        const again = calls.filter((x) => x.includes("activity")).length;
+        window.Waypage.sync.setWhat("activity", false);
+        calls.length = 0;
+        await syncNow(true);
+        const off = calls.slice();
+        calls.length = 0;
+        await syncNow(true);
+        return { first, written: written.filter((x) => x.includes("activity")), again, off, offAgain: calls.filter((x) => x.includes("activity")), err: window.Waypage.sync.last.error };
+      });
+      assert.deepStrictEqual(got.first, { app: "waypage", schema: 1, ids: ["art1:article"] }, JSON.stringify(got));
+      assert.deepStrictEqual(got.written, ["PUT activity/reading.json"]);
+      assert.strictEqual(got.again, 0, "nothing changed, nothing written ");
+      assert.deepStrictEqual(got.off.filter((x) => !/^PUT (library\.json|stats\/)/.test(x)), ["DELETE activity/reading.json"], JSON.stringify(got.off));
+      assert.deepStrictEqual(got.offAgain, []);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("reading on while a sync runs keeps the new place, not the one the sync started with (1.36.1)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
@@ -3565,7 +3621,7 @@ function zipOf(files) {
       assert.strictEqual(got.pages, 3);
       assert.ok(got.jpeg, "page 3 drew");
       assert.strictEqual(got.outline, 2);
-      assert.ok(got.reads > 1, "asked for ranges: " + JSON.stringify(got));
+      assert.ok(got.reads > 1, "asked for ranges: ");
       // Only the first stretch goes with the open; the rest is asked for.
       assert.strictEqual(got.first, 256);
       const errors = q.errors.filter((e) => !/serviceWorker/.test(e));
@@ -3833,7 +3889,7 @@ function zipOf(files) {
       const q = await page(browser, 390);
       const agreed = ["Your fonts", "Dictionaries", "Before you go offline", "Save from your browser", "Sync with GitHub",
         "Already syncing on another device?", "Back up to Google Drive", "Backups", "What goes in", "Restore", "Account", "Feeds", "Newsletters",
-        "This browser", "Where your library is", "Actions", "Branches", "The report", "Lock"];
+        "This browser", "Where your library is", "Actions", "Branches", "The report", "Lock", "Other apps"];
       const found = await q.evaluate(async () => {
         openSettings();
         const out = [];

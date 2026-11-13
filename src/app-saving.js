@@ -11,7 +11,7 @@
 const PICTURES_KEY = "waypage.syncPictures";
 let syncTimer = null, syncQueue = load(PICTURES_KEY, null) || [], fetchingPictures = false;
 const keepQueue = () => store(PICTURES_KEY, syncQueue.length ? [...new Set(syncQueue)] : null);
-const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "turn", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks"];
+const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "turn", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks", "noShare", "book", "folderNoShare", "folderBooks"];
 // While a run of saves is on, sync waits longer (1.2.0): each sync is a
 // merge of the whole library, and one after every page landing was a
 // stutter every few seconds.
@@ -266,7 +266,7 @@ async function fetchPictures() {
 // off, the three steps to a first device and a way in for the next one;
 // on, the state and a code that sets up another device.
 function syncSections() {
-  return C.sync.on ? [C.sync.oldToken ? syncNewToken() : null, syncState(), syncsList(), syncWhat(), syncShare(), syncLeave()] : [syncSteps(), syncJoin()];
+  return C.sync.on ? [C.sync.oldToken ? syncNewToken() : null, syncState(), syncsList(), syncActivity(), syncWhat(), syncShare(), syncLeave()] : [syncSteps(), syncJoin()];
 }
 async function connectSync(text, btn) {
   if (btn) { btn.disabled = true; btn.textContent = "Connecting…"; }
@@ -493,6 +493,18 @@ function syncsList() {
       sw("stats", "Reading stats", "Reading time from every device, added up"),
       dataRow(DATA_SYNC_KEY, "Sync", "Everything, on any connection", "Changes wait until then",
         { value: "places", label: "Places and reading time only", note: "Clips, tags and collections wait for Wi-Fi" })));
+}
+// Share reading activity (2026-11): activity/reading.json for other apps
+// that read this repo, with which kinds go in it.
+const SHARE_KINDS = [["book", "Books", "EPUB, MOBI, AZW3, FB2, and PDFs counted as books"], ["audiobook", "Audiobooks", "Listening time apart from reading"],
+  ["comic", "Comics", "CBZ files and clips saved as comics"], ["serial", "Serials", "Collections that follow a story's new chapters"], ["article", "Articles", "Web clips"]];
+function syncActivity() {
+  const on = C.sync.what.activity, kinds = C.sync.shareKinds;
+  const sw = (label, note, checked, set) => switchRow(label, note, checked, (v) => { set(v); renderSection(); syncSoon(500); });
+  return section("Other apps", "Other apps you connect to your " + C.sync.account.split("/")[1] + " repo can read what you've read: titles, authors, how far you are, when you started and finished, and your minutes a day. It goes only to that repo, as activity/reading.json; no text, highlights or notes. A clip or collection's ⋯ can keep it out. Turned off, the file is removed at the next sync. Each device has its own switch.",
+    el("div", { class: "group" },
+      sw("Share reading activity", "", on, (v) => C.sync.setWhat("activity", v)),
+      ...(on ? SHARE_KINDS.map(([k, label, note]) => sw(label, note, !!kinds[k], (v) => C.sync.setShareKind(k, v))) : [])));
 }
 function syncWhat() {
   return section("This device", null,
