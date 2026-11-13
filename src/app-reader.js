@@ -821,6 +821,14 @@ function showSection() {
   if ($("readerNow").textContent === (section || "Contents")) return;
   $("readerNow").textContent = section || "Contents";
   $("readerContents").setAttribute("aria-label", section ? "Contents, now " + section : "Contents");
+  paintPart();
+}
+// On a phone the name hangs under the bar in a bubble, with the chapter
+// being read under it.
+function paintPart() {
+  const now = $("readerNow").textContent, part = $("readerName").querySelector(".reader-part");
+  const text = now && now !== "Contents" ? now : "";
+  if (part) { part.textContent = text; part.hidden = !text; }
 }
 
 // The bar along the bottom fills as the page is read. The top bar slides
@@ -3648,7 +3656,8 @@ function noteSettings() {
 function paintReaderName(p) {
   const title = p.preview ? el("span", { class: "reader-title" }, p.title)
     : el("button", { class: "reader-title", type: "button", "aria-label": "Rename", title: "Rename", onclick: () => renameInReader(p) }, p.title);
-  fill($("readerName"), siteOf(p) ? el("span", { class: "reader-site" }, siteOf(p)) : null, title);
+  fill($("readerName"), siteOf(p) ? el("span", { class: "reader-site" }, siteOf(p)) : null, title, el("span", { class: "reader-part", dir: "auto", hidden: "" }));
+  paintPart();
 }
 // The name becomes a field where it is: Enter or tapping away saves, Escape
 // leaves it as it was.
