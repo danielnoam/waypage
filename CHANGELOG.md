@@ -2,6 +2,29 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.58.2] - 2026-11-13
+
+### Added
+- "Keep playing when you leave the book" in Audiobook settings, off by default: the book stops when you go back or open another clip. On, it keeps playing, like Narrate's "Keep reading when you leave the clip".
+- Reorder in a collection sorts by Chapter, Release date, Date added or Title; tap again to turn the order around. Royal Road chapters sort by release even when saved before dates were kept; other clips pick up their date when saved (or saved again) from a site that gives one.
+- A collection can show its clips as covers instead of a list (⋯ › Show as covers), for a shelf of books. Kept on this device.
+- A collection's cover in the library shows what it holds, a small mark for each kind: clips, files, audiobooks, notes.
+- Library, Feeds, Newsletters and Discover each have a Search icon switch in View options. On, search waits behind the icon at the top; off, the search field is always at the top and the icon goes. It starts on everywhere but Discover, as before. Feeds and Newsletters get a View options button for it.
+- A Stop button on the "Writing the transcript" notification, and "Stop writing" in the audiobook's Read along sheet whenever its transcript is being written. After Stop, nothing more is written until you play the book again or press Write the rest now.
+
+### Changed
+- An audiobook with no transcript yet shows its cover on the page, instead of an empty space.
+- Audiobooks: "Write ahead while charging" is off until you turn it on. It was on from the start, so a transcript could begin by itself when the phone was put on charge.
+
+### Fixed
+- Audiobooks: the dot on the player's track drags. It follows your finger with the times, and the book moves there when you let go. Before, only a tap moved it. The track is also easier to catch.
+- The time you've spent on a file sits right under its "Opened from" line, as one footer with one line above it, instead of two that read like the same thing twice.
+- An audiobook no longer ends with "Opened from" its file name: the player under it already says what it is.
+- Edit clips now finds words in link addresses, so you can find every link to a site (say oceanofpdf.com). Removing it takes the link away and keeps its words; Replace with rewrites the address.
+- A space typed in Edit clips' Find also matches a no-break space or a line break in the clip, as Find in this clip does.
+- Back to where you were no longer stays up for good after a link, Contents, a highlight, find or the skim bar. It goes once you scroll back to that spot yourself, or read on three screens past where the jump put you. Scrolling toward the old spot keeps it.
+- The small window outside the app no longer pops up when you go home with nothing playing. It opens only while Narrate or an audiobook is actually playing, not when it's paused, was stopped by another app taking the sound, or ended while you were away.
+
 ## [1.58.1] - 2026-11-12
 
 ### Added
