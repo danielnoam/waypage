@@ -78,7 +78,7 @@ Each section below shows the computer (left) and the phone (right).
 - Pen, highlighter, eraser, Undo and Redo as before, and Select (loop, cut, copy, paste, move), Add › Image and Add › Text. Only a pen draws on a touch screen unless Finger is on.
 - Opening a PDF offers Make a note beside Keep a copy and Read from where it is, and ⋯ › Make a note from it works on any file: a PDF's own pages, a comic's pictures, anything else set as pages. The file stays as it is. A note's card shows its first sheet.
 - Notes show in their own part of the library, above Files, and Show › All notes (there once you have a note) lists them alone. Aa on a note has only Layout (All notes or This note, margins, brightness slider, theme, Dark note) and Auto-scroll, which goes on to the next note.
-- Highlights › Try your pen shows what a pen sends and runs the pen test; ⋯ › Save as PDF makes a PDF of the sheets with what is on them.
+- ⋯ › Try your pen shows what a pen sends and runs the pen test; ⋯ › Save as PDF makes a PDF of the sheets with what is on them.
 - Settings › GitHub sync › What this device syncs has Notes: each note goes up whole (sheets, strokes, typed text, pictures and the PDF it was made from, up to 50 MB) and comes down on your other devices; what two devices drew is merged stroke by stroke. A bigger note says Not synced, too big. Notes go into backups too, with their own switch in Google Drive's What goes in.
 
 ## Saving

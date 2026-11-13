@@ -1148,6 +1148,8 @@ function pageSheet(p, where) {
         // A PDF's drawings as ink annotations in a new file (2026-11).
         inReader && !p.note && p.file && (p.drawn || []).length && C.files.heldPdf() && C.files.heldPdf().ink
           ? menuRow("Save a copy with drawings", () => back().then(() => inkCopy(p))) : null,
+        // Moved here from Highlights (Daniel's ask, 2026-11-13).
+        inReader && inkReady() ? menuRow("Try your pen", () => { history.back(); setTimeout(() => openSheet("ink"), 0); }) : null,
         C.files.convertible(p) ? menuRow("Make a note from it", () => back().then(() => makeNoteFrom(p))) : null,
         inReader && !p.note && !C.files.printed(p) ? menuRow("Find in this clip", () => back().then(openFind)) : null,
         inReader && !p.note && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow("Save linked pages", () => back().then(() => openSheet("links"))) : null,
@@ -2656,6 +2658,9 @@ function newNoteSheet() {
 async function makeNote(kind) {
   let meta;
   try { meta = await C.notes.create(kind); } catch (e) { console.error(e); toast("Couldn't make the note. Free some space and try again."); return; }
+  // Made inside a collection, it belongs to it; under a tag filter, it has the tag.
+  if (state.folder) { meta.folder = folderName(state.folder); meta.folderAt = Date.now(); joinFav(meta, meta.folder); }
+  if (state.filter.startsWith("#")) meta.tags = withTags([], [state.filter.slice(1)]);
   state.pages.unshift(meta);
   await C.store.writeIndex(state.pages);
   await back(state.batch ? 2 : 1);

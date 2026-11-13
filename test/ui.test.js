@@ -3478,8 +3478,8 @@ c("bk1", { at: 0.01 })]);
       await q.locator("#readingSheet:not([hidden]) .ink-row", { hasText: "Paragraph 4" }).waitFor();
       assert.strictEqual(await q.locator("#readingSheet .ink-row svg.ink-thumb path").count(), 1);
       assert.match(await q.locator("#readingSheet .menu-title").first().innerText(), /1 drawing/);
-      // What was ⋯ Drawings is at its foot: Try your pen and Remove all drawings.
-      await q.locator("#readingSheet .row", { hasText: "Try your pen" }).waitFor();
+      // Remove all drawings is at its foot; Try your pen is in ⋯ (2026-11-13).
+      assert.strictEqual(await q.locator("#readingSheet .row", { hasText: "Try your pen" }).count(), 0);
       q.once("dialog", (d) => d.accept());
       await q.locator("#readingSheet .row", { hasText: "Remove all drawings" }).click();
       await until(q, () => !state.open.ink);
@@ -4740,6 +4740,37 @@ c("bk1", { at: 0.01 })]);
       await w.waitForTimeout(900);
       assert.deepStrictEqual(await w.evaluate(() => { const b = document.querySelector(".reader-bar .icon-btn").getBoundingClientRect(), v = document.querySelector(".reader-bar .icon-btn svg").getBoundingClientRect(); return [b.width, b.height, v.width, v.height]; }), [44, 44, 22, 22]);
       await w.context().close();
+    });
+
+    await test("a new note made in a collection joins it, and one made under a tag filter takes the tag (2026-11-13)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = { id: "nc1", url: "", title: "Chapter", site: "", savedAt: 1, minutes: 1, mode: "full", at: 0, finished: false, folder: "Serial", folderAt: 1, tags: ["plane"] };
+        await S.writeIndex([c]);
+        await S.writePage(c.id, "<!doctype html><html><body><p>x</p></body></html>", c);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await until(q, () => !!document.querySelector('.tile[data-name="Serial"]'));
+      await q.evaluate(() => openFolder("Serial"));
+      await q.click("#folderMore");
+      await q.locator("#folderPop .pop-item", { hasText: "Add clips" }).click();
+      await q.locator("#batchView .row", { hasText: "New note" }).click();
+      await q.locator(".paper-row", { hasText: "Blank note" }).click();
+      await until(q, () => !!state.open && state.open.note);
+      assert.strictEqual(await q.evaluate(() => state.open.folder), "Serial");
+      assert.strictEqual(await q.evaluate(async () => (await C.store.readIndex()).find((x) => x.id === state.open.id).folder), "Serial");
+      await q.evaluate(() => closeReader());
+      // Under a tag filter, a note made from the Save screen takes the tag.
+      await q.evaluate(() => { closeFolder && closeFolder(); setFilter("#plane"); });
+      await q.click("#severalBtn");
+      await q.locator("#batchView .row", { hasText: "New note" }).click();
+      await q.locator(".paper-row", { hasText: "Blank note" }).click();
+      await until(q, () => !!state.open && state.open.note && !state.open.folder);
+      assert.deepStrictEqual(await q.evaluate(() => state.open.tags), ["plane"]);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
     });
 
     await test("an audiobook's dot drags along the chapter and seeks once, on letting go (1.58.2)", async () => {
