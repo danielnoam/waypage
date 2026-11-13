@@ -127,14 +127,16 @@ longPress($("folderBody"));
 $("settingsBack").addEventListener("click", () => history.go(state.section && wide.matches ? -2 : -1));
 $("folderBack").addEventListener("click", () => history.back());
 $("folderMore").addEventListener("click", openFolderMenu);
+$("folderEdit").addEventListener("click", () => setFolderMode("edit"));
+$("folderFav").addEventListener("click", () => favFolder(state.folder, !folderFav(state.folder)));
 $("folderCancel").addEventListener("click", () => setFolderMode(""));
 $("folderDone").addEventListener("click", async () => {
-  if (folderMode === "rename" && !(await renameFolder($("folderBody").querySelector(".book-title-input").value))) return;
+  if (folderMode === "edit" && folderDraft != null && !(await renameFolder(folderDraft))) return;
   setFolderMode("");
 });
 $("folderBody").addEventListener("scroll", paintFolderTitle, { passive: true });
-// Escape steps out of Reorder, the story page or Export; Rename's field
-// handles its own.
+// Escape steps out of Edit (dropping a typed name), the story page or
+// Export.
 $("folderView").addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !e.defaultPrevented && folderMode && !state.menu && !state.select) { e.preventDefault(); setFolderMode(""); }
 });

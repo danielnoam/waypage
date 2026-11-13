@@ -1448,7 +1448,16 @@ function zipOf(files) {
       await until(q, () => !!document.querySelector('.tile[data-name="Serial"]'));
       assert.deepStrictEqual(await q.locator('.tile[data-name="Serial"] .tile-kinds svg').evaluateAll((s) => s.map((x) => x.dataset.kind)), ["clip", "note"]);
       assert.ok(/collection, 2 clips, 1 note,/.test(await q.locator('.tile[data-name="Serial"] .card-open').getAttribute("aria-label")));
-      await q.evaluate(() => { openFolder("Serial"); setFolderMode("order"); });
+      await q.evaluate(() => openFolder("Serial"));
+      // Favourite and Edit sit in the bar; the ⋯ menu keeps the rest.
+      await q.click("#folderMore");
+      assert.deepStrictEqual(await q.locator("#folderPop .pop-label").allTextContents(), ["Story page", "Add clips", "Show as covers", "Select", "Export", "Remove"]);
+      await q.keyboard.press("Escape");
+      await q.click("#folderFav");
+      await until(q, () => folderFav("Serial") && document.getElementById("folderFav").getAttribute("aria-pressed") === "true");
+      await q.click("#folderEdit");
+      // A name typed in Edit stays while the order changes under it.
+      await q.fill("#folderBody .book-title-input", "Serial two");
       const order = () => q.evaluate(() => folderPages("Serial").map((p) => p.id).join());
       await q.locator('[data-sort="released"]').click();
       await until(q, () => folderPages("Serial")[0].id === "rr100");
@@ -1461,6 +1470,16 @@ function zipOf(files) {
       await q.locator('[data-sort="added"]').click();
       await until(q, () => folderPages("Serial")[0].id === "rr100");
       assert.strictEqual(await order(), "rr100,rr300,rr500");
+      assert.strictEqual(await q.locator("#folderBody .book-title-input").inputValue(), "Serial two");
+      await q.click("#folderDone");
+      await until(q, () => state.folder === "Serial two" && !folderMode);
+      await q.evaluate(async () => {
+        await renameFolder("Serial");
+        folderPages("Serial").forEach((p, i) => { p.thumb = location.origin + "/tools/shots/demo/img/" + ["bread", "fox", "books"][i] + ".jpg"; });
+        setFolderMode("edit");
+      });
+      await q.locator('.cover-choice[aria-label="Mosaic of the first 3 pictures"]').click();
+      await until(q, () => /^ux[a-z0-9]+\.jpg$/.test(coverPick(folderPages("Serial"))) && document.querySelector('.cover-choice[aria-pressed="true"] .cover-choice-name').textContent === "Mosaic");
       await q.evaluate(() => { setFolderMode(""); setFolderLook("Serial", "covers"); });
       assert.strictEqual(await q.locator("#folderBody .folder-covers .cover-item").count(), 3);
       assert.strictEqual(await q.locator("#folderBody .folder-list").count(), 0);

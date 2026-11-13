@@ -260,33 +260,34 @@ function closeFolder() {
 }
 
 // The collection's screen is a book page (0.27.11): its cover and title,
-// how far along, Continue, then its chapters. Its tools are in the ⋯
-// menu; Rename, Reorder, the story page and Export take the screen over
-// in place, with Cancel, Save or Done in the bar.
+// how far along, Continue, then its chapters. Favourite and Edit sit in
+// the bar, the rest in the ⋯ menu. Edit (name, cover and order in one
+// place), the story page and Export take the screen over in place, with
+// Done in the bar.
 let folderMode = "";
+// The name typed in Edit, kept while a cover or move draws the screen again.
+let folderDraft = null;
 const FOLDER_BARS = {
-  rename: { title: "Rename", cancel: true, done: "Save" },
-  order: { title: "Reorder", done: "Done" },
+  edit: { title: "Edit", done: "Done" },
   chapters: { title: "Story page", done: "Done" },
   export: { title: "Export", done: "Done" },
-  cover: { title: "Cover", done: "Done" },
 };
 
 function setFolderMode(m) {
   closeFolderMenu();
   folderMode = m;
+  folderDraft = null;
   renderFolder();
   $("folderBody").scrollTop = 0;
-  const field = $("folderBody").querySelector(".book-title-input");
-  if (field) { field.focus(); field.select(); }
-  else if (m) $("folderDone").focus({ preventScroll: true });
-  else $("folderMore").focus({ preventScroll: true });
+  $(m ? "folderDone" : "folderMore").focus({ preventScroll: true });
 }
 
 function paintFolderBar() {
   const bar = FOLDER_BARS[folderMode];
   $("folderBack").hidden = !!bar;
-  $("folderMore").hidden = !!bar;
+  $("folderTools").hidden = !!bar;
+  const fav = !!state.folder && folderFav(state.folder);
+  $("folderFav").setAttribute("aria-pressed", fav ? "true" : "false");
   $("folderCancel").hidden = !(bar && bar.cancel);
   $("folderDone").hidden = !bar;
   if (bar) $("folderDone").textContent = bar.done;
@@ -328,11 +329,12 @@ function collectionIcon(list, size) {
 
 function bookHead(list, next, done) {
   const n = list.length, name = state.folder;
-  const renaming = folderMode === "rename";
+  const renaming = folderMode === "edit";
   let title;
   if (renaming) {
-    title = el("input", { class: "book-title-input", type: "text", value: name, "aria-label": "Collection name",
+    title = el("input", { class: "book-title-input", type: "text", value: folderDraft ?? name, "aria-label": "Collection name",
       maxlength: "32", enterkeyhint: "done", autocapitalize: "sentences", spellcheck: "false", dir: "auto" });
+    title.addEventListener("input", () => { folderDraft = title.value; });
     title.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); $("folderDone").click(); }
       else if (e.key === "Escape") { e.preventDefault(); setFolderMode(""); }
@@ -350,17 +352,18 @@ function bookHead(list, next, done) {
       title,
       el("p", { class: "meta folder-meta" }, meta),
       bar));
-  if (renaming) {
-    return [head, el("p", { class: "footnote book-note" }, n === 1 ? "Renames the collection on its clip." : "Renames the collection on all " + n + " of its clips.")];
-  }
+  if (renaming) return [head];
   const go = done === n ? "Read again from the start" : (next.at > 0.02 || done ? "Continue: " : "Start: ") + next.title;
-  const s = savedParts(list);
   return [head,
     el("button", { class: "btn-primary folder-go", type: "button", dir: "auto", onclick: () => openPage(done === n ? list[0].id : next.id) }, go),
     saveNewButton(list),
-    el("button", { class: "book-saved", type: "button", onclick: () => openMenu("saved") },
-      el("span", null, formatSize(s.total) + " · " + picturesAs(list) + " · "),
-      el("span", { class: "accent" }, "What's saved"))];
+    savedLine(list)];
+}
+function savedLine(list) {
+  const s = savedParts(list);
+  return el("button", { class: "book-saved", type: "button", onclick: () => openMenu("saved") },
+    el("span", null, formatSize(s.total) + " · " + picturesAs(list) + " · "),
+    el("span", { class: "accent" }, "What's saved"));
 }
 
 // New chapters found by the daily check, saved from here: straight from
@@ -412,25 +415,31 @@ function renderFolder() {
   if (!picking && !folderMode) lookBack(list[0]);
   const next = folderNext(list);
   const done = list.filter((p) => p.finished).length;
-  const ordering = folderMode === "order";
+  const editing = folderMode === "edit";
+  const ordering = editing && list.length > 1;
   let top;
   if (folderMode === "chapters") top = [chaptersPanel(list)];
-  else if (folderMode === "cover") top = [coverPanel(list)];
   else if (folderMode === "export") top = [el("div", { class: "folder-actions export-panel" }, exportControls({ pages: list, title: state.folder }, () => setFolderMode("")))];
-  else if (ordering) {
-    top = [el("div", { class: "order-hint" },
-      el("p", { class: "meta" }, "Drag a chapter by its handle, or use the arrows."),
-      el("div", { class: "chips sort-chips", role: "group", "aria-label": "Sort by" },
-        el("span", { class: "meta" }, "Sort by"),
-        ...Object.entries(FOLDER_SORTS).map(([key, s]) =>
-          el("button", { class: "chip", type: "button", "data-sort": key, onclick: () => sortFolder(list, key) }, el("span", { class: "chip-label" }, s.label)))))];
+  // Edit: the name in place of the title, the cover's choices, then the
+  // chapters with what they keep, to put in order.
+  else if (editing) {
+    top = [el("div", { class: "folder-edit" }, ...bookHead(list, next, done),
+      sectionHead("Cover"), coverPanel(list),
+      sectionHead((isSeries(list) ? "Chapters" : "Clips") + " · " + list.length),
+      savedLine(list),
+      ordering ? el("div", { class: "order-hint" },
+        el("p", { class: "meta" }, "Drag a chapter by its handle, or use the arrows."),
+        el("div", { class: "chips sort-chips", role: "group", "aria-label": "Sort by" },
+          el("span", { class: "meta" }, "Sort by"),
+          ...Object.entries(FOLDER_SORTS).map(([key, s]) =>
+            el("button", { class: "chip", type: "button", "data-sort": key, onclick: () => sortFolder(list, key) }, el("span", { class: "chip-label" }, s.label))))) : null)];
   // On a big screen the book's cover and facts stand beside its list.
   } else top = [el("div", { class: "book-side" }, ...bookHead(list, next, done))];
-  const showList = folderMode !== "export" && folderMode !== "cover";
-  const covers = showList && !ordering && folderLook(state.folder) === "covers";
+  const showList = folderMode !== "export";
+  const covers = showList && !editing && folderLook(state.folder) === "covers";
   fill($("folderBody"),
     ...top,
-    showList && !ordering ? sectionHead((isSeries(list) ? "Chapters" : "Clips") + " · " + list.length) : null,
+    showList && !editing ? sectionHead((isSeries(list) ? "Chapters" : "Clips") + " · " + list.length) : null,
     covers ? el("ol", { class: "folder-covers" }, ...list.map((p) => coverItem(p, p === next && done < list.length))) : null,
     showList && !covers ? el("ol", { class: "group folder-list" + (ordering ? " ordering" : "") },
       ...list.map((p, i) => el("li", folderMode ? { "data-id": p.id } : { "data-id": p.id, "data-ids": p.id },
@@ -440,7 +449,8 @@ function renderFolder() {
           el("span", { class: "chapter-n", "aria-hidden": "true" }, String(i + 1)),
           el("span", { class: "choice-text" },
             el("span", { class: "row-label", dir: "auto" }, p.title),
-            ordering ? null : el("span", { class: "choice-note" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, readingLine(p))),
+            editing ? el("span", { class: "choice-note" }, formatSize(p.bytes || 0))
+              : el("span", { class: "choice-note" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, readingLine(p))),
           ordering ? null : chapterMark(p)),
         ordering ? moveButton(p, i, -1, list.length) : null,
         ordering ? moveButton(p, i, 1, list.length) : null,
@@ -645,19 +655,14 @@ function openFolderMenu() {
   };
   const sep = () => el("div", { class: "pop-sep", role: "separator" });
   const pop = el("div", { class: "pop-menu", id: "folderPop", role: "menu", "aria-label": "Collection" },
-    item("saved", "What's saved", () => openMenu("saved"), { note: formatSize(sizeOf(list)) }),
     item("book", "Story page", () => setFolderMode("chapters"), fresh ? { note: newCountText(fresh), accent: true } : {}),
     item("add", "Add clips", () => openBatch("", false, state.folder)),
     sep(),
-    item("rename", "Rename", () => setFolderMode("rename")),
-    item("cover", "Cover", () => setFolderMode("cover")),
-    item("reorder", "Reorder", () => setFolderMode("order"), { disabled: list.length < 2 }),
     folderLook(state.folder) === "covers"
       ? item("chapters", "Show as a list", () => setFolderLook(state.folder, "list"))
       : item("grid", "Show as covers", () => setFolderLook(state.folder, "covers")),
     item("select", "Select", () => startSelect([])),
     item("send", "Export", () => setFolderMode("export")),
-    item("star", folderFav(state.folder) ? "Unfavourite" : "Favourite", () => favFolder(state.folder, !folderFav(state.folder))),
     sep(),
     item("remove", "Remove", () => openMenu("remove"), { warn: true }));
   const more = $("folderMore"), at = more.getBoundingClientRect();
@@ -714,13 +719,18 @@ function coverPanel(list) {
     return i;
   };
   const autoUrl = shownCover(list.map((p) => ({ ...p, coverPick: undefined })));
-  const own = C.backup.COVER_FILE.test(pick) ? C.store.coverUrl(pick) : null;
+  const mixed = MOSAIC_FILE.test(pick);
+  const own = C.backup.COVER_FILE.test(pick) && !mixed ? C.store.coverUrl(pick) : null;
   const plus = svgIcon("add", 28);
   const clips = list.filter((p) => thumbUrl(p));
+  const tiles = clips.slice(0, 4);
   return el("div", { class: "folder-actions cover-panel" }, input,
     el("div", { class: "cover-grid" },
       choice("Automatic", !pick, autoUrl ? img(autoUrl) : collectionIcon(list, 28), () => setCoverPick(state.folder, ""), "Automatic"),
       choice(own ? "Your picture, choose another" : "Choose a picture of your own", !!own, own ? img(own) : plus, () => input.click(), "Your picture"),
+      tiles.length > 1 ? choice("Mosaic of the first " + tiles.length + " pictures", mixed,
+        mixed ? img(C.store.coverUrl(pick)) : el("span", { class: "cover-mosaic n" + tiles.length }, ...tiles.map((p) => img(thumbUrl(p)))),
+        () => coverMosaic(state.folder), "Mosaic") : null,
       ...clips.map((p) => choice(p.title, pick === "clip:" + p.id, img(thumbUrl(p)), () => setCoverPick(state.folder, "clip:" + p.id)))));
 }
 
@@ -732,6 +742,43 @@ async function setCoverPick(name, pick) {
   if (was && was !== pick && C.backup.COVER_FILE.test(was) && !state.pages.some((p) => p.coverPick === was)) C.store.removeCover(was).catch(() => {});
   if (state.folder && sameTag(state.folder, name)) renderFolder();
   renderLibrary();
+}
+
+// A mosaic: the first two to four pictures in the collection, drawn
+// into one picture of your own, so it syncs and backs up like one. Its
+// name starts "ux" (own pictures start with a time, "um" for decades).
+// Picking it again draws it again from what's there now.
+const MOSAIC_FILE = /^ux[a-z0-9]+\.jpg$/;
+async function coverMosaic(name) {
+  const srcs = folderPages(name).map(thumbUrl).filter(Boolean).slice(0, 4);
+  const pics = (await Promise.all(srcs.map(async (url) => {
+    try {
+      const here = url.startsWith("data:") || new URL(url, location.href).origin === location.origin;
+      const blob = here ? await (await fetch(url)).blob() : navigator.onLine ? (await C.platform.fetchBytes(url, "cover")).blob : null;
+      return blob ? await createImageBitmap(blob) : null;
+    } catch (e) { return null; }
+  }))).filter(Boolean);
+  if (pics.length < 2) { toast("Couldn't read enough of its pictures for a mosaic."); return; }
+  const W = 480, H = 720;
+  // Two stack; three put one across the top; four make a two-by-two.
+  const spots = { 2: [[0, 0, W, H / 2], [0, H / 2, W, H / 2]],
+    3: [[0, 0, W, H / 2], [0, H / 2, W / 2, H / 2], [W / 2, H / 2, W / 2, H / 2]],
+    4: [[0, 0, W / 2, H / 2], [W / 2, 0, W / 2, H / 2], [0, H / 2, W / 2, H / 2], [W / 2, H / 2, W / 2, H / 2]] }[pics.length];
+  const canvas = el("canvas", { width: String(W), height: String(H) });
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingQuality = "high";
+  pics.forEach((pic, i) => {
+    const [x, y, w, h] = spots[i];
+    const k = Math.max(w / pic.width, h / pic.height);
+    const sw = w / k, sh = h / k;
+    ctx.drawImage(pic, (pic.width - sw) / 2, (pic.height - sh) / 2, sw, sh, x, y, w, h);
+    pic.close();
+  });
+  const blob = await new Promise((done) => canvas.toBlob(done, "image/jpeg", 0.85));
+  if (!blob) { toast("Couldn't make the mosaic. Try again."); return; }
+  const kept = "ux" + C.save.newId() + ".jpg";
+  await C.store.writeCover(kept, new Uint8Array(await blob.arrayBuffer()), "image/jpeg");
+  await setCoverPick(name, kept);
 }
 
 // A picture of your own, drawn no bigger than a cover is shown (480 by
