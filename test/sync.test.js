@@ -378,4 +378,47 @@ test("a rename on one device stays when the other edited the clip's text (2026-1
   assert.strictEqual(both.editedAt, 300);
 });
 
+test("a highlight, drawing or edit made while another device deleted the clip keeps it (2026-11)", () => {
+  const mk = { id: "m1", block: 1, start: 0, end: 5, at: 1 };
+  const base = lib([page("a1b2", { marks: [mk] }), page("c3d4")]);
+  const gone = lib([page("c3d4")]);
+  const cases = [
+    page("a1b2", { marks: [mk, { id: "m2", block: 2, start: 0, end: 3, at: 5 }] }),
+    page("a1b2", { marks: [mk], ink: { 1: [{ id: "s1", p: [] }] } }),
+    page("a1b2", { marks: [mk], editedAt: 300 }),
+  ];
+  for (const kept of cases) {
+    // The deleting device syncs second, then first.
+    const there = lib([kept, page("c3d4")]);
+    const a = S.merge(base, gone, there, NOW);
+    assert.deepStrictEqual(ids(a), ["a1b2", "c3d4"]);
+    assert.ok(!a.deleted.a1b2);
+    const first = S.merge(base, gone, base, NOW);
+    const b = S.merge(base, there, first, NOW);
+    assert.deepStrictEqual(ids(b), ["a1b2", "c3d4"]);
+    assert.ok(!b.deleted.a1b2);
+  }
+  // Reading on, a tag or a highlight taken away doesn't stop the delete.
+  for (const p of [page("a1b2", { marks: [mk], at: 0.5, placeAt: 9 }), page("a1b2", { marks: [mk], tags: ["x"] }), page("a1b2")]) {
+    assert.deepStrictEqual(ids(S.merge(base, gone, lib([p, page("c3d4")]), NOW)), ["c3d4"]);
+  }
+});
+
+test("a clip moved to two collections ends in the one it was moved to last (2026-11)", () => {
+  const base = lib([page("a1b2", { folder: "Old", folderAt: 5 })]);
+  const early = page("a1b2", { folder: "Trips", folderAt: 10, movedAt: 10 });
+  const late = page("a1b2", { folder: "Work", folderAt: 3, movedAt: 20, folderFav: true, folderFavAt: 20 });
+  for (const [l, r] of [[early, late], [late, early]]) {
+    const m = S.merge(base, lib([l]), lib([r]), NOW).pages[0];
+    assert.strictEqual(m.folder, "Work");
+    assert.strictEqual(m.folderAt, 3);
+    assert.strictEqual(m.folderFav, true);
+  }
+  // Taken out of it later wins too.
+  const out = page("a1b2", { movedAt: 30 });
+  assert.strictEqual(S.merge(base, lib([late]), lib([out]), NOW).pages[0].folder, undefined);
+  // Moved on one side only: that move, whenever it was.
+  assert.strictEqual(S.merge(base, lib([early]), base, NOW).pages[0].folder, "Trips");
+});
+
 console.log("\n" + passed + " passed");

@@ -500,7 +500,7 @@ bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js` and `listen.test.js` test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js` and `listen.test.js` test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
 changes Markdown runs just `build.test.js` and `docs.test.js`.
 
 `node tools/shots.js` retakes the README's pictures at 1280 px and 390 px
@@ -609,8 +609,9 @@ adds a line here.
   place wins. A clip's text edited on both keeps the later edit whole and
   drops the other (rare, from Edit clips; not worth a text merge). A rename
   on one survives a text edit on the other. A clip moved to two different
-  collections ends in the one synced last (`folderAt` is its order there,
-  not a time). A note's PDF over 50 MB isn't sent, so that note opens on
+  collections ends in the one moved to last (`movedAt`; `folderAt` is its
+  order there, not a time). A new highlight, stroke or edit on one beats
+  a delete on the other (`addedSince`); reading on or a tag doesn't. A note's PDF over 50 MB isn't sent, so that note opens on
   another device with its PDF missing. Notes sync by default like the other
   parts, since sync itself is already on.
 
@@ -794,6 +795,9 @@ area.
   reached reads as empty, so sync refuses to run; a clip that was in the
   library during a run and isn't at a settle was deleted meanwhile, and
   the settle must not put it back (`syncdelete.test.js`).
+  A page's text goes up before library.json, so two devices sending one
+  edited clip at once can leave the loser's text under the winner's name;
+  the merge after a 409 checks what it sent (`raced`, `syncrace.test.js`).
 - **A Blob writes a string byte above 127 as two:** binary formats (the
   PDF writer) use plain ASCII strings or bytes.
 - **The Settings window from 700 px:** `#settingsWin` is `display:

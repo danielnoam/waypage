@@ -43,13 +43,14 @@
   // (backup.cleanMeta); anything else on a page stays on its device.
   const SYNCED = new Set(["id", "url", "title", "site", "byline", "licence", "savedAt", "minutes", "lang", "dir", "mode", "images",
     "at", "finished", "readAt", "readOn", "placeAt", "spot", "comic", "manga", "volume", "turn", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "file", "marks", "ink", "inkAt", "cut", "archived", "editedAt", "note", "published",
-    "noShare", "folderNoShare"]);
+    "noShare", "folderNoShare", "movedAt"]);
   // Where the reader is, which goes with whichever device moved it last:
   // placeAt (1.30.2), or readAt on entries from before it. Opening a clip
   // stamps readAt alone, so a device that opened one at an older place
   // no longer sends that place everywhere.
   const PLACE = ["at", "finished", "placeAt", "spot"];
   const placeTime = (p) => p.placeAt || p.readAt || 0;
+  const FOLDER = ["folder", "folderAt", "folderFav", "folderFavAt", "movedAt"];
   // Which copy of a page's text this is: when it was saved, or edited
   // since in Edit clips (1.22.0), so an edit goes up like a save again.
   const ver = (p) => Math.max(p.savedAt || 0, p.editedAt || 0);
@@ -221,7 +222,12 @@
     // wins, rather than riding back with the text.
     const contentOther = contentFrom === r ? l : r;
     const untouched = b.id && ver(contentOther) === ver(b);
+    // Moved to two different collections: the later move, with what goes
+    // with being in it (movedAt, 2026-11; folderAt is its order there).
+    const moved = (l.movedAt || r.movedAt) && !same(l.folder, r.folder) && !same(l.folder, b.folder) && !same(r.folder, b.folder);
+    const folderFrom = moved ? ((r.movedAt || 0) > (l.movedAt || 0) ? r : l) : null;
     for (const k of keys) {
+      if (folderFrom && FOLDER.includes(k)) { out[k] = folderFrom[k]; continue; }
       if (CONTENT.includes(k)) out[k] = ver(l) === ver(r) ? pick(k)
         : untouched && !same(contentOther[k], b[k]) && same(contentFrom[k], b[k]) ? contentOther[k] : contentFrom[k];
       else if (k === "readOn" || k === "readAt") out[k] = readFrom[k];
@@ -253,7 +259,7 @@
   // stats add up as one. Drawings go too: `ink` by block, and `pages`,
   // a printed PDF's drawn pages, which live beside the clip (store.readInk)
   // and so come in on the copies outsidePages makes.
-  const OUTSIDE = ["at", "finished", "readAt", "readOn", "placeAt", "spot", "turn", "tags", "folder", "folderAt", "fav", "favAt", "folderFav", "folderFavAt", "marks", "listen", "ink", "inkAt", "noShare", "folderNoShare"];
+  const OUTSIDE = ["at", "finished", "readAt", "readOn", "placeAt", "spot", "turn", "tags", "folder", "folderAt", "fav", "favAt", "folderFav", "folderFavAt", "marks", "listen", "ink", "inkAt", "noShare", "folderNoShare", "movedAt"];
   const FP = /^[0-9a-f]{32}$/;
   const OUT_MAX = 2000;
   // This device's outside files as entries: one a fingerprint, the copy
@@ -379,6 +385,18 @@
     return out.sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0) || (a.url < b.url ? -1 : 1));
   }
 
+  // Work put into a page since the base, which a delete elsewhere mustn't
+  // take: its text edited, a highlight or a stroke that's new. Reading on
+  // or a tag doesn't count.
+  function addedSince(b, p) {
+    if (ver(p) > ver(b)) return true;
+    const had = new Set((b.marks || []).map((m) => m.id));
+    if ((p.marks || []).some((m) => !had.has(m.id))) return true;
+    const strokes = (o) => Object.values(o && typeof o === "object" ? o : {}).flatMap((l) => (Array.isArray(l) ? l : []).map((s) => s && s.id));
+    const drawn = new Set(strokes(b.ink));
+    return strokes(p.ink).some((s) => s && !drawn.has(s));
+  }
+
   // base, local and remote are library files ({ pages, deleted, files });
   // base and remote may be null (never synced, nothing on GitHub yet).
   // Resolves to the merged file. `same(a, b)` says two addresses are one
@@ -398,6 +416,11 @@
     for (const id of new Set([...L.keys(), ...R.keys()])) {
       const back = Math.max((L.get(id) || {}).back || 0, (R.get(id) || {}).back || 0);
       if (deleted[id] && back > deleted[id]) delete deleted[id];
+    }
+    // Highlighted, drawn on or edited on one device while another deleted
+    // it (2026-11): the newer work wins over the delete, everywhere.
+    for (const id of new Set([...L.keys(), ...R.keys()])) {
+      if (deleted[id] && B.has(id) && [L.get(id), R.get(id)].some((p) => p && addedSince(B.get(id), p))) delete deleted[id];
     }
     const pages = [];
     for (const id of new Set([...L.keys(), ...R.keys()])) {
@@ -712,6 +735,36 @@
   // A note's data files (2.0.0): its sheets, strokes and typed text, the
   // pictures put on it and the PDF it was made from, as notes/<id>/<name>.
   // Resolves to [{ name, bytes }]; null when the note has no sheets here.
+  // Two devices sending the same edited page at once (2026-11): a page
+  // write never waits for library.json, so the copy that lost the merge
+  // can land on GitHub after the one that won. On the merge again after a
+  // 409, a page this run sent that someone wrote over since goes again
+  // when it won; when it lost, and what GitHub holds isn't the winner's,
+  // the library stops naming that text, and the winning device sends it
+  // again on its next sync.
+  async function raced(merged, remoteDoc, sentNow, uploaded) {
+    const byId = new Map(merged.pages.map((p) => [p.id, p]));
+    for (const [id, f] of sentNow) {
+      const m = byId.get(id);
+      if (!m) continue;
+      const theirs = remoteDoc && remoteDoc.files && remoteDoc.files[id];
+      if (ver(m) === f.at) {
+        if (theirs && theirs.sha !== f.sha && theirs.sha !== f.was) { delete uploaded[id]; sentNow.delete(id); }
+        continue;
+      }
+      sentNow.delete(id);
+      const named = merged.files[id] && merged.files[id].sha;
+      let now = null;
+      try { now = await shaOf("pages/" + id + ".html"); } catch (e) { if (e instanceof Paused) throw e; now = f.sha; }
+      if (now !== named) delete merged.files[id];
+    }
+  }
+  async function shaOf(path) {
+    const r = await call(contents(path) + "?ref=" + encodeURIComponent(cfg.branch), { headers: headers({ Accept: "application/vnd.github.object+json" }) });
+    if (r.status === 404) return null;
+    if (!r.ok) throw await fail(r);
+    return (await r.json()).sha;
+  }
   async function noteFilesOut(p) {
     const note = await C.store.readNote(p.id);
     if (!note) return null;
@@ -1065,6 +1118,8 @@
     // A picked cover goes up before the library that names it.
     if (!light && !noClips) try { await syncCovers(before, true); } catch (e) { if (e instanceof Paused) throw e; }
     let up = 0;
+    // Pages sent this run: { at, sha, was } (was: the sha GitHub had before).
+    const sentNow = new Map();
     let merged, remote;
     for (let tries = 0; ; tries++) {
       remote = await readJson("library.json");
@@ -1131,6 +1186,7 @@
         }
         continue;
       }
+      if (sentNow.size) await raced(merged, remoteDoc, sentNow, uploaded);
       for (const [id, f] of Object.entries(uploaded)) if (merged.pages.some((p) => p.id === id && ver(p) === f.at)) merged.files[id] = f;
       // Text this device has and GitHub doesn't: every page saved here, or
       // saved again since.
@@ -1140,6 +1196,8 @@
       const todo = todoAll.filter((p) => !p.note);
       const noteTodo = todoAll.filter((p) => p.note);
       const sentOne = (p, sha, packShas) => {
+        const was = merged.files[p.id] || (remoteDoc && remoteDoc.files && remoteDoc.files[p.id]);
+        sentNow.set(p.id, { at: ver(p), sha, was: was && was.sha });
         merged.files[p.id] = uploaded[p.id] = { at: ver(p), sha };
         if (packShas.length) merged.files[p.id].packs = packShas;
         keep(SENT_KEY, uploaded);
@@ -1201,6 +1259,7 @@
         // The data first, so a page never names files that aren't there.
         const note = await sendNoteFiles(p, was && was.note);
         const sha = await put("pages/" + p.id + ".html", body, was && was.sha, "Note: " + p.title.slice(0, 60));
+        sentNow.set(p.id, { at: ver(p), sha, was: was && was.sha });
         merged.files[p.id] = uploaded[p.id] = { at: ver(p), sha, note };
         keep(SENT_KEY, uploaded);
         up++;
