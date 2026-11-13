@@ -1464,7 +1464,12 @@ function zipOf(files) {
       await q.keyboard.press("Escape");
       await q.click("#folderFav");
       await until(q, () => folderFav("Serial") && document.getElementById("folderFav").getAttribute("aria-pressed") === "true");
+      // Each clip has its own star, which keeps focus once drawn again.
+      await q.locator('#folderBody li[data-id="rr500"] .item-fav').click();
+      await until(q, () => state.pages.find((p) => p.id === "rr500").fav && document.activeElement.matches('li[data-id="rr500"] .item-fav[aria-pressed="true"]'));
+      assert.ok(!(await q.evaluate(() => state.pages.find((p) => p.id === "rr100").fav)));
       await q.click("#folderEdit");
+      assert.strictEqual(await q.locator("#folderBody .item-fav").count(), 0);
       // A name typed in Edit stays while the order changes under it.
       await q.fill("#folderBody .book-title-input", "Serial two");
       const order = () => q.evaluate(() => folderPages("Serial").map((p) => p.id).join());
@@ -1509,6 +1514,8 @@ function zipOf(files) {
       await q.evaluate(() => { setFolderMode(""); setFolderLook("Serial", "covers"); });
       assert.strictEqual(await q.locator("#folderBody .folder-covers .cover-item").count(), 3);
       assert.strictEqual(await q.locator("#folderBody .folder-list").count(), 0);
+      await q.locator('#folderBody .folder-covers li[data-id="rr500"] .item-fav').click();
+      await until(q, () => !state.pages.find((p) => p.id === "rr500").fav);
       // Opening a serial looks for its next chapter, which has nowhere to go here.
       const errors = q.errors.filter((e) => !/workers\.dev/.test(e));
       assert.deepStrictEqual(errors, [], errors.join(" | "));
