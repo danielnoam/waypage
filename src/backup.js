@@ -75,12 +75,10 @@
     const folder = text(m.folder, 32).replace(/\s+/g, " ").trim();
     if (folder) { out.folder = folder; out.folderAt = num(m.folderAt) || out.savedAt; }
     if (folder && m.folderFav === true) { out.folderFav = true; out.folderFavAt = num(m.folderFavAt) || out.savedAt; }
-    // Share reading activity's marks (2026-11): kept out, and a PDF (or a
-    // collection's PDFs) counted as a book.
+    // Share reading activity (2026-11): kept out of it, a clip or a
+    // collection (on its clips, like folderFav).
     if (m.noShare === true) out.noShare = true;
-    if (m.book === true) out.book = true;
     if (folder && m.folderNoShare === true) out.folderNoShare = true;
-    if (folder && m.folderBooks === true) out.folderBooks = true;
     if (folder && httpUrl(m.source)) out.source = httpUrl(m.source);
     if (folder && typeof m.coverPick === "string" && (COVER_FILE.test(m.coverPick) || /^clip:[a-z0-9]{4,24}$/.test(m.coverPick))) out.coverPick = m.coverPick;
     if (text(m.series, 200)) out.series = text(m.series, 200);

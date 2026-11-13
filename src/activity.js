@@ -5,8 +5,7 @@
 // docs/reading-activity.md: fields are only ever added.
 //
 // Each item's kind comes from the library's own marks, never a guess:
-// an audiobook, a book file (EPUB, MOBI, AZW3, FB2; a PDF only when
-// counted as a book), a comic (CBZ, or saved as a comic), a serial (a
+// an audiobook, a book file (EPUB, MOBI, AZW3, FB2, PDF), a comic (CBZ, or saved as a comic), a serial (a
 // collection linked to a story's page) or an article (a web clip). Notes
 // and anything kept out with "In other apps" off are never in it.
 //
@@ -18,7 +17,7 @@
   const SCHEMA = 1;
   const KINDS = ["book", "audiobook", "comic", "serial", "article"];
   const DEFAULT_KINDS = { book: true, audiobook: true, comic: true, serial: true, article: false };
-  const BOOK_EXTS = new Set(["epub", "mobi", "azw3", "fb2"]);
+  const BOOK_EXTS = new Set(["epub", "mobi", "azw3", "fb2", "pdf"]);
   // Opened to look at isn't reading: listed from 10 minutes or 5% in.
   const MIN_MS = 10 * 60000, MIN_PART = 0.05;
   const FP = /^[0-9a-f]{32}$/;
@@ -34,15 +33,13 @@
   // A short, stable name for a story's page.
   const hash = (t) => { let h = 2166136261; for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619); return (h >>> 0).toString(36); };
 
-  // What a library entry is, or null when it's never shared. `folder` is
-  // its collection's marks: { books } (its PDFs count as books).
-  function kindOf(p, folder) {
+  // What a library entry is, or null when it's never shared.
+  function kindOf(p) {
     if (!p || p.note || p.preview) return null;
     if (audiobook(p)) return "audiobook";
     const e = ext(p);
     if (p.comic || e === "cbz") return "comic";
     if (BOOK_EXTS.has(e)) return "book";
-    if (e === "pdf") return p.book || (folder && folder.books) ? "book" : null;
     if (!p.file && /^https?:/.test(p.url || "")) return "article";
     return null;
   }
@@ -83,7 +80,6 @@
     const marks = new Map();
     for (const [k, list] of byFolder) marks.set(k, {
       off: list.some((p) => p.folderNoShare),
-      books: list.some((p) => p.folderBooks),
       source: (list.find((p) => p.source) || {}).source || "",
     });
     const markOf = (p) => (p.folder ? marks.get(p.folder.toLocaleLowerCase()) : null);
@@ -95,7 +91,7 @@
       if (p.noShare || (m && m.off)) continue;
       // A serial's chapters are the serial, below.
       if (m && m.source && !p.file && !p.note) continue;
-      const kind = kindOf(p, m);
+      const kind = kindOf(p);
       if (!kind || !kinds[kind]) continue;
       const t = clips[p.id] || null;
       const part = partOf(p, t), ms = msOf(t);

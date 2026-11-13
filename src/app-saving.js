@@ -11,7 +11,7 @@
 const PICTURES_KEY = "waypage.syncPictures";
 let syncTimer = null, syncQueue = load(PICTURES_KEY, null) || [], fetchingPictures = false;
 const keepQueue = () => store(PICTURES_KEY, syncQueue.length ? [...new Set(syncQueue)] : null);
-const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "turn", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks", "noShare", "book", "folderNoShare", "folderBooks"];
+const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "turn", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks", "noShare", "folderNoShare"];
 // While a run of saves is on, sync waits longer (1.2.0): each sync is a
 // merge of the whole library, and one after every page landing was a
 // stutter every few seconds.
@@ -496,7 +496,7 @@ function syncsList() {
 }
 // Share reading activity (2026-11): activity/reading.json for other apps
 // that read this repo, with which kinds go in it.
-const SHARE_KINDS = [["book", "Books", "EPUB, MOBI, AZW3, FB2, and PDFs counted as books"], ["audiobook", "Audiobooks", "Listening time apart from reading"],
+const SHARE_KINDS = [["book", "Books", "EPUB, PDF, MOBI, AZW3 and FB2 files"], ["audiobook", "Audiobooks", "Listening time apart from reading"],
   ["comic", "Comics", "CBZ files and clips saved as comics"], ["serial", "Serials", "Collections that follow a story's new chapters"], ["article", "Articles", "Web clips"]];
 function syncActivity() {
   const on = C.sync.what.activity, kinds = C.sync.shareKinds;

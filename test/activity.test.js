@@ -21,8 +21,8 @@ const file = (id, ext, more) => ({ id, url: "", title: "File " + id, byline: "An
 const library = [
   file("book1", "epub", { at: 0.62, folder: "Shelf" }),
   file("pdf1", "pdf", { at: 0.5 }),
-  file("pdf2", "pdf", { at: 0.5, book: true }),
-  file("pdf3", "pdf", { at: 0.5, folder: "Papers", folderBooks: true }),
+  file("pdf2", "pdf", { at: 0.5, noShare: true }),
+  file("pdf3", "pdf", { at: 0.5, folder: "Papers" }),
   file("cbz1", "cbz", { at: 1, finished: true, readAt: T("2026-11-10") }),
   web("comic1", { comic: true, at: 0.3 }),
   { ...file("aud1", "mp3", { link: "content://x", byline: "A Reader" }), file: { name: "aud1", kind: "audio", ext: "mp3", size: 10, fp: FP },
@@ -62,7 +62,7 @@ test("a fixture library makes the expected file", () => {
       { id: "cbz1", kind: "comic", title: "File cbz1", author: "An Author", collection: "", progress: 1, startedAt: null, finishedAt: "2026-11-10", minutes: 15 },
       { id: "comic1", kind: "comic", title: "Clip comic1", author: "", collection: "", progress: 0.3, startedAt: null, finishedAt: null, minutes: 0 },
       { id: "f" + FP, kind: "audiobook", title: "File aud1", author: "A Reader", collection: "", progress: 0.5, chapters: { read: 1, total: 3 }, startedAt: "2026-11-12", finishedAt: null, minutes: 20 },
-      { id: "pdf2", kind: "book", title: "File pdf2", author: "An Author", collection: "", progress: 0.5, startedAt: null, finishedAt: null, minutes: 0 },
+      { id: "pdf1", kind: "book", title: "File pdf1", author: "An Author", collection: "", progress: 0.5, startedAt: null, finishedAt: null, minutes: 0 },
       { id: "pdf3", kind: "book", title: "File pdf3", author: "An Author", collection: "Papers", progress: 0.5, startedAt: null, finishedAt: null, minutes: 0 },
       { id: doc.items[6].id, kind: "serial", title: "Story", author: "Writer", collection: "Story", progress: 0.67, chapters: { read: 2, total: 3 }, startedAt: "2026-11-12", finishedAt: null, minutes: 50 },
     ],
@@ -76,7 +76,7 @@ test("articles go in only when turned on, and only past 10 minutes or 5%", () =>
   const ids = doc.items.map((i) => i.id);
   assert.ok(ids.includes("art1"));
   assert.ok(!ids.includes("art2"));
-  for (const away of ["away1", "away2", "away3", "note1", "md1", "pdf1", "ch1", "ch2", "ch3"]) assert.ok(!ids.includes(away), away);
+  for (const away of ["away1", "away2", "away3", "note1", "md1", "pdf2", "ch1", "ch2", "ch3"]) assert.ok(!ids.includes(away), away);
 });
 
 test("a kind turned off is left out", () => {

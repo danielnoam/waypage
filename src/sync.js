@@ -43,7 +43,7 @@
   // (backup.cleanMeta); anything else on a page stays on its device.
   const SYNCED = new Set(["id", "url", "title", "site", "byline", "licence", "savedAt", "minutes", "lang", "dir", "mode", "images",
     "at", "finished", "readAt", "readOn", "placeAt", "spot", "comic", "manga", "volume", "turn", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "file", "marks", "ink", "inkAt", "cut", "archived", "editedAt", "note", "published",
-    "book", "noShare", "folderBooks", "folderNoShare"]);
+    "noShare", "folderNoShare"]);
   // Where the reader is, which goes with whichever device moved it last:
   // placeAt (1.30.2), or readAt on entries from before it. Opening a clip
   // stamps readAt alone, so a device that opened one at an older place
@@ -247,7 +247,7 @@
   // stats add up as one. Drawings go too: `ink` by block, and `pages`,
   // a printed PDF's drawn pages, which live beside the clip (store.readInk)
   // and so come in on the copies outsidePages makes.
-  const OUTSIDE = ["at", "finished", "readAt", "readOn", "placeAt", "spot", "turn", "tags", "folder", "folderAt", "fav", "favAt", "folderFav", "folderFavAt", "marks", "listen", "ink", "inkAt", "book", "noShare", "folderBooks", "folderNoShare"];
+  const OUTSIDE = ["at", "finished", "readAt", "readOn", "placeAt", "spot", "turn", "tags", "folder", "folderAt", "fav", "favAt", "folderFav", "folderFavAt", "marks", "listen", "ink", "inkAt", "noShare", "folderNoShare"];
   const FP = /^[0-9a-f]{32}$/;
   const OUT_MAX = 2000;
   // This device's outside files as entries: one a fingerprint, the copy

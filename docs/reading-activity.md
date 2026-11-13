@@ -64,13 +64,13 @@ The kind comes from Waypage's own marks, never a guess:
 | --- | --- |
 | `audiobook` | an audiobook (`file.kind` `"audio"`) |
 | `comic` | a CBZ file, or anything saved or shown as a comic (`comic`) |
-| `book` | an EPUB, MOBI, AZW3 or FB2 file; a PDF only when counted as a book (its ⋯, or its collection's) |
+| `book` | an EPUB, PDF, MOBI, AZW3 or FB2 file |
 | `serial` | a collection linked to a story's page, the kind that finds new chapters; its chapters aren't listed on their own |
 | `article` | a web clip with none of the above |
 
 - Each kind has its own switch under Share reading activity. Books,
   audiobooks, comics and serials start on; articles start off.
-- Notes, PDFs not counted as books, and other files (Markdown, text,
+- Notes and other files (Markdown, text,
   HTML, email, PowerPoint) are never listed.
 - Something is listed once about 10 minutes went into it or 5% of it is
   read, or it's finished.

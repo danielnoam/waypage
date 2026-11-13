@@ -414,9 +414,9 @@ web copy stay links, as before.
   `stats.totals()`, written only when it changed (`waypage.syncActivity`
   keeps the last one's signature), and removed once when the switch goes
   off (`activityGone`). Kinds come from the entry's own marks
-  (`activity.kindOf`); a clip's `noShare` and `book`, and a collection's
-  `folderNoShare` and `folderBooks` (on its clips, like `folderFav`),
-  sync like any field, in the outside map too. A file read from outside
+  (`activity.kindOf`; a PDF is a book); a clip's `noShare` and a
+  collection's `folderNoShare` (on its clips, like `folderFav`) keep
+  one out, and sync like any field, in the outside map too. A file read from outside
   is listed by its fingerprint (`f<fp>`), and one another device has but
   this one doesn't is kept as the file had it (`activity.carry`).
 - The Sync screen shows the repo's size against GitHub's 5 GB (its
