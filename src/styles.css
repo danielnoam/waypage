@@ -1863,6 +1863,15 @@ span.update-text { cursor: default; }
   box-shadow: 0 1px 3px var(--shadow);
 }
 [dir="rtl"] .thumb-fav { left: auto; right: var(--s-1); }
+/* What a collection holds: a mark per kind on its cover's other corner. */
+.tile-kinds {
+  position: absolute; right: var(--s-1); bottom: var(--s-1); z-index: 1;
+  display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 6px;
+  border-radius: var(--r-sm); background: var(--surface); color: var(--accent);
+  box-shadow: 0 1px 3px var(--shadow);
+}
+.tile-kinds svg { display: block; flex: none; }
+[dir="rtl"] .tile-kinds { right: auto; left: var(--s-1); }
 .card-thumb.has-fav { position: relative; display: block; }
 .card-thumb.has-fav > img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 

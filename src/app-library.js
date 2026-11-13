@@ -153,6 +153,22 @@ async function setFolder(p, name) {
 // 2 files". A copy made from a file is a clip, as in the library.
 const HOLDS = [["note", "note", "notes"], ["audio", "audiobook", "audiobooks"], ["file", "file", "files"], ["clip", "clip", "clips"]];
 const holdKind = (p) => (p.note ? "note" : isAudiobook(p) ? "audio" : p.link ? "file" : "clip");
+// ...and as marks along the bottom of its cover, one per kind it holds,
+// in the library's order: clips, files, audiobooks, notes.
+const HOLD_ICONS = {
+  clip: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.5 5.3 3.5 8.5s-1.1 6.1-3.5 8.5c-2.4-2.4-3.5-5.3-3.5-8.5s1.1-6.1 3.5-8.5z"/>',
+  file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
+  audio: '<path d="M4 15v-3a8 8 0 0 1 16 0v3M4 15h3v5H5a1 1 0 0 1-1-1zM20 15h-3v5h2a1 1 0 0 0 1-1z"/>',
+  note: '<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+};
+function holdsMarks(list) {
+  const has = new Set(list.map(holdKind));
+  const box = el("span", { class: "tile-kinds", "aria-hidden": "true" });
+  box.innerHTML = ["clip", "file", "audio", "note"].filter((k) => has.has(k)).map((k) =>
+    '<svg data-kind="' + k + '" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + HOLD_ICONS[k] + "</svg>").join("");
+  return box;
+}
+
 function holdsLine(list) {
   const n = new Map();
   for (const p of list) n.set(holdKind(p), (n.get(holdKind(p)) || 0) + 1);
@@ -185,7 +201,6 @@ function folderTile(name) {
           saveNewChapters(name, e.currentTarget);
         } }, "+" + (fresh >= NEW_MAX ? NEW_MAX : fresh)) : null),
     el("span", { class: "tile-name", dir: "auto" }, name),
-    el("span", { class: "tile-meta tile-holds" }, holdsLine(list)),
     el("span", { class: "tile-meta" }, el("span", { class: "tile-kind" }, "Collection · "), (done === list.length ? "All read" : done + " of " + list.length + " read"), el("span", { class: "tile-size" }, " · " + formatSize(sizeOf(list)))),
     el("span", { class: "progress thin", "aria-hidden": "true" },
       el("span", { class: "progress-fill", style: "transform: scaleX(" + done / list.length + ")" })));
@@ -200,6 +215,7 @@ function folderTile(name) {
   // A favourite's star in the picture's corner (1.16.0), where a book's
   // icon used to sit.
   if (fav) tile.querySelector(".tile-thumb").append(favStar());
+  tile.querySelector(".tile-thumb").append(holdsMarks(list));
   return tile;
 }
 

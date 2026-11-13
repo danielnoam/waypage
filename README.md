@@ -59,7 +59,7 @@ Each section below shows the computer (left) and the phone (right).
 <p><img src="docs/shots/collections-desktop.jpg" width="74%" alt="A collection on a computer"> <img src="docs/shots/collections-phone.jpg" width="21%" alt="A collection on a phone"></p>
 
 - Collections are ordered folders: chapters in order, "2 of 4 read", Continue.
-- Sort a collection by chapter, release date, date added or title, or show it as covers instead of a list. Its card says what it holds (clips, files, audiobooks, notes).
+- Sort a collection by chapter, release date, date added or title, or show it as covers instead of a list. Its cover shows a mark for each kind it holds (clips, files, audiobooks, notes).
 - A collection linked to a story's page finds new chapters and shows a "+N" to save them.
 - Files: EPUB, PDF, MOBI, AZW3, FB2, CBZ, Markdown, text and HTML, copied in (a clip like any other) or read from where they are. Books keep their own contents.
 - PDFs mixing Hebrew or Arabic with English keep each line's words in order.
