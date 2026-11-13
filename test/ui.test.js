@@ -1448,7 +1448,16 @@ function zipOf(files) {
       await until(q, () => !!document.querySelector('.tile[data-name="Serial"]'));
       assert.deepStrictEqual(await q.locator('.tile[data-name="Serial"] .tile-kinds svg').evaluateAll((s) => s.map((x) => x.dataset.kind)), ["clip", "note"]);
       assert.ok(/collection, 2 clips, 1 note,/.test(await q.locator('.tile[data-name="Serial"] .card-open').getAttribute("aria-label")));
-      await q.evaluate(() => { openFolder("Serial"); setFolderMode("order"); });
+      await q.evaluate(() => openFolder("Serial"));
+      // Favourite and Edit sit in the bar; the ⋯ menu keeps the rest.
+      await q.click("#folderMore");
+      assert.deepStrictEqual(await q.locator("#folderPop .pop-label").allTextContents(), ["Story page", "Add clips", "Show as covers", "Select", "Export", "Remove"]);
+      await q.keyboard.press("Escape");
+      await q.click("#folderFav");
+      await until(q, () => folderFav("Serial") && document.getElementById("folderFav").getAttribute("aria-pressed") === "true");
+      await q.click("#folderEdit");
+      // A name typed in Edit stays while the order changes under it.
+      await q.fill("#folderBody .book-title-input", "Serial two");
       const order = () => q.evaluate(() => folderPages("Serial").map((p) => p.id).join());
       await q.locator('[data-sort="released"]').click();
       await until(q, () => folderPages("Serial")[0].id === "rr100");
@@ -1461,6 +1470,31 @@ function zipOf(files) {
       await q.locator('[data-sort="added"]').click();
       await until(q, () => folderPages("Serial")[0].id === "rr100");
       assert.strictEqual(await order(), "rr100,rr300,rr500");
+      // No arrow buttons: the handle takes the arrow keys.
+      assert.strictEqual(await q.locator("#folderBody .move").count(), 0);
+      await q.locator('#folderBody li[data-id="rr100"] .drag-handle').press("ArrowDown");
+      await until(q, () => folderPages("Serial")[1].id === "rr100");
+      assert.strictEqual(await order(), "rr300,rr100,rr500");
+      assert.strictEqual(await q.evaluate(() => document.activeElement.closest("li").dataset.id), "rr100");
+      assert.strictEqual(await q.locator("#folderBody .book-title-input").inputValue(), "Serial two");
+      await q.click("#folderDone");
+      await until(q, () => state.folder === "Serial two" && !folderMode);
+      await q.evaluate(async () => {
+        await renameFolder("Serial");
+        folderPages("Serial").forEach((p, i) => { p.thumb = location.origin + "/tools/shots/demo/img/" + ["bread", "fox", "books"][i] + ".jpg"; });
+        setFolderMode("edit");
+      });
+      await q.locator('.cover-choice[aria-label="Mosaic of the first 3 pictures"]').click();
+      await until(q, () => /^ux[a-z0-9]+\.jpg$/.test(coverPick(folderPages("Serial"))) && document.querySelector('.cover-choice[aria-pressed="true"] .cover-choice-name').textContent === "Mosaic");
+      // What's saved counts files and audiobooks by kind, not as pictures.
+      const kept = await q.evaluate(() => {
+        const book = { id: "fb1", title: "Book", bytes: 900000, images: 22, imageBytes: 0, mode: "full", file: { kind: "epub", ext: "epub" }, link: "x" };
+        const copy = { id: "fc1", title: "Copy", bytes: 2000000, images: 9, imageBytes: 1500000, mode: "full", file: { kind: "epub", ext: "epub" } };
+        const only = savedView([book, copy]).textContent;
+        return { only, line: savedKindsLine([...folderPages("Serial"), book, copy]) };
+      });
+      assert.ok(/Copied from files · 1/.test(kept.only) && /Files read from their folder · 1/.test(kept.only) && !/Pictures|pictures,/.test(kept.only), kept.only);
+      assert.strictEqual(kept.line, "2 clips, 2 files, 1 note");
       await q.evaluate(() => { setFolderMode(""); setFolderLook("Serial", "covers"); });
       assert.strictEqual(await q.locator("#folderBody .folder-covers .cover-item").count(), 3);
       assert.strictEqual(await q.locator("#folderBody .folder-list").count(), 0);
@@ -3761,7 +3795,7 @@ c("bk1", { at: 0.01 })]);
       await btn.waitFor();
       await btn.click();
       const names = await q.locator(".dropdown-menu .dropdown-item").allInnerTexts();
-      assert.deepStrictEqual(names.map((x) => x.trim()), ["Phone's default (Google)", "Kokoro 0.19", "Kokoro 1.0"]);
+      assert.deepStrictEqual(names.map((x) => x.trim()), ["All", "Phone's default (Google)", "Kokoro 0.19", "Kokoro 1.0"]);
       await q.locator(".dropdown-menu .dropdown-item", { hasText: "Kokoro 1.0" }).click();
       await until(q, () => window.asked.length > 0);
       assert.deepStrictEqual(await q.evaluate(() => window.asked), ["use v10"]);
@@ -3791,11 +3825,55 @@ c("bk1", { at: 0.01 })]);
       await btn.waitFor();
       await btn.click();
       const names = await q.locator(".dropdown-menu .dropdown-item").allInnerTexts();
-      assert.deepStrictEqual(names.map((x) => x.trim()), ["Phone's default (Google)", "Kokoro 0.19", "Piper"]);
+      assert.deepStrictEqual(names.map((x) => x.trim()), ["All", "Phone's default (Google)", "Kokoro 0.19", "Piper"]);
       await q.locator(".dropdown-menu .dropdown-item", { hasText: "Piper" }).click();
       await until(q, () => JSON.parse(localStorage.getItem("waypage.aloudVoice") || "{}")["app|en"] === "piper-f_test");
       assert.deepStrictEqual(await q.evaluate(() => window.asked), [], "Piper isn't a Kokoro pack to put in use");
       await until(q, () => /Piper/.test(document.querySelector("[aria-label^='Speech engine']").getAttribute("aria-label")));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Speech engine All lists every engine's voices, and picking one switches to its engine", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(() => {
+        const st = { supported: true, engine: "app", use: "v019", busy: "", step: "", done: 0, total: 0, packs: [
+          { id: "v019", title: "Kokoro 0.19", note: "English", bytes: 98.5e6, ready: true, size: 1, voices: 11, languages: ["en"] }] };
+        const lists = {
+          "": [{ id: "g1", name: "en-us-x-iol-local", lang: "en-US" }, { id: "g2", name: "en-gb-x-gba-local", lang: "en-GB" }, { id: "gd", name: "de-de-x-nfh-local", lang: "de-DE" }],
+          app: [{ id: "kokoro-af_heart", name: "kokoro-af_heart", lang: "en-US" }],
+        };
+        const sp = C.platform.speech;
+        Object.defineProperty(sp, "kokoro", { value: async (action) => (action ? null : JSON.parse(JSON.stringify(st))) });
+        Object.defineProperty(sp, "engines", { value: async () => ({ engines: [{ name: "g", label: "Google" }, { name: "app", label: "Kokoro" }], default: "g" }) });
+        Object.defineProperty(sp, "voices", { value: async (engine) => lists[engine || ""] || [] });
+        Object.defineProperty(navigator, "language", { value: "en-US" });
+        openSettings();
+        openSection("reading");
+      });
+      const voiceNames = async () => {
+        await q.locator("#sectionView").getByRole("button", { name: /^Voice/ }).click();
+        const names = (await q.locator(".dropdown-menu .dropdown-item").allInnerTexts()).map((x) => x.trim());
+        await q.keyboard.press("Escape");
+        await until(q, () => !document.querySelector(".dropdown-menu"));
+        return names;
+      };
+      await q.getByRole("button", { name: /^Speech engine/ }).waitFor();
+      await q.locator("#sectionView").getByRole("button", { name: /^Voice/ }).waitFor();
+      assert.ok(!(await voiceNames()).some((x) => /Heart/.test(x)), "one engine shows only its voices");
+      await q.getByRole("button", { name: /^Speech engine/ }).click();
+      await q.locator(".dropdown-menu .dropdown-item", { hasText: /^\s*All\s*$/ }).click();
+      await until(q, () => /All/.test((document.querySelector("[aria-label^='Speech engine']") || {}).getAttribute?.("aria-label") || ""));
+      await q.locator("#sectionView").getByRole("button", { name: /^Voice/ }).waitFor();
+      const all = await voiceNames();
+      assert.ok(all.some((x) => /Heart/.test(x)) && all.filter((x) => /^Voice \d/.test(x)).length === 2, all.join(", "));
+      assert.ok(!all.some((x) => /de/i.test(x) && /nfh/.test(x)), "other languages stay out");
+      await q.locator("#sectionView").getByRole("button", { name: /^Voice/ }).click();
+      await q.locator(".dropdown-menu .dropdown-item", { hasText: "Heart" }).click();
+      await until(q, () => JSON.parse(localStorage.getItem("waypage.aloudEngine") || "{}").en === "app");
+      assert.strictEqual(await q.evaluate(() => JSON.parse(localStorage.getItem("waypage.aloudVoice") || "{}")["app|en"]), "kokoro-af_heart");
+      assert.match(await q.locator("[aria-label^='Speech engine']").getAttribute("aria-label"), /All/, "All stays picked");
+      assert.match(await q.locator("#sectionView button[aria-label^='Voice']").getAttribute("aria-label"), /Heart/);
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

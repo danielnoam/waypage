@@ -248,9 +248,17 @@
       </button>
       <button class="btn-text bar-left" id="folderCancel" type="button" hidden>Cancel</button>
       <h1 class="bar-title" id="folderTitle" dir="auto"></h1>
-      <button class="icon-btn bar-right" id="folderMore" type="button" aria-label="Collection" aria-haspopup="menu" aria-expanded="false">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg>
-      </button>
+      <div class="bar-right bar-tools" id="folderTools">
+        <button class="icon-btn" id="folderFav" type="button" aria-label="Favourite" aria-pressed="false">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.7l5.9-.9z"></path></svg>
+        </button>
+        <button class="icon-btn" id="folderEdit" type="button" aria-label="Edit collection">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"></path><path d="M13.5 6.5l4 4"></path></svg>
+        </button>
+        <button class="icon-btn" id="folderMore" type="button" aria-label="Collection" aria-haspopup="menu" aria-expanded="false">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg>
+        </button>
+      </div>
       <button class="btn-text bar-right" id="folderDone" type="button" hidden>Done</button>
     </header>
     <div class="screen-body" id="folderBody"></div>

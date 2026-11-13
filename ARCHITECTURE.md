@@ -618,6 +618,10 @@ adds a line here.
 Things that broke once and would again. Check here before touching the
 area.
 
+- A collection's mosaic cover is a picture of your own whose name starts
+  "ux" (`MOSAIC_FILE`); own pictures start with a base-36 time ("um…"
+  until the 2050s). Change how either is named and the Cover choices
+  show the wrong one as picked.
 - The small window outside the app (picture in picture) is one setting
   on the activity that Narrate and audiobooks share, and Android keeps it
   armed until told otherwise. Only `PipWindow.java` sets it, and it arms
