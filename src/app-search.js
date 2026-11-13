@@ -89,10 +89,28 @@ function clearSearch() {
 
 // Search shows when its button is tapped, and stays while something is
 // typed in it; empty, it goes away again (0.27.10).
+// Each place's View options can turn the icon off (2026-11, Daniel's
+// ask): the field is then always at the top and the bar has no icon.
+// Discover's field was always shown, so its icon starts off.
 let searchOpen = false;
+const searchIcon = (place) => { const v = (load(SEARCH_ICON_KEY, {}) || {})[place]; return typeof v === "boolean" ? v : place !== "discover"; };
+function setSearchIcon(place, on) {
+  store(SEARCH_ICON_KEY, { ...(load(SEARCH_ICON_KEY, {}) || {}), [place]: on });
+  if (place === "library") { searchOpen = false; document.documentElement.toggleAttribute("data-search-bar", !on); }
+  else if (place === "discover") dzSearchOpen = false;
+  else postSearchOpen = false;
+  if (place !== state.place) return;
+  paintSearchBtn();
+  if (place === "library") paintSearch();
+  else if (place === "discover") renderDiscover();
+  else renderPosts();
+}
+const searchIconRow = (place) => switchRow("Search icon", "Search waits behind the icon at the top", searchIcon(place), (on) => setSearchIcon(place, on));
+// Escape in an empty field: away behind the icon, or out of the field.
+const leaveSearchField = (input) => { if (!$("searchBtn").hidden) $("searchBtn").focus(); else input.blur(); };
 function paintSearch() {
-  if (postPlace()) return;
-  const on = !!state.pages.length && (searchOpen || !!state.query);
+  if (postPlace() || state.place === "discover") return;
+  const on = !!state.pages.length && (!searchIcon("library") || searchOpen || !!state.query);
   $("searchBox").hidden = !on;
   $("searchBtn").setAttribute("aria-expanded", String(on));
   $("searchBtn").classList.toggle("on", on);
@@ -100,8 +118,9 @@ function paintSearch() {
 // The bar's button searches whatever place it's in: the library, or the
 // posts in Feeds and the emails in Newsletters.
 function paintSearchBtn() {
-  const n = state.place === "feeds" ? siteFeeds().length : state.place === "newsletters" ? mailBoxes().length : state.pages.length;
-  $("searchBtn").hidden = !n;
+  const n = state.place === "feeds" ? siteFeeds().length : state.place === "newsletters" ? mailBoxes().length : state.place === "discover" ? 1 : state.pages.length;
+  $("searchBtn").hidden = !n || !searchIcon(state.place);
+  if (postPlace()) $("viewBtn").hidden = !n;
 }
 function openSearch() {
   searchOpen = true;
@@ -145,7 +164,7 @@ function postSearchBox() {
       e.preventDefault();
       e.stopPropagation();
       if (postQuery) { postQuery = ""; renderPosts(); }
-      else { closePostSearch(); $("searchBtn").focus(); }
+      else { closePostSearch(); leaveSearchField(input); }
     });
     input.addEventListener("blur", () => { if (!postQuery) { postSearchOpen = false; setTimeout(() => { if (!postSearchOpen) renderPosts(); }, 150); } });
     clear.addEventListener("click", () => { postQuery = ""; renderPosts(); input.focus(); });
@@ -153,7 +172,7 @@ function postSearchBox() {
     box.insertAdjacentHTML("afterbegin", '<svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path></svg>');
     postBoxes[place] = box;
   }
-  const on = postSearchOpen || !!postQuery;
+  const on = !searchIcon(place) || postSearchOpen || !!postQuery;
   const input = box.querySelector("input");
   if (input.value !== postQuery) input.value = postQuery;
   box.hidden = !on;
@@ -272,7 +291,14 @@ function libViewSheet() {
         renderLibrary();
       }), note)),
     el("div", { class: "group" },
-      switchRow("Continue reading", "Your last clip at the top of the library", load(CONTINUE_KEY, true), (on) => { store(CONTINUE_KEY, on); renderLibrary(); })));
+      switchRow("Continue reading", "Your last clip at the top of the library", load(CONTINUE_KEY, true), (on) => { store(CONTINUE_KEY, on); renderLibrary(); }),
+      searchIconRow("library")));
+}
+// Feeds' and Newsletters' View button: only how their search shows.
+function postViewSheet() {
+  return el("div", { class: "page-controls post-view" },
+    el("h2", { class: "menu-title" }, "View options"),
+    el("div", { class: "group" }, searchIconRow(state.place)));
 }
 
 // Our own dropdown (0.26.0), in place of the system's <select>: a

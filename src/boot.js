@@ -18,4 +18,7 @@
   // time, it holds its place in the bar until the library is read.
   const starts = read("waypage.startTimes");
   if (Array.isArray(starts) && starts.length && starts[starts.length - 1].clips > 0) root.dataset.clips = "had";
+  // With the library's search icon off (View options), the field holds
+  // its place instead of the icon.
+  if ((read("waypage.searchIcon") || {}).library === false) root.setAttribute("data-search-bar", "");
 })();

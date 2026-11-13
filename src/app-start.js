@@ -102,6 +102,7 @@ $("sectionBack").addEventListener("click", () => history.back());
 // in the list. A second tap, with the field empty or in view, puts it away.
 $("searchBtn").addEventListener("click", () => {
   if (postPlace()) { togglePostSearch(); return; }
+  if (state.place === "discover") { toggleDzSearch(); return; }
   const box = $("searchBox");
   if (!box.hidden && (!state.query || box.getBoundingClientRect().bottom > $("topBar").offsetHeight)) closeSearch();
   else openSearch();
@@ -146,7 +147,7 @@ $("librarySearch").addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   e.preventDefault();
   if (state.query) clearSearch();
-  else { closeSearch(); $("searchBtn").focus(); }
+  else { closeSearch(); leaveSearchField($("librarySearch")); }
 });
 $("searchClear").addEventListener("click", () => { clearSearch(); $("librarySearch").focus(); });
 $("newsBack").addEventListener("click", () => history.back());
