@@ -259,7 +259,8 @@ async function listenPlay(a, at) {
   a.readAt = Date.now();
   paintListen();
   try {
-    await A.play({ parts: await partsToPlay(a), part, pos: pos * 1000, rate: speedOf(a), title: a.title, subtitle: chapterName(a, t) || a.byline || "", key: a.id });
+    await A.play({ parts: await partsToPlay(a), part, pos: pos * 1000, rate: speedOf(a), title: a.title, subtitle: a.byline || "", key: a.id,
+      chapters: carChapters(a), cover: thumbUrl(a) || "" });
   } catch (e) {
     lis.state = "stopped";
     paintListen();

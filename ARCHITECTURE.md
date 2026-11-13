@@ -62,6 +62,7 @@ src/app-discover.js the Discover place: Wikipedia today, the list, its search, t
 src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
 src/app-listen.js   audiobooks: bringing one in, the player and its bar, reading along, transcripts written ahead, fixes, Find the book in Discover, Settings › Audiobooks
 src/app-lock.js     app lock: passcode (PBKDF2 hash), fingerprint or face on Android
+src/app-car.js      Android Auto: the list the car starts from (books, clips cut for Narrate) and where the car got to
 src/app-start.js    wiring at launch, what other apps share in, self-update, Test builds, What's new
 src/save.js         link to saved page: fetch, Wikipedia adapter or Readability, allowlist cleaner, picture previews, video cards
 src/reader.js       a saved page in the sandboxed iframe: place, find, highlights, translation, pages mode
@@ -93,7 +94,7 @@ src/vendor/         Readability, pdf.js, foliate-js's MOBI reader, each with its
 assets/             icon and splash sources for the apps
 icons/, icon.svg    app icons
 worker/             the web copy's fetch proxy, a Cloudflare Worker (worker.js, wrangler.toml, README.md has the setup)
-native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Pen, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes), Audiobook (AudiobookService plays with the screen off; Listen writes transcripts with sherpa-onnx's offline recognizer), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
+native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Pen, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes), Audiobook (AudiobookService plays with the screen off; Listen writes transcripts with sherpa-onnx's offline recognizer), Car (Android Auto: CarService, Car's one shared media session), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
 tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-build.json
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
 tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
@@ -532,6 +533,30 @@ with the CSS Custom Highlight API. A transcript clip is aligned to its
 own text the same way, so both read along through one path. An EPUB's
 Media Overlays (SMIL) give the times themselves (`overlaySync`).
 
+## Android Auto
+
+Android Auto lists Waypage through `CarService` (a framework
+MediaBrowserService, no androidx) and `automotive_app_desc` in the
+plugin's manifest. Narrate and audiobooks share one MediaSession
+(`Car.session`, never released): the car binds to one token, so each
+player only says it's the one playing (`Car.playing`) and hands it back
+when it stops (`Car.idle`). The car's tabs are Continue, Audiobooks and
+Up next; an audiobook's chapters are the session's queue. Custom
+actions add next and previous clip (`SpeechService.clip`: the clip the
+app queued, else `Car.neighbour` under Up next) and next and previous
+chapter or file (`AudiobookService.chapter`). A clip the car jumps to
+that the app didn't queue isn't followed by the open app's player.
+
+The car starts things with the app closed, so the WebView can't help.
+`app-car.js` writes `car.json` (CarPlugin) when the app is put away and
+a little after it opens, if anything changed: up to 40 books with their
+parts, chapters and place, and the 10 latest unfinished clips with their
+text already cut into Narrate's pieces, voice, engine and speed. A job
+the car started is marked `car`; where it got to goes into
+SharedPreferences (`Car.heardBook`, `Car.heardClip`) and `carPlaces`
+takes it back into the library when the app opens. A clip's place there
+is its share of the text, so it lands near, not on, the sentence.
+
 ## Trade-offs
 
 What the app gives up on purpose, said plainly. A change that adds one
@@ -620,10 +645,23 @@ adds a line here.
   No unsure-word marks: the models give no confidence. Fixes are find and
   replace on what's heard, not hotwords for the model.
 
+- **Android Auto keeps a copy for the car.** `car.json`, in the app's own storage, holds the text of
+  the 10 latest unfinished clips and the titles of up to 40 audiobooks,
+  so the car can start them with the app closed. Only the car, the
+  Assistant, Bluetooth and system apps (by uid, system or from the Play
+  Store) may browse it, and with App lock on it lists nothing.
+
 ## Traps
 
 Things that broke once and would again. Check here before touching the
 area.
+
+- Android Auto hides media apps not installed from the Play Store: a
+  sideloaded APK needs Android Auto's developer settings › Unknown
+  sources. The framework MediaBrowserService has no `onSearch`, so the
+  car's own search box isn't offered; voice asks come in as
+  `onPlayFromSearch`. Don't release `Car`'s session in a player's
+  `onDestroy`: the car holds that token.
 
 - A collection's mosaic cover is a picture of your own whose name starts
   "ux" (`MOSAIC_FILE`); own pictures start with a base-36 time ("um…"

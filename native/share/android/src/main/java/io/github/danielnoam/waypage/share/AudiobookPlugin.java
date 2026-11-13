@@ -141,6 +141,8 @@ public class AudiobookPlugin extends Plugin {
         j.title = call.getString("title", "");
         j.subtitle = call.getString("subtitle", "");
         j.key = call.getString("key", "");
+        j.cover = call.getString("cover", "");
+        j.chapters = AudiobookService.chaptersFrom(call.getArray("chapters"));
         AudiobookService.pending = j;
         AudiobookService.send(getContext(), AudiobookService.PLAY, null, null);
         call.resolve();

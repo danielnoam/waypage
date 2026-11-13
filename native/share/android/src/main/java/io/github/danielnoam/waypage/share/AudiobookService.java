@@ -26,6 +26,10 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.os.PowerManager;
+import java.util.ArrayList;
+import java.util.List;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 /**
  * Plays an audiobook with the screen off (src/app-listen.js). A foreground
@@ -33,7 +37,8 @@ import android.os.PowerManager;
  * one file, a folder's files in order, or stretches of a file (an EPUB's
  * own sound, stored in its zip). Its notification is a media session with
  * back 15 s, play or pause, on 30 s, the sleep timer and stop, on the lock
- * screen and to earbuds and cars too.
+ * screen and to earbuds and cars too. Its session is Car's, shared with
+ * Narrate, so Android Auto shows it, with the chapters as the queue.
  *
  * Unlike Narrate it takes the audio focus: a call or a navigation prompt
  * pauses the book, and it goes on after (a lost focus doesn't). Unplugging
@@ -45,7 +50,7 @@ import android.os.PowerManager;
  */
 public class AudiobookService extends Service {
 
-    static final String PLAY = "play", PAUSE = "pause", RESUME = "resume", SEEK = "seek", SKIP = "skip", RATE = "rate", STOP = "stop", SLEEP = "sleep", SLEEP_MORE = "sleepmore", BACK = "back", ON = "on";
+    static final String PLAY = "play", PAUSE = "pause", RESUME = "resume", SEEK = "seek", SKIP = "skip", RATE = "rate", STOP = "stop", SLEEP = "sleep", SLEEP_MORE = "sleepmore", BACK = "back", ON = "on", NEXT_CH = "nextchapter", PREV_CH = "prevchapter";
     private static final String CHANNEL = "waypage-listen";
     private static final int NOTE = 31;
 
@@ -54,12 +59,38 @@ public class AudiobookService extends Service {
         long offset = -1, length = -1;
     }
 
+    static final class Chapter {
+        String title;
+        int part;
+        long pos;
+    }
+
     static final class Job {
         Part[] parts;
         int part;
         long pos;
         float rate = 1f;
-        String title = "", subtitle = "", key = "";
+        String title = "", subtitle = "", key = "", cover = "";
+        Chapter[] chapters = new Chapter[0];
+        // Started from the car with the app closed: where it gets to is
+        // kept for the app (Car.heardBook).
+        boolean car;
+    }
+
+    // [{ title, part, pos }], pos in ms into the part.
+    static Chapter[] chaptersFrom(JSONArray a) {
+        if (a == null) return new Chapter[0];
+        List<Chapter> out = new ArrayList<>();
+        for (int i = 0; i < a.length(); i++) {
+            JSONObject o = a.optJSONObject(i);
+            if (o == null) continue;
+            Chapter c = new Chapter();
+            c.title = o.optString("title", "Chapter " + (i + 1));
+            c.part = o.optInt("part", 0);
+            c.pos = o.optLong("pos", 0);
+            out.add(c);
+        }
+        return out.toArray(new Chapter[0]);
     }
 
     interface Listener {
@@ -145,19 +176,29 @@ public class AudiobookService extends Service {
         super.onCreate();
         running = this;
         audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        session = new MediaSession(this, "Waypage audiobook");
-        session.setCallback(new MediaSession.Callback() {
-            @Override public void onPlay() { resume(); }
-            @Override public void onPause() { pause(); }
-            @Override public void onSkipToNext() { skip(onMs); }
-            @Override public void onSkipToPrevious() { skip(-backMs); }
-            @Override public void onFastForward() { skip(onMs); }
-            @Override public void onRewind() { skip(-backMs); }
-            @Override public void onSeekTo(long pos) { seekIn(job == null ? 0 : job.part, pos); }
-            @Override public void onStop() { finish("stopped"); }
-            @Override public void onCustomAction(String action, android.os.Bundle extras) { if (SLEEP_MORE.equals(action)) sleepMore(); }
-        });
+        session = Car.session(this);
     }
+
+    private final Car.Player controls = new Car.Player() {
+        @Override public void play() { resume(); }
+        @Override public void pause() { AudiobookService.this.pause(); }
+        @Override public void next() { skip(onMs); }
+        @Override public void prev() { skip(-backMs); }
+        @Override public void forward() { skip(onMs); }
+        @Override public void rewind() { skip(-backMs); }
+        @Override public void seekTo(long pos) { seekIn(job == null ? 0 : job.part, pos); }
+        @Override public void stop() { finish("stopped"); }
+        @Override public void custom(String action) {
+            if (SLEEP_MORE.equals(action)) sleepMore();
+            else if (NEXT_CH.equals(action)) chapter(1);
+            else if (PREV_CH.equals(action)) chapter(-1);
+        }
+        @Override public void toQueueItem(long id) {
+            if (job == null || id < 0 || id >= job.chapters.length) return;
+            Chapter c = job.chapters[(int) id];
+            seekIn(c.part, c.pos);
+        }
+    };
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -186,6 +227,9 @@ public class AudiobookService extends Service {
 
     private void start(Job j) {
         job = j;
+        queued = false;
+        chapterShown = -2;
+        Car.playing(controls);
         job.part = Math.max(0, Math.min(job.part, job.parts.length - 1));
         playWhenReady = true;
         load(job.part, job.pos);
@@ -363,6 +407,8 @@ public class AudiobookService extends Service {
         sleepAt = 0;
         if (job != null) job.pos = position();
         report(true);
+        if (job != null && job.car) Car.heardBook(this, job.key, job.part, job.pos, "ended".equals(how));
+        Car.idle(controls);
         noisyOn(false);
         dropFocus();
         release();
@@ -435,26 +481,54 @@ public class AudiobookService extends Service {
         long pos = position(), dur = duration();
         job.pos = pos;
         if (listener != null) listener.onState(job.key, job.part, pos, dur, state);
+        if (job.car && (all || System.currentTimeMillis() - keptAt > 10000) && !"loading".equals(state)) {
+            keptAt = System.currentTimeMillis();
+            Car.heardBook(this, job.key, job.part, pos, false);
+        }
+        if (job.chapters.length > 0 && chapterAt(job.part, pos) != chapterShown) all = true;
         if (!all || "ended".equals(state) || "stopped".equals(state) || "error".equals(state)) return;
         boolean playing = "playing".equals(state);
+        int ch = chapterAt(job.part, pos);
+        chapterShown = ch;
+        // The chapter under the book's title, as the app's player shows it.
+        String under = ch >= 0 ? job.chapters[ch].title : job.subtitle;
         MediaMetadata.Builder meta = new MediaMetadata.Builder()
             .putString(MediaMetadata.METADATA_KEY_TITLE, job.title)
             .putString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE, job.title)
-            .putString(MediaMetadata.METADATA_KEY_ARTIST, job.subtitle)
-            .putString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE, job.subtitle);
+            .putString(MediaMetadata.METADATA_KEY_ARTIST, under)
+            .putString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE, under)
+            .putString(MediaMetadata.METADATA_KEY_ALBUM, job.title);
         if (dur > 0) meta.putLong(MediaMetadata.METADATA_KEY_DURATION, dur);
         if (job.parts.length > 1) {
             meta.putLong(MediaMetadata.METADATA_KEY_TRACK_NUMBER, job.part + 1);
             meta.putLong(MediaMetadata.METADATA_KEY_NUM_TRACKS, job.parts.length);
         }
+        Car.putArt(this, meta, job.cover);
         session.setMetadata(meta.build());
-        session.setPlaybackState(new PlaybackState.Builder()
+        if (!queued) {
+            queued = true;
+            List<MediaSession.QueueItem> q = new ArrayList<>();
+            for (int i = 0; i < job.chapters.length; i++) {
+                q.add(new MediaSession.QueueItem(new android.media.MediaDescription.Builder()
+                    .setMediaId("ch" + i).setTitle(job.chapters[i].title).build(), i));
+            }
+            session.setQueue(q.isEmpty() ? null : q);
+            session.setQueueTitle(q.isEmpty() ? null : "Chapters");
+        }
+        PlaybackState.Builder ps = new PlaybackState.Builder()
             .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE
                 | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_FAST_FORWARD
-                | PlaybackState.ACTION_REWIND | PlaybackState.ACTION_SEEK_TO | PlaybackState.ACTION_STOP)
-            .setState(playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, pos, playing ? job.rate : 0f)
-            .addCustomAction(new PlaybackState.CustomAction.Builder(SLEEP_MORE, sleepLabel(), R.drawable.waypage_sleep).build())
-            .build());
+                | PlaybackState.ACTION_REWIND | PlaybackState.ACTION_SEEK_TO | PlaybackState.ACTION_STOP
+                | PlaybackState.ACTION_SKIP_TO_QUEUE_ITEM | Car.ACTIONS)
+            .setState(playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, pos, playing ? job.rate : 0f);
+        String what = job.chapters.length > 0 ? "chapter" : job.parts.length > 1 ? "file" : null;
+        if (what != null) {
+            ps.addCustomAction(new PlaybackState.CustomAction.Builder(PREV_CH, "Previous " + what, R.drawable.waypage_prev_item).build());
+            ps.addCustomAction(new PlaybackState.CustomAction.Builder(NEXT_CH, "Next " + what, R.drawable.waypage_next_item).build());
+        }
+        ps.addCustomAction(new PlaybackState.CustomAction.Builder(SLEEP_MORE, sleepLabel(), R.drawable.waypage_sleep).build());
+        if (ch >= 0) ps.setActiveQueueItemId(ch);
+        session.setPlaybackState(ps.build());
         session.setActive(true);
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         nm.notify(NOTE, notification());
@@ -464,6 +538,40 @@ public class AudiobookService extends Service {
         Notification n = notification();
         if (Build.VERSION.SDK_INT >= 29) startForeground(NOTE, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
         else startForeground(NOTE, n);
+    }
+
+    // Next or previous chapter from the car, or file of a folder with no
+    // chapters. Back goes to this one's start first, past its first 3 s.
+    private void chapter(int d) {
+        if (job == null) return;
+        long pos = position();
+        if (job.chapters.length == 0) {
+            if (d < 0 && pos > 3000) seekIn(job.part, 0);
+            else if (job.part + d >= 0 && job.part + d < job.parts.length) seekIn(job.part + d, 0);
+            return;
+        }
+        int ch = chapterAt(job.part, pos), to = ch + d;
+        if (d < 0 && ch >= 0) {
+            Chapter c = job.chapters[ch];
+            if (job.part > c.part || pos - c.pos > 3000) to = ch;
+        }
+        if (to < 0 || to >= job.chapters.length) return;
+        seekIn(job.chapters[to].part, job.chapters[to].pos);
+    }
+
+    private boolean queued;
+    private int chapterShown = -2;
+    private long keptAt;
+
+    // The chapter `pos` into `part` is in, -1 before the first.
+    private int chapterAt(int part, long pos) {
+        int at = -1;
+        for (int i = 0; i < job.chapters.length; i++) {
+            Chapter c = job.chapters[i];
+            if (c.part < part || (c.part == part && c.pos <= pos + 500)) at = i;
+            else break;
+        }
+        return at;
     }
 
     private String sleepLabel() {
@@ -517,7 +625,7 @@ public class AudiobookService extends Service {
         main.removeCallbacks(sleeper);
         noisyOn(false);
         release();
-        if (session != null) session.release();
+        Car.idle(controls);
         dropFocus();
         if (running == this) running = null;
         PipWindow.refresh();
