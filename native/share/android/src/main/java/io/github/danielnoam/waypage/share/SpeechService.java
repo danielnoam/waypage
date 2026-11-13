@@ -41,7 +41,7 @@ import java.util.Locale;
  */
 public class SpeechService extends Service {
 
-    static final String PLAY = "play", PAUSE = "pause", RESUME = "resume", NEXT = "next", PREV = "prev", STOP = "stop", SEEK = "seek", RATE = "rate", VOLUME = "volume", SLEEP = "sleep", SLEEP_MORE = "sleepmore";
+    static final String PLAY = "play", PAUSE = "pause", RESUME = "resume", NEXT = "next", PREV = "prev", STOP = "stop", SEEK = "seek", RATE = "rate", VOLUME = "volume", SLEEP = "sleep", SLEEP_MORE = "sleepmore", NEXT_CLIP = "nextclip", PREV_CLIP = "prevclip";
     private static final String CHANNEL = "waypage-aloud";
     private static final int NOTE = 27;
 
@@ -120,7 +120,11 @@ public class SpeechService extends Service {
         @Override public void rewind() { step(-1); }
         @Override public void seekTo(long ms) {}
         @Override public void stop() { finish("stopped"); }
-        @Override public void custom(String action) { if (SLEEP_MORE.equals(action)) sleepMore(); }
+        @Override public void custom(String action) {
+            if (SLEEP_MORE.equals(action)) sleepMore();
+            else if (NEXT_CLIP.equals(action)) clip(1);
+            else if (PREV_CLIP.equals(action)) clip(-1);
+        }
         @Override public void toQueueItem(long id) {}
     };
 
@@ -357,17 +361,8 @@ public class SpeechService extends Service {
             if (next != null && next.items != null && next.items.length > 0 && job.key != null && job.key.equals(queuedAfter)) {
                 queued = null;
                 queuedAfter = null;
-                next.rate = job.rate;
-                next.volume = job.volume;
                 if (job.car) Car.heardClip(this, job.key, job.items.length - 1, 1, true);
-                job = next;
-                if (job.car) Car.queueAfter(this, job.key);
-                index = Math.max(0, Math.min(job.start, job.items.length - 1));
-                // Another language can have its own engine; the new
-                // one speaks once it has started.
-                String want = job.engine == null ? "" : job.engine;
-                if (!want.equals(engine)) { makeTts(want); return; }
-                speakCurrent();
+                switchTo(next);
                 return;
             }
             finish("ended");
@@ -382,6 +377,37 @@ public class SpeechService extends Service {
             return;
         }
         speakCurrent();
+    }
+
+    private void switchTo(Job next) {
+        next.rate = job.rate;
+        next.volume = job.volume;
+        job = next;
+        keptIndex = -1;
+        if (job.car) Car.queueAfter(this, job.key);
+        index = Math.max(0, Math.min(job.start, job.items.length - 1));
+        // Another language can have its own engine; the new one speaks
+        // once it has started.
+        makeTts(job.engine == null ? "" : job.engine);
+        if ("playing".equals(state)) speakCurrent();
+        else play();
+    }
+
+    // Next or previous clip from the car (Daniel's ask): on, the clip the
+    // app queued (the collection's next) or the next under Up next; back,
+    // the one before under Up next, else this clip from its start.
+    private void clip(int d) {
+        if (job == null) return;
+        Job to = null;
+        if (d > 0 && queued != null && queued.items != null && queued.items.length > 0 && job.key != null && job.key.equals(queuedAfter)) {
+            to = queued;
+            queued = null;
+            queuedAfter = null;
+        }
+        if (to == null) to = Car.neighbour(this, job.key, d);
+        if (to == null) { if (d < 0) { move(0); if (!"playing".equals(state)) play(); } return; }
+        if (job.car) Car.heardClip(this, job.key, index, through(), false);
+        switchTo(to);
     }
 
     private void pause() {
@@ -523,6 +549,8 @@ public class SpeechService extends Service {
             .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE
                 | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_STOP | Car.ACTIONS)
             .setState(playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, PlaybackState.PLAYBACK_POSITION_UNKNOWN, playing ? 1f : 0f)
+            .addCustomAction(new PlaybackState.CustomAction.Builder(PREV_CLIP, "Previous clip", R.drawable.waypage_prev_item).build())
+            .addCustomAction(new PlaybackState.CustomAction.Builder(NEXT_CLIP, "Next clip", R.drawable.waypage_next_item).build())
             .addCustomAction(new PlaybackState.CustomAction.Builder(SLEEP_MORE, sleepLabel(), R.drawable.waypage_sleep).build())
             .build());
         session.setActive(true);

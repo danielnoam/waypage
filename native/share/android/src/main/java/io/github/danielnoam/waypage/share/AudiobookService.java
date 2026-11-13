@@ -50,7 +50,7 @@ import org.json.JSONObject;
  */
 public class AudiobookService extends Service {
 
-    static final String PLAY = "play", PAUSE = "pause", RESUME = "resume", SEEK = "seek", SKIP = "skip", RATE = "rate", STOP = "stop", SLEEP = "sleep", SLEEP_MORE = "sleepmore", BACK = "back", ON = "on";
+    static final String PLAY = "play", PAUSE = "pause", RESUME = "resume", SEEK = "seek", SKIP = "skip", RATE = "rate", STOP = "stop", SLEEP = "sleep", SLEEP_MORE = "sleepmore", BACK = "back", ON = "on", NEXT_CH = "nextchapter", PREV_CH = "prevchapter";
     private static final String CHANNEL = "waypage-listen";
     private static final int NOTE = 31;
 
@@ -188,7 +188,11 @@ public class AudiobookService extends Service {
         @Override public void rewind() { skip(-backMs); }
         @Override public void seekTo(long pos) { seekIn(job == null ? 0 : job.part, pos); }
         @Override public void stop() { finish("stopped"); }
-        @Override public void custom(String action) { if (SLEEP_MORE.equals(action)) sleepMore(); }
+        @Override public void custom(String action) {
+            if (SLEEP_MORE.equals(action)) sleepMore();
+            else if (NEXT_CH.equals(action)) chapter(1);
+            else if (PREV_CH.equals(action)) chapter(-1);
+        }
         @Override public void toQueueItem(long id) {
             if (job == null || id < 0 || id >= job.chapters.length) return;
             Chapter c = job.chapters[(int) id];
@@ -516,8 +520,13 @@ public class AudiobookService extends Service {
                 | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_FAST_FORWARD
                 | PlaybackState.ACTION_REWIND | PlaybackState.ACTION_SEEK_TO | PlaybackState.ACTION_STOP
                 | PlaybackState.ACTION_SKIP_TO_QUEUE_ITEM | Car.ACTIONS)
-            .setState(playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, pos, playing ? job.rate : 0f)
-            .addCustomAction(new PlaybackState.CustomAction.Builder(SLEEP_MORE, sleepLabel(), R.drawable.waypage_sleep).build());
+            .setState(playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, pos, playing ? job.rate : 0f);
+        String what = job.chapters.length > 0 ? "chapter" : job.parts.length > 1 ? "file" : null;
+        if (what != null) {
+            ps.addCustomAction(new PlaybackState.CustomAction.Builder(PREV_CH, "Previous " + what, R.drawable.waypage_prev_item).build());
+            ps.addCustomAction(new PlaybackState.CustomAction.Builder(NEXT_CH, "Next " + what, R.drawable.waypage_next_item).build());
+        }
+        ps.addCustomAction(new PlaybackState.CustomAction.Builder(SLEEP_MORE, sleepLabel(), R.drawable.waypage_sleep).build());
         if (ch >= 0) ps.setActiveQueueItemId(ch);
         session.setPlaybackState(ps.build());
         session.setActive(true);
@@ -529,6 +538,25 @@ public class AudiobookService extends Service {
         Notification n = notification();
         if (Build.VERSION.SDK_INT >= 29) startForeground(NOTE, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
         else startForeground(NOTE, n);
+    }
+
+    // Next or previous chapter from the car, or file of a folder with no
+    // chapters. Back goes to this one's start first, past its first 3 s.
+    private void chapter(int d) {
+        if (job == null) return;
+        long pos = position();
+        if (job.chapters.length == 0) {
+            if (d < 0 && pos > 3000) seekIn(job.part, 0);
+            else if (job.part + d >= 0 && job.part + d < job.parts.length) seekIn(job.part + d, 0);
+            return;
+        }
+        int ch = chapterAt(job.part, pos), to = ch + d;
+        if (d < 0 && ch >= 0) {
+            Chapter c = job.chapters[ch];
+            if (job.part > c.part || pos - c.pos > 3000) to = ch;
+        }
+        if (to < 0 || to >= job.chapters.length) return;
+        seekIn(job.chapters[to].part, job.chapters[to].pos);
     }
 
     private boolean queued;

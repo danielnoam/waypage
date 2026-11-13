@@ -539,7 +539,11 @@ plugin's manifest. Narrate and audiobooks share one MediaSession
 (`Car.session`, never released): the car binds to one token, so each
 player only says it's the one playing (`Car.playing`) and hands it back
 when it stops (`Car.idle`). The car's tabs are Continue, Audiobooks and
-Up next; an audiobook's chapters are the session's queue.
+Up next; an audiobook's chapters are the session's queue. Custom
+actions add next and previous clip (`SpeechService.clip`: the clip the
+app queued, else `Car.neighbour` under Up next) and next and previous
+chapter or file (`AudiobookService.chapter`). A clip the car jumps to
+that the app didn't queue isn't followed by the open app's player.
 
 The car starts things with the app closed, so the WebView can't help.
 `app-car.js` writes `car.json` (CarPlugin) when the app is put away and

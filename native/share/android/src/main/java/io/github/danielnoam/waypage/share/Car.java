@@ -295,6 +295,20 @@ final class Car {
         SpeechService.send(ctx, SpeechService.PLAY, null, null);
     }
 
+    // The clip `step` from `key` under Up next; on from a clip that isn't
+    // there (started in the app), the first of them.
+    static SpeechService.Job neighbour(Context ctx, String key, int step) {
+        JSONArray a = list(ctx, CLIPS);
+        int at = -1;
+        for (int i = 0; i < a.length(); i++) {
+            JSONObject o = a.optJSONObject(i);
+            if (o != null && key != null && key.equals(o.optString("id"))) { at = i; break; }
+        }
+        int to = at < 0 ? (step > 0 ? 0 : -1) : at + step;
+        JSONObject o = to >= 0 && to < a.length() ? a.optJSONObject(to) : null;
+        return o == null ? null : clipJob(ctx, o);
+    }
+
     private static SpeechService.Job clipJob(Context ctx, JSONObject o) {
         JSONArray items = o.optJSONArray("items");
         if (items == null || items.length() == 0) return null;
