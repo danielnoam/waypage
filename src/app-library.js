@@ -428,7 +428,6 @@ function renderFolder() {
       sectionHead((isSeries(list) ? "Chapters" : "Clips") + " · " + list.length),
       savedLine(list),
       ordering ? el("div", { class: "order-hint" },
-        el("p", { class: "meta" }, "Drag a chapter by its handle, or use the arrows."),
         el("div", { class: "chips sort-chips", role: "group", "aria-label": "Sort by" },
           el("span", { class: "meta" }, "Sort by"),
           ...Object.entries(FOLDER_SORTS).map(([key, s]) =>
@@ -452,9 +451,7 @@ function renderFolder() {
             editing ? el("span", { class: "choice-note" }, formatSize(p.bytes || 0))
               : el("span", { class: "choice-note" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, readingLine(p))),
           ordering ? null : chapterMark(p)),
-        ordering ? moveButton(p, i, -1, list.length) : null,
-        ordering ? moveButton(p, i, 1, list.length) : null,
-        ordering ? dragHandle(p) : null))) : null);
+        ordering ? dragHandle(p, i, list.length) : null))) : null);
   paintFolderBar();
   paintPicks();
 }
@@ -500,21 +497,16 @@ function chapterMark(p) {
   return el("span", { class: "chapter-mark", "aria-hidden": "true" });
 }
 
-const CHEVRON = (d) => '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + d + '"/></svg>';
-const CHEVRON_UP = CHEVRON("M6 15l6-6 6 6"), CHEVRON_DOWN = CHEVRON("M6 9l6 6 6-6");
-
-function moveButton(p, i, step, n) {
-  const b = el("button", { class: "icon-btn move", type: "button", "data-step": String(step),
-    "aria-label": "Move " + p.title + (step < 0 ? " up" : " down"), onclick: () => movePage(p, step) });
-  b.innerHTML = step < 0 ? CHEVRON_UP : CHEVRON_DOWN;
-  b.disabled = step < 0 ? i === 0 : i === n - 1;
-  return b;
-}
-
-// Dragging is for fingers and mice; the arrows beside it do the same
-// from a keyboard or a screen reader, so the handle is hidden from them.
-function dragHandle(p) {
-  const h = el("span", { class: "drag-handle", "aria-hidden": "true" });
+// The handle is dragged by a finger or a mouse; from a keyboard or a
+// screen reader its arrow keys move the chapter (Daniel 2026-11-13: no
+// arrow buttons beside it).
+function dragHandle(p, i, n) {
+  const h = el("button", { class: "drag-handle", type: "button", "aria-keyshortcuts": "ArrowUp ArrowDown",
+    "aria-label": "Move " + p.title + ", " + (i + 1) + " of " + n + ". Use the up and down arrow keys." });
+  h.addEventListener("keydown", (e) => {
+    const step = { ArrowUp: -1, ArrowDown: 1 }[e.key];
+    if (step) { e.preventDefault(); movePage(p, step); }
+  });
   h.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h16M4 12h16M4 16h16"/></svg>';
   h.addEventListener("pointerdown", (e) => dragRow(e, h, p));
   return h;
@@ -582,10 +574,8 @@ async function moveInFolder(p, to) {
 async function movePage(p, step) {
   const list = folderPages(p.folder);
   if (!(await moveInFolder(p, list.indexOf(p) + step))) return;
-  const row = $("folderBody").querySelector('li[data-id="' + p.id + '"]');
-  const again = row && row.querySelector('.move[data-step="' + step + '"]');
-  const focus = again && !again.disabled ? again : row && row.querySelector(".move:not(:disabled)");
-  if (focus) focus.focus();
+  const handle = $("folderBody").querySelector('li[data-id="' + p.id + '"] .drag-handle');
+  if (handle) handle.focus();
 }
 
 // Royal Road numbers its chapters as it puts them out, so a chapter's
@@ -1588,7 +1578,7 @@ function longPress(root) {
     fired = false;
     mouse = e.pointerType === "mouse";
     const node = e.button === 0 && e.target.closest("[data-ids]");
-    if (!node || e.target.closest(".card-retry, .move")) return;
+    if (!node || e.target.closest(".card-retry, .drag-handle")) return;
     start = { x: e.clientX, y: e.clientY };
     cancel();
     timer = setTimeout(() => {

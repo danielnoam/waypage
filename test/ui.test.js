@@ -1470,6 +1470,12 @@ function zipOf(files) {
       await q.locator('[data-sort="added"]').click();
       await until(q, () => folderPages("Serial")[0].id === "rr100");
       assert.strictEqual(await order(), "rr100,rr300,rr500");
+      // No arrow buttons: the handle takes the arrow keys.
+      assert.strictEqual(await q.locator("#folderBody .move").count(), 0);
+      await q.locator('#folderBody li[data-id="rr100"] .drag-handle').press("ArrowDown");
+      await until(q, () => folderPages("Serial")[1].id === "rr100");
+      assert.strictEqual(await order(), "rr300,rr100,rr500");
+      assert.strictEqual(await q.evaluate(() => document.activeElement.closest("li").dataset.id), "rr100");
       assert.strictEqual(await q.locator("#folderBody .book-title-input").inputValue(), "Serial two");
       await q.click("#folderDone");
       await until(q, () => state.folder === "Serial two" && !folderMode);
