@@ -3705,7 +3705,7 @@ function zipOf(files) {
       await btn.waitFor();
       await btn.click();
       const names = await q.locator(".dropdown-menu .dropdown-item").allInnerTexts();
-      assert.deepStrictEqual(names.map((x) => x.trim()), ["Phone's default (Google)", "Kokoro 0.19", "Kokoro 1.0"]);
+      assert.deepStrictEqual(names.map((x) => x.trim()), ["All", "Phone's default (Google)", "Kokoro 0.19", "Kokoro 1.0"]);
       await q.locator(".dropdown-menu .dropdown-item", { hasText: "Kokoro 1.0" }).click();
       await until(q, () => window.asked.length > 0);
       assert.deepStrictEqual(await q.evaluate(() => window.asked), ["use v10"]);
@@ -3735,11 +3735,55 @@ function zipOf(files) {
       await btn.waitFor();
       await btn.click();
       const names = await q.locator(".dropdown-menu .dropdown-item").allInnerTexts();
-      assert.deepStrictEqual(names.map((x) => x.trim()), ["Phone's default (Google)", "Kokoro 0.19", "Piper"]);
+      assert.deepStrictEqual(names.map((x) => x.trim()), ["All", "Phone's default (Google)", "Kokoro 0.19", "Piper"]);
       await q.locator(".dropdown-menu .dropdown-item", { hasText: "Piper" }).click();
       await until(q, () => JSON.parse(localStorage.getItem("waypage.aloudVoice") || "{}")["app|en"] === "piper-f_test");
       assert.deepStrictEqual(await q.evaluate(() => window.asked), [], "Piper isn't a Kokoro pack to put in use");
       await until(q, () => /Piper/.test(document.querySelector("[aria-label^='Speech engine']").getAttribute("aria-label")));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Speech engine All lists every engine's voices, and picking one switches to its engine", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(() => {
+        const st = { supported: true, engine: "app", use: "v019", busy: "", step: "", done: 0, total: 0, packs: [
+          { id: "v019", title: "Kokoro 0.19", note: "English", bytes: 98.5e6, ready: true, size: 1, voices: 11, languages: ["en"] }] };
+        const lists = {
+          "": [{ id: "g1", name: "en-us-x-iol-local", lang: "en-US" }, { id: "g2", name: "en-gb-x-gba-local", lang: "en-GB" }, { id: "gd", name: "de-de-x-nfh-local", lang: "de-DE" }],
+          app: [{ id: "kokoro-af_heart", name: "kokoro-af_heart", lang: "en-US" }],
+        };
+        const sp = C.platform.speech;
+        Object.defineProperty(sp, "kokoro", { value: async (action) => (action ? null : JSON.parse(JSON.stringify(st))) });
+        Object.defineProperty(sp, "engines", { value: async () => ({ engines: [{ name: "g", label: "Google" }, { name: "app", label: "Kokoro" }], default: "g" }) });
+        Object.defineProperty(sp, "voices", { value: async (engine) => lists[engine || ""] || [] });
+        Object.defineProperty(navigator, "language", { value: "en-US" });
+        openSettings();
+        openSection("reading");
+      });
+      const voiceNames = async () => {
+        await q.locator("#sectionView").getByRole("button", { name: /^Voice/ }).click();
+        const names = (await q.locator(".dropdown-menu .dropdown-item").allInnerTexts()).map((x) => x.trim());
+        await q.keyboard.press("Escape");
+        await until(q, () => !document.querySelector(".dropdown-menu"));
+        return names;
+      };
+      await q.getByRole("button", { name: /^Speech engine/ }).waitFor();
+      await q.locator("#sectionView").getByRole("button", { name: /^Voice/ }).waitFor();
+      assert.ok(!(await voiceNames()).some((x) => /Heart/.test(x)), "one engine shows only its voices");
+      await q.getByRole("button", { name: /^Speech engine/ }).click();
+      await q.locator(".dropdown-menu .dropdown-item", { hasText: /^\s*All\s*$/ }).click();
+      await until(q, () => /All/.test((document.querySelector("[aria-label^='Speech engine']") || {}).getAttribute?.("aria-label") || ""));
+      await q.locator("#sectionView").getByRole("button", { name: /^Voice/ }).waitFor();
+      const all = await voiceNames();
+      assert.ok(all.some((x) => /Heart/.test(x)) && all.filter((x) => /^Voice \d/.test(x)).length === 2, all.join(", "));
+      assert.ok(!all.some((x) => /de/i.test(x) && /nfh/.test(x)), "other languages stay out");
+      await q.locator("#sectionView").getByRole("button", { name: /^Voice/ }).click();
+      await q.locator(".dropdown-menu .dropdown-item", { hasText: "Heart" }).click();
+      await until(q, () => JSON.parse(localStorage.getItem("waypage.aloudEngine") || "{}").en === "app");
+      assert.strictEqual(await q.evaluate(() => JSON.parse(localStorage.getItem("waypage.aloudVoice") || "{}")["app|en"]), "kokoro-af_heart");
+      assert.match(await q.locator("[aria-label^='Speech engine']").getAttribute("aria-label"), /All/, "All stays picked");
+      assert.match(await q.locator("#sectionView button[aria-label^='Voice']").getAttribute("aria-label"), /Heart/);
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });
