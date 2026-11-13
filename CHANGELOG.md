@@ -2,6 +2,15 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.59.0] - 2026-11-13
+
+### Added
+- Android Auto. Waypage is in the car's media apps, with three tabs: Continue (the audiobook and the clip you were last on), Audiobooks, and Up next (your 10 latest unfinished clips, narrated). Tap one and it plays with the phone in your pocket and the app closed. An audiobook shows its cover and chapter, and its chapters are the queue. Beside the paragraph buttons, Narrate has Next clip and Previous clip (the collection's next clip, else the next under Up next), and an audiobook Next and Previous chapter (or file, for a folder with no chapters). Ask "Hey Google, play <title> on Waypage" to start a book or clip by name. Where the car got to is back in the app when you next open it. With App lock on, the car lists nothing. A Waypage installed from GitHub needs Android Auto's Unknown sources setting (Android Auto's settings, tap Version ten times, then ⋮ › Developer settings).
+
+### Changed
+- Narrate and audiobooks show their cover on the lock screen and in the car, and an audiobook's chapter under its title as it goes.
+- On a phone, the reader's top bar no longer squeezes the name in among its buttons. The name hangs in a bubble just under the bar, with the chapter you're in under it, and goes away with the bar as you read on. Tap the name to rename it, as before.
+
 ## [1.58.3] - 2026-11-13
 
 ### Added
