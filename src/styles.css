@@ -1487,9 +1487,8 @@ html { -webkit-tap-highlight-color: transparent; }
 .screen-body .rc-row.follow { margin-top: var(--s-4); }
 .screen-body .rc-row.follow.back { margin-top: 0; margin-bottom: var(--s-4); }
 .folder-list li { display: flex; align-items: center; }
+.folder-list li > .row { min-width: 0; }
 .folder-list.ordering li { padding-inline-end: var(--s-1); }
-.folder-list .move { flex-shrink: 0; color: var(--accent); }
-.folder-list .move:disabled { color: var(--line); cursor: default; }
 /* A folder's tools sit above its pages: three a row on a phone, six on a
    desktop, the same tiles as a page's sheet. */
 .tile-btn.warn { color: var(--warn); }
@@ -1831,8 +1830,16 @@ span.update-text { cursor: default; }
 .folder-actions.export-panel > .export { width: 100%; }
 .chapter-tools { display: flex; flex-direction: column; gap: var(--s-2); }
 .chapters-panel .settings-section { margin: 0; }
-.folder-actions.cover-panel { flex-direction: column; align-items: stretch; gap: var(--s-4); }
-.cover-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: var(--s-4) var(--s-3); }
+.folder-actions.cover-panel { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: var(--s-4); }
+/* One row that scrolls sideways, so a long story's chapters stay close
+   under it in Edit. */
+.cover-grid {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 96px; gap: var(--s-3); min-width: 0;
+  overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+  padding: 3px 3px var(--s-1);
+}
+@media (max-width: 699px) { .cover-grid { margin: 0 calc(-1 * var(--gutter)); padding-inline: var(--gutter); } }
+.cover-grid::-webkit-scrollbar { display: none; }
 .cover-choice {
   display: flex; flex-direction: column; gap: var(--s-2); min-width: 0;
   padding: 0; border: 0; background: none; color: var(--ink); text-align: start; cursor: pointer;
@@ -1842,6 +1849,10 @@ span.update-text { cursor: default; }
   border-radius: var(--r-sm); border: 1px solid var(--line); overflow: hidden; background: var(--preview); color: var(--muted);
 }
 .cover-choice-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* The mosaic choice before it's picked: the pictures it will be drawn from. */
+.cover-mosaic { display: grid; width: 100%; height: 100%; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.cover-mosaic img { min-width: 0; min-height: 0; }
+.cover-mosaic.n2 > *, .cover-mosaic.n3 > :first-child { grid-column: 1 / -1; }
 .cover-choice-pic .folder-icon, .cover-choice-pic .book-icon { color: var(--accent); }
 .cover-choice[aria-pressed="true"] .cover-choice-pic { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .paper-row { gap: var(--s-4); }
@@ -2039,7 +2050,12 @@ span.update-text { cursor: default; }
 #searchBtn.on { background: var(--line); }
 
 /* ---- 0.27.11: the collection as a book page ---- */
-#folderView .screen-bar { grid-template-columns: var(--s-9) minmax(0, 1fr) var(--s-9); }
+/* Favourite, Edit and ⋯ share the right; the title stays centred while
+   it fits. */
+#folderView .screen-bar { grid-template-columns: minmax(var(--s-9), 1fr) minmax(0, max-content) minmax(max-content, 1fr); }
+#folderView .bar-tools { display: flex; align-items: center; }
+#folderFav[aria-pressed="true"] { color: var(--accent); }
+#folderFav[aria-pressed="true"] svg { fill: currentColor; }
 #folderView .bar-left, #folderBack { grid-column: 1; justify-self: start; }
 #folderView .bar-right { grid-column: 3; justify-self: end; }
 #folderView .bar-left[hidden], #folderView .bar-right[hidden], #folderBack[hidden] { display: none; }
@@ -2114,7 +2130,9 @@ span.update-text { cursor: default; }
   flex-shrink: 0; width: var(--tap); height: var(--tap);
   display: flex; align-items: center; justify-content: center;
   color: var(--muted); cursor: grab; touch-action: none;
+  padding: 0; border: 0; border-radius: var(--r-sm); background: none; font: inherit;
 }
+.drag-handle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; color: var(--accent); }
 .lifted .drag-handle { color: var(--accent); cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) { .folder-list.dragging li { transition: none; } }
 
@@ -2149,6 +2167,7 @@ span.update-text { cursor: default; }
 .saved-key.text { background: var(--muted); background: color-mix(in srgb, var(--accent) 40%, var(--line)); }
 .saved-key.links { border: 1px solid var(--muted); }
 .saved-key.missing { background: var(--warn); }
+.saved-bar .other, .saved-key.other { background: var(--ink); opacity: .35; }
 .saved-label { flex: 1; min-width: 0; }
 .saved-value { flex-shrink: 0; color: var(--muted); font-size: var(--fs-meta); font-variant-numeric: tabular-nums; }
 .saved-view .footnote { margin: var(--s-1) 0 0; }

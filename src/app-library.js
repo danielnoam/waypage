@@ -260,33 +260,34 @@ function closeFolder() {
 }
 
 // The collection's screen is a book page (0.27.11): its cover and title,
-// how far along, Continue, then its chapters. Its tools are in the ⋯
-// menu; Rename, Reorder, the story page and Export take the screen over
-// in place, with Cancel, Save or Done in the bar.
+// how far along, Continue, then its chapters. Favourite and Edit sit in
+// the bar, the rest in the ⋯ menu. Edit (name, cover and order in one
+// place), the story page and Export take the screen over in place, with
+// Done in the bar.
 let folderMode = "";
+// The name typed in Edit, kept while a cover or move draws the screen again.
+let folderDraft = null;
 const FOLDER_BARS = {
-  rename: { title: "Rename", cancel: true, done: "Save" },
-  order: { title: "Reorder", done: "Done" },
+  edit: { title: "Edit", done: "Done" },
   chapters: { title: "Story page", done: "Done" },
   export: { title: "Export", done: "Done" },
-  cover: { title: "Cover", done: "Done" },
 };
 
 function setFolderMode(m) {
   closeFolderMenu();
   folderMode = m;
+  folderDraft = null;
   renderFolder();
   $("folderBody").scrollTop = 0;
-  const field = $("folderBody").querySelector(".book-title-input");
-  if (field) { field.focus(); field.select(); }
-  else if (m) $("folderDone").focus({ preventScroll: true });
-  else $("folderMore").focus({ preventScroll: true });
+  $(m ? "folderDone" : "folderMore").focus({ preventScroll: true });
 }
 
 function paintFolderBar() {
   const bar = FOLDER_BARS[folderMode];
   $("folderBack").hidden = !!bar;
-  $("folderMore").hidden = !!bar;
+  $("folderTools").hidden = !!bar;
+  const fav = !!state.folder && folderFav(state.folder);
+  $("folderFav").setAttribute("aria-pressed", fav ? "true" : "false");
   $("folderCancel").hidden = !(bar && bar.cancel);
   $("folderDone").hidden = !bar;
   if (bar) $("folderDone").textContent = bar.done;
@@ -328,11 +329,12 @@ function collectionIcon(list, size) {
 
 function bookHead(list, next, done) {
   const n = list.length, name = state.folder;
-  const renaming = folderMode === "rename";
+  const renaming = folderMode === "edit";
   let title;
   if (renaming) {
-    title = el("input", { class: "book-title-input", type: "text", value: name, "aria-label": "Collection name",
+    title = el("input", { class: "book-title-input", type: "text", value: folderDraft ?? name, "aria-label": "Collection name",
       maxlength: "32", enterkeyhint: "done", autocapitalize: "sentences", spellcheck: "false", dir: "auto" });
+    title.addEventListener("input", () => { folderDraft = title.value; });
     title.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); $("folderDone").click(); }
       else if (e.key === "Escape") { e.preventDefault(); setFolderMode(""); }
@@ -350,17 +352,19 @@ function bookHead(list, next, done) {
       title,
       el("p", { class: "meta folder-meta" }, meta),
       bar));
-  if (renaming) {
-    return [head, el("p", { class: "footnote book-note" }, n === 1 ? "Renames the collection on its clip." : "Renames the collection on all " + n + " of its clips.")];
-  }
+  if (renaming) return [head];
   const go = done === n ? "Read again from the start" : (next.at > 0.02 || done ? "Continue: " : "Start: ") + next.title;
-  const s = savedParts(list);
   return [head,
     el("button", { class: "btn-primary folder-go", type: "button", dir: "auto", onclick: () => openPage(done === n ? list[0].id : next.id) }, go),
     saveNewButton(list),
-    el("button", { class: "book-saved", type: "button", onclick: () => openMenu("saved") },
-      el("span", null, formatSize(s.total) + " · " + picturesAs(list) + " · "),
-      el("span", { class: "accent" }, "What's saved"))];
+    savedLine(list)];
+}
+function savedLine(list) {
+  const web = webClips(list);
+  const what = web.length === list.length ? picturesAs(list) : savedKindsLine(list);
+  return el("button", { class: "book-saved", type: "button", onclick: () => openMenu("saved") },
+    el("span", null, formatSize(sizeOf(list)) + " · " + what + " · "),
+    el("span", { class: "accent" }, "What's saved"));
 }
 
 // New chapters found by the daily check, saved from here: straight from
@@ -412,25 +416,30 @@ function renderFolder() {
   if (!picking && !folderMode) lookBack(list[0]);
   const next = folderNext(list);
   const done = list.filter((p) => p.finished).length;
-  const ordering = folderMode === "order";
+  const editing = folderMode === "edit";
+  const ordering = editing && list.length > 1;
   let top;
   if (folderMode === "chapters") top = [chaptersPanel(list)];
-  else if (folderMode === "cover") top = [coverPanel(list)];
   else if (folderMode === "export") top = [el("div", { class: "folder-actions export-panel" }, exportControls({ pages: list, title: state.folder }, () => setFolderMode("")))];
-  else if (ordering) {
-    top = [el("div", { class: "order-hint" },
-      el("p", { class: "meta" }, "Drag a chapter by its handle, or use the arrows."),
-      el("div", { class: "chips sort-chips", role: "group", "aria-label": "Sort by" },
-        el("span", { class: "meta" }, "Sort by"),
-        ...Object.entries(FOLDER_SORTS).map(([key, s]) =>
-          el("button", { class: "chip", type: "button", "data-sort": key, onclick: () => sortFolder(list, key) }, el("span", { class: "chip-label" }, s.label)))))];
+  // Edit: the name in place of the title, the cover's choices, then the
+  // chapters with what they keep, to put in order.
+  else if (editing) {
+    top = [el("div", { class: "folder-edit" }, ...bookHead(list, next, done),
+      sectionHead("Cover"), coverPanel(list),
+      sectionHead((isSeries(list) ? "Chapters" : "Clips") + " · " + list.length),
+      savedLine(list),
+      ordering ? el("div", { class: "order-hint" },
+        el("div", { class: "chips sort-chips", role: "group", "aria-label": "Sort by" },
+          el("span", { class: "meta" }, "Sort by"),
+          ...Object.entries(FOLDER_SORTS).map(([key, s]) =>
+            el("button", { class: "chip", type: "button", "data-sort": key, onclick: () => sortFolder(list, key) }, el("span", { class: "chip-label" }, s.label))))) : null)];
   // On a big screen the book's cover and facts stand beside its list.
   } else top = [el("div", { class: "book-side" }, ...bookHead(list, next, done))];
-  const showList = folderMode !== "export" && folderMode !== "cover";
-  const covers = showList && !ordering && folderLook(state.folder) === "covers";
+  const showList = folderMode !== "export";
+  const covers = showList && !editing && folderLook(state.folder) === "covers";
   fill($("folderBody"),
     ...top,
-    showList && !ordering ? sectionHead((isSeries(list) ? "Chapters" : "Clips") + " · " + list.length) : null,
+    showList && !editing ? sectionHead((isSeries(list) ? "Chapters" : "Clips") + " · " + list.length) : null,
     covers ? el("ol", { class: "folder-covers" }, ...list.map((p) => coverItem(p, p === next && done < list.length))) : null,
     showList && !covers ? el("ol", { class: "group folder-list" + (ordering ? " ordering" : "") },
       ...list.map((p, i) => el("li", folderMode ? { "data-id": p.id } : { "data-id": p.id, "data-ids": p.id },
@@ -440,11 +449,10 @@ function renderFolder() {
           el("span", { class: "chapter-n", "aria-hidden": "true" }, String(i + 1)),
           el("span", { class: "choice-text" },
             el("span", { class: "row-label", dir: "auto" }, p.title),
-            ordering ? null : el("span", { class: "choice-note" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, readingLine(p))),
+            editing ? el("span", { class: "choice-note" }, formatSize(p.bytes || 0))
+              : el("span", { class: "choice-note" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, readingLine(p))),
           ordering ? null : chapterMark(p)),
-        ordering ? moveButton(p, i, -1, list.length) : null,
-        ordering ? moveButton(p, i, 1, list.length) : null,
-        ordering ? dragHandle(p) : null))) : null);
+        ordering ? dragHandle(p, i, list.length) : null))) : null);
   paintFolderBar();
   paintPicks();
 }
@@ -490,21 +498,16 @@ function chapterMark(p) {
   return el("span", { class: "chapter-mark", "aria-hidden": "true" });
 }
 
-const CHEVRON = (d) => '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + d + '"/></svg>';
-const CHEVRON_UP = CHEVRON("M6 15l6-6 6 6"), CHEVRON_DOWN = CHEVRON("M6 9l6 6 6-6");
-
-function moveButton(p, i, step, n) {
-  const b = el("button", { class: "icon-btn move", type: "button", "data-step": String(step),
-    "aria-label": "Move " + p.title + (step < 0 ? " up" : " down"), onclick: () => movePage(p, step) });
-  b.innerHTML = step < 0 ? CHEVRON_UP : CHEVRON_DOWN;
-  b.disabled = step < 0 ? i === 0 : i === n - 1;
-  return b;
-}
-
-// Dragging is for fingers and mice; the arrows beside it do the same
-// from a keyboard or a screen reader, so the handle is hidden from them.
-function dragHandle(p) {
-  const h = el("span", { class: "drag-handle", "aria-hidden": "true" });
+// The handle is dragged by a finger or a mouse; from a keyboard or a
+// screen reader its arrow keys move the chapter (Daniel 2026-11-13: no
+// arrow buttons beside it).
+function dragHandle(p, i, n) {
+  const h = el("button", { class: "drag-handle", type: "button", "aria-keyshortcuts": "ArrowUp ArrowDown",
+    "aria-label": "Move " + p.title + ", " + (i + 1) + " of " + n + ". Use the up and down arrow keys." });
+  h.addEventListener("keydown", (e) => {
+    const step = { ArrowUp: -1, ArrowDown: 1 }[e.key];
+    if (step) { e.preventDefault(); movePage(p, step); }
+  });
   h.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h16M4 12h16M4 16h16"/></svg>';
   h.addEventListener("pointerdown", (e) => dragRow(e, h, p));
   return h;
@@ -572,10 +575,8 @@ async function moveInFolder(p, to) {
 async function movePage(p, step) {
   const list = folderPages(p.folder);
   if (!(await moveInFolder(p, list.indexOf(p) + step))) return;
-  const row = $("folderBody").querySelector('li[data-id="' + p.id + '"]');
-  const again = row && row.querySelector('.move[data-step="' + step + '"]');
-  const focus = again && !again.disabled ? again : row && row.querySelector(".move:not(:disabled)");
-  if (focus) focus.focus();
+  const handle = $("folderBody").querySelector('li[data-id="' + p.id + '"] .drag-handle');
+  if (handle) handle.focus();
 }
 
 // Royal Road numbers its chapters as it puts them out, so a chapter's
@@ -645,19 +646,14 @@ function openFolderMenu() {
   };
   const sep = () => el("div", { class: "pop-sep", role: "separator" });
   const pop = el("div", { class: "pop-menu", id: "folderPop", role: "menu", "aria-label": "Collection" },
-    item("saved", "What's saved", () => openMenu("saved"), { note: formatSize(sizeOf(list)) }),
     item("book", "Story page", () => setFolderMode("chapters"), fresh ? { note: newCountText(fresh), accent: true } : {}),
     item("add", "Add clips", () => openBatch("", false, state.folder)),
     sep(),
-    item("rename", "Rename", () => setFolderMode("rename")),
-    item("cover", "Cover", () => setFolderMode("cover")),
-    item("reorder", "Reorder", () => setFolderMode("order"), { disabled: list.length < 2 }),
     folderLook(state.folder) === "covers"
       ? item("chapters", "Show as a list", () => setFolderLook(state.folder, "list"))
       : item("grid", "Show as covers", () => setFolderLook(state.folder, "covers")),
     item("select", "Select", () => startSelect([])),
     item("send", "Export", () => setFolderMode("export")),
-    item("star", folderFav(state.folder) ? "Unfavourite" : "Favourite", () => favFolder(state.folder, !folderFav(state.folder))),
     sep(),
     item("remove", "Remove", () => openMenu("remove"), { warn: true }));
   const more = $("folderMore"), at = more.getBoundingClientRect();
@@ -714,13 +710,18 @@ function coverPanel(list) {
     return i;
   };
   const autoUrl = shownCover(list.map((p) => ({ ...p, coverPick: undefined })));
-  const own = C.backup.COVER_FILE.test(pick) ? C.store.coverUrl(pick) : null;
+  const mixed = MOSAIC_FILE.test(pick);
+  const own = C.backup.COVER_FILE.test(pick) && !mixed ? C.store.coverUrl(pick) : null;
   const plus = svgIcon("add", 28);
   const clips = list.filter((p) => thumbUrl(p));
+  const tiles = clips.slice(0, 4);
   return el("div", { class: "folder-actions cover-panel" }, input,
     el("div", { class: "cover-grid" },
       choice("Automatic", !pick, autoUrl ? img(autoUrl) : collectionIcon(list, 28), () => setCoverPick(state.folder, ""), "Automatic"),
       choice(own ? "Your picture, choose another" : "Choose a picture of your own", !!own, own ? img(own) : plus, () => input.click(), "Your picture"),
+      tiles.length > 1 ? choice("Mosaic of the first " + tiles.length + " pictures", mixed,
+        mixed ? img(C.store.coverUrl(pick)) : el("span", { class: "cover-mosaic n" + tiles.length }, ...tiles.map((p) => img(thumbUrl(p)))),
+        () => coverMosaic(state.folder), "Mosaic") : null,
       ...clips.map((p) => choice(p.title, pick === "clip:" + p.id, img(thumbUrl(p)), () => setCoverPick(state.folder, "clip:" + p.id)))));
 }
 
@@ -732,6 +733,43 @@ async function setCoverPick(name, pick) {
   if (was && was !== pick && C.backup.COVER_FILE.test(was) && !state.pages.some((p) => p.coverPick === was)) C.store.removeCover(was).catch(() => {});
   if (state.folder && sameTag(state.folder, name)) renderFolder();
   renderLibrary();
+}
+
+// A mosaic: the first two to four pictures in the collection, drawn
+// into one picture of your own, so it syncs and backs up like one. Its
+// name starts "ux" (own pictures start with a time, "um" for decades).
+// Picking it again draws it again from what's there now.
+const MOSAIC_FILE = /^ux[a-z0-9]+\.jpg$/;
+async function coverMosaic(name) {
+  const srcs = folderPages(name).map(thumbUrl).filter(Boolean).slice(0, 4);
+  const pics = (await Promise.all(srcs.map(async (url) => {
+    try {
+      const here = url.startsWith("data:") || new URL(url, location.href).origin === location.origin;
+      const blob = here ? await (await fetch(url)).blob() : navigator.onLine ? (await C.platform.fetchBytes(url, "cover")).blob : null;
+      return blob ? await createImageBitmap(blob) : null;
+    } catch (e) { return null; }
+  }))).filter(Boolean);
+  if (pics.length < 2) { toast("Couldn't read enough of its pictures for a mosaic."); return; }
+  const W = 480, H = 720;
+  // Two stack; three put one across the top; four make a two-by-two.
+  const spots = { 2: [[0, 0, W, H / 2], [0, H / 2, W, H / 2]],
+    3: [[0, 0, W, H / 2], [0, H / 2, W / 2, H / 2], [W / 2, H / 2, W / 2, H / 2]],
+    4: [[0, 0, W / 2, H / 2], [W / 2, 0, W / 2, H / 2], [0, H / 2, W / 2, H / 2], [W / 2, H / 2, W / 2, H / 2]] }[pics.length];
+  const canvas = el("canvas", { width: String(W), height: String(H) });
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingQuality = "high";
+  pics.forEach((pic, i) => {
+    const [x, y, w, h] = spots[i];
+    const k = Math.max(w / pic.width, h / pic.height);
+    const sw = w / k, sh = h / k;
+    ctx.drawImage(pic, (pic.width - sw) / 2, (pic.height - sh) / 2, sw, sh, x, y, w, h);
+    pic.close();
+  });
+  const blob = await new Promise((done) => canvas.toBlob(done, "image/jpeg", 0.85));
+  if (!blob) { toast("Couldn't make the mosaic. Try again."); return; }
+  const kept = "ux" + C.save.newId() + ".jpg";
+  await C.store.writeCover(kept, new Uint8Array(await blob.arrayBuffer()), "image/jpeg");
+  await setCoverPick(name, kept);
 }
 
 // A picture of your own, drawn no bigger than a cover is shown (480 by
@@ -803,11 +841,38 @@ function savedNote(p) {
     s.missing ? s.missing + " missing" : null].filter(Boolean).join(" · ") || "Text only";
 }
 
+// What else a collection keeps besides clips saved from the web: their
+// pictures and text are split out, everything else is counted by kind
+// (Daniel 2026-11-13: a book's pictures aren't "pictures as previews").
+const SAVED_KINDS = [
+  ["copy", "Copied from files"],
+  ["linked", "Files read from their folder"],
+  ["audio", "Audiobooks"],
+  ["note", "Notes"],
+];
+const savedKind = (p) => (p.note ? "note" : isAudiobook(p) ? "audio" : p.file ? (p.link ? "linked" : "copy") : "web");
+const webClips = (list) => list.filter((p) => savedKind(p) === "web");
+// "2 clips, 2 files, 1 audiobook": here a copy made from a file is a file.
+function savedKindsLine(list) {
+  const n = { web: 0, file: 0, audio: 0, note: 0 };
+  for (const p of list) { const k = savedKind(p); n[k === "copy" || k === "linked" ? "file" : k]++; }
+  return [["web", "clip", "clips"], ["file", "file", "files"], ["audio", "audiobook", "audiobooks"], ["note", "note", "notes"]]
+    .filter(([k]) => n[k]).map(([k, one, many]) => n[k] + " " + (n[k] === 1 ? one : many)).join(", ");
+}
+
 function savedView(list) {
-  const s = savedParts(list);
+  const web = webClips(list);
+  const others = SAVED_KINDS.map(([k, label]) => {
+    const of = list.filter((p) => savedKind(p) === k);
+    return { k, label, n: of.length, bytes: sizeOf(of) };
+  }).filter((o) => o.n);
+  const s = savedParts(web);
+  const otherBytes = others.reduce((sum, o) => sum + o.bytes, 0);
+  const total = s.total + otherBytes;
+  const mixed = others.length > 0;
   const kept = s.previews + s.full;
   const what = s.previews && s.full ? "previews and full size" : s.full ? "full size" : "previews";
-  const share = (b) => (s.total ? Math.max(b ? 2 : 0, Math.round(b / s.total * 100)) : 0);
+  const share = (b) => (total ? Math.max(b ? 2 : 0, Math.round(b / total * 100)) : 0);
   const legend = (cls, label, value) => el("div", { class: "saved-row" },
     el("span", { class: "saved-key " + cls, "aria-hidden": "true" }),
     el("span", { class: "saved-label" + (cls === "missing" ? " warn" : "") }, label),
@@ -816,16 +881,20 @@ function savedView(list) {
   return el("div", { class: "saved-view" },
     el("div", { class: "saved-head" },
       el("span", { class: "saved-title" }, "What's saved"),
-      el("span", { class: "saved-value" }, formatSize(s.total))),
+      el("span", { class: "saved-value" }, formatSize(total))),
     s.known && s.total ? el("div", { class: "saved-bar", "aria-hidden": "true" },
       el("span", { class: "pics", style: "width: " + share(s.pictures) + "%" }),
-      el("span", { class: "text", style: "width: " + share(s.text) + "%" })) : null,
-    kept ? legend("pics", "Pictures, " + what + " · " + kept, s.known ? formatSize(s.pictures) : "") : null,
-    legend("text", "Text", s.known ? formatSize(s.text) : ""),
-    s.links ? legend("links", "Pictures as links · " + s.links + ", need a connection", "") : null,
+      el("span", { class: "text", style: "width: " + share(s.text) + "%" }),
+      otherBytes ? el("span", { class: "other", style: "width: " + share(otherBytes) + "%" }) : null) : null,
+    kept ? legend("pics", (mixed ? "Clips' pictures, " : "Pictures, ") + what + " · " + kept, s.known ? formatSize(s.pictures) : "") : null,
+    web.length ? legend("text", mixed ? "Clips' text · " + web.length : "Text", s.known ? formatSize(s.text) : "") : null,
+    s.links ? legend("links", (mixed ? "Clips' pictures as links · " : "Pictures as links · ") + s.links + ", need a connection", "") : null,
     s.missing ? legend("missing", s.missing + (s.missing === 1 ? " preview" : " previews") + " missing, shown online", "") : null,
+    ...others.map((o) => legend("other", o.label + " · " + o.n, formatSize(o.bytes))),
+    others.some((o) => o.k === "linked" || o.k === "audio")
+      ? el("p", { class: "footnote" }, "Files read from their folder and audiobooks stay in that folder. Only their text, cover and your place are kept here.") : null,
     !s.known ? el("p", { class: "footnote" }, C.platform.native ? "Measuring the pictures…" : "Picture sizes show for clips saved from 0.27.11 on.")
-      : lean ? el("p", { class: "footnote" }, "Most of it is pictures. Save again with Links to keep only the text, about " + formatSize(s.text) + ".") : null);
+      : lean ? el("p", { class: "footnote" }, (mixed ? "The clips are mostly pictures. Save them again" : "Most of it is pictures. Save again") + " with Links to keep only the text, about " + formatSize(s.text) + ".") : null);
 }
 
 // Pages saved before 0.27.11 have their pictures measured from their
@@ -854,7 +923,8 @@ async function measureSizes(list, then) {
 // again with pictures another way.
 function savedSheet() {
   const name = state.folder;
-  const list = folderPages(name);
+  const all = folderPages(name);
+  const list = webClips(all).filter((p) => /^https?:/.test(p.url || ""));
   const n = list.length;
   let mode = load(IMAGES_KEY, "previews");
   const s = savedParts(list);
@@ -865,10 +935,13 @@ function savedSheet() {
   paintNote();
   const go = el("button", { class: "btn-primary refresh-go", type: "button", onclick: () => back().then(() => refreshFolder(name, mode, go)) },
     "Save " + n + " " + chapterWord(list, n) + " again");
-  go.disabled = !list.some((p) => /^https?:/.test(p.url || "")) || !!runFor(name);
-  measureSizes(list, () => { if (state.menu && state.menu.kind === "saved") redrawMenu(); if (state.folder) renderFolder(); });
+  go.disabled = !!runFor(name);
+  measureSizes(all, () => { if (state.menu && state.menu.kind === "saved") redrawMenu(); if (state.folder) renderFolder(); });
+  // Saving again is for clips from the web; a collection of files only
+  // shows what it keeps.
+  if (!n) return el("div", { class: "page-controls saved-sheet" }, savedView(all));
   return el("div", { class: "page-controls saved-sheet" },
-    savedView(list),
+    savedView(all),
     C.platform.native ? el("h2", { class: "overline" }, "Save again with pictures as") : el("h2", { class: "overline" }, "Save again"),
     C.platform.native ? seg("refresh-images", "Pictures", [
       { value: "previews", label: "Previews" }, { value: "full", label: "Full" }, { value: "links", label: "Links" },
@@ -1541,7 +1614,7 @@ function longPress(root) {
     fired = false;
     mouse = e.pointerType === "mouse";
     const node = e.button === 0 && e.target.closest("[data-ids]");
-    if (!node || e.target.closest(".card-retry, .move")) return;
+    if (!node || e.target.closest(".card-retry, .drag-handle")) return;
     start = { x: e.clientX, y: e.clientY };
     cancel();
     timer = setTimeout(() => {
