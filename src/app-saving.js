@@ -74,6 +74,7 @@ async function syncNow(quiet = true) {
         renderLibrary();
         if (state.folder) renderFolder();
         updateWidgets();
+        noteCoversSoon();
       },
       getFeeds: () => feeds,
       setFeeds: syncedFeeds,

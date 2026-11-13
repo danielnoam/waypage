@@ -2665,6 +2665,7 @@ async function makeNote(kind) {
   await C.store.writeIndex(state.pages);
   await back(state.batch ? 2 : 1);
   renderLibrary();
+  noteCoversSoon();
   openPage(meta.id);
 }
 
@@ -2683,6 +2684,7 @@ async function noteFromFile(file, open) {
   state.pages.unshift(meta);
   await C.store.writeIndex(state.pages);
   renderLibrary();
+  noteCoversSoon();
   if (open) openPage(meta.id);
 }
 // A note made from any file (2026-11): a PDF's own pages, a comic's
@@ -2712,6 +2714,7 @@ async function makeNoteFrom(p) {
   state.pages.unshift(meta);
   await C.store.writeIndex(state.pages);
   renderLibrary();
+  noteCoversSoon();
   if (state.open) await goTo(meta, true);
   else openPage(meta.id);
 }

@@ -656,6 +656,12 @@ adds a line here.
 Things that broke once and would again. Check here before touching the
 area.
 
+- A note's card picture is always `images/cover.jpg`, so its address
+  carries `thumbAt` (this device's own, never synced), stamped after the
+  picture is written. Stamping `editedAt` instead showed the old picture:
+  the redraw lands after the library has already rendered that address.
+  Covers are drawn without opening the note (`noteCoverOf`, queued by
+  `noteCoversSoon`) for new, synced-in and edited notes.
 - Android Auto hides media apps not installed from the Play Store: a
   sideloaded APK needs Android Auto's developer settings › Unknown
   sources. The framework MediaBrowserService has no `onSearch`, so the

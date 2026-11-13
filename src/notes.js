@@ -128,8 +128,8 @@
     return { blob: C.pptx.writePdf(pages), name: pdfName(meta), sheets: last };
   }
   // A note's card picture (2026-11): its first sheet as it is now, drawn on.
-  async function cover(handle, strokes) {
-    const { c } = await sheetCanvas(handle, 1, 360, strokes || []);
+  async function cover(handle, strokes, images) {
+    const { c } = await sheetCanvas(handle, 1, 360, strokes || [], images);
     return jpeg(c, 0.8);
   }
 

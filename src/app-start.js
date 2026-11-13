@@ -339,6 +339,7 @@ Promise.all([C.platform.ready, firstIndex]).then(([, [pages]]) => {
   takeWidget();
   C.platform.widgets.onOpen(takeWidget);
   updateWidgets();
+  noteCoversSoon();
   C.store.onIndex = () => { unsynced = true; syncSoon(); };
   takeSetupLink();
   takeSend();

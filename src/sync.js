@@ -34,7 +34,7 @@
 
   // Fields that are this device's own: its pictures, their sizes, and a
   // collection's cover (each device finds its own).
-  const DEVICE = ["thumb", "bytes", "imageBytes", "missing", "cover", "coverFrom"];
+  const DEVICE = ["thumb", "thumbAt", "bytes", "imageBytes", "missing", "cover", "coverFrom"];
   // Fields that come with the page's text, so the copy saved last wins
   // them all together.
   const CONTENT = ["url", "title", "site", "byline", "licence", "savedAt", "minutes", "lang", "dir", "mode", "images",
