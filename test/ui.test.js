@@ -977,7 +977,7 @@ function zipOf(files) {
       await q.context().close();
     });
 
-    await test("the sidebar shows the favourites, then Collections and Clips (1.14.0)", async () => {
+    await test("the sidebar shows the favourites, Favourites, then Collections and Clips (1.14.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
         const c = (i, more) => ({ id: "fv" + i, url: "https://example.com/fv" + i, title: "Clip " + i, site: "example.com", savedAt: 1000 + i, minutes: 3, mode: "links", at: 0, finished: false, ...more });
@@ -992,7 +992,7 @@ function zipOf(files) {
       await q.locator(".page-card").first().waitFor();
       await q.click("#sideBtn");
       const labels = await q.locator("#sidebar .side-item .side-label").allTextContents();
-      assert.deepStrictEqual(labels.slice(0, 5), ["Library", "Trips", "Clip 3", "Collections", "Clips"], labels.join(", "));
+      assert.deepStrictEqual(labels.slice(0, 6), ["Library", "Trips", "Clip 3", "Favourites", "Collections", "Clips"], labels.join(", "));
       assert.ok(!labels.includes("Unloved") && !labels.includes("Files"), labels.join(", "));
       assert.strictEqual(await q.locator("#sidebar > .side-version").last().textContent(), "Version " + await q.evaluate(() => APP_VERSION), "the sidebar ends with the app version");
       await q.locator("#sidebar .side-item", { hasText: "Collections" }).click();
@@ -1003,6 +1003,15 @@ function zipOf(files) {
       await q.click("#sideBtn");
       await q.locator("#sidebar .side-item", { hasText: "Library" }).click();
       await until(q, () => !state.part && !state.side && !(history.state && history.state.view));
+      // Favourites from inside Collections: the library's favourites filter.
+      await q.waitForTimeout(400);
+      await q.evaluate(() => openPart("collections"));
+      await q.waitForTimeout(400);
+      await q.click("#sideBtn");
+      await q.locator("#sidebar .side-item", { hasText: "Favourites" }).click();
+      await until(q, () => state.filter === "favourites" && !state.part && !state.side && !(history.state && history.state.view));
+      await q.click("#sideBtn");
+      assert.strictEqual(await q.locator("#sidebar .side-item[aria-current]", { hasText: "Favourites" }).count(), 1, "Favourites isn't marked as open");
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });
@@ -1455,7 +1464,12 @@ function zipOf(files) {
       await q.keyboard.press("Escape");
       await q.click("#folderFav");
       await until(q, () => folderFav("Serial") && document.getElementById("folderFav").getAttribute("aria-pressed") === "true");
+      // Each clip has its own star, which keeps focus once drawn again.
+      await q.locator('#folderBody li[data-id="rr500"] .item-fav').click();
+      await until(q, () => state.pages.find((p) => p.id === "rr500").fav && document.activeElement.matches('li[data-id="rr500"] .item-fav[aria-pressed="true"]'));
+      assert.ok(!(await q.evaluate(() => state.pages.find((p) => p.id === "rr100").fav)));
       await q.click("#folderEdit");
+      assert.strictEqual(await q.locator("#folderBody .item-fav").count(), 0);
       // A name typed in Edit stays while the order changes under it.
       await q.fill("#folderBody .book-title-input", "Serial two");
       const order = () => q.evaluate(() => folderPages("Serial").map((p) => p.id).join());
@@ -1500,6 +1514,8 @@ function zipOf(files) {
       await q.evaluate(() => { setFolderMode(""); setFolderLook("Serial", "covers"); });
       assert.strictEqual(await q.locator("#folderBody .folder-covers .cover-item").count(), 3);
       assert.strictEqual(await q.locator("#folderBody .folder-list").count(), 0);
+      await q.locator('#folderBody .folder-covers li[data-id="rr500"] .item-fav').click();
+      await until(q, () => !state.pages.find((p) => p.id === "rr500").fav);
       // Opening a serial looks for its next chapter, which has nowhere to go here.
       const errors = q.errors.filter((e) => !/workers\.dev/.test(e));
       assert.deepStrictEqual(errors, [], errors.join(" | "));

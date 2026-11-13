@@ -407,10 +407,11 @@ function saveNewButton(list) {
 }
 
 function renderFolder() {
-  // A handle with focus keeps it through a draw again (a cover drawn
-  // late redraws the list after a move by keys).
-  const had = document.activeElement && document.activeElement.matches && document.activeElement.matches("#folderBody .drag-handle")
-    ? document.activeElement.closest("li").dataset.id : null;
+  // A handle or star with focus keeps it through a draw again (a cover
+  // drawn late redraws the list after a move by keys).
+  const a = document.activeElement;
+  const had = a && a.matches && a.matches("#folderBody .drag-handle, #folderBody .item-fav")
+    ? '[data-id="' + a.closest("li").dataset.id + '"] .' + a.classList[a.classList.length - 1] : null;
   const list = folderPages(state.folder);
   if (!list.length) {
     folderMode = "";
@@ -459,11 +460,21 @@ function renderFolder() {
             editing ? el("span", { class: "choice-note" }, formatSize(p.bytes || 0))
               : el("span", { class: "choice-note" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, readingLine(p))),
           ordering ? null : chapterMark(p)),
-        ordering ? dragHandle(p, i, list.length) : null))) : null);
+        ordering ? dragHandle(p, i, list.length) : editing ? null : itemFav(p)))) : null);
   paintFolderBar();
   paintPicks();
-  const again = had && $("folderBody").querySelector('li[data-id="' + had + '"] .drag-handle');
-  if (again) again.focus();
+  const again = had && $("folderBody").querySelector("li" + had);
+  if (again) again.focus({ preventScroll: true });
+}
+
+// A star on each clip in a collection (Daniel 2026-11-13), the same as
+// Favourite in its sheet.
+function itemFav(p) {
+  const b = el("button", { class: "icon-btn item-fav", type: "button", "aria-label": "Favourite " + p.title,
+    "aria-pressed": p.fav ? "true" : "false",
+    onclick: () => setFavourite([p], !p.fav) });
+  b.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS.star + "</svg>";
+  return b;
 }
 
 // How a collection shows what's in it, kept on this device: a list of
@@ -493,7 +504,8 @@ function coverItem(p, now) {
       pickMark(),
       el("span", { class: "tile-thumb" + (src ? "" : " blank") }, src ? el("img", { src, alt: "", loading: "lazy" }) : siteMark(p)),
       el("span", { class: "tile-name", dir: "auto" }, p.title),
-      el("span", { class: "tile-meta" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, readingLine(p))));
+      el("span", { class: "tile-meta" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, readingLine(p))),
+    itemFav(p));
 }
 
 // A tick once read, a filling ring part way.
@@ -1654,7 +1666,7 @@ function longPress(root) {
     fired = false;
     mouse = e.pointerType === "mouse";
     const node = e.button === 0 && e.target.closest("[data-ids]");
-    if (!node || e.target.closest(".card-retry, .drag-handle")) return;
+    if (!node || e.target.closest(".card-retry, .drag-handle, .item-fav")) return;
     start = { x: e.clientX, y: e.clientY };
     cancel();
     timer = setTimeout(() => {
