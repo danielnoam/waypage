@@ -19,7 +19,7 @@ const file = (id, ext, more) => ({ id, url: "", title: "File " + id, byline: "An
   file: { name: id + "." + ext, kind: ext, ext, size: 10 }, ...more });
 
 const library = [
-  file("book1", "epub", { at: 0.62, folder: "Shelf" }),
+  file("book1", "epub", { at: 0.62, folder: "Shelf", minutes: 600 }),
   file("pdf1", "pdf", { at: 0.5 }),
   file("pdf2", "pdf", { at: 0.5, noShare: true }),
   file("pdf3", "pdf", { at: 0.5, folder: "Papers" }),
@@ -29,9 +29,9 @@ const library = [
     audio: { parts: [{}], chapters: [{ t: 0 }, { t: 600 }, { t: 1200 }], dur: 1800 }, listen: { t: 900, tAt: 1 } },
   web("art1", { at: 0.9 }),
   web("art2", { at: 0.01 }),
-  web("ch1", { folder: "Story", source: "https://example.com/story", finished: true, byline: "Writer" }),
-  web("ch2", { folder: "Story", finished: true }),
-  web("ch3", { folder: "Story" }),
+  web("ch1", { folder: "Story", source: "https://example.com/story", finished: true, byline: "Writer", minutes: 4 }),
+  web("ch2", { folder: "Story", finished: true, minutes: 4 }),
+  web("ch3", { folder: "Story", minutes: 4 }),
   web("note1", { url: "", note: { paper: "blank" } }),
   web("away1", { at: 0.9, noShare: true }),
   web("away2", { at: 0.9, folder: "Private", folderNoShare: true }),
@@ -40,6 +40,8 @@ const library = [
 ];
 const totals = {
   days: {
+    // Past 90 days: in the totals, without its items.
+    "2026-07-01": { readMs: 5 * 60000, paceMs: 5 * 60000, aloudMs: 0, clips: { ch2: 5 * 60000 } },
     "2026-11-08": { readMs: 30 * 60000, paceMs: 30 * 60000, aloudMs: 0, clips: { book1: 30 * 60000 } },
     "2026-11-12": { readMs: 50 * 60000, paceMs: 34 * 60000, aloudMs: 20 * 60000, clips: { aud1: 20 * 60000, ch1: 30 * 60000 } },
     "2026-11-13": { readMs: 0, aloudMs: 0, clips: {} },
@@ -54,19 +56,23 @@ const totals = {
 };
 
 test("a fixture library makes the expected file", () => {
-  const doc = A.build(library, totals, { now: Date.UTC(2026, 10, 13, 9) });
+  const doc = A.build(library, totals, { now: Date.UTC(2026, 10, 13, 9), timeZone: "Asia/Jerusalem" });
   assert.deepStrictEqual(doc, {
-    schema: 1, app: "waypage", updatedAt: "2026-11-13T09:00:00Z",
+    schema: 1, app: "waypage", updatedAt: "2026-11-13T09:00:00Z", timeZone: "Asia/Jerusalem",
     items: [
-      { id: "book1", kind: "book", title: "File book1", author: "An Author", collection: "Shelf", progress: 0.62, startedAt: "2026-11-08", finishedAt: null, minutes: 412 },
-      { id: "cbz1", kind: "comic", title: "File cbz1", author: "An Author", collection: "", progress: 1, startedAt: null, finishedAt: "2026-11-10", minutes: 15 },
-      { id: "comic1", kind: "comic", title: "Clip comic1", author: "", collection: "", progress: 0.3, startedAt: null, finishedAt: null, minutes: 0 },
-      { id: "f" + FP, kind: "audiobook", title: "File aud1", author: "A Reader", collection: "", progress: 0.5, chapters: { read: 1, total: 3 }, startedAt: "2026-11-12", finishedAt: null, minutes: 20 },
-      { id: "pdf1", kind: "book", title: "File pdf1", author: "An Author", collection: "", progress: 0.5, startedAt: null, finishedAt: null, minutes: 0 },
-      { id: "pdf3", kind: "book", title: "File pdf3", author: "An Author", collection: "Papers", progress: 0.5, startedAt: null, finishedAt: null, minutes: 0 },
-      { id: doc.items[6].id, kind: "serial", title: "Story", author: "Writer", collection: "Story", progress: 0.67, chapters: { read: 2, total: 3 }, startedAt: "2026-11-12", finishedAt: null, minutes: 50 },
+      { id: "book1", kind: "book", title: "File book1", author: "An Author", collection: "Shelf", progress: 0.62, startedAt: "2026-11-08", finishedAt: null, minutes: 412, lastReadAt: "2026-11-08", lengthMinutes: 600 },
+      { id: "cbz1", kind: "comic", title: "File cbz1", author: "An Author", collection: "", progress: 1, startedAt: null, finishedAt: "2026-11-10", minutes: 15, lastReadAt: null, lengthMinutes: null },
+      { id: "comic1", kind: "comic", title: "Clip comic1", author: "", collection: "", progress: 0.3, startedAt: null, finishedAt: null, minutes: 0, lastReadAt: null, lengthMinutes: null },
+      { id: "f" + FP, kind: "audiobook", title: "File aud1", author: "A Reader", collection: "", progress: 0.5, chapters: { read: 1, total: 3 }, startedAt: "2026-11-12", finishedAt: null, minutes: 20, lastReadAt: "2026-11-12", lengthMinutes: 30 },
+      { id: "pdf1", kind: "book", title: "File pdf1", author: "An Author", collection: "", progress: 0.5, startedAt: null, finishedAt: null, minutes: 0, lastReadAt: null, lengthMinutes: null },
+      { id: "pdf3", kind: "book", title: "File pdf3", author: "An Author", collection: "Papers", progress: 0.5, startedAt: null, finishedAt: null, minutes: 0, lastReadAt: null, lengthMinutes: null },
+      { id: doc.items[6].id, kind: "serial", title: "Story", author: "Writer", collection: "Story", progress: 0.67, chapters: { read: 2, total: 3 }, startedAt: "2026-07-01", finishedAt: null, minutes: 50, lastReadAt: "2026-11-12", lengthMinutes: 12 },
     ],
-    days: { "2026-11-08": { read: 30, listened: 0 }, "2026-11-12": { read: 34, listened: 20 } },
+    days: {
+      "2026-07-01": { read: 5, listened: 0 },
+      "2026-11-08": { read: 30, listened: 0, items: { book1: 30 } },
+      "2026-11-12": { read: 34, listened: 20, items: { ["f" + FP]: 20, [doc.items[6].id]: 30 } },
+    },
   });
   assert.ok(/^s[0-9a-z]+$/.test(doc.items[6].id));
 });

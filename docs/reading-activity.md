@@ -19,6 +19,7 @@ fields they don't know.
   "schema": 1,
   "app": "waypage",
   "updatedAt": "2026-11-13T09:00:00Z",
+  "timeZone": "Asia/Jerusalem",
   "items": [
     {
       "id": "k3j9x2m1q8wa",
@@ -30,10 +31,12 @@ fields they don't know.
       "chapters": { "read": 31, "total": 40 },
       "startedAt": "2026-11-08",
       "finishedAt": null,
-      "minutes": 412
+      "minutes": 412,
+      "lastReadAt": "2026-11-12",
+      "lengthMinutes": 520
     }
   ],
-  "days": { "2026-11-12": { "read": 34, "listened": 20 } }
+  "days": { "2026-11-12": { "read": 34, "listened": 20, "items": { "k3j9x2m1q8wa": 34 } } }
 }
 ```
 
@@ -42,6 +45,7 @@ fields they don't know.
 | `schema` | 1. Goes up only when a field is removed. |
 | `app` | Always `"waypage"`. |
 | `updatedAt` | When this copy was written, UTC, to the second. |
+| `timeZone` | The IANA time zone of the device that wrote it (`"Europe/London"`), which the dates and `days` are local to. `""` when unknown. |
 | `items[].id` | Stable across devices and syncs. A clip's id; `f` and a 32-hex fingerprint for a file read from outside (each device has its own clip id for it); `s` and a short hash of the story's page for a serial. |
 | `items[].kind` | `book`, `audiobook`, `comic`, `serial` or `article`. New kinds may be added. |
 | `items[].title` | As named in the library. |
@@ -52,7 +56,10 @@ fields they don't know.
 | `items[].startedAt` | The first day with time in it (`YYYY-MM-DD`, the device's local day), or null when unknown. |
 | `items[].finishedAt` | The day it was finished, else null. A serial's is set when every saved chapter is finished, and goes back to null when a new one comes. |
 | `items[].minutes` | Time spent in it, from every device. |
+| `items[].lastReadAt` | The last day with time in it, or null when unknown. |
+| `items[].lengthMinutes` | How long it is: an audiobook's running time, else Waypage's reading-time estimate (a serial's chapters added up). Null when unknown. |
 | `days` | Minutes a day from every device (local days). `read` is reading by eye; `listened` is audiobooks and Narrate. They don't overlap. Days with neither are left out. |
+| `days[].items` | For the last 90 days only: minutes by listed item id, reading and listening together. Left out on a day with none. |
 
 `days` covers everything read in Waypage, not only the listed items.
 

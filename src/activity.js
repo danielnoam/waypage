@@ -20,6 +20,8 @@
   const BOOK_EXTS = new Set(["epub", "mobi", "azw3", "fb2", "pdf"]);
   // Opened to look at isn't reading: listed from 10 minutes or 5% in.
   const MIN_MS = 10 * 60000, MIN_PART = 0.05;
+  // Minutes by item go on the days of the last this many.
+  const ITEM_DAYS = 90;
   const FP = /^[0-9a-f]{32}$/;
 
   const dayKey = (t) => {
@@ -66,9 +68,12 @@
     const kinds = { ...DEFAULT_KINDS, ...(opts.kinds || {}) };
     const days = (totals && totals.days) || {};
     const clips = (totals && totals.clips) || {};
-    // The first day each clip had any time: when it was started.
-    const first = {};
-    for (const k of Object.keys(days).sort()) for (const [id, ms] of Object.entries(days[k].clips || {})) if (ms > 0 && !first[id]) first[id] = k;
+    // The first and last day each clip had any time: when it was started
+    // and last read.
+    const first = {}, last = {};
+    for (const k of Object.keys(days).sort()) for (const [id, ms] of Object.entries(days[k].clips || {})) if (ms > 0) { if (!first[id]) first[id] = k; last[id] = k; }
+    // Which item each clip's time belongs to.
+    const itemOf = {};
 
     const byFolder = new Map();
     for (const p of pages) if (p.folder) {
@@ -76,7 +81,6 @@
       if (!byFolder.has(k)) byFolder.set(k, []);
       byFolder.get(k).push(p);
     }
-    const folderOf = (p) => (p.folder ? byFolder.get(p.folder.toLocaleLowerCase()) : null);
     const marks = new Map();
     for (const [k, list] of byFolder) marks.set(k, {
       off: list.some((p) => p.folderNoShare),
@@ -104,6 +108,10 @@
       item.startedAt = first[p.id] || (t && t.last ? dayKey(t.last) : null);
       item.finishedAt = p.finished ? finishedDay(p, t) : null;
       item.minutes = mins(ms);
+      item.lastReadAt = last[p.id] || (t && t.last ? dayKey(t.last) : null);
+      // How long it is: an audiobook's time, else Waypage's estimate.
+      item.lengthMinutes = Math.round(audiobook(p) && p.audio.dur ? p.audio.dur / 60 : p.minutes || 0) || null;
+      itemOf[p.id] = item.id;
       items.push(item);
     }
 
@@ -113,35 +121,49 @@
       const chapters = list.filter((p) => !p.file && !p.note && !p.preview && !p.noShare);
       if (!chapters.length) continue;
       const read = chapters.filter((p) => p.finished).length;
-      let ms = 0, start = null, done = 0;
+      let ms = 0, start = null, done = 0, end = null, length = 0;
       for (const p of chapters) {
         const t = clips[p.id];
         ms += msOf(t);
-        const s = first[p.id];
+        length += p.minutes || 0;
+        const s = first[p.id], e = last[p.id];
         if (s && (!start || s < start)) start = s;
+        if (e && (!end || e > end)) end = e;
         if (p.finished) done = Math.max(done, (t && t.finished) || p.readAt || 0);
       }
       const part = read / chapters.length;
       if (ms < MIN_MS && part < MIN_PART) continue;
       const by = chapters.find((p) => p.byline);
+      const id = "s" + hash(m.source);
+      for (const p of chapters) itemOf[p.id] = id;
       items.push({
-        id: "s" + hash(m.source), kind: "serial", title: list[0].folder, author: by ? by.byline : "", collection: list[0].folder,
+        id, kind: "serial", title: list[0].folder, author: by ? by.byline : "", collection: list[0].folder,
         progress: round2(part), chapters: { read, total: chapters.length },
         startedAt: start, finishedAt: read === chapters.length ? (done ? dayKey(done) : null) : null, minutes: mins(ms),
+        lastReadAt: end, lengthMinutes: Math.round(length) || null,
       });
     }
 
     // Minutes a day, reading and listening apart. Reading is by eye
     // (paceMs, not while anything plays); before 1.41.0 kept it, all of it.
+    // The last ITEM_DAYS days also say which listed items the time went to.
+    const now = opts.now || Date.now();
+    const from = dayKey(now - (ITEM_DAYS - 1) * 864e5);
     const out = {};
     for (const k of Object.keys(days).sort()) {
       const d = days[k];
       const read = mins(d.paceMs || (d.aloudMs ? Math.max(0, (d.readMs || 0) - d.aloudMs) : d.readMs));
       const listened = mins(d.aloudMs);
-      if (read || listened) out[k] = { read, listened };
+      const by = {};
+      if (k >= from) for (const [cid, ms] of Object.entries(d.clips || {})) if (itemOf[cid]) by[itemOf[cid]] = (by[itemOf[cid]] || 0) + ms;
+      const per = {};
+      for (const id of Object.keys(by).sort()) if (mins(by[id])) per[id] = mins(by[id]);
+      if (read || listened || Object.keys(per).length) out[k] = Object.keys(per).length ? { read, listened, items: per } : { read, listened };
     }
     items.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-    return { schema: SCHEMA, app: "waypage", updatedAt: new Date(opts.now || Date.now()).toISOString().replace(/\.\d{3}Z$/, "Z"), items, days: out };
+    let timeZone = opts.timeZone || "";
+    if (!timeZone) try { timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) { timeZone = ""; }
+    return { schema: SCHEMA, app: "waypage", updatedAt: new Date(now).toISOString().replace(/\.\d{3}Z$/, "Z"), timeZone, items, days: out };
   }
 
   // Files read from outside are on one device only. Items for files this
