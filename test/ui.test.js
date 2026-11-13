@@ -977,7 +977,7 @@ function zipOf(files) {
       await q.context().close();
     });
 
-    await test("the sidebar shows the favourites, then Collections and Clips (1.14.0)", async () => {
+    await test("the sidebar shows the favourites, Favourites, then Collections and Clips (1.14.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
         const c = (i, more) => ({ id: "fv" + i, url: "https://example.com/fv" + i, title: "Clip " + i, site: "example.com", savedAt: 1000 + i, minutes: 3, mode: "links", at: 0, finished: false, ...more });
@@ -992,7 +992,7 @@ function zipOf(files) {
       await q.locator(".page-card").first().waitFor();
       await q.click("#sideBtn");
       const labels = await q.locator("#sidebar .side-item .side-label").allTextContents();
-      assert.deepStrictEqual(labels.slice(0, 5), ["Library", "Trips", "Clip 3", "Collections", "Clips"], labels.join(", "));
+      assert.deepStrictEqual(labels.slice(0, 6), ["Library", "Trips", "Clip 3", "Favourites", "Collections", "Clips"], labels.join(", "));
       assert.ok(!labels.includes("Unloved") && !labels.includes("Files"), labels.join(", "));
       assert.strictEqual(await q.locator("#sidebar > .side-version").last().textContent(), "Version " + await q.evaluate(() => APP_VERSION), "the sidebar ends with the app version");
       await q.locator("#sidebar .side-item", { hasText: "Collections" }).click();
@@ -1003,6 +1003,15 @@ function zipOf(files) {
       await q.click("#sideBtn");
       await q.locator("#sidebar .side-item", { hasText: "Library" }).click();
       await until(q, () => !state.part && !state.side && !(history.state && history.state.view));
+      // Favourites from inside Collections: the library's favourites filter.
+      await q.waitForTimeout(400);
+      await q.evaluate(() => openPart("collections"));
+      await q.waitForTimeout(400);
+      await q.click("#sideBtn");
+      await q.locator("#sidebar .side-item", { hasText: "Favourites" }).click();
+      await until(q, () => state.filter === "favourites" && !state.part && !state.side && !(history.state && history.state.view));
+      await q.click("#sideBtn");
+      assert.strictEqual(await q.locator("#sidebar .side-item[aria-current]", { hasText: "Favourites" }).count(), 1, "Favourites isn't marked as open");
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });
