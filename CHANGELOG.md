@@ -2,7 +2,7 @@
 
 All notable changes to Carry-on. Newest first.
 
-## [1.59.0] - 2026-11-13
+## [1.58.3] - 2026-11-13
 
 ### Added
 - A collection's cover can be a mosaic of its first two to four pictures. Picking it again draws it again from what's there now.
