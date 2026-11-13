@@ -1117,6 +1117,16 @@
     N.addListener("change", (r) => set(r && r.metered));
   })();
 
+  // ---- Android Auto (2026-11) ----
+  // What the car lists and can start with the app closed (CarPlugin keeps
+  // it as car.json), and where what it started got to: { id: { kind,
+  // part, pos | index, of, done, at } }, taken once.
+  const car = {
+    get on() { return !!plugin("Car"); },
+    async list(o) { const P = plugin("Car"); if (!P) return false; try { await P.list({ json: JSON.stringify(o) }); return true; } catch (e) { return false; } },
+    async places() { const P = plugin("Car"); if (!P) return {}; try { const r = await P.places(); return JSON.parse((r && r.json) || "{}"); } catch (e) { return {}; } },
+  };
+
   window.Waypage = window.Waypage || {};
   // ---- Audiobooks (2026-11) ----
   // The phone's own player in the app (AudiobookPlugin: it keeps playing
@@ -1167,8 +1177,9 @@
       on(fn) { heard.add(fn); return () => heard.delete(fn); },
       onSleep(fn) { sleepHeard.add(fn); },
       // parts: [{ uri, offset, length }] in the app; [{ src: async () => url }] elsewhere.
-      async play({ parts, part = 0, pos = 0, rate = 1, title = "", subtitle = "", key = "" }) {
-        if (A()) return A().play({ parts: parts.map((p) => ({ uri: p.uri, offset: p.offset == null ? -1 : p.offset, length: p.length == null ? -1 : p.length })), part, pos: Math.round(pos), rate, title, subtitle, key });
+      // chapters: [{ title, part, pos }] for a car's queue; cover: the book's picture.
+      async play({ parts, part = 0, pos = 0, rate = 1, title = "", subtitle = "", key = "", chapters = [], cover = "" }) {
+        if (A()) return A().play({ parts: parts.map((p) => ({ uri: p.uri, offset: p.offset == null ? -1 : p.offset, length: p.length == null ? -1 : p.length })), part, pos: Math.round(pos), rate, title, subtitle, key, chapters, cover });
         job = { parts, part, rate, key };
         tell({ key, part, pos, dur: 0, state: "loading" });
         await webLoad(part, pos, true);
@@ -1360,6 +1371,7 @@
     webUrl() { return (build && build.webUrl) || null; },
     files,
     audio,
+    car,
     get canScan() { return !!scanner(); },
     scanQr,
   };

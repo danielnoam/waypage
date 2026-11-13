@@ -1387,7 +1387,7 @@ function mediaInfo(p) {
   const list = p.folder ? folderPages(p.folder) : [];
   const at = list.indexOf(p);
   return { title: p.title, subtitle: p.folder || siteOf(p), album: p.folder || siteOf(p),
-    track: at >= 0 ? at + 1 : 0, tracks: at >= 0 ? list.length : 0 };
+    track: at >= 0 ? at + 1 : 0, tracks: at >= 0 ? list.length : 0, cover: thumbUrl(p) || "" };
 }
 
 // Going on with the app put away (1.23.0). At the end of a clip the app

@@ -33,7 +33,8 @@ import java.util.Locale;
  * type mediaPlayback owns the TextToSpeech engine and the list of
  * paragraphs, so the reading goes on when the phone locks and the WebView
  * sleeps. Its notification, a media session, carries previous, play or
- * pause, next and stop, on the lock screen too.
+ * pause, next and stop, on the lock screen too. Its session is Car's,
+ * shared with audiobooks, so Android Auto shows it.
  *
  * SpeechPlugin hands it a Job and gets each paragraph's start back through
  * the Listener; both run in the app's process, so nothing is parcelled.
@@ -47,7 +48,9 @@ public class SpeechService extends Service {
     static class Job {
         String[] items;
         int start;
-        String lang, voice, engine, title, subtitle, key, album;
+        String lang, voice, engine, title, subtitle, key, album, cover;
+        // Started from the car with the app closed (Car.heardClip).
+        boolean car;
         int[] blocks;
         int track, tracks;
         float rate = 1f;
@@ -108,6 +111,19 @@ public class SpeechService extends Service {
         else if (running != null || PLAY.equals(action)) ctx.startService(i);
     }
 
+    private final Car.Player controls = new Car.Player() {
+        @Override public void play() { resume(); }
+        @Override public void pause() { SpeechService.this.pause(); }
+        @Override public void next() { step(1); }
+        @Override public void prev() { step(-1); }
+        @Override public void forward() { step(1); }
+        @Override public void rewind() { step(-1); }
+        @Override public void seekTo(long ms) {}
+        @Override public void stop() { finish("stopped"); }
+        @Override public void custom(String action) { if (SLEEP_MORE.equals(action)) sleepMore(); }
+        @Override public void toQueueItem(long id) {}
+    };
+
     static String stateOf() { return running == null ? "stopped" : running.state; }
     static int indexOf() { return running == null ? -1 : running.index; }
     static String keyOf() { return running == null || running.job == null ? "" : running.job.key; }
@@ -120,15 +136,7 @@ public class SpeechService extends Service {
         super.onCreate();
         running = this;
         audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        session = new MediaSession(this, "Waypage read aloud");
-        session.setCallback(new MediaSession.Callback() {
-            @Override public void onPlay() { resume(); }
-            @Override public void onPause() { pause(); }
-            @Override public void onSkipToNext() { step(1); }
-            @Override public void onSkipToPrevious() { step(-1); }
-            @Override public void onStop() { finish("stopped"); }
-            @Override public void onCustomAction(String action, android.os.Bundle extras) { if (SLEEP_MORE.equals(action)) sleepMore(); }
-        });
+        session = Car.session(this);
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
         wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "waypage:aloud");
         wake.setReferenceCounted(false);
@@ -185,6 +193,7 @@ public class SpeechService extends Service {
             // Foreground first: Android stops a service that doesn't say so
             // within seconds of startForegroundService.
             job = pending;
+            keptIndex = -1;
             pending = null;
             if (job == null || job.items == null || job.items.length == 0) {
                 foreground();
@@ -193,6 +202,8 @@ public class SpeechService extends Service {
             }
             index = Math.max(0, Math.min(job.start, job.items.length - 1));
             state = "playing";
+            Car.playing(controls);
+            if (job.car) Car.queueAfter(this, job.key);
             foreground();
             makeTts(job.engine);
             play();
@@ -348,7 +359,9 @@ public class SpeechService extends Service {
                 queuedAfter = null;
                 next.rate = job.rate;
                 next.volume = job.volume;
+                if (job.car) Car.heardClip(this, job.key, job.items.length - 1, 1, true);
                 job = next;
+                if (job.car) Car.queueAfter(this, job.key);
                 index = Math.max(0, Math.min(job.start, job.items.length - 1));
                 // Another language can have its own engine; the new
                 // one speaks once it has started.
@@ -415,6 +428,8 @@ public class SpeechService extends Service {
         hushOff();
         dropFocus();
         report();
+        if (job != null && job.car) Car.heardClip(this, job.key, index, "ended".equals(how) ? 1 : through(), "ended".equals(how));
+        Car.idle(controls);
         job = null;
         if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE);
         else stopForeground(true);
@@ -486,6 +501,10 @@ public class SpeechService extends Service {
     private void report() {
         PipWindow.refresh();
         if (listener != null && job != null) listener.onProgress(job.key, index, state, thinking);
+        if (job != null && job.car && !"loading".equals(state) && index != keptIndex) {
+            keptIndex = index;
+            Car.heardClip(this, job.key, index, through(), false);
+        }
         if (job == null || "ended".equals(state) || "stopped".equals(state) || "error".equals(state)) return;
         boolean playing = "playing".equals(state);
         // What a car's screen or the earbuds' app shows (1.26.0): the clip,
@@ -498,16 +517,30 @@ public class SpeechService extends Service {
         if (job.album != null && !job.album.isEmpty()) meta.putString(MediaMetadata.METADATA_KEY_ALBUM, job.album);
         if (job.track > 0) meta.putLong(MediaMetadata.METADATA_KEY_TRACK_NUMBER, job.track);
         if (job.tracks > 0) meta.putLong(MediaMetadata.METADATA_KEY_NUM_TRACKS, job.tracks);
+        Car.putArt(this, meta, job.cover);
         session.setMetadata(meta.build());
         session.setPlaybackState(new PlaybackState.Builder()
             .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE
-                | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_STOP)
+                | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_STOP | Car.ACTIONS)
             .setState(playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, PlaybackState.PLAYBACK_POSITION_UNKNOWN, playing ? 1f : 0f)
             .addCustomAction(new PlaybackState.CustomAction.Builder(SLEEP_MORE, sleepLabel(), R.drawable.waypage_sleep).build())
             .build());
         session.setActive(true);
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         nm.notify(NOTE, notification());
+    }
+
+    private int keptIndex = -1;
+
+    // How far through the clip's text the piece being read starts, 0 to 1.
+    private double through() {
+        if (job == null || job.items.length == 0) return 0;
+        long before = 0, all = 0;
+        for (int i = 0; i < job.items.length; i++) {
+            if (i < index) before += job.items[i].length();
+            all += job.items[i].length();
+        }
+        return all == 0 ? 0 : (double) before / all;
     }
 
     private void foreground() {
@@ -567,7 +600,7 @@ public class SpeechService extends Service {
     public void onDestroy() {
         if (tts != null) tts.shutdown();
         tts = null;
-        if (session != null) session.release();
+        Car.idle(controls);
         if (hush != null) { hush.release(); hush = null; }
         if (louder != null) { louder.release(); louder = null; }
         if (wake != null && wake.isHeld()) wake.release();
