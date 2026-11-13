@@ -1473,7 +1473,9 @@ function zipOf(files) {
       // No arrow buttons: the handle takes the arrow keys.
       assert.strictEqual(await q.locator("#folderBody .move").count(), 0);
       await q.locator('#folderBody li[data-id="rr100"] .drag-handle').press("ArrowDown");
-      await until(q, () => folderPages("Serial")[1].id === "rr100");
+      // The order changes before the index is written and the list drawn
+      // again; the handle gets focus back only after that.
+      await until(q, () => folderPages("Serial")[1].id === "rr100" && !!document.activeElement.closest("li"));
       assert.strictEqual(await order(), "rr300,rr100,rr500");
       assert.strictEqual(await q.evaluate(() => document.activeElement.closest("li").dataset.id), "rr100");
       assert.strictEqual(await q.locator("#folderBody .book-title-input").inputValue(), "Serial two");

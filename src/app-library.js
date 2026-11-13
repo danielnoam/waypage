@@ -406,6 +406,10 @@ function saveNewButton(list) {
 }
 
 function renderFolder() {
+  // A handle with focus keeps it through a draw again (a cover drawn
+  // late redraws the list after a move by keys).
+  const had = document.activeElement && document.activeElement.matches && document.activeElement.matches("#folderBody .drag-handle")
+    ? document.activeElement.closest("li").dataset.id : null;
   const list = folderPages(state.folder);
   if (!list.length) {
     folderMode = "";
@@ -457,6 +461,8 @@ function renderFolder() {
         ordering ? dragHandle(p, i, list.length) : null))) : null);
   paintFolderBar();
   paintPicks();
+  const again = had && $("folderBody").querySelector('li[data-id="' + had + '"] .drag-handle');
+  if (again) again.focus();
 }
 
 // How a collection shows what's in it, kept on this device: a list of
