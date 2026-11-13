@@ -113,21 +113,21 @@ async function noteCoverOf(p) {
 // Every note whose card is missing or older than its last edit, one at a
 // time while the app is idle (a card picture never syncs, so a note that
 // came from another device has none).
-let coverQueue = null;
+let noteCoverQueue = null;
+const noteCoverTried = new Map();
 function noteCoversSoon() {
   const due = () => state.pages.filter((p) => p.note && state.open !== p && (!p.thumb || (p.editedAt || 0) > (p.thumbAt || 0)));
-  if (coverQueue) return;
-  coverQueue = true;
+  if (noteCoverQueue) return;
+  noteCoverQueue = true;
   const next = async () => {
-    const p = due().find((x) => !(coverTried.get(x.id) >= (x.editedAt || 0) + 1));
-    if (!p) { coverQueue = null; return; }
-    coverTried.set(p.id, (p.editedAt || 0) + 1);
+    const p = due().find((x) => !(noteCoverTried.get(x.id) >= (x.editedAt || 0) + 1));
+    if (!p) { noteCoverQueue = null; return; }
+    noteCoverTried.set(p.id, (p.editedAt || 0) + 1);
     await noteCoverOf(p);
     setTimeout(next, 200);
   };
   setTimeout(next, 1500);
 }
-const coverTried = new Map();
 // A clip's drawings by block live on its index entry (`ink`, page -> strokes),
 // beside its highlights, so they sync and back up the same way.
 C.ink.blockStore = {
