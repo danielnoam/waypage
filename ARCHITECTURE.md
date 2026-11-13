@@ -82,6 +82,7 @@ src/drive.js        Google Drive backups
 src/backup.js       one-file backups and exports
 src/imports.js      Pocket, Instapaper, Omnivore, Raindrop, Wallabag exports
 src/stats.js        reading stats and the reading pace
+src/activity.js     Share reading activity: builds activity/reading.json (docs/reading-activity.md)
 src/dict.js         StarDict dictionaries in IndexedDB
 src/motion.js       the springs from DESIGN.md, sampled into CSS linear()
 src/qr.js           QR code for sync's setup link, made on the device so the token never leaves it
@@ -112,7 +113,7 @@ docs/shots/         the README's screenshots
 
 `index.html` loads every script as a classic `<script>`, in the order
 listed there: platform, motion, Readability, store, save, feeds, backup,
-imports, dict, sync, drive, qr, stats, epub, files, pdf, reader, then the
+imports, dict, sync, drive, qr, stats, activity, epub, files, pdf, reader, then the
 shell (`app.js` and the `app-*.js` files). No modules, no bundler.
 
 The area scripts (`save.js`, `reader.js`, `store.js`, ...) are IIFEs that
@@ -405,6 +406,19 @@ web copy stay links, as before.
   at once when it's brought in (`outsideKnown`, from the last library
   seen). An entry's `ids` are that file's clip ids on each device; stats
   add them up under this device's own (`stats.same`, kept here only).
+- **Share reading activity** (2026-11, `activity.js`, off by default, a
+  switch per device in `what.activity`): after the stats, sync writes
+  `activity/reading.json`, what you're reading and minutes a day, for
+  other apps that read the repo. The format is public and only grows:
+  docs/reading-activity.md. It's built from the library and
+  `stats.totals()`, written only when it changed (`waypage.syncActivity`
+  keeps the last one's signature), and removed once when the switch goes
+  off (`activityGone`). Kinds come from the entry's own marks
+  (`activity.kindOf`; a PDF is a book); a clip's `noShare` and a
+  collection's `folderNoShare` (on its clips, like `folderFav`) keep
+  one out, and sync like any field, in the outside map too. A file read from outside
+  is listed by its fingerprint (`f<fp>`), and one another device has but
+  this one doesn't is kept as the file had it (`activity.carry`).
 - The Sync screen shows the repo's size against GitHub's 5 GB (its
   advice; it has no hard cap), from `/repos`, asked at most every 10
   minutes. GitHub updates it a while after a push.
@@ -484,7 +498,7 @@ bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `pptx.test.js`, `ink.test.js` and `listen.test.js` test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js` and `listen.test.js` test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
 changes Markdown runs just `build.test.js` and `docs.test.js`.
 
 `node tools/shots.js` retakes the README's pictures at 1280 px and 390 px
@@ -525,6 +539,12 @@ adds a line here.
   picture host sees the visit (Settings › Saving › Load pictures only
   when tapped turns that off).
 - The `waypage-data` sync repo is private on GitHub, not encrypted.
+- Share reading activity (off by default) lets any app holding a token
+  for `waypage-data` read what you read and when: titles, authors,
+  collections, progress, dates and minutes a day. Nothing new leaves the
+  device (the library is already there), but every app you connect to the
+  repo can now read it in one simple file. No text, highlights, notes or
+  links go in it.
 - The web copy shares `danielnoam.github.io`'s storage with every other
   Pages site on that account, so its sync token is as safe as the least
   safe of them.

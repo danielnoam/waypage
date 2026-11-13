@@ -85,6 +85,8 @@ function setFolderFav(name, on) {
 function joinFav(p, name) {
   const on = name && folderPages(name).some((x) => x !== p && x.folderFav);
   if (on) { p.folderFav = true; p.folderFavAt = Date.now(); } else { delete p.folderFav; delete p.folderFavAt; }
+  // Share reading activity's collection mark goes the same way.
+  if (name && folderPages(name).some((x) => x !== p && x.folderNoShare)) p.folderNoShare = true; else delete p.folderNoShare;
   const pick = name ? coverPick(folderPages(name).filter((x) => x !== p)) : "";
   if (pick) p.coverPick = pick; else delete p.coverPick;
 }
@@ -404,6 +406,10 @@ function saveNewButton(list) {
 }
 
 function renderFolder() {
+  // A handle with focus keeps it through a draw again (a cover drawn
+  // late redraws the list after a move by keys).
+  const had = document.activeElement && document.activeElement.matches && document.activeElement.matches("#folderBody .drag-handle")
+    ? document.activeElement.closest("li").dataset.id : null;
   const list = folderPages(state.folder);
   if (!list.length) {
     folderMode = "";
@@ -455,6 +461,8 @@ function renderFolder() {
         ordering ? dragHandle(p, i, list.length) : null))) : null);
   paintFolderBar();
   paintPicks();
+  const again = had && $("folderBody").querySelector('li[data-id="' + had + '"] .drag-handle');
+  if (again) again.focus();
 }
 
 // How a collection shows what's in it, kept on this device: a list of
@@ -654,6 +662,11 @@ function openFolderMenu() {
       : item("grid", "Show as covers", () => setFolderLook(state.folder, "covers")),
     item("select", "Select", () => startSelect([])),
     item("send", "Export", () => setFolderMode("export")),
+    ...(sharing() ? [
+      sep(),
+      item("share", "In other apps", () => setFolderShare(state.folder, !list.some((p) => p.folderNoShare)),
+        { note: list.some((p) => p.folderNoShare) ? "Kept out" : "Shown" }),
+    ] : []),
     sep(),
     item("remove", "Remove", () => openMenu("remove"), { warn: true }));
   const more = $("folderMore"), at = more.getBoundingClientRect();
@@ -971,7 +984,7 @@ async function removeFolder(withPages) {
   if (withPages) forgetWatched(list);
   for (const p of list) {
     if (withPages) { if (p.link && !p.watched) C.platform.files.release(p.link); await C.store.removePage(p.id); }
-    else { delete p.folder; delete p.folderAt; delete p.folderFav; delete p.folderFavAt; delete p.coverPick; }
+    else { delete p.folder; delete p.folderAt; delete p.folderFav; delete p.folderFavAt; delete p.coverPick; delete p.folderNoShare; }
   }
   if (withPages) state.pages = state.pages.filter((p) => !list.includes(p));
   await C.store.writeIndex(state.pages);
@@ -1114,6 +1127,7 @@ function pageSheet(p, where) {
       ...series,
       el("h3", { class: "overline" }, "More"),
       el("div", { class: "group" },
+        ...shareRows(p, draw),
         inReader ? null : menuRow("Rename", () => { renaming = true; draw(); }),
         p.link && p.file && p.file.kind === "pdf" && !p.comic
           ? menuRow(p.view === "text" ? "Show as printed pages" : "Show as text", () => switchView(p, where)) : null,
@@ -1171,6 +1185,30 @@ async function setTitle(p, title) {
   renderLibrary();
   if (state.folder) renderFolder();
   updateWidgets();
+}
+
+// Share reading activity (2026-11): whether a clip is listed for other
+// apps. Shown only while the switch is on.
+const sharing = () => C.sync.on && C.sync.what.activity;
+function shareRows(p, redraw) {
+  if (!sharing() || p.note || p.preview) return [];
+  const folderOff = p.folder && folderPages(p.folder).some((x) => x.folderNoShare);
+  const row = (label, note, on, set, off) => switchRow(label, note, on, (v) => set(v).then(redraw), off ? { disabled: "" } : null);
+  return [
+    row("In other apps", folderOff ? "Its collection is kept out" : "", !p.noShare && !folderOff, (v) => setShareMark(p, "noShare", !v), folderOff),
+  ];
+}
+async function setShareMark(p, key, on) {
+  if (on) p[key] = true; else delete p[key];
+  await C.store.writeIndex(state.pages);
+  syncSoon();
+}
+// The same for a collection: a mark on its clips, like a favourite's.
+async function setFolderShare(name, on) {
+  for (const p of folderPages(name)) { if (on) p.folderNoShare = true; else delete p.folderNoShare; }
+  await C.store.writeIndex(state.pages);
+  syncSoon();
+  toast(on ? name + " is kept out of other apps" : name + " is in other apps");
 }
 
 // A PDF read from outside stays as it is: its printed pages are pictures.

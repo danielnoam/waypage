@@ -22,6 +22,8 @@
   const OLD_REPO = "carryon-data"; // Carry-on's name for it, before 1.0.0
   const COVERS_KEY = "waypage.syncCovers"; // picked covers this device knows are on GitHub
   const STATS_KEY = "waypage.syncStats"; // { device: sha of its stats file as last read, _sent: what this device last wrote }
+  const ACT_KEY = "waypage.syncActivity"; // { sig } of the reading activity this device last wrote
+  const ACT_PATH = "activity/reading.json";
   const DAY = 24 * 3600 * 1000;
   // The files a note keeps on GitHub beside its page: notes/<id>/<name>.
   const NOTE_FILE = /^(note\.json|ink\.json|base\.pdf|img-[a-z0-9]{1,40}\.txt)$/;
@@ -40,7 +42,8 @@
   // Every field an index entry can carry through a backup or sync
   // (backup.cleanMeta); anything else on a page stays on its device.
   const SYNCED = new Set(["id", "url", "title", "site", "byline", "licence", "savedAt", "minutes", "lang", "dir", "mode", "images",
-    "at", "finished", "readAt", "readOn", "placeAt", "spot", "comic", "manga", "volume", "turn", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "file", "marks", "ink", "inkAt", "cut", "archived", "editedAt", "note", "published"]);
+    "at", "finished", "readAt", "readOn", "placeAt", "spot", "comic", "manga", "volume", "turn", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "file", "marks", "ink", "inkAt", "cut", "archived", "editedAt", "note", "published",
+    "noShare", "folderNoShare"]);
   // Where the reader is, which goes with whichever device moved it last:
   // placeAt (1.30.2), or readAt on entries from before it. Opening a clip
   // stamps readAt alone, so a device that opened one at an older place
@@ -244,7 +247,7 @@
   // stats add up as one. Drawings go too: `ink` by block, and `pages`,
   // a printed PDF's drawn pages, which live beside the clip (store.readInk)
   // and so come in on the copies outsidePages makes.
-  const OUTSIDE = ["at", "finished", "readAt", "readOn", "placeAt", "spot", "turn", "tags", "folder", "folderAt", "fav", "favAt", "folderFav", "folderFavAt", "marks", "listen", "ink", "inkAt"];
+  const OUTSIDE = ["at", "finished", "readAt", "readOn", "placeAt", "spot", "turn", "tags", "folder", "folderAt", "fav", "favAt", "folderFav", "folderFavAt", "marks", "listen", "ink", "inkAt", "noShare", "folderNoShare"];
   const FP = /^[0-9a-f]{32}$/;
   const OUT_MAX = 2000;
   // This device's outside files as entries: one a fingerprint, the copy
@@ -684,6 +687,7 @@
     keep(WAIT_KEY, null);
     keep(SENT_KEY, null);
     keep(STATS_KEY, null);
+    keep(ACT_KEY, null);
   }
 
   // ---- A page's text going up and coming down ----
@@ -1214,7 +1218,10 @@
         if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e;
       }
     }
-    const stats = async () => { if (what.stats) try { await syncStats(); } catch (e) { if (e instanceof Paused) throw e; } };
+    const stats = async () => {
+      if (what.stats) try { await syncStats(); } catch (e) { if (e instanceof Paused) throw e; }
+      try { await syncActivity(getPages()); } catch (e) { if (e instanceof Paused) throw e; }
+    };
     // Feeds the same way as clips: one changed here while this ran keeps
     // this device's version, which goes up next time. Those not synced
     // here stay as they are.
@@ -1417,6 +1424,36 @@
     keep(STATS_KEY, known);
   }
 
+  // Share reading activity (2026-11): activity/reading.json, written
+  // only while the switch is on, and only when what it says changed.
+  // Turned off, the file is removed once, and nothing else is touched.
+  async function syncActivity(pages) {
+    if (!C.activity) return;
+    if (!C.sync.what.activity) {
+      if (!cfg.activityGone) return;
+      halt();
+      const r = await call(contents(ACT_PATH) + "?ref=" + encodeURIComponent(cfg.branch), { headers: headers({ Accept: "application/vnd.github.object+json" }) });
+      if (r.ok) await remove(ACT_PATH, (await r.json()).sha);
+      else if (r.status !== 404) throw await fail(r);
+      delete cfg.activityGone;
+      keep(CFG_KEY, cfg);
+      keep(ACT_KEY, null);
+      return;
+    }
+    const doc = C.activity.build(pages, C.stats ? C.stats.totals() : null, { kinds: C.sync.shareKinds });
+    const sig = C.activity.sig(doc);
+    if ((load(ACT_KEY, {}) || {}).sig === sig) return;
+    halt();
+    const prev = await readJson(ACT_PATH).catch((e) => { if (e instanceof Paused || !(e instanceof SyntaxError)) throw e; return null; });
+    const known = new Set(pages.filter((p) => p.link).map(C.activity.idOf));
+    const out = C.activity.carry(doc, prev && prev.data, known);
+    if (!prev || C.activity.sig(out) !== C.activity.sig({ ...prev.data, updatedAt: out.updatedAt })) {
+      halt();
+      await put(ACT_PATH, JSON.stringify(out), prev && prev.sha, "Reading activity");
+    }
+    keep(ACT_KEY, { sig });
+  }
+
   // Pictures picked as collections' covers: covers/<name>, written once
   // by the device that picked it (a name is never used for another), and
   // brought down by the others. The one picture that syncs: it has no
@@ -1497,8 +1534,17 @@
     get progress() { return progress; },
     get links() { return !!(cfg && cfg.links); },
     // What this device syncs (1.47.0): clips, feeds, newsletters, stats.
-    get what() { return { clips: true, notes: true, feeds: true, newsletters: true, stats: true, ...((cfg && cfg.what) || {}) }; },
-    setWhat(k, v) { if (!cfg) return; cfg.what = { ...this.what, [k]: !!v }; keep(CFG_KEY, cfg); },
+    get what() { return { clips: true, notes: true, feeds: true, newsletters: true, stats: true, activity: false, ...((cfg && cfg.what) || {}) }; },
+    setWhat(k, v) {
+      if (!cfg) return;
+      cfg.what = { ...this.what, [k]: !!v };
+      // Share reading activity turned off takes its file away next sync.
+      if (k === "activity") { if (v) delete cfg.activityGone; else cfg.activityGone = true; keep(ACT_KEY, null); }
+      keep(CFG_KEY, cfg);
+    },
+    // Which kinds Share reading activity lists (2026-11).
+    get shareKinds() { return { ...(C.activity ? C.activity.DEFAULT_KINDS : {}), ...((cfg && cfg.shareKinds) || {}) }; },
+    setShareKind(k, v) { if (!cfg) return; cfg.shareKinds = { ...this.shareKinds, [k]: !!v }; keep(CFG_KEY, cfg); },
     get paused() { return !!(cfg && cfg.paused); },
     set paused(v) { if (!cfg) return; if (v) cfg.paused = true; else delete cfg.paused; keep(CFG_KEY, cfg); },
     set links(v) { if (!cfg) return; if (v) cfg.links = true; else delete cfg.links; keep(CFG_KEY, cfg); },
