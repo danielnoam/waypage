@@ -360,9 +360,10 @@ function bookHead(list, next, done) {
     savedLine(list)];
 }
 function savedLine(list) {
-  const s = savedParts(list);
+  const web = webClips(list);
+  const what = web.length === list.length ? picturesAs(list) : savedKindsLine(list);
   return el("button", { class: "book-saved", type: "button", onclick: () => openMenu("saved") },
-    el("span", null, formatSize(s.total) + " · " + picturesAs(list) + " · "),
+    el("span", null, formatSize(sizeOf(list)) + " · " + what + " · "),
     el("span", { class: "accent" }, "What's saved"));
 }
 
@@ -840,11 +841,38 @@ function savedNote(p) {
     s.missing ? s.missing + " missing" : null].filter(Boolean).join(" · ") || "Text only";
 }
 
+// What else a collection keeps besides clips saved from the web: their
+// pictures and text are split out, everything else is counted by kind
+// (Daniel 2026-11-13: a book's pictures aren't "pictures as previews").
+const SAVED_KINDS = [
+  ["copy", "Copied from files"],
+  ["linked", "Files read from their folder"],
+  ["audio", "Audiobooks"],
+  ["note", "Notes"],
+];
+const savedKind = (p) => (p.note ? "note" : isAudiobook(p) ? "audio" : p.file ? (p.link ? "linked" : "copy") : "web");
+const webClips = (list) => list.filter((p) => savedKind(p) === "web");
+// "2 clips, 2 files, 1 audiobook": here a copy made from a file is a file.
+function savedKindsLine(list) {
+  const n = { web: 0, file: 0, audio: 0, note: 0 };
+  for (const p of list) { const k = savedKind(p); n[k === "copy" || k === "linked" ? "file" : k]++; }
+  return [["web", "clip", "clips"], ["file", "file", "files"], ["audio", "audiobook", "audiobooks"], ["note", "note", "notes"]]
+    .filter(([k]) => n[k]).map(([k, one, many]) => n[k] + " " + (n[k] === 1 ? one : many)).join(", ");
+}
+
 function savedView(list) {
-  const s = savedParts(list);
+  const web = webClips(list);
+  const others = SAVED_KINDS.map(([k, label]) => {
+    const of = list.filter((p) => savedKind(p) === k);
+    return { k, label, n: of.length, bytes: sizeOf(of) };
+  }).filter((o) => o.n);
+  const s = savedParts(web);
+  const otherBytes = others.reduce((sum, o) => sum + o.bytes, 0);
+  const total = s.total + otherBytes;
+  const mixed = others.length > 0;
   const kept = s.previews + s.full;
   const what = s.previews && s.full ? "previews and full size" : s.full ? "full size" : "previews";
-  const share = (b) => (s.total ? Math.max(b ? 2 : 0, Math.round(b / s.total * 100)) : 0);
+  const share = (b) => (total ? Math.max(b ? 2 : 0, Math.round(b / total * 100)) : 0);
   const legend = (cls, label, value) => el("div", { class: "saved-row" },
     el("span", { class: "saved-key " + cls, "aria-hidden": "true" }),
     el("span", { class: "saved-label" + (cls === "missing" ? " warn" : "") }, label),
@@ -853,16 +881,20 @@ function savedView(list) {
   return el("div", { class: "saved-view" },
     el("div", { class: "saved-head" },
       el("span", { class: "saved-title" }, "What's saved"),
-      el("span", { class: "saved-value" }, formatSize(s.total))),
+      el("span", { class: "saved-value" }, formatSize(total))),
     s.known && s.total ? el("div", { class: "saved-bar", "aria-hidden": "true" },
       el("span", { class: "pics", style: "width: " + share(s.pictures) + "%" }),
-      el("span", { class: "text", style: "width: " + share(s.text) + "%" })) : null,
-    kept ? legend("pics", "Pictures, " + what + " · " + kept, s.known ? formatSize(s.pictures) : "") : null,
-    legend("text", "Text", s.known ? formatSize(s.text) : ""),
-    s.links ? legend("links", "Pictures as links · " + s.links + ", need a connection", "") : null,
+      el("span", { class: "text", style: "width: " + share(s.text) + "%" }),
+      otherBytes ? el("span", { class: "other", style: "width: " + share(otherBytes) + "%" }) : null) : null,
+    kept ? legend("pics", (mixed ? "Clips' pictures, " : "Pictures, ") + what + " · " + kept, s.known ? formatSize(s.pictures) : "") : null,
+    web.length ? legend("text", mixed ? "Clips' text · " + web.length : "Text", s.known ? formatSize(s.text) : "") : null,
+    s.links ? legend("links", (mixed ? "Clips' pictures as links · " : "Pictures as links · ") + s.links + ", need a connection", "") : null,
     s.missing ? legend("missing", s.missing + (s.missing === 1 ? " preview" : " previews") + " missing, shown online", "") : null,
+    ...others.map((o) => legend("other", o.label + " · " + o.n, formatSize(o.bytes))),
+    others.some((o) => o.k === "linked" || o.k === "audio")
+      ? el("p", { class: "footnote" }, "Files read from their folder and audiobooks stay in that folder. Only their text, cover and your place are kept here.") : null,
     !s.known ? el("p", { class: "footnote" }, C.platform.native ? "Measuring the pictures…" : "Picture sizes show for clips saved from 0.27.11 on.")
-      : lean ? el("p", { class: "footnote" }, "Most of it is pictures. Save again with Links to keep only the text, about " + formatSize(s.text) + ".") : null);
+      : lean ? el("p", { class: "footnote" }, (mixed ? "The clips are mostly pictures. Save them again" : "Most of it is pictures. Save again") + " with Links to keep only the text, about " + formatSize(s.text) + ".") : null);
 }
 
 // Pages saved before 0.27.11 have their pictures measured from their
@@ -891,7 +923,8 @@ async function measureSizes(list, then) {
 // again with pictures another way.
 function savedSheet() {
   const name = state.folder;
-  const list = folderPages(name);
+  const all = folderPages(name);
+  const list = webClips(all).filter((p) => /^https?:/.test(p.url || ""));
   const n = list.length;
   let mode = load(IMAGES_KEY, "previews");
   const s = savedParts(list);
@@ -902,10 +935,13 @@ function savedSheet() {
   paintNote();
   const go = el("button", { class: "btn-primary refresh-go", type: "button", onclick: () => back().then(() => refreshFolder(name, mode, go)) },
     "Save " + n + " " + chapterWord(list, n) + " again");
-  go.disabled = !list.some((p) => /^https?:/.test(p.url || "")) || !!runFor(name);
-  measureSizes(list, () => { if (state.menu && state.menu.kind === "saved") redrawMenu(); if (state.folder) renderFolder(); });
+  go.disabled = !!runFor(name);
+  measureSizes(all, () => { if (state.menu && state.menu.kind === "saved") redrawMenu(); if (state.folder) renderFolder(); });
+  // Saving again is for clips from the web; a collection of files only
+  // shows what it keeps.
+  if (!n) return el("div", { class: "page-controls saved-sheet" }, savedView(all));
   return el("div", { class: "page-controls saved-sheet" },
-    savedView(list),
+    savedView(all),
     C.platform.native ? el("h2", { class: "overline" }, "Save again with pictures as") : el("h2", { class: "overline" }, "Save again"),
     C.platform.native ? seg("refresh-images", "Pictures", [
       { value: "previews", label: "Previews" }, { value: "full", label: "Full" }, { value: "links", label: "Links" },

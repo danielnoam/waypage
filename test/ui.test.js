@@ -1486,6 +1486,15 @@ function zipOf(files) {
       });
       await q.locator('.cover-choice[aria-label="Mosaic of the first 3 pictures"]').click();
       await until(q, () => /^ux[a-z0-9]+\.jpg$/.test(coverPick(folderPages("Serial"))) && document.querySelector('.cover-choice[aria-pressed="true"] .cover-choice-name').textContent === "Mosaic");
+      // What's saved counts files and audiobooks by kind, not as pictures.
+      const kept = await q.evaluate(() => {
+        const book = { id: "fb1", title: "Book", bytes: 900000, images: 22, imageBytes: 0, mode: "full", file: { kind: "epub", ext: "epub" }, link: "x" };
+        const copy = { id: "fc1", title: "Copy", bytes: 2000000, images: 9, imageBytes: 1500000, mode: "full", file: { kind: "epub", ext: "epub" } };
+        const only = savedView([book, copy]).textContent;
+        return { only, line: savedKindsLine([...folderPages("Serial"), book, copy]) };
+      });
+      assert.ok(/Copied from files · 1/.test(kept.only) && /Files read from their folder · 1/.test(kept.only) && !/Pictures|pictures,/.test(kept.only), kept.only);
+      assert.strictEqual(kept.line, "2 clips, 2 files, 1 note");
       await q.evaluate(() => { setFolderMode(""); setFolderLook("Serial", "covers"); });
       assert.strictEqual(await q.locator("#folderBody .folder-covers .cover-item").count(), 3);
       assert.strictEqual(await q.locator("#folderBody .folder-list").count(), 0);
