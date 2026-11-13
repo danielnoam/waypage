@@ -1341,6 +1341,9 @@ const engineOf = (lang) => { const all = enginePicks(); return String((lang in a
 const engineFor = (p) => engineOf(primary(langOf(p)));
 const voiceKey = (lang) => (engineOf(lang) ? engineOf(lang) + "|" : "") + lang;
 const voiceFor = (p) => load(VOICE_KEY, {})[voiceKey(primary(langOf(p)))] || "";
+// All in the engine list (Daniel's ask): the voice list shows every
+// engine's voices, and picking one switches to its engine.
+const ALL_ENGINES_KEY = "waypage.aloudAll";
 
 // From a block, or from a word in it (`spot` from a selection).
 async function startAloud(from, spot) {
@@ -2232,7 +2235,19 @@ function aloudControls() {
   const more = el("button", { class: "btn-quiet aloud-more", type: "button",
     onclick: () => { if (state.settings) openSection("kokoro", false, true); else { closeSheet(); openSettings(false, "kokoro"); } } }, "More speech engines");
   const kokoro = speech.kokoro().catch(() => null);
-  const enginesIn = Promise.all([speech.engines(), kokoro]).then(([{ engines, default: def }, k]) => {
+  const enginesP = speech.engines();
+  const allOn = !!load(ALL_ENGINES_KEY, false);
+  // Filled again in place, once the new rows are in: the reader sheet's
+  // tab keeps this box (and its heading), so a new one in its place showed
+  // nothing, and rows arriving one by one jumped.
+  const refresh = async () => {
+    const box = engineRow.closest(".aloud-controls");
+    if (!box) return;
+    const fresh = aloudControls();
+    await fresh.ready;
+    box.replaceChildren(...box.querySelectorAll(":scope > h2.overline"), ...fresh.childNodes);
+  };
+  const enginesIn = Promise.all([enginesP, kokoro]).then(([{ engines, default: def }, k]) => {
     if (engines.length || k) moreSlot.replaceWith(more);
     if (engines.length < 2) return;
     const dflt = engines.find((e) => e.name === def);
@@ -2246,14 +2261,16 @@ function aloudControls() {
     const ours = (e) => [...packs.map((x) => ({ value: e.name + "#" + x.id, label: x.title })), ...(piper ? [{ value: e.name + "#piper", label: "Piper" }] : [])];
     const listed = (e) => (k && e.name === k.engine && ours(e).length ? ours(e) : [{ value: e.name, label: e.label }]);
     // The phone's default engine is the first option, not listed again.
-    const options = [{ value: "", label: "Phone's default" + (dflt ? " (" + dflt.label + ")" : "") }, ...engines.filter((e) => e.name !== def).flatMap(listed)];
+    const options = [{ value: "*all", label: "All" }, { value: "", label: "Phone's default" + (dflt ? " (" + dflt.label + ")" : "") }, ...engines.filter((e) => e.name !== def).flatMap(listed)];
     const engine = engineOf(lang) === def ? "" : engineOf(lang);
     const picked = !k || engine !== k.engine ? engine
       : piper && voiceFor(p) === piper.voice ? engine + "#piper"
       : k.use ? engine + "#" + k.use : engine;
     engineRow.append(dropdown({ label: "Speech engine", cls: "field-pick font-pick", options,
-      value: options.some((o) => o.value === picked) ? picked : "",
+      value: allOn ? "*all" : options.some((o) => o.value === picked) ? picked : "",
       onpick: async (v) => {
+        store(ALL_ENGINES_KEY, v === "*all");
+        if (v === "*all") { await refresh(); return; }
         const [name, pack] = v.split("#");
         if (pack && pack !== "piper") { try { await speech.kokoro("use", pack); } catch (e) { toast(e && e.message || "Couldn't switch. Try again."); } }
         store(ENGINE_KEY, { ...enginePicks(), [lang]: name });
@@ -2263,20 +2280,49 @@ function aloudControls() {
           else if (/^piper-/.test(voices[name + "|" + lang] || "")) delete voices[name + "|" + lang];
           store(VOICE_KEY, voices);
         }
-        // Filled again in place, once the new rows are in: the reader
-        // sheet's tab keeps this box (and its heading), so a new one in its
-        // place showed nothing, and rows arriving one by one jumped.
-        const box = engineRow.closest(".aloud-controls");
-        if (box) {
-          const fresh = aloudControls();
-          await fresh.ready;
-          box.replaceChildren(...box.querySelectorAll(":scope > h2.overline"), ...fresh.childNodes);
-        }
+        await refresh();
         restart();
       } }));
     engineSlot.replaceWith(engineRow);
   });
-  const voicesIn = speech.voices(engineOf(lang)).then((all) => {
+  const voicesIn = enginesP.then(({ engines, default: def }) => allOn && engines.length >= 2 ? allVoices(engines, def) : speech.voices(engineOf(lang)).then(oneEngine));
+  // Under All: each engine's voices under its name, one engine at a time
+  // (the phone lists one engine's at a time). Kokoro's are the version in use.
+  async function allVoices(engines, def) {
+    const groups = [];
+    for (const e of [...engines.filter((x) => x.name === def), ...engines.filter((x) => x.name !== def)]) {
+      const mine = (await speech.voices(e.name === def ? "" : e.name)).filter((v) => primary(v.lang) === lang);
+      if (mine.length) groups.push({ engine: e.name === def ? "" : e.name, label: e.label, mine });
+    }
+    if (!groups.length) return oneEngine([]);
+    const curEngine = engineOf(lang) === def ? "" : engineOf(lang);
+    const curVoice = voiceFor(p);
+    const picks = new Map([["", { engine: "", voice: "" }]]);
+    const options = [{ value: "", label: "Phone's default" }];
+    const add = (engine, voice, label) => { const k = "v" + picks.size; picks.set(k, { engine, voice }); options.push({ value: k, label }); return k; };
+    let value = "";
+    for (const g of groups) {
+      const opts = voiceOptions(g.mine, g.engine === curEngine ? curVoice : "");
+      if (!opts[0] || !opts[0].head) options.push({ head: g.label });
+      if (g.engine && g.engine === curEngine && !curVoice) value = add(g.engine, "", "Default");
+      for (const o of opts) {
+        if (o.head) { options.push({ head: g.label + " · " + o.head }); continue; }
+        const k = add(g.engine, o.value, o.label);
+        if (g.engine === curEngine && o.value === curVoice) value = k;
+      }
+    }
+    voiceRow.lastChild.replaceWith(dropdown({ label: "Voice", cls: "field-pick font-pick voice-pick", options, value,
+      onpick: (v) => {
+        const m = picks.get(v);
+        store(ENGINE_KEY, { ...enginePicks(), [lang]: m.engine });
+        const all = load(VOICE_KEY, {});
+        const key = (m.engine ? m.engine + "|" : "") + lang;
+        if (m.voice) all[key] = m.voice; else delete all[key];
+        store(VOICE_KEY, all);
+        restart();
+      } }));
+  }
+  function oneEngine(all) {
     const mine = all.filter((v) => primary(v.lang) === lang);
     if (!mine.length) {
       voiceRow.lastChild.replaceWith(el("span", { class: "meta" }, "Phone's default"));
@@ -2294,7 +2340,7 @@ function aloudControls() {
         store(VOICE_KEY, all);
         restart();
       } }));
-  });
+  }
   const rate = clamp(Number(load(RATE_KEY, 1)) || 1, RATE_MIN, RATE_MAX);
   const shown = el("span", { class: "rc-value" }, rateText(rate));
   const speed = el("input", { class: "range", type: "range", min: RATE_MIN, max: RATE_MAX, step: 0.1, value: rate, "aria-label": "Speed",
