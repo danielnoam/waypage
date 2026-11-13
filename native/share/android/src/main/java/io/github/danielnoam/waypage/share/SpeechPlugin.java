@@ -202,6 +202,7 @@ public class SpeechPlugin extends Plugin {
         job.title = call.getString("title", "Narrate");
         job.subtitle = call.getString("subtitle", "");
         job.album = call.getString("album", "");
+        job.cover = call.getString("cover", "");
         job.track = call.getInt("track", 0);
         job.tracks = call.getInt("tracks", 0);
         job.key = call.getString("key", "");

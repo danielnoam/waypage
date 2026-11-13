@@ -28,6 +28,20 @@
             android:name="io.github.danielnoam.waypage.share.AudiobookService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+        <!-- Android Auto (2026-11): what the car lists and starts, and the
+             one session both players share (Car.java). onGetRoot answers
+             only the car, the Assistant, Bluetooth and the system. -->
+        <service
+            android:name="io.github.danielnoam.waypage.share.CarService"
+            android:exported="true"
+            android:label="Waypage">
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/waypage_automotive_app_desc" />
         <!-- Kokoro voices: Waypage's own speech engine, off until the
              voices are downloaded in Settings (Kokoro.java turns it on). -->
         <service

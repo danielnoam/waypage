@@ -821,6 +821,14 @@ function showSection() {
   if ($("readerNow").textContent === (section || "Contents")) return;
   $("readerNow").textContent = section || "Contents";
   $("readerContents").setAttribute("aria-label", section ? "Contents, now " + section : "Contents");
+  paintPart();
+}
+// On a phone the name hangs under the bar in a bubble, with the chapter
+// being read under it.
+function paintPart() {
+  const now = $("readerNow").textContent, part = $("readerName").querySelector(".reader-part");
+  const text = now && now !== "Contents" ? now : "";
+  if (part) { part.textContent = text; part.hidden = !text; }
 }
 
 // The bar along the bottom fills as the page is read. The top bar slides
@@ -1387,7 +1395,7 @@ function mediaInfo(p) {
   const list = p.folder ? folderPages(p.folder) : [];
   const at = list.indexOf(p);
   return { title: p.title, subtitle: p.folder || siteOf(p), album: p.folder || siteOf(p),
-    track: at >= 0 ? at + 1 : 0, tracks: at >= 0 ? list.length : 0 };
+    track: at >= 0 ? at + 1 : 0, tracks: at >= 0 ? list.length : 0, cover: thumbUrl(p) || "" };
 }
 
 // Going on with the app put away (1.23.0). At the end of a clip the app
@@ -3648,7 +3656,8 @@ function noteSettings() {
 function paintReaderName(p) {
   const title = p.preview ? el("span", { class: "reader-title" }, p.title)
     : el("button", { class: "reader-title", type: "button", "aria-label": "Rename", title: "Rename", onclick: () => renameInReader(p) }, p.title);
-  fill($("readerName"), siteOf(p) ? el("span", { class: "reader-site" }, siteOf(p)) : null, title);
+  fill($("readerName"), siteOf(p) ? el("span", { class: "reader-site" }, siteOf(p)) : null, title, el("span", { class: "reader-part", dir: "auto", hidden: "" }));
+  paintPart();
 }
 // The name becomes a field where it is: Enter or tapping away saves, Escape
 // leaves it as it was.

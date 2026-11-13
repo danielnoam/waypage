@@ -764,6 +764,13 @@ function zipOf(files) {
       await q.locator("#readerView:not([hidden])").waitFor();
       await until(q, () => document.querySelectorAll("#readTicks i").length >= 7);
       assert.match(await q.locator("#readSection").innerText(), /min left/);
+      // On a phone the name hangs in a bubble under the bar, the chapter under it.
+      await q.evaluate(() => Waypage.reader.jumpTo(3));
+      await until(q, () => /Chapter/.test(document.querySelector("#readerName .reader-part").textContent));
+      const name = await q.locator("#readerName").boundingBox(), topBar = await q.locator("#readerView .reader-bar").boundingBox();
+      assert.ok(name.y >= topBar.y + topBar.height, "the name isn't under the bar");
+      await q.frameLocator("#readerFrame").locator("body").evaluate(() => window.scrollTo(0, 0));
+      await q.waitForTimeout(800);
       await q.locator("#readSection").click();
       await q.locator("#skimBar:not([hidden])").waitFor();
       await q.waitForTimeout(500);
