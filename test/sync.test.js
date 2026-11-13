@@ -361,4 +361,21 @@ test("what's yours on a file read from outside syncs by its fingerprint (2026-11
   assert.strictEqual(S.outsideOnto(next, got[FP]), null);
 });
 
+test("a rename on one device stays when the other edited the clip's text (2026-11)", () => {
+  const base = lib([page("a1b2", { title: "Old", archived: true })]);
+  const renamed = lib([page("a1b2", { title: "New" })]);
+  const edited = lib([page("a1b2", { title: "Old", archived: true, editedAt: 300, minutes: 4 })]);
+  for (const [l, r] of [[renamed, edited], [edited, renamed]]) {
+    const m = S.merge(base, l, r, NOW).pages[0];
+    assert.strictEqual(m.title, "New");
+    assert.strictEqual(m.archived, undefined);
+    assert.strictEqual(m.editedAt, 300);
+    assert.strictEqual(m.minutes, 4);
+  }
+  // Both edited the text: the later edit wins it all, its title too.
+  const both = S.merge(base, lib([page("a1b2", { title: "Mine", editedAt: 200 })]), edited, NOW).pages[0];
+  assert.strictEqual(both.title, "Old");
+  assert.strictEqual(both.editedAt, 300);
+});
+
 console.log("\n" + passed + " passed");

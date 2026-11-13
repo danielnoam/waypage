@@ -388,7 +388,9 @@ web copy stay links, as before.
   Contents API). Their shas by name are in `files[id].note`, so only what
   changed is sent, and the files go before the page that names them. Drawing
   on a note stamps `editedAt` (`ink.onSaved`), which is what makes sync see
-  it: **the copy edited last wins whole**, strokes are not merged. The
+  it. Its strokes, typed text and pictures merge three ways by id against
+  `ink-base.json` (`noteInkMerged`); `note.json` (the sheets) goes with the
+  copy edited last. The
   switch is `what.notes`: a note (or, with Clips off, a clip) this device
   doesn't sync is left out of the merge and the base, and put back into
   library.json as GitHub had it (`ours`/`rest` in `once()`), so it never reads
@@ -602,9 +604,13 @@ adds a line here.
 - Dialogs (Downloads, Sync, Save with options, Settings) fade in and out,
   the one planned exception to "nothing fades" (Daniel's pick over the
   grow and the zoom).
-- **Notes sync whole, the last edit wins.** Two devices writing on the same
-  note between syncs keep one device's version (the one saved last); strokes
-  aren't merged. A note's PDF over 50 MB isn't sent, so that note opens on
+- **Two devices editing one thing between syncs** (2026-11): highlights,
+  tags, drawings (a note's too) and a file's progress merge; the newest
+  place wins. A clip's text edited on both keeps the later edit whole and
+  drops the other (rare, from Edit clips; not worth a text merge). A rename
+  on one survives a text edit on the other. A clip moved to two different
+  collections ends in the one synced last (`folderAt` is its order there,
+  not a time). A note's PDF over 50 MB isn't sent, so that note opens on
   another device with its PDF missing. Notes sync by default like the other
   parts, since sync itself is already on.
 

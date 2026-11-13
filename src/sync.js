@@ -216,8 +216,14 @@
     const contentFrom = ver(r) > ver(l) ? r : l;
     const readFrom = (r.readAt || 0) > (l.readAt || 0) ? r : l;
     const placeFrom = placeTime(r) > placeTime(l) ? r : l;
+    // A side whose text is still the base's changed only what's around it
+    // (a rename, Archived): that change stays when the other side's text
+    // wins, rather than riding back with the text.
+    const contentOther = contentFrom === r ? l : r;
+    const untouched = b.id && ver(contentOther) === ver(b);
     for (const k of keys) {
-      if (CONTENT.includes(k)) out[k] = ver(l) !== ver(r) ? contentFrom[k] : pick(k);
+      if (CONTENT.includes(k)) out[k] = ver(l) === ver(r) ? pick(k)
+        : untouched && !same(contentOther[k], b[k]) && same(contentFrom[k], b[k]) ? contentOther[k] : contentFrom[k];
       else if (k === "readOn" || k === "readAt") out[k] = readFrom[k];
       // Where you are goes with the side read last (1.21.0). Three ways
       // only when both were read at the same time: a library that went
