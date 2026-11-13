@@ -846,8 +846,10 @@ function renderSide() {
     ...favs.slice(0, FAV_MAX).map((f) => f.folder
       ? item(sideCover(f.folder), f.folder, state.folder === f.folder, count(freshCount(f.folder)), () => openFromSide(f.folder), "side-sub")
       : item(clipCover(f.page), f.page.title, state.open === f.page, null, () => fromSide().then(() => openPage(f.page.id)), "side-sub")),
-    favs.length > FAV_MAX ? item(sideMark("star"), "All favourites", inLib && !state.part && state.filter === "favourites", count(favs.length),
-      () => goPlace("library").then(() => setFilter("favourites")), "side-sub") : null,
+    // Favourites, always there (2026-11, Daniel's ask): the library's
+    // favourites filter, collections and clips alike.
+    item(sideMark("star"), "Favourites", inLib && !state.part && !state.folder && state.filter === "favourites", count(favs.length),
+      () => toLibrary().then(() => goPlace("library")).then(() => setFilter("favourites")), "side-sub"),
     // The library's parts (1.14.0), each opening alone.
     hasFolders ? item(sideMark("folder"), "Collections", inLib && state.part === "collections", null, () => partFromSide("collections"), "side-sub") : null,
     item(sideMark("open"), "Clips", inLib && state.part === "pages", null, () => partFromSide("pages"), "side-sub"),

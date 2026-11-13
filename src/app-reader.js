@@ -1817,11 +1817,10 @@ function marksView(p, back) {
         : el("p", { class: "footnote" }, (pictureBook() && state.open === p ? "Tap Draw on this " + (p.file ? "file" : "clip") + " to draw on its pictures."
           : "Select words in the text and tap Mark or Draw.") + " Highlights and drawings go with the clip to your other devices."),
       // What was on ⋯ Drawings (2026-11): drawings are highlights now.
-      (drawings || canDraw) && !sheetColor ? el("div", { class: "group" },
-        canDraw ? menuRow("Try your pen", () => { history.back(); setTimeout(() => openSheet("ink"), 0); }) : null,
-        drawings ? menuRow("Remove all drawings", () => {
+      drawings && !sheetColor ? el("div", { class: "group" },
+        menuRow("Remove all drawings", () => {
           if (confirm("Remove all drawings from “" + p.title + "”? This can't be undone.")) inkRemoveAll(p, groups).then(draw);
-        }, "warn") : null) : null);
+        }, "warn")) : null);
   };
   const markOne = (p, m, draw) => {
     const note = el("textarea", { class: "mark-note-field", rows: "3", placeholder: "Add a note", "aria-label": "Note", dir: "auto" });

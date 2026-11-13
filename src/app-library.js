@@ -137,11 +137,12 @@ async function setFolder(p, name) {
   if (clean) {
     if (p.folder && sameTag(p.folder, clean)) return;
     p.folder = folderName(clean);
-    p.folderAt = Date.now();
+    p.folderAt = p.movedAt = Date.now();
     joinFav(p, p.folder);
   } else {
     delete p.folder;
     delete p.folderAt;
+    p.movedAt = Date.now();
     joinFav(p, null);
   }
   await C.store.writeIndex(state.pages);
@@ -406,10 +407,11 @@ function saveNewButton(list) {
 }
 
 function renderFolder() {
-  // A handle with focus keeps it through a draw again (a cover drawn
-  // late redraws the list after a move by keys).
-  const had = document.activeElement && document.activeElement.matches && document.activeElement.matches("#folderBody .drag-handle")
-    ? document.activeElement.closest("li").dataset.id : null;
+  // A handle or star with focus keeps it through a draw again (a cover
+  // drawn late redraws the list after a move by keys).
+  const a = document.activeElement;
+  const had = a && a.matches && a.matches("#folderBody .drag-handle, #folderBody .item-fav")
+    ? '[data-id="' + a.closest("li").dataset.id + '"] .' + a.classList[a.classList.length - 1] : null;
   const list = folderPages(state.folder);
   if (!list.length) {
     folderMode = "";
@@ -458,11 +460,21 @@ function renderFolder() {
             editing ? el("span", { class: "choice-note" }, formatSize(p.bytes || 0))
               : el("span", { class: "choice-note" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, readingLine(p))),
           ordering ? null : chapterMark(p)),
-        ordering ? dragHandle(p, i, list.length) : null))) : null);
+        ordering ? dragHandle(p, i, list.length) : editing ? null : itemFav(p)))) : null);
   paintFolderBar();
   paintPicks();
-  const again = had && $("folderBody").querySelector('li[data-id="' + had + '"] .drag-handle');
-  if (again) again.focus();
+  const again = had && $("folderBody").querySelector("li" + had);
+  if (again) again.focus({ preventScroll: true });
+}
+
+// A star on each clip in a collection (Daniel 2026-11-13), the same as
+// Favourite in its sheet.
+function itemFav(p) {
+  const b = el("button", { class: "icon-btn item-fav", type: "button", "aria-label": "Favourite " + p.title,
+    "aria-pressed": p.fav ? "true" : "false",
+    onclick: () => setFavourite([p], !p.fav) });
+  b.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS.star + "</svg>";
+  return b;
 }
 
 // How a collection shows what's in it, kept on this device: a list of
@@ -492,7 +504,8 @@ function coverItem(p, now) {
       pickMark(),
       el("span", { class: "tile-thumb" + (src ? "" : " blank") }, src ? el("img", { src, alt: "", loading: "lazy" }) : siteMark(p)),
       el("span", { class: "tile-name", dir: "auto" }, p.title),
-      el("span", { class: "tile-meta" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, readingLine(p))));
+      el("span", { class: "tile-meta" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, readingLine(p))),
+    itemFav(p));
 }
 
 // A tick once read, a filling ring part way.
@@ -1135,6 +1148,8 @@ function pageSheet(p, where) {
         // A PDF's drawings as ink annotations in a new file (2026-11).
         inReader && !p.note && p.file && (p.drawn || []).length && C.files.heldPdf() && C.files.heldPdf().ink
           ? menuRow("Save a copy with drawings", () => back().then(() => inkCopy(p))) : null,
+        // Moved here from Highlights (Daniel's ask, 2026-11-13).
+        inReader && inkReady() ? menuRow("Try your pen", () => { history.back(); setTimeout(() => openSheet("ink"), 0); }) : null,
         C.files.convertible(p) ? menuRow("Make a note from it", () => back().then(() => makeNoteFrom(p))) : null,
         inReader && !p.note && !C.files.printed(p) ? menuRow("Find in this clip", () => back().then(openFind)) : null,
         inReader && !p.note && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow("Save linked pages", () => back().then(() => openSheet("links"))) : null,
@@ -1611,11 +1626,12 @@ function folderSheet() {
     const target = name && cleanTag(name) ? folderName(name) : null;
     const now = Date.now();
     [...list].sort((a, b) => (a.folderAt || a.savedAt || 0) - (b.folderAt || b.savedAt || 0)).forEach((p, i) => {
-      if (!target) { delete p.folder; delete p.folderAt; joinFav(p, null); return; }
+      if (!target) { if (p.folder) p.movedAt = now; delete p.folder; delete p.folderAt; joinFav(p, null); return; }
       if (p.folder && sameTag(p.folder, target)) return;
       joinFav(p, target);
       p.folder = target;
       p.folderAt = now + i;
+      p.movedAt = now;
     });
     await C.store.writeIndex(state.pages);
     await back(andFolder(2));
@@ -1652,7 +1668,7 @@ function longPress(root) {
     fired = false;
     mouse = e.pointerType === "mouse";
     const node = e.button === 0 && e.target.closest("[data-ids]");
-    if (!node || e.target.closest(".card-retry, .drag-handle")) return;
+    if (!node || e.target.closest(".card-retry, .drag-handle, .item-fav")) return;
     start = { x: e.clientX, y: e.clientY };
     cancel();
     timer = setTimeout(() => {
@@ -2536,7 +2552,7 @@ function watchIntoPick(w) {
       const dir = into || ((p.file && p.file.path) || "").split("/").slice(-2, -1)[0];
       const to = dir ? folderName(dir) : null;
       if ((p.folder || null) === to) continue;
-      if (to) { joinFav(p, to); Object.assign(p, { folder: to, folderAt: at }); } else { delete p.folder; delete p.folderAt; joinFav(p, null); }
+      if (to) { joinFav(p, to); Object.assign(p, { folder: to, folderAt: at, movedAt: at }); } else { delete p.folder; delete p.folderAt; p.movedAt = at; joinFav(p, null); }
       moved++;
     }
     if (moved) { await C.store.writeIndex(state.pages); renderLibrary(); updateWidgets(); }
@@ -2642,6 +2658,9 @@ function newNoteSheet() {
 async function makeNote(kind) {
   let meta;
   try { meta = await C.notes.create(kind); } catch (e) { console.error(e); toast("Couldn't make the note. Free some space and try again."); return; }
+  // Made inside a collection, it belongs to it; under a tag filter, it has the tag.
+  if (state.folder) { meta.folder = folderName(state.folder); meta.folderAt = Date.now(); joinFav(meta, meta.folder); }
+  if (state.filter.startsWith("#")) meta.tags = withTags([], [state.filter.slice(1)]);
   state.pages.unshift(meta);
   await C.store.writeIndex(state.pages);
   await back(state.batch ? 2 : 1);
