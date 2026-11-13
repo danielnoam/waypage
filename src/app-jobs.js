@@ -317,7 +317,7 @@ async function runJob(job) {
     if (old) {
       // Saved again: the new copy takes the old one's place, keeping its
       // collection, tags and read position.
-      for (const k of ["requested", "folder", "folderAt", "folderFav", "folderFavAt", "coverPick", "source", "tags", "at", "finished", "readAt", "readOn", "placeAt", "fav", "favAt", "marks", "noShare", "folderNoShare"]) if (old[k] !== undefined) meta[k] = old[k];
+      for (const k of ["requested", "folder", "folderAt", "folderFav", "folderFavAt", "coverPick", "source", "tags", "at", "finished", "readAt", "readOn", "placeAt", "fav", "favAt", "marks", "noShare", "folderNoShare", "movedAt"]) if (old[k] !== undefined) meta[k] = old[k];
       if (job.keep) Object.assign(meta, job.keep);
       C.stats.moved(old.id, meta.id);
       const i = state.pages.indexOf(old);

@@ -137,11 +137,12 @@ async function setFolder(p, name) {
   if (clean) {
     if (p.folder && sameTag(p.folder, clean)) return;
     p.folder = folderName(clean);
-    p.folderAt = Date.now();
+    p.folderAt = p.movedAt = Date.now();
     joinFav(p, p.folder);
   } else {
     delete p.folder;
     delete p.folderAt;
+    p.movedAt = Date.now();
     joinFav(p, null);
   }
   await C.store.writeIndex(state.pages);
@@ -1623,11 +1624,12 @@ function folderSheet() {
     const target = name && cleanTag(name) ? folderName(name) : null;
     const now = Date.now();
     [...list].sort((a, b) => (a.folderAt || a.savedAt || 0) - (b.folderAt || b.savedAt || 0)).forEach((p, i) => {
-      if (!target) { delete p.folder; delete p.folderAt; joinFav(p, null); return; }
+      if (!target) { if (p.folder) p.movedAt = now; delete p.folder; delete p.folderAt; joinFav(p, null); return; }
       if (p.folder && sameTag(p.folder, target)) return;
       joinFav(p, target);
       p.folder = target;
       p.folderAt = now + i;
+      p.movedAt = now;
     });
     await C.store.writeIndex(state.pages);
     await back(andFolder(2));
@@ -2548,7 +2550,7 @@ function watchIntoPick(w) {
       const dir = into || ((p.file && p.file.path) || "").split("/").slice(-2, -1)[0];
       const to = dir ? folderName(dir) : null;
       if ((p.folder || null) === to) continue;
-      if (to) { joinFav(p, to); Object.assign(p, { folder: to, folderAt: at }); } else { delete p.folder; delete p.folderAt; joinFav(p, null); }
+      if (to) { joinFav(p, to); Object.assign(p, { folder: to, folderAt: at, movedAt: at }); } else { delete p.folder; delete p.folderAt; p.movedAt = at; joinFav(p, null); }
       moved++;
     }
     if (moved) { await C.store.writeIndex(state.pages); renderLibrary(); updateWidgets(); }
