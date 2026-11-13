@@ -625,6 +625,12 @@ adds a line here.
 Things that broke once and would again. Check here before touching the
 area.
 
+- A note's card picture is always `images/cover.jpg`, so its address
+  carries `thumbAt` (this device's own, never synced), stamped after the
+  picture is written. Stamping `editedAt` instead showed the old picture:
+  the redraw lands after the library has already rendered that address.
+  Covers are drawn without opening the note (`noteCoverOf`, queued by
+  `noteCoversSoon`) for new, synced-in and edited notes.
 - A collection's mosaic cover is a picture of your own whose name starts
   "ux" (`MOSAIC_FILE`); own pictures start with a base-36 time ("um…"
   until the 2050s). Change how either is named and the Cover choices

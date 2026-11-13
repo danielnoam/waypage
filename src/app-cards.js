@@ -35,8 +35,9 @@ function thumbUrl(p) {
   if (/^https?:/.test(p.thumb)) return p.thumb;
   if (webThumbs.has(p.id)) return webThumbs.get(p.id);
   const base = C.store.pageDirUrl(p.id);
-  // A note's picture is drawn again as it is written on, at the same name.
-  return base ? base + p.thumb + (p.note && p.editedAt ? "?v=" + p.editedAt : "") : null;
+  // A note's picture is drawn again as it is written on, at the same name,
+  // so its address carries when it was drawn (thumbAt, this device's own).
+  return base ? base + p.thumb + (p.note && (p.thumbAt || p.editedAt) ? "?v=" + (p.thumbAt || p.editedAt) : "") : null;
 }
 
 // The site's icon, for a card with no picture (0.27.6): kept beside the

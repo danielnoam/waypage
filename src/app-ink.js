@@ -80,15 +80,54 @@ function noteCoverSoon(p, ms) {
 async function noteCover(p) {
   const handle = C.files.heldPdf();
   if (state.open !== p || !p.note || !handle || !handle.sheets) return;
+  await noteCoverKeep(p, () => C.notes.cover(handle, C.ink.strokes(1)), () => state.open === p);
+}
+// Draws the picture with `make`, keeps it as the card's and stamps when,
+// so the card's address changes (the file's name never does).
+async function noteCoverKeep(p, make, still) {
   try {
-    const bytes = await C.notes.cover(handle, C.ink.strokes(1));
-    if (state.open !== p) return;
+    const bytes = await make();
+    if (!still()) return;
     p.thumb = await C.files.thumbnail(p.id, bytes, "image/jpeg");
-    await C.store.writeIndex(state.pages);
+    p.thumbAt = Date.now();
+    await C.store.writeIndexOnly(state.pages);
     if (!C.platform.native) await loadThumbs();
     renderLibrary();
   } catch (e) { /* the card keeps what it had */ }
 }
+// A note's card drawn without opening it: its first sheet and the strokes
+// on it, read from the note's own files.
+async function noteCoverOf(p) {
+  if (!p || !p.note || state.open === p) return;
+  let opened = null;
+  try {
+    opened = await C.notes.open(p);
+    const d = await C.store.readInk(p.id);
+    const list = d && d.pages && Array.isArray(d.pages[1]) ? d.pages[1].map(C.ink.clean).filter(Boolean) : [];
+    const images = {};
+    for (const s of list) if (s.t === "i" && !(s.f in images)) images[s.f] = await C.store.readInkImage(p.id, s.f);
+    await noteCoverKeep(p, () => C.notes.cover(opened.handle, list, images), () => state.pages.includes(p) && state.open !== p);
+  } catch (e) { /* the card keeps what it had */ }
+  finally { if (opened) opened.handle.close(); }
+}
+// Every note whose card is missing or older than its last edit, one at a
+// time while the app is idle (a card picture never syncs, so a note that
+// came from another device has none).
+let coverQueue = null;
+function noteCoversSoon() {
+  const due = () => state.pages.filter((p) => p.note && state.open !== p && (!p.thumb || (p.editedAt || 0) > (p.thumbAt || 0)));
+  if (coverQueue) return;
+  coverQueue = true;
+  const next = async () => {
+    const p = due().find((x) => !(coverTried.get(x.id) >= (x.editedAt || 0) + 1));
+    if (!p) { coverQueue = null; return; }
+    coverTried.set(p.id, (p.editedAt || 0) + 1);
+    await noteCoverOf(p);
+    setTimeout(next, 200);
+  };
+  setTimeout(next, 1500);
+}
+const coverTried = new Map();
 // A clip's drawings by block live on its index entry (`ink`, page -> strokes),
 // beside its highlights, so they sync and back up the same way.
 C.ink.blockStore = {
