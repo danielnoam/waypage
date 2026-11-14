@@ -663,6 +663,9 @@ function zipOf(files) {
     await test("held half a second, the brightness slider swipes to the other side (1.16.0)", async () => {
       await p.evaluate(() => {
         C.platform.brightness = { available: true, get: async () => ({ level: 0.5 }), set: async () => {} };
+        // The spacing changes above keep the place by scrolling, which can
+        // tuck the bars away; a tap brings them, and the slider with them.
+        document.getElementById("readerView").classList.remove("bar-away");
         brightOpen();
       });
       await p.locator("#bright:not([hidden])").waitFor();
