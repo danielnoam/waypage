@@ -911,7 +911,13 @@ area.
   screen. Move its children. Only Playwright with `isMobile: true` shows it.
 - **Long clips use `content-visibility` chunks:** measuring anything
   inside a skipped chunk lays it out, so a loop over
-  `getBoundingClientRect` across a book undoes the speed-up.
+  `getBoundingClientRect` across a book undoes the speed-up. Anything
+  that finds a place in a book (`spot`, `section`) halves over it and
+  judges a skipped chapter by its own box (`above`). The chunks only
+  exist after the page has loaded, so while it parses `co-parsing` on
+  `<html>` skips every part of the body: without it Chrome lays out the
+  growing book again and again (a 47 MB book, 54 s at 6x against 7 s).
+  `textContent` on a whole book is a 40 MB string; count with a walker.
 - **Moving an iframe reloads it.** Wrap it where it will stay at start-up.
 - **Classic scripts share one scope:** a global function can shadow a
   `window` method (`moveTo` had to become `moveInFolder`).

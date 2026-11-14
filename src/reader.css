@@ -132,6 +132,8 @@ html[data-co-pdf-dark] .co-printed img[src] { filter: url(#co-pdf-dark); }
 .co-comic { margin: 0 -20px; touch-action: pan-x pan-y; }
 /* A long clip's chapters lay out as they're reached (reader.js, chunkUp). */
 .co-lazy { content-visibility: auto; }
+/* A long clip while it parses (reader.js srcdoc), until chunkUp. */
+.co-parsing .co-body > * { content-visibility: auto; contain-intrinsic-block-size: auto 600px; }
 .co-comic img { display: block; width: 100%; height: auto; margin: 0; border-radius: 0; background: var(--preview); cursor: default; }
 /* A comic page still in its file, from before 1.29.0 wrote sizes: a page's room until it's read. */
 .co-comic img[data-in]:not([width]) { aspect-ratio: 2 / 3; }
