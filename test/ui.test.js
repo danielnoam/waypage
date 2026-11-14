@@ -4601,6 +4601,53 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("a comic exports as a CBZ that comes back in whole: its pages in order, its series and direction (2026-11)", async () => {
+      const q = await page(browser, 390);
+      const add = (b, name) => q.evaluate(async ([b, name]) => { askKeep = async () => false; await openFile(new File([new Uint8Array(b)], name), null, false); }, [b, name]);
+      await add([...mangaBytes(2)], "v2.cbz");
+      await add([...mangaBytes(1)], "v1.cbz");
+      await add([...Buffer.from("# Plain words\n\nNo pictures here.")], "plain.md");
+      const got = await q.evaluate(async () => {
+        const B = window.Waypage.backup;
+        const kinds = (what) => {
+          const box = document.body.appendChild(exportControls(what, () => {}));
+          box.querySelector(".dropdown-btn").click();
+          const list = [...document.querySelectorAll(".dropdown-item")].map((i) => i.textContent + (i.getAttribute("aria-selected") === "true" ? "*" : ""));
+          document.querySelectorAll(".dropdown-item").forEach((n) => n.remove());
+          box.remove();
+          return list;
+        };
+        const one = state.pages.find((p) => p.title === "Volume 1"), plain = state.pages.find((p) => p.title === "Plain words");
+        let blob = null;
+        window.Waypage.platform.download = (name, b) => { blob = b; blob.label = name; };
+        const out = async (what) => {
+          await exportAs(what, "cbz", "save", document.createElement("button"));
+          const files = await B.zipEntries(blob);
+          const info = new TextDecoder().decode(await B.zipRead(blob, files.get("ComicInfo.xml")));
+          return { name: blob.label, files: [...files.keys()], info, blob };
+        };
+        const single = await out(one);
+        const both = await out({ pages: folderPages("Night Ferry"), title: "Night Ferry" });
+        // Back in: the same comic, filed with its series, right to left.
+        const back = await Waypage.files.bring(new File([both.blob], both.name), "cbz", { has: () => false });
+        return {
+          comic: kinds(one), plain: kinds(plain), folder: kinds({ pages: folderPages("Night Ferry"), title: "Night Ferry" }),
+          single: { ...single, blob: null }, both: { ...both, blob: null }, back: [back.series, back.manga, back.images],
+        };
+      });
+      assert.ok(got.comic.includes("CBZ*"), "a comic offers CBZ, picked at first: " + got.comic);
+      assert.ok(!got.plain.some((k) => k.startsWith("CBZ")), "words offer no CBZ: " + got.plain);
+      assert.ok(got.folder.includes("CBZ*"), "a collection of comics offers CBZ: " + got.folder);
+      assert.strictEqual(got.single.name, "Volume 1.cbz");
+      assert.deepStrictEqual(got.single.files, ["0001.png", "0002.png", "0003.png", "0004.png", "0005.png", "0006.png", "ComicInfo.xml"]);
+      assert.ok(/<Series>Night Ferry<\/Series>/.test(got.single.info) && /<Number>1<\/Number>/.test(got.single.info) && /<Manga>YesAndRightToLeft<\/Manga>/.test(got.single.info), got.single.info);
+      assert.strictEqual(got.both.files.length, 13, "both volumes, one after the other");
+      assert.ok(/<PageCount>12<\/PageCount>/.test(got.both.info), got.both.info);
+      assert.deepStrictEqual(got.back, ["Night Ferry", true, 12]);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a comic in Pages: a page a screen, a manga turns right to left, a spread in halves, two up on a wide window (1.53.0)", async () => {
       for (const width of [390, 1280]) {
         const q = await page(browser, width);
