@@ -290,7 +290,13 @@ and the page shows above it.
   (PDF, HTML, EPUB, Markdown, Page source, each with a one-line note, the
   last pick remembered), and two 48 px buttons side by side: "Save to
   device" (primary) and "Send" (quiet). PDF has one button, "Print or
-  save as PDF". The web copy has one, "Download".
+  save as PDF". The web copy has one, "Download". While the file is
+  made, the pressed button turns a 12 px spinner (accent ink on the
+  primary) beside what it's on ("Making the book…", "Chapter 12 of 48",
+  "Packing the book…"), over a 3 px bar inset along its foot that sweeps
+  until it can count, then fills (chapters are most of a book, packing
+  the rest). The kind and the other button wait, disabled; Back doesn't.
+  Reduced motion: the spinner and bar breathe.
 - **Settings (Now):** a menu of three groups: Appearance and Saving (the
   current choice on the right), Storage and backup (the total), Updates
   and About (the version). Each row ends with a chevron and pushes its

@@ -1686,6 +1686,45 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("exporting a collection shows what it's making, then gives the button back", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const c = (i) => ({ id: "xb" + i, url: "https://example.com/xb" + i, title: "Part " + i, site: "example.com", savedAt: 1000 + i, minutes: 1, mode: "links", at: 0, finished: false, folder: "Tome", folderAt: i });
+        await window.Waypage.store.writeIndex([c(1), c(2), c(3)]);
+        for (const i of [1, 2, 3]) await window.Waypage.store.writePage("xb" + i, "<!doctype html><html><body><h1>Part " + i + "</h1><p>Words.</p></body></html>", c(i));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        let file = null;
+        window.Waypage.platform.download = (name) => { file = name; };
+        const box = exportControls({ pages: folderPages("Tome"), title: "Tome" }, () => {});
+        document.body.append(box);
+        const [save, other] = box.querySelectorAll(".export-actions button");
+        const face = save.textContent;
+        const seen = [];
+        let bar = false, held = false;
+        new MutationObserver(() => {
+          const l = save.querySelector(".export-label");
+          if (l && seen[seen.length - 1] !== l.textContent) seen.push(l.textContent);
+          bar = bar || !!save.querySelector(".export-bar .progress-fill");
+          held = held || (!!l && box.querySelector(".dropdown-btn").disabled);
+        }).observe(save, { subtree: true, childList: true, characterData: true });
+        const kind = box.querySelector(".dropdown-btn");
+        save.click();
+        await new Promise((r) => { const t = setInterval(() => { if (file) { clearInterval(t); r(); } }, 20); });
+        await new Promise((r) => setTimeout(r, 0));
+        return { seen, bar, held, file, face, after: save.textContent, busy: save.classList.contains("busy"), disabled: save.disabled || kind.disabled || other.disabled };
+      });
+      assert.strictEqual(got.file, "Tome.epub");
+      assert.deepStrictEqual(got.seen.slice(0, 1), ["Making the book…"], JSON.stringify(got.seen));
+      assert.ok(got.seen.includes("Chapter 2 of 3") && got.seen.includes("Packing the book…"), JSON.stringify(got.seen));
+      assert.ok(got.bar && got.held, JSON.stringify(got));
+      assert.ok(got.after === got.face && !got.busy && !got.disabled, JSON.stringify(got));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a picked collection's ring goes round its name and progress (1.23.1)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

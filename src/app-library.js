@@ -1825,14 +1825,16 @@ async function exportAs(p, kind, how, btn) {
   if (kind === "pdf") { await (pages ? printPages(pages, p.title, btn) : printPage(p, btn)); return; }
   if (kind === "source" && !navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
   const mime = EXPORTS.find((e) => e.value === kind).mime;
-  btn.disabled = true;
+  const book = kind === "epub";
+  const busy = exportBusy(btn, book ? "Making the book…" : kind === "source" ? "Getting the page…" : "Making the file…", book);
   try {
     let name, text = null, uri = null, blob = null;
-    if (kind === "epub") ({ name, uri = null, blob = null } = await C.epub.exportBook(pages || [p], pages ? p.title : undefined, pages ? await coverBytes(pages) : null));
-    else if (kind === "md") ({ name, text } = await (pages ? C.backup.exportMarkdownAll(pages, p.title) : C.backup.exportMarkdown(p)));
-    else if (kind === "html") ({ name, html: text } = await (pages ? C.backup.exportPages(pages, p.title) : C.backup.exportPage(p)));
+    if (kind === "epub") ({ name, uri = null, blob = null } = await C.epub.exportBook(pages || [p], pages ? p.title : undefined, pages ? await coverBytes(pages) : null, busy.count));
+    else if (kind === "md") ({ name, text } = await (pages ? C.backup.exportMarkdownAll(pages, p.title, busy.count) : C.backup.exportMarkdown(p)));
+    else if (kind === "html") ({ name, html: text } = await (pages ? C.backup.exportPages(pages, p.title, busy.count) : C.backup.exportPage(p)));
     else ({ name, html: text } = await C.save.pageSource(p.url));
     if (!uri && text != null) uri = await C.platform.writeCache(name, text);
+    busy.made();
     if (!uri) C.platform.download(name, blob || new Blob([text], { type: mime }));
     else if (how === "save") {
       const saved = await C.platform.saveFile(uri, name, mime);
@@ -1843,7 +1845,41 @@ async function exportAs(p, kind, how, btn) {
     if (!(e instanceof C.save.SaveError)) console.error(e);
     toast(e instanceof C.save.SaveError ? e.message : "Couldn't make the file. Try again.");
   }
-  btn.disabled = false;
+  busy.end();
+}
+
+// While an export is made: the pressed button turns a spinner and says
+// what it's on, with a bar along its foot that sweeps until it can count
+// the chapters, then fills. The other controls wait; Back doesn't.
+function exportBusy(btn, first, book) {
+  const box = btn.closest(".export");
+  const held = box ? [...box.querySelectorAll("button, input")].filter((b) => b !== btn && !b.disabled && !b.classList.contains("export-back")) : [];
+  const face = [...btn.childNodes];
+  const label = el("span", { class: "export-label", "aria-live": "polite" }, first);
+  const fill = el("span", { class: "progress-fill" });
+  const bar = el("span", { class: "progress busy export-bar", "aria-hidden": "true" }, fill);
+  held.forEach((b) => { b.disabled = true; });
+  btn.disabled = true;
+  btn.classList.add("busy");
+  btn.replaceChildren(el("span", { class: "spinner", "aria-hidden": "true" }), label, bar);
+  const show = (share, text) => {
+    bar.classList.remove("busy");
+    fill.style.transform = "scaleX(" + share + ")";
+    if (text && label.textContent !== text) label.textContent = text;
+  };
+  return {
+    // Chapters take most of a book's time; packing it takes the rest.
+    count(done, total, packing) {
+      if (packing) show(0.8 + 0.2 * done / total, "Packing the book…");
+      else if (total > 1) show((book ? 0.8 : 1) * done / total, (book ? "Chapter " : "Adding ") + Math.min(done + 1, total) + " of " + total);
+    },
+    made() { btn.classList.remove("busy"); btn.replaceChildren(...face); },
+    end() {
+      if (btn.classList.contains("busy")) this.made();
+      btn.disabled = false;
+      held.forEach((b) => { b.disabled = false; });
+    },
+  };
 }
 
 // A page, or a folder in its order, as an e-book (epub.js), for an
@@ -1864,11 +1900,12 @@ async function sendBook(pages, btn, title) {
 // The page file with a plain print style, on the phone's print screen;
 // it runs no scripts and loads nothing, its pictures are inside it.
 const printPage = (p, btn) => printFile(() => C.backup.exportPage(p), btn);
-const printPages = (pages, title, btn) => printFile(() => C.backup.exportPages(pages, title), btn);
+const printPages = (pages, title, btn) => printFile((count) => C.backup.exportPages(pages, title, count), btn);
 async function printFile(make, btn) {
-  btn.disabled = true;
+  const busy = exportBusy(btn, "Getting it ready…");
   try {
-    const { name, html } = await make();
+    const { name, html } = await make(busy.count);
+    busy.made();
     const head = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data:; style-src \'unsafe-inline\'">' +
       "<style>" + C.epub.STYLE + "</style>";
     await C.platform.printHtml(name.replace(/\.html$/, ""), html.replace(/<head>/i, "<head>" + head));
@@ -1876,7 +1913,7 @@ async function printFile(make, btn) {
     console.error(e);
     toast("Couldn't open printing. Try again.");
   }
-  btn.disabled = false;
+  busy.end();
 }
 
 // Back up the library (1.47.0): Pause and Stop while it runs, like
