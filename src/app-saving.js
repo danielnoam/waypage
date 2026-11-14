@@ -485,11 +485,11 @@ function syncLeave() {
 // the merge, the deletions and the other devices all work as they do for
 // edits made here. Where you are in each clip and the reading stats stay
 // as they are (C.sync.revertPlan).
-let historyList = null, historyMore = false, historyPage = 0, historyError = "", historyBusy = false;
+let historyList = null, historyMore = false, historyPage = 0, historyError = "", historyBusy = false, historyStatus = "";
 let reverting = null;   // { text, syncing }: a version is being put back
 const historyOpen = new Set();   // shas of the versions folded out
 const historyDiff = new Map();   // sha -> { busy } | { error } | { plan, view }
-const historyReset = () => { historyList = null; historyMore = false; historyPage = 0; historyError = ""; historyOpen.clear(); historyDiff.clear(); };
+const historyReset = () => { historyList = null; historyMore = false; historyPage = 0; historyError = ""; historyStatus = ""; historyOpen.clear(); historyDiff.clear(); };
 // This device's clips as sync sees them, and what to ask revertPlan.
 function historyView() {
   const what = C.sync.what;
@@ -610,20 +610,36 @@ function historyWhy() {
   if (C.sync.links) return "This device syncs Links only. History needs Clips too, since it brings clips' text back.";
   return "";
 }
+// A page of the commits, and more until one shows a version that differs:
+// saves that changed nothing are left out (C.sync.distinct). Older commits
+// with no print in their message are read once to compare, three at a time.
 async function historyLoad(more) {
   if (historyBusy) return;
   historyBusy = true;
   historyError = "";
+  historyStatus = "";
   if (state.section === "syncHistory") renderSection();
   try {
-    const got = await C.sync.history(historyPage + 1);
-    historyPage++;
-    historyList = (more && historyList ? historyList : []).concat(got.list);
-    historyMore = got.more;
+    const before = more && historyList ? C.sync.distinct(historyList).length : 1;
+    for (let tries = 0; tries < 3; tries++) {
+      const got = await C.sync.history(historyPage + 1);
+      historyPage++;
+      const todo = got.list.filter((e) => !e.print);
+      for (let i = 0; i < todo.length; i += 3) {
+        historyStatus = "Comparing versions, " + Math.min(i + 3, todo.length) + " of " + todo.length;
+        if (state.section === "syncHistory") renderSection();
+        // One that can't be read keeps no print, and so keeps its row.
+        await Promise.all(todo.slice(i, i + 3).map((e) => C.sync.printOf(e.sha).then((p) => { e.print = p; }, () => {})));
+      }
+      historyList = (more || tries ? historyList || [] : []).concat(got.list);
+      historyMore = got.more;
+      if (!got.more || C.sync.distinct(historyList).length > before) break;
+    }
   } catch (e) {
     historyError = e instanceof C.sync.SyncError ? e.message : "Couldn't read the history. Try again.";
     if (!(e instanceof C.sync.SyncError)) console.error(e);
   }
+  historyStatus = "";
   historyBusy = false;
   if (state.section === "syncHistory") renderSection();
 }
@@ -635,7 +651,7 @@ function historySections() {
   const note = (e) => [e.kind === "feeds" ? "Feeds changed" : e.kind === "back" ? "Put back to " + e.back : e.clips != null ? countLine(e.clips) : "",
     e.device ? "from " + e.device : ""].filter(Boolean).join(" · ");
   // Tap the version to see what it would change; only Put back puts it back.
-  const rows = (historyList || []).flatMap((e, i) => {
+  const rows = C.sync.distinct(historyList || []).flatMap((e, i) => {
     const text = el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, driveWhen(e.at)), el("span", { class: "choice-note" }, note(e)));
     if (i === 0) return [el("div", { class: "row" }, text, el("span", { class: "row-value" }, "Now"))];
     const open = historyOpen.has(e.sha), id = "history-" + e.sha;
@@ -659,14 +675,14 @@ function historySections() {
     el("span", { class: "progress thin busy", "aria-hidden": "true" }, el("span", { class: "progress-fill", style: "transform: scaleX(1)" }))))] : [];
   const rest = why ? [el("div", { class: "row" }, el("span", { class: "row-label muted" }, why))]
     : historyError ? [el("button", { class: "row", type: "button", onclick: () => historyLoad(!!historyList) }, el("span", { class: "row-label warn" }, historyError + " Try again"))]
-    : !historyList ? [el("div", { class: "row" }, el("span", { class: "row-label" }, "Looking on GitHub…"))]
-    : !rows.length ? [el("div", { class: "row" }, el("span", { class: "row-label" }, "No earlier versions yet"))]
+    : !historyList ? [el("div", { class: "row" }, el("span", { class: "row-label" }, historyStatus || "Looking on GitHub…"))]
+    : rows.length <= 1 && !historyMore ? [el("div", { class: "row" }, el("span", { class: "row-label" }, "No earlier versions with changes yet"))]
     : [];
   return [section("Sync history", null,
     el("div", { class: "group" }, ...status, ...rows, ...rest,
       !why && historyMore && !historyError ? el("button", { class: "row", type: "button", ...off, onclick: () => historyLoad(true) },
-        el("span", { class: "row-label accent" }, historyBusy ? "Looking…" : "Show older")) : null),
-    el("p", { class: "footnote" }, "Each time your library changed, GitHub kept a copy. Tap a version to see what it would change. Putting one back makes your library as it was then, on every device: clips deleted since come back, clips saved since are deleted, and tags, collections, favourites, highlights and feeds go back too. Notes and drawings go back too. Where you are in each clip and your reading stats stay as they are. A clip deleted this way stays in history, so you can put a later version back from this list." + (C.sync.what.notes ? "" : " This device doesn't sync Notes, so it leaves them as they are.")))];
+        el("span", { class: "row-label accent" }, historyBusy ? historyStatus || "Looking…" : "Show older")) : null),
+    el("p", { class: "footnote" }, "Each time your library changed, GitHub kept a copy. Tap a version to see what it would change. Versions that changed nothing are left out. Putting one back makes your library as it was then, on every device: clips deleted since come back, clips saved since are deleted, and tags, collections, favourites, highlights and feeds go back too. Notes and drawings go back too. Where you are in each clip and your reading stats stay as they are. A clip deleted this way stays in history, so you can put a later version back from this list." + (C.sync.what.notes ? "" : " This device doesn't sync Notes, so it leaves them as they are.")))];
 }
 async function syncRevert(e) {
   if (reverting || historyWhy()) return;

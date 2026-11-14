@@ -381,7 +381,12 @@ web copy stay links, as before.
   comes back through `noteFilesIn`/`noteFilesKeep` at that commit, and its ink
   base is set to GitHub head's `ink.json` (its sha and strokes), so the next
   sync sends the old strokes rather than merging the newer ones back; the
-  other device's three-way merge then lands on the old strokes.
+  other device's three-way merge then lands on the old strokes. The list
+  leaves out saves that changed nothing: each library commit's message ends
+  ` · #<16 hex>` (`libraryPrint`: synced fields without places, reading and
+  bookkeeping times, feeds without `addedAt`), and `distinct` keeps the newest
+  of each run of the same print. Older commits have none, so `printOf` reads
+  each once and keeps its print on this device (`waypage.sync.prints`, 600).
 - **Google Drive** (`drive.js`): zipped backups (`backup.js`) in a
   Waypage folder in the person's Drive, resumable (the browser in 8 MB
   pieces), the last few kept. On Android the zip is packed natively
