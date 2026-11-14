@@ -46,6 +46,49 @@ test("a commit that isn't a library write, or a reply that isn't a list, is igno
   assert.deepStrictEqual(S.parseHistory({ message: "Not Found" }), []);
 });
 
+// ---- Versions that differ ----
+const HEX = "0123456789abcdef";
+test("a message carries a print, and an old one reads without", () => {
+  const list = S.parseHistory([
+    commit("c3", "Library: 12 pages · Pixel · #" + HEX, "2026-11-14T10:00:00Z"),
+    commit("c2", "Library: 12 pages · #" + HEX, "2026-11-13T10:00:00Z"),
+    commit("c1", "Feeds: 3 · #" + HEX, "2026-11-12T10:00:00Z"),
+    commit("c0", "Library: 12 pages · Pixel", "2026-11-11T10:00:00Z"),
+  ]);
+  assert.deepStrictEqual(list.map((e) => [e.device, e.print]), [["Pixel", HEX], ["", HEX], ["", HEX], ["Pixel", null]]);
+  assert.strictEqual(list[0].clips, 12);
+});
+
+test("a print ignores places, reading times, bookkeeping times, key order and a feed's addedAt", () => {
+  const a = lib([page("a1b2", { tags: ["t"] }), page("c3d4")], { feeds: [feed("a.example"), feed("b.example")] });
+  const b = lib([page("c3d4", { at: 0.9, spot: "2/3", readAt: 5, readOn: 6, placeAt: 7, favAt: 8, inkAt: 9, finished: true }),
+    { tags: ["t"], ...page("a1b2"), folderFavAt: 3 }], { feeds: [feed("b.example", { addedAt: 99 }), feed("a.example")] });
+  assert.strictEqual(S.libraryPrint(a), S.libraryPrint(b));
+  assert.ok(/^[0-9a-f]{16}$/.test(S.libraryPrint(a)));
+});
+
+test("a print changes with tags, a title, an edit, a stroke, a clip or a feed", () => {
+  const base = () => lib([page("a1b2", { tags: ["t"] })], { feeds: [feed("a.example")] });
+  const p0 = S.libraryPrint(base());
+  const differs = (edit) => { const d = base(); edit(d); return S.libraryPrint(d) !== p0; };
+  assert.ok(differs((d) => { d.pages[0].tags = ["u"]; }));
+  assert.ok(differs((d) => { d.pages[0].title = "Other"; }));
+  assert.ok(differs((d) => { d.pages[0].editedAt = 400; }));
+  assert.ok(differs((d) => { d.pages[0].ink = { 1: [{ id: "s", t: "p" }] }; }));
+  assert.ok(differs((d) => { d.pages[0].marks = [{ id: "m" }]; }));
+  assert.ok(differs((d) => { d.pages.push(page("e5f6")); }));
+  assert.ok(differs((d) => { d.feeds[0].mode = "save"; }));
+  assert.ok(differs((d) => { d.feeds.push(feed("b.example")); }));
+});
+
+test("the list keeps the newest of each run of the same library, and any it can't tell", () => {
+  const e = (print) => ({ print });
+  const got = S.distinct([e("A"), e("A"), e("B"), e("B"), e("B"), e("A")]);
+  assert.deepStrictEqual(got.map((x) => x.print), ["A", "B", "A"]);
+  assert.deepStrictEqual(S.distinct([e("A"), e(null), e("A"), e(null), e(null)]).map((x) => x.print), ["A", null, "A", null, null]);
+  assert.deepStrictEqual(S.distinct([]), []);
+});
+
 // ---- What a put-back changes ----
 // Then: a1b2 (tagged "old"), c3d4. Now: a1b2 (tagged "new", read to 0.7), e5f6 saved since; c3d4 deleted.
 const then = lib([page("a1b2", { tags: ["old"], fav: true, favAt: 5 }), page("c3d4", { savedAt: 50 })], { feeds: [feed("a.example"), feed("b.example")], feedsGone: {} });
