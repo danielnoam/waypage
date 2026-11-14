@@ -265,14 +265,14 @@ function closeFolder() {
 // The collection's screen is a book page (0.27.11): its cover and title,
 // how far along, Continue, then its chapters. Favourite and Edit sit in
 // the bar, the rest in the ⋯ menu. Edit (name, cover and order in one
-// place), the story page and Export take the screen over in place, with
+// place), Website sync and Export take the screen over in place, with
 // Done in the bar.
 let folderMode = "";
 // The name typed in Edit, kept while a cover or move draws the screen again.
 let folderDraft = null;
 const FOLDER_BARS = {
   edit: { title: "Edit", done: "Done" },
-  chapters: { title: "Story page", done: "Done" },
+  chapters: { title: "Website sync", done: "Done" },
   export: { title: "Export", done: "Done" },
 };
 
@@ -371,7 +371,7 @@ function savedLine(list) {
 }
 
 // New chapters found by the daily check, saved from here: straight from
-// the story page's list when it gave one, else by following the last
+// the linked page's list when it gave one, else by following the last
 // chapter's next link.
 // Chapters saving into a collection; while they are, its Save button
 // gives way to a line that opens Downloads (0.30.2).
@@ -667,7 +667,7 @@ function openFolderMenu() {
   };
   const sep = () => el("div", { class: "pop-sep", role: "separator" });
   const pop = el("div", { class: "pop-menu", id: "folderPop", role: "menu", "aria-label": "Collection" },
-    item("book", "Story page", () => setFolderMode("chapters"), fresh ? { note: newCountText(fresh), accent: true } : {}),
+    item("book", "Website sync", () => setFolderMode("chapters"), fresh ? { note: newCountText(fresh), accent: true } : {}),
     item("add", "Add clips", () => openBatch("", false, state.folder)),
     sep(),
     folderLook(state.folder) === "covers"
@@ -719,7 +719,7 @@ function closeFolderMenu(away) {
 
 // ---- Cover ----
 // Any collection's cover can be picked: a picture of your own, or one of
-// its clips'. Automatic is the story page's picture, else the first
+// its clips'. Automatic is the linked page's picture, else the first
 // clip's, else the collection's icon. The pick is a mark on its clips,
 // like a favourite, so it syncs and backs up with them; a picture of
 // your own goes as its own small file (backup.headFiles, sync.syncCovers).
