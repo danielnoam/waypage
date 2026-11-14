@@ -1340,7 +1340,7 @@ const mailAddress = (f) => (f.url.match(MAIL_FEED) || [])[1] + "@" + KTN;
 // "Please confirm your subscription": a Confirm button, not a clip.
 const CONFIRM = /\b(confirm|verify|activate|validate)|opt[- ]?in/i;
 const isConfirm = (it) => CONFIRM.test((it && it.title) || "");
-state.place = ["feeds", "newsletters", "highlights", "reading", "discover"].includes(load(PLACE_KEY, "library")) ? load(PLACE_KEY, "library") : "library";
+state.place = ["feeds", "newsletters", "highlights", "reading", "discover"].includes(load(PLACE_KEY, "library")) || (load(PLACE_KEY, "library") === "anki" && C.ext.on("anki")) ? load(PLACE_KEY, "library") : "library";
 // The feed picked in the river (its url), or null for all of them.
 state.feed = null;
 state.side = false;
@@ -1742,14 +1742,16 @@ function paintPlace() {
   const marksOn = state.place === "highlights";
   const readOn = state.place === "reading";
   const findOn = state.place === "discover";
-  $("placeTitle").textContent = feedsOn ? "Feeds" : mailOn ? "Newsletters" : marksOn ? "Highlights" : readOn ? "Stats" : findOn ? "Discover" : "Library";
+  const ankiOn = state.place === "anki";
+  $("placeTitle").textContent = feedsOn ? "Feeds" : mailOn ? "Newsletters" : marksOn ? "Highlights" : readOn ? "Stats" : findOn ? "Discover" : ankiOn ? "Anki" : "Library";
   $("libraryView").dataset.place = state.place;
-  $("library").hidden = feedsOn || mailOn || marksOn || readOn || findOn;
+  $("library").hidden = feedsOn || mailOn || marksOn || readOn || findOn || ankiOn;
   $("feeds").hidden = !feedsOn;
   $("newsletters").hidden = !mailOn;
   $("highlights").hidden = !marksOn;
   $("reading").hidden = !readOn;
   $("discover").hidden = !findOn;
+  $("anki").hidden = !ankiOn;
   $("paneNote").textContent = marksOn ? "Pick a highlight to read it here" : readOn ? "Pick a clip to read it here" : mailOn ? "Pick an email to read it here" : "Pick a post to read it here";
   // The bottom field follows a feed in Feeds, makes a newsletter address
   // in Newsletters (1.43.1), searches Royal Road or follows a site in
@@ -1761,14 +1763,15 @@ function paintPlace() {
   if (mailOn) $("saveUrl").maxLength = 32; else $("saveUrl").removeAttribute("maxlength");
   document.querySelector('label[for="saveUrl"]').textContent = feedsOn ? "Site or feed" : mailOn ? "New address's name" : "Page link";
   $("saveForm").querySelector(".btn-primary").textContent = feedsOn ? "Follow" : mailOn ? "Make" : "Save";
-  $("severalBtn").hidden = feedsOn || mailOn || findOn;
+  $("severalBtn").hidden = feedsOn || mailOn || findOn || ankiOn;
   $("viewBtn").hidden = !findOn && !(state.place === "library" && state.pages.length);
-  if (feedsOn || mailOn || marksOn || readOn || findOn) { if (state.query) clearSearch(); }
+  if (feedsOn || mailOn || marksOn || readOn || findOn || ankiOn) { if (state.query) clearSearch(); }
   if (feedsOn) renderFeeds();
   else if (mailOn) renderNewsletters();
   else if (marksOn) renderHighlights();
   else if (readOn) renderReading();
   else if (findOn) openDiscover();
+  else if (ankiOn) renderAnki();
   else renderLibrary();
 }
 

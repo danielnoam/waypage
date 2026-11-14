@@ -61,6 +61,7 @@ src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestur
 src/app-discover.js the Discover place: Wikipedia today, the list, its search, the Sites grid (stories, books, texts), the story and sign-up sheets
 src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
 src/app-listen.js   audiobooks: bringing one in, the player and its bar, reading along, transcripts written ahead, fixes, Find the book in Discover, Settings › Audiobooks
+src/app-extensions.js Settings › Extensions (a switch each) and the places extensions add to the sidebar, above Stats
 src/app-lock.js     app lock: passcode (PBKDF2 hash), fingerprint or face on Android
 src/app-car.js      Android Auto: the list the car starts from (books, clips cut for Narrate) and where the car got to
 src/app-start.js    wiring at launch, what other apps share in, self-update, Test builds, What's new
@@ -85,6 +86,8 @@ src/imports.js      Pocket, Instapaper, Omnivore, Raindrop, Wallabag exports
 src/stats.js        reading stats and the reading pace
 src/activity.js     Share reading activity: builds activity/reading.json (docs/reading-activity.md)
 src/dict.js         StarDict dictionaries in IndexedDB
+src/extensions.js   extensions: the catalogue, on or off per device, loading an extension's scripts once it is on
+src/anki.js         the Anki extension's engine; loaded only once Anki is on (not in index.html, but in sw.js's ASSETS)
 src/motion.js       the springs from DESIGN.md, sampled into CSS linear()
 src/qr.js           QR code for sync's setup link, made on the device so the token never leaves it
 src/styles.css      tokens, themes, layout (DESIGN.md)
@@ -613,6 +616,12 @@ adds a line here.
   Piper voices (one per language) are more downloads for the same engine
   and library; one model is in memory at a time, so switching between a
   Kokoro and a Piper language reloads (a second or two).
+- Extensions (Anki first): their code ships in the app and loads only once
+  they are turned on; what they download (a language pack) is data, checked
+  against a pinned SHA-256, never code that runs. That keeps the app
+  inside the stores' rules on downloaded code and working the same
+  offline, at the price of a few kilobytes of unused code for anyone who
+  never turns one on.
 - The web copy reads pages through the fetch proxy (`worker/`), so
   Cloudflare sees which addresses a browser user saves (not the app's).
   It only answers the web copy's origin, but the Origin header binds only

@@ -1239,6 +1239,7 @@ function renderSettings() {
           el("button", { class: "btn-small", type: "button", onclick: () => (upd.tag ? openSection("updates") : openNews(false, true)) }, "View"))) : null,
       el("div", { class: "group" }, row("appearance"), row("reading"), row("audiobooks"), row("library"), C.platform.native ? row("notifications") : null, row("lock")),
       el("div", { class: "group" }, row("saving"), row("sync"), C.drive.available ? row("drive") : null, row("storage")),
+      el("div", { class: "group" }, row("extensions")),
       el("div", { class: "group" }, row("updates"), row("report"))));
 }
 

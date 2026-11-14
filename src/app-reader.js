@@ -912,7 +912,7 @@ function fitRail() {
 }
 function paintRail() {
   const p = state.open;
-  $("railBackLabel").textContent = state.folder || (state.place === "feeds" ? "Feeds" : state.place === "newsletters" ? "Newsletters" : state.place === "highlights" ? "Highlights" : state.place === "reading" ? "Stats" : "Library");
+  $("railBackLabel").textContent = state.folder || (state.place === "feeds" ? "Feeds" : state.place === "newsletters" ? "Newsletters" : state.place === "highlights" ? "Highlights" : state.place === "reading" ? "Stats" : state.place === "anki" ? "Anki" : "Library");
   const pages = railPages();
   $("readerRail").classList.toggle("paged", pages.length > 0);
   $("readerRail").setAttribute("aria-label", pages.length ? "Pages" : "Contents");

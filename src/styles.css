@@ -2219,7 +2219,7 @@ span.update-text { cursor: default; }
 
 /* ---- 0.28.0: the sidebar and Feeds ---- */
 .library[hidden], .feeds[hidden], .highlights[hidden], .reading[hidden] { display: none; }
-:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"], [data-place="reading"], [data-place="discover"]) .top { display: none; }
+:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"], [data-place="reading"], [data-place="discover"], [data-place="anki"]) .top { display: none; }
 
 .side-catch { z-index: 17; }
 .sidebar {
@@ -2329,8 +2329,8 @@ span.update-text { cursor: default; }
   display: flex; flex-direction: column;
 }
 .reading > * { width: 100%; max-width: 40rem; margin-inline: auto; }
-[data-place="reading"] .save-form { display: none; }
-[data-place="reading"] .save-bar:not(:has(.update-bar:not([hidden]))) { display: none; }
+:is([data-place="reading"], [data-place="anki"]) .save-form { display: none; }
+:is([data-place="reading"], [data-place="anki"]) .save-bar:not(:has(.update-bar:not([hidden]))) { display: none; }
 .rs-seg { display: flex; gap: 2px; padding: 3px; border-radius: var(--r-md); background: var(--bar); }
 .rs-tab {
   flex: 1; min-height: 38px; border: 0; border-radius: 9px; background: transparent;

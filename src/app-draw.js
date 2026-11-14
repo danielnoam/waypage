@@ -344,5 +344,6 @@ function renderLibrary() {
   if (state.place === "newsletters") renderNewsletters();
   if (state.place === "highlights") renderHighlights();
   if (state.place === "reading") renderReading();
+  if (state.place === "anki") renderAnki();
   if (sideShown()) renderSide();
 }
