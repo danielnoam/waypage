@@ -8,7 +8,7 @@
 //   any()            whether there's one to look in
 //   add(files)       { name, words }; throws an Error saying what's wrong
 //   remove(id)
-//   lookup(text)     [{ dict, word, parts: [{ type, text }] }]
+//   lookup(text, only)  [{ dict, word, parts: [{ type, text }] }]; only = one dictionary's id
 //   show(part)       a part as safe DOM: no attributes, links or pictures
 //   forms(word)      the forms looked for (tests)
 (function () {
@@ -348,11 +348,12 @@
     return out;
   }
 
-  async function lookup(text) {
+  async function lookup(text, only) {
     const word = String(text || "").replace(/\s+/g, " ").replace(/^[\s\p{P}\p{S}]+|[\s\p{P}\p{S}]+$/gu, "").trim();
     if (!word || word.length > 64) return [];
     const out = [];
     for (const d of readList()) {
+      if (only && d.id !== only) continue;
       let ix;
       try { ix = await loaded(d); } catch (e) { continue; }
       let hits = [];

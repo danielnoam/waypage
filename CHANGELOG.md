@@ -4,6 +4,26 @@ All notable changes to Carry-on. Newest first.
 
 
 
+
+## [1.61.0] - 2026-11-14
+
+### Added
+- Settings › Extensions, the last row of the top group (under App lock): features that stay out of the way until you turn them on. Anki is the first; turned on, it adds an Anki place to the sidebar, above Stats, where you make decks, study them (Again, Hard, Good, Easy, scheduled by FSRS, with Undo), browse and edit cards, and set each deck's limits, steps and retention.
+- Select a word in a clip and tap the Anki button to make a card: its front is the word, the back is yours to write, and the sentence it came from comes with it, with a way back to the clip.
+- Export a deck, or all decks, as a text file Anki can import, and import a deck from Anki (.apkg, exported with "Support older Anki versions" ticked), with its review history. On Android, the card sheet's Send to AnkiDroid hands a card to AnkiDroid.
+- Anki's decks, cards and reviews sync through GitHub sync, with their own switch under Sync › What this device syncs. What you review on one device counts on the others (today's new cards too), and a card deleted on one is deleted on all.
+- Settings › Extensions › Anki › Languages: download a language pack (German → English to begin with). With one on the device, the card sheet's Fill writes the back from its dictionary, and finds a word's headword from the form you picked (Häusern gives Haus).
+
+### Changed
+- Story page is now called Website sync. Link a collection to a site's
+  contents page, or paste any of its chapters and it finds the contents
+  page from there.
+- Website sync reads chapter lists from many more sites, not only the
+  ones Waypage knows (Royal Road, AO3 and the rest): lists split into
+  volumes or arcs, lists where each chapter sits in a box of its own,
+  lists spread over several pages, and chapters with names but no
+  numbers.
+
 ## [1.60.1] - 2026-11-14
 
 ### Changed

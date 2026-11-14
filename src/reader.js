@@ -1004,6 +1004,25 @@
     return { text, box: { top: b.top, bottom: b.bottom, left: b.left, right: b.right } };
   }
 
+  // The sentence the selection sits in (2026-11, for Anki's cards): its
+  // block's text out to the nearest sentence ends, "" when it can't be found.
+  function selectionContext() {
+    const sel = doc && doc.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return "";
+    let n = sel.getRangeAt(0).startContainer;
+    n = n.nodeType === 1 ? n : n.parentElement;
+    const block = n && n.closest("p, li, blockquote, h1, h2, h3, h4, h5, h6, td, dd, div");
+    if (!block) return "";
+    const full = words(block.textContent), picked = words(sel.toString());
+    const at = picked ? full.indexOf(picked) : -1;
+    if (at < 0) return "";
+    const before = full.slice(0, at), after = full.slice(at + picked.length);
+    const head = before.match(/^[sS]*[.!?…]["'”’)]]*s/);
+    const tail = /[.!?…]["'”’)]]*(?=s|$)/.exec(after);
+    const out = (head ? before.slice(head[0].length) : before) + picked + (tail ? after.slice(0, tail.index + tail[0].length) : after);
+    return out.length > 400 ? "" : out.trim();
+  }
+
   // The selection as a highlight to keep: { block, start, endBlock, end, text }.
   function selectionMark() {
     const onPages = layers.size ? printedSelection(true) : null;
@@ -2310,5 +2329,5 @@
       return line;
     }));
   }
-  C.reader = { say, spotOfId, blockCount, pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, inkRoot, inkBlock, inkBlocks, inkBlockBox, inkBlockAt, inkBlocksNear, inkBlockWords, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
+  C.reader = { say, spotOfId, blockCount, pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionContext, selectionMark, selectionMarks, paintMarks, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, inkRoot, inkBlock, inkBlocks, inkBlockBox, inkBlockAt, inkBlocksNear, inkBlockWords, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
 })();

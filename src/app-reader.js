@@ -912,7 +912,7 @@ function fitRail() {
 }
 function paintRail() {
   const p = state.open;
-  $("railBackLabel").textContent = state.folder || (state.place === "feeds" ? "Feeds" : state.place === "newsletters" ? "Newsletters" : state.place === "highlights" ? "Highlights" : state.place === "reading" ? "Stats" : "Library");
+  $("railBackLabel").textContent = state.folder || (state.place === "feeds" ? "Feeds" : state.place === "newsletters" ? "Newsletters" : state.place === "highlights" ? "Highlights" : state.place === "reading" ? "Stats" : state.place === "anki" ? "Anki" : "Library");
   const pages = railPages();
   $("readerRail").classList.toggle("paged", pages.length > 0);
   $("readerRail").setAttribute("aria-label", pages.length ? "Pages" : "Contents");
@@ -1584,6 +1584,7 @@ function showReadHere() {
   readHere.querySelector(".sel-aloud .sel-label").textContent = heard ? "Play from here" : "Narrate from here";
   readHere.querySelector(".sel-aloud").setAttribute("aria-label", heard ? "Play from here" : "Narrate from here");
   listenSelection(readHere, picked);
+  if (typeof ankiSelection === "function") ankiSelection(readHere, picked);
   readHere.querySelector(".sel-translate").hidden = !picked;
   readHere.querySelector(".sel-lookup").hidden = !picked || !C.dict.any() || picked.text.trim().split(/\s+/).length > 4;
   const frame = $("readerFrame").getBoundingClientRect();
