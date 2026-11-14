@@ -50,9 +50,9 @@ test("an extension starts off, turns on by loading its scripts once, and off aga
   assert.strictEqual(X.on("anki"), false);
   await X.turnOn("anki");
   assert.strictEqual(X.on("anki"), true);
-  assert.deepStrictEqual(loaded, ["src/fsrs.js?v=9.9.9", "src/anki.js?v=9.9.9", "src/app-anki.js?v=9.9.9"]);
+  assert.deepStrictEqual(loaded, ["src/fsrs.js?v=9.9.9", "src/sqlite.js?v=9.9.9", "src/anki-import.js?v=9.9.9", "src/anki.js?v=9.9.9", "src/app-anki.js?v=9.9.9"]);
   await X.load("anki");
-  assert.strictEqual(loaded.length, 3, "loaded once");
+  assert.strictEqual(loaded.length, 5, "loaded once");
   let told = 0;
   X.changed(() => told++);
   X.turnOff("anki");

@@ -211,6 +211,8 @@ Features you turn on in Settings › Extensions, above About. Their code ships w
 - **Anki** adds an Anki place to the sidebar, above Stats. Select up to six words in a clip and tap the Anki button: the word is the front, you write the back (or Fill it), the sentence it came from comes along with a way back to the clip.
 - Study with Again, Hard, Good and Easy, each showing its wait, scheduled by FSRS; Undo, Edit, Bury and Suspend; keys 1 to 4, Space and Z. Browse and edit cards, and set each deck's new cards a day, reviews a day, steps and retention.
 - **Languages** (Settings › Extensions › Anki): download a language pack, German → English to begin with (4 MB, words from Wiktionary). Fill writes a card's back from it and finds the headword from the form you picked (Häusern gives Haus). A pack is a dictionary on the device, so Look up uses it too.
+- **Export** a deck, or all of them, as a text file Anki imports (its HTML, deck and a guid, so importing again updates instead of copying). **Import** a deck from Anki (.apkg, exported with "Support older Anki versions" ticked): its decks, cards and review history come in, as text; pictures and sounds don't.
+- On Android, **Send to AnkiDroid** on the card sheet opens the share sheet; AnkiDroid takes it as a new note.
 - Decks, cards and reviews sync through GitHub sync with their own switch; each device's reviews are kept apart and replayed together, so what you review on one phone is done on the other.
 
 ## Sync and backup

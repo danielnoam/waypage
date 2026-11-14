@@ -18,6 +18,8 @@
 //   undo()                      takes the last answer back; the card's id
 //   info(id)                    the card's schedule: { state, due, stability, ... }
 //   fill(term, dictId)          { word, text } from a language pack's dictionary, or null
+//   exportText(deckId)          a text file Anki imports (one deck, or all); { text, cards }
+//   importCards(parsed)         brings in what src/anki-import.js read; { cards, decks, reviews, skipped, dup }
 (function () {
   const C = window.Waypage;
   const F = () => C.fsrs;
@@ -283,6 +285,52 @@
     return text ? { word: found[0].word, text } : null;
   }
 
+  // ---- Export and import ----
+  // Anki's text import: tab-separated, HTML on, the deck in column 3 and a
+  // guid in column 4, so importing it again updates the notes instead of
+  // making them twice. A field with a quote is quoted, as CSV does.
+  const html = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\r?\n/g, "<br>");
+  const field = (s) => { const t = String(s).replace(/\t/g, " "); return t.includes("\"") ? "\"" + t.replace(/"/g, "\"\"") + "\"" : t; };
+  function exportText(deckId) {
+    const rows = [];
+    for (const d of deckList.filter((x) => !deckId || x.id === deckId)) {
+      for (const c of cardList.filter((x) => x.deck === d.id).sort((a, b) => a.made - b.made)) {
+        const back = html(c.back) + (c.context ? (c.back ? "<br><br>" : "") + "<i>" + html(c.context) + "</i>" : "");
+        rows.push([html(c.front), back, d.name, c.id].map(field).join("\t"));
+      }
+    }
+    return { cards: rows.length, text: ["#separator:tab", "#html:true", "#notetype:Basic", "#deck column:3", "#guid column:4", ...rows].join("\n") + "\n" };
+  }
+
+  // What src/anki-import.js read from an Anki deck: its decks (merged by
+  // name into ours), its cards (one already here, by id, is left as it is)
+  // and the reviews of the new ones, which become this device's own.
+  function importCards(parsed) {
+    const ids = new Map();
+    for (const name of new Set(parsed.cards.map((c) => c.deck))) ids.set(name, makeDeck(name).id);
+    const have = new Set(cardList.map((c) => c.id)), fresh = new Set();
+    const now = Date.now();
+    for (const c of parsed.cards) {
+      if (have.has(c.key)) continue;
+      delete goneCards[c.key];
+      cardList.push({ id: c.key, deck: ids.get(c.deck), front: c.front.slice(0, 500), back: c.back.slice(0, 4000), context: "", from: null,
+        made: c.made || now, edited: now, suspended: !!c.suspended, buried: 0 });
+      sched.set(c.key, F().fresh());
+      fresh.add(c.key);
+    }
+    const seen = new Set(logList.map((e) => e.card + "@" + e.at));
+    let reviews = 0;
+    for (const e of parsed.log) {
+      if (!fresh.has(e.card) || seen.has(e.card + "@" + e.at)) continue;
+      logList.push({ card: e.card, at: e.at, grade: e.grade, ms: e.ms, was: e.was });
+      seen.add(e.card + "@" + e.at);
+      reviews++;
+    }
+    if (reviews) logList.sort((a, b) => a.at - b.at);
+    if (fresh.size) { saveCards(); if (reviews) saveLog(); rebuild(); }
+    return { cards: fresh.size, decks: ids.size, reviews, skipped: parsed.skipped || 0, dup: parsed.cards.length - fresh.size };
+  }
+
   // ---- Sync (src/sync.js syncAnki) ----
   // Decks and cards are shared files merged record by record: the copy
   // edited last wins, and a deletion wins over any copy edited before it.
@@ -361,6 +409,6 @@
     return true;
   }
 
-  C.anki = { docs, mergeIn, takeLog, changed, edited, device, fill, load, unload, decks, deck, makeDeck, renameDeck, setOptions, removeDeck, cards, card, add, edit, remove, suspend, bury,
+  C.anki = { exportText, importCards, docs, mergeIn, takeLog, changed, edited, device, fill, load, unload, decks, deck, makeDeck, renameDeck, setOptions, removeDeck, cards, card, add, edit, remove, suspend, bury,
     counts, queue, preview, answer, undo, canUndo, info, dayStart, dayEnd, DEFAULTS };
 })();

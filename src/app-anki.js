@@ -99,9 +99,56 @@ function ankiCardSheet(n) {
     el("label", { class: "anki-field" }, el("span", { class: "overline" }, "Sentence"), context),
     el("div", { class: "export-actions" },
       el("button", { class: "btn-quiet", type: "button", onclick: () => closeSheet() }, "Cancel"),
-      el("button", { class: "btn-primary", type: "button", onclick: add }, "Add card")));
+      el("button", { class: "btn-primary", type: "button", onclick: add }, "Add card")),
+    ANKIDROID ? el("button", { class: "btn-text", type: "button", onclick: () => sendToAnkiDroid(front.value, back.value, context.value) }, "Send to AnkiDroid") : null);
+}
+// AnkiDroid takes shared text as a new note, the subject in its first field
+// and the text in its second, and asks which deck: so the share sheet is
+// how a card gets there, with nothing for Waypage to ask of AnkiDroid.
+const ANKIDROID = C.platform.native && /android/i.test(navigator.userAgent);
+async function sendToAnkiDroid(front, back, context) {
+  const text = [back.trim(), context.trim()].filter(Boolean).join("\n\n");
+  try { await C.platform.shareText(front.trim(), text || front.trim()); } catch (e) { console.error(e); toast("Couldn't open the share sheet."); }
 }
 SHEETS.anki = { label: "Anki card", build: () => ankiCardSheet(ankiNow) };
+
+// ---- Export and import ----
+// A deck out as a text file Anki imports (the phone's save screen, else the
+// share sheet, else a download), and a deck from Anki (.apkg) in. The
+// export is not a backup: Waypage's own is Settings › Storage, and sync.
+async function ankiSaveText(name, text, mime) {
+  const uri = await C.platform.writeCache(name, text);
+  if (!uri) { C.platform.download(name, new Blob([text], { type: mime })); return; }
+  const saved = await C.platform.saveFile(uri, name, mime);
+  if (saved === null) await C.platform.shareFile(uri, name);
+  else if (saved) toast("Saved " + name);
+}
+async function ankiExport(deckId) {
+  const d = deckId ? C.anki.deck(deckId) : null;
+  const out = C.anki.exportText(deckId);
+  if (!out.cards) { toast("No cards to export yet."); return; }
+  const name = "Waypage " + (d ? d.name.replace(/[^\p{L}\p{N} _-]+/gu, "-") : "Anki decks") + " " + new Date().toISOString().slice(0, 10) + ".txt";
+  try { await ankiSaveText(name, out.text, "text/plain"); } catch (e) { console.error(e); toast("Couldn't make the file. Try again."); }
+}
+async function ankiImport(file) {
+  toast("Reading " + file.name + "…");
+  try {
+    const r = C.anki.importCards(await C.ankiImport.readApkg(file));
+    toast(r.cards
+      ? "Added " + plural(r.cards, "card", "cards") + " to " + plural(r.decks, "deck", "decks") + (r.reviews ? ", with " + plural(r.reviews, "review", "reviews") : "") + (r.skipped ? ". " + plural(r.skipped, "card was", "cards were") + " only a picture or sound." : ".")
+      : "Those cards are already here.");
+  } catch (e) {
+    console.error(e);
+    toast(e && e.message && !/^(Failed|NetworkError|Quota)/.test(e.message) ? e.message : "Couldn't read that deck.");
+  }
+  ankiDraw();
+}
+// A picker for an .apkg, opened by whatever `open` is handed.
+function ankiPicker(make) {
+  const input = el("input", { type: "file", accept: ".apkg", class: "visually-hidden", tabindex: "-1", "aria-hidden": "true" });
+  input.addEventListener("change", () => { const f = input.files[0]; input.value = ""; if (f) ankiImport(f); });
+  return [make(() => input.click()), input];
+}
 
 // ---- The place ----
 let av = { view: "decks", deck: null, card: null, shown: false, since: 0, early: false, query: "", edit: null };
@@ -137,7 +184,8 @@ function ankiDecksView() {
     return el("div", { class: "empty" },
       el("h2", { class: "empty-title" }, "No decks yet"),
       el("p", { class: "empty-text" }, "Select a word in a clip and tap Anki to make a card, or start a deck here."),
-      el("button", { class: "btn-quiet", type: "button", onclick: () => ankiGo({ view: "name", deck: null }) }, "New deck"));
+      el("button", { class: "btn-quiet", type: "button", onclick: () => ankiGo({ view: "name", deck: null }) }, "New deck"),
+      ...ankiPicker((open) => el("button", { class: "btn-quiet", type: "button", onclick: open }, "Import from Anki")));
   }
   const now = ankiStamp();
   return el("div", { class: "anki" },
@@ -145,7 +193,10 @@ function ankiDecksView() {
       const n = C.anki.counts(d.id, now);
       return navRow(d.name, ankiSummary(n, C.anki.cards(d.id).length), () => ankiGo({ view: "deck", deck: d.id }));
     }))),
-    section("Actions", null, el("div", { class: "group" }, menuRow("New deck", () => ankiGo({ view: "name", deck: null })))));
+    section("Actions", null, el("div", { class: "group" },
+      menuRow("New deck", () => ankiGo({ view: "name", deck: null })),
+      ...ankiPicker((open) => menuRow("Import from Anki (.apkg)", open)),
+      menuRow("Export all decks", () => ankiExport(null)))));
 }
 
 function ankiDeckView() {
@@ -161,6 +212,7 @@ function ankiDeckView() {
       navRow("Options", "Limits, steps and retention", () => ankiGo({ view: "options" })))),
     section("Actions", null, el("div", { class: "group" },
       menuRow("Rename", () => ankiGo({ view: "name" })),
+      menuRow("Export deck", () => ankiExport(d.id)),
       menuRow("Delete deck", () => {
         if (!confirm("Delete “" + d.name + "” and its " + plural(count, "card", "cards") + "? This can't be undone.")) return;
         C.anki.removeDeck(d.id);

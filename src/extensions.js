@@ -30,7 +30,7 @@
   // a new pin (tools/packs/build-lang.js prints the hash and size).
   const PACKS = "https://raw.githubusercontent.com/danielnoam/waypage/";
   const CATALOGUE = [
-    { id: "anki", title: "Anki", note: "Flashcards from the words you pick in a clip", scripts: ["src/fsrs.js", "src/anki.js", "src/app-anki.js"], packs: [
+    { id: "anki", title: "Anki", note: "Flashcards from the words you pick in a clip", scripts: ["src/fsrs.js", "src/sqlite.js", "src/anki-import.js", "src/anki.js", "src/app-anki.js"], packs: [
       { id: "de-en", title: "German → English", note: "Word meanings from Wiktionary", bytes: 4270563,
         sha256: "09f7325a69a742aec48e6cd360fa81222abf452201e451ae42fa9ba8482b1a6b",
         url: PACKS + "2b0eebb87575cddf948bac62051aa1b0fa9a0163/de-en.tar.gz" },
