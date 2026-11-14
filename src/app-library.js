@@ -1788,9 +1788,9 @@ const EXPORTS = [
   { value: "html", label: "HTML", note: "One file with its pictures. Opens in any browser, and back in Waypage.", mime: "text/html" },
   { value: "epub", label: "EPUB", note: "For an e-reader, Apple Books or Send to Kindle.", mime: "application/epub+zip" },
   { value: "md", label: "Markdown", note: "The text for a notes app. Pictures link to the site.", mime: "text/markdown" },
+  { value: "cbz", label: "CBZ", note: "The pictures in order, for any comic reader.", mime: "application/vnd.comicbook+zip" },
   { value: "source", label: "Page source", note: "The site's own page, fetched again. Send it when a site saves badly.", mime: "text/html" },
 ];
-const exportKind = () => { const k = load(EXPORT_KEY, "html"); return EXPORTS.some((e) => e.value === k) ? k : "html"; };
 
 function focusFirst(box) {
   requestAnimationFrame(() => { const f = box.querySelector("input:checked, button"); if (f) f.focus({ preventScroll: true }); });
@@ -1799,9 +1799,13 @@ function focusFirst(box) {
 // `what` is a page, or { pages, title } for a folder.
 function exportControls(what, done) {
   const folder = !!what.pages;
-  const kinds = EXPORTS.filter((e) => !folder || e.value !== "source");
-  let kind = folder ? load(EXPORT_KEY + ".folder", "epub") : exportKind();
-  if (!kinds.some((e) => e.value === kind)) kind = "epub";
+  // CBZ only for comics; they remember their own pick, CBZ at first.
+  const comic = folder ? what.pages.length > 0 && what.pages.every(C.files.comicExportable) : C.files.comicExportable(what);
+  const kinds = EXPORTS.filter((e) => (e.value !== "source" || (!folder && /^https?:/.test(what.url || ""))) && (comic || e.value !== "cbz"));
+  const key = EXPORT_KEY + (folder ? ".folder" : "") + (comic ? ".comic" : "");
+  const first = comic ? "cbz" : folder ? "epub" : "html";
+  let kind = load(key, first);
+  if (!kinds.some((e) => e.value === kind)) kind = first;
   const p = what;
   const save = el("button", { class: "btn-primary export-save", type: "button", onclick: () => exportAs(p, kind, "save", save) });
   const send = el("button", { class: "btn-quiet export-send", type: "button", onclick: () => exportAs(p, kind, "send", send) }, "Send");
@@ -1810,7 +1814,7 @@ function exportControls(what, done) {
     send.hidden = kind === "pdf" || !C.platform.native;
   };
   const group = choiceGroup({ key: "export-kind", label: "Export as", options: kinds, get: () => kind,
-    set: (v) => { kind = v; store(folder ? EXPORT_KEY + ".folder" : EXPORT_KEY, v); sync(); } });
+    set: (v) => { kind = v; store(key, v); sync(); } });
   sync();
   return el("div", { class: "export" },
     el("div", { class: "export-top" },
@@ -1828,7 +1832,8 @@ async function exportAs(p, kind, how, btn) {
   btn.disabled = true;
   try {
     let name, text = null, uri = null, blob = null;
-    if (kind === "epub") ({ name, uri = null, blob = null } = await C.epub.exportBook(pages || [p], pages ? p.title : undefined, pages ? await coverBytes(pages) : null));
+    if (kind === "cbz") ({ name, uri = null, blob = null } = await C.files.exportComic(pages || [p], pages ? p.title : undefined));
+    else if (kind === "epub") ({ name, uri = null, blob = null } = await C.epub.exportBook(pages || [p], pages ? p.title : undefined, pages ? await coverBytes(pages) : null));
     else if (kind === "md") ({ name, text } = await (pages ? C.backup.exportMarkdownAll(pages, p.title) : C.backup.exportMarkdown(p)));
     else if (kind === "html") ({ name, html: text } = await (pages ? C.backup.exportPages(pages, p.title) : C.backup.exportPage(p)));
     else ({ name, html: text } = await C.save.pageSource(p.url));
@@ -1840,8 +1845,9 @@ async function exportAs(p, kind, how, btn) {
       else if (saved) toast("Saved " + name);
     } else await C.platform.shareFile(uri, name);
   } catch (e) {
-    if (!(e instanceof C.save.SaveError)) console.error(e);
-    toast(e instanceof C.save.SaveError ? e.message : "Couldn't make the file. Try again.");
+    const told = e instanceof C.save.SaveError || e instanceof C.files.FileError;
+    if (!told) console.error(e);
+    toast(told ? e.message : "Couldn't make the file. Try again.");
   }
   btn.disabled = false;
 }

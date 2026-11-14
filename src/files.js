@@ -1474,5 +1474,55 @@
     return meta;
   }
 
-  C.files = { KINDS, LINKABLE, canLink, kindOf, bring, openLinked, openNoteItem, noteSheets, addSheet, printed, drawable, convertible, fingerprint, fingerprintOf, thumbnail, pictureSource, drawNear, findPage, heldPdf: () => (held && held.pdf) || null, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
+  // ---- CBZ out ----
+  // A comic clip, or a collection of them in order, as a CBZ: its pictures
+  // as they're kept, numbered so every reader keeps the order, and a
+  // ComicInfo.xml so the title, series and reading direction come back
+  // when it's opened again, here or in another comic reader. CBR can't be
+  // written: RAR is closed.
+  const CBZ_MIME = "application/vnd.comicbook+zip";
+  const comicName = (t) => (String(t || "").replace(/[\\/:*?"<>|#%\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 60) || "Comic") + ".cbz";
+  const xmlEsc = (s) => String(s).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  function comicInfo(pages, title, count) {
+    const one = pages.length === 1 ? pages[0] : null;
+    const series = one ? one.series : title;
+    const tags = [
+      ["Title", title],
+      ["Series", series],
+      ["Number", one && Number.isFinite(one.volume) ? String(one.volume) : ""],
+      ["Web", one && /^https?:/.test(one.url || "") ? one.url : ""],
+      ["LanguageISO", (pages[0].lang || "").split("-")[0]],
+      ["PageCount", String(count)],
+      ["Manga", pages.some((p) => p.manga) ? "YesAndRightToLeft" : ""],
+    ].filter(([, v]) => v);
+    return '<?xml version="1.0" encoding="utf-8"?>\n<ComicInfo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">\n' +
+      tags.map(([k, v]) => "  <" + k + ">" + xmlEsc(v) + "</" + k + ">\n").join("") + "</ComicInfo>\n";
+  }
+  const comicExportable = (p) => !!(p && p.comic && !p.preview);
+  async function exportComic(pages, title, onProgress) {
+    title = title || pages[0].title;
+    const name = comicName(title);
+    const native = C.platform.native;
+    const file = native ? await S().cacheFile(name) : null;
+    const parts = [];
+    const zip = B().zipWriter(native ? (b) => file.append(b) : (b) => { parts.push(b); });
+    let n = 0;
+    for (const [i, p] of pages.entries()) {
+      const root = new DOMParser().parseFromString(await S().readPage(p.id), "text/html").querySelector(".co-body");
+      const read = await pictureSource(p);
+      for (const img of root ? root.querySelectorAll("img") : []) {
+        let b = null;
+        try { b = await read(img); } catch (e) { b = null; }
+        const ext = b && MIME_EXT[B().imageType(b)];
+        if (ext) await zip.add(String(++n).padStart(4, "0") + "." + ext, b);
+      }
+      if (onProgress) onProgress(i + 1, pages.length);
+    }
+    if (!n) throw new FileError("There are no pictures here to put in a comic.");
+    await zip.add("ComicInfo.xml", new TextEncoder().encode(comicInfo(pages, title, n)));
+    await zip.finish();
+    return native ? { uri: await file.uri(), name } : { blob: new Blob(parts, { type: CBZ_MIME }), name };
+  }
+
+  C.files = { KINDS, LINKABLE, canLink, kindOf, bring, openLinked, openNoteItem, noteSheets, addSheet, printed, drawable, convertible, fingerprint, fingerprintOf, thumbnail, pictureSource, comicExportable, exportComic, CBZ_MIME, drawNear, findPage, heldPdf: () => (held && held.pdf) || null, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
 })();
