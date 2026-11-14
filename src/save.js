@@ -240,10 +240,56 @@
     if (!best) return [];
     const depths = new Set(best.links.filter((l, i) => best.nums[i] != null).map((l) => depthOf(l.url)));
     best = { links: best.links.filter((l, i) => best.nums[i] != null || depths.has(depthOf(l.url))), nums: best.nums.filter((n, i) => n != null || depths.has(depthOf(best.links[i].url))) };
-    const known = best.nums.filter((n) => n != null);
+    return readingOrder(best.links, best.nums);
+  }
+  function readingOrder(links, nums) {
+    const known = nums.filter((n) => n != null);
     let down = 0, up = 0;
     for (let i = 1; i < known.length; i++) { if (known[i] < known[i - 1]) down++; else if (known[i] > known[i - 1]) up++; }
-    return down > up ? [...best.links].reverse() : best.links;
+    return down > up ? [...links].reverse() : links;
+  }
+
+  // The chapter list grown to the whole block it sits in, for a contents
+  // page whose books or arcs are marked up each their own way (A Practical
+  // Guide to Evil's first books are nested lists, the later ones flat;
+  // Worm's arcs switch between divs and paragraphs): every link in the
+  // nearest block holding all of the list, outside the site's menus, at
+  // the same depth of address as the list's numbered links.
+  function widen(links, doc, at) {
+    const els = links.map((l) => l.a).filter(Boolean);
+    if (els.length < 2) return links;
+    let box = els[0].parentElement;
+    while (box && !els.every((a) => box.contains(a))) box = box.parentElement;
+    if (!box || box === doc.body || box === doc.documentElement) return links;
+    const depths = new Set(links.filter((l) => chapterNumber(l.text, l.url) != null).map((l) => depthOf(l.url)));
+    const host = new URL(at).host, here = at.split("#")[0];
+    const inside = (el) => {
+      const seen = new Set(), all = [];
+      for (const a of el.querySelectorAll("a[href]")) {
+        const text = a.textContent.replace(/\s+/g, " ").trim();
+        if (!text || a.closest(CHROME)) continue;
+        const url = absolute(a.getAttribute("href"), at).split("#")[0];
+        let x;
+        try { x = new URL(url); } catch (e) { continue; }
+        if (!/^https?:$/.test(x.protocol) || x.host !== host || url === here || seen.has(url) || !depths.has(depthOf(url))) continue;
+        seen.add(url);
+        all.push({ url, text: text.slice(0, 200), a });
+      }
+      return all;
+    };
+    // Up a block at a time while what it adds is mostly chapters too (or
+    // a stray link or two):
+    // a page's markup can close a list's blocks out of step (Worm's).
+    const numbered = (list) => list.filter((l) => chapterNumber(l.text, l.url) != null).length;
+    let all = inside(box);
+    for (let up = box.parentElement; up && up !== doc.body && up !== doc.documentElement; up = up.parentElement) {
+      const more = inside(up);
+      const added = more.length - all.length;
+      if (added > 2 && numbered(more) - numbered(all) < added / 2) break;
+      all = more;
+    }
+    if (all.length <= links.length) return links;
+    return readingOrder(all, all.map((l) => chapterNumber(l.text, l.url)));
   }
 
   // The links on a page grouped by the list, table or block they sit in,
@@ -275,7 +321,7 @@
       const url = u.split("#")[0];
       if (!/^https?:$/.test(x.protocol) || x.host !== host || url === pageUrl.split("#")[0]) continue;
       const box = a.closest("ul, ol, table, dl, select") || (a.parentElement && a.parentElement.closest("div, section, nav, p")) || doc.body;
-      const link = { url, text: text.slice(0, 200) };
+      const link = { url, text: text.slice(0, 200), a };
       if (!groups.has(box)) groups.set(box, []);
       groups.get(box).push(link);
       const shape = linkShape(a, doc.body);
@@ -322,7 +368,7 @@
       // Wikisource work's subpages): no guessing from the page's links.
       if (site.ownChapters) return { title: readTitle(doc), links: [], cover, page: url };
     }
-    let links = pickChapters(linkGroups(doc, at));
+    let links = widen(pickChapters(linkGroups(doc, at)), doc, at);
     if (links.length) links = await laterPages(doc, at, links);
     else if (!led) {
       const toc = contentsLink(doc, at);
@@ -382,7 +428,7 @@
       let res;
       try { res = await get(next); } catch (e) { break; }
       const d = parse(res.text, res.url || next);
-      const more = pickChapters(linkGroups(d, res.url || next)).filter((l) => !urls.has(l.url));
+      const more = widen(pickChapters(linkGroups(d, res.url || next)), d, res.url || next).filter((l) => !urls.has(l.url));
       if (!more.length) break;
       more.forEach((l) => urls.add(l.url));
       pages.push(more);
@@ -397,16 +443,18 @@
   }
 
   // A contents page whose chapters have names and no numbers: the
-  // longest run of links alike in shape outside the site's menus, six at
-  // least, all under the same first folder of the site.
+  // longest run of links alike in shape outside the site's menus: six
+  // different addresses at least (not one page by its queries), all under
+  // the same first folder of the site.
   function namedChapters(doc, at) {
     let best = [];
     for (const g of linkGroups(doc, at)) {
       if (g.chrome === undefined || g.chrome || g.length < 6 || g.length <= best.length) continue;
       const seen = new Set();
       const links = g.filter((l) => !seen.has(l.url) && seen.add(l.url));
-      const firsts = new Set(links.map((l) => new URL(l.url).pathname.split("/")[1] || ""));
-      if (links.length >= 6 && firsts.size === 1 && !firsts.has("")) best = links;
+      const paths = links.map((l) => new URL(l.url).pathname);
+      const firsts = new Set(paths.map((x) => x.split("/")[1] || ""));
+      if (new Set(paths).size >= 6 && firsts.size === 1 && !firsts.has("")) best = links;
     }
     return best;
   }

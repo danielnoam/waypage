@@ -401,6 +401,15 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       assert.ok(!got.links.some((u) => /donate/.test(u)));
     });
 
+    await test("Website sync: books marked up each their own way are one list", async () => {
+      const { got } = await inPage(browser, [["https://guide.example/table-of-contents/", "toc-mixed.html"]],
+        () => Waypage.save.findChapters("https://guide.example/table-of-contents/"));
+      assert.strictEqual(got.links.length, 15, "the nested first book, the flat second, both prologues");
+      assert.match(got.links[0], /\/prologue\/$/);
+      assert.match(got.links[14], /chapter-8-y\/$/);
+      assert.ok(!got.links.some((u) => /donate/.test(u)));
+    });
+
     await test("Website sync: a chapter list over several pages is read to its end", async () => {
       const { got, asked } = await inPage(browser, [
         ["https://novels.example/a-tale.html?page=2", "toc-paged-2.html"],
