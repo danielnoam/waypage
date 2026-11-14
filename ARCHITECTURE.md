@@ -61,6 +61,7 @@ src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestur
 src/app-discover.js the Discover place: Wikipedia today, the list, its search, the Sites grid (stories, books, texts), the story and sign-up sheets
 src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
 src/app-listen.js   audiobooks: bringing one in, the player and its bar, reading along, transcripts written ahead, fixes, Find the book in Discover, Settings › Audiobooks
+src/app-extensions.js Settings › Extensions (a switch each) and the places extensions add to the sidebar, above Stats
 src/app-lock.js     app lock: passcode (PBKDF2 hash), fingerprint or face on Android
 src/app-car.js      Android Auto: the list the car starts from (books, clips cut for Narrate) and where the car got to
 src/app-start.js    wiring at launch, what other apps share in, self-update, Test builds, What's new
@@ -85,6 +86,12 @@ src/imports.js      Pocket, Instapaper, Omnivore, Raindrop, Wallabag exports
 src/stats.js        reading stats and the reading pace
 src/activity.js     Share reading activity: builds activity/reading.json (docs/reading-activity.md)
 src/dict.js         StarDict dictionaries in IndexedDB
+src/extensions.js   extensions: the catalogue, on or off per device, loading an extension's scripts once it is on
+src/fsrs.js         the Anki extension's scheduler: FSRS-5 in plain JS; loaded only once Anki is on (as are anki.js and app-anki.js: not in index.html, but in sw.js's ASSETS)
+src/sqlite.js       a read-only SQLite reader (table b-trees and overflow pages, UTF-8), loaded with the Anki extension, for opening an Anki deck
+src/anki-import.js  reads an Anki deck (.apkg: a zip with a SQLite collection) into cards and reviews, and Anki's text export's counterpart lives in anki.js; loaded with the Anki extension
+src/anki.js         the Anki extension's engine: decks, cards and a review log (anki/ beside the library, per-device log), each card's schedule replayed from the log
+src/app-anki.js     the Anki extension's screens: the selection bar's button and card sheet, the place (decks, study, browse, edit, options)
 src/motion.js       the springs from DESIGN.md, sampled into CSS linear()
 src/qr.js           QR code for sync's setup link, made on the device so the token never leaves it
 src/styles.css      tokens, themes, layout (DESIGN.md)
@@ -101,6 +108,7 @@ tools/release.js    bumps the three version places and dates CHANGELOG.md's Unre
 tools/sign-apk.sh   signs the APK with the release key in CI
 tools/sherpa-lib.sh   fetches sherpa-onnx's arm64 library (Kokoro voices) into the Android build, pinned and checked
 tools/test-build.sh        puts a labelled pull request's build on its test-<branch> pre-release
+tools/packs/build-lang.js  builds Anki's language packs (a StarDict .tar.gz) from Wiktextract data; not shipped, and prints the SHA-256 the catalogue pins
 tools/shots.js      retakes the README's screenshots (tools/shots/demo is the demo library)
 tools/check-discover.js  checks every feed, sign-up and serial in Discover's list still answers (weekly, discover-check.yml)
 test/               node test/run-all.js runs every *.test.js
@@ -427,6 +435,23 @@ web copy stay links, as before.
   at once when it's brought in (`outsideKnown`, from the last library
   seen). An entry's `ids` are that file's clip ids on each device; stats
   add them up under this device's own (`stats.same`, kept here only).
+- **Anki** (2026-11, an extension; `syncAnki`, a switch per device in
+  `what.anki`, shown only while the extension is on): `anki/decks.json` and
+  `anki/cards.json` are shared, merged record by record (`anki.mergeIn`):
+  the copy edited last wins, a deletion (kept 90 days in `gone`, by id)
+  wins over any copy edited before it, and two decks of one name become
+  the older. `anki/log/<device>.json` is one device's reviews, written
+  only by it (like stats, so never merged); every device replays all the
+  logs in time order, so a card's schedule and the day's new and review
+  counts come out the same everywhere. The files are written in a fixed
+  order, so the same state is the same text: a write is skipped when it is
+  what GitHub has (`waypage.syncAnki` keeps the hashes), which is also what
+  stops two devices from answering each other forever. A write another
+  device beat is read, merged and sent again (up to 3 times), never
+  forced; a file damaged by hand reads as nothing and is written over.
+  A device that has reviewed nothing sends no log. Changes made here
+  start a sync 30 seconds after the last one (`anki.edited`).
+  `test/syncanki.test.js` plays two devices on one made-up repo.
 - **Share reading activity** (2026-11, `activity.js`, off by default, a
   switch per device in `what.activity`): after the stats, sync writes
   `activity/reading.json`, what you're reading and minutes a day, for
@@ -519,7 +544,7 @@ bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js` and `listen.test.js` test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `syncanki.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
 changes Markdown runs just `build.test.js` and `docs.test.js`.
 
 `node tools/shots.js` retakes the README's pictures at 1280 px and 390 px
@@ -631,6 +656,15 @@ adds a line here.
   Piper voices (one per language) are more downloads for the same engine
   and library; one model is in memory at a time, so switching between a
   Kokoro and a Piper language reloads (a second or two).
+- Extensions (Anki first): their code ships in the app and loads only once
+  they are turned on; what they download (a language pack) is data, checked
+  against a pinned SHA-256, never code that runs. That keeps the app
+  inside the stores' rules on downloaded code and working the same
+  offline, at the price of a few kilobytes of unused code for anyone who
+  never turns one on.
+- Anki import reads only the older collection layout (Anki's "Support older Anki versions" export, `collection.anki21`), since the newer `collection.anki21b` is zstd-compressed and a decompressor would be one more thing to vendor; a deck in the newer layout is told to be exported again. Pictures and sounds aren't brought in, a card keeps its Anki id (so a deck read twice, or on two devices, is the same cards), and its schedule is replayed from its review log through FSRS, so a card with no log starts as new. The fixture was built from Anki's documented tables, not exported by Anki itself.
+- A card goes to AnkiDroid through the share sheet (it takes shared text as a new note and asks which deck), not through its content provider: that would be a native plugin and a permission to ask for, and it can't be built or tried without the Android toolchain.
+- Language packs live on the repository's orphan `packs` branch (files and a README, no code, no workflows), fetched from `raw.githubusercontent.com` at one commit so a file can't change under its pinned hash. A new or changed pack is built with `tools/packs/build-lang.js`, committed to `packs`, and its commit, SHA-256 and size go in `src/extensions.js`'s catalogue (`test/extensions.test.js` checks the pins have that shape). A language pack is a hash-pinned download of Wiktionary's words as a StarDict dictionary; hashed and size-checked before `dict.js` reads it, and never run as code. It is the same dictionary as one you add yourself, so Settings › Reading › Dictionaries lists and removes it too. It isn't synced or backed up.
 - The web copy reads pages through the fetch proxy (`worker/`), so
   Cloudflare sees which addresses a browser user saves (not the app's).
   It only answers the web copy's origin, but the Origin header binds only

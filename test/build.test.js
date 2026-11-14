@@ -307,7 +307,9 @@ test("no class the share extension or widgets compile is taken for a plugin", ()
 test("no two scripts index.html loads declare the same top-level name", () => {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   const seen = {};
-  for (const [, f] of html.matchAll(/<script src="([^"?]+)/g)) {
+  // An extension's scripts load later, into the same scope, so they count too.
+  const scripts = [...html.matchAll(/<script src="([^"?]+)/g)].map((m) => m[1]).concat("src/app-anki.js");
+  for (const f of scripts) {
     const src = fs.readFileSync(path.join(ROOT, f), "utf8");
     const first = src.replace(/^(\s*(\/\/.*|\/\*[\s\S]*?\*\/))*\s*/, "");
     if (first.startsWith("(")) continue;

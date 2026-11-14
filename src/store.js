@@ -402,6 +402,25 @@
     } catch (e) { return null; }
   }
 
+  // The Anki extension's files (2026-11): decks, cards and the review log, as
+// JSON under anki/ in the library (a key of their own in a browser). null when
+// there is none; writing null removes it.
+  async function writeAnki(name, data) {
+    const text = data ? JSON.stringify(data) : "";
+    if (FS()) {
+      if (text) await (await B()).write("anki/" + name + ".json", text, true);
+      else try { await (await B()).remove("anki/" + name + ".json"); } catch (e) { /* none */ }
+    } else {
+      await idbDo("readwrite", (s) => (text ? s.put(text, "anki:" + name) : s.delete("anki:" + name)));
+    }
+  }
+  async function readAnki(name) {
+    try {
+      const t = FS() ? await (await B()).read("anki/" + name + ".json") : await idbDo("readonly", (s) => s.get("anki:" + name));
+      return typeof t === "string" && t ? JSON.parse(t) : null;
+    } catch (e) { return null; }
+  }
+
   // A note's strokes as sync last left them on both sides (2026-11), so two
   // devices' drawing on one note merge stroke by stroke.
   async function writeInkBase(id, data) {
@@ -768,7 +787,7 @@
   }
 
   window.Waypage.store = { ready,
-    get place() { return cur ? cur.place : savedPlace(); }, placeName, get problem() { return problem; }, moveTo, readIndex, writeIndex, writeIndexOnly, set onIndex(f) { onIndex = f; }, writeThumb, readThumbs, storageInfo, keepStored, writePage, readPage, readPages, removePage, writeText, readText, writeTranslation, readTranslation, writeListen, readListen, writeInk, readInk, writeInkBase, readInkBase, writeNote, readNote, writeNoteBase, readNoteBase, writeInkImage, readInkImage, removeInkImage, download, removeFile, sizeOf, shrink, squeeze, pageDirUrl, bytesOf,
+    get place() { return cur ? cur.place : savedPlace(); }, placeName, get problem() { return problem; }, moveTo, readIndex, writeIndex, writeIndexOnly, set onIndex(f) { onIndex = f; }, writeThumb, readThumbs, storageInfo, keepStored, writePage, readPage, readPages, removePage, writeText, readText, writeTranslation, readTranslation, writeListen, readListen, writeInk, readInk, writeAnki, readAnki, writeInkBase, readInkBase, writeNote, readNote, writeNoteBase, readNoteBase, writeInkImage, readInkImage, removeInkImage, download, removeFile, sizeOf, shrink, squeeze, pageDirUrl, bytesOf,
     listFiles, listSized, readBytes, writeBytes, cacheFile, packSource, toBase64, listFonts, readFont, addFont, removeFont,
     readCovers, coverUrl, readCover, writeCover, removeCover };
 })();

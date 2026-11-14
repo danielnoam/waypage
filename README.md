@@ -27,6 +27,7 @@ Each section below shows the computer (left) and the phone (right).
 - [Newsletters](#newsletters)
 - [Discover](#discover)
 - [Stats](#stats)
+- [Extensions and Anki](#extensions-and-anki)
 - [Sync and backup](#sync-and-backup)
 - [Settings and the app](#settings-and-the-app)
 - [Privacy and security](#privacy-and-security)
@@ -203,11 +204,22 @@ Each section below shows the computer (left) and the phone (right).
 - Kept per device and added up through sync and backups; your time in a clip at its end.
 - Reading widgets on Android.
 
+## Extensions and Anki
+
+Features you turn on in Settings › Extensions, above About. Their code ships with the app but is only loaded once they are on; what they download is data, checked before it is kept.
+
+- **Anki** adds an Anki place to the sidebar, above Stats. Select up to six words in a clip and tap the Anki button: the word is the front, you write the back (or Fill it), the sentence it came from comes along with a way back to the clip.
+- Study with Again, Hard, Good and Easy, each showing its wait, scheduled by FSRS; Undo, Edit, Bury and Suspend; keys 1 to 4, Space and Z. Browse and edit cards, and set each deck's new cards a day, reviews a day, steps and retention.
+- **Languages** (Settings › Extensions › Anki): download a language pack, German → English to begin with (4 MB, words from Wiktionary). Fill writes a card's back from it and finds the headword from the form you picked (Häusern gives Haus). A pack is a dictionary on the device, so Look up uses it too.
+- **Export** a deck, or all of them, as a text file Anki imports (its HTML, deck and a guid, so importing again updates instead of copying). **Import** a deck from Anki (.apkg, exported with "Support older Anki versions" ticked): its decks, cards and review history come in, as text; pictures and sounds don't.
+- On Android, **Send to AnkiDroid** on the card sheet opens the share sheet; AnkiDroid takes it as a new note.
+- Decks, cards and reviews sync through GitHub sync with their own switch; each device's reviews are kept apart and replayed together, so what you review on one phone is done on the other.
+
 ## Sync and backup
 
 <p><img src="docs/shots/sync-desktop.jpg" width="74%" alt="Sync on a computer"> <img src="docs/shots/sync-phone.jpg" width="21%" alt="Sync on a phone"></p>
 
-- GitHub sync of clips, places, highlights, feeds, newsletters and stats through your own private repo, with a token for that repo only; each device picks which of them it syncs.
+- GitHub sync of clips, places, highlights, feeds, newsletters, stats and Anki decks through your own private repo, with a token for that repo only; each device picks which of them it syncs.
 - Resumes after the app closes; on mobile data, sync only places and reading time.
 - Settings › GitHub sync › Sync history lists earlier versions of your library; Put back makes it as it was then on every device (clips, tags, collections, favourites, highlights, drawings, notes, feeds), listing only versions that differ, and keeping where you are in each clip and your stats.
 - Share reading activity (off by default): what you're reading and your minutes a day go to `activity/reading.json` in the same repo, for other apps you connect to it ([the format](docs/reading-activity.md)).
