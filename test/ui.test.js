@@ -2229,6 +2229,14 @@ c("bk1", { at: 0.01 })]);
       assert.ok(await q.evaluate(() => document.querySelectorAll(".rs-col").length >= 28));
       await q.click(".rs-tab >> text=Year");
       assert.strictEqual(await q.evaluate(() => document.querySelectorAll(".rs-col").length), 12);
+      await q.click(".rs-tab >> text=All time");
+      const all = await q.evaluate(() => ({ total: document.querySelector(".rs-total").textContent, title: document.querySelector(".rs-title").textContent,
+        cols: document.querySelectorAll(".rs-col").length, steps: [...document.querySelectorAll(".rs-range button")].map((b) => b.disabled), top: document.querySelector(".rs-over").textContent }));
+      assert.ok(/^Since /.test(all.title), all.title);
+      assert.ok(all.cols >= 6, "a month each, six at least");
+      assert.deepStrictEqual(all.steps, [true, true], "nothing before or after all time");
+      assert.strictEqual(all.top, "Most time overall");
+      assert.notStrictEqual(all.total, week.total, "all ten days, not just this week's");
       await q.click(".rs-tab >> text=Week");
       await q.click(".rs-range button[aria-label=Before]");
       assert.notStrictEqual(await q.textContent(".rs-total"), week.total, "last week is its own total");
