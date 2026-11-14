@@ -2,6 +2,30 @@
 
 All notable changes to Carry-on. Newest first.
 
+
+## [1.60.0] - 2026-11-14
+
+### Added
+- Settings › Appearance › Sidebar: turn off the fold under Library, Feeds or Newsletters so each is a single row, and pick what heads Library's fold: the 3 favourites marked last, the 3 clips read last, or nothing.
+- Swipe sideways in the reader to go to the next or previous clip in its collection. In Pages, turn past the last or first page to do the same. Switch it off under Aa › Layout › Swipe between clips.
+- Sync history: in Settings, GitHub sync, a list of earlier versions of your
+  library (when, how many clips, which device). Put back makes your library
+  as it was then on every device: clips deleted since come back, clips saved
+  since are deleted, and tags, collections, favourites, highlights and feeds
+  go back, and so do your notes and drawings. Where you are in each clip and your
+  reading stats stay. Tap a
+  version to fold out what it would change (how many drawings are new here or
+  erased since, how a note's sheets differ); only its Put back button puts it back. It shows
+  what will change before it does anything, and the put-back is itself in the
+  list, so it can be undone.
+
+### Changed
+- Library's fold in the sidebar shows 3 favourites at the top, not up to 6.
+- Where a clip was saved from, and when, is said once: at its end, right under your time in it, with Read the original. The line over the title is gone.
+
+### Removed
+- The Search icon switch in View options. Library, Feeds, Newsletters and Discover always show the search field at the top, and the search icon in the top bar is gone. Feeds and Newsletters lose their View options button, which only held that switch.
+
 ## [1.59.0] - 2026-11-13
 
 ### Added
