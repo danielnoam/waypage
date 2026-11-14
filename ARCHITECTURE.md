@@ -625,7 +625,7 @@ adds a line here.
   inside the stores' rules on downloaded code and working the same
   offline, at the price of a few kilobytes of unused code for anyone who
   never turns one on.
-- A language pack is a hash-pinned download of Wiktionary's words as a StarDict dictionary; hashed and size-checked before `dict.js` reads it, and never run as code. It is the same dictionary as one you add yourself, so Settings › Reading › Dictionaries lists and removes it too. It isn't synced or backed up.
+- Language packs live on the repository's orphan `packs` branch (files and a README, no code, no workflows), fetched from `raw.githubusercontent.com` at one commit so a file can't change under its pinned hash. A new or changed pack is built with `tools/packs/build-lang.js`, committed to `packs`, and its commit, SHA-256 and size go in `src/extensions.js`'s catalogue (`test/extensions.test.js` checks the pins have that shape). A language pack is a hash-pinned download of Wiktionary's words as a StarDict dictionary; hashed and size-checked before `dict.js` reads it, and never run as code. It is the same dictionary as one you add yourself, so Settings › Reading › Dictionaries lists and removes it too. It isn't synced or backed up.
 - The web copy reads pages through the fetch proxy (`worker/`), so
   Cloudflare sees which addresses a browser user saves (not the app's).
   It only answers the web copy's origin, but the Origin header binds only

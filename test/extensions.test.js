@@ -18,6 +18,7 @@ const X = window.Waypage.ext;
 const bytes = Buffer.from("not really a tarball, but bytes");
 const good = crypto.createHash("sha256").update(bytes).digest("hex");
 const pack = { id: "de-en", title: "German → English", url: "https://example.test/de-en.tar.gz", sha256: good, bytes: bytes.length };
+const shipped = X.catalogue.flatMap((x) => x.packs.map((p) => ({ ext: x.id, ...p })));
 X.catalogue[0].packs = [pack];
 const serve = (body) => { global.fetch = async () => new Response(body); };
 
@@ -25,6 +26,17 @@ let passed = 0;
 const queued = [];
 const test = (name, fn) => queued.push([name, fn]);
 const reset = () => { added.length = 0; removed.length = 0; listed.length = 0; loaded.length = 0; mem.clear(); scriptsOk = true; };
+
+test("every pack in the catalogue is pinned: a commit's raw file, a SHA-256, a size", () => {
+  assert.ok(shipped.length > 0);
+  for (const p of shipped) {
+    assert.ok(/^https:\/\/raw\.githubusercontent\.com\/danielnoam\/waypage\/[0-9a-f]{40}\/[\w.-]+\.tar\.gz$/.test(p.url), p.id + "'s url must name a commit, not a branch");
+    assert.ok(/^[0-9a-f]{64}$/.test(p.sha256), p.id + "'s hash");
+    assert.ok(Number.isInteger(p.bytes) && p.bytes > 0, p.id + "'s size");
+    assert.ok(p.title && p.note, p.id + " needs a title and a note");
+  }
+  assert.strictEqual(new Set(shipped.map((p) => p.ext + "/" + p.id)).size, shipped.length, "no pack twice");
+});
 
 test("one whose code doesn't load stays off", async () => {
   reset();
