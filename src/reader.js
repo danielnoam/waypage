@@ -344,7 +344,7 @@
     const nodes = [];
     let text = "";
     const walk = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT,
-      { acceptNode: (t) => (t.parentElement.closest("script, style, noscript, .co-next, .co-placeholder, .co-full, .co-spent") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
+      { acceptNode: (t) => (t.parentElement.closest("script, style, noscript, [hidden], .co-next, .co-placeholder, .co-full, .co-spent") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
     for (let t = walk.nextNode(); t; t = walk.nextNode()) { nodes.push([t, text.length]); text += t.data; }
     // Lower case, any run of white space read as one space; map[i] is
     // where the i-th letter of that sits in the text.
@@ -2042,6 +2042,9 @@
           return a;
         };
         if (next) doc.body.append(nextLink = stepLink(next, "co-after"));
+        // Where it was saved from goes with the stats, last of all.
+        const foot = doc.querySelector("body > .co-licence");
+        if (foot) doc.body.append(foot);
         spentEl = null;
         if (end) setEnd(end);
         if (prev) doc.body.prepend(prevLink = stepLink(prev, "co-before"));
@@ -2066,6 +2069,14 @@
         if (meta && meta.audio && !meta.audio.overlay) {
           const foot = doc.querySelector(".co-licence");
           if (foot && /^Opened from /.test(foot.textContent)) foot.remove();
+        }
+        // Where it's from and when is said once, in the line under the
+        // stats: not over the title too.
+        const source = doc.querySelector("body > .co-licence");
+        if (metaLine && source) {
+          const on = /saved (.+)$/.exec(metaLine.textContent);
+          if (on && !/\bSaved\b|^From /.test(source.textContent)) source.insertBefore(doc.createTextNode("Saved on " + on[1] + ". "), source.querySelector("a"));
+          metaLine.hidden = true;
         }
         // Loose text is wrapped now, not on the first selection (1.11.1):
         // wrapping the words being selected dropped that selection.
@@ -2210,7 +2221,7 @@
     if (!spentEl || !spentEl.isConnected) {
       spentEl = doc.createElement("div");
       spentEl.className = "co-spent";
-      doc.body.append(spentEl);
+      doc.body.insertBefore(spentEl, doc.querySelector("body > .co-licence"));
     }
     const text = lines.join("\n");
     if (spentEl.dataset.text === text) return;
