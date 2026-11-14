@@ -110,7 +110,8 @@ Save with options) are the one exception: they fade in as they settle
 
 **Words in the UI.** Library, Clips, Files, Collections, Feeds, Tags,
 Highlights, Notes, Narrate (not "Read aloud"). "Pages" is only the reader's
-layout mode.
+layout mode. Website sync (was "Story page") is a collection kept in step
+with a site's chapter list; plain Sync is the library's backup.
 
 **Ask first for big things.** A new look, a reworked screen or a big
 change is shown or explained to Daniel (a mockup, a screenshot, a short

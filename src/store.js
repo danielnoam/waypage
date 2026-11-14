@@ -611,7 +611,7 @@
   }
 
   // ---- Pictures picked for collections' covers ----
-  // In the app, files in _covers/ beside the story pages' covers; in a
+  // In the app, files in _covers/ beside the linked pages' covers; in a
   // browser, data: URLs in the database, read once into `webCovers`.
   const IDB_COVER = "__cover:";
   const webCovers = new Map();

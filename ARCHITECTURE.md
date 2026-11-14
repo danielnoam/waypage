@@ -163,6 +163,17 @@ up. A new shell file goes in the order in `index.html` and in `sw.js`'s
 5. **Store** (below) and draw the card. Saves run in the background with
    a queue, Wi-Fi gating, retries, and a Downloads screen for what failed.
 
+**Website sync** (a collection's linked page, `findChapters` in save.js)
+reads a site's rule when it has one, else any contents page: links
+grouped by their box and again by their shape (their nearest ancestors'
+tags and classes, inline tags skipped), the group with the most numbered
+links winning, then grown to the whole block around it while what it
+adds is mostly numbered too (books or arcs marked up each their own
+way); a list over pages followed by its Next link (40 pages at
+most); a chapter's own link led on to its "Table of contents" link; and
+a list of named, unnumbered chapters taken when six or more links of one
+shape share the site's first folder.
+
 ## Where clips live
 
 `store.js`. One directory per clip, `pages/<id>/` with `page.html`,
