@@ -2029,10 +2029,10 @@ async function pickFile(first) {
 
 // ---- Add a folder (2026-11) ----
 // Every book, note and comic in a picked folder and its folders, each a
-// clip of its own in a collection named after its folder; its sound
-// files together become one audiobook. In the app each is read from
+// clip of its own in a collection named after its folder. Sound files
+// are left to Add an audiobook folder. In the app each is read from
 // where it is, like a watched folder's. A browser has no lasting folder
-// permission, so it copies the files and leaves sound files out.
+// permission, so it copies the files.
 const canAddFolder = () => C.platform.files.canPickFolder || "webkitdirectory" in HTMLInputElement.prototype;
 async function addFolder() {
   if (!C.platform.files.canPickFolder) { addFolderInBrowser(); return; }
@@ -2041,17 +2041,15 @@ async function addFolder() {
   if (!got) return;
   const scan = await C.platform.files.scan(got.ref);
   const name = scan.name || got.name;
-  const all = scan.files || [];
-  const books = all.filter((f) => WATCH_EXTS.test(f.name));
-  const sound = all.filter((f) => C.listen.isAudioName(f.name));
-  if (!scan.ok || (!books.length && !sound.length)) {
-    toast(scan.ok ? "There's nothing in " + name + " that Waypage opens." : "Couldn't read " + name + ".");
+  const books = (scan.files || []).filter((f) => WATCH_EXTS.test(f.name));
+  if (!scan.ok || !books.length) {
+    toast(!scan.ok ? "Couldn't read " + name + "." : (scan.files || []).some((f) => C.listen.isAudioName(f.name))
+      ? "There are only sound files in " + name + ". Add it with Add an audiobook folder." : "There's nothing in " + name + " that Waypage opens.");
     C.platform.files.release(got.ref);
     return;
   }
-  const added = books.length ? await addFolderFiles(name, books.map((f) => ({ ...f, read: () => C.platform.files.blob(f.ref, f.size) }))) : 0;
-  const heard = sound.length ? await addAudiobookFolder(got, { ...scan, files: all.filter((f) => !WATCH_EXTS.test(f.name)) }) : false;
-  if (!added && !heard) C.platform.files.release(got.ref);
+  const added = await addFolderFiles(name, books.map((f) => ({ ...f, read: () => C.platform.files.blob(f.ref, f.size) })));
+  if (!added) C.platform.files.release(got.ref);
 }
 function addFolderInBrowser() {
   document.querySelectorAll(".file-pick").forEach((n) => n.remove());
@@ -2064,14 +2062,9 @@ function addFolderInBrowser() {
     // "Books/Sci-fi/dune.epub": the folder picked, then the path in it.
     const root = (picked[0].webkitRelativePath || "").split("/")[0] || "Folder";
     const books = picked.filter((f) => WATCH_EXTS.test(f.name));
-    const sound = picked.some((f) => C.listen.isAudioName(f.name));
-    if (!books.length) {
-      toast(sound ? "Waypage plays an audiobook from where it is, which a browser can't do for a folder. Add its files with Add a file." : "There's nothing in " + root + " that Waypage opens.");
-      return;
-    }
+    if (!books.length) { toast("There's nothing in " + root + " that Waypage opens."); return; }
     await addFolderFiles(root, books.map((f) => ({ name: f.name, size: f.size, ref: null,
       path: (f.webkitRelativePath || f.name).split("/").slice(1).join("/") || f.name, read: async () => f })));
-    if (sound) toast("Its sound files were left out: in a browser, add an audiobook with Add a file.");
   });
   input.click();
 }

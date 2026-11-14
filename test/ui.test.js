@@ -3802,7 +3802,7 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
-    await test("Add a folder: the Add page's three rows, each book in the folder added on its own in its folder's collection, its sound files handed on as one audiobook", async () => {
+    await test("Add a folder: the Add page's four rows, each book in the folder added on its own in its folder's collection, its sound files left to Add an audiobook folder", async () => {
       const q = await page(browser, 390);
       const bytes = [...epubBytes()];
       await q.evaluate(() => {
@@ -3810,7 +3810,7 @@ c("bk1", { at: 0.01 })]);
         window.released = [];
       });
       await q.click("#severalBtn");
-      assert.deepStrictEqual(await q.locator("#batchView .batch-file .row-label").allTextContents(), ["Add a file", "Add a folder", "New note"]);
+      assert.deepStrictEqual(await q.locator("#batchView .batch-file .row-label").allTextContents(), ["Add a file", "Add a folder", "Add an audiobook folder", "New note"]);
       const got = await q.evaluate(async (b) => {
         const F = window.Waypage.platform.files;
         const book = (n) => new File([new Uint8Array(b)], n, { type: "application/epub+zip" });
@@ -3823,22 +3823,19 @@ c("bk1", { at: 0.01 })]);
           { ref: "content://f/cover.jpg", path: "cover.jpg", name: "cover.jpg", size: 10 }] });
         F.blob = async (ref) => files[ref];
         F.release = (ref) => window.released.push(ref);
-        let heard = null;
-        addAudiobookFolder = async (g, s) => { heard = s.files.map((f) => f.name); return true; };
         await addFolder();
-        return { pages: state.pages.map((p) => [p.file.name, p.folder, p.link]), heard, released: window.released };
+        return { pages: state.pages.map((p) => [p.file.name, p.folder, p.link]), released: window.released };
       }, bytes);
       assert.deepStrictEqual(got.pages, [["b.epub", "Book 2", "content://f/b.epub"], ["a.epub", "Savage Divinity", "content://f/a.epub"]], JSON.stringify(got));
-      assert.deepStrictEqual(got.heard, ["1.mp3", "cover.jpg"]);
       assert.deepStrictEqual(got.released, []);
       // The same folder again adds nothing.
-      const again = await q.evaluate(async () => { addAudiobookFolder = async () => false; await addFolder(); return { n: state.pages.length, released: window.released }; });
+      const again = await q.evaluate(async () => { await addFolder(); return { n: state.pages.length, released: window.released }; });
       assert.deepStrictEqual(again, { n: 2, released: ["content://f"] });
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });
 
-    await test("Add a folder in a browser: its books are copied in, in its collection, and its sound files left out", async () => {
+    await test("Add a folder in a browser: its books are copied in, in its collection", async () => {
       const q = await page(browser, 390);
       const dir = fs.mkdtempSync(path.join(require("os").tmpdir(), "wp-folder-"));
       fs.mkdirSync(path.join(dir, "Stories"));

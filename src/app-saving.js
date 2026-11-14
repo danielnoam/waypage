@@ -1172,8 +1172,10 @@ function renderBatch(text, preset, from) {
       el("span", { class: "row-label accent" }, "Add a file")),
       canAddFolder() ? el("button", { class: "row", type: "button", onclick: () => back().then(addFolder) },
         el("span", { class: "row-label accent" }, "Add a folder")) : null,
+      C.platform.files.canPickFolder ? el("button", { class: "row", type: "button", onclick: () => back().then(addAudiobookFolder) },
+        el("span", { class: "row-label accent" }, "Add an audiobook folder")) : null,
       newNoteRow),
-    el("p", { class: "meta" }, "An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3). A folder's files are each added on their own, in a collection named after their folder" + (C.platform.files.canPickFolder ? ", and its sound files make one audiobook" : "") + ". It stays " + ON_HERE + "."));
+    el("p", { class: "meta" }, "An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3" + (C.platform.files.canPickFolder ? ", or a folder of them" : "") + "). A folder's files are each added on their own, in a collection named after their folder. It stays " + ON_HERE + "."));
   const form = el("form", { class: "batch-form" }, asPage, fromFile,
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, "Links"), area, count, finder, skipRow),
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, "Save as"),
