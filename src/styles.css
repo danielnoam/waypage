@@ -1786,6 +1786,20 @@ span.update-text { cursor: default; }
 .storage-folder[aria-expanded="true"] .row-chev { transform: rotate(90deg); }
 .storage-folder.loose .choice-label { color: var(--muted); }
 .storage-pages[hidden] { display: none; }
+/* Sync history: tap a version to fold out what it would change; Put back is its own button. */
+.history-row { padding: 0; gap: 0; }
+.history-fold, .history-put { display: flex; align-items: center; align-self: stretch; min-height: 52px; background: transparent; border: 0; font: inherit; text-align: left; cursor: pointer; color: inherit; }
+.history-fold { flex: 1; min-width: 0; gap: var(--s-3); padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4); }
+.history-put { flex-shrink: 0; padding: var(--s-2) var(--s-4); color: var(--accent); font-size: var(--fs-meta); border-inline-start: 1px solid var(--line); }
+.history-put:disabled { color: var(--muted); cursor: default; }
+.history-fold .row-chev { transition: transform var(--spring-control-ms, 300ms) var(--spring-control, ease-out); }
+.history-fold[aria-expanded="true"] .row-chev { transform: rotate(90deg); }
+.history-diff[hidden] { display: none; }
+.history-diff { background: var(--bg); border-top: 1px solid var(--line); }
+.history-diff .row { padding-inline-start: var(--s-6); cursor: default; }
+.history-head { padding: var(--s-2) var(--s-4) var(--s-1) var(--s-6); color: var(--muted); font-size: var(--fs-meta); font-weight: 500; }
+.history-note { margin: 0; padding: var(--s-2) var(--s-4) var(--s-3) var(--s-6); }
+@media (prefers-reduced-motion: reduce) { .history-fold .row-chev { transition: none; } }
 .storage-pages .row { padding-inline-start: var(--s-6); }
 .storage-pages > .row:first-child, .storage-pages + .row { border-top: 1px solid var(--line); }
 @media (prefers-reduced-motion: reduce) { .storage-folder .row-chev { transition: none; } }
