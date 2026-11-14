@@ -962,19 +962,46 @@
   // 14:02 · Pixel". A commit that only moved places or stats isn't a
   // change to the library, so the list leaves it out.
   let who = "", putBack = "";
-  const libraryNote = (n) => (putBack ? "Library: put back to " + putBack : "Library: " + n + " pages") + (who ? " · " + who : "");
+  // A short fingerprint of what Put back would change, kept in the commit's
+  // message (` · #<16 hex>`), so the list can leave out saves that changed
+  // nothing. Places, reading times and the bookkeeping times are left out.
+  const BOOK = new Set(["favAt", "folderAt", "folderFavAt", "inkAt", "movedAt", "readAt", "readOn"].concat(PLACE));
+  const canon = (v) => (Array.isArray(v) ? v.map(canon) : v && typeof v === "object"
+    ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])])) : v);
+  const fnv = (str, seed) => { let h = seed >>> 0; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h; };
+  function libraryPrint(doc) {
+    const pages = (doc.pages || []).filter((p) => p && p.id).map((p) => {
+      const o = {};
+      for (const k of Object.keys(p)) if (SYNCED.has(k) && !BOOK.has(k)) o[k] = p[k];
+      return o;
+    }).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const feeds = (doc.feeds || []).filter((x) => x && x.url).map((x) => {
+      const o = {};
+      for (const k of FEED) if (k !== "addedAt" && x[k] != null && x[k] !== "") o[k] = x[k];
+      return o;
+    }).sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
+    const text = JSON.stringify(canon({ pages, feeds }));
+    const hex = (n) => n.toString(16).padStart(8, "0");
+    return hex(fnv(text, 2166136261)) + hex(fnv(text, 40503));
+  }
+  // The print of a document as it is read back from GitHub (clean), or "".
+  const printDoc = (doc) => { try { return libraryPrint(clean(doc)); } catch (e) { return ""; } };
+  const withPrint = (print) => (print ? " · #" + print : "");
+  const libraryNote = (n, print) => (putBack ? "Library: put back to " + putBack : "Library: " + n + " pages") + (who ? " · " + who : "") + withPrint(print);
   const HISTORY_PAGE = 30;
   // GitHub's commits for library.json -> [{ sha, at, kind, clips, back, device }], newest first.
   function parseHistory(raw) {
     const out = [];
     for (const c of Array.isArray(raw) ? raw : []) {
-      const msg = String((c && c.commit && c.commit.message) || "").split("\n")[0];
+      let msg = String((c && c.commit && c.commit.message) || "").split("\n")[0];
+      const pr = / · #([0-9a-f]{16})$/.exec(msg);
+      if (pr) msg = msg.slice(0, pr.index);
       const m = /^(Library|Feeds|Places): (.*?)(?: · (.+))?$/.exec(msg);
       if (!c || typeof c.sha !== "string" || !m || m[1] === "Places") continue;
       const at = Date.parse((c.commit.committer || c.commit.author || {}).date || "") || 0;
       const pages = /^(\d+) pages?$/.exec(m[2]), back = /^put back to (.+)$/.exec(m[2]);
       out.push({ sha: c.sha, at, kind: m[1] === "Feeds" ? "feeds" : back ? "back" : "library",
-        clips: pages ? Number(pages[1]) : null, back: back ? back[1] : "", device: m[3] || "" });
+        clips: pages ? Number(pages[1]) : null, back: back ? back[1] : "", device: m[3] || "", print: pr ? pr[1] : null });
     }
     return out;
   }
@@ -985,7 +1012,32 @@
       + "&per_page=" + HISTORY_PAGE + "&page=" + page, { headers: headers() });
     if (!r.ok) throw await fail(r);
     const raw = await r.json();
-    return { list: parseHistory(raw), more: Array.isArray(raw) && raw.length === HISTORY_PAGE };
+    const list = parseHistory(raw), known = load(PRINTS_KEY, {});
+    for (const e of list) if (!e.print && known[e.sha]) e.print = known[e.sha];
+    return { list, more: Array.isArray(raw) && raw.length === HISTORY_PAGE };
+  }
+  const PRINTS_KEY = "waypage.sync.prints";
+  // The print of an older commit, which has none in its message: read once and
+  // kept on this device (a commit never changes), the last 600.
+  async function printOf(sha) {
+    const known = load(PRINTS_KEY, {});
+    if (known[sha]) return known[sha];
+    const print = libraryPrint(await target(sha));
+    known[sha] = print;
+    const keys = Object.keys(known);
+    for (const k of keys.slice(0, Math.max(0, keys.length - 600))) delete known[k];
+    keep(PRINTS_KEY, known);
+    return print;
+  }
+  // Only the versions that differ from the one kept before them (newest first);
+  // the first always stays, and so does one whose print isn't known.
+  function distinct(list) {
+    const out = [];
+    let last = null;
+    for (const [i, e] of list.entries()) {
+      if (i === 0 || !e.print || !last || e.print !== last) { out.push(e); last = e.print || null; }
+    }
+    return out;
   }
   // The library as it was in that commit, down to what Waypage writes.
   async function target(sha) {
@@ -1059,7 +1111,7 @@
   // Where you are in the clip never shows: revertPlan keeps it.
   function revertChanges(h, next, text) {
     const out = [];
-    const seen = new Set(["id", "tags", "folder", "folderAt", "fav", "favAt", "marks", "ink", "inkAt", "title", "editedAt", "readAt", "readOn", "movedAt"].concat(PLACE));
+    const seen = new Set(["id", "tags", "folder", "folderAt", "folderFavAt", "fav", "favAt", "marks", "ink", "inkAt", "title", "editedAt", "readAt", "readOn", "movedAt"].concat(PLACE));
     if (text) out.push({ field: "text" });
     if (!same(h.title, next.title)) out.push({ field: "title", was: h.title || "", now: next.title || "" });
     const tags = (p) => (p.tags || []).slice().sort();
@@ -1277,7 +1329,7 @@
         if (merged.feedsSeen) doc.feedsSeen = merged.feedsSeen;
         if (await sameOff(doc, remoteDoc)) break;
         halt();
-        try { await write("library.json", JSON.stringify(doc), remote.sha, "Feeds: " + (merged.feeds || []).length); break; } catch (e) {
+        try { await write("library.json", JSON.stringify(doc), remote.sha, "Feeds: " + (merged.feeds || []).length + withPrint(printDoc(doc))); break; } catch (e) {
           if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e;
         }
         continue;
@@ -1397,7 +1449,7 @@
       if (remote && await sameOff(merged, remoteDoc)) { keep(SENT_KEY, null); break; }
       halt();
       try {
-        await write("library.json", JSON.stringify(merged), remote && remote.sha, libraryNote(merged.pages.length));
+        await write("library.json", JSON.stringify(merged), remote && remote.sha, libraryNote(merged.pages.length, printDoc(merged)));
         keep(SENT_KEY, null);
         break;
       } catch (e) {
@@ -1706,7 +1758,7 @@
     // A note whose PDF is over the cap stays on its device (2026-11).
     tooBig: (p) => !!(p && p.note && (p.noteBytes || 0) > NOTE_BASE_MAX),
     merge, mergeTags, mergeMarks, mergeInk, mergeListen, mergeOutside, cleanOutside, outsideOf, outsideOnto, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
-    share, clean, same, urlKey, sameUrl, peek, poll, parseHistory, history, target, revertPlan, revertChanges, inkDiff, noteFilesIn, noteFilesKeep, readText, readBytes,
+    share, clean, same, urlKey, sameUrl, peek, poll, parseHistory, history, target, printOf, libraryPrint, distinct, revertPlan, revertChanges, inkDiff, noteFilesIn, noteFilesKeep, readText, readBytes,
     // This device's name in the commits it writes, and a one-off line for
     // the sync after a put-back (cleared when that sync ends).
     set device(v) { who = String(v || "").replace(/[\r\n·]/g, " ").trim().slice(0, 40); },
