@@ -27,6 +27,11 @@ const sample = [
   entry({ word: "gehen", pos: "verb", head_templates: [{ expansion: "gehen (strong, third-person singular present geht, past tense ging, past participle gegangen, auxiliary sein)" }],
     forms: [{ form: "ging", tags: ["past"] }, { form: "gegangen", tags: ["participle", "past"] }, { form: "ich gehe", tags: ["present"] }, { form: "zu gehen", tags: ["infinitive"] }],
     senses: [{ glosses: ["to go", "to walk"], tags: ["intransitive"] }, { glosses: ["to work"], tags: ["colloquial"] }] }),
+  // A village with a plural’s spelling: not a headword, so the plural finds Haus.
+  entry({ word: "Häusern", pos: "name", senses: [{ glosses: ["a municipality in Germany"] }] }),
+  // schönen is a verb of its own and also schön's inflected form.
+  entry({ word: "schön", pos: "adj", head_templates: [{ expansion: "schön (comparative schöner, superlative am schönsten)" }], forms: [{ form: "schönen", tags: ["strong", "accusative"] }], senses: [{ glosses: ["beautiful"] }] }),
+  entry({ word: "schönen", pos: "verb", head_templates: [{ expansion: "schönen (weak, past tense schönte)" }], senses: [{ glosses: ["to beautify"] }] }),
   entry({ word: "un-", pos: "prefix", senses: [{ glosses: ["not"] }] }),
   entry({ word: "Zebra", lang: "English", pos: "noun", senses: [{ glosses: ["zebra"] }] }),
   "not json",
@@ -68,8 +73,8 @@ let built;
 test("only German headwords come in, with their meanings, and nothing for forms or empty ones", async () => {
   built = await P.build(lines(sample), { id: "t", name: "Test pack" });
   const words = readIdx(built.files["t.idx"]).map((x) => x.word).sort();
-  assert.deepStrictEqual(words, ["Bank", "Haus", "gehen"]);
-  assert.strictEqual(built.words, 3);
+  assert.deepStrictEqual(words, ["Bank", "Haus", "gehen", "schön", "schönen"]);
+  assert.strictEqual(built.words, 5);
 });
 
 test("a noun's first line has its article and plural, then numbered meanings without repeats", () => {
@@ -83,6 +88,11 @@ test("a word with two entries keeps both, apart", () => {
 test("a verb's first line is Wiktionary's own headword line, and its meanings carry the useful tags", () => {
   assert.strictEqual(textOf(built.files, "gehen"),
     "verb · strong, third-person singular present geht, past tense ging, past participle gegangen, auxiliary sein\n1. to walk\n2. (colloquial) to work");
+});
+
+test("a headword that is also another word's form says so, with that word's first meaning", () => {
+  assert.strictEqual(textOf(built.files, "schönen"), "verb · weak, past tense schönte\nto beautify\n\nalso a form of schön:\nadj · comparative schöner, superlative am schönsten\nbeautiful");
+  assert.ok(!textOf(built.files, "schön").includes("also a form"), "a word isn't its own form");
 });
 
 test("forms find their headword, with the article taken off, and phrases and table junk left out", () => {
@@ -109,7 +119,7 @@ test("the index is in the order src/dict.js searches by: ASCII letters without c
 test("the .ifo says what it holds, and the idx size is its real size", () => {
   const ifo = built.files["t.ifo"].toString();
   assert.ok(ifo.startsWith("StarDict's dict ifo file\nversion=3.0.0\n"));
-  assert.ok(ifo.includes("bookname=Test pack\n") && ifo.includes("wordcount=3\n") && ifo.includes("sametypesequence=m\n"));
+  assert.ok(ifo.includes("bookname=Test pack\n") && ifo.includes("wordcount=5\n") && ifo.includes("sametypesequence=m\n"));
   assert.ok(ifo.includes("idxfilesize=" + built.files["t.idx"].length + "\n"));
   assert.ok(/synwordcount=\d+/.test(ifo) && /CC BY-SA 4\.0/.test(ifo));
 });

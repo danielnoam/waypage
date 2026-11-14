@@ -30,7 +30,9 @@ const STRIP_ARTICLE = /^(?:der|die|das|des|dem|den|ein|eine|einen|einem|einer|ei
 // Tags worth keeping in front of a meaning; the rest (grammar, "strong") are noise there.
 const KEEP_TAGS = new Set(["archaic", "colloquial", "dated", "derogatory", "dialectal", "figurative", "informal", "literary", "obsolete",
   "offensive", "rare", "regional", "slang", "technical", "vulgar", "Austria", "Switzerland", "Germany", "ironic", "jargon"]);
-const SKIP_POS = new Set(["character", "symbol", "punct", "prefix", "suffix", "infix", "circumfix", "interfix", "affix"]);
+// "name" is Wiktionary’s proper noun: towns and surnames, which crowd out the
+// common word of the same spelling (Häusern the village, not Haus).
+const SKIP_POS = new Set(["name", "character", "symbol", "punct", "prefix", "suffix", "infix", "circumfix", "interfix", "affix"]);
 const MAX_SENSES = 6, MAX_GLOSS = 140, MAX_TEXT = 1200;
 
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -130,10 +132,16 @@ const u32 = (n) => { const b = Buffer.alloc(4); b.writeUInt32BE(n); return b; };
 function stardict({ words, forms }, opts) {
   const heads = [...words.keys()].sort(order);
   const index = new Map(heads.map((w, i) => [w, i]));
+  // A headword that is also the form of another word (schönen the verb,
+  // and schön's inflected form) says so after its own meanings, with that
+  // word's first line and meaning, since the .syn can't point a headword
+  // somewhere else.
+  const alsoOf = (w) => [...(forms.get(w) || [])].filter((l) => l !== w && words.has(l)).sort(order).slice(0, 2)
+    .map((l) => "also a form of " + l + ":\n" + words.get(l)[0].split("\n").slice(0, 2).join("\n"));
   const idx = [], dict = [];
   let at = 0;
   for (const w of heads) {
-    const text = Buffer.from(words.get(w).join("\n\n").slice(0, MAX_TEXT), "utf8");
+    const text = Buffer.from([...words.get(w), ...alsoOf(w)].join("\n\n").slice(0, MAX_TEXT), "utf8");
     idx.push(Buffer.from(w + "\0", "utf8"), u32(at), u32(text.length));
     dict.push(text);
     at += text.length;
