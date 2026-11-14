@@ -4313,6 +4313,18 @@ c("bk1", { at: 0.01 })]);
       await reopen();
       got = await look();
       assert.ok(Math.abs(Number(got.spot.split("/")[0]) - Number(left.spot.split("/")[0])) <= 1, "back at " + got.spot + ", left at " + left.spot);
+      // The parse's skip-everything rule is gone once the chapters take over,
+      // and the chapter named is the one read, found by halving (2026-11).
+      const named = await q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument, R = window.Waypage.reader;
+        const edge = document.querySelector("#readerView .reader-bar").offsetHeight + 24;
+        const marked = [...d.querySelectorAll("[data-toc]")];
+        const heads = marked.length > 1 ? marked : [...d.querySelectorAll("h2, h3")];
+        const real = heads.filter((h) => h.getBoundingClientRect().top <= edge).pop();
+        return { parsing: d.documentElement.classList.contains("co-parsing"), section: R.section(), real: real ? (real.getAttribute("data-toc-t") || real.textContent).replace(/\s+/g, " ").trim() : "" };
+      });
+      assert.strictEqual(named.parsing, false);
+      assert.ok(named.real && named.section === named.real, named.section + " vs " + named.real);
       // The scroll back to the place has the pictures there read.
       await until(q, () => { const d = document.getElementById("readerFrame").contentDocument; return [...d.querySelectorAll("img[data-at]")].some((i) => { const r = i.getBoundingClientRect(); return r.bottom > -innerHeight && r.top < innerHeight * 2; }); });
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));

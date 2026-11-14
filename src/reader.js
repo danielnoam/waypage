@@ -58,6 +58,10 @@
       '<link rel="stylesheet" href="' + appUrl("src/reader.css") + '">';
     if (onTapOnly) html = holdPictures(html);
     if (lazyPictures) html = html.replace(/<img(?=[\s>])(?![^>]*\sloading=)/gi, '<img loading="lazy"');
+    // While a long clip parses, Chrome lays out what it has so far again
+    // and again: a 47 MB book took 54 s at 6x to parse, 7 s with its parts
+    // skipped from the start. chunkUp takes over once it's in.
+    if (lazyPictures) html = html.replace(/<html\b([^>]*)>/i, (m, attrs) => /\sclass="/i.test(attrs) ? m.replace(/\sclass="/i, ' class="co-parsing ') : '<html class="co-parsing"' + attrs + ">");
     return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + head) : head + html;
   }
 
@@ -406,7 +410,7 @@
   // under the bar, and those spots ("12/37") still go back there.
   let anchors = [];
   function findAnchors() {
-    anchors = doc ? [...doc.body.querySelectorAll(BLOCKS + ", .co-comic img")].filter((el) => !el.closest(SKIP) && !el.querySelector(BLOCKS)) : [];
+    anchors = doc ? [...doc.body.querySelectorAll(BLOCKS + ", .co-comic img")].filter((el) => !el.closest(SKIP) && (!el.firstElementChild || !el.querySelector(BLOCKS))) : [];
   }
   // A spot's block as words (1.38.0), read from a clip's saved HTML, and
   // the same block found again in a new copy of it: Update from the site
@@ -452,7 +456,7 @@
     if (chunks.length) {
       while (lo < hi) {
         const mid = (lo + hi) >> 1;
-        if (anchors[mid].getBoundingClientRect().bottom <= edge) lo = mid + 1; else hi = mid;
+        if (above(anchors[mid], edge, "bottom")) lo = mid + 1; else hi = mid;
       }
     }
     for (let i = lo; i < anchors.length; i++) {
@@ -506,15 +510,32 @@
 
   // The heading of the part being read: the last one above the bar's edge,
   // or in pages, the last one on this page or before it.
+  // It runs on every scroll. Measuring each heading laid out every chapter
+  // above the one read (chunkUp): a 900-chapter book took 22 s at 6x to
+  // open at chapter 800. The headings are in reading order, so it halves,
+  // and a heading in a chapter the reader skips is placed by that
+  // chapter's own box.
+  // Whether an element's `side` (top or bottom) is at or above the line
+  // `edge`, judged by its skipped chapter's box when the chapter is wholly
+  // on one side of the line: measuring inside it would lay it out.
+  function above(el, edge, side = "top") {
+    const box = chunks.length && el.closest(".co-lazy");
+    if (box) {
+      const r = box.getBoundingClientRect();
+      if (r.top > edge) return false;
+      if (r.bottom <= edge) return true;
+    }
+    return el.getBoundingClientRect()[side] <= edge;
+  }
   function section() {
-    let cur = null;
     const edge = (topSpace ? topSpace() : 0) + 24;
     const p = isPaged() ? page() : 0;
-    for (const h of heads) {
-      if (isPaged() ? pageOf(h) > p : h.getBoundingClientRect().top > edge) break;
-      cur = h;
+    let lo = 0, hi = heads.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (isPaged() ? pageOf(heads[mid]) <= p : above(heads[mid], edge)) lo = mid + 1; else hi = mid;
     }
-    return cur ? clean(cur) : "";
+    return lo ? clean(heads[lo - 1]) : "";
   }
 
   // Where each heading sits along the progress line (1.45.0), in
@@ -543,7 +564,8 @@
           const r = doc.createRange();
           r.setStart(box, 0);
           r.setEndBefore(h);
-          return { box, share: r.toString().length / Math.max(1, box.textContent.length) };
+          const all = (chunks.find((c) => c.el === box) || {}).chars || box.textContent.length;
+          return { box, share: r.toString().length / Math.max(1, all) };
         });
       }
       partsAt = heads.map((h, i) => {
@@ -642,11 +664,29 @@
   // so there the guesses are taken off.
   const LONG = 150000, PIECE = 24;
   let chunks = [];
+  // How many characters of text an element holds, counting no further than
+  // `upTo`: textContent on a whole book builds a 40 MB string to measure.
+  function leadingText(el, upTo) {
+    let out = "";
+    const walk = el.ownerDocument.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let t = walk.nextNode(); t && out.length < upTo; t = walk.nextNode()) out += t.data;
+    return out;
+  }
+  function lettersIn(el, upTo = Infinity) {
+    let n = 0;
+    const walk = el.ownerDocument.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let t = walk.nextNode(); t && n < upTo; t = walk.nextNode()) n += t.data.length;
+    return n;
+  }
   function chunkUp() {
     chunks = [];
-    if (!doc || comic) return;
+    if (!doc) return;
+    // Nothing is laid out before this runs out, so the chunks take over
+    // from the parse's rule without the whole book being laid out between.
+    doc.documentElement.classList.remove("co-parsing");
+    if (comic) return;
     const body = doc.querySelector(".co-body") || doc.body;
-    if (body.textContent.length < LONG) return;
+    if (lettersIn(body, LONG) < LONG) return;
     let parts = [...body.children].filter((el) => el.localName === "section");
     if (parts.length < 4) {
       parts = [];
@@ -663,7 +703,7 @@
       for (const n of [...body.childNodes]) { run.push(n); if (run.length >= PIECE && n.nodeType === 1) close(); }
       close();
     }
-    chunks = parts.map((el) => ({ el, chars: el.textContent.length, imgs: el.querySelectorAll("img").length }));
+    chunks = parts.map((el) => ({ el, chars: lettersIn(el), imgs: el.querySelectorAll("img").length }));
     lazy(!isPaged());
   }
   function lazy(on) {
@@ -696,6 +736,7 @@
   // heading, a list item with a sublist), has no paragraph of its own to
   // read or light, so each run of it between line breaks is wrapped in an
   // inline span.co-run, which changes nothing on screen.
+  const LEAF = new Set(BLOCKS.split(", "));
   function wrapLoose() {
     if (doc.body.dataset.coRuns) return;
     doc.body.dataset.coRuns = "1";
@@ -703,8 +744,10 @@
     const walk = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
     for (let t = walk.nextNode(); t; t = walk.nextNode()) {
       const up = t.parentElement;
+      // A paragraph of plain words, most of a book, is a block of its own.
+      if ((!up.firstElementChild && LEAF.has(up.localName)) || !/[\p{L}\p{N}]/u.test(t.data)) continue;
       const block = up.closest(BLOCKS);
-      if (!/[\p{L}\p{N}]/u.test(t.data) || (block && !block.querySelector(BLOCKS)) || up.closest(SKIP)) continue;
+      if ((block && !block.querySelector(BLOCKS)) || up.closest(SKIP)) continue;
       let h = up;
       while (h !== doc.body && !BREAKS.has(h.tagName)) h = h.parentElement;
       holders.add(h);
@@ -2117,7 +2160,7 @@
       iframe.onload = () => {
         doc = iframe.contentDocument;
         // Pages saved before 0.4.0 may not carry their direction.
-        if (!doc.documentElement.hasAttribute("dir") && C.save.textDir(doc) === "rtl") doc.documentElement.dir = "rtl";
+        if (!doc.documentElement.hasAttribute("dir") && C.save.textDir(doc, leadingText(doc.body, 4000)) === "rtl") doc.documentElement.dir = "rtl";
         applyTheme();
         applyConnection();
         applyTop();
