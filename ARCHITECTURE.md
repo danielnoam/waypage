@@ -376,7 +376,12 @@ web copy stay links, as before.
   clip whose text goes back gets a new `editedAt`, a feed followed again a
   new `addedAt`; places and reading stay (`synchistory.test.js`). A version's
   fold-out is a dry run of the same `revertPlan` (`revertChanges` says what
-  each clip would change), with no pre-sync and nothing written.
+  each clip would change; a changed note's sheets and strokes are read from
+  that commit for the first 20), with no pre-sync and nothing written. A note
+  comes back through `noteFilesIn`/`noteFilesKeep` at that commit, and its ink
+  base is set to GitHub head's `ink.json` (its sha and strokes), so the next
+  sync sends the old strokes rather than merging the newer ones back; the
+  other device's three-way merge then lands on the old strokes.
 - **Google Drive** (`drive.js`): zipped backups (`backup.js`) in a
   Waypage folder in the person's Drive, resumable (the browser in 8 MB
   pieces), the last few kept. On Android the zip is packed natively

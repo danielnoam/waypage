@@ -92,9 +92,36 @@ test("feeds go back; one followed again beats its unfollow, one this device does
   assert.deepStrictEqual([plan.followed, plan.unfollowed], [1, 1]);
 });
 
-test("notes are left as they are, in both directions", () => {
-  const plan = S.revertPlan([page("n1n1", { note: { sheets: 1 } }), page("a1b2")], lib([page("n2n2", { note: { sheets: 2 } }), page("a1b2")]), { now: NOW });
+const note = (id, more) => page(id, { note: { sheets: 1 }, editedAt: 100, ...more });
+
+test("a note deleted since comes back, one made since goes, one changed gets the old version as the newest", () => {
+  const plan = S.revertPlan([note("n1n1", { editedAt: 400 }), note("n3n3")], lib([note("n1n1"), note("n2n2")]), { now: NOW });
+  assert.deepStrictEqual(plan.back.map((p) => [p.id, p.note !== undefined, p.back]), [["n2n2", true, NOW]]);
+  assert.deepStrictEqual(plan.drop, ["n3n3"]);
+  assert.deepStrictEqual([plan.change.length, plan.change[0].note, plan.change[0].text, plan.change[0].next.editedAt], [1, true, true, NOW]);
+});
+
+test("a device that doesn't sync notes leaves them alone, on both sides", () => {
+  const plan = S.revertPlan([note("n1n1"), page("a1b2")], lib([note("n2n2"), page("a1b2")]), { now: NOW, skipNote: true });
   assert.deepStrictEqual([plan.back.length, plan.drop.length, plan.change.length], [0, 0, 0]);
+});
+
+test("inkDiff counts strokes by id and block: new here, and erased since", () => {
+  const st = (id) => ({ id, t: "p" });
+  assert.deepStrictEqual(S.inkDiff({ 1: [st("a"), st("b")], 2: [st("c")] }, { 1: [st("b")], 2: [st("c"), st("d")], 3: [st("e")] }), { here: 1, then: 2 });
+  // The same id on another block is a different stroke.
+  assert.deepStrictEqual(S.inkDiff({ 1: [st("a")] }, { 2: [st("a")] }), { here: 1, then: 1 });
+  assert.deepStrictEqual(S.inkDiff(undefined, null), { here: 0, then: 0 });
+  assert.deepStrictEqual(S.inkDiff({ 1: [st("a")] }, { 1: [st("a")] }), { here: 0, then: 0 });
+});
+
+test("a clip's drawings are counted in what a put-back changes", () => {
+  const st = (id) => ({ id, t: "p" });
+  const here = page("a1b2", { ink: { 1: [st("a"), st("b"), st("c")] } });
+  const plan = S.revertPlan([here], lib([page("a1b2", { ink: { 1: [st("a")] } })]), { now: NOW });
+  const ink = S.revertChanges(here, plan.change[0].next, false).find((x) => x.field === "ink");
+  assert.deepStrictEqual([ink.here, ink.then], [2, 0]);
+  assert.ok(!S.revertChanges(here, here, false).some((x) => x.field === "ink"));
 });
 
 test("an old library with no feeds leaves feeds alone", () => {
@@ -150,6 +177,19 @@ test("a put-back of a text edit wins on the other device", () => {
   assert.strictEqual(byId(a.pages, "a1b2").editedAt, NOW);
   const b = S.merge(head, lib([page("a1b2", { editedAt: 400 })]), a, NOW + 2);
   assert.strictEqual(byId(b.pages, "a1b2").editedAt, NOW);
+});
+
+// A note's strokes: A puts the note back, so its base is GitHub's head and its
+// strokes are the old ones. B, which saw the head, merges what A sent.
+test("a put-back of a note's strokes reaches another device, and a stroke drawn there since stays", () => {
+  const st = (id) => ({ id, t: "p", p: [1, 2] });
+  const head = { 1: [st("a"), st("b"), st("new")] };
+  const old = { 1: [st("a"), st("b")] };
+  // B drew "mine" after head, and has not synced.
+  const b = S.mergeInk(head, { 1: [st("a"), st("b"), st("new"), st("mine")] }, old);
+  assert.deepStrictEqual(b[1].map((x) => x.id).sort(), ["a", "b", "mine"]);
+  // B has changed nothing since head: exactly the old strokes.
+  assert.deepStrictEqual(S.mergeInk(head, head, old)[1].map((x) => x.id).sort(), ["a", "b"]);
 });
 
 console.log(passed + " passed");

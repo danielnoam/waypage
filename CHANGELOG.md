@@ -11,8 +11,10 @@ All notable changes to Carry-on. Newest first.
   library (when, how many clips, which device). Put back makes your library
   as it was then on every device: clips deleted since come back, clips saved
   since are deleted, and tags, collections, favourites, highlights and feeds
-  go back. Where you are in each clip, your reading stats and your notes stay. Tap a
-  version to fold out what it would change; only its Put back button puts it back. It shows
+  go back, and so do your notes and drawings. Where you are in each clip and your
+  reading stats stay. Tap a
+  version to fold out what it would change (how many drawings are new here or
+  erased since, how a note's sheets differ); only its Put back button puts it back. It shows
   what will change before it does anything, and the put-back is itself in the
   list, so it can be undone.
 

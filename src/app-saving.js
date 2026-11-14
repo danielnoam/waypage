@@ -494,17 +494,39 @@ const historyReset = () => { historyList = null; historyMore = false; historyPag
 function historyView() {
   const what = C.sync.what;
   const view = state.pages.filter((p) => !p.link).map((p) => C.sync.share(C.backup.cleanMeta(p, p.id) || p));
-  return { view, opts: { feeds, skipFeed: (u) => (isMail({ url: u }) ? !what.newsletters : !what.feeds) } };
+  return { view, opts: { feeds, skipNote: !what.notes, skipFeed: (u) => (isMail({ url: u }) ? !what.newsletters : !what.feeds) } };
 }
 // What a put-back does, in words: "2 clips come back, 1 saved since is deleted".
 function historyParts(plan) {
-  const one = (n, a, b) => (n === 1 ? a : b);
-  return [plan.back.length ? countLine(plan.back.length) + one(plan.back.length, " comes", " come") + " back" : "",
-    plan.drop.length ? countLine(plan.drop.length) + " saved since " + one(plan.drop.length, "is", "are") + " deleted" : "",
-    plan.change.length ? countLine(plan.change.length) + one(plan.change.length, " changes", " change") : "",
+  const one = (n, x, y) => (n === 1 ? x : y);
+  const isNote = (id) => { const p = state.pages.find((x) => x.id === id); return !!(p && p.note); };
+  const said = (list, noteOf) => {
+    const notes = list.filter(noteOf).length, clips = list.length - notes;
+    return { n: list.length, who: [clips ? countLine(clips) : "", notes ? notes + one(notes, " note", " notes") : ""].filter(Boolean).join(" and ") };
+  };
+  const back = said(plan.back, (m) => m.note), drop = said(plan.drop, isNote), change = said(plan.change, (c) => c.note);
+  return [back.n ? back.who + one(back.n, " comes", " come") + " back" : "",
+    drop.n ? drop.who + " saved since " + one(drop.n, "is", "are") + " deleted" : "",
+    change.n ? change.who + one(change.n, " changes", " change") : "",
     plan.followed ? plan.followed + one(plan.followed, " feed is", " feeds are") + " followed again" : "",
     plan.unfollowed ? plan.unfollowed + one(plan.unfollowed, " feed is", " feeds are") + " unfollowed" : ""].filter(Boolean);
 }
+// For each changed note, what its sheets and strokes would do: read here and
+// from that version, the first few only. c.detail stays unset when a read fails.
+async function historyNotes(plan, T, sha) {
+  for (const c of plan.change.filter((x) => x.note && x.text).slice(0, 20)) {
+    try {
+      const names = (T.files[c.id] && T.files[c.id].note) || {};
+      if (!names["note.json"]) continue;
+      const mine = await C.store.readNote(c.id), ink = await C.store.readInk(c.id);
+      const then = JSON.parse(await C.sync.readText("notes/" + c.id + "/note.json", sha));
+      const rawInk = names["ink.json"] ? await C.sync.readText("notes/" + c.id + "/ink.json", sha) : null;
+      const thenInk = rawInk ? JSON.parse(rawInk) : null;
+      c.detail = { sheets: [((mine && mine.sheets) || []).length, ((then && then.sheets) || []).length], ink: C.sync.inkDiff(ink && ink.pages, thenInk && thenInk.pages) };
+    } catch (err) { /* the row says it as a whole */ }
+  }
+}
+const strokesText = (here, then) => [here ? here + " new here" : "", then ? then + " erased since" : ""].filter(Boolean).join(", ");
 // A dry run of the put-back under a version's row: reads that version from
 // GitHub and works out the plan, and changes nothing here.
 async function historyLook(e) {
@@ -516,6 +538,7 @@ async function historyLook(e) {
     const T = await C.sync.target(e.sha);
     const { view, opts } = historyView();
     got = { plan: C.sync.revertPlan(view, T, opts), view };
+    await historyNotes(got.plan, T, e.sha);
   } catch (err) {
     got = { error: err instanceof C.sync.SyncError ? err.message : "Couldn't read that version." };
     if (!(err instanceof C.sync.SyncError)) console.error(err);
@@ -547,15 +570,25 @@ function historyDiffRows(e) {
   const says = (c) => {
     const h = hereBy.get(c.id) || {};
     const word = {
-      text: () => "Text: the version from then", title: (x) => "Title: " + x.was + " → " + x.now,
+      text: () => (c.note ? "" : "Text: the version from then"), title: (x) => "Title: " + x.was + " → " + x.now,
       tags: (x) => "Tags: " + none(x.was.join(", ")) + " → " + none(x.now.join(", ")),
       folder: (x) => "Collection: " + none(x.was) + " → " + none(x.now), fav: (x) => "Favourite: " + (x.now ? "on" : "off"),
-      marks: (x) => "Highlights: " + x.was + " → " + x.now, ink: () => "Drawing", other: () => "Other details" };
-    return C.sync.revertChanges(h, c.next, c.text).map((x) => word[x.field](x)).join(" · ");
+      marks: (x) => "Highlights: " + x.was + " → " + x.now, ink: (x) => "Drawings: " + strokesText(x.here, x.then), other: () => "Other details" };
+    const lines = C.sync.revertChanges(h, c.next, c.text).map((x) => word[x.field](x)).filter(Boolean);
+    if (c.note && c.text) {
+      const d = c.detail;
+      if (!d) lines.unshift("The note as it was then");
+      else {
+        if (d.sheets[0] !== d.sheets[1]) lines.unshift("Sheets: " + d.sheets[0] + " → " + d.sheets[1]);
+        if (d.ink.here || d.ink.then) lines.push("Drawings: " + strokesText(d.ink.here, d.ink.then));
+        if (!lines.length) lines.push("Typed text or pictures");
+      }
+    }
+    return lines.join(" · ");
   };
-  group("Come back", p.back.map((m) => ({ title: m.title })));
-  group("Deleted", p.drop.map((id) => ({ title: (state.pages.find((x) => x.id === id) || {}).title })));
-  group("Change", p.change.map((c) => ({ title: c.next.title, note: says(c) })));
+  group("Come back", p.back.map((m) => ({ title: m.title, note: m.note ? "Note" : "" })));
+  group("Deleted", p.drop.map((id) => { const x = state.pages.find((y) => y.id === id) || {}; return { title: x.title, note: x.note ? "Note" : "" }; }));
+  group("Change", p.change.map((c) => ({ title: c.next.title, note: (c.note ? "Note · " : "") + says(c) })));
   if (p.feeds) {
     const mine = new Set(feeds.map((f) => f.url)), kept = new Set(p.feeds.map((f) => f.url));
     group("Followed again", p.feeds.filter((f) => !mine.has(f.url)).map((f) => ({ title: f.title || f.url })));
@@ -633,7 +666,7 @@ function historySections() {
     el("div", { class: "group" }, ...status, ...rows, ...rest,
       !why && historyMore && !historyError ? el("button", { class: "row", type: "button", ...off, onclick: () => historyLoad(true) },
         el("span", { class: "row-label accent" }, historyBusy ? "Looking…" : "Show older")) : null),
-    el("p", { class: "footnote" }, "Each time your library changed, GitHub kept a copy. Tap a version to see what it would change. Putting one back makes your library as it was then, on every device: clips deleted since come back, clips saved since are deleted, and tags, collections, favourites, highlights and feeds go back too. Where you are in each clip, your reading stats and your notes stay as they are. A clip deleted this way stays in history, so you can put a later version back from this list."))];
+    el("p", { class: "footnote" }, "Each time your library changed, GitHub kept a copy. Tap a version to see what it would change. Putting one back makes your library as it was then, on every device: clips deleted since come back, clips saved since are deleted, and tags, collections, favourites, highlights and feeds go back too. Notes and drawings go back too. Where you are in each clip and your reading stats stay as they are. A clip deleted this way stays in history, so you can put a later version back from this list." + (C.sync.what.notes ? "" : " This device doesn't sync Notes, so it leaves them as they are.")))];
 }
 async function syncRevert(e) {
   if (reverting || historyWhy()) return;
@@ -666,11 +699,23 @@ async function syncRevert(e) {
   reverting.syncing = false;
   // All the text first, so a connection lost part way changes nothing.
   const want = plan.back.map((m) => ({ meta: m, have: null })).concat(plan.change.filter((c) => c.text).map((c) => ({ meta: c.next, have: state.pages.find((p) => p.id === c.id) })));
-  const html = new Map();
+  const html = new Map(), noteData = new Map(), inkBase = new Map();
   try {
+    // GitHub's own copy of a note's strokes is what the next sync compares with,
+    // so it is the base: the old strokes then go up instead of merging with new ones.
+    const head = want.some((w) => w.meta.note && w.have) ? await C.sync.target() : null;
     for (const [i, w] of want.entries()) {
       say("Bringing clips back, " + (i + 1) + " of " + want.length);
       html.set(w.meta.id, await C.sync.readText("pages/" + w.meta.id + ".html", e.sha));
+      if (!w.meta.note) continue;
+      const id = w.meta.id, names = T.files[id] && T.files[id].note;
+      const got = await C.sync.noteFilesIn(id, names, e.sha);
+      noteData.set(id, got);
+      const at = head && head.files[id] && head.files[id].note;
+      if (got && w.have && at && at["ink.json"]) {
+        const text = await C.sync.readText("notes/" + id + "/ink.json");
+        if (text) inkBase.set(id, { pages: JSON.parse(text).pages || {}, sha: at["ink.json"] });
+      }
     }
   } catch (err) {
     return fail(err instanceof C.sync.SyncError ? err.message : "Couldn't bring the clips back. Nothing was changed.");
@@ -682,11 +727,15 @@ async function syncRevert(e) {
     for (const w of want) {
       const text = html.get(w.meta.id);
       // No text kept for it on GitHub: saved again from its link, or left as it is.
-      if (!text) { if (w.have) skipped.push(w.meta.id); else if (w.meta.url) fromLinks.push(w.meta); continue; }
+      if (!text || (w.meta.note && !noteData.get(w.meta.id))) { if (w.have) skipped.push(w.meta.id); else if (w.meta.url && !w.meta.note) fromLinks.push(w.meta); continue; }
       if (w.have) await C.store.removePage(w.meta.id);
       const got = await C.sync.incoming(text, w.meta, e.sha);
       const meta = { ...w.meta, missing: got.missing };
       meta.bytes = await C.store.writePage(w.meta.id, got.html, meta);
+      if (w.meta.note) {
+        meta.bytes += await C.sync.noteFilesKeep(w.meta.id, noteData.get(w.meta.id));
+        await C.store.writeInkBase(w.meta.id, inkBase.get(w.meta.id) || null);
+      }
       written.set(w.meta.id, meta);
       if (got.missing) pictures.push(w.meta.id);
     }

@@ -836,15 +836,15 @@
   }
   // A note's files from GitHub, read before the note's old copy goes.
   // null when its sheets aren't there (yet).
-  async function noteFilesIn(id, names) {
+  async function noteFilesIn(id, names, ref) {
     if (!names || !names["note.json"]) return null;
     const got = { imgs: {} };
     for (const name of Object.keys(names)) {
       halt();
       const path = "notes/" + id + "/" + name;
-      if (name === "base.pdf") got.base = await readBytes(path);
+      if (name === "base.pdf") got.base = await readBytes(path, ref);
       else {
-        const text = await readText(path);
+        const text = await readText(path, ref);
         if (text == null) { if (name === "note.json") return null; continue; }
         if (name === "note.json") got.note = JSON.parse(text);
         else if (name === "ink.json") got.ink = JSON.parse(text);
@@ -1007,8 +1007,10 @@
   function revertPlan(current, T, opts) {
     const now = (opts && opts.now) || Date.now();
     const mine = (opts && opts.feeds) || [];
-    const here = new Map(current.filter((p) => !p.note).map((p) => [p.id, p]));
-    const there = new Map(T.pages.filter((p) => !p.note).map((p) => [p.id, p]));
+    // A device that doesn't sync notes leaves them as they are.
+    const keep = (p) => !(opts && opts.skipNote && p.note);
+    const here = new Map(current.filter(keep).map((p) => [p.id, p]));
+    const there = new Map(T.pages.filter(keep).map((p) => [p.id, p]));
     const back = [], drop = [], change = [];
     for (const [id, t] of there) {
       const h = here.get(id);
@@ -1019,7 +1021,7 @@
       const text = ver(t) !== ver(h);
       // The other text is the newest choice on every device.
       if (text) next.editedAt = now;
-      if (text || !same(next, h)) change.push({ id, next, text });
+      if (text || !same(next, h)) change.push({ id, next, text, note: !!t.note });
     }
     for (const id of here.keys()) if (!there.has(id)) drop.push(id);
     let feeds = null, followed = 0, unfollowed = 0;
@@ -1035,6 +1037,21 @@
     return { back, drop, change, feeds, followed, unfollowed };
   }
 
+  // How many strokes differ between two drawings ({ "<block>": [stroke] }):
+  // `here` drawn only in the first, `then` only in the second. A stroke is
+  // known by its id and its block, as mergeInk knows it.
+  function inkDiff(a, b) {
+    const ids = (o) => {
+      const out = new Set();
+      for (const [k, list] of Object.entries(o && typeof o === "object" ? o : {})) for (const s of Array.isArray(list) ? list : []) if (s && s.id) out.add(s.id + "@" + k);
+      return out;
+    };
+    const A = ids(a), B = ids(b);
+    let here = 0, then = 0;
+    for (const k of A) if (!B.has(k)) here++;
+    for (const k of B) if (!A.has(k)) then++;
+    return { here, then };
+  }
   // What a put-back would change on one clip, for the list that folds out
   // under a version: [{ field, was, now }], field one of text, title, tags,
   // folder, fav, marks, ink, other. `h` is the clip here, `next` what
@@ -1050,7 +1067,8 @@
     if (!same(h.folder || "", next.folder || "")) out.push({ field: "folder", was: h.folder || "", now: next.folder || "" });
     if (!!h.fav !== !!next.fav) out.push({ field: "fav", was: !!h.fav, now: !!next.fav });
     if (!same(h.marks || [], next.marks || [])) out.push({ field: "marks", was: (h.marks || []).length, now: (next.marks || []).length });
-    if (!same(h.ink || null, next.ink || null)) out.push({ field: "ink" });
+    const strokes = inkDiff(h.ink, next.ink);
+    if (strokes.here || strokes.then) out.push({ field: "ink", here: strokes.here, then: strokes.then });
     const keys = new Set(Object.keys(h).concat(Object.keys(next)));
     for (const k of keys) {
       if (seen.has(k) || !SYNCED.has(k) || (text && CONTENT.includes(k))) continue;
@@ -1688,7 +1706,7 @@
     // A note whose PDF is over the cap stays on its device (2026-11).
     tooBig: (p) => !!(p && p.note && (p.noteBytes || 0) > NOTE_BASE_MAX),
     merge, mergeTags, mergeMarks, mergeInk, mergeListen, mergeOutside, cleanOutside, outsideOf, outsideOnto, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
-    share, clean, same, urlKey, sameUrl, peek, poll, parseHistory, history, target, revertPlan, revertChanges, readText, readBytes,
+    share, clean, same, urlKey, sameUrl, peek, poll, parseHistory, history, target, revertPlan, revertChanges, inkDiff, noteFilesIn, noteFilesKeep, readText, readBytes,
     // This device's name in the commits it writes, and a one-off line for
     // the sync after a put-back (cleared when that sync ends).
     set device(v) { who = String(v || "").replace(/[\r\n·]/g, " ").trim().slice(0, 40); },
