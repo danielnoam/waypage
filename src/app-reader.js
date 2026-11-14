@@ -1584,6 +1584,7 @@ function showReadHere() {
   readHere.querySelector(".sel-aloud .sel-label").textContent = heard ? "Play from here" : "Narrate from here";
   readHere.querySelector(".sel-aloud").setAttribute("aria-label", heard ? "Play from here" : "Narrate from here");
   listenSelection(readHere, picked);
+  if (typeof ankiSelection === "function") ankiSelection(readHere, picked);
   readHere.querySelector(".sel-translate").hidden = !picked;
   readHere.querySelector(".sel-lookup").hidden = !picked || !C.dict.any() || picked.text.trim().split(/\s+/).length > 4;
   const frame = $("readerFrame").getBoundingClientRect();

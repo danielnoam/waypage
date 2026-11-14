@@ -17,7 +17,7 @@
   // Each pack is { id, title, url, sha256, bytes }, added with the
   // extension's data in the same change that builds it.
   const CATALOGUE = [
-    { id: "anki", title: "Anki", note: "Flashcards from the words you pick in a clip", scripts: ["src/anki.js"], packs: [] },
+    { id: "anki", title: "Anki", note: "Flashcards from the words you pick in a clip", scripts: ["src/fsrs.js", "src/anki.js", "src/app-anki.js"], packs: [] },
   ];
 
   const read = () => { try { const v = JSON.parse(localStorage.getItem(KEY) || "{}"); return v && typeof v === "object" ? v : {}; } catch (e) { return {}; } };

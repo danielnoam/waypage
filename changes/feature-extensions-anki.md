@@ -1,2 +1,3 @@
 ### Added
-- Settings › Extensions, above About: features that stay out of the way until you turn them on. Anki is the first; turned on, it adds an Anki place to the sidebar, above Stats.
+- Settings › Extensions, above About: features that stay out of the way until you turn them on. Anki is the first; turned on, it adds an Anki place to the sidebar, above Stats, where you make decks, study them (Again, Hard, Good, Easy, scheduled by FSRS, with Undo), browse and edit cards, and set each deck's limits, steps and retention.
+- Select a word in a clip and tap the Anki button to make a card: its front is the word, the back is yours to write, and the sentence it came from comes with it, with a way back to the clip.

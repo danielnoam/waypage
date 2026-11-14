@@ -87,7 +87,9 @@ src/stats.js        reading stats and the reading pace
 src/activity.js     Share reading activity: builds activity/reading.json (docs/reading-activity.md)
 src/dict.js         StarDict dictionaries in IndexedDB
 src/extensions.js   extensions: the catalogue, on or off per device, loading an extension's scripts once it is on
-src/anki.js         the Anki extension's engine; loaded only once Anki is on (not in index.html, but in sw.js's ASSETS)
+src/fsrs.js         the Anki extension's scheduler: FSRS-5 in plain JS; loaded only once Anki is on (as are anki.js and app-anki.js: not in index.html, but in sw.js's ASSETS)
+src/anki.js         the Anki extension's engine: decks, cards and a review log (anki/ beside the library, per-device log), each card's schedule replayed from the log
+src/app-anki.js     the Anki extension's screens: the selection bar's button and card sheet, the place (decks, study, browse, edit, options)
 src/motion.js       the springs from DESIGN.md, sampled into CSS linear()
 src/qr.js           QR code for sync's setup link, made on the device so the token never leaves it
 src/styles.css      tokens, themes, layout (DESIGN.md)
@@ -504,7 +506,7 @@ bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js` and `listen.test.js` test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `listen.test.js` and `anki.test.js` (the scheduler and the decks' engine) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
 changes Markdown runs just `build.test.js` and `docs.test.js`.
 
 `node tools/shots.js` retakes the README's pictures at 1280 px and 390 px

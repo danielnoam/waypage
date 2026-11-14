@@ -39,7 +39,9 @@ async function renderAnki() {
       el("p", { class: "empty-text" }, "Check your connection, then open it again.")));
     return;
   }
-  if (state.place !== "anki") return;
-  const none = C.anki.empty();
-  fill(root, el("div", { class: "empty" }, el("h2", { class: "empty-title" }, none.title), el("p", { class: "empty-text" }, none.text)));
+  try { await C.anki.load(); } catch (e) {
+    fill(root, el("div", { class: "empty" }, el("h2", { class: "empty-title" }, "Your decks didn't open"), el("p", { class: "empty-text" }, "Close the app and open it again.")));
+    return;
+  }
+  ankiDraw();
 }
