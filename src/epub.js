@@ -268,7 +268,10 @@
   // Pages (in reading order) as one book. `title` names it; one page's
   // book is named after the page. Resolves like backup.exportLibrary:
   // { uri, name } in the app, { blob, name } in a browser.
-  async function exportBook(pages, title, cover) {
+  // `onProgress(done, total, packing)`: the chapters as they're made,
+  // then the files as they're packed.
+  async function exportBook(pages, title, cover, onProgress) {
+    const say = onProgress || (() => {});
     title = clean(title || pages[0].title);
     const native = C.platform.native;
     const name = slug(title) + ".epub";
@@ -279,7 +282,7 @@
       return "../" + file;
     };
     const chapters = [];
-    for (const [i, p] of pages.entries()) chapters.push(await chapter(p, i + 1, addImage));
+    for (const [i, p] of pages.entries()) { chapters.push(await chapter(p, i + 1, addImage)); say(i + 1, pages.length, false); }
     const lang = chapters[0].lang || "en";
     const rtl = chapters[0].dir === "rtl";
     const uid = "urn:uuid:" + uuid();
@@ -342,8 +345,10 @@
     await zip.add("OEBPS/toc.ncx", utf8(tocNcx(uid, title, items)));
     await zip.add("OEBPS/style.css", utf8(STYLE));
     if (coverPage) await zip.add("OEBPS/cover.xhtml", utf8(coverPage));
-    for (const c of chapters) await zip.add("OEBPS/" + c.file, utf8(c.xhtml));
-    for (const im of images) await zip.add("OEBPS/" + im.file, im.bytes);
+    const packs = chapters.length + images.length;
+    let packed = 0;
+    for (const c of chapters) { await zip.add("OEBPS/" + c.file, utf8(c.xhtml)); say(++packed, packs, true); }
+    for (const im of images) { await zip.add("OEBPS/" + im.file, im.bytes); say(++packed, packs, true); }
     await zip.finish();
     return native ? { uri: await file.uri(), name } : { blob: new Blob(parts, { type: "application/epub+zip" }), name };
   }

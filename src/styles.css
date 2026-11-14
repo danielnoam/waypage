@@ -1838,6 +1838,20 @@ span.update-text { cursor: default; }
 .export-actions { display: flex; gap: var(--s-2); margin-top: var(--s-4); }
 .export-actions > * { flex: 1; height: 48px; }
 .export-actions [hidden] { display: none; }
+/* Making the file: the pressed button turns a spinner and says what it's
+   on, a bar along its foot sweeps, then fills once it can count. */
+.export-actions .busy {
+  position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center;
+  gap: var(--s-2); min-width: 0; padding-inline: var(--s-3); cursor: default;
+}
+.export-actions .busy .spinner { flex-shrink: 0; margin: 0; }
+.export-label { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.export-bar { position: absolute; inset: auto var(--s-4) 6px; height: 3px; }
+.btn-primary.busy .spinner { border-color: color-mix(in srgb, var(--accent-ink) 35%, transparent); border-top-color: var(--accent-ink); }
+.btn-primary.busy .export-bar { background: color-mix(in srgb, var(--accent-ink) 30%, transparent); }
+.btn-primary.busy .export-bar .progress-fill { background: var(--accent-ink); }
+.export-actions button:disabled:not(.busy) { opacity: 0.5; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .btn-primary.busy .spinner { background: var(--accent-ink); } }
 
 /* Folder Chapters and Export panels (0.26.0) */
 .folder-actions.chapters-panel, .folder-actions.export-panel { flex-direction: column; align-items: stretch; gap: var(--s-4); }

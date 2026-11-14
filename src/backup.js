@@ -719,7 +719,7 @@
 
   // A folder as one file (0.26.0): its pages in order, each with its own
   // title and licence line, pictures inside.
-  async function exportPages(pages, title) {
+  async function exportPages(pages, title, onProgress) {
     const out = document.implementation.createHTMLDocument(title);
     const charset = out.createElement("meta");
     charset.setAttribute("charset", "utf-8");
@@ -728,20 +728,24 @@
     h.className = "co-folder";
     h.textContent = title;
     out.body.append(h);
-    for (const p of pages) {
+    for (const [i, p] of pages.entries()) {
       const doc = new DOMParser().parseFromString((await exportPage(p)).html, "text/html");
       const part = out.createElement("section");
       part.className = "co-part";
       part.append(...[...doc.body.childNodes].map((n) => out.importNode(n, true)));
       part.querySelectorAll(".co-head h1").forEach((n) => { const h2 = out.createElement("h2"); h2.textContent = n.textContent; n.replaceWith(h2); });
       out.body.append(part);
+      if (onProgress) onProgress(i + 1, pages.length);
     }
     return { name: pageSlug(title) + ".html", html: "<!doctype html>\n" + out.documentElement.outerHTML };
   }
 
-  async function exportMarkdownAll(pages, title) {
+  async function exportMarkdownAll(pages, title, onProgress) {
     const parts = [];
-    for (const p of pages) parts.push((await exportMarkdown(p)).text.replace(/^# /, "## ").trim());
+    for (const [i, p] of pages.entries()) {
+      parts.push((await exportMarkdown(p)).text.replace(/^# /, "## ").trim());
+      if (onProgress) onProgress(i + 1, pages.length);
+    }
     return { name: pageSlug(title) + ".md", text: "# " + mdEscape(title) + "\n\n" + parts.join("\n\n---\n\n") + "\n" };
   }
 
