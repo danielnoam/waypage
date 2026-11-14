@@ -1047,7 +1047,49 @@
       const at = flat.indexOf(m.text);
       if (at >= 0 && !/\s\s/.test(t.slice(at, at + m.text.length))) return { block: a.i, start: at, endBlock: a.i, end: at + m.text.length };
     }
-    return null;
+    return looseLocate(m);
+  }
+  // A last try (Recover): the words alone, across blocks and past doubled
+  // spaces, taken only when they are in the clip exactly once.
+  function looseLocate(m) {
+    if (!m.text) return null;
+    let flat = "";
+    const from = [];
+    markBlocks().forEach((el, i) => {
+      const t = blockText(el);
+      for (let k = 0; k < t.length; k++) {
+        const space = /\s/.test(t[k]);
+        if (space && (!flat || flat.endsWith(" "))) continue;
+        flat += space ? " " : t[k];
+        from.push([i, k]);
+      }
+      if (flat && !flat.endsWith(" ")) { flat += " "; from.push([i, t.length]); }
+    });
+    const at = flat.indexOf(m.text);
+    if (at < 0 || flat.indexOf(m.text, at + 1) >= 0) return null;
+    const a = from[at], b = from[at + m.text.length - 1];
+    return { block: a[0], start: a[1], endBlock: b[0], end: b[1] + 1 };
+  }
+  // How each of a clip's highlights sits in its saved HTML, without opening
+  // it (Recover): { marks: [{ id, state }], blocks }, a state "ok", "moved"
+  // (found elsewhere, `at` says where) or "lost".
+  function locateIn(html, marks) {
+    const was = { doc, spans };
+    try {
+      doc = new DOMParser().parseFromString(html, "text/html");
+      spans = [];
+      const out = (marks || []).map((m) => {
+        const list = markBlocks();
+        if (list[m.block] && list[m.endBlock] && m.endBlock >= m.block && textOf(m) === m.text) return { id: m.id, state: "ok" };
+        const at = locate(m);
+        return at ? { id: m.id, state: "moved", at } : { id: m.id, state: "lost" };
+      });
+      // `blocks`: how many places a drawing can be anchored to (Draw's blocks).
+      return { marks: out, blocks: anchorsIn(doc).length };
+    } finally {
+      doc = was.doc;
+      spans = was.spans;
+    }
   }
   function unpaint() {
     const parents = new Set();
@@ -2310,5 +2352,5 @@
       return line;
     }));
   }
-  C.reader = { say, spotOfId, blockCount, pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, inkRoot, inkBlock, inkBlocks, inkBlockBox, inkBlockAt, inkBlocksNear, inkBlockWords, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
+  C.reader = { say, spotOfId, blockCount, pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, locateIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionMark, selectionMarks, paintMarks, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, inkRoot, inkBlock, inkBlocks, inkBlockBox, inkBlockAt, inkBlocksNear, inkBlockWords, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
 })();

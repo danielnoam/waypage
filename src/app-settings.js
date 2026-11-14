@@ -793,9 +793,95 @@ async function reportText() {
     await C.platform.deviceLine(),
     countLine(state.pages.length) + ", theme " + state.theme + ", sync " + (C.sync.on ? "on" : "off"),
     load(START_KEY, []).map((t) => "Start: " + t.shown + " ms (scripts " + t.scripts + ", library " + t.library + ") with " + t.clips + " clips").join("\n") || "Start: not measured",
+    recovered.at ? "Recover: checked " + logTime(recovered.at) + ", " + recovered.found.length + " found, " + recovered.fixed + " put back" + (recovered.found.length ? " (" + [...new Set(recovered.found.map((x) => x.kind))].join(", ") + ")" : "") : "Recover: not run",
     "",
     lines.length ? "Log:\n" + lines.join("\n") : "Log: empty",
   ].join("\n");
+}
+
+// ---- Recover Notes and Highlights (2026-11) ----
+// Looks through the whole library for highlights and drawings an update
+// left behind, lists them by clip, and puts back what has one safe place.
+// It runs when asked, never when Settings is built (Settings search builds
+// every screen out of sight); the answer is kept here until the next run.
+const recovered = { at: 0, found: [], fixed: 0, busy: "" };
+const recoverIO = () => ({
+  html: (p) => (p.link ? C.files.openLinked(p) : C.store.readPage(p.id)),
+  ink: (p) => C.store.readInk(p.id),
+  note: (p) => C.store.readNote(p.id),
+  hasBase: async (p) => !!(await C.store.readNoteBase(p.id)),
+  locateIn: (html, marks) => C.reader.locateIn(html, marks),
+  printed: (p) => C.files.printed(p),
+  writeNote: (p, d) => C.store.writeNote(p.id, d),
+  save: () => C.store.writeIndex(state.pages),
+});
+async function recoverScan(btn) {
+  if (recovered.busy) return;
+  recovered.busy = "Checking…";
+  const label = btn && btn.querySelector(".choice-label");
+  if (btn) btn.disabled = true;
+  try {
+    recovered.found = await C.recover.scan(state.pages, recoverIO(), (n, of) => { if (label) label.textContent = "Checking, " + n + " of " + of; });
+    recovered.at = Date.now();
+    recovered.fixed = 0;
+    C.platform.log.note("recover", recovered.found.length + " found in " + countLine(state.pages.length));
+  } catch (e) {
+    console.error(e);
+    toast("Couldn't check your library. Try again.");
+  }
+  recovered.busy = "";
+  renderSection();
+}
+async function recoverFix(list) {
+  if (recovered.busy) return;
+  recovered.busy = "Putting back…";
+  let n = 0;
+  for (const prob of list) {
+    try { if (await C.recover.fix(prob, state.pages, recoverIO())) { n++; recovered.found = recovered.found.filter((x) => x !== prob); } } catch (e) { console.error(e); }
+  }
+  recovered.fixed += n;
+  recovered.busy = "";
+  if (n) C.platform.log.note("recover", n + " put back");
+  toast(n ? (n === 1 ? "Put it back" : "Put back " + n) : "Couldn't put it back. Try again.");
+  renderSection();
+}
+async function recoverDelete(prob) {
+  const p = state.pages.find((x) => x.id === prob.clip);
+  if (!p || !prob.mark) return;
+  if (!confirm("Delete this highlight from “" + p.title + "”? Copy its text first if you want to keep it. This can't be undone." + alsoSynced())) return;
+  p.marks = (p.marks || []).filter((m) => m.id !== prob.mark);
+  if (!p.marks.length) delete p.marks;
+  await C.store.writeIndex(state.pages);
+  recovered.found = recovered.found.filter((x) => x !== prob);
+  renderSection();
+}
+function recoverGroup() {
+  const run = el("button", { class: "row recover-go", type: "button", ...(recovered.busy ? { disabled: "" } : {}), onclick: () => recoverScan(run) },
+    el("span", { class: "choice-text" },
+      el("span", { class: "choice-label accent" }, recovered.busy || "Recover Notes and Highlights"),
+      el("span", { class: "choice-note" }, recovered.at
+        ? (recovered.found.length ? recovered.found.length + (recovered.found.length === 1 ? " thing" : " things") + " to look at" : "Nothing lost") + ", checked " + logTime(recovered.at)
+        : "Looks for highlights and drawings that stopped showing after an update")));
+  const kids = [el("div", { class: "group" }, run)];
+  if (recovered.at && !recovered.found.length) kids.push(el("p", { class: "footnote" }, "Nothing lost. Every highlight and drawing has a place."));
+  const fixable = recovered.found.filter((x) => x.fix);
+  if (fixable.length) {
+    kids.push(el("h2", { class: "overline" }, "Actions"),
+      el("div", { class: "group" }, el("button", { class: "row", type: "button", ...(recovered.busy ? { disabled: "" } : {}), onclick: () => recoverFix(fixable) },
+        el("span", { class: "row-label accent" }, "Put back what can be (" + fixable.length + ")"))));
+  }
+  const byClip = new Map();
+  for (const x of recovered.found) { if (!byClip.has(x.clip)) byClip.set(x.clip, []); byClip.get(x.clip).push(x); }
+  for (const [id, items] of byClip) {
+    kids.push(el("h2", { class: "overline", dir: "auto" }, items[0].title),
+      el("div", { class: "group recover-list" }, ...items.map((x) => el("div", { class: "row recover-item" },
+        el("span", { class: "choice-text" }, el("span", { class: "choice-note", dir: "auto" }, x.line)),
+        x.fix ? el("button", { class: "btn-text", type: "button", onclick: () => recoverFix([x]) }, x.fix) : null,
+        el("button", { class: "btn-text", type: "button", onclick: () => { closeSettings(); openPage(id); } }, "Open"),
+        el("button", { class: "btn-text", type: "button", onclick: () => copyText(C.recover.copyText(x, state.pages), "Copied") }, "Copy"),
+        x.kind === "mark-lost" ? el("button", { class: "btn-text warn", type: "button", onclick: () => recoverDelete(x) }, "Delete") : null))));
+  }
+  return section("Recover", null, ...kids);
 }
 function reportGroup() {
   const list = C.platform.log.list();
@@ -1216,7 +1302,7 @@ const SECTIONS = {
   credits: { title: "Credits", build: creditsSections, value: () => "", parent: "updates" },
   news: { title: "Changelog", build: () => newsSections(), value: () => "", parent: "updates" },
   ahead: { title: "What's new", build: () => aheadSections(), value: () => "", parent: "updates" },
-  report: { title: "Report a problem", build: () => [reportGroup()], value: () => { const n = C.platform.log.list().length; return n ? n + (n === 1 ? " note" : " notes") : ""; } },
+  report: { title: "Report a problem", build: () => [reportGroup(), recoverGroup()], value: () => { const n = C.platform.log.list().length; return n ? n + (n === 1 ? " note" : " notes") : ""; } },
 };
 
 function renderSettings() {
@@ -1279,7 +1365,7 @@ function settingsIndex() {
       const help = text(sec.querySelector(".help-text"));
       if (head) list.push({ key, path, head, label: head, note: "", more: help + " " + (FIND_ALIASES[head] || "") });
       for (const row of sec.querySelectorAll(".row, .choice, .rc-row, [role=radiogroup]")) {
-        if (row.closest(".storage-pages, .report-log, .edit-samples")) continue;
+        if (row.closest(".storage-pages, .report-log, .recover-list, .edit-samples")) continue;
         const label = row.matches("[role=radiogroup]") ? row.getAttribute("aria-label") : text(row.querySelector(".choice-label, .row-label, .rc-label, .step-num + .choice-text .choice-label"));
         if (!label || label === head || list.some((x) => x.key === key && x.head === head && x.label === label)) continue;
         const note = row.matches("[role=radiogroup]") ? [...row.querySelectorAll(".seg-face")].map(text).join(", ") : text(row.querySelector(".choice-note"));

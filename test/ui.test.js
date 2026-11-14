@@ -1243,6 +1243,28 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("Recover Notes and Highlights finds a highlight that moved and puts it back", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const C = window.Waypage;
+        await C.store.writePage("rc1", '<!doctype html><html><body><div class="co-body"><p>First paragraph about foxes.</p><p>Second paragraph about hounds.</p></div></body></html>', {});
+        state.pages.unshift({ id: "rc1", title: "Fox article", url: "https://x.test/a", site: "x.test", bytes: 100, savedAt: Date.now(), marks: [{ id: "m1", block: 0, start: 0, endBlock: 0, end: 6, text: "hounds", at: 1 }] });
+        await C.store.writeIndex(state.pages);
+        renderLibrary();
+      });
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Report a problem" }).click();
+      assert.strictEqual(await q.locator(".recover-item").count(), 0, "it looked before it was asked");
+      await q.locator(".recover-go").click();
+      const item = q.locator(".recover-item", { hasText: "hounds" });
+      await item.waitFor();
+      await item.locator("button", { hasText: "Put it back" }).click();
+      await until(q, () => state.pages.find((p) => p.id === "rc1").marks[0].block === 1);
+      await q.locator(".recover-item").waitFor({ state: "detached" });
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a Pocket export imports with its tags, archived clips finished", async () => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), "waypage-"));
       const file = path.join(dir, "ril_export.html");

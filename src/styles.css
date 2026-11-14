@@ -3169,3 +3169,8 @@ body.listen-bar-up .library, body.listen-bar-up .screen-body { padding-bottom: c
 .reader.listening .read-progress { display: none; }
 .listen-pack { flex: none; accent-color: var(--accent); width: 20px; height: 20px; margin: 0; }
 .sel-fix[hidden] { display: none; }
+
+/* Recover Notes and Highlights (2026-11): what was found, the words across
+   the row and its buttons under them, so a phone keeps readable lines. */
+.recover-item { flex-wrap: wrap; align-items: center; gap: 2px 18px; }
+.recover-item .choice-text { flex: 1 1 100%; }
