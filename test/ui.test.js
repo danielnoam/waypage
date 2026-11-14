@@ -2268,6 +2268,14 @@ c("bk1", { at: 0.01 })]);
       assert.ok(await q.evaluate(() => document.querySelectorAll(".rs-col").length >= 28));
       await q.click(".rs-tab >> text=Year");
       assert.strictEqual(await q.evaluate(() => document.querySelectorAll(".rs-col").length), 12);
+      await q.click(".rs-tab >> text=All time");
+      const all = await q.evaluate(() => ({ total: document.querySelector(".rs-total").textContent, title: document.querySelector(".rs-title").textContent,
+        cols: document.querySelectorAll(".rs-col").length, steps: [...document.querySelectorAll(".rs-range button")].map((b) => b.disabled), top: document.querySelector(".rs-over").textContent }));
+      assert.ok(/^Since /.test(all.title), all.title);
+      assert.ok(all.cols >= 6, "a month each, six at least");
+      assert.deepStrictEqual(all.steps, [true, true], "nothing before or after all time");
+      assert.strictEqual(all.top, "Most time overall");
+      assert.notStrictEqual(all.total, week.total, "all ten days, not just this week's");
       await q.click(".rs-tab >> text=Week");
       await q.click(".rs-range button[aria-label=Before]");
       assert.notStrictEqual(await q.textContent(".rs-total"), week.total, "last week is its own total");
@@ -3841,6 +3849,58 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("Add a folder: the Add page's four rows, each book in the folder added on its own in its folder's collection, its sound files left to Add an audiobook folder", async () => {
+      const q = await page(browser, 390);
+      const bytes = [...epubBytes()];
+      await q.evaluate(() => {
+        Object.defineProperty(window.Waypage.platform.files, "canPickFolder", { get: () => true });
+        window.released = [];
+      });
+      await q.click("#severalBtn");
+      assert.deepStrictEqual(await q.locator("#batchView .batch-file .row-label").allTextContents(), ["Add a file", "Add a folder", "Add an audiobook folder", "New note"]);
+      const got = await q.evaluate(async (b) => {
+        const F = window.Waypage.platform.files;
+        const book = (n) => new File([new Uint8Array(b)], n, { type: "application/epub+zip" });
+        const files = { "content://f/a.epub": book("a.epub"), "content://f/b.epub": book("b.epub") };
+        F.pickFolder = async () => ({ ref: "content://f", name: "Savage Divinity" });
+        F.scan = async () => ({ ok: true, name: "Savage Divinity", files: [
+          { ref: "content://f/b.epub", path: "Book 2/b.epub", name: "b.epub", size: files["content://f/b.epub"].size },
+          { ref: "content://f/a.epub", path: "a.epub", name: "a.epub", size: files["content://f/a.epub"].size },
+          { ref: "content://f/1.mp3", path: "1.mp3", name: "1.mp3", size: 10 },
+          { ref: "content://f/cover.jpg", path: "cover.jpg", name: "cover.jpg", size: 10 }] });
+        F.blob = async (ref) => files[ref];
+        F.release = (ref) => window.released.push(ref);
+        await addFolder();
+        return { pages: state.pages.map((p) => [p.file.name, p.folder, p.link]), released: window.released };
+      }, bytes);
+      assert.deepStrictEqual(got.pages, [["b.epub", "Book 2", "content://f/b.epub"], ["a.epub", "Savage Divinity", "content://f/a.epub"]], JSON.stringify(got));
+      assert.deepStrictEqual(got.released, []);
+      // The same folder again adds nothing.
+      const again = await q.evaluate(async () => { await addFolder(); return { n: state.pages.length, released: window.released }; });
+      assert.deepStrictEqual(again, { n: 2, released: ["content://f"] });
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Add a folder in a browser: its books are copied in, in its collection", async () => {
+      const q = await page(browser, 390);
+      const dir = fs.mkdtempSync(path.join(require("os").tmpdir(), "wp-folder-"));
+      fs.mkdirSync(path.join(dir, "Stories"));
+      fs.writeFileSync(path.join(dir, "Stories", "one.md"), "# One\n\nThe first story.");
+      fs.writeFileSync(path.join(dir, "Stories", "two.md"), "# Two\n\nThe second story.");
+      fs.writeFileSync(path.join(dir, "Stories", "song.mp3"), "not really");
+      await q.click("#severalBtn");
+      const chooser = q.waitForEvent("filechooser");
+      await q.locator("#batchView .row", { hasText: "Add a folder" }).click();
+      await (await chooser).setFiles(path.join(dir, "Stories"));
+      await until(q, () => state.pages.length === 2 && !runs.size);
+      const got = await q.evaluate(() => state.pages.map((p) => [p.title, p.folder, !!p.link]));
+      assert.deepStrictEqual(got, [["Two", "Stories", false], ["One", "Stories", false]], JSON.stringify(got));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
     // CONTRIBUTING "Explain less": a ? only where Daniel agreed to one.
     await test("More speech engines (Kokoro): Download starts the one pressed, and is pressable when nothing else is downloading", async () => {
       const q = await page(browser, 390);
@@ -4636,6 +4696,53 @@ c("bk1", { at: 0.01 })]);
       const got = await q.evaluate(() => ({ ferry: folderPages("Night Ferry").map((p) => [p.title, p.volume, p.manga]), voyage: folderPages("Long Voyage").map((p) => [p.title, p.volume]) }));
       assert.deepStrictEqual(got.ferry, [["Volume 1", 1, true], ["Volume 2", 2, true]]);
       assert.deepStrictEqual(got.voyage, [["Plain Chapters", 3]]);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a comic exports as a CBZ that comes back in whole: its pages in order, its series and direction (2026-11)", async () => {
+      const q = await page(browser, 390);
+      const add = (b, name) => q.evaluate(async ([b, name]) => { askKeep = async () => false; await openFile(new File([new Uint8Array(b)], name), null, false); }, [b, name]);
+      await add([...mangaBytes(2)], "v2.cbz");
+      await add([...mangaBytes(1)], "v1.cbz");
+      await add([...Buffer.from("# Plain words\n\nNo pictures here.")], "plain.md");
+      const got = await q.evaluate(async () => {
+        const B = window.Waypage.backup;
+        const kinds = (what) => {
+          const box = document.body.appendChild(exportControls(what, () => {}));
+          box.querySelector(".dropdown-btn").click();
+          const list = [...document.querySelectorAll(".dropdown-item")].map((i) => i.textContent + (i.getAttribute("aria-selected") === "true" ? "*" : ""));
+          document.querySelectorAll(".dropdown-item").forEach((n) => n.remove());
+          box.remove();
+          return list;
+        };
+        const one = state.pages.find((p) => p.title === "Volume 1"), plain = state.pages.find((p) => p.title === "Plain words");
+        let blob = null;
+        window.Waypage.platform.download = (name, b) => { blob = b; blob.label = name; };
+        const out = async (what) => {
+          await exportAs(what, "cbz", "save", document.createElement("button"));
+          const files = await B.zipEntries(blob);
+          const info = new TextDecoder().decode(await B.zipRead(blob, files.get("ComicInfo.xml")));
+          return { name: blob.label, files: [...files.keys()], info, blob };
+        };
+        const single = await out(one);
+        const both = await out({ pages: folderPages("Night Ferry"), title: "Night Ferry" });
+        // Back in: the same comic, filed with its series, right to left.
+        const back = await Waypage.files.bring(new File([both.blob], both.name), "cbz", { has: () => false });
+        return {
+          comic: kinds(one), plain: kinds(plain), folder: kinds({ pages: folderPages("Night Ferry"), title: "Night Ferry" }),
+          single: { ...single, blob: null }, both: { ...both, blob: null }, back: [back.series, back.manga, back.images],
+        };
+      });
+      assert.ok(got.comic.includes("CBZ*"), "a comic offers CBZ, picked at first: " + got.comic);
+      assert.ok(!got.plain.some((k) => k.startsWith("CBZ")), "words offer no CBZ: " + got.plain);
+      assert.ok(got.folder.includes("CBZ*"), "a collection of comics offers CBZ: " + got.folder);
+      assert.strictEqual(got.single.name, "Volume 1.cbz");
+      assert.deepStrictEqual(got.single.files, ["0001.png", "0002.png", "0003.png", "0004.png", "0005.png", "0006.png", "ComicInfo.xml"]);
+      assert.ok(/<Series>Night Ferry<\/Series>/.test(got.single.info) && /<Number>1<\/Number>/.test(got.single.info) && /<Manga>YesAndRightToLeft<\/Manga>/.test(got.single.info), got.single.info);
+      assert.strictEqual(got.both.files.length, 13, "both volumes, one after the other");
+      assert.ok(/<PageCount>12<\/PageCount>/.test(got.both.info), got.both.info);
+      assert.deepStrictEqual(got.back, ["Night Ferry", true, 12]);
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

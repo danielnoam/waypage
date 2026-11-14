@@ -292,7 +292,7 @@ and the page shows above it.
   device" (primary) and "Send" (quiet). PDF has one button, "Print or
   save as PDF". The web copy has one, "Download". While the file is
   made, the pressed button turns a 12 px spinner (accent ink on the
-  primary) beside what it's on ("Making the book…", "Chapter 12 of 48",
+  primary) beside what it's on ("Making the book…" or "Making the comic…", "Chapter 12 of 48",
   "Packing the book…"), over a 3 px bar inset along its foot that sweeps
   until it can count, then fills (chapters are most of a book, packing
   the rest). The kind and the other button wait, disabled; Back doesn't.

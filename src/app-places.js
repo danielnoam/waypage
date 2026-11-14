@@ -111,9 +111,11 @@ function renderHighlights() {
 // The reading stats as a place: a week, month or year of time read and
 // heard, a bar a day (a month in a year), the totals under them, days in
 // a row, and the clips you spent most time on. Every device's counts
-// added up (stats.js).
+// added up (stats.js). All time (2026-11) is everything since counting
+// began: every day is kept, so nothing in it is cut short.
 const SPAN_KEY = "waypage.readingSpan";
-let readSpan = ["week", "month", "year"].includes(load(SPAN_KEY, "week")) ? load(SPAN_KEY, "week") : "week";
+const SPANS = { week: "Week", month: "Month", year: "Year", all: "All time" };
+let readSpan = SPANS[load(SPAN_KEY, "week")] ? load(SPAN_KEY, "week") : "week";
 let readBack = 0; // how many weeks, months or years before this one
 const dayAt = (k) => new Date(k + "T12:00:00");
 const keyOf = (d) => C.stats.dayKey(d.getTime());
@@ -130,6 +132,10 @@ function weekStart() {
 function readRange(span = readSpan, back = readBack) {
   const now = new Date();
   now.setHours(12, 0, 0, 0);
+  if (span === "all") {
+    const from = C.stats.dayKey(C.stats.since());
+    return { from, to: keyOf(now), title: "Since " + dayAt(from).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" }), now: null, all: true };
+  }
   if (span === "week") {
     const a = new Date(now);
     a.setDate(a.getDate() - ((a.getDay() - weekStart() + 7) % 7) - 7 * back);
@@ -149,10 +155,41 @@ function readRange(span = readSpan, back = readBack) {
   const y = now.getFullYear() - back;
   return { from: y + "-01-01", to: y + "-12-31", title: String(y), now: back === 0 ? "This year" : null };
 }
-// The bars: a day each, or in a year a month each.
-function readBars(range) {
-  const days = C.stats.days(range.from, range.to);
+// The days in a range. All time goes over the days there are: days()
+// walks every day and stops at 400.
+const readDays = (range) => (range.all
+  ? Object.entries(C.stats.totals().days).filter(([k]) => k >= range.from && k <= range.to).map(([key, d]) => ({ key, ...d }))
+  : C.stats.days(range.from, range.to));
+// All time: a month each, at least six, or a year each past two years.
+function allBars(range, days) {
   const today = C.stats.dayKey(Date.now());
+  const y0 = Number(range.from.slice(0, 4)), m0 = Number(range.from.slice(5, 7)) - 1;
+  const y1 = Number(today.slice(0, 4)), m1 = Number(today.slice(5, 7)) - 1;
+  const months = (y1 - y0) * 12 + m1 - m0 + 1;
+  if (months > 24) {
+    const years = [];
+    for (let y = y0; y <= y1; y++) years.push({ read: 0, aloud: 0, label: String(y), name: String(y), today: y === y1, future: false });
+    for (const d of days) { const b = years[Number(d.key.slice(0, 4)) - y0]; if (b) { b.read += d.readMs; b.aloud += d.aloudMs; } }
+    return Object.assign(years, { unit: "year" });
+  }
+  const bars = [], at = {};
+  const first = new Date(y1, m1 - Math.max(6, months) + 1, 1, 12);
+  for (let i = 0, n = Math.max(6, months); i < n; i++) {
+    const t = new Date(first.getFullYear(), first.getMonth() + i, 1, 12);
+    const k = keyOf(t).slice(0, 7);
+    at[k] = bars.length;
+    // Months before counting began are left empty, not drawn as none read.
+    bars.push({ read: 0, aloud: 0, today: i === n - 1, future: k < range.from.slice(0, 7),
+      label: n <= 12 ? t.toLocaleDateString(undefined, { month: "narrow" }) : i === 0 || t.getMonth() === 0 ? String(t.getFullYear()) : "",
+      name: t.toLocaleDateString(undefined, { month: "long", year: "numeric" }) });
+  }
+  for (const d of days) { const b = bars[at[d.key.slice(0, 7)]]; if (b) { b.read += d.readMs; b.aloud += d.aloudMs; } }
+  return Object.assign(bars, { unit: "month", dense: bars.length > 12 });
+}
+// The bars: a day each, or in a year a month each.
+function readBars(range, days = readDays(range)) {
+  const today = C.stats.dayKey(Date.now());
+  if (range.all) return allBars(range, days);
   if (readSpan !== "year") {
     return days.map((d, i) => {
       const t = dayAt(d.key);
@@ -168,7 +205,7 @@ function readBars(range) {
   const thisMonth = today.slice(0, 7);
   for (const d of days) { const m = Number(d.key.slice(5, 7)) - 1; months[m].read += d.readMs; months[m].aloud += d.aloudMs; }
   months.forEach((m, i) => { const k = range.from.slice(0, 4) + "-" + String(i + 1).padStart(2, "0"); m.today = k === thisMonth; m.future = k > thisMonth; });
-  return months;
+  return Object.assign(months, { unit: "month" });
 }
 // A top worth drawing a line at: 15, 30 or 60 minutes, then whole hours.
 function niceMax(ms) {
@@ -190,7 +227,7 @@ function readChart(bars) {
     return c;
   };
   const said = bars.filter((b) => b.read + b.aloud >= 60000).map((b) => b.name + " " + spanText(b.read + b.aloud)).join(", ");
-  return el("div", { class: "rs-chart rs-" + readSpan, role: "img", "aria-label": said ? "Time a " + (readSpan === "year" ? "month" : "day") + ": " + said : "No reading in this " + readSpan },
+  return el("div", { class: "rs-chart rs-" + readSpan + (bars.dense ? " rs-dense" : ""), role: "img", "aria-label": said ? "Time a " + (bars.unit || "day") + ": " + said : readSpan === "all" ? "No reading yet" : "No reading in this " + readSpan },
     el("span", { class: "rs-top meta" }, spanText(top)),
     el("div", { class: "rs-cols" }, ...bars.map(col)));
 }
@@ -239,14 +276,14 @@ function statsWidget() {
 function renderReading() {
   const root = $("reading");
   const range = readRange();
-  const days = C.stats.days(range.from, range.to);
+  const days = readDays(range);
   const read = days.reduce((n, d) => n + d.readMs, 0), aloud = days.reduce((n, d) => n + d.aloudMs, 0);
   const since = C.stats.dayKey(C.stats.since());
-  const older = range.from <= since;
+  const older = range.all || range.from <= since;
   const step = (n) => () => { readBack = Math.max(0, readBack + n); renderReading(); };
-  const seg = el("div", { class: "rs-seg", role: "tablist", "aria-label": "Show" }, ...["week", "month", "year"].map((s) => {
+  const seg = el("div", { class: "rs-seg", role: "tablist", "aria-label": "Show" }, ...Object.keys(SPANS).map((s) => {
     const b = el("button", { class: "rs-tab", type: "button", role: "tab", "aria-selected": String(s === readSpan),
-      onclick: () => { readSpan = s; readBack = 0; store(SPAN_KEY, s); renderReading(); } }, s[0].toUpperCase() + s.slice(1));
+      onclick: () => { readSpan = s; readBack = 0; store(SPAN_KEY, s); renderReading(); } }, SPANS[s]);
     return b;
   }));
   const back = el("button", { class: "icon-btn", type: "button", "aria-label": "Before", onclick: step(1) });
@@ -264,16 +301,16 @@ function renderReading() {
     el("div", { class: "rs-range" }, back, el("p", { class: "rs-title", "aria-live": "polite" }, range.title), on),
     el("p", { class: "rs-total" }, read + aloud >= 60000 ? spanText(read + aloud) : "0 min"),
     el("p", { class: "meta rs-split" }, spanText(read) + " reading · " + spanText(aloud) + " narrated"),
-    readChart(readBars(range)),
+    readChart(readBars(range, days)),
     el("div", { class: "rs-legend meta", "aria-hidden": "true" }, el("span", null, el("i", { class: "rs-key-read" }), "Reading"), el("span", null, el("i", { class: "rs-key-aloud" }), "Narrated")),
-    older ? el("p", { class: "meta rs-since" }, "Counting since " + dayAt(since).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })) : null,
+    older && !range.all ? el("p", { class: "meta rs-since" }, "Counting since " + dayAt(since).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })) : null,
     el("div", { class: "rs-figs" },
       readFigure(Math.round(words / 100) * 100 || words, "words"),
       readFigure(C.stats.finishedIn(range.from, range.to), "clips finished"),
       readFigure(opened, "clips opened"),
       readFigure(saved, "clips saved")),
     readStreak(),
-    tops.length ? el("h2", { class: "overline rs-over" }, "Most time " + (range.now ? range.now.toLowerCase() : "then")) : null,
+    tops.length ? el("h2", { class: "overline rs-over" }, "Most time " + (range.all ? "overall" : range.now ? range.now.toLowerCase() : "then")) : null,
     tops.length ? el("ul", { class: "rs-top-list" }, ...tops.map((t) => el("li", null,
       el("button", { class: "rs-clip", type: "button", onclick: () => openPage(t.p.id) },
         clipCover(t.p),

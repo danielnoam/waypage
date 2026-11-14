@@ -224,7 +224,11 @@ FB2, CBZ, Markdown, text and HTML, either copied in as a normal clip or
 read from where they are (shown under Files, not synced). PDFs go through
 `pdf.js` in its own iframe with `allow-scripts` but no access to the app
 (`src/pdf.js` is the bridge, `src/vendor/pdf.min.mjs` and its worker the library); large
-linked PDFs are read in ranges.
+linked PDFs are read in ranges. It also writes comics back out
+(`exportComic`): a comic clip or a collection of them as one CBZ, pages
+numbered 0001… and a ComicInfo.xml (title, series, number, manga
+direction) that `fromCbz` reads back. CBR isn't offered: RAR can't be
+written freely.
 
 A linked PDF's printed pages can be highlighted (1.56.0). As a page is
 drawn, `files.js` asks the sandbox for its words where they sit

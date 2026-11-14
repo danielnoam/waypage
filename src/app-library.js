@@ -1788,9 +1788,9 @@ const EXPORTS = [
   { value: "html", label: "HTML", note: "One file with its pictures. Opens in any browser, and back in Waypage.", mime: "text/html" },
   { value: "epub", label: "EPUB", note: "For an e-reader, Apple Books or Send to Kindle.", mime: "application/epub+zip" },
   { value: "md", label: "Markdown", note: "The text for a notes app. Pictures link to the site.", mime: "text/markdown" },
+  { value: "cbz", label: "CBZ", note: "The pictures in order, for any comic reader.", mime: "application/vnd.comicbook+zip" },
   { value: "source", label: "Page source", note: "The site's own page, fetched again. Send it when a site saves badly.", mime: "text/html" },
 ];
-const exportKind = () => { const k = load(EXPORT_KEY, "html"); return EXPORTS.some((e) => e.value === k) ? k : "html"; };
 
 function focusFirst(box) {
   requestAnimationFrame(() => { const f = box.querySelector("input:checked, button"); if (f) f.focus({ preventScroll: true }); });
@@ -1799,9 +1799,13 @@ function focusFirst(box) {
 // `what` is a page, or { pages, title } for a folder.
 function exportControls(what, done) {
   const folder = !!what.pages;
-  const kinds = EXPORTS.filter((e) => !folder || e.value !== "source");
-  let kind = folder ? load(EXPORT_KEY + ".folder", "epub") : exportKind();
-  if (!kinds.some((e) => e.value === kind)) kind = "epub";
+  // CBZ only for comics; they remember their own pick, CBZ at first.
+  const comic = folder ? what.pages.length > 0 && what.pages.every(C.files.comicExportable) : C.files.comicExportable(what);
+  const kinds = EXPORTS.filter((e) => (e.value !== "source" || (!folder && /^https?:/.test(what.url || ""))) && (comic || e.value !== "cbz"));
+  const key = EXPORT_KEY + (folder ? ".folder" : "") + (comic ? ".comic" : "");
+  const first = comic ? "cbz" : folder ? "epub" : "html";
+  let kind = load(key, first);
+  if (!kinds.some((e) => e.value === kind)) kind = first;
   const p = what;
   const save = el("button", { class: "btn-primary export-save", type: "button", onclick: () => exportAs(p, kind, "save", save) });
   const send = el("button", { class: "btn-quiet export-send", type: "button", onclick: () => exportAs(p, kind, "send", send) }, "Send");
@@ -1810,7 +1814,7 @@ function exportControls(what, done) {
     send.hidden = kind === "pdf" || !C.platform.native;
   };
   const group = choiceGroup({ key: "export-kind", label: "Export as", options: kinds, get: () => kind,
-    set: (v) => { kind = v; store(folder ? EXPORT_KEY + ".folder" : EXPORT_KEY, v); sync(); } });
+    set: (v) => { kind = v; store(key, v); sync(); } });
   sync();
   return el("div", { class: "export" },
     el("div", { class: "export-top" },
@@ -1826,10 +1830,11 @@ async function exportAs(p, kind, how, btn) {
   if (kind === "source" && !navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
   const mime = EXPORTS.find((e) => e.value === kind).mime;
   const book = kind === "epub";
-  const busy = exportBusy(btn, book ? "Making the book…" : kind === "source" ? "Getting the page…" : "Making the file…", book);
+  const busy = exportBusy(btn, book ? "Making the book…" : kind === "cbz" ? "Making the comic…" : kind === "source" ? "Getting the page…" : "Making the file…", book);
   try {
     let name, text = null, uri = null, blob = null;
-    if (kind === "epub") ({ name, uri = null, blob = null } = await C.epub.exportBook(pages || [p], pages ? p.title : undefined, pages ? await coverBytes(pages) : null, busy.count));
+    if (kind === "cbz") ({ name, uri = null, blob = null } = await C.files.exportComic(pages || [p], pages ? p.title : undefined, busy.count));
+    else if (kind === "epub") ({ name, uri = null, blob = null } = await C.epub.exportBook(pages || [p], pages ? p.title : undefined, pages ? await coverBytes(pages) : null, busy.count));
     else if (kind === "md") ({ name, text } = await (pages ? C.backup.exportMarkdownAll(pages, p.title, busy.count) : C.backup.exportMarkdown(p)));
     else if (kind === "html") ({ name, html: text } = await (pages ? C.backup.exportPages(pages, p.title, busy.count) : C.backup.exportPage(p)));
     else ({ name, html: text } = await C.save.pageSource(p.url));
@@ -1842,8 +1847,9 @@ async function exportAs(p, kind, how, btn) {
       else if (saved) toast("Saved " + name);
     } else await C.platform.shareFile(uri, name);
   } catch (e) {
-    if (!(e instanceof C.save.SaveError)) console.error(e);
-    toast(e instanceof C.save.SaveError ? e.message : "Couldn't make the file. Try again.");
+    const told = e instanceof C.save.SaveError || e instanceof C.files.FileError;
+    if (!told) console.error(e);
+    toast(told ? e.message : "Couldn't make the file. Try again.");
   }
   busy.end();
 }
@@ -2064,6 +2070,99 @@ async function pickFile(first) {
   input.click();
 }
 
+// ---- Add a folder (2026-11) ----
+// Every book, note and comic in a picked folder and its folders, each a
+// clip of its own in a collection named after its folder. Sound files
+// are left to Add an audiobook folder. In the app each is read from
+// where it is, like a watched folder's. A browser has no lasting folder
+// permission, so it copies the files.
+const canAddFolder = () => C.platform.files.canPickFolder || "webkitdirectory" in HTMLInputElement.prototype;
+async function addFolder() {
+  if (!C.platform.files.canPickFolder) { addFolderInBrowser(); return; }
+  let got = null;
+  try { got = await C.platform.files.pickFolder(); } catch (e) { got = null; }
+  if (!got) return;
+  const scan = await C.platform.files.scan(got.ref);
+  const name = scan.name || got.name;
+  const books = (scan.files || []).filter((f) => WATCH_EXTS.test(f.name));
+  if (!scan.ok || !books.length) {
+    toast(!scan.ok ? "Couldn't read " + name + "." : (scan.files || []).some((f) => C.listen.isAudioName(f.name))
+      ? "There are only sound files in " + name + ". Add it with Add an audiobook folder." : "There's nothing in " + name + " that Waypage opens.");
+    C.platform.files.release(got.ref);
+    return;
+  }
+  const added = await addFolderFiles(name, books.map((f) => ({ ...f, read: () => C.platform.files.blob(f.ref, f.size) })));
+  if (!added) C.platform.files.release(got.ref);
+}
+function addFolderInBrowser() {
+  document.querySelectorAll(".file-pick").forEach((n) => n.remove());
+  const input = el("input", { type: "file", multiple: "", webkitdirectory: "", class: "file-pick visually-hidden", tabindex: "-1", "aria-hidden": "true" });
+  document.body.append(input);
+  input.addEventListener("change", async () => {
+    const picked = [...input.files];
+    input.remove();
+    if (!picked.length) return;
+    // "Books/Sci-fi/dune.epub": the folder picked, then the path in it.
+    const root = (picked[0].webkitRelativePath || "").split("/")[0] || "Folder";
+    const books = picked.filter((f) => WATCH_EXTS.test(f.name));
+    if (!books.length) { toast("There's nothing in " + root + " that Waypage opens."); return; }
+    await addFolderFiles(root, books.map((f) => ({ name: f.name, size: f.size, ref: null,
+      path: (f.webkitRelativePath || f.name).split("/").slice(1).join("/") || f.name, read: async () => f })));
+  });
+  input.click();
+}
+// One card in the library and Downloads, with Pause and Stop, as a
+// watched folder's. Resolves to how many were added.
+async function addFolderFiles(name, list) {
+  const known = new Set(state.pages.filter((p) => p.link).map((p) => p.link));
+  const fresh = list.filter((f) => !f.ref || !known.has(f.ref))
+    .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: "base" }));
+  if (!fresh.length) { toast("Everything in " + name + " is already in your library."); return 0; }
+  const run = Object.assign(startRun(null, "Adding a folder", fresh.length), { label: name, files: true });
+  runChanged();
+  let added = 0, had = 0;
+  const failed = [];
+  for (const f of fresh) {
+    if (!(await gate(run))) break;
+    Object.assign(run, { now: "Opening " + f.name, part: null });
+    updateRunCard(run);
+    try {
+      const file = await f.read();
+      const kind = await C.files.kindOf(file);
+      if (!C.files.KINDS[kind]) { run.total--; continue; }
+      const link = f.ref || null;
+      const meta = await C.files.bring(file, kind, { link, has: (n, size) => hasFile(n, size, link), onProgress: fileProgress(run, f.name) });
+      if (meta.already) { run.total--; had++; continue; }
+      if (link) meta.file.path = f.path.slice(0, 500);
+      const dir = f.path.split("/").slice(-2, -1)[0] || name;
+      meta.folder = folderName(dir);
+      meta.folderAt = Date.now();
+      fileSeries(meta);
+      outsideKnown(meta);
+      state.pages.unshift(meta);
+      await C.store.writeIndex(state.pages);
+      added++;
+      run.saved++;
+    } catch (e) {
+      if (!(e instanceof C.files.FileError)) console.error(e);
+      failed.push(f.name + ": " + (e && e.message ? e.message : "couldn't read it"));
+      run.failed++;
+    }
+  }
+  run.now = null; run.part = null;
+  endRun(run);
+  if (added) { await loadThumbs(); C.store.keepStored(); }
+  renderLibrary();
+  updateWidgets();
+  if (state.folder) renderFolder();
+  if (state.section) renderSection();
+  const files = (n) => (n === 1 ? "1 file" : n + " files");
+  toast(failed.length ? "Added " + files(added) + " from " + name + ". Couldn't read " + files(failed.length) + ": " + failed[0]
+    : added ? "Added " + files(added) + " from " + name + (had ? ". " + files(had) + (had === 1 ? " was" : " were") + " already here." : "")
+    : "Everything in " + name + " is already in your library.");
+  return added;
+}
+
 // ---- Import (1.9.0) ----
 // Pocket's, Instapaper's or Omnivore's export (src/imports.js), saved as
 // one run like a list of links: their tags kept, the ones read there
@@ -2154,7 +2253,7 @@ function fileSheet() {
         el("span", { class: "choice-text" }, el("span", { class: "choice-label" + (a.can ? " accent" : "") }, "Read from where it is"),
           el("span", { class: "choice-note" }, a.can
             ? "Lives in Files and costs almost nothing here. It needs the file to stay where it is, and doesn't sync."
-            : "Waypage wasn't given lasting access to this file. Open it with Open a file to read it from where it is."))),
+            : "Waypage wasn't given lasting access to this file. Add it with Add a file to read it from where it is."))),
       // A PDF can also be made into a note to draw on (2.0.0).
       a.kind === "pdf" ? el("button", { class: "row", type: "button", onclick: () => answer("note") },
         el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, "Make a note"),
