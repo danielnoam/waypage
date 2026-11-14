@@ -101,6 +101,22 @@ test("an old library with no feeds leaves feeds alone", () => {
   assert.strictEqual(S.revertPlan(now, lib([]), { now: NOW, feeds: [feed("a.example")] }).feeds, null);
 });
 
+// ---- What the fold-out lists ----
+test("revertChanges names each field a put-back alters, never where you are", () => {
+  const here = page("a1b2", { tags: ["new"], fav: false, folder: "Trips", at: 0.7, readAt: 900, marks: [{ id: "m1" }, { id: "m2" }] });
+  const next = { ...here, tags: ["old"], fav: true, folder: undefined, at: 0.1, readAt: 5, marks: [{ id: "m1" }], title: "Old title" };
+  const got = S.revertChanges(here, next, true);
+  assert.deepStrictEqual(got.map((x) => x.field), ["text", "title", "tags", "folder", "fav", "marks"]);
+  assert.deepStrictEqual([got[5].was, got[5].now], [2, 1]);
+  assert.deepStrictEqual(got[2].now, ["old"]);
+});
+
+test("revertChanges: only where you are differs, nothing to list; an odd field reads as other", () => {
+  const here = page("a1b2", { at: 0.7, spot: "3/4" });
+  assert.deepStrictEqual(S.revertChanges(here, { ...here, at: 0.1, spot: "1/4", placeAt: 9 }, false), []);
+  assert.deepStrictEqual(S.revertChanges(here, { ...here, noShare: true }, false).map((x) => x.field), ["other"]);
+});
+
 // ---- Through the merge, to another device ----
 // A puts the library back by hand, then syncs: base and GitHub are both
 // the head H. B, still at H, then syncs against what A wrote.

@@ -374,7 +374,9 @@ web copy stay links, as before.
   (not by writing the old file): the merge, tombstones and other devices
   then treat it like any change. A clip that comes back carries `back`, a
   clip whose text goes back gets a new `editedAt`, a feed followed again a
-  new `addedAt`; places and reading stay (`synchistory.test.js`).
+  new `addedAt`; places and reading stay (`synchistory.test.js`). A version's
+  fold-out is a dry run of the same `revertPlan` (`revertChanges` says what
+  each clip would change), with no pre-sync and nothing written.
 - **Google Drive** (`drive.js`): zipped backups (`backup.js`) in a
   Waypage folder in the person's Drive, resumable (the browser in 8 MB
   pieces), the last few kept. On Android the zip is packed natively

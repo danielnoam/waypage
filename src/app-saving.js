@@ -487,7 +487,88 @@ function syncLeave() {
 // as they are (C.sync.revertPlan).
 let historyList = null, historyMore = false, historyPage = 0, historyError = "", historyBusy = false;
 let reverting = null;   // { text, syncing }: a version is being put back
-const historyReset = () => { historyList = null; historyMore = false; historyPage = 0; historyError = ""; };
+const historyOpen = new Set();   // shas of the versions folded out
+const historyDiff = new Map();   // sha -> { busy } | { error } | { plan, view }
+const historyReset = () => { historyList = null; historyMore = false; historyPage = 0; historyError = ""; historyOpen.clear(); historyDiff.clear(); };
+// This device's clips as sync sees them, and what to ask revertPlan.
+function historyView() {
+  const what = C.sync.what;
+  const view = state.pages.filter((p) => !p.link).map((p) => C.sync.share(C.backup.cleanMeta(p, p.id) || p));
+  return { view, opts: { feeds, skipFeed: (u) => (isMail({ url: u }) ? !what.newsletters : !what.feeds) } };
+}
+// What a put-back does, in words: "2 clips come back, 1 saved since is deleted".
+function historyParts(plan) {
+  const one = (n, a, b) => (n === 1 ? a : b);
+  return [plan.back.length ? countLine(plan.back.length) + one(plan.back.length, " comes", " come") + " back" : "",
+    plan.drop.length ? countLine(plan.drop.length) + " saved since " + one(plan.drop.length, "is", "are") + " deleted" : "",
+    plan.change.length ? countLine(plan.change.length) + one(plan.change.length, " changes", " change") : "",
+    plan.followed ? plan.followed + one(plan.followed, " feed is", " feeds are") + " followed again" : "",
+    plan.unfollowed ? plan.unfollowed + one(plan.unfollowed, " feed is", " feeds are") + " unfollowed" : ""].filter(Boolean);
+}
+// A dry run of the put-back under a version's row: reads that version from
+// GitHub and works out the plan, and changes nothing here.
+async function historyLook(e) {
+  if (historyDiff.has(e.sha)) return;
+  const mine = { busy: true };
+  historyDiff.set(e.sha, mine);
+  let got;
+  try {
+    const T = await C.sync.target(e.sha);
+    const { view, opts } = historyView();
+    got = { plan: C.sync.revertPlan(view, T, opts), view };
+  } catch (err) {
+    got = { error: err instanceof C.sync.SyncError ? err.message : "Couldn't read that version." };
+    if (!(err instanceof C.sync.SyncError)) console.error(err);
+  }
+  if (historyDiff.get(e.sha) !== mine) return;
+  historyDiff.set(e.sha, got);
+  if (state.section === "syncHistory") renderSection();
+}
+const HISTORY_SHOWN = 20;
+function historyDiffRows(e) {
+  const d = historyDiff.get(e.sha);
+  const plain = (t, cls) => el("div", { class: "row" }, el("span", { class: "row-label " + (cls || "muted") }, t));
+  if (!d || d.busy) return [plain("Looking on GitHub…")];
+  if (d.error) return [el("button", { class: "row", type: "button", onclick: () => { historyDiff.delete(e.sha); historyDiffFill(e); historyLook(e); } },
+    el("span", { class: "row-label warn" }, d.error + " Try again"))];
+  const p = d.plan;
+  if (!historyParts(p).length) return [plain("Same as your library now")];
+  const item = (title, note) => el("div", { class: "row" }, el("span", { class: "choice-text" },
+    el("span", { class: "row-label", dir: "auto" }, title || "Untitled"), note ? el("span", { class: "choice-note", dir: "auto" }, note) : null));
+  const out = [];
+  const group = (label, items) => {
+    if (!items.length) return;
+    out.push(el("div", { class: "history-head" }, label));
+    for (const it of items.slice(0, HISTORY_SHOWN)) out.push(item(it.title, it.note));
+    if (items.length > HISTORY_SHOWN) out.push(plain("and " + (items.length - HISTORY_SHOWN) + " more"));
+  };
+  const hereBy = new Map(d.view.map((x) => [x.id, x]));
+  const none = (v) => v || "none";
+  const says = (c) => {
+    const h = hereBy.get(c.id) || {};
+    const word = {
+      text: () => "Text: the version from then", title: (x) => "Title: " + x.was + " → " + x.now,
+      tags: (x) => "Tags: " + none(x.was.join(", ")) + " → " + none(x.now.join(", ")),
+      folder: (x) => "Collection: " + none(x.was) + " → " + none(x.now), fav: (x) => "Favourite: " + (x.now ? "on" : "off"),
+      marks: (x) => "Highlights: " + x.was + " → " + x.now, ink: () => "Drawing", other: () => "Other details" };
+    return C.sync.revertChanges(h, c.next, c.text).map((x) => word[x.field](x)).join(" · ");
+  };
+  group("Come back", p.back.map((m) => ({ title: m.title })));
+  group("Deleted", p.drop.map((id) => ({ title: (state.pages.find((x) => x.id === id) || {}).title })));
+  group("Change", p.change.map((c) => ({ title: c.next.title, note: says(c) })));
+  if (p.feeds) {
+    const mine = new Set(feeds.map((f) => f.url)), kept = new Set(p.feeds.map((f) => f.url));
+    group("Followed again", p.feeds.filter((f) => !mine.has(f.url)).map((f) => ({ title: f.title || f.url })));
+    group("Unfollowed", feeds.filter((f) => !kept.has(f.url)).map((f) => ({ title: f.title || f.url })));
+  }
+  out.push(el("p", { class: "footnote history-note" }, "Compared with this device's library now. Where you are in each clip isn't compared."));
+  return out;
+}
+// Fills a version's fold-out in place, where it is on screen.
+function historyDiffFill(e) {
+  const box = document.getElementById("history-" + e.sha);
+  if (box) box.replaceChildren(...historyDiffRows(e));
+}
 // Why history can't be used now, or "".
 function historyWhy() {
   if (!C.sync.on) return "Turn on GitHub sync to see earlier versions of your library.";
@@ -520,13 +601,26 @@ function historySections() {
   const off = reverting || historyBusy ? { disabled: "" } : {};
   const note = (e) => [e.kind === "feeds" ? "Feeds changed" : e.kind === "back" ? "Put back to " + e.back : e.clips != null ? countLine(e.clips) : "",
     e.device ? "from " + e.device : ""].filter(Boolean).join(" · ");
-  const rows = (historyList || []).map((e, i) => (i === 0
-    ? el("div", { class: "row" }, el("span", { class: "choice-text" },
-      el("span", { class: "choice-label" }, driveWhen(e.at)), el("span", { class: "choice-note" }, note(e))),
-      el("span", { class: "row-value" }, "Now"))
-    : el("button", { class: "row", type: "button", ...off, onclick: () => syncRevert(e) },
-      el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, driveWhen(e.at)), el("span", { class: "choice-note" }, note(e))),
-      el("span", { class: "row-value accent" }, "Put back"))));
+  // Tap the version to see what it would change; only Put back puts it back.
+  const rows = (historyList || []).flatMap((e, i) => {
+    const text = el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, driveWhen(e.at)), el("span", { class: "choice-note" }, note(e)));
+    if (i === 0) return [el("div", { class: "row" }, text, el("span", { class: "row-value" }, "Now"))];
+    const open = historyOpen.has(e.sha), id = "history-" + e.sha;
+    const diff = el("div", { class: "history-diff", id });
+    diff.hidden = !open;
+    if (open) diff.append(...historyDiffRows(e));
+    const fold = el("button", { class: "history-fold", type: "button", "aria-expanded": String(open), "aria-controls": id,
+      onclick: () => {
+        const now = !historyOpen.has(e.sha);
+        if (now) historyOpen.add(e.sha); else historyOpen.delete(e.sha);
+        fold.setAttribute("aria-expanded", String(now));
+        diff.hidden = !now;
+        if (now) { diff.replaceChildren(...historyDiffRows(e)); historyLook(e); }
+      } },
+      text, el("span", { class: "row-chev", "aria-hidden": "true" }, "›"));
+    return [el("div", { class: "row history-row" }, fold,
+      el("button", { class: "history-put", type: "button", ...off, onclick: () => syncRevert(e) }, "Put back")), diff];
+  });
   const status = reverting ? [el("div", { class: "row" }, el("span", { class: "choice-text" },
     el("span", { class: "choice-label" }, reverting.text),
     el("span", { class: "progress thin busy", "aria-hidden": "true" }, el("span", { class: "progress-fill", style: "transform: scaleX(1)" }))))] : [];
@@ -539,7 +633,7 @@ function historySections() {
     el("div", { class: "group" }, ...status, ...rows, ...rest,
       !why && historyMore && !historyError ? el("button", { class: "row", type: "button", ...off, onclick: () => historyLoad(true) },
         el("span", { class: "row-label accent" }, historyBusy ? "Looking…" : "Show older")) : null),
-    el("p", { class: "footnote" }, "Each time your library changed, GitHub kept a copy. Putting one back makes your library as it was then, on every device: clips deleted since come back, clips saved since are deleted, and tags, collections, favourites, highlights and feeds go back too. Where you are in each clip, your reading stats and your notes stay as they are. A clip deleted this way stays in history, so you can put a later version back from this list."))];
+    el("p", { class: "footnote" }, "Each time your library changed, GitHub kept a copy. Tap a version to see what it would change. Putting one back makes your library as it was then, on every device: clips deleted since come back, clips saved since are deleted, and tags, collections, favourites, highlights and feeds go back too. Where you are in each clip, your reading stats and your notes stay as they are. A clip deleted this way stays in history, so you can put a later version back from this list."))];
 }
 async function syncRevert(e) {
   if (reverting || historyWhy()) return;
@@ -557,16 +651,12 @@ async function syncRevert(e) {
     await syncNow(true);
     if (C.sync.last.error) return fail(C.sync.last.error);
     T = await C.sync.target(e.sha);
-    const what = C.sync.what;
-    const view = state.pages.filter((p) => !p.link).map((p) => C.sync.share(C.backup.cleanMeta(p, p.id) || p));
-    plan = C.sync.revertPlan(view, T, { feeds, skipFeed: (u) => (isMail({ url: u }) ? !what.newsletters : !what.feeds) });
+    const { view, opts } = historyView();
+    plan = C.sync.revertPlan(view, T, opts);
   } catch (err) {
     return fail(err instanceof C.sync.SyncError ? err.message : "Couldn't read that version. Try again.");
   }
-  const parts = [plan.back.length ? countLine(plan.back.length) + (plan.back.length === 1 ? " comes" : " come") + " back" : "",
-    plan.drop.length ? countLine(plan.drop.length) + " saved since " + (plan.drop.length === 1 ? "is" : "are") + " deleted" : "",
-    plan.change.length ? countLine(plan.change.length) + (plan.change.length === 1 ? " changes" : " change") : "",
-    plan.followed ? plan.followed + (plan.followed === 1 ? " feed is" : " feeds are") + " followed again" : "", plan.unfollowed ? plan.unfollowed + (plan.unfollowed === 1 ? " feed is" : " feeds are") + " unfollowed" : ""].filter(Boolean);
+  const parts = historyParts(plan);
   if (!parts.length) { reverting = null; toast("Your library is already as it was then."); if (state.section === "syncHistory") renderSection(); return; }
   if (!confirm("Put your library back as it was on " + when + "?\n\n" + parts.join(", ") + ".\n\nYour other devices follow when they sync. Where you are in each clip stays as it is.")) {
     reverting = null;

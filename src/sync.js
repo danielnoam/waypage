@@ -1035,6 +1035,30 @@
     return { back, drop, change, feeds, followed, unfollowed };
   }
 
+  // What a put-back would change on one clip, for the list that folds out
+  // under a version: [{ field, was, now }], field one of text, title, tags,
+  // folder, fav, marks, ink, other. `h` is the clip here, `next` what
+  // revertPlan sets it to, `text` revertPlan's flag for the other text.
+  // Where you are in the clip never shows: revertPlan keeps it.
+  function revertChanges(h, next, text) {
+    const out = [];
+    const seen = new Set(["id", "tags", "folder", "folderAt", "fav", "favAt", "marks", "ink", "inkAt", "title", "editedAt", "readAt", "readOn", "movedAt"].concat(PLACE));
+    if (text) out.push({ field: "text" });
+    if (!same(h.title, next.title)) out.push({ field: "title", was: h.title || "", now: next.title || "" });
+    const tags = (p) => (p.tags || []).slice().sort();
+    if (!same(tags(h), tags(next))) out.push({ field: "tags", was: h.tags || [], now: next.tags || [] });
+    if (!same(h.folder || "", next.folder || "")) out.push({ field: "folder", was: h.folder || "", now: next.folder || "" });
+    if (!!h.fav !== !!next.fav) out.push({ field: "fav", was: !!h.fav, now: !!next.fav });
+    if (!same(h.marks || [], next.marks || [])) out.push({ field: "marks", was: (h.marks || []).length, now: (next.marks || []).length });
+    if (!same(h.ink || null, next.ink || null)) out.push({ field: "ink" });
+    const keys = new Set(Object.keys(h).concat(Object.keys(next)));
+    for (const k of keys) {
+      if (seen.has(k) || !SYNCED.has(k) || (text && CONTENT.includes(k))) continue;
+      if (!same(h[k], next[k])) { out.push({ field: "other" }); break; }
+    }
+    return out;
+  }
+
   // ---- A sync ----
 
   let running = null;
@@ -1664,7 +1688,7 @@
     // A note whose PDF is over the cap stays on its device (2026-11).
     tooBig: (p) => !!(p && p.note && (p.noteBytes || 0) > NOTE_BASE_MAX),
     merge, mergeTags, mergeMarks, mergeInk, mergeListen, mergeOutside, cleanOutside, outsideOf, outsideOnto, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
-    share, clean, same, urlKey, sameUrl, peek, poll, parseHistory, history, target, revertPlan, readText, readBytes,
+    share, clean, same, urlKey, sameUrl, peek, poll, parseHistory, history, target, revertPlan, revertChanges, readText, readBytes,
     // This device's name in the commits it writes, and a one-off line for
     // the sync after a put-back (cleared when that sync ends).
     set device(v) { who = String(v || "").replace(/[\r\n·]/g, " ").trim().slice(0, 40); },
