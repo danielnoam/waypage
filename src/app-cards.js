@@ -51,7 +51,7 @@ function iconUrl(p) {
 }
 
 // A collection's cover: the one picked for it, a picture of your own
-// or one of its clips', else its story page's (0.27.6), kept in _covers/,
+// or one of its clips', else its linked page's (0.27.6), kept in _covers/,
 // or its link.
 const coverPick = (list) => (list.find((p) => p.coverPick) || {}).coverPick || "";
 function pickedCoverUrl(list) {

@@ -231,7 +231,7 @@ and the page shows above it.
   the chapter being read under it in `--muted`, and fades with the bar;
   the name is a button that renames it in place (a field across the
   bubble, Enter or tapping away saves, Escape cancels).
-- **Collection tile (Now):** its story page's cover when it's linked to
+- **Collection tile (Now):** its linked page's cover when it's linked to
   one (0.27.6), else its first picture, else its icon (the folder, or the
   book for a story) at 44 px, centred on `--preview`, `--muted` (the book
   `--accent`), with no name drawn: the name is under it already (0.30.3).
@@ -381,7 +381,7 @@ and the page shows above it.
 - **Collection screen (Now, a book page since 0.27.11):** pushed like
   Settings, the bar holding only back and ⋯ (its hairline and the
   collection's name fade in once the title scrolls away). Then the book's
-  head: a 2:3 cover (104 px; its story page's picture, else drawn: an
+  head: a 2:3 cover (104 px; its linked page's picture, else drawn: an
   accent rule, the name in the serif, the site), beside it "site ·
   Collection", the name in the serif at `--fs-screen`, "12 of 42 read ·
   4 h 10 min left" and a 4 px progress bar. Then Continue as the primary
@@ -452,12 +452,12 @@ and the page shows above it.
   Finished" and the like when a filter is on) and Clear search.
 - **Collection ⋯ menu (Now, 0.27.11):** a popover under ⋯ (248 px,
   `--surface`, `--line` border, the soft shadow, 48 px rows with an accent
-  icon): What's saved (its size), Story page ("N new" in the accent), Add
+  icon): What's saved (its size), Website sync ("N new" in the accent), Add
   pages; a hairline; Rename, Reorder (dimmed with one page), Select,
   Export; a hairline; Remove in the warn colour. Arrow keys, Home and End
   move through it, Escape or a tap outside closes it. A collection linked
-  to its story page shows a book icon in the bar and on its tile.
-- **Editing a collection (Now, 0.27.11):** Rename, Reorder, Story page
+  to a site's page shows a book icon in the bar and on its tile.
+- **Editing a collection (Now, 0.27.11):** Rename, Reorder, Website sync
   and Export take the screen over in place; the bar shows the mode's name
   with Done (Rename: Cancel and Save) and Escape steps out. Rename turns
   the title into a 2 px accent field, focused, with "Renames the
@@ -466,9 +466,10 @@ and the page shows above it.
   arrows (44 px, for keyboards and screen readers) and a drag handle;
   the lifted row takes the soft shadow and the others slide aside on the
   control spring (none with reduced motion).
-- **Story page (Now, 0.26.0, was the Chapters panel):** over the
+- **Website sync (Now, was Story page, and the Chapters panel before
+  that):** over the
   chapters: the check row with "Save N" when there are new chapters,
-  Save previous and Save next, then "Story page" (a 44 px link field,
+  Save previous and Save next, then "Synced with" (a 44 px link field,
   Link or Change, Unlink).
 - **What's saved (Now, 0.27.11):** a bordered `--surface` box: "What's
   saved" and the size, an 8 px bar of pictures (accent) and text (accent

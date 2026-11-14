@@ -380,6 +380,61 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       await ctx.close();
     });
 
+    // Website sync reads a collection's chapters from any site's contents
+    // page, not only the ones with rules of their own.
+    await test("Website sync: a contents page with each chapter in a block of its own", async () => {
+      const { got } = await inPage(browser, [["https://wanderinginn.example/table-of-contents/", "toc-divs.html"]],
+        () => Waypage.save.findChapters("https://wanderinginn.example/table-of-contents/"));
+      assert.strictEqual(got.links.length, 24, "every volume's chapters, not the book links or the side's");
+      assert.match(got.links[0], /\/01\/01\/1-01\/$/);
+      assert.match(got.links[23], /\/02\/24\/2-24\/$/);
+      assert.ok(got.links.some((u) => /interlude/.test(u)), "an interlude without a number keeps its place");
+      assert.strictEqual(got.cover, "https://wanderinginn.example/cover.jpg");
+    });
+
+    await test("Website sync: arcs in paragraphs of their own are one list", async () => {
+      const { got } = await inPage(browser, [["https://parahumans.example/table-of-contents/", "toc-arcs.html"]],
+        () => Waypage.save.findChapters("https://parahumans.example/table-of-contents/"));
+      assert.strictEqual(got.links.length, 24);
+      assert.match(got.links[0], /gestation-1-1\/$/);
+      assert.match(got.links[23], /interlude-4\/$/);
+      assert.ok(!got.links.some((u) => /donate/.test(u)));
+    });
+
+    await test("Website sync: books marked up each their own way are one list", async () => {
+      const { got } = await inPage(browser, [["https://guide.example/table-of-contents/", "toc-mixed.html"]],
+        () => Waypage.save.findChapters("https://guide.example/table-of-contents/"));
+      assert.strictEqual(got.links.length, 15, "the nested first book, the flat second, both prologues");
+      assert.match(got.links[0], /\/prologue\/$/);
+      assert.match(got.links[14], /chapter-8-y\/$/);
+      assert.ok(!got.links.some((u) => /donate/.test(u)));
+    });
+
+    await test("Website sync: a chapter list over several pages is read to its end", async () => {
+      const { got, asked } = await inPage(browser, [
+        ["https://novels.example/a-tale.html?page=2", "toc-paged-2.html"],
+        ["https://novels.example/a-tale.html?page=3", "toc-paged-3.html"],
+        ["https://novels.example/a-tale.html", "toc-paged-1.html"],
+      ], () => Waypage.save.findChapters("https://novels.example/a-tale.html"));
+      assert.deepStrictEqual(got.links, Array.from({ length: 16 }, (_, i) => "https://novels.example/a-tale/chapter-" + (i + 1) + ".html"));
+      assert.strictEqual(asked.length, 3, "each page once");
+    });
+
+    await test("Website sync: a chapter's own link finds its contents page", async () => {
+      const { got } = await inPage(browser, [
+        ["https://wanderinginn.example/table-of-contents/", "toc-divs.html"],
+        ["https://wanderinginn.example/2017/01/02/1-01/", "toc-chapter.html"],
+      ], () => Waypage.save.findChapters("https://wanderinginn.example/2017/01/02/1-01/"));
+      assert.strictEqual(got.links.length, 24);
+      assert.strictEqual(got.page, "https://wanderinginn.example/table-of-contents/", "says which page it read");
+    });
+
+    await test("Website sync: chapters with names and no numbers", async () => {
+      const { got } = await inPage(browser, [["https://serial.example/story/", "toc-named.html"]],
+        () => Waypage.save.findChapters("https://serial.example/story/"));
+      assert.deepStrictEqual(got.links.map((u) => u.split("/")[4]), ["prologue", "the-long-road", "ashes", "a-quiet-town", "the-well", "strangers", "night-market", "embers", "homecoming"]);
+    });
+
     await test("a page's release date: meta, JSON-LD, Royal Road's unixtime, never a comment's", async () => {
       const ctx = await browser.newContext({ serviceWorkers: "block" });
       const p = await ctx.newPage();

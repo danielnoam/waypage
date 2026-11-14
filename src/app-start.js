@@ -125,7 +125,7 @@ $("folderDone").addEventListener("click", async () => {
   setFolderMode("");
 });
 $("folderBody").addEventListener("scroll", paintFolderTitle, { passive: true });
-// Escape steps out of Edit (dropping a typed name), the story page or
+// Escape steps out of Edit (dropping a typed name), Website sync or
 // Export.
 $("folderView").addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !e.defaultPrevented && folderMode && !state.menu && !state.select) { e.preventDefault(); setFolderMode(""); }
