@@ -180,7 +180,6 @@ function renderLibrary() {
   // Until the library is read nothing is said (1.2.0): the empty state
   // showed for the second it took, as if there were no clips.
   $("libraryMeta").textContent = n ? pagesLine(n) : loaded ? "Nothing saved yet" : "";
-  paintSearchBtn();
   if (state.place === "library") $("viewBtn").hidden = !n;
   // boot.js showed Search from the first frame if the last start had
   // clips, so the bar doesn't shift when they arrive; now it's known.

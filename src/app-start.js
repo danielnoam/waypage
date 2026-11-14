@@ -98,16 +98,6 @@ C.platform.downloads.onStop(() => {
   if (C.sync.on && (C.sync.running || syncQueue.length || fetchingPictures)) pauseSync(true);
 });
 $("sectionBack").addEventListener("click", () => history.back());
-// Search's button sits in the bar that stays, so it's there from anywhere
-// in the list. A second tap, with the field empty or in view, puts it away.
-$("searchBtn").addEventListener("click", () => {
-  if (postPlace()) { togglePostSearch(); return; }
-  if (state.place === "discover") { toggleDzSearch(); return; }
-  const box = $("searchBox");
-  if (!box.hidden && (!state.query || box.getBoundingClientRect().bottom > $("topBar").offsetHeight)) closeSearch();
-  else openSearch();
-});
-$("librarySearch").addEventListener("blur", () => { if (!state.query) { searchOpen = false; setTimeout(paintSearch, 150); } });
 // The bar gets its hairline once the list scrolls under it.
 const topBar = $("topBar");
 addEventListener("scroll", () => topBar.classList.toggle("scrolled", scrollY > 0), { passive: true });
@@ -149,7 +139,7 @@ $("librarySearch").addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   e.preventDefault();
   if (state.query) clearSearch();
-  else { closeSearch(); leaveSearchField($("librarySearch")); }
+  else $("librarySearch").blur();
 });
 $("searchClear").addEventListener("click", () => { clearSearch(); $("librarySearch").focus(); });
 $("newsBack").addEventListener("click", () => history.back());

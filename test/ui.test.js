@@ -489,7 +489,6 @@ function zipOf(files) {
     });
 
     await test("search finds a clip by words in its text, and not by others", async () => {
-      await p.click("#searchBtn");
       await p.fill("#librarySearch", "waypoints");
       await p.waitForTimeout(700);
       assert.strictEqual(await p.locator(".library .page-card:visible").count(), 1);
@@ -1060,7 +1059,7 @@ function zipOf(files) {
       await q.context().close();
     });
 
-    await test("Feeds and Newsletters: the bar's search finds posts and emails, and leaving empties it", async () => {
+    await test("Feeds and Newsletters: the search field finds posts and emails, and leaving empties it", async () => {
       const q = await page(browser, 390);
       await q.evaluate(() => {
         const now = Date.now();
@@ -1076,9 +1075,9 @@ function zipOf(files) {
       await q.waitForSelector("#saveUrl");
       await q.evaluate(() => goPlace("feeds"));
       await q.locator("#feeds .post", { hasText: "Zeppelins" }).waitFor();
-      assert.ok(await q.locator("#searchBtn").isVisible(), "no search button in Feeds");
-      await q.click("#searchBtn");
-      await until(q, () => document.activeElement && document.activeElement.closest("#feeds .post-search"));
+      assert.ok(await q.locator("#feeds .post-search").isVisible(), "no search field in Feeds");
+      assert.strictEqual(await q.locator("#viewBtn").isVisible(), false);
+      await q.click("#feeds .post-search input");
       await q.keyboard.type("airship");
       await until(q, () => document.querySelectorAll("#feeds .post").length === 1);
       assert.match(await q.textContent("#feeds .feed-head .meta"), /1 post found/);
@@ -1089,17 +1088,17 @@ function zipOf(files) {
       await q.keyboard.press("Escape");
       await until(q, () => document.querySelectorAll("#feeds .post").length === 2);
       await q.keyboard.press("Escape");
-      await until(q, () => document.querySelector("#feeds .post-search").hidden && document.activeElement.id === "searchBtn");
+      await until(q, () => !document.querySelector("#feeds .post-search").hidden && !document.activeElement.closest(".post-search"));
       await q.evaluate(() => goPlace("newsletters"));
       await q.locator("#newsletters .post", { hasText: "Weekly roundup" }).waitFor();
-      await q.click("#searchBtn");
+      await q.click("#newsletters .post-search input");
       await q.keyboard.type("gardens");
       await until(q, () => document.querySelectorAll("#newsletters .post").length === 1);
       assert.match(await q.textContent("#newsletters .feed-head .meta"), /1 email found/);
       await q.evaluate(() => goPlace("feeds"));
-      await until(q, () => document.querySelectorAll("#feeds .post").length === 2 && document.querySelector("#feeds .post-search").hidden);
+      await until(q, () => document.querySelectorAll("#feeds .post").length === 2 && document.querySelector("#feeds .post-search input").value === "");
       await q.evaluate(() => goPlace("newsletters"));
-      await until(q, () => document.querySelectorAll("#newsletters .post").length === 2 && document.querySelector("#newsletters .post-search").hidden);
+      await until(q, () => document.querySelectorAll("#newsletters .post").length === 2 && document.querySelector("#newsletters .post-search input").value === "");
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

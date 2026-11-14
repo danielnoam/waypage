@@ -37,7 +37,7 @@ function dzSavedStory(s) {
 // The search field at the top searches what's shown: the picked lists as
 // you type, and a story site's own search on Enter (Daniel: "it searches
 // what's in your view"). It stays put, so typing keeps its focus.
-let dzHead = null, dzSearchOpen = false;
+let dzHead = null;
 const dzQ = () => (dzHead ? dzHead.querySelector("input").value.trim() : "");
 const dzMatch = (e, q) => !q || [e.name, e.about || "", dzHost(e.url)].some((t) => t.toLowerCase().includes(q.toLowerCase()));
 function dzSearchHead() {
@@ -50,37 +50,18 @@ function dzSearchHead() {
     if (src && dzQ()) { input.blur(); dzSearch(dzQ(), src); }
   });
   input.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape" || dzQ() || !searchIcon("discover")) return;
+    if (e.key !== "Escape" || dzQ()) return;
     e.preventDefault();
     e.stopPropagation();
-    dzSearchOpen = false;
-    paintDzSearch();
-    leaveSearchField(input);
+    input.blur();
   });
-  input.addEventListener("blur", () => { if (!dzQ()) { dzSearchOpen = false; setTimeout(() => { if (!dzSearchOpen) paintDzSearch(); }, 150); } });
   const box = el("div", { class: "search dz-search", role: "search" }, input);
   box.insertAdjacentHTML("afterbegin", '<svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path></svg>');
   return el("div", { class: "dz-head" }, box, el("div", { class: "chips filters feed-chips", role: "group", "aria-label": "Show" }));
 }
-// With the icon on in View options, the field waits behind the bar's
-// icon, and stays while something is typed or found.
-function paintDzSearch() {
-  if (!dzHead || state.place !== "discover") return;
-  const on = !searchIcon("discover") || dzSearchOpen || !!dzQ() || !!dz.found;
-  dzHead.querySelector(".dz-search").hidden = !on;
-  $("searchBtn").setAttribute("aria-expanded", String(on));
-  $("searchBtn").classList.toggle("on", on);
-}
 function openDzSearch() {
-  dzSearchOpen = true;
-  paintDzSearch();
   window.scrollTo({ top: 0, behavior: M.reduced() ? "auto" : "smooth" });
   if (dzHead) dzHead.querySelector("input").focus({ preventScroll: true });
-}
-function toggleDzSearch() {
-  const box = dzHead && dzHead.querySelector(".dz-search");
-  if (box && !box.hidden && !dzQ() && !dz.found) { dzSearchOpen = false; paintDzSearch(); }
-  else openDzSearch();
 }
 
 // The story site Enter searches: the grid's in Sites, Royal Road in All.
@@ -123,7 +104,6 @@ function renderDiscover() {
   if (dzHead.parentNode !== root) root.replaceChildren(dzHead, el("div", { class: "dz-body" }));
   fill(root.querySelector(".dz-body"), ...nodes.filter(Boolean));
   chips.scrollLeft = scrollX;
-  paintDzSearch();
 }
 
 // Under a typed search, a button that asks the story site itself.
@@ -517,14 +497,12 @@ function dzViewSheet() {
         store("waypage.discover.showWiki", on);
         renderDiscover();
         if (on) dzReadWiki();
-      }),
-      searchIconRow("discover")));
+      })));
 }
-$("viewBtn").addEventListener("click", () => openMenu(state.place === "discover" ? "discoverView" : postPlace() ? "postView" : "libView"));
+$("viewBtn").addEventListener("click", () => openMenu(state.place === "discover" ? "discoverView" : "libView"));
 
 MENUS.discoverView = { label: "View options", build: () => dzViewSheet() };
 MENUS.libView = { label: "View options", build: () => libViewSheet() };
-MENUS.postView = { label: "View options", build: () => postViewSheet() };
 MENUS.story = { label: "Story", build: () => storySheet() };
 MENUS.signup = { label: "Sign up", build: () => signupSheet() };
 

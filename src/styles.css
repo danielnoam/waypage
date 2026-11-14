@@ -624,8 +624,8 @@ html.native .reader-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
 /* With Settings opened over the clip (app-settings.js). */
 .reader.under { z-index: 9; }
 .icon-btn[hidden] { display: none; }
-:root[data-clips="had"]:not([data-search-bar]) #searchBtn[hidden], :root[data-clips="had"] #libraryView[data-place="library"] #viewBtn[hidden] { display: inline-flex; }
-:root[data-clips="had"][data-search-bar] #libraryView[data-place="library"] #searchBox[hidden] { display: block; }
+:root[data-clips="had"] #libraryView[data-place="library"] #viewBtn[hidden] { display: inline-flex; }
+:root[data-clips="had"] #libraryView[data-place="library"] #searchBox[hidden] { display: block; }
 #readerAa[aria-expanded="true"] { background: var(--line); }
 .aloud-btn[aria-pressed="true"] { color: var(--accent); background: var(--line); }
 
@@ -2047,7 +2047,6 @@ span.update-text { cursor: default; }
 /* ---- 0.27.10: Select beside Order, search behind its button ---- */
 .lib-tools-end { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
 .lib-tools-end .dropdown.sort-wrap { margin-right: 0; }
-#searchBtn.on { background: var(--line); }
 
 /* ---- 0.27.11: the collection as a book page ---- */
 /* Favourite, Edit and ⋯ share the right; the title stays centred while
@@ -2221,7 +2220,6 @@ span.update-text { cursor: default; }
 /* ---- 0.28.0: the sidebar and Feeds ---- */
 .library[hidden], .feeds[hidden], .highlights[hidden], .reading[hidden] { display: none; }
 :is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"], [data-place="reading"], [data-place="discover"]) .top { display: none; }
-:is([data-place="highlights"], [data-place="reading"]) #searchBtn { display: none; }
 
 .side-catch { z-index: 17; }
 .sidebar {
