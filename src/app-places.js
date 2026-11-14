@@ -761,8 +761,14 @@ function openFromSide(name) {
 function partFromSide(part) {
   return fromSide().then(() => {
     if (state.place !== "library") { state.place = "library"; store(PLACE_KEY, "library"); paintPlace(); }
+    // A part only shows under All clips, so Clips and the rest put Show back there.
+    if (state.filter !== "all") setFilter("all");
     if (state.part !== part) openPart(part);
   });
+}
+// Notes, from the sidebar: the library's All notes filter, as Favourites does.
+function notesFromSide() {
+  return toLibrary().then(() => goPlace("library")).then(() => setFilter("notes"));
 }
 function sideFavourites() {
   const folders = allFolders().filter(folderFav)
@@ -842,7 +848,7 @@ function renderSide() {
   const latest = (f) => Math.max(0, ...f.items.map(postAt));
   const big = wide.matches;
   const inLib = !inFeeds && !inMarks && !["reading", "newsletters", "discover", "anki"].includes(state.place);
-  const inLibrary = inLib && !state.part && !state.folder && state.filter !== "favourites";
+  const inLibrary = inLib && !state.part && !state.folder && state.filter !== "favourites" && state.filter !== "notes";
   const favs = sideFavourites();
   const hasFolders = allFolders().length > 0;
   fill($("sidebar"),
@@ -851,8 +857,8 @@ function renderSide() {
     // From inside Collections, Clips, a collection or the favourites
     // (1.20.0), Library steps all the way back to the library itself.
     ...sideFold("library", item(feedIcon("library"), "Library", inLibrary, null, () =>
-      inLib && (state.part || state.folder || state.filter === "favourites")
-        ? toLibrary().then(() => { if (state.filter === "favourites") setFilter("all"); return goPlace("library"); })
+      inLib && (state.part || state.folder || state.filter === "favourites" || state.filter === "notes")
+        ? toLibrary().then(() => { if (state.filter === "favourites" || state.filter === "notes") setFilter("all"); return goPlace("library"); })
         : goPlace("library")), [
     ...sideTopItems(favs).map((f) => f.folder
       ? item(sideCover(f.folder), f.folder, state.folder === f.folder, count(freshCount(f.folder)), () => openFromSide(f.folder), "side-sub")
@@ -865,7 +871,7 @@ function renderSide() {
     hasFolders ? item(sideMark("folder"), "Collections", inLib && state.part === "collections", null, () => partFromSide("collections"), "side-sub") : null,
     item(sideMark("open"), "Clips", inLib && state.part === "pages", null, () => partFromSide("pages"), "side-sub"),
     // Notes (2.0.0), above Files (2026-11) as in the library.
-    state.pages.some((p) => p.note) ? item(sideMark("open"), "Notes", inLib && state.part === "notes", null, () => partFromSide("notes"), "side-sub") : null,
+    state.pages.some((p) => p.note) ? item(sideMark("open"), "Notes", inLib && !state.part && !state.folder && state.filter === "notes", null, notesFromSide, "side-sub") : null,
     // Files of your own (0.31.0), their part of the library.
     state.pages.some((p) => p.link && !p.note) ? item(fileMark(), "Files", inLib && state.part === "files", null, () => partFromSide("files"), "side-sub") : null]),
     ...sideFold("feeds", item(feedIcon("feeds"), "Feeds", inFeeds && !state.feed, fresh ? el("span", { class: "side-pill" }, fresh + " new") : null,

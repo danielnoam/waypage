@@ -29,8 +29,11 @@ const syncsPage = (p) => (p.note ? C.sync.what.notes && !C.sync.tooBig(p) : C.sy
 const tooBigLine = (p) => (C.sync.on && C.sync.tooBig(p) ? "Over 50 MB, can't be synced" : "");
 async function syncNow(quiet = true) {
   if (!C.sync.on || C.sync.paused) return null;
+  // Not while a version is being put back (only its own syncs run).
+  if (reverting && !reverting.syncing) return null;
   if (!navigator.onLine && quiet) return null;
   if (waitsForWifi(DATA_SYNC_KEY)) { if (!quiet) toast("Sync waits for Wi-Fi. Change that below."); return null; }
+  C.sync.device = deviceName();
   clearTimeout(syncTimer);
   syncTimer = null;
   const joined = C.sync.running;
@@ -434,7 +437,8 @@ function syncState() {
       paused ? null : el("button", { class: "row", type: "button", ...(C.sync.running ? { disabled: "" } : {}), onclick: () => syncNow(false) },
         el("span", { class: "row-label accent" }, "Sync now")),
       el("button", { class: "row", type: "button", onclick: () => pauseSync(!paused) },
-        el("span", { class: "row-label accent" }, paused ? "Resume syncing" : "Pause syncing"))));
+        el("span", { class: "row-label accent" }, paused ? "Resume syncing" : "Pause syncing")),
+      navRow("Sync history", "Earlier versions of your library, and putting one back", () => openSection("syncHistory", false, true))));
 }
 // How much room the repo has left (2026-11), against GitHub's 5 GB.
 function syncSpace() {
@@ -472,6 +476,337 @@ function syncLeave() {
   return section("Connection", "Disconnecting forgets the token on this device. Your clips stay here and on GitHub.",
     el("div", { class: "group" },
       el("button", { class: "row", type: "button", onclick: disconnectSync }, el("span", { class: "row-label warn" }, "Disconnect from GitHub"))));
+}
+// ---- Sync history ----
+// Each library write is a commit on GitHub, so the repo holds every
+// earlier version of the library. Putting one back is done here, by hand,
+// as the changes it comes to (clips back, clips gone, tags and the rest as
+// they were, feeds followed or not), and then synced like any change:
+// the merge, the deletions and the other devices all work as they do for
+// edits made here. Where you are in each clip and the reading stats stay
+// as they are (C.sync.revertPlan).
+let historyList = null, historyMore = false, historyPage = 0, historyError = "", historyBusy = false, historyStatus = "";
+let reverting = null;   // { text, syncing }: a version is being put back
+const historyOpen = new Set();   // shas of the versions folded out
+const historyDiff = new Map();   // sha -> { busy } | { error } | { plan, view }
+const historyReset = () => { historyList = null; historyMore = false; historyPage = 0; historyError = ""; historyStatus = ""; historyOpen.clear(); historyDiff.clear(); };
+// This device's clips as sync sees them, and what to ask revertPlan.
+function historyView() {
+  const what = C.sync.what;
+  const view = state.pages.filter((p) => !p.link).map((p) => C.sync.share(C.backup.cleanMeta(p, p.id) || p));
+  return { view, opts: { feeds, skipNote: !what.notes, skipFeed: (u) => (isMail({ url: u }) ? !what.newsletters : !what.feeds) } };
+}
+// What a put-back does, in words: "2 clips come back, 1 saved since is deleted".
+function historyParts(plan) {
+  const one = (n, x, y) => (n === 1 ? x : y);
+  const isNote = (id) => { const p = state.pages.find((x) => x.id === id); return !!(p && p.note); };
+  const said = (list, noteOf) => {
+    const notes = list.filter(noteOf).length, clips = list.length - notes;
+    return { n: list.length, who: [clips ? countLine(clips) : "", notes ? notes + one(notes, " note", " notes") : ""].filter(Boolean).join(" and ") };
+  };
+  const back = said(plan.back, (m) => m.note), drop = said(plan.drop, isNote), change = said(plan.change, (c) => c.note);
+  return [back.n ? back.who + one(back.n, " comes", " come") + " back" : "",
+    drop.n ? drop.who + " saved since " + one(drop.n, "is", "are") + " deleted" : "",
+    change.n ? change.who + one(change.n, " changes", " change") : "",
+    plan.followed ? plan.followed + one(plan.followed, " feed is", " feeds are") + " followed again" : "",
+    plan.unfollowed ? plan.unfollowed + one(plan.unfollowed, " feed is", " feeds are") + " unfollowed" : ""].filter(Boolean);
+}
+// For each changed note, what its sheets and strokes would do: read here and
+// from that version, the first few only. c.detail stays unset when a read fails.
+async function historyNotes(plan, T, sha) {
+  for (const c of plan.change.filter((x) => x.note && x.text).slice(0, 20)) {
+    try {
+      const names = (T.files[c.id] && T.files[c.id].note) || {};
+      if (!names["note.json"]) continue;
+      const mine = await C.store.readNote(c.id), ink = await C.store.readInk(c.id);
+      const then = JSON.parse(await C.sync.readText("notes/" + c.id + "/note.json", sha));
+      const rawInk = names["ink.json"] ? await C.sync.readText("notes/" + c.id + "/ink.json", sha) : null;
+      const thenInk = rawInk ? JSON.parse(rawInk) : null;
+      c.detail = { sheets: [((mine && mine.sheets) || []).length, ((then && then.sheets) || []).length], ink: C.sync.inkDiff(ink && ink.pages, thenInk && thenInk.pages) };
+    } catch (err) { /* the row says it as a whole */ }
+  }
+}
+const strokesText = (here, then) => [here ? here + " new here" : "", then ? then + " erased since" : ""].filter(Boolean).join(", ");
+// A dry run of the put-back under a version's row: reads that version from
+// GitHub and works out the plan, and changes nothing here.
+async function historyLook(e) {
+  if (historyDiff.has(e.sha)) return;
+  const mine = { busy: true };
+  historyDiff.set(e.sha, mine);
+  let got;
+  try {
+    const T = await C.sync.target(e.sha);
+    const { view, opts } = historyView();
+    got = { plan: C.sync.revertPlan(view, T, opts), view };
+    await historyNotes(got.plan, T, e.sha);
+  } catch (err) {
+    got = { error: err instanceof C.sync.SyncError ? err.message : "Couldn't read that version." };
+    if (!(err instanceof C.sync.SyncError)) console.error(err);
+  }
+  if (historyDiff.get(e.sha) !== mine) return;
+  historyDiff.set(e.sha, got);
+  if (state.section === "syncHistory") renderSection();
+}
+const HISTORY_SHOWN = 20;
+function historyDiffRows(e) {
+  const d = historyDiff.get(e.sha);
+  const plain = (t, cls) => el("div", { class: "row" }, el("span", { class: "row-label " + (cls || "muted") }, t));
+  if (!d || d.busy) return [plain("Looking on GitHub…")];
+  if (d.error) return [el("button", { class: "row", type: "button", onclick: () => { historyDiff.delete(e.sha); historyDiffFill(e); historyLook(e); } },
+    el("span", { class: "row-label warn" }, d.error + " Try again"))];
+  const p = d.plan;
+  if (!historyParts(p).length) return [plain("Same as your library now")];
+  const item = (title, note) => el("div", { class: "row" }, el("span", { class: "choice-text" },
+    el("span", { class: "row-label", dir: "auto" }, title || "Untitled"), note ? el("span", { class: "choice-note", dir: "auto" }, note) : null));
+  const out = [];
+  const group = (label, items) => {
+    if (!items.length) return;
+    out.push(el("div", { class: "history-head" }, label));
+    for (const it of items.slice(0, HISTORY_SHOWN)) out.push(item(it.title, it.note));
+    if (items.length > HISTORY_SHOWN) out.push(plain("and " + (items.length - HISTORY_SHOWN) + " more"));
+  };
+  const hereBy = new Map(d.view.map((x) => [x.id, x]));
+  const none = (v) => v || "none";
+  const says = (c) => {
+    const h = hereBy.get(c.id) || {};
+    const word = {
+      text: () => (c.note ? "" : "Text: the version from then"), title: (x) => "Title: " + x.was + " → " + x.now,
+      tags: (x) => "Tags: " + none(x.was.join(", ")) + " → " + none(x.now.join(", ")),
+      folder: (x) => "Collection: " + none(x.was) + " → " + none(x.now), fav: (x) => "Favourite: " + (x.now ? "on" : "off"),
+      marks: (x) => "Highlights: " + x.was + " → " + x.now, ink: (x) => "Drawings: " + strokesText(x.here, x.then), other: () => "Other details" };
+    const lines = C.sync.revertChanges(h, c.next, c.text).map((x) => word[x.field](x)).filter(Boolean);
+    if (c.note && c.text) {
+      const d = c.detail;
+      if (!d) lines.unshift("The note as it was then");
+      else {
+        if (d.sheets[0] !== d.sheets[1]) lines.unshift("Sheets: " + d.sheets[0] + " → " + d.sheets[1]);
+        if (d.ink.here || d.ink.then) lines.push("Drawings: " + strokesText(d.ink.here, d.ink.then));
+        if (!lines.length) lines.push("Typed text or pictures");
+      }
+    }
+    return lines.join(" · ");
+  };
+  group("Come back", p.back.map((m) => ({ title: m.title, note: m.note ? "Note" : "" })));
+  group("Deleted", p.drop.map((id) => { const x = state.pages.find((y) => y.id === id) || {}; return { title: x.title, note: x.note ? "Note" : "" }; }));
+  group("Change", p.change.map((c) => ({ title: c.next.title, note: (c.note ? "Note · " : "") + says(c) })));
+  if (p.feeds) {
+    const mine = new Set(feeds.map((f) => f.url)), kept = new Set(p.feeds.map((f) => f.url));
+    group("Followed again", p.feeds.filter((f) => !mine.has(f.url)).map((f) => ({ title: f.title || f.url })));
+    group("Unfollowed", feeds.filter((f) => !kept.has(f.url)).map((f) => ({ title: f.title || f.url })));
+  }
+  out.push(el("p", { class: "footnote history-note" }, "Compared with this device's library now. Where you are in each clip isn't compared."));
+  return out;
+}
+// Fills a version's fold-out in place, where it is on screen.
+function historyDiffFill(e) {
+  const box = document.getElementById("history-" + e.sha);
+  if (box) box.replaceChildren(...historyDiffRows(e));
+}
+// Why history can't be used now, or "".
+function historyWhy() {
+  if (!C.sync.on) return "Turn on GitHub sync to see earlier versions of your library.";
+  if (C.sync.paused) return "Sync is paused. Resume it to see earlier versions.";
+  if (!C.sync.what.clips) return "This device doesn't sync Clips. Turn Clips on under What this device syncs to use history.";
+  if (C.sync.links) return "This device syncs Links only. History needs Clips too, since it brings clips' text back.";
+  return "";
+}
+// A page of the commits, and more until one shows a version that differs:
+// saves that changed nothing are left out (C.sync.distinct). Older commits
+// with no print in their message are read once to compare, three at a time.
+async function historyLoad(more) {
+  if (historyBusy) return;
+  historyBusy = true;
+  historyError = "";
+  historyStatus = "";
+  if (state.section === "syncHistory") renderSection();
+  try {
+    const before = more && historyList ? C.sync.distinct(historyList).length : 1;
+    for (let tries = 0; tries < 3; tries++) {
+      const got = await C.sync.history(historyPage + 1);
+      historyPage++;
+      const todo = got.list.filter((e) => !e.print);
+      for (let i = 0; i < todo.length; i += 3) {
+        historyStatus = "Comparing versions, " + Math.min(i + 3, todo.length) + " of " + todo.length;
+        if (state.section === "syncHistory") renderSection();
+        // One that can't be read keeps no print, and so keeps its row.
+        await Promise.all(todo.slice(i, i + 3).map((e) => C.sync.printOf(e.sha).then((p) => { e.print = p; }, () => {})));
+      }
+      historyList = (more || tries ? historyList || [] : []).concat(got.list);
+      historyMore = got.more;
+      if (!got.more || C.sync.distinct(historyList).length > before) break;
+    }
+  } catch (e) {
+    historyError = e instanceof C.sync.SyncError ? e.message : "Couldn't read the history. Try again.";
+    if (!(e instanceof C.sync.SyncError)) console.error(e);
+  }
+  historyStatus = "";
+  historyBusy = false;
+  if (state.section === "syncHistory") renderSection();
+}
+function historySections() {
+  const why = historyWhy();
+  // Loaded when its screen is open, not when Settings' search reads it.
+  if (!why && state.section === "syncHistory" && !historyList && !historyError && !historyBusy) historyLoad(false);
+  const off = reverting || historyBusy ? { disabled: "" } : {};
+  const note = (e) => [e.kind === "feeds" ? "Feeds changed" : e.kind === "back" ? "Put back to " + e.back : e.clips != null ? countLine(e.clips) : "",
+    e.device ? "from " + e.device : ""].filter(Boolean).join(" · ");
+  // Tap the version to see what it would change; only Put back puts it back.
+  const rows = C.sync.distinct(historyList || []).flatMap((e, i) => {
+    const text = el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, driveWhen(e.at)), el("span", { class: "choice-note" }, note(e)));
+    if (i === 0) return [el("div", { class: "row" }, text, el("span", { class: "row-value" }, "Now"))];
+    const open = historyOpen.has(e.sha), id = "history-" + e.sha;
+    const diff = el("div", { class: "history-diff", id });
+    diff.hidden = !open;
+    if (open) diff.append(...historyDiffRows(e));
+    const fold = el("button", { class: "history-fold", type: "button", "aria-expanded": String(open), "aria-controls": id,
+      onclick: () => {
+        const now = !historyOpen.has(e.sha);
+        if (now) historyOpen.add(e.sha); else historyOpen.delete(e.sha);
+        fold.setAttribute("aria-expanded", String(now));
+        diff.hidden = !now;
+        if (now) { diff.replaceChildren(...historyDiffRows(e)); historyLook(e); }
+      } },
+      text, el("span", { class: "row-chev", "aria-hidden": "true" }, "›"));
+    return [el("div", { class: "row history-row" }, fold,
+      el("button", { class: "history-put", type: "button", ...off, onclick: () => syncRevert(e) }, "Put back")), diff];
+  });
+  const status = reverting ? [el("div", { class: "row" }, el("span", { class: "choice-text" },
+    el("span", { class: "choice-label" }, reverting.text),
+    el("span", { class: "progress thin busy", "aria-hidden": "true" }, el("span", { class: "progress-fill", style: "transform: scaleX(1)" }))))] : [];
+  const rest = why ? [el("div", { class: "row" }, el("span", { class: "row-label muted" }, why))]
+    : historyError ? [el("button", { class: "row", type: "button", onclick: () => historyLoad(!!historyList) }, el("span", { class: "row-label warn" }, historyError + " Try again"))]
+    : !historyList ? [el("div", { class: "row" }, el("span", { class: "row-label" }, historyStatus || "Looking on GitHub…"))]
+    : rows.length <= 1 && !historyMore ? [el("div", { class: "row" }, el("span", { class: "row-label" }, "No earlier versions with changes yet"))]
+    : [];
+  return [section("Sync history", null,
+    el("div", { class: "group" }, ...status, ...rows, ...rest,
+      !why && historyMore && !historyError ? el("button", { class: "row", type: "button", ...off, onclick: () => historyLoad(true) },
+        el("span", { class: "row-label accent" }, historyBusy ? historyStatus || "Looking…" : "Show older")) : null),
+    el("p", { class: "footnote" }, "Each time your library changed, GitHub kept a copy. Tap a version to see what it would change. Versions that changed nothing are left out. Putting one back makes your library as it was then, on every device: clips deleted since come back, clips saved since are deleted, and tags, collections, favourites, highlights and feeds go back too. Notes and drawings go back too. Where you are in each clip and your reading stats stay as they are. A clip deleted this way stays in history, so you can put a later version back from this list." + (C.sync.what.notes ? "" : " This device doesn't sync Notes, so it leaves them as they are.")))];
+}
+async function syncRevert(e) {
+  if (reverting || historyWhy()) return;
+  if (state.open) { toast("Close the clip you're reading, then put the library back."); return; }
+  if (!navigator.onLine) { toast("You're offline. Connect to put the library back."); return; }
+  const when = driveWhen(e.at);
+  reverting = { text: "Checking GitHub…", syncing: true };
+  renderSection();
+  const say = (t) => { reverting.text = t; if (state.section === "syncHistory") renderSection(); };
+  const fail = (msg) => { reverting = null; toast(msg); if (state.section === "syncHistory") renderSection(); };
+  let plan, T;
+  try {
+    // Level with GitHub first, so this device's own changes since the last
+    // sync are sent, and aren't taken for part of the put-back.
+    await syncNow(true);
+    if (C.sync.last.error) return fail(C.sync.last.error);
+    T = await C.sync.target(e.sha);
+    const { view, opts } = historyView();
+    plan = C.sync.revertPlan(view, T, opts);
+  } catch (err) {
+    return fail(err instanceof C.sync.SyncError ? err.message : "Couldn't read that version. Try again.");
+  }
+  const parts = historyParts(plan);
+  if (!parts.length) { reverting = null; toast("Your library is already as it was then."); if (state.section === "syncHistory") renderSection(); return; }
+  if (!confirm("Put your library back as it was on " + when + "?\n\n" + parts.join(", ") + ".\n\nYour other devices follow when they sync. Where you are in each clip stays as it is.")) {
+    reverting = null;
+    if (state.section === "syncHistory") renderSection();
+    return;
+  }
+  reverting.syncing = false;
+  // All the text first, so a connection lost part way changes nothing.
+  const want = plan.back.map((m) => ({ meta: m, have: null })).concat(plan.change.filter((c) => c.text).map((c) => ({ meta: c.next, have: state.pages.find((p) => p.id === c.id) })));
+  const html = new Map(), noteData = new Map(), inkBase = new Map();
+  try {
+    // GitHub's own copy of a note's strokes is what the next sync compares with,
+    // so it is the base: the old strokes then go up instead of merging with new ones.
+    const head = want.some((w) => w.meta.note && w.have) ? await C.sync.target() : null;
+    for (const [i, w] of want.entries()) {
+      say("Bringing clips back, " + (i + 1) + " of " + want.length);
+      html.set(w.meta.id, await C.sync.readText("pages/" + w.meta.id + ".html", e.sha));
+      if (!w.meta.note) continue;
+      const id = w.meta.id, names = T.files[id] && T.files[id].note;
+      const got = await C.sync.noteFilesIn(id, names, e.sha);
+      noteData.set(id, got);
+      const at = head && head.files[id] && head.files[id].note;
+      if (got && w.have && at && at["ink.json"]) {
+        const text = await C.sync.readText("notes/" + id + "/ink.json");
+        if (text) inkBase.set(id, { pages: JSON.parse(text).pages || {}, sha: at["ink.json"] });
+      }
+    }
+  } catch (err) {
+    return fail(err instanceof C.sync.SyncError ? err.message : "Couldn't bring the clips back. Nothing was changed.");
+  }
+  say("Putting it back…");
+  const fromLinks = [], pictures = [], skipped = [];
+  const written = new Map(), live = new Map(state.pages.map((p) => [p.id, p]));
+  try {
+    for (const w of want) {
+      const text = html.get(w.meta.id);
+      // No text kept for it on GitHub: saved again from its link, or left as it is.
+      if (!text || (w.meta.note && !noteData.get(w.meta.id))) { if (w.have) skipped.push(w.meta.id); else if (w.meta.url && !w.meta.note) fromLinks.push(w.meta); continue; }
+      if (w.have) await C.store.removePage(w.meta.id);
+      const got = await C.sync.incoming(text, w.meta, e.sha);
+      const meta = { ...w.meta, missing: got.missing };
+      meta.bytes = await C.store.writePage(w.meta.id, got.html, meta);
+      if (w.meta.note) {
+        meta.bytes += await C.sync.noteFilesKeep(w.meta.id, noteData.get(w.meta.id));
+        await C.store.writeInkBase(w.meta.id, inkBase.get(w.meta.id) || null);
+      }
+      written.set(w.meta.id, meta);
+      if (got.missing) pictures.push(w.meta.id);
+    }
+    const gone = new Set(plan.drop);
+    const edits = new Map(plan.change.map((c) => [c.id, c.next]));
+    const next = [];
+    for (const p of state.pages) {
+      if (gone.has(p.id)) continue;
+      const m = written.get(p.id);
+      const edit = edits.get(p.id);
+      if (m) { for (const k of Object.keys(p)) if (!(k in m)) delete p[k]; Object.assign(p, m); }
+      else if (edit && !skipped.includes(p.id)) {
+        // What came with the clip stays; what is its own is set as it was.
+        const was = C.sync.share(C.backup.cleanMeta(p, p.id) || p);
+        for (const k of Object.keys(was)) if (!(k in edit)) delete p[k];
+        Object.assign(p, edit);
+      }
+      next.push(p);
+    }
+    for (const m of plan.back) if (written.has(m.id) && !live.has(m.id)) next.push(written.get(m.id));
+    next.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+    state.pages = next;
+    await C.store.writeIndex(state.pages);
+    for (const id of plan.drop) await C.store.removePage(id);
+    if (plan.feeds) syncedFeeds(plan.feeds);
+    texts.clear();
+    await loadThumbs();
+    C.store.keepStored();
+    renderLibrary();
+    if (state.folder) renderFolder();
+    updateWidgets();
+  } catch (err) {
+    console.error(err);
+    reverting = null;
+    historyReset();
+    if (state.section === "syncHistory") renderSection();
+    toast("Couldn't put the library back. Some clips may have changed; syncing will bring the rest.");
+    syncNow(true);
+    return;
+  }
+  if (pictures.length) { syncQueue.push(...pictures); keepQueue(); }
+  if (fromLinks.length) saveFromLinks(fromLinks, "From sync history");
+  // Sent like any change of this device's, with a commit that says so.
+  say("Syncing it…");
+  C.sync.note = when;
+  unsynced = true;
+  reverting.syncing = true;
+  await syncNow(true);
+  reverting = null;
+  historyReset();
+  fetchPictures();
+  if (state.section === "syncHistory") renderSection();
+  else if (state.section === "sync") renderSection();
+  toast(C.sync.last.error ? "Put back here. It goes to your other devices with the next sync."
+    : "Library put back to " + when + (skipped.length ? ". " + countLine(skipped.length) + " kept as " + (skipped.length === 1 ? "it was" : "they were") + ", its old text isn't on GitHub" : "") + ".");
 }
 // Pages too, or links only: the library and its marks always sync.
 // What this device syncs (1.47.0): switches, like Google Drive's What
