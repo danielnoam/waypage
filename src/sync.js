@@ -520,8 +520,8 @@
   }
 
   // { data, sha } or null. Files past 1 MB come as a blob, as in LifeLog.
-  async function readJson(path) {
-    const r = await call(contents(path) + "?ref=" + encodeURIComponent(cfg.branch), { headers: headers({ Accept: "application/vnd.github.object+json" }) });
+  async function readJson(path, ref) {
+    const r = await call(contents(path) + "?ref=" + encodeURIComponent(ref || cfg.branch), { headers: headers({ Accept: "application/vnd.github.object+json" }) });
     if (r.status === 404) return null;
     if (!r.ok) throw await fail(r);
     const j = await r.json();
@@ -534,13 +534,13 @@
     if (!b64) return null;
     return { data: JSON.parse(b64decode(b64)), sha: j.sha };
   }
-  async function readBytes(path) {
-    const r = await call(contents(path) + "?ref=" + encodeURIComponent(cfg.branch), { headers: headers({ Accept: "application/vnd.github.raw" }) });
+  async function readBytes(path, ref) {
+    const r = await call(contents(path) + "?ref=" + encodeURIComponent(ref || cfg.branch), { headers: headers({ Accept: "application/vnd.github.raw" }) });
     if (!r.ok) throw await fail(r);
     return new Uint8Array(await r.arrayBuffer());
   }
-  async function readText(path) {
-    const r = await call(contents(path) + "?ref=" + encodeURIComponent(cfg.branch), { headers: headers({ Accept: "application/vnd.github.raw" }) });
+  async function readText(path, ref) {
+    const r = await call(contents(path) + "?ref=" + encodeURIComponent(ref || cfg.branch), { headers: headers({ Accept: "application/vnd.github.raw" }) });
     if (r.status === 404) return null;
     if (!r.ok) throw await fail(r);
     return r.text();
@@ -899,7 +899,7 @@
   // A page from GitHub, ready to keep: pictures as links where this device
   // keeps none (a browser, or a page saved as Links), else left missing for
   // the downloads after. Resolves to { html, missing }.
-  async function incoming(html, entry) {
+  async function incoming(html, entry, ref) {
     const doc = new DOMParser().parseFromString(html, "text/html");
     const asLinks = !C.platform.native || entry.mode === "links";
     let missing = 0;
@@ -914,7 +914,7 @@
         let b = null;
         if (m) {
           const k = Number(m[1]);
-          if (!got.has(k)) got.set(k, await readBytes("pages/" + entry.id + "/pack-" + k).catch(() => null));
+          if (!got.has(k)) got.set(k, await readBytes("pages/" + entry.id + "/pack-" + k, ref).catch(() => null));
           const all = got.get(k);
           if (all && Number(m[2]) + Number(m[3]) <= all.length) b = all.subarray(Number(m[2]), Number(m[2]) + Number(m[3]));
         }
@@ -953,6 +953,86 @@
       else missing++;
     }
     return { html: "<!doctype html>\n" + doc.documentElement.outerHTML, missing };
+  }
+
+  // ---- Sync history ----
+  // Every library write is a commit, so GitHub already holds each earlier
+  // version of the library. The commit says what wrote it: "Library: 120
+  // pages · Pixel", "Feeds: 4 · Pixel" or "Library: put back to 3 Nov,
+  // 14:02 · Pixel". A commit that only moved places or stats isn't a
+  // change to the library, so the list leaves it out.
+  let who = "", putBack = "";
+  const libraryNote = (n) => (putBack ? "Library: put back to " + putBack : "Library: " + n + " pages") + (who ? " · " + who : "");
+  const HISTORY_PAGE = 30;
+  // GitHub's commits for library.json -> [{ sha, at, kind, clips, back, device }], newest first.
+  function parseHistory(raw) {
+    const out = [];
+    for (const c of Array.isArray(raw) ? raw : []) {
+      const msg = String((c && c.commit && c.commit.message) || "").split("\n")[0];
+      const m = /^(Library|Feeds|Places): (.*?)(?: · (.+))?$/.exec(msg);
+      if (!c || typeof c.sha !== "string" || !m || m[1] === "Places") continue;
+      const at = Date.parse((c.commit.committer || c.commit.author || {}).date || "") || 0;
+      const pages = /^(\d+) pages?$/.exec(m[2]), back = /^put back to (.+)$/.exec(m[2]);
+      out.push({ sha: c.sha, at, kind: m[1] === "Feeds" ? "feeds" : back ? "back" : "library",
+        clips: pages ? Number(pages[1]) : null, back: back ? back[1] : "", device: m[3] || "" });
+    }
+    return out;
+  }
+  // One page of the list: { list, more }.
+  async function history(page = 1) {
+    if (!cfg) return { list: [], more: false };
+    const r = await call(API + "/repos/" + cfg.owner + "/" + cfg.repo + "/commits?path=library.json&sha=" + encodeURIComponent(cfg.branch)
+      + "&per_page=" + HISTORY_PAGE + "&page=" + page, { headers: headers() });
+    if (!r.ok) throw await fail(r);
+    const raw = await r.json();
+    return { list: parseHistory(raw), more: Array.isArray(raw) && raw.length === HISTORY_PAGE };
+  }
+  // The library as it was in that commit, down to what Waypage writes.
+  async function target(sha) {
+    const got = await readJson("library.json", sha);
+    if (!got || !got.data || !Array.isArray(got.data.pages)) throw new SyncError("That version of the library can't be read.");
+    return clean(got.data);
+  }
+  // What putting the library back as T was takes, done here as if by hand
+  // and then synced like any change: `current` is this device's clips
+  // (as index entries) and `opts.feeds` its followed feeds.
+  //   back   clips in T and not here (a deleted one comes back over its tombstone)
+  //   drop   ids here and not in T
+  //   change { id, next, text }: in both, differing; `text` when the text
+  //          itself was another version, so it is written from T again
+  //   feeds  the feeds to follow, or null to leave them as they are
+  // Where you are in each clip, when it was read and what only this device
+  // has stay as they are here. Notes aren't put back: their files are
+  // kept apart (notes/<id>/), so they stay as they are, in both.
+  function revertPlan(current, T, opts) {
+    const now = (opts && opts.now) || Date.now();
+    const mine = (opts && opts.feeds) || [];
+    const here = new Map(current.filter((p) => !p.note).map((p) => [p.id, p]));
+    const there = new Map(T.pages.filter((p) => !p.note).map((p) => [p.id, p]));
+    const back = [], drop = [], change = [];
+    for (const [id, t] of there) {
+      const h = here.get(id);
+      if (!h) { back.push({ ...t, back: now }); continue; }
+      const next = { ...t };
+      for (const k of PLACE.concat(["readAt", "readOn"])) { if (h[k] === undefined) delete next[k]; else next[k] = h[k]; }
+      for (const k of Object.keys(h)) if (!SYNCED.has(k)) next[k] = h[k];
+      const text = ver(t) !== ver(h);
+      // The other text is the newest choice on every device.
+      if (text) next.editedAt = now;
+      if (text || !same(next, h)) change.push({ id, next, text });
+    }
+    for (const id of here.keys()) if (!there.has(id)) drop.push(id);
+    let feeds = null, followed = 0, unfollowed = 0;
+    if (T.feeds) {
+      const skip = (opts && opts.skipFeed) || (() => false);
+      const had = new Map(mine.map((f) => [f.url, f]));
+      // One followed again gets a new addedAt, so it beats its unfollow.
+      feeds = T.feeds.filter((f) => !skip(f.url)).map((f) => (had.has(f.url) ? f : { ...f, addedAt: now }));
+      for (const f of mine) if (skip(f.url)) feeds.push(f);
+      followed = feeds.filter((f) => !had.has(f.url)).length;
+      unfollowed = mine.filter((h) => !feeds.some((f) => f.url === h.url)).length;
+    }
+    return { back, drop, change, feeds, followed, unfollowed };
   }
 
   // ---- A sync ----
@@ -1032,7 +1112,7 @@
         if (e instanceof Paused) return null;
         last = { at: last.at, error: e instanceof SyncError ? e.message : "Sync stopped: " + (e && e.message ? e.message : e) };
         throw e;
-      } finally { running = null; progress = null; }
+      } finally { running = null; progress = null; putBack = ""; }
     })();
     // Told once `running` is set, so what it draws says Syncing.
     if (!progress) told({ stage: "check", done: 0, total: 0 });
@@ -1275,7 +1355,7 @@
       if (remote && await sameOff(merged, remoteDoc)) { keep(SENT_KEY, null); break; }
       halt();
       try {
-        await write("library.json", JSON.stringify(merged), remote && remote.sha, "Library: " + merged.pages.length + " pages");
+        await write("library.json", JSON.stringify(merged), remote && remote.sha, libraryNote(merged.pages.length));
         keep(SENT_KEY, null);
         break;
       } catch (e) {
@@ -1584,7 +1664,11 @@
     // A note whose PDF is over the cap stays on its device (2026-11).
     tooBig: (p) => !!(p && p.note && (p.noteBytes || 0) > NOTE_BASE_MAX),
     merge, mergeTags, mergeMarks, mergeInk, mergeListen, mergeOutside, cleanOutside, outsideOf, outsideOnto, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
-    share, clean, same, urlKey, sameUrl, peek, poll,
+    share, clean, same, urlKey, sameUrl, peek, poll, parseHistory, history, target, revertPlan, readText, readBytes,
+    // This device's name in the commits it writes, and a one-off line for
+    // the sync after a put-back (cleared when that sync ends).
+    set device(v) { who = String(v || "").replace(/[\r\n·]/g, " ").trim().slice(0, 40); },
+    set note(v) { putBack = String(v || "").replace(/[\r\n·]/g, " ").trim().slice(0, 60); },
     // What this device last saw on GitHub for a file read from outside.
     outsideKnown(fp) { const b = load(BASE_KEY, null); return (b && b.outside && b.outside[fp] && cleanOutside({ [fp]: b.outside[fp] })[fp]) || null; },
     get on() { return !!cfg; },

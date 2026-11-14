@@ -29,8 +29,11 @@ const syncsPage = (p) => (p.note ? C.sync.what.notes && !C.sync.tooBig(p) : C.sy
 const tooBigLine = (p) => (C.sync.on && C.sync.tooBig(p) ? "Over 50 MB, can't be synced" : "");
 async function syncNow(quiet = true) {
   if (!C.sync.on || C.sync.paused) return null;
+  // Not while a version is being put back (only its own syncs run).
+  if (reverting && !reverting.syncing) return null;
   if (!navigator.onLine && quiet) return null;
   if (waitsForWifi(DATA_SYNC_KEY)) { if (!quiet) toast("Sync waits for Wi-Fi. Change that below."); return null; }
+  C.sync.device = deviceName();
   clearTimeout(syncTimer);
   syncTimer = null;
   const joined = C.sync.running;
@@ -434,7 +437,8 @@ function syncState() {
       paused ? null : el("button", { class: "row", type: "button", ...(C.sync.running ? { disabled: "" } : {}), onclick: () => syncNow(false) },
         el("span", { class: "row-label accent" }, "Sync now")),
       el("button", { class: "row", type: "button", onclick: () => pauseSync(!paused) },
-        el("span", { class: "row-label accent" }, paused ? "Resume syncing" : "Pause syncing"))));
+        el("span", { class: "row-label accent" }, paused ? "Resume syncing" : "Pause syncing")),
+      navRow("Sync history", "Earlier versions of your library, and putting one back", () => openSection("syncHistory", false, true))));
 }
 // How much room the repo has left (2026-11), against GitHub's 5 GB.
 function syncSpace() {
@@ -472,6 +476,182 @@ function syncLeave() {
   return section("Connection", "Disconnecting forgets the token on this device. Your clips stay here and on GitHub.",
     el("div", { class: "group" },
       el("button", { class: "row", type: "button", onclick: disconnectSync }, el("span", { class: "row-label warn" }, "Disconnect from GitHub"))));
+}
+// ---- Sync history ----
+// Each library write is a commit on GitHub, so the repo holds every
+// earlier version of the library. Putting one back is done here, by hand,
+// as the changes it comes to (clips back, clips gone, tags and the rest as
+// they were, feeds followed or not), and then synced like any change:
+// the merge, the deletions and the other devices all work as they do for
+// edits made here. Where you are in each clip and the reading stats stay
+// as they are (C.sync.revertPlan).
+let historyList = null, historyMore = false, historyPage = 0, historyError = "", historyBusy = false;
+let reverting = null;   // { text, syncing }: a version is being put back
+const historyReset = () => { historyList = null; historyMore = false; historyPage = 0; historyError = ""; };
+// Why history can't be used now, or "".
+function historyWhy() {
+  if (!C.sync.on) return "Turn on GitHub sync to see earlier versions of your library.";
+  if (C.sync.paused) return "Sync is paused. Resume it to see earlier versions.";
+  if (!C.sync.what.clips) return "This device doesn't sync Clips. Turn Clips on under What this device syncs to use history.";
+  if (C.sync.links) return "This device syncs Links only. History needs Clips too, since it brings clips' text back.";
+  return "";
+}
+async function historyLoad(more) {
+  if (historyBusy) return;
+  historyBusy = true;
+  historyError = "";
+  if (state.section === "syncHistory") renderSection();
+  try {
+    const got = await C.sync.history(historyPage + 1);
+    historyPage++;
+    historyList = (more && historyList ? historyList : []).concat(got.list);
+    historyMore = got.more;
+  } catch (e) {
+    historyError = e instanceof C.sync.SyncError ? e.message : "Couldn't read the history. Try again.";
+    if (!(e instanceof C.sync.SyncError)) console.error(e);
+  }
+  historyBusy = false;
+  if (state.section === "syncHistory") renderSection();
+}
+function historySections() {
+  const why = historyWhy();
+  // Loaded when its screen is open, not when Settings' search reads it.
+  if (!why && state.section === "syncHistory" && !historyList && !historyError && !historyBusy) historyLoad(false);
+  const off = reverting || historyBusy ? { disabled: "" } : {};
+  const note = (e) => [e.kind === "feeds" ? "Feeds changed" : e.kind === "back" ? "Put back to " + e.back : e.clips != null ? countLine(e.clips) : "",
+    e.device ? "from " + e.device : ""].filter(Boolean).join(" · ");
+  const rows = (historyList || []).map((e, i) => (i === 0
+    ? el("div", { class: "row" }, el("span", { class: "choice-text" },
+      el("span", { class: "choice-label" }, driveWhen(e.at)), el("span", { class: "choice-note" }, note(e))),
+      el("span", { class: "row-value" }, "Now"))
+    : el("button", { class: "row", type: "button", ...off, onclick: () => syncRevert(e) },
+      el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, driveWhen(e.at)), el("span", { class: "choice-note" }, note(e))),
+      el("span", { class: "row-value accent" }, "Put back"))));
+  const status = reverting ? [el("div", { class: "row" }, el("span", { class: "choice-text" },
+    el("span", { class: "choice-label" }, reverting.text),
+    el("span", { class: "progress thin busy", "aria-hidden": "true" }, el("span", { class: "progress-fill", style: "transform: scaleX(1)" }))))] : [];
+  const rest = why ? [el("div", { class: "row" }, el("span", { class: "row-label muted" }, why))]
+    : historyError ? [el("button", { class: "row", type: "button", onclick: () => historyLoad(!!historyList) }, el("span", { class: "row-label warn" }, historyError + " Try again"))]
+    : !historyList ? [el("div", { class: "row" }, el("span", { class: "row-label" }, "Looking on GitHub…"))]
+    : !rows.length ? [el("div", { class: "row" }, el("span", { class: "row-label" }, "No earlier versions yet"))]
+    : [];
+  return [section("Sync history", null,
+    el("div", { class: "group" }, ...status, ...rows, ...rest,
+      !why && historyMore && !historyError ? el("button", { class: "row", type: "button", ...off, onclick: () => historyLoad(true) },
+        el("span", { class: "row-label accent" }, historyBusy ? "Looking…" : "Show older")) : null),
+    el("p", { class: "footnote" }, "Each time your library changed, GitHub kept a copy. Putting one back makes your library as it was then, on every device: clips deleted since come back, clips saved since are deleted, and tags, collections, favourites, highlights and feeds go back too. Where you are in each clip, your reading stats and your notes stay as they are. A clip deleted this way stays in history, so you can put a later version back from this list."))];
+}
+async function syncRevert(e) {
+  if (reverting || historyWhy()) return;
+  if (state.open) { toast("Close the clip you're reading, then put the library back."); return; }
+  if (!navigator.onLine) { toast("You're offline. Connect to put the library back."); return; }
+  const when = driveWhen(e.at);
+  reverting = { text: "Checking GitHub…", syncing: true };
+  renderSection();
+  const say = (t) => { reverting.text = t; if (state.section === "syncHistory") renderSection(); };
+  const fail = (msg) => { reverting = null; toast(msg); if (state.section === "syncHistory") renderSection(); };
+  let plan, T;
+  try {
+    // Level with GitHub first, so this device's own changes since the last
+    // sync are sent, and aren't taken for part of the put-back.
+    await syncNow(true);
+    if (C.sync.last.error) return fail(C.sync.last.error);
+    T = await C.sync.target(e.sha);
+    const what = C.sync.what;
+    const view = state.pages.filter((p) => !p.link).map((p) => C.sync.share(C.backup.cleanMeta(p, p.id) || p));
+    plan = C.sync.revertPlan(view, T, { feeds, skipFeed: (u) => (isMail({ url: u }) ? !what.newsletters : !what.feeds) });
+  } catch (err) {
+    return fail(err instanceof C.sync.SyncError ? err.message : "Couldn't read that version. Try again.");
+  }
+  const parts = [plan.back.length ? countLine(plan.back.length) + (plan.back.length === 1 ? " comes" : " come") + " back" : "",
+    plan.drop.length ? countLine(plan.drop.length) + " saved since " + (plan.drop.length === 1 ? "is" : "are") + " deleted" : "",
+    plan.change.length ? countLine(plan.change.length) + (plan.change.length === 1 ? " changes" : " change") : "",
+    plan.followed ? plan.followed + (plan.followed === 1 ? " feed is" : " feeds are") + " followed again" : "", plan.unfollowed ? plan.unfollowed + (plan.unfollowed === 1 ? " feed is" : " feeds are") + " unfollowed" : ""].filter(Boolean);
+  if (!parts.length) { reverting = null; toast("Your library is already as it was then."); if (state.section === "syncHistory") renderSection(); return; }
+  if (!confirm("Put your library back as it was on " + when + "?\n\n" + parts.join(", ") + ".\n\nYour other devices follow when they sync. Where you are in each clip stays as it is.")) {
+    reverting = null;
+    if (state.section === "syncHistory") renderSection();
+    return;
+  }
+  reverting.syncing = false;
+  // All the text first, so a connection lost part way changes nothing.
+  const want = plan.back.map((m) => ({ meta: m, have: null })).concat(plan.change.filter((c) => c.text).map((c) => ({ meta: c.next, have: state.pages.find((p) => p.id === c.id) })));
+  const html = new Map();
+  try {
+    for (const [i, w] of want.entries()) {
+      say("Bringing clips back, " + (i + 1) + " of " + want.length);
+      html.set(w.meta.id, await C.sync.readText("pages/" + w.meta.id + ".html", e.sha));
+    }
+  } catch (err) {
+    return fail(err instanceof C.sync.SyncError ? err.message : "Couldn't bring the clips back. Nothing was changed.");
+  }
+  say("Putting it back…");
+  const fromLinks = [], pictures = [], skipped = [];
+  const written = new Map(), live = new Map(state.pages.map((p) => [p.id, p]));
+  try {
+    for (const w of want) {
+      const text = html.get(w.meta.id);
+      // No text kept for it on GitHub: saved again from its link, or left as it is.
+      if (!text) { if (w.have) skipped.push(w.meta.id); else if (w.meta.url) fromLinks.push(w.meta); continue; }
+      if (w.have) await C.store.removePage(w.meta.id);
+      const got = await C.sync.incoming(text, w.meta, e.sha);
+      const meta = { ...w.meta, missing: got.missing };
+      meta.bytes = await C.store.writePage(w.meta.id, got.html, meta);
+      written.set(w.meta.id, meta);
+      if (got.missing) pictures.push(w.meta.id);
+    }
+    const gone = new Set(plan.drop);
+    const edits = new Map(plan.change.map((c) => [c.id, c.next]));
+    const next = [];
+    for (const p of state.pages) {
+      if (gone.has(p.id)) continue;
+      const m = written.get(p.id);
+      const edit = edits.get(p.id);
+      if (m) { for (const k of Object.keys(p)) if (!(k in m)) delete p[k]; Object.assign(p, m); }
+      else if (edit && !skipped.includes(p.id)) {
+        // What came with the clip stays; what is its own is set as it was.
+        const was = C.sync.share(C.backup.cleanMeta(p, p.id) || p);
+        for (const k of Object.keys(was)) if (!(k in edit)) delete p[k];
+        Object.assign(p, edit);
+      }
+      next.push(p);
+    }
+    for (const m of plan.back) if (written.has(m.id) && !live.has(m.id)) next.push(written.get(m.id));
+    next.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+    state.pages = next;
+    await C.store.writeIndex(state.pages);
+    for (const id of plan.drop) await C.store.removePage(id);
+    if (plan.feeds) syncedFeeds(plan.feeds);
+    texts.clear();
+    await loadThumbs();
+    C.store.keepStored();
+    renderLibrary();
+    if (state.folder) renderFolder();
+    updateWidgets();
+  } catch (err) {
+    console.error(err);
+    reverting = null;
+    historyReset();
+    if (state.section === "syncHistory") renderSection();
+    toast("Couldn't put the library back. Some clips may have changed; syncing will bring the rest.");
+    syncNow(true);
+    return;
+  }
+  if (pictures.length) { syncQueue.push(...pictures); keepQueue(); }
+  if (fromLinks.length) saveFromLinks(fromLinks, "From sync history");
+  // Sent like any change of this device's, with a commit that says so.
+  say("Syncing it…");
+  C.sync.note = when;
+  unsynced = true;
+  reverting.syncing = true;
+  await syncNow(true);
+  reverting = null;
+  historyReset();
+  fetchPictures();
+  if (state.section === "syncHistory") renderSection();
+  else if (state.section === "sync") renderSection();
+  toast(C.sync.last.error ? "Put back here. It goes to your other devices with the next sync."
+    : "Library put back to " + when + (skipped.length ? ". " + countLine(skipped.length) + " kept as " + (skipped.length === 1 ? "it was" : "they were") + ", its old text isn't on GitHub" : "") + ".");
 }
 // Pages too, or links only: the library and its marks always sync.
 // What this device syncs (1.47.0): switches, like Google Drive's What

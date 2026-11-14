@@ -368,7 +368,13 @@ web copy stay links, as before.
   `waypage-data` repo, with a token scoped to that repo. The merge runs in
   `sync-worker.js`, off the main thread. Reading places merge by their
   own time, so the newest place wins across devices. On mobile data it
-  can sync only places.
+  can sync only places. Every library write is a commit, so **Sync history**
+  (`history`, `target`, `revertPlan`) lists library.json's commits and puts
+  an old one back. That is done as edits made here, then an ordinary sync
+  (not by writing the old file): the merge, tombstones and other devices
+  then treat it like any change. A clip that comes back carries `back`, a
+  clip whose text goes back gets a new `editedAt`, a feed followed again a
+  new `addedAt`; places and reading stay (`synchistory.test.js`).
 - **Google Drive** (`drive.js`): zipped backups (`backup.js`) in a
   Waypage folder in the person's Drive, resumable (the browser in 8 MB
   pieces), the last few kept. On Android the zip is packed natively
@@ -501,7 +507,7 @@ bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js` and `listen.test.js` test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js` and `listen.test.js` test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
 changes Markdown runs just `build.test.js` and `docs.test.js`.
 
 `node tools/shots.js` retakes the README's pictures at 1280 px and 390 px
@@ -838,7 +844,9 @@ area.
   the base, or a cut-off run reads as deletions; a library that can't be
   reached reads as empty, so sync refuses to run; a clip that was in the
   library during a run and isn't at a settle was deleted meanwhile, and
-  the settle must not put it back (`syncdelete.test.js`).
+  the settle must not put it back (`syncdelete.test.js`). A put-back
+  never writes library.json itself: an old file has no tombstones and old
+  versions lose the merge, so it goes in as local edits (`synchistory.test.js`).
   A page's text goes up before library.json, so two devices sending one
   edited clip at once can leave the loser's text under the winner's name;
   the merge after a 409 checks what it sent (`raced`, `syncrace.test.js`).
