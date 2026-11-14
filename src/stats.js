@@ -356,9 +356,11 @@
     const a = new Date(from + "T00:00:00").getTime(), b = new Date(to + "T00:00:00").getTime() + 864e5;
     return Object.values(fresh().clips).filter((c) => c.finished >= a && c.finished < b).length;
   }
+  // Straight over the days there are, so All time (2026-11) isn't held
+  // to days()'s 400.
   function top(from, to, n) {
     const t = {};
-    for (const d of days(from, to)) for (const [id, ms] of Object.entries(d.clips || {})) t[id] = (t[id] || 0) + ms;
+    for (const [k, d] of Object.entries(fresh().days)) if (k >= from && k <= to) for (const [id, ms] of Object.entries(d.clips || {})) t[id] = (t[id] || 0) + ms;
     return Object.entries(t).sort((a, b) => b[1] - a[1]).slice(0, n || 5).map(([id, ms]) => ({ id, ms }));
   }
   // Days in a row with a minute or more read or heard, to today (or to

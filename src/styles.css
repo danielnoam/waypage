@@ -2366,6 +2366,9 @@ span.update-text { cursor: default; }
 }
 .rs-month .rs-cols { gap: 2px; }
 .rs-year .rs-cols { gap: var(--s-1); }
+.rs-all .rs-cols { gap: var(--s-1); }
+.rs-dense .rs-cols { gap: 2px; }
+.rs-dense .rs-day { text-align: start; }
 .rs-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .rs-stack { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; }
 .rs-stack span { display: block; border-radius: 3px; }
