@@ -570,8 +570,14 @@ bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `syncanki.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `recover.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
-changes Markdown runs just `build.test.js` and `docs.test.js`.
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `syncanki.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `recover.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR and on `main`, spread
+over four machines: `TEST_SHARD=2/4 node test/run-all.js` runs one
+slice. `ui.test.js` is most of the time, so it is split too
+(`UI_SHARD`): the tests on its first page `p` build on each other and
+all run in slice 1, and every test that opens its own page is dealt
+round slices 2 to 4 with the other files, biggest first. The job named
+Tests waits for the four. A PR that only changes Markdown runs just
+`build.test.js` and `docs.test.js`.
 
 `node tools/shots.js` retakes the README's pictures at 1280 px and 390 px
 into `docs/shots/`, from a demo library it saves through the app itself
@@ -739,6 +745,11 @@ area.
   phone. GitHub's `notes/<id>/` is left, which is what Recover's Look for
   deleted notes reads. Don't sync a library with Notes from such a build.
 
+- A `ui.test.js` test that needs what an earlier test left behind must
+  use the first page `p`; that is how the slicing (`UI_SHARD`) keeps it
+  in slice 1 after them. One that leans on an earlier test some other
+  way (a variable it set) passes alone in order and fails in CI's
+  slices; run `TEST_SHARD=i/4` for each slice to check.
 - The reader's sideways swipe to the next or previous clip (`swipeInput`
   in reader.js, `clipSwipe` in app-reader.js) shares the page with the
   brightness edge, the pinch, the Pages turn, selection and Draw. It

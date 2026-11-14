@@ -11,9 +11,21 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 
-const files = fs.readdirSync(__dirname)
+// TEST_SHARD=i/n runs one slice, for CI's machines (test.yml). ui.test.js
+// runs in every slice and picks its own tests (UI_SHARD); slice 1 has its
+// long chain on one page, so the other files are dealt round the rest,
+// biggest first.
+const [SHARD, SHARDS] = (process.env.TEST_SHARD || "1/1").split("/").map(Number);
+let files = fs.readdirSync(__dirname)
   .filter((f) => f.endsWith(".test.js"))
   .sort();
+if (SHARDS > 1) {
+  const rest = files.filter((f) => f !== "ui.test.js")
+    .sort((a, b) => fs.statSync(path.join(__dirname, b)).size - fs.statSync(path.join(__dirname, a)).size);
+  const slice = rest.filter((f, i) => 2 + (i % (SHARDS - 1)) === SHARD);
+  files = ["ui.test.js", ...slice].sort();
+  process.env.UI_SHARD = SHARD + "/" + SHARDS;
+}
 
 let anyFailed = false;
 const failedFiles = [];
@@ -24,5 +36,5 @@ for (const f of files) {
 }
 // A file that crashes before its first test prints a stack trace and no
 // FAIL line at all, so the verdict names every file that didn't finish clean.
-console.log(anyFailed ? `\nFAILED: ${failedFiles.join(", ")}` : `\nAll ${files.length} test files passed.`);
+console.log(anyFailed ? `\nFAILED: ${failedFiles.join(", ")}` : `\nAll ${files.length} test files passed` + (SHARDS > 1 ? ` (slice ${SHARD} of ${SHARDS}).` : "."));
 if (anyFailed) process.exitCode = 1;

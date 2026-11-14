@@ -27,8 +27,21 @@ if (!pw) {
 
 let passed = 0;
 const fails = [];
+// UI_SHARD=i/n runs one slice, so CI can spread this file over machines.
+// A test that touches the first page `p` builds on the ones before it, so
+// all of those stay together in slice 1; every other test opens its own
+// page and is dealt round the remaining slices.
+const [SHARD, SHARDS] = (process.env.UI_SHARD || "1/1").split("/").map(Number);
+let dealt = 0;
+const onShared = (fn) => /(?<![\w.])p(?=[.,)])/.test(String(fn));
+function mine(fn) {
+  if (SHARDS < 2) return true;
+  if (onShared(fn)) return SHARD === 1;
+  return SHARD === 2 + (dealt++ % (SHARDS - 1));
+}
 async function test(name, fn) {
   if (process.env.ONLY && !name.includes(process.env.ONLY)) return;
+  if (!mine(fn)) return;
   try { await fn(); passed++; console.log("  ok - " + name); }
   catch (e) { fails.push(name); console.error("  FAIL - " + name); console.error("    " + (process.env.ONLY ? String(e.message) : String(e.message).split("\n")[0])); process.exitCode = 1; }
 }
