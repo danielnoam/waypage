@@ -1080,7 +1080,7 @@ function renderBatch(text, preset, from) {
     try {
       const found = await C.save.findChapters(url);
       if (found.links.length) {
-        source = url;
+        source = found.page || url;
         area.value = found.links.join("\n");
         if (!folder) choose(folderName(found.title || C.save.siteName(url)));
         sync();
@@ -1463,7 +1463,7 @@ function checkRow(list) {
     checkNew(name, false);
   } }, "Check");
   btn.disabled = busy;
-  // From a story page, the new ones are saved straight from its list,
+  // From a linked page, the new ones are saved straight from its list,
   // each at its place among those already saved.
   const take = entry && entry.all && fresh && !savingInto(name) ? el("button", { class: "chip on save-new", type: "button", onclick: () => {
     if (!navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
@@ -1475,15 +1475,16 @@ function checkRow(list) {
       el("span", { class: "check-note" + (fresh ? " accent" : ""), role: "status" }, note), take, btn));
 }
 
-// ---- The folder's Chapters panel (0.26.0) ----
+// ---- The folder's Website sync panel (0.26.0, was Story page) ----
 // Everything about a series in one place: new chapters, saving earlier
-// or later ones, the story page it's linked to, and saving the saved
+// or later ones, the site's page it's linked to (any site's contents
+// page, or one of its chapters), and saving the saved
 // ones again.
 function chaptersPanel(list) {
   const rows = [checkRow(list), followControls(list[0], true), followControls(list[list.length - 1])].filter(Boolean);
   return el("div", { class: "folder-actions chapters-panel" },
     rows.length ? el("div", { class: "chapter-tools" }, ...rows)
-      : el("p", { class: "meta" }, "These clips don't link to each other, so there's nothing to look for. Link the collection to its story page below."),
+      : el("p", { class: "meta" }, "These clips don't link to each other, so there's nothing to look for. Link the collection to its website below."),
     sourceSection(list));
 }
 
@@ -1491,17 +1492,17 @@ function sourceSection(list) {
   const name = state.folder;
   const src = folderSource(list);
   const input = el("input", { class: "tag-input source-input", type: "url", inputmode: "url", value: src,
-    placeholder: "The story's page, with its chapter list", "aria-label": "Story page", autocapitalize: "off", spellcheck: "false" });
+    placeholder: "Its contents page, or any chapter", "aria-label": "Page to sync with", autocapitalize: "off", spellcheck: "false" });
   const link = el("button", { class: "btn-quiet source-link", type: "button", onclick: async () => {
     const u = linkFrom(input.value);
-    if (!u) { toast("Paste the link to the story's page."); return; }
+    if (!u) { toast("Paste the link to its contents page or a chapter."); return; }
     if (!navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
     link.disabled = true;
     link.textContent = "Reading…";
     try {
       const found = await C.save.findChapters(u);
       if (!found.links.length) { toast("Couldn't find a list of chapters on that page."); return; }
-      setSource(name, u, found.cover || "");
+      setSource(name, found.page || u, found.cover || "");
       toast("Linked to " + countLine(found.links.length).replace("clip", "chapter") + " on " + C.save.siteName(u));
     } catch (e) {
       toast(e instanceof C.save.SaveError ? e.message : "Couldn't read that page. Try again.");
@@ -1512,7 +1513,7 @@ function sourceSection(list) {
   const unlink = src ? el("button", { class: "btn-quiet source-unlink", type: "button", onclick: () => { setSource(name, ""); toast("Unlinked " + name); } }, "Unlink") : null;
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); link.click(); } });
   return el("section", { class: "settings-section source-section" },
-    el("h2", { class: "overline" }, "Story page"),
+    el("h2", { class: "overline" }, "Synced with"),
     el("div", { class: "source-row" }, input, link, unlink),
     el("p", { class: "footnote" }, "New chapters are read from its chapter list, which also finds chapters added in between."));
 }
@@ -1526,7 +1527,7 @@ async function setSource(name, url, cover) {
   if (url) updateCover(name, cover);
 }
 
-// Keeps a linked collection's cover (its story page's picture) in step:
+// Keeps a linked collection's cover (its linked page's picture) in step:
 // `url` when the page was just read, else the page is read for it.
 // Once per session for a collection that has none.
 const coverTried = new Set();

@@ -72,7 +72,7 @@ The kind comes from Waypage's own marks, never a guess:
 | `audiobook` | an audiobook (`file.kind` `"audio"`) |
 | `comic` | a CBZ file, or anything saved or shown as a comic (`comic`) |
 | `book` | an EPUB, PDF, MOBI, AZW3 or FB2 file |
-| `serial` | a collection linked to a story's page, the kind that finds new chapters; its chapters aren't listed on their own |
+| `serial` | a collection linked to a site's page (Website sync), the kind that finds new chapters; its chapters aren't listed on their own |
 | `article` | a web clip with none of the above |
 
 - Each kind has its own switch under Share reading activity. Books,
