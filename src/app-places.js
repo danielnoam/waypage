@@ -1388,8 +1388,9 @@ function swipeFeeds(root) {
   let go = null;
   const chips = () => [...root.querySelectorAll(".feed-chips .chip")];
   // The chips stay put; what's under them slides (Daniel, 1.45.6).
-  // Discover's search and chips sit in one box at the top; it stays too.
-  const parts = () => [...root.children].filter((x) => !x.classList.contains("feed-chips") && !x.querySelector(".feed-chips"));
+  // Discover's search and chips sit in one box at the top; it stays too,
+  // and so does the search field over Feeds and Newsletters.
+  const parts = () => [...root.children].filter((x) => !x.matches(".feed-chips, .post-search") && !x.querySelector(".feed-chips"));
   const move = (t) => parts().forEach((x) => { x.style.transform = t; });
   const play = (frames, timing) => parts().map((x) => x.animate(frames, timing));
   const neighbour = (d) => {
