@@ -303,9 +303,14 @@
   // -1, 1.23.1) runs the other way: the page before comes in from the
   // left, or down from the top.
   const along = (side, d) => (side ? "translateX(" : "translateY(") + d + "%)";
-  function pageOut(el, side = true, dir = 1) {
-    return one(el, [{ transform: "none" }, { transform: along(side, -100 * dir) }], "control", false)
+  // from: where a sideways swipe left it, in px.
+  function pageOut(el, side = true, dir = 1, from = 0) {
+    return one(el, [{ transform: from ? "translateX(" + from + "px)" : "none" }, { transform: along(side, -100 * dir) }], "control", false)
       .then(() => { el.style.visibility = "hidden"; });
+  }
+  // A swipe that wasn't far enough: back where it was.
+  function pageBack(el, from) {
+    return one(el, [{ transform: "translateX(" + from + "px)" }, { transform: "none" }], "controlEdge", null);
   }
   function pageIn(el, side = true, dir = 1) {
     el.style.visibility = "";
@@ -328,6 +333,6 @@
   window.Waypage = window.Waypage || {};
   window.Waypage.motion = {
     busy, timing, reduced, still, setStill, desk, push, pop, grow, shrink, rise, sink, settle, dim, slideIn, slideOut, slideBack,
-    popFrom, popInto, popOut, dialogIn, dialogOut, edgeIn, edgeOut, morph, appear, vanish, measure, flip, ghostOut, fromPast, pageOut, pageIn, sideDrift,
+    popFrom, popInto, popOut, dialogIn, dialogOut, edgeIn, edgeOut, morph, appear, vanish, measure, flip, ghostOut, fromPast, pageOut, pageBack, pageIn, sideDrift,
   };
 })();

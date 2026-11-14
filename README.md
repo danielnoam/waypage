@@ -128,6 +128,7 @@ Each section below shows the computer (left) and the phone (right).
 - Ten reading fonts, four Hebrew ones, and your own.
 - Size (or pinch), weight, line and letter spacing, margins, alignment, hyphenation.
 - Any of them, and Scroll or Pages, per clip, per collection or per book.
+- Swipe sideways to the next or previous clip in a collection, with a switch to turn it off.
 - Dim pictures in dark themes.
 
 ## Skim

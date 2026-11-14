@@ -1571,6 +1571,73 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a sideways swipe goes to the clip before or after in its collection, and stays out of other gestures' way", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (i) => ({ id: "sw" + i, url: "https://example.com/sw" + i, title: "Part " + i, site: "example.com", savedAt: 1000 + i, minutes: 1, mode: "links", at: 0, finished: false, folder: "Swipes", folderAt: 1000 + i });
+        await S.writeIndex([c(1), c(2), c(3)]);
+        for (const i of [1, 2, 3]) await S.writePage("sw" + i, "<!doctype html><html><body><h1>Part " + i + "</h1><p>First words of part " + i + ".</p><pre>" + "x".repeat(400) + "</pre><p>Last words.</p></body></html>", c(i));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => openPage("sw2"));
+      await until(q, () => state.open && state.open.id === "sw2" && C.reader.frameDoc && C.reader.frameDoc.querySelector("h1"));
+      // A finger from (x0, y0) to (x1, y1) in a few steps, on `sel` or the text.
+      const swipe = (x0, y0, x1, y1, sel) => q.evaluate(async ([x0, y0, x1, y1, sel]) => {
+        const d = C.reader.frameDoc, target = sel ? d.querySelector(sel) : d.querySelector("p");
+        const t = (x, y) => new Touch({ identifier: 1, target, clientX: x, clientY: y, screenX: x, screenY: y });
+        const fire = (type, list, changed) => target.dispatchEvent(new TouchEvent(type, { touches: list, changedTouches: changed || list, bubbles: true, cancelable: true }));
+        fire("touchstart", [t(x0, y0)]);
+        for (let i = 1; i <= 6; i++) { await new Promise((r) => setTimeout(r, 16)); fire("touchmove", [t(x0 + (x1 - x0) * i / 6, y0 + (y1 - y0) * i / 6)]); }
+        fire("touchend", [], [t(x1, y1)]);
+        await new Promise((r) => setTimeout(r, 900));
+        return state.open.id;
+      }, [x0, y0, x1, y1, sel]);
+      assert.strictEqual(await swipe(300, 300, 60, 310), "sw3", "left goes to the next");
+      await until(q, () => C.reader.frameDoc && /Part 3/.test(C.reader.frameDoc.querySelector("h1").textContent));
+      assert.strictEqual(await swipe(80, 300, 330, 300), "sw2", "right goes back");
+      await until(q, () => C.reader.frameDoc && /Part 2/.test(C.reader.frameDoc.querySelector("h1").textContent));
+      assert.strictEqual(await swipe(300, 200, 200, 400), "sw2", "a mostly downward drag is a scroll");
+      assert.strictEqual(await swipe(10, 300, 300, 300), "sw2", "not from the screen's edge, the phone's Back");
+      await q.evaluate(() => { const pre = C.reader.frameDoc.querySelector("pre"); pre.style.overflowX = "auto"; pre.style.whiteSpace = "pre"; });
+      assert.strictEqual(await swipe(300, 300, 60, 300, "pre"), "sw2", "not on what scrolls sideways");
+      await q.evaluate(() => { const d = C.reader.frameDoc, r = d.createRange(); r.selectNodeContents(d.querySelector("p")); d.getSelection().addRange(r); });
+      assert.strictEqual(await swipe(300, 300, 60, 300), "sw2", "not with words selected");
+      await q.evaluate(() => C.reader.frameDoc.getSelection().removeAllRanges());
+      await q.evaluate(() => C.reader.frameDoc.documentElement.setAttribute("data-co-inking", ""));
+      assert.strictEqual(await swipe(300, 300, 60, 300), "sw2", "not while Draw is on");
+      await q.evaluate(() => C.reader.frameDoc.documentElement.removeAttribute("data-co-inking"));
+      assert.strictEqual(await q.frameLocator("#readerFrame").locator("h1").count(), 1);
+      assert.strictEqual(await q.evaluate(() => $("readerFrame").style.transform), "", "the page is back in place");
+      // At the last clip it gives a little and stays.
+      await q.evaluate(() => openPage("sw3"));
+      await until(q, () => state.open.id === "sw3" && C.reader.frameDoc && /Part 3/.test(C.reader.frameDoc.querySelector("h1").textContent));
+      assert.strictEqual(await swipe(300, 300, 60, 300), "sw3");
+      // The switch in Layout turns it off.
+      await q.click("#readerAa");
+      await q.locator('input[name="sheet-tab"][value="layout"]').evaluate((i) => i.click());
+      const sw = q.locator('#readingSheet input[data-pref="swipeClips"]');
+      await sw.waitFor();
+      assert.ok(await sw.isChecked(), "on by default");
+      await sw.evaluate((i) => i.click());
+      await q.evaluate(() => new Promise((r) => { addEventListener("popstate", r, { once: true }); history.back(); }));
+      await until(q, () => !state.sheet);
+      assert.strictEqual(await swipe(80, 300, 330, 300), "sw3", "off: nothing");
+      await q.evaluate(() => store("waypage.swipeClips", true));
+      // In Pages, a turn past the last page goes on to the next clip.
+      await q.evaluate(() => { openPage("sw1"); });
+      await until(q, () => state.open.id === "sw1" && C.reader.frameDoc && /Part 1/.test(C.reader.frameDoc.querySelector("h1").textContent));
+      await q.evaluate(() => setReading({ layout: "pages" }));
+      await until(q, () => C.reader.paged && C.reader.pageInfo());
+      const last = await q.evaluate(() => C.reader.pageInfo().pages);
+      for (let i = 1; i < last; i++) assert.strictEqual(await swipe(300, 300, 60, 300), "sw1", "turns a page");
+      assert.strictEqual(await q.evaluate(() => C.reader.pageInfo().page), last);
+      assert.strictEqual(await swipe(300, 300, 60, 300), "sw2", "past the last page, the next clip");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a collection's EPUB carries its cover: a picture of your own, else what the library shows", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

@@ -440,6 +440,7 @@ function show(p, html) {
     onKey: onKeys,
     onEdge: brightEdge,
     onPinch: textPinch,
+    onSwipe: clipSwipe,
     onLink: openLink,
     onNote: openNote,
     onJump: jumped,
@@ -670,6 +671,26 @@ const textPinch = {
   size: () => readingPrefs().size,
   set: (px) => { pinchedAt = performance.now(); px = clamp(px, SIZE_MIN, SIZE_MAX); if (px !== readingPrefs().size) setReading({ size: px }); },
 };
+// A sideways swipe goes to the clip before or after in its collection
+// (Daniel's ask). The page follows the finger; let go past a quarter of
+// the screen, or with a flick, and the next one comes in from that side.
+// With nothing that way it gives a little and comes back. Off in Layout.
+const SWIPE_KEY = "waypage.swipeClips";
+const swipeOn = () => load(SWIPE_KEY, true) !== false;
+const swipeTo = (d) => (state.open && !state.open.preview ? neighbour(state.open, d) : null);
+const clipSwipe = {
+  on: () => swipeOn() && !state.sheet && !!state.open && !!state.open.folder && !heading && !skim,
+  move: (dx, d) => {
+    if (M.reduced()) return;
+    $("readerFrame").style.transform = "translateX(" + (swipeTo(d) ? dx : dx / 4) + "px)";
+  },
+  end: (dx, d, far) => {
+    const frame = $("readerFrame"), to = swipeTo(d);
+    if (to && far) { goTo(to, d, M.reduced() ? null : dx); return; }
+    frame.style.transform = "";
+    if (dx && !M.reduced()) M.pageBack(frame, to ? dx : dx / 4);
+  },
+};
 // Volume buttons turn pages (1.32.0, Android): down for the next page,
 // up for the one before, while the reader shows Pages and nothing is
 // read aloud. Off by default, as the buttons are the volume.
@@ -775,6 +796,17 @@ async function setTurn(v) {
   C.reader.setPicsDir(v);
   await C.store.writeIndex(state.pages);
   syncSoon();
+}
+
+function swipeSwitch() {
+  return el("label", { class: "rc-row switch-row" },
+    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Swipe between clips"),
+      el("span", { class: "choice-note" }, "Sideways, to the next or previous clip in a collection")),
+    el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "swipeClips", checked: swipeOn(),
+      onchange: (e) => {
+        store(SWIPE_KEY, e.target.checked);
+        document.querySelectorAll('input[data-pref="swipeClips"]').forEach((i) => { i.checked = e.target.checked; });
+      } }));
 }
 
 function pinchSwitch() {
@@ -1031,10 +1063,14 @@ async function followAndOpen(p) {
 // backwards, the page before coming in from the left or the top.
 // The clip the reader is turning to, while it turns (1.26.3).
 let heading = "";
-async function goTo(p, turn) {
+// From a sideways swipe (swiped, the px it was dragged) the page goes on
+// from where the finger left it, sideways in Scroll too.
+async function goTo(p, turn, swiped = null) {
   heading = p.id;
   let html;
   try { html = p.note ? await openLinked(p) : await C.store.readPage(p.id); } catch (e) { html = null; }
+  const frame = $("readerFrame");
+  if (swiped != null && !html) { frame.style.transform = ""; if (!M.reduced()) M.pageBack(frame, swiped); }
   if (!html) {
     if (heading === p.id) { heading = ""; showAloudBar(); }
     toast("This clip's file is missing. Delete it and save it again.");
@@ -1044,11 +1080,14 @@ async function goTo(p, turn) {
   C.reader.settle();
   if (positionTimer) savePositions();
   history.replaceState(readerState(p), "");
-  const frame = $("readerFrame");
-  const side = C.reader.paged;
-  const dir = turn === -1 ? -1 : 1;
+  const side = swiped != null || C.reader.paged;
+  const dir = swiped ? (swiped < 0 ? 1 : -1) : turn === -1 ? -1 : 1;
   try {
-    if (turn) await M.pageOut(frame, side, dir);
+    if (turn) {
+      const out = M.pageOut(frame, side, dir, swiped || 0);
+      frame.style.transform = "";
+      await out;
+    }
     try { await show(p, html); } finally { if (turn) await M.pageIn(frame, side, dir); }
   } finally { if (heading === p.id) heading = ""; }
   frame.focus();
@@ -2506,6 +2545,7 @@ function readingControls(withTheme) {
       ], r.wide, (v) => set({ wide: v }))),
       note("A two-page spread on one screen: in halves, or whole")) : null,
     volumeSwitch(),
+    swipeSwitch(),
     comic ? null : row("Margins", seg(id + "-margins", "Margins", [
       { value: "narrow", label: "Narrow" }, { value: "normal", label: "Normal" }, { value: "wide", label: "Wide" },
     ], r.margins, (v) => set({ margins: v }))),

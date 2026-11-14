@@ -1808,7 +1808,7 @@
   // Brightness from the left edge (1.10.0): a touch that starts in the
   // left part of the page and goes up or down is the brightness, not a
   // scroll. onEdge: { start(), move(d) with d the change, -1 to 1, end() }.
-  let onEdge = null;
+  let onEdge = null, edging = false;
   function edgeInput() {
     let e0 = null;
     doc.addEventListener("touchstart", (e) => {
@@ -1827,7 +1827,7 @@
         if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy)) { e0 = null; return; }
         if (e.cancelable) e.preventDefault();
         if (Math.abs(dy) < 10) return;
-        e0.on = true;
+        e0.on = edging = true;
         e0.y = t.clientY;
         if (tapTimer) { clearTimeout(tapTimer); tapTimer = 0; }
         onEdge.start();
@@ -1836,9 +1836,69 @@
       if (e.cancelable) e.preventDefault();
       onEdge.move(-(t.clientY - e0.y) / (e0.h * 0.6));
     }, { passive: false });
-    const end = () => { if (e0 && e0.on) onEdge.end(); e0 = null; };
+    const end = () => { if (e0 && e0.on) onEdge.end(); e0 = null; edging = false; };
     doc.addEventListener("touchend", end);
     doc.addEventListener("touchcancel", end);
+  }
+
+  // A sideways swipe goes to the clip before or after in its collection
+  // (Daniel's ask). In Scroll it's any clear sideways swipe on the text;
+  // in Pages it's a turn past the first or the last page. It stays out of
+  // the other gestures' way: not from the screen's edges (the phone's own
+  // Back), not once the brightness swipe has the finger, not with two
+  // fingers, a selection, a long press (selecting), Draw on, a zoomed
+  // picture, or on anything that scrolls sideways (a table, code).
+  // onSwipe: { on(), move(dx, d), end(dx, d, far) }, d 1 for the next clip.
+  let onSwipe = null;
+  const SWIPE_EDGE = 24;
+  const swipeFree = () => !!onSwipe && onSwipe.on() && !pinch && zoom === 1 && !edging
+    && !doc.documentElement.hasAttribute("data-co-inking")
+    && !(frame.contentWindow.getSelection() && !frame.contentWindow.getSelection().isCollapsed);
+  function sideways(node) {
+    for (let x = node && node.nodeType === 1 ? node : node && node.parentElement; x && x !== doc.body; x = x.parentElement) {
+      if (x.scrollWidth > x.clientWidth + 1 && /auto|scroll/.test(frame.contentWindow.getComputedStyle(x).overflowX)) return true;
+    }
+    return false;
+  }
+  const swipeFar = (s, dx) => {
+    const a = s.last[0], b = s.last[s.last.length - 1], v = (b.x - a.x) / Math.max(1, b.t - a.t);
+    return Math.abs(dx) > width() / 4 || (Math.abs(v) > 0.3 && Math.abs(dx) > 24 && Math.sign(v) === Math.sign(dx));
+  };
+  function swipeInput() {
+    let s = null;
+    // screenX: the frame moves with the finger, so its own clientX would too.
+    doc.addEventListener("touchstart", (e) => {
+      s = null;
+      if (isPaged() || e.touches.length !== 1 || !swipeFree()) return;
+      const t = e.touches[0], W = frame.contentWindow.innerWidth;
+      if (t.clientX < SWIPE_EDGE || t.clientX > W - SWIPE_EDGE || sideways(e.target)) return;
+      s = { x: t.screenX, y: t.screenY, at: e.timeStamp, on: false, dx: 0, last: [{ x: t.screenX, t: e.timeStamp }] };
+    }, { passive: true });
+    doc.addEventListener("touchmove", (e) => {
+      if (!s) return;
+      if (e.touches.length !== 1) { if (s.on) onSwipe.end(0, 1, false); s = null; return; }
+      const t = e.touches[0], dx = t.screenX - s.x, dy = t.screenY - s.y;
+      if (!s.on) {
+        if (Math.abs(dy) > 10 && Math.abs(dy) * 1.5 > Math.abs(dx)) { s = null; return; }
+        if (Math.abs(dx) < 16) return;
+        if (e.timeStamp - s.at > 500 || Math.abs(dx) < Math.abs(dy) * 2 || !swipeFree()) { s = null; return; }
+        s.on = true;
+        s.x = t.screenX;
+        if (tapTimer) { clearTimeout(tapTimer); tapTimer = 0; }
+      }
+      if (e.cancelable) e.preventDefault();
+      s.dx = t.screenX - s.x;
+      s.last.push({ x: t.screenX, t: e.timeStamp });
+      if (s.last.length > 5) s.last.shift();
+      onSwipe.move(s.dx, (s.dx < 0) !== rtl() ? 1 : -1);
+    }, { passive: false });
+    doc.addEventListener("touchend", () => {
+      const g = s;
+      s = null;
+      if (!g || !g.on) return;
+      onSwipe.end(g.dx, (g.dx < 0) !== rtl() ? 1 : -1, swipeFar(g, g.dx));
+    });
+    doc.addEventListener("touchcancel", () => { if (s && s.on) onSwipe.end(0, 1, false); s = null; });
   }
 
   // Text size from a pinch (1.16.0): two fingers apart or together set the
@@ -1887,7 +1947,10 @@
     let start = null;
     const w = () => frame.contentWindow;
     doc.addEventListener("touchstart", (e) => {
-      start = e.touches.length === 1 && isPaged() ? { x: e.touches[0].clientX, y: e.touches[0].clientY, on: false, n: page(), last: [{ x: e.touches[0].clientX, t: e.timeStamp }] } : null;
+      const t0 = e.touches[0];
+      start = e.touches.length === 1 && isPaged() ? { x: t0.clientX, y: t0.clientY, sx: t0.screenX, on: false, n: page(), last: [{ x: t0.clientX, t: e.timeStamp }] } : null;
+      // Not from the screen's edges, the phone's own Back; a page still turns from there.
+      if (start && (t0.clientX < SWIPE_EDGE || t0.clientX > frame.contentWindow.innerWidth - SWIPE_EDGE)) start.give = true;
     }, { passive: true });
     doc.addEventListener("touchmove", (e) => {
       if (!start || e.touches.length !== 1) return;
@@ -1899,8 +1962,18 @@
         if (turning) { w().cancelAnimationFrame(turning.raf); turning = null; }
       }
       const fwd = (dx < 0) !== rtl(), next = start.n + (fwd ? 1 : -1);
-      const give = next < 0 || next >= pages() ? 0.2 : 1;
-      w().scrollTo(start.n * width() * (rtl() ? -1 : 1) - dx * give, 0);
+      const past = next < 0 || next >= pages();
+      // Past the first or last page, the clip before or after (onSwipe).
+      if (start.clip || (past && !start.give && swipeFree())) {
+        if (!start.clip) { start.clip = true; start.last = []; }
+        start.dx = t.screenX - start.sx;
+        start.last.push({ x: t.screenX, t: e.timeStamp });
+        if (start.last.length > 5) start.last.shift();
+        onSwipe.move(start.dx, (start.dx < 0) !== rtl() ? 1 : -1);
+        return;
+      }
+      start.give = start.give || past;
+      w().scrollTo(start.n * width() * (rtl() ? -1 : 1) - dx * (past ? 0.2 : 1), 0);
       start.last.push({ x: t.clientX, t: e.timeStamp });
       if (start.last.length > 5) start.last.shift();
     }, { passive: true });
@@ -1914,11 +1987,13 @@
         turn((dx < 0) !== rtl() ? 1 : -1);
         return;
       }
+      if (s.clip) { onSwipe.end(s.dx, (s.dx < 0) !== rtl() ? 1 : -1, swipeFar(s, s.dx)); return; }
       const a = s.last[0], b = s.last[s.last.length - 1], v = (b.x - a.x) / Math.max(1, b.t - a.t);
       const far = Math.abs(dx) > width() / 4 || (Math.abs(v) > 0.3 && Math.abs(dx) > 24 && Math.sign(v) === Math.sign(dx));
       const d = far ? ((dx < 0) !== rtl() ? 1 : -1) : 0;
       goPage(s.n + d, false, d ? -v : 0);
     }, { passive: true });
+    doc.addEventListener("touchcancel", () => { if (start && start.clip) onSwipe.end(0, 1, false); start = null; }, { passive: true });
     doc.addEventListener("keydown", (e) => {
       if (!isPaged() || e.altKey || e.ctrlKey || e.metaKey) return;
       const fwd = { ArrowRight: !rtl(), ArrowLeft: rtl(), PageDown: true, " ": !e.shiftKey }[e.key];
@@ -1975,7 +2050,7 @@
   // `next` ({ over, title, go }) adds a link to the next page at the end;
   // `top` () gives the height the bar covers; onImage(info) opens a tapped
   // image.
-  function open(iframe, html, meta, { at = 0, spot: spotAt = "", onPosition, onScroll, next, prev, top, onImage: image, onTap: tap, onMark: mark, onSelect, pages: asPages, turn: turnWay, wide: wideWay, bottom, onKey, onEdge: edge, onPinch: pinchTo, onLink: link, onNote: note, onJump: jumped, spotWords: wordsAt, end } = {}) {
+  function open(iframe, html, meta, { at = 0, spot: spotAt = "", onPosition, onScroll, next, prev, top, onImage: image, onTap: tap, onMark: mark, onSelect, pages: asPages, turn: turnWay, wide: wideWay, bottom, onKey, onEdge: edge, onPinch: pinchTo, onSwipe: swipeTo, onLink: link, onNote: note, onJump: jumped, spotWords: wordsAt, end } = {}) {
     // The clip before tells where it was left before this one comes in.
     settle();
     tell = onPosition ? () => onPosition(position(), spot()) : null;
@@ -2000,6 +2075,7 @@
     onMark = mark || null;
     onEdge = edge || null;
     onPinch = pinchTo || null;
+    onSwipe = swipeTo || null;
     onLink = link || null;
     onNote = note || null;
     onJump = jumped || null;
@@ -2092,6 +2168,7 @@
         // A pen on the page, the first time it's seen (1.56.0): the app offers Draw.
         doc.addEventListener("pointerdown", (e) => { if (e.pointerType === "pen" && inkHook && inkHook.pen) inkHook.pen(); }, { passive: true });
         edgeInput();
+        swipeInput();
         textPinchInput();
         // Keys pressed in the page that it doesn't use itself go to the
         // app's shortcuts (1.5.0).

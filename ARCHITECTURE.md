@@ -669,6 +669,16 @@ adds a line here.
 Things that broke once and would again. Check here before touching the
 area.
 
+- The reader's sideways swipe to the next or previous clip (`swipeInput`
+  in reader.js, `clipSwipe` in app-reader.js) shares the page with the
+  brightness edge, the pinch, the Pages turn, selection and Draw. It
+  yields to each: not from the 24 px screen edges (the phone's own Back),
+  not once the brightness drag has started, not with two fingers, a
+  selection, Draw on, a zoomed picture or over a sideways-scrolling block,
+  and it needs a clearly horizontal drag. It uses `screenX`: the frame
+  moves with the finger, so `clientX` would shrink the drag. In Pages
+  `pagedInput` hands over only past the first or last page.
+
 - A note's card picture is always `images/cover.jpg`, so its address
   carries `thumbAt` (this device's own, never synced), stamped after the
   picture is written. Stamping `editedAt` instead showed the old picture:
