@@ -445,6 +445,43 @@
       return b || null;
     } catch (e) { return null; }
   }
+  // Notes whose files are still here though no library entry names them
+  // (Recover): [{ id, title, paper }]. `known` is a Set of the library's ids.
+  // The app lists pages/; a browser reads the database's keys.
+  async function orphanNotes(known) {
+    const out = [];
+    const title = (html) => { const h = html && new DOMParser().parseFromString(html, "text/html").querySelector("h1"); return h ? h.textContent.trim().slice(0, 300) : ""; };
+    if (FS()) {
+      const b = await B();
+      let ids = [];
+      try { ids = (await b.list("pages")).map((f) => (typeof f === "string" ? f : f && f.name)).filter(Boolean); } catch (e) { return out; }
+      for (const id of ids) {
+        if (known.has(id) || !(await readNote(id))) continue;
+        let meta = null;
+        try { meta = JSON.parse(await b.read("pages/" + id + "/meta.json")); } catch (e) { meta = null; }
+        out.push({ id, title: (meta && meta.title) || "", paper: meta && meta.note && meta.note.paper });
+      }
+      return out;
+    }
+    const keys = (await idbDo("readonly", (s) => s.getAllKeys())) || [];
+    for (const k of keys) {
+      const m = /^(.+):note$/.exec(String(k));
+      if (!m || known.has(m[1]) || !(await readNote(m[1]))) continue;
+      out.push({ id: m[1], title: title(await idbDo("readonly", (s) => s.get(m[1])).catch(() => null)), paper: null });
+    }
+    return out;
+  }
+  // What an orphaned note keeps, in the shape sync's noteFilesIn reads:
+  // { note, ink?, imgs, base? }; null when its sheets are gone.
+  async function orphanFiles(id) {
+    const note = await readNote(id);
+    if (!note) return null;
+    const ink = await readInk(id);
+    const imgs = {};
+    for (const list of Object.values((ink && ink.pages) || {})) for (const it of list || []) if (it && it.f && !imgs[it.f]) { const u = await readInkImage(id, String(it.f)); if (u) imgs[it.f] = u; }
+    const base = await readNoteBase(id);
+    return { note, ink: ink || undefined, imgs, base: base || undefined };
+  }
 
   // Downloads `url` into the page's directory; resolves to the file's size.
   // Throws where there is no directory, so callers keep the link instead.
@@ -768,7 +805,7 @@
   }
 
   window.Waypage.store = { ready,
-    get place() { return cur ? cur.place : savedPlace(); }, placeName, get problem() { return problem; }, moveTo, readIndex, writeIndex, writeIndexOnly, set onIndex(f) { onIndex = f; }, writeThumb, readThumbs, storageInfo, keepStored, writePage, readPage, readPages, removePage, writeText, readText, writeTranslation, readTranslation, writeListen, readListen, writeInk, readInk, writeInkBase, readInkBase, writeNote, readNote, writeNoteBase, readNoteBase, writeInkImage, readInkImage, removeInkImage, download, removeFile, sizeOf, shrink, squeeze, pageDirUrl, bytesOf,
+    get place() { return cur ? cur.place : savedPlace(); }, placeName, get problem() { return problem; }, moveTo, readIndex, writeIndex, writeIndexOnly, set onIndex(f) { onIndex = f; }, writeThumb, readThumbs, storageInfo, keepStored, writePage, readPage, readPages, removePage, writeText, readText, writeTranslation, readTranslation, writeListen, readListen, writeInk, readInk, writeInkBase, readInkBase, writeNote, readNote, writeNoteBase, readNoteBase, orphanNotes, orphanFiles, writeInkImage, readInkImage, removeInkImage, download, removeFile, sizeOf, shrink, squeeze, pageDirUrl, bytesOf,
     listFiles, listSized, readBytes, writeBytes, cacheFile, packSource, toBase64, listFonts, readFont, addFont, removeFont,
     readCovers, coverUrl, readCover, writeCover, removeCover };
 })();

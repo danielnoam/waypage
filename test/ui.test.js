@@ -1243,6 +1243,57 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("Recover Notes and Highlights finds a highlight that moved and puts it back", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const C = window.Waypage;
+        await C.store.writePage("rc1", '<!doctype html><html><body><div class="co-body"><p>First paragraph about foxes.</p><p>Second paragraph about hounds.</p></div></body></html>', {});
+        state.pages.unshift({ id: "rc1", title: "Fox article", url: "https://x.test/a", site: "x.test", bytes: 100, savedAt: Date.now(), marks: [{ id: "m1", block: 0, start: 0, endBlock: 0, end: 6, text: "hounds", at: 1 }] });
+        await C.store.writeIndex(state.pages);
+        renderLibrary();
+      });
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Report a problem" }).click();
+      assert.strictEqual(await q.locator(".recover-item").count(), 0, "it looked before it was asked");
+      await q.locator(".recover-go").click();
+      const item = q.locator(".recover-item", { hasText: "hounds" });
+      await item.waitFor();
+      await item.locator("button", { hasText: "Put it back" }).click();
+      await until(q, () => state.pages.find((p) => p.id === "rc1").marks[0].block === 1);
+      await q.locator(".recover-item").waitFor({ state: "detached" });
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Look for deleted notes finds a note whose entry is gone and brings it back as a new one", async () => {
+      const q = await page(browser, 390);
+      // Its files are here, but no library entry names it.
+      await q.evaluate(async () => {
+        const C = window.Waypage;
+        await C.store.writePage("lost1", '<!doctype html><html><body><header class="co-head"><h1>Debate 1</h1></header><div class="co-body"></div></body></html>', {});
+        await C.store.writeNote("lost1", { v: 1, sheets: [{ bg: "paper" }, { bg: "paper" }, { bg: "paper" }] });
+        await C.store.writeInk("lost1", { v: 1, pages: { 1: [{ id: "s1", t: "p", c: "#000", w: 0.004, p: [0.1, 0.1, 0.5, 0.2, 0.2, 0.5] }] } });
+      });
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Report a problem" }).click();
+      assert.strictEqual(await q.locator(".recover-item").count(), 0, "it looked before it was asked");
+      await q.locator(".recover-look").click();
+      const item = q.locator(".recover-item", { hasText: "Debate 1" });
+      await item.waitFor();
+      assert.ok(/3 sheets/.test(await item.innerText()) && /1 stroke/.test(await item.innerText()), await item.innerText());
+      await item.locator("button", { hasText: "Bring back" }).click();
+      await until(q, () => state.pages.some((p) => p.note && p.title === "Debate 1"));
+      const made = await q.evaluate(async () => {
+        const p = state.pages.find((x) => x.note && x.title === "Debate 1");
+        const note = await window.Waypage.store.readNote(p.id);
+        const ink = await window.Waypage.store.readInk(p.id);
+        return { fresh: p.id !== "lost1", sheets: note.sheets.length, strokes: ink.pages[1].length };
+      });
+      assert.deepStrictEqual(made, { fresh: true, sheets: 3, strokes: 1 });
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a Pocket export imports with its tags, archived clips finished", async () => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), "waypage-"));
       const file = path.join(dir, "ril_export.html");

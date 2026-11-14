@@ -73,6 +73,7 @@ src/listen.js       audiobooks' pure parts: chapters from M4B and MP3 tags, tran
 src/pdf.js          PDFs through pdf.js in a locked-down frame
 src/ink.js          drawing over a clip's blocks or a PDF's pages: strokes, layers, undo, what a copy of the PDF is given
 src/notes.js        notes: sheets of paper you draw on, opened through the PDF pages pipeline with a stand-in document; any clip laid out as a PDF to make one
+src/recover.js      Settings › Report a problem › Recover: finds highlights and drawings an update left behind (scan) and puts them back (fix); no page code
 src/pptx.js         PowerPoint decks redrawn on a canvas and written as a PDF (1.49.0)
 src/epub.js         clips as an EPUB 3 book, for e-readers and Send to Kindle
 src/feeds.js        RSS, Atom and JSON Feed, read into one shape
@@ -322,7 +323,21 @@ has its own margins and Dark note (`waypage.noteLook`, `app-reading.js`),
 and only a note is `drawable`; a linked PDF is `convertible`: its pen asks
 for a note, and `notes.fromPdf` keeps a copy of the PDF beside the note
 (`base.pdf`, `store.writeNoteBase`; a browser keeps a Blob in the database,
-at most 100 MB), one sheet to a page, and moves the PDF's old drawings over.
+at most 100 MB), one sheet to a page; the PDF's own drawings stay on the PDF.
+Recover (`recover.js`, Settings › Report a problem) looks for what an update
+left behind: `scan` reads every clip and finds highlights `reader.locateIn`
+can no longer place (a last, words-only try across blocks is in `locate`
+too), drawings by block past the end of the clip, a linked PDF shown as text
+that has drawings, a PDF's `drawn` summary out of step with `ink.json`, and a
+note with fewer sheets than it is drawn on or a PDF that is gone. `fix` puts
+back what has one safe place and stamps a moved highlight `at` now so sync
+keeps it. It runs only when tapped, never when Settings is built.
+Recover also looks for notes gone from the library (`findDeleted`, `bringBack`):
+the folders of GitHub's `notes/` (`sync.noteFolders`, `noteListing`, `noteTitle`)
+and a phone's `pages/<id>` or a browser's `<id>:note` keys that no entry
+names (`store.orphanNotes`, `orphanFiles`). A note comes back as a new one
+(`notes.bring`, a new id), never under its old id, which may carry a deletion
+marker in sync; the old copy is left alone.
 Opening a PDF asks Keep a copy, Read from where it is or Make a note too
 (`noteFromFile`, `fileSheet`), in a browser as well; the library's Show has
 All notes (`filter "notes"`) while a note exists.
@@ -519,7 +534,7 @@ bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js` and `listen.test.js` test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `recover.test.js` and `listen.test.js` test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
 changes Markdown runs just `build.test.js` and `docs.test.js`.
 
 `node tools/shots.js` retakes the README's pictures at 1280 px and 390 px
@@ -673,6 +688,11 @@ adds a line here.
 
 Things that broke once and would again. Check here before touching the
 area.
+- A build from before Notes (1.57.0 and older, and `test-omri-dev`) drops
+  every note when it syncs: `cleanMeta` keeps only entries with an address,
+  so the next merge marks them deleted and removes their folders on the
+  phone. GitHub's `notes/<id>/` is left, which is what Recover's Look for
+  deleted notes reads. Don't sync a library with Notes from such a build.
 
 - The reader's sideways swipe to the next or previous clip (`swipeInput`
   in reader.js, `clipSwipe` in app-reader.js) shares the page with the

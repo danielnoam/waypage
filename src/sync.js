@@ -861,6 +861,31 @@
     if (got.base) size = await C.store.writeNoteBase(id, new Blob([got.base], { type: "application/pdf" }));
     return size;
   }
+  // What GitHub holds of notes (Recover): the ids of notes/'s folders, one
+  // folder's files by name, and the title a note's page was saved with.
+  // Read only; a note's own folder is never touched.
+  async function noteFolders() {
+    if (!cfg) return [];
+    const r = await call(contents("notes") + "?ref=" + encodeURIComponent(cfg.branch), { headers: headers() });
+    if (r.status === 404) return [];
+    if (!r.ok) throw await fail(r);
+    const list = await r.json();
+    return (Array.isArray(list) ? list : []).filter((f) => f && f.type === "dir" && /^[a-z0-9]{6,20}$/.test(f.name)).map((f) => f.name);
+  }
+  async function noteListing(id) {
+    const r = await call(contents("notes/" + id) + "?ref=" + encodeURIComponent(cfg.branch), { headers: headers() });
+    if (r.status === 404) return {};
+    if (!r.ok) throw await fail(r);
+    const out = {};
+    for (const f of await r.json()) if (f && f.type === "file" && NOTE_FILE.test(f.name)) out[f.name] = f.sha;
+    return out;
+  }
+  async function noteTitle(id) {
+    const html = await readText("pages/" + id + ".html").catch(() => null);
+    if (!html) return "";
+    const h1 = new DOMParser().parseFromString(html, "text/html").querySelector("h1");
+    return h1 ? h1.textContent.trim().slice(0, 300) : "";
+  }
 
   // The page's HTML with its pictures marked missing: the other device
   // gets them from the site itself. A file's clip takes its pictures with
@@ -1758,7 +1783,7 @@
     // A note whose PDF is over the cap stays on its device (2026-11).
     tooBig: (p) => !!(p && p.note && (p.noteBytes || 0) > NOTE_BASE_MAX),
     merge, mergeTags, mergeMarks, mergeInk, mergeListen, mergeOutside, cleanOutside, outsideOf, outsideOnto, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
-    share, clean, same, urlKey, sameUrl, peek, poll, parseHistory, history, target, printOf, libraryPrint, distinct, revertPlan, revertChanges, inkDiff, noteFilesIn, noteFilesKeep, readText, readBytes,
+    share, clean, same, urlKey, sameUrl, peek, poll, parseHistory, history, target, printOf, libraryPrint, distinct, revertPlan, revertChanges, inkDiff, noteFilesIn, noteFilesKeep, noteFolders, noteListing, noteTitle, readText, readBytes,
     // This device's name in the commits it writes, and a one-off line for
     // the sync after a put-back (cleared when that sync ends).
     set device(v) { who = String(v || "").replace(/[\r\n·]/g, " ").trim().slice(0, 40); },
