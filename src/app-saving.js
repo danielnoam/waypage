@@ -1762,9 +1762,8 @@ function paintPlace() {
   document.querySelector('label[for="saveUrl"]').textContent = feedsOn ? "Site or feed" : mailOn ? "New address's name" : "Page link";
   $("saveForm").querySelector(".btn-primary").textContent = feedsOn ? "Follow" : mailOn ? "Make" : "Save";
   $("severalBtn").hidden = feedsOn || mailOn || findOn;
-  $("viewBtn").hidden = !findOn && !(feedsOn ? siteFeeds().length : mailOn ? mailBoxes().length : state.place === "library" && state.pages.length);
+  $("viewBtn").hidden = !findOn && !(state.place === "library" && state.pages.length);
   if (feedsOn || mailOn || marksOn || readOn || findOn) { if (state.query) clearSearch(); }
-  paintSearchBtn();
   if (feedsOn) renderFeeds();
   else if (mailOn) renderNewsletters();
   else if (marksOn) renderHighlights();
@@ -1809,7 +1808,6 @@ function renderFeeds() {
   const nodes = [];
   if (!feeds.length) {
     leavePostSearch();
-    paintSearchBtn();
     nodes.push(el("div", { class: "empty" },
       el("h2", { class: "empty-title" }, "Follow the sites you read"),
       el("p", { class: "empty-text" }, C.platform.native

@@ -15,10 +15,7 @@
   if (typeof theme === "string") root.dataset.theme = theme;
   if (read("waypage.animations") === false) root.dataset.motion = "off";
   // Search shows once there are clips (renderLibrary); if there were last
-  // time, it holds its place in the bar until the library is read.
+  // time, it holds its place at the top until the library is read.
   const starts = read("waypage.startTimes");
   if (Array.isArray(starts) && starts.length && starts[starts.length - 1].clips > 0) root.dataset.clips = "had";
-  // With the library's search icon off (View options), the field holds
-  // its place instead of the icon.
-  if ((read("waypage.searchIcon") || {}).library === false) root.setAttribute("data-search-bar", "");
 })();

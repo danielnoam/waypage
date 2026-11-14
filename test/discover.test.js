@@ -557,32 +557,19 @@ async function phone(browser) {
       await ctx.close();
     });
 
-    await test("each place's Search icon switch hides search behind the icon, or keeps the field shown", async () => {
+    await test("every place shows its search field, with no search icon or switch for it", async () => {
       const { ctx, p } = await phone(browser);
       const shown = (sel) => p.evaluate((s) => { const e = document.querySelector(s); return !!e && !e.hidden && e.getClientRects().length > 0; }, sel);
+      assert.strictEqual(await p.locator("#searchBtn").count(), 0);
       await p.evaluate(() => goPlace("discover"));
       await p.locator("#discover .dz-search").waitFor();
-      // Discover starts with the field shown and no icon, as before.
       assert.strictEqual(await shown("#discover .dz-search"), true);
-      assert.strictEqual(await shown("#searchBtn"), false);
       await p.locator("#viewBtn").click();
-      const sw = p.locator('#menuSheet:not([hidden]) .row', { hasText: "Search icon" }).locator(".switch");
-      await sw.waitFor();
-      assert.strictEqual(await sw.isChecked(), false);
-      await sw.click();
+      await p.locator("#menuSheet:not([hidden]) .row").first().waitFor();
+      assert.strictEqual(await p.locator('#menuSheet:not([hidden]) .row', { hasText: "Search icon" }).count(), 0);
       await p.evaluate(() => history.back());
       await p.waitForFunction(() => !state.menu);
-      assert.strictEqual(await shown("#discover .dz-search"), false);
-      assert.strictEqual(await shown("#searchBtn"), true);
-      await p.locator("#searchBtn").click();
-      assert.strictEqual(await shown("#discover .dz-search"), true);
-      assert.deepStrictEqual(await p.evaluate(() => JSON.parse(localStorage.getItem("waypage.searchIcon"))), { discover: true });
-      // Feeds: the icon starts on; off, the field is always there.
       await p.evaluate(() => { feeds = [{ url: "https://example.org/feed.xml", title: "Slow Air", days: 7, mode: "show", checkedAt: Date.now(), items: [{ id: "a", url: "https://example.org/a", title: "A post", date: Date.now() }] }]; goPlace("feeds"); });
-      assert.strictEqual(await shown("#searchBtn"), true);
-      assert.strictEqual(await shown("#feeds .post-search"), false);
-      await p.evaluate(() => setSearchIcon("feeds", false));
-      assert.strictEqual(await shown("#searchBtn"), false);
       assert.strictEqual(await shown("#feeds .post-search"), true);
       await ctx.close();
     });

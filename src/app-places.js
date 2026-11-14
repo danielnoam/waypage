@@ -585,7 +585,6 @@ function renderNewsletters() {
   const nodes = [];
   if (!boxes.length) {
     leavePostSearch();
-    paintSearchBtn();
     nodes.push(el("div", { class: "empty" },
       el("h2", { class: "empty-title" }, "Read newsletters here"),
       el("p", { class: "empty-text" }, "Make an email address for newsletters and sign up with it. Each email arrives here, and is saved for reading offline."),
