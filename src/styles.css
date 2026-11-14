@@ -3203,3 +3203,9 @@ body.listen-bar-up .library, body.listen-bar-up .screen-body { padding-bottom: c
 .anki-field .tag-input, .anki-field .mark-note-field { width: 100%; }
 .anki-sheet { display: flex; flex-direction: column; gap: var(--s-3); }
 .sel-anki[hidden] { display: none; }
+
+.anki-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
+.anki-fill { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.anki-fill .field-pick { min-width: 0; }
+.anki-pack { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.anki-found { margin: 0; }

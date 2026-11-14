@@ -153,6 +153,17 @@ test("labels read as minutes, hours, days, months", () => {
     assert.strictEqual(A.info(b.id).state, "relearn");
   });
 
+  await t("fill takes the first entry from the pack's dictionary, and says what it was found under", async () => {
+    const asked = [];
+    window.Waypage.dict = { lookup: async (term, only) => { asked.push([term, only]);
+      return term === "Häusern" ? [{ dict: "De", word: "Haus", parts: [{ type: "m", text: "noun · das Haus · pl. Häuser\n1. house" }] }] : []; },
+      show: () => null };
+    assert.deepStrictEqual(await A.fill("Häusern", "d1"), { word: "Haus", text: "noun · das Haus · pl. Häuser\n1. house" });
+    assert.deepStrictEqual(asked, [["Häusern", "d1"]]);
+    assert.strictEqual(await A.fill("Katze", "d1"), null);
+    assert.strictEqual(await A.fill("Haus", null), null, "no pack, nothing to ask");
+  });
+
   await t("renaming, moving and deleting keep the decks straight", async () => {
     const d1 = A.makeDeck("One"), d2 = A.makeDeck("Two");
     assert.strictEqual(A.makeDeck("one").id, d1.id, "the same name is the same deck");

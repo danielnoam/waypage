@@ -1157,6 +1157,8 @@ const CREDITS = {
     { name: "Parakeet TDT 0.6B v3", by: "NVIDIA", licence: "CC BY 4.0", url: "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3", note: "Better transcripts of audiobooks, downloaded" },
     { name: "Moonshine", by: "Useful Sensors", licence: "MIT", url: "https://github.com/usefulsensors/moonshine", note: "Fast transcripts of audiobooks, downloaded" },
     { name: "Whisper", by: "OpenAI", licence: "MIT", url: "https://github.com/openai/whisper", note: "Transcripts in most languages, downloaded" },
+    { name: "FSRS", by: "open-spaced-repetition", licence: "MIT", url: "https://github.com/open-spaced-repetition/fsrs4anki", note: "Schedules Anki's cards; written out in the app from the published algorithm" },
+    { name: "Wiktionary", by: "Wiktionary contributors, through Wiktextract (kaikki.org)", licence: "CC BY-SA 4.0", url: "https://kaikki.org", note: "Word meanings in Anki's language packs, downloaded" },
     { name: "Piper voices", by: "Open Home Foundation", licence: "CC0, CC BY 4.0", url: "https://github.com/OHF-Voice/piper1-gpl", note: "Voices for Narrate, downloaded; French from the SIWIS corpus (CC BY 4.0)" },
   ],
   fonts: [

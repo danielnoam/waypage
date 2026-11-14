@@ -9,6 +9,7 @@
 // other places; Escape or the view's own back goes up a level.
 
 const ANKI_DECK_KEY = "waypage.anki.lastDeck";
+const ANKI_PACK_KEY = "waypage.anki.lastPack";
 const ankiStamp = () => Date.now();
 
 // ---- The selection bar's button and the card sheet ----
@@ -49,6 +50,32 @@ function ankiCardSheet(n) {
     options: [...decks.map((d) => ({ value: d.id, label: d.name })), { value: "__new", label: "New deck…" }],
     onpick: (v) => { deck = v; name.hidden = v !== "__new"; if (v === "__new") name.focus(); } });
   name.hidden = deck !== "__new";
+  // Fill from a language pack (Settings › Extensions › Anki › Languages):
+  // the entry for the front becomes the back. Run once on opening when the
+  // back is empty, and again whenever Fill is tapped.
+  const have = C.ext.packs("anki").filter((p) => p.have);
+  let pack = have.some((p) => p.id === load(ANKI_PACK_KEY, "")) ? load(ANKI_PACK_KEY, "") : have[0] && have[0].id;
+  const found = el("p", { class: "meta anki-found", role: "status", hidden: "" });
+  const doFill = async (quiet) => {
+    const p = have.find((x) => x.id === pack);
+    if (!p) return;
+    found.hidden = false;
+    found.textContent = "Looking in " + p.title + "…";
+    let hit = null;
+    try { hit = await C.anki.fill(front.value, C.ext.packDict("anki", pack)); } catch (e) { hit = null; }
+    if (!front.isConnected) return;
+    if (!hit) { found.textContent = quiet ? "" : "Not in " + p.title + "."; found.hidden = !found.textContent; return; }
+    if (quiet && back.value.trim()) { found.hidden = true; return; }
+    back.value = hit.text;
+    found.replaceChildren(document.createTextNode("From " + p.title + (hit.word.toLowerCase() !== front.value.trim().toLowerCase() ? " · as " + hit.word + " " : "")));
+    if (hit.word.toLowerCase() !== front.value.trim().toLowerCase()) found.append(el("button", { class: "btn-text", type: "button", onclick: () => { front.value = hit.word; found.hidden = true; } }, "Use " + hit.word));
+  };
+  const fillControls = have.length ? el("div", { class: "anki-fill" },
+    have.length > 1 ? dropdown({ label: "Language", cls: "field-pick", value: pack, options: have.map((p) => ({ value: p.id, label: p.title })), onpick: (v) => { pack = v; store(ANKI_PACK_KEY, v); } })
+      : el("span", { class: "anki-pack meta" }, have[0].title),
+    el("button", { class: "btn-small", type: "button", onclick: () => doFill(false) }, "Fill")) : null;
+  const fillRow = fillControls;
+  if (fillRow) afterStart(() => { if (!back.value.trim()) doFill(true); });
   const add = () => {
     try {
       const d = deck === "__new" ? C.anki.makeDeck(name.value) : C.anki.deck(deck);
@@ -63,7 +90,7 @@ function ankiCardSheet(n) {
     el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, "Anki card")),
     el("label", { class: "anki-field" }, el("span", { class: "overline" }, "Front"), front),
     el("div", { class: "anki-field" }, el("span", { class: "overline" }, "Deck"), pick, name),
-    el("label", { class: "anki-field" }, el("span", { class: "overline" }, "Back"), back),
+    el("div", { class: "anki-field" }, el("div", { class: "anki-head" }, el("span", { class: "overline" }, "Back"), fillControls), back, found),
     el("label", { class: "anki-field" }, el("span", { class: "overline" }, "Sentence"), context),
     el("div", { class: "export-actions" },
       el("button", { class: "btn-quiet", type: "button", onclick: () => closeSheet() }, "Cancel"),

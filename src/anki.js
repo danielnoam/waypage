@@ -17,6 +17,7 @@
 //   answer(id, grade, ms, now)  the card's new schedule
 //   undo()                      takes the last answer back; the card's id
 //   info(id)                    the card's schedule: { state, due, stability, ... }
+//   fill(term, dictId)          { word, text } from a language pack's dictionary, or null
 (function () {
   const C = window.Waypage;
   const F = () => C.fsrs;
@@ -235,6 +236,23 @@
   }
   const canUndo = () => !!lastAnswer;
 
-  C.anki = { load, unload, decks, deck, makeDeck, renameDeck, setOptions, removeDeck, cards, card, add, edit, remove, suspend, bury,
+  // ---- Language packs ----
+  // A word's entry in one language pack (a StarDict dictionary: src/dict.js),
+  // as the text for a card's back. `word` is the headword it was found
+  // under, which is not the selection when that was an inflected form.
+  const plain = (part) => {
+    if ("mlgt".includes(part.type)) return part.text;
+    const n = C.dict.show(part);
+    return n ? n.textContent : "";
+  };
+  async function fill(term, dictId) {
+    if (!dictId) return null;
+    const found = await C.dict.lookup(term, dictId);
+    if (!found.length) return null;
+    const text = found[0].parts.map(plain).map((t) => t.trim()).filter(Boolean).join("\n\n");
+    return text ? { word: found[0].word, text } : null;
+  }
+
+  C.anki = { fill, load, unload, decks, deck, makeDeck, renameDeck, setOptions, removeDeck, cards, card, add, edit, remove, suspend, bury,
     counts, queue, preview, answer, undo, canUndo, info, dayStart, dayEnd, DEFAULTS };
 })();
