@@ -7,6 +7,7 @@ All notable changes to Carry-on. Newest first.
 
 ### Added
 - Settings › Appearance › Sidebar: turn off the fold under Library, Feeds or Newsletters so each is a single row, and pick what heads Library's fold: the 3 favourites marked last, the 3 clips read last, or nothing.
+- Swipe sideways in the reader to go to the next or previous clip in its collection. In Pages, turn past the last or first page to do the same. Switch it off under Aa › Layout › Swipe between clips.
 - Sync history: in Settings, GitHub sync, a list of earlier versions of your
   library (when, how many clips, which device). Put back makes your library
   as it was then on every device: clips deleted since come back, clips saved
