@@ -11,7 +11,7 @@
 const PICTURES_KEY = "waypage.syncPictures";
 let syncTimer = null, syncQueue = load(PICTURES_KEY, null) || [], fetchingPictures = false;
 const keepQueue = () => store(PICTURES_KEY, syncQueue.length ? [...new Set(syncQueue)] : null);
-const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "turn", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks", "noShare", "folderNoShare"];
+const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "turn", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks", "noShare", "folderNoShare", "folderTagNew"];
 // While a run of saves is on, sync waits longer (1.2.0): each sync is a
 // merge of the whole library, and one after every page landing was a
 // stutter every few seconds.
@@ -1052,6 +1052,7 @@ const LONG_LIST = 50;
 // The site's tags join the picked ones when this is on; off by default,
 // and remembered.
 const SITE_TAGS_KEY = "waypage.saveSiteTags";
+const TAG_NEW_KEY = "waypage.saveTagNew";
 
 function renderBatch(text, preset, from, siteTags) {
   let folder = preset;
@@ -1062,6 +1063,7 @@ function renderBatch(text, preset, from, siteTags) {
   let kind = preset && folderPages(preset).some((p) => p.comic) ? "comic" : "article";
   if (kind === "comic") mode = "full";
   const tags = [];
+  let drawTagNew = null;
   const area = el("textarea", { class: "batch-links", rows: "6", "aria-label": "Links, one a line", spellcheck: "false",
     autocapitalize: "off", autocomplete: "off", dir: "ltr" });
   area.value = text;
@@ -1106,6 +1108,7 @@ function renderBatch(text, preset, from, siteTags) {
     count.textContent = links.length ? links.length + (links.length === 1 ? " link" : " links") : "No links yet. Paste them here, one a line.";
     go.textContent = n ? "Save " + countLine(n) + (folder ? " into " + folder : "") : links.length ? "Nothing new to save" : "Save";
     go.disabled = !n;
+    if (drawTagNew) drawTagNew();
   };
   const pick = (f, typed) => { folder = f; if (!typed) input.value = ""; sync(); };
   // The collection: None, one already there, or a new one typed in.
@@ -1151,6 +1154,7 @@ function renderBatch(text, preset, from, siteTags) {
         ...tags.map((t) => el("button", { class: "chip on", type: "button", "aria-label": "Remove tag " + t,
           onclick: () => { tags.splice(tags.indexOf(t), 1); drawTags(); } }, t, el("span", { class: "chip-x", "aria-hidden": "true" }, "×")))) : null,
       allTags().length ? tagPick : null, tagInput);
+    if (drawTagNew) drawTagNew();
     if (focus === "input") tagInput.focus({ preventScroll: true });
     else if (focus === "pick" && allTags().length) tagPick.querySelector(".dropdown-btn").focus({ preventScroll: true });
   };
@@ -1182,6 +1186,15 @@ function renderBatch(text, preset, from, siteTags) {
     useSite(on);
   };
   setSiteTags(siteTags);
+  // Clips that join the collection later (Website sync, Next, a move)
+  // take the tags its clips share.
+  let tagNew = load(TAG_NEW_KEY, true);
+  const tagNewBox = el("div", { class: "batch-tag-new" });
+  drawTagNew = () => {
+    tagNewBox.replaceChildren(folder && tags.length ? el("div", { class: "group" },
+      switchRow("Tag new clips too", "Chapters added later get these tags", tagNew, (v) => { tagNew = v; store(TAG_NEW_KEY, v); })) : "");
+  };
+  drawTagNew();
   area.addEventListener("input", sync);
   input.addEventListener("input", () => pick(cleanTag(input.value) ? folderName(input.value) : null, true));
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
@@ -1222,7 +1235,7 @@ function renderBatch(text, preset, from, siteTags) {
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, "Collection"),
       el("div", { class: "tag-edit" }, folderPick, input),
       el("p", { class: "meta" }, "Clips in a collection keep the order of the links.")),
-    el("section", { class: "settings-section" }, el("h2", { class: "overline" }, "Tags"), siteBox, tagBox),
+    el("section", { class: "settings-section" }, el("h2", { class: "overline" }, "Tags"), siteBox, tagBox, tagNewBox),
     go);
   form.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -1232,7 +1245,7 @@ function renderBatch(text, preset, from, siteTags) {
     if (!urls.length) return;
     if (urls.length > LONG_LIST && !confirm("Save " + urls.length + " clips? They save one at a time, so a list this long takes a while. Pause and Stop are on its card.")) return;
     history.back();
-    saveAll(skipSaved ? all : urls, folder, tags, mode, skipSaved, kind, source);
+    saveAll(skipSaved ? all : urls, folder, tags, mode, skipSaved, kind, source, !!(folder && tags.length && tagNew));
   });
   $("batchBody").replaceChildren(form);
   if (folder) choose(folder);

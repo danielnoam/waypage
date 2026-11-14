@@ -4655,6 +4655,28 @@ c("bk1", { at: 0.01 })]);
       await open();
       await q.locator(".batch-site-tags .row").waitFor();
       assert.strictEqual(await q.locator("#batchView .chip.on").count(), 4, "on stays on for the next story");
+      // With a collection and tags, its later clips can take them too (on by default).
+      const later = q.locator(".batch-tag-new .row");
+      assert.strictEqual(await later.locator(".choice-label").textContent(), "Tag new clips too");
+      assert.strictEqual(await later.locator("input").isChecked(), true);
+      // A clip joining a collection marked so takes the tags all its clips share.
+      const joined = await q.evaluate(() => {
+        const a = { id: "a1", folder: "A Story", folderTagNew: true, tags: ["Fantasy", "Magic"] };
+        const b = { id: "b1", folder: "A Story", folderTagNew: true, tags: ["fantasy", "Action"] };
+        const c = { id: "c1", tags: ["Mine"] };
+        const was = state.pages;
+        state.pages = [a, b, c];
+        joinFav(c, "A Story");
+        const out = { tags: c.tags, on: c.folderTagNew };
+        setFolderTagNew("A Story", false);
+        const d = { id: "d1" };
+        state.pages.push(d);
+        joinFav(d, "A Story");
+        out.off = d.tags || [];
+        state.pages = was;
+        return out;
+      });
+      assert.deepStrictEqual(joined, { tags: ["Mine", "Fantasy"], on: true, off: [] });
       // Links with no story page behind them show no row.
       await q.goBack();
       await until(q, () => !state.batch);

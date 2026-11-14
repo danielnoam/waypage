@@ -185,6 +185,9 @@ The same read gives the page's own tags (`pageTags`: a site rule's
 `tags`, else `article:tag` meta, ten at most) as `siteTags`; Save with
 options offers them as one switch, off until turned on, remembered in
 `waypage.saveSiteTags`.
+A collection marked "Tag new clips" (`folderTagNew` on its clips, like
+`folderFav`; synced) gives a clip joining it the tags all its clips
+share (`joinTags`, run from `joinFav` and on every new save into it).
 
 ## Where clips live
 
