@@ -720,7 +720,6 @@ async function removeMailBox(f) {
 // history entry. Feeds shows the three touched last (0.28.1); Library
 // the favourite collections, then the favourite clips (1.14.0).
 const SIDE_MAX = 3;
-const FAV_MAX = 6;
 function sideCover(name) {
   const list = folderPages(name);
   const src = coverUrl(list) || list.map(thumbUrl).find(Boolean);
@@ -796,9 +795,22 @@ const mailMark = (f) => {
 // Library and Feeds fold their items away under a small arrow (1.43.2),
 // remembered on this device. The rows slide shut on the control spring.
 const SIDE_FOLD_KEY = "waypage.sideFolded";
+// Settings › Appearance › Sidebar (2026-11, Daniel's ask): each fold can
+// be turned off, leaving the place as a single row; and what heads
+// Library's fold: the 3 favourites marked last, the 3 clips read last,
+// or nothing.
+const SIDE_FOLDS_KEY = "waypage.sideFolds";
+const SIDE_TOP_KEY = "waypage.sideTop";
+const sideFolds = (name) => load(SIDE_FOLDS_KEY, {})[name] !== false;
+const sideTop = () => load(SIDE_TOP_KEY, "favourites");
+function sideTopItems(favs) {
+  const top = sideTop();
+  if (top === "recent") return state.pages.filter((p) => p.readAt).sort((a, b) => b.readAt - a.readAt).slice(0, SIDE_MAX).map((p) => ({ page: p }));
+  return top === "off" ? [] : favs.slice(0, SIDE_MAX);
+}
 function sideFold(name, head, subs) {
   subs = subs.filter(Boolean);
-  if (!subs.length) return [head];
+  if (!subs.length || !sideFolds(name)) return [head];
   const folded = !!load(SIDE_FOLD_KEY, {})[name];
   const group = el("div", { class: "side-group" + (folded ? " folded" : ""), id: "sideGroup-" + name }, el("div", { class: "side-group-in" }, ...subs));
   group.inert = folded;
@@ -843,7 +855,7 @@ function renderSide() {
       inLib && (state.part || state.folder || state.filter === "favourites")
         ? toLibrary().then(() => { if (state.filter === "favourites") setFilter("all"); return goPlace("library"); })
         : goPlace("library")), [
-    ...favs.slice(0, FAV_MAX).map((f) => f.folder
+    ...sideTopItems(favs).map((f) => f.folder
       ? item(sideCover(f.folder), f.folder, state.folder === f.folder, count(freshCount(f.folder)), () => openFromSide(f.folder), "side-sub")
       : item(clipCover(f.page), f.page.title, state.open === f.page, null, () => fromSide().then(() => openPage(f.page.id)), "side-sub")),
     // Favourites, always there (2026-11, Daniel's ask): the library's

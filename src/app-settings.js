@@ -252,6 +252,28 @@ function looksGroup() {
       switchRow("Animations", "Off: everything changes at once", !M.still(), (on) => { store(MOTION_KEY, on); M.setStill(!on); })));
 }
 
+// The sidebar's folds (2026-11, Daniel's ask): each one can be off, and
+// Library's picks what heads it. The pick only shows while Library folds.
+function sidebarGroup() {
+  const foldRow = (name, label, note) => switchRow(label, note, sideFolds(name), (on) => {
+    store(SIDE_FOLDS_KEY, { ...load(SIDE_FOLDS_KEY, {}), [name]: on });
+    if (name === "library") top.hidden = !on;
+    if (sideShown()) renderSide();
+  });
+  const top = pickRow({ label: "Top of Library", get: sideTop,
+    set: (v) => { store(SIDE_TOP_KEY, v); if (sideShown()) renderSide(); },
+    options: [{ value: "favourites", label: "Favourites", note: "The 3 favourites marked last" },
+      { value: "recent", label: "Recent", note: "The 3 clips read last" },
+      { value: "off", label: "Off", note: "Only Favourites and the parts" }] });
+  top.hidden = !sideFolds("library");
+  return section("Sidebar", null,
+    el("div", { class: "group" },
+      foldRow("library", "Library folds out", "Favourites, Collections, Clips…"),
+      top,
+      foldRow("feeds", "Feeds folds out", "The 3 feeds updated last"),
+      foldRow("newsletters", "Newsletters folds out", "The 3 addresses with the latest emails")));
+}
+
 // Themes as a grid of swatches (1.48.0), two rows instead of ten.
 function themeGroup() {
   const g = SETTINGS[0];
@@ -1171,7 +1193,7 @@ const updateOut = () => UPD_OUT.includes(upd.phase) && upd.latest;
 // Settings sorted by what you came to change (1.12.0): how it looks,
 // how you read, the library; then saving, sync and storage; then About.
 const SECTIONS = {
-  appearance: { title: "Appearance", build: () => [themeGroup(), autoGroup(), readerThemeGroup(), looksGroup()],
+  appearance: { title: "Appearance", build: () => [themeGroup(), autoGroup(), readerThemeGroup(), looksGroup(), sidebarGroup()],
     value: () => themeName(state.theme) },
   reading: { title: "Reading", build: () => [readingGroup(), fontsGroup(), dictsGroup(), aloudGroup()],
     value: () => { const r = readingPrefs(null); return (FONTS.find((f) => f.value === r.font) || FONTS[0]).label + " · " + r.size + " px"; } },
@@ -1234,6 +1256,7 @@ const FIND_ALIASES = {
   Version: "update check app", Changelog: "what's new release notes", "Continue reading": "last clip resume",
   Audiobooks: "audio listen m4b mp3 read along", Transcripts: "transcribe speech to text audiobook read along",
   "Test builds": "beta branch preview pull request",
+  Sidebar: "fold collapse collapsible menu side recent favourites",
 };
 let settingsIdx = null;
 const settingsQuery = () => { const i = $("settingsSearch"); return i ? i.value.trim() : ""; };
