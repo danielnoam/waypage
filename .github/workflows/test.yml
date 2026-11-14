@@ -3,6 +3,10 @@
 # The app builds (android.yml, ios.yml) skip Markdown-only changes; this
 # runs on everything (Markdown-only PRs run just the Markdown tests),
 # since build.test.js checks CHANGELOG.md too.
+#
+# The suite is spread over four machines (TEST_SHARD, test/run-all.js);
+# ui.test.js is most of the time and is split between them. The job named
+# "Tests" waits for all four, so it stays the one check main requires.
 name: Tests
 
 on:
@@ -19,25 +23,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  tests:
-    name: Tests
+  # A pull request that only changes Markdown runs just the two tests that
+  # read Markdown (CHANGELOG.md, ARCHITECTURE.md): seconds, not the whole
+  # browser suite, and still the Tests check main requires.
+  scope:
+    name: Scope
     runs-on: ubuntu-latest
+    outputs:
+      md: ${{ steps.scope.outputs.md }}
+    steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'pull_request'
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Markdown only?
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" != "pull_request" ] || git diff --name-only "$BASE" HEAD | grep -qv '\.md$'; then echo "md=false" >> "$GITHUB_OUTPUT"; else echo "md=true" >> "$GITHUB_OUTPUT"; fi
+
+  shard:
+    name: Slice ${{ matrix.shard }} of 4
+    needs: scope
+    if: needs.scope.outputs.md != 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          fetch-depth: 0
-
-      # A pull request that only changes Markdown runs just the two tests
-      # that read Markdown (CHANGELOG.md, ARCHITECTURE.md): seconds, not the
-      # whole browser suite, and still the Tests check main requires.
-      - name: Markdown only?
-        id: scope
-        if: github.event_name == 'pull_request'
-        env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          if git diff --name-only "$BASE" HEAD | grep -qv '\.md$'; then echo "md=false" >> "$GITHUB_OUTPUT"; else echo "md=true" >> "$GITHUB_OUTPUT"; fi
 
       - uses: actions/setup-node@v4
         with:
@@ -50,13 +70,41 @@ jobs:
       # ui.test.js and drive.test.js skip themselves without Playwright;
       # here they must run, so it's installed with its Chromium.
       - name: Install Playwright
-        if: steps.scope.outputs.md != 'true'
         run: |
           npm install --no-save playwright@1.63.0
           npx playwright install --with-deps chromium
 
       - run: node test/run-all.js
-        if: steps.scope.outputs.md != 'true'
+        env:
+          TEST_SHARD: ${{ matrix.shard }}/4
 
+  tests:
+    name: Tests
+    needs: [scope, shard]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        if: needs.scope.outputs.md == 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        if: needs.scope.outputs.md == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        if: needs.scope.outputs.md == 'true'
       - run: node test/build.test.js && node test/docs.test.js
-        if: steps.scope.outputs.md == 'true'
+        if: needs.scope.outputs.md == 'true'
+
+      # A skipped or failed slice must fail this job: a required check that
+      # is skipped would count as passed.
+      - name: Every slice passed
+        if: needs.scope.outputs.md != 'true'
+        env:
+          SCOPE: ${{ needs.scope.result }}
+          SHARDS: ${{ needs.shard.result }}
+        run: |
+          echo "scope: $SCOPE, slices: $SHARDS"
+          [ "$SCOPE" = "success" ] && [ "$SHARDS" = "success" ]

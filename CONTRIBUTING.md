@@ -17,6 +17,9 @@ node server.js          # http://localhost:5173 (start.cmd on Windows)
 node test/run-all.js    # the whole test suite
 ```
 
+How the tests are laid out, run in CI and retake the README's pictures:
+[ARCHITECTURE.md › Tests and screenshots](ARCHITECTURE.md#tests-and-screenshots).
+
 Nothing to install for the web app. `npm ci` is only needed for the native
 builds (`tools/build-www.js`, Capacitor) and for `test/build.test.js`,
 which fails without `node_modules/@capacitor`.
@@ -234,7 +237,8 @@ into the GitHub release notes. Only a release PR edits CHANGELOG.md.
 **How a change gets in:** `main` takes only pull requests. Push a
 branch, open a PR, and merge it when the **Tests** check is green
 (`.github/workflows/test.yml` runs `node test/run-all.js` with
-Playwright on every PR and on `main`; a PR that only changes Markdown
+Playwright on every PR and on `main`, split over four machines, see
+[ARCHITECTURE.md › Tests and screenshots](ARCHITECTURE.md#tests-and-screenshots); a PR that only changes Markdown
 runs just `build.test.js` and `docs.test.js`, which read it). No review is required: anyone
 with write access merges on green, and Daniel decides who has write
 access. A PR from a fork runs the tests too, but without the repo's
