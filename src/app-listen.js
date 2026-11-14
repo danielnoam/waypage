@@ -80,7 +80,7 @@ async function partLength(part, file) {
 
 // One sound file (`file` from the picker, `ref` its lasting permission).
 async function addAudiobook(file, ref) {
-  if (!ref) { toast("Waypage plays an audiobook from where it is, so it needs lasting access. Open it with Open a file."); return; }
+  if (!ref) { toast("Waypage plays an audiobook from where it is, so it needs lasting access. Add it with Add a file."); return; }
   const head = new Uint8Array(await file.slice(0, 64).arrayBuffer());
   const kind = L.sniff(head, file.name) || "mp3";
   const dup = state.pages.find((p) => isAudiobook(p) && p.file && p.file.name === file.name && p.file.size === file.size);
@@ -112,16 +112,14 @@ async function folderCover(all) {
   } catch (e) { return null; }
 }
 
-// A folder of sound files, one book (Android): in name order, each a
-// chapter unless a file has chapters of its own.
-async function addAudiobookFolder() {
-  let got = null;
-  try { got = await C.platform.files.pickFolder(); } catch (e) { got = null; }
-  if (!got) return;
-  const scan = await C.platform.files.scan(got.ref);
+// A folder's sound files, one book (the app): in name order, each a
+// chapter unless a file has chapters of its own. `got` and `scan` come
+// from Add a folder (addFolder). Resolves to true when the folder is
+// in use by an audiobook, so its permission is kept.
+async function addAudiobookFolder(got, scan) {
   const files = L.inOrder(scan.files || []);
-  if (!scan.ok || !files.length) { toast("There are no sound files in " + got.name + "."); C.platform.files.release(got.ref); return; }
-  if (state.pages.some((p) => isAudiobook(p) && p.link === got.ref)) { toast("Already in your library"); return; }
+  if (!files.length) return false;
+  if (state.pages.some((p) => isAudiobook(p) && p.link === got.ref)) { toast("Already in your library"); return true; }
   toast("Adding “" + (scan.name || got.name) + "”, " + files.length + " files…");
   const parts = [], chapters = [];
   // Named for the folder (a file's own title is its chapter's), with the
@@ -149,7 +147,7 @@ async function addAudiobookFolder() {
     parts.push(part);
     at += dur;
   }
-  if (!parts.length) { toast("Waypage can't play the files in " + got.name + "."); C.platform.files.release(got.ref); return; }
+  if (!parts.length) { toast("Waypage can't play the files in " + got.name + "."); return false; }
   const fp = await sha(parts.map((p) => p.name + ":" + p.size).join("|"));
   const size = parts.reduce((s, p) => s + p.size, 0);
   const meta = await newAudiobook({
@@ -157,7 +155,8 @@ async function addAudiobookFolder() {
     file: { name: (scan.name || got.name).slice(0, 200), kind: "audio", ext: L.extOf(parts[0].name) || "mp3", size, fp }, link: got.ref,
     audio: { parts, chapters, dur: at, folder: true },
   }, cover);
-  arrived(meta);
+  await arrived(meta);
+  return true;
 }
 
 // The library entry and its page: the chapters until there are words.
@@ -1165,7 +1164,7 @@ function listenSheetPart() {
   return part;
 }
 function audiobookSections() {
-  const adding = el("p", { class: "footnote" }, "Open an M4B or MP3 with Open a file" + (C.platform.files.canPickFolder ? ", or a folder of them with Open an audiobook folder" : "") + ". It's played from where it is, and shows under Files.");
+  const adding = el("p", { class: "footnote" }, "Add an M4B or MP3 with Add a file" + (C.platform.files.canPickFolder ? ", or a folder of them with Add a folder" : "") + ". It's played from where it is, and shows under Files.");
   if (!A.canTranscribe) return [listeningGroup(), adding, el("p", { class: "footnote" }, "Reading along with a book or a transcript is in the Android app.")];
   const slot = el("div", { class: "kokoro-slot" }, el("p", { class: "footnote" }, "Looking…"));
   fillTranscripts(slot);

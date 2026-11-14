@@ -3802,6 +3802,61 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("Add a folder: the Add page's three rows, each book in the folder added on its own in its folder's collection, its sound files handed on as one audiobook", async () => {
+      const q = await page(browser, 390);
+      const bytes = [...epubBytes()];
+      await q.evaluate(() => {
+        Object.defineProperty(window.Waypage.platform.files, "canPickFolder", { get: () => true });
+        window.released = [];
+      });
+      await q.click("#severalBtn");
+      assert.deepStrictEqual(await q.locator("#batchView .batch-file .row-label").allTextContents(), ["Add a file", "Add a folder", "New note"]);
+      const got = await q.evaluate(async (b) => {
+        const F = window.Waypage.platform.files;
+        const book = (n) => new File([new Uint8Array(b)], n, { type: "application/epub+zip" });
+        const files = { "content://f/a.epub": book("a.epub"), "content://f/b.epub": book("b.epub") };
+        F.pickFolder = async () => ({ ref: "content://f", name: "Savage Divinity" });
+        F.scan = async () => ({ ok: true, name: "Savage Divinity", files: [
+          { ref: "content://f/b.epub", path: "Book 2/b.epub", name: "b.epub", size: files["content://f/b.epub"].size },
+          { ref: "content://f/a.epub", path: "a.epub", name: "a.epub", size: files["content://f/a.epub"].size },
+          { ref: "content://f/1.mp3", path: "1.mp3", name: "1.mp3", size: 10 },
+          { ref: "content://f/cover.jpg", path: "cover.jpg", name: "cover.jpg", size: 10 }] });
+        F.blob = async (ref) => files[ref];
+        F.release = (ref) => window.released.push(ref);
+        let heard = null;
+        addAudiobookFolder = async (g, s) => { heard = s.files.map((f) => f.name); return true; };
+        await addFolder();
+        return { pages: state.pages.map((p) => [p.file.name, p.folder, p.link]), heard, released: window.released };
+      }, bytes);
+      assert.deepStrictEqual(got.pages, [["b.epub", "Book 2", "content://f/b.epub"], ["a.epub", "Savage Divinity", "content://f/a.epub"]], JSON.stringify(got));
+      assert.deepStrictEqual(got.heard, ["1.mp3", "cover.jpg"]);
+      assert.deepStrictEqual(got.released, []);
+      // The same folder again adds nothing.
+      const again = await q.evaluate(async () => { addAudiobookFolder = async () => false; await addFolder(); return { n: state.pages.length, released: window.released }; });
+      assert.deepStrictEqual(again, { n: 2, released: ["content://f"] });
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Add a folder in a browser: its books are copied in, in its collection, and its sound files left out", async () => {
+      const q = await page(browser, 390);
+      const dir = fs.mkdtempSync(path.join(require("os").tmpdir(), "wp-folder-"));
+      fs.mkdirSync(path.join(dir, "Stories"));
+      fs.writeFileSync(path.join(dir, "Stories", "one.md"), "# One\n\nThe first story.");
+      fs.writeFileSync(path.join(dir, "Stories", "two.md"), "# Two\n\nThe second story.");
+      fs.writeFileSync(path.join(dir, "Stories", "song.mp3"), "not really");
+      await q.click("#severalBtn");
+      const chooser = q.waitForEvent("filechooser");
+      await q.locator("#batchView .row", { hasText: "Add a folder" }).click();
+      await (await chooser).setFiles(path.join(dir, "Stories"));
+      await until(q, () => state.pages.length === 2 && !runs.size);
+      const got = await q.evaluate(() => state.pages.map((p) => [p.title, p.folder, !!p.link]));
+      assert.deepStrictEqual(got, [["Two", "Stories", false], ["One", "Stories", false]], JSON.stringify(got));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
     // CONTRIBUTING "Explain less": a ? only where Daniel agreed to one.
     await test("More speech engines (Kokoro): Download starts the one pressed, and is pressable when nothing else is downloading", async () => {
       const q = await page(browser, 390);
