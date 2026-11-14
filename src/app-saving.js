@@ -492,6 +492,7 @@ function syncsList() {
       sw("feeds", "Feeds", "Which you follow and how"),
       sw("newsletters", "Newsletters", "Your addresses and how they're set"),
       sw("stats", "Reading stats", "Reading time from every device, added up"),
+      C.ext.on("anki") ? sw("anki", "Anki", "Decks, cards and reviews from every device") : null,
       dataRow(DATA_SYNC_KEY, "Sync", "Everything, on any connection", "Changes wait until then",
         { value: "places", label: "Places and reading time only", note: "Clips, tags and collections wait for Wi-Fi" })));
 }

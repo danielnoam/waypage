@@ -12,6 +12,11 @@ const ANKI_DECK_KEY = "waypage.anki.lastDeck";
 const ANKI_PACK_KEY = "waypage.anki.lastPack";
 const ankiStamp = () => Date.now();
 
+// What this device changes goes up soon after it stops, and what another
+// device sent (a sync, or opening the place) redraws what is on screen.
+C.anki.edited(() => { if (C.sync.on && C.sync.what.anki) syncSoon(30000); });
+C.anki.changed(() => { if (state.place === "anki") ankiDraw(); });
+
 // ---- The selection bar's button and the card sheet ----
 let ankiNow = null;
 function ankiSelection(bar, picked) {
@@ -113,6 +118,11 @@ const ankiTotal = (n) => n.new + n.learn + n.due;
 
 function ankiDraw() {
   if (state.place !== "anki" || !C.anki) return;
+  // A card another device deleted meanwhile is no longer the one to study.
+  if (av.view === "study" && av.card && !C.anki.card(av.card.id)) {
+    const q = C.anki.queue(av.deck, ankiStamp());
+    av = { ...av, card: q ? q.card : null, early: !!(q && q.early), shown: false, since: ankiStamp() };
+  }
   // A deck that's gone (deleted, or never there) takes you up.
   if (av.view !== "decks" && av.view !== "name" && !(av.deck && C.anki.deck(av.deck))) av = { ...av, view: "decks", deck: null };
   fill(ankiRoot(), (ANKI_VIEWS[av.view] || ANKI_VIEWS.decks)());

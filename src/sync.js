@@ -22,6 +22,7 @@
   const OLD_REPO = "carryon-data"; // Carry-on's name for it, before 1.0.0
   const COVERS_KEY = "waypage.syncCovers"; // picked covers this device knows are on GitHub
   const STATS_KEY = "waypage.syncStats"; // { device: sha of its stats file as last read, _sent: what this device last wrote }
+  const ANKI_KEY = "waypage.syncAnki"; // { decks, cards: sha as last seen; log: { device: sha }; sent: hash of what GitHub has of decks, cards, log }
   const ACT_KEY = "waypage.syncActivity"; // { sig } of the reading activity this device last wrote
   const ACT_PATH = "activity/reading.json";
   const DAY = 24 * 3600 * 1000;
@@ -1285,6 +1286,7 @@
     }
     const stats = async () => {
       if (what.stats) try { await syncStats(); } catch (e) { if (e instanceof Paused) throw e; }
+      if (what.anki) try { await syncAnki(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
       try { await syncActivity(getPages()); } catch (e) { if (e instanceof Paused) throw e; }
     };
     // Feeds the same way as clips: one changed here while this ran keeps
@@ -1489,6 +1491,85 @@
     keep(STATS_KEY, known);
   }
 
+  // Anki (2026-11, an extension): anki/decks.json and anki/cards.json are
+  // shared and merged here, record by record (src/anki.js mergeIn), and
+  // anki/log/<device>.json is each device's own reviews, written only by
+  // it, like stats. A write another device beat is read, merged and sent
+  // again, never forced. Only while the extension is on, and never the
+  // reason a sync failed.
+  const EMPTY_LOG = JSON.stringify({ v: 1, log: [] });
+  async function syncAnki() {
+    if (!C.ext || !C.ext.on("anki")) return;
+    await C.ext.load("anki");
+    await C.anki.load();
+    const A = C.anki, dev = A.device();
+    const known = load(ANKI_KEY, {}) || {};
+    // A file someone damaged by hand reads as nothing, and is written over.
+    const readOk = async (path) => { try { return await readJson(path); } catch (e) { if (e instanceof SyntaxError) return null; throw e; } };
+    known.log = known.log || {};
+    known.sent = known.sent || {};
+    const list = async (path) => {
+      const r = await call(contents(path) + "?ref=" + encodeURIComponent(cfg.branch), { headers: headers() });
+      if (r.status === 404) return [];
+      if (!r.ok) throw await fail(r);
+      const l = await r.json();
+      return Array.isArray(l) ? l.filter((f) => f && f.type !== "dir") : [];
+    };
+    for (let tries = 0; ; tries++) {
+      const top = await list("anki");
+      const shaOf = (name) => (top.find((f) => f.name === name) || {}).sha || null;
+      // What GitHub has of the shared files, if this device hasn't seen it.
+      const got = {};
+      for (const name of ["decks", "cards"]) {
+        const sha = shaOf(name + ".json");
+        if (!sha || known[name] === sha) continue;
+        halt();
+        const r = await readOk("anki/" + name + ".json");
+        known[name] = sha;
+        if (!r) { delete known.sent[name]; continue; }
+        got[name] = r.data;
+        known.sent[name] = hashOf(JSON.stringify(r.data));
+      }
+      if (got.decks || got.cards) A.mergeIn(got);
+      // The other devices' logs.
+      let mineSha = null;
+      for (const f of await list("anki/log")) {
+        const m = /^([a-z0-9]{12})[.]json$/.exec(f.name || "");
+        if (!m) continue;
+        if (m[1] === dev) { mineSha = f.sha; continue; }
+        if (known.log[m[1]] === f.sha) continue;
+        halt();
+        const r = await readOk("anki/log/" + f.name);
+        if (r) A.takeLog(m[1], r.data && r.data.log);
+        known.log[m[1]] = f.sha;
+      }
+      // This device's: the shared files only when they differ from GitHub's.
+      const out = A.docs();
+      let again = false;
+      for (const name of ["decks", "cards"]) {
+        const sha = shaOf(name + ".json"), h = hashOf(out[name]);
+        if (sha && known.sent[name] === h) continue;
+        halt();
+        try { known[name] = await write("anki/" + name + ".json", out[name], sha, "Anki " + name); known.sent[name] = h; }
+        catch (e) {
+          if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e;
+          again = true;
+          break;
+        }
+      }
+      if (again) continue;
+      const lh = hashOf(out.log);
+      // A device that has reviewed nothing sends no file.
+      if (mineSha ? known.sent.log !== lh : out.log !== EMPTY_LOG) {
+        halt();
+        await put("anki/log/" + dev + ".json", out.log, mineSha, "Anki reviews");
+        known.sent.log = lh;
+      }
+      keep(ANKI_KEY, known);
+      return;
+    }
+  }
+
   // Share reading activity (2026-11): activity/reading.json, written
   // only while the switch is on, and only when what it says changed.
   // Turned off, the file is removed once, and nothing else is touched.
@@ -1598,8 +1679,8 @@
     get last() { return last; },
     get progress() { return progress; },
     get links() { return !!(cfg && cfg.links); },
-    // What this device syncs (1.47.0): clips, feeds, newsletters, stats.
-    get what() { return { clips: true, notes: true, feeds: true, newsletters: true, stats: true, activity: false, ...((cfg && cfg.what) || {}) }; },
+    // What this device syncs (1.47.0): clips, feeds, newsletters, stats, Anki.
+    get what() { return { clips: true, notes: true, feeds: true, newsletters: true, stats: true, anki: true, activity: false, ...((cfg && cfg.what) || {}) }; },
     setWhat(k, v) {
       if (!cfg) return;
       cfg.what = { ...this.what, [k]: !!v };

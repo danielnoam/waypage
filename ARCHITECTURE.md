@@ -415,6 +415,23 @@ web copy stay links, as before.
   at once when it's brought in (`outsideKnown`, from the last library
   seen). An entry's `ids` are that file's clip ids on each device; stats
   add them up under this device's own (`stats.same`, kept here only).
+- **Anki** (2026-11, an extension; `syncAnki`, a switch per device in
+  `what.anki`, shown only while the extension is on): `anki/decks.json` and
+  `anki/cards.json` are shared, merged record by record (`anki.mergeIn`):
+  the copy edited last wins, a deletion (kept 90 days in `gone`, by id)
+  wins over any copy edited before it, and two decks of one name become
+  the older. `anki/log/<device>.json` is one device's reviews, written
+  only by it (like stats, so never merged); every device replays all the
+  logs in time order, so a card's schedule and the day's new and review
+  counts come out the same everywhere. The files are written in a fixed
+  order, so the same state is the same text: a write is skipped when it is
+  what GitHub has (`waypage.syncAnki` keeps the hashes), which is also what
+  stops two devices from answering each other forever. A write another
+  device beat is read, merged and sent again (up to 3 times), never
+  forced; a file damaged by hand reads as nothing and is written over.
+  A device that has reviewed nothing sends no log. Changes made here
+  start a sync 30 seconds after the last one (`anki.edited`).
+  `test/syncanki.test.js` plays two devices on one made-up repo.
 - **Share reading activity** (2026-11, `activity.js`, off by default, a
   switch per device in `what.activity`): after the stats, sync writes
   `activity/reading.json`, what you're reading and minutes a day, for
@@ -507,7 +524,7 @@ bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `syncanki.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR; a PR that only
 changes Markdown runs just `build.test.js` and `docs.test.js`.
 
 `node tools/shots.js` retakes the README's pictures at 1280 px and 390 px

@@ -176,5 +176,103 @@ test("labels read as minutes, hours, days, months", () => {
     assert.throws(() => A.add({ deck: d1.id, front: "  " }), /front/);
   });
 
+  // ---- Sync: what another device's files do here ----
+  const DEV = "abcdefghij12";
+  const deckDoc = (...decks) => ({ v: 1, decks, gone: {} });
+  const cardDoc = (cards, gone = {}) => ({ v: 1, cards, gone });
+  const rdeck = (id, name, extra) => ({ id, name, newPerDay: 20, reviewsPerDay: 200, steps: [1, 10], relearn: [10], retention: 0.9, made: 100, edited: 100, ...extra });
+  const rcard = (id, deck, front, extra) => ({ id, deck, front, back: "", context: "", from: null, made: 100, edited: 100, suspended: false, buried: 0, ...extra });
+
+  await t("decks and cards from another device come in, and the copy edited last wins", async () => {
+    const d = A.makeDeck("Mine");
+    const c = A.add({ deck: d.id, front: "alt", back: "old" });
+    const mine = A.card(c.id);
+    assert.strictEqual(A.mergeIn({ decks: deckDoc(rdeck("r1", "Theirs")), cards: cardDoc([rcard("k1", "r1", "neu"), { ...mine, back: "older", edited: mine.edited - 5000 }]) }), true);
+    assert.deepStrictEqual(A.decks().map((x) => x.name).sort(), ["Mine", "Theirs"]);
+    assert.strictEqual(A.card(c.id).back, "old", "an older copy doesn't win");
+    A.mergeIn({ cards: cardDoc([{ ...mine, back: "newer", edited: mine.edited + 5000 }]) });
+    assert.strictEqual(A.card(c.id).back, "newer");
+    assert.strictEqual(A.mergeIn({ cards: cardDoc([{ ...mine, back: "newer", edited: mine.edited + 5000 }]) }), false, "nothing new says so");
+  });
+
+  await t("a deletion reaches the other device, and beats an older copy but not a later edit", async () => {
+    const d = A.makeDeck("D");
+    const c = A.add({ deck: d.id, front: "x" }), e = A.add({ deck: d.id, front: "y" });
+    const had = A.card(c.id), other = A.card(e.id);
+    A.mergeIn({ cards: cardDoc([], { [c.id]: had.edited + 10, [e.id]: other.edited - 10 }) });
+    assert.strictEqual(A.card(c.id), null, "deleted there after the last edit here");
+    assert.ok(A.card(e.id), "edited here after it was deleted there");
+    A.remove(e.id);
+    const out = JSON.parse(A.docs().cards);
+    assert.ok(out.gone[e.id] && out.gone[c.id], "both deletions are kept to be sent");
+    assert.deepStrictEqual(out.cards, []);
+    A.mergeIn({ cards: cardDoc([other]) });
+    assert.strictEqual(A.card(e.id), null, "an old copy from a device that hasn't heard doesn't bring it back");
+  });
+
+  await t("a deleted deck takes its cards, and two decks of one name become the older one", async () => {
+    const mine = A.makeDeck("Words");
+    const c = A.add({ deck: mine.id, front: "a" });
+    A.mergeIn({ decks: deckDoc(rdeck("older", "words", { made: 1 })), cards: cardDoc([rcard("k9", "older", "b")]) });
+    assert.deepStrictEqual(A.decks().map((x) => x.id), ["older"]);
+    assert.deepStrictEqual(A.cards().map((x) => x.deck), ["older", "older"], "its cards moved over");
+    A.mergeIn({ decks: { v: 1, decks: [], gone: { older: Date.now() + 1000 } } });
+    assert.deepStrictEqual([A.decks().length, A.cards().length], [0, 0]);
+    assert.ok(c.id);
+  });
+
+  await t("what arrives that isn't a deck or a card is left out", async () => {
+    A.mergeIn({ decks: deckDoc(rdeck("ok", "Fine"), { id: 5 }, null, { id: "x", name: " " }), cards: cardDoc([rcard("c", "ok", "yes"), rcard("c2", "ok", " "), { id: "c3" }, null]) });
+    assert.deepStrictEqual([A.decks().map((x) => x.name), A.cards().map((x) => x.front)], [["Fine"], ["yes"]]);
+  });
+
+  await t("another device's answers are replayed with ours, and count against the day's limit", async () => {
+    const d = A.makeDeck("Shared");
+    A.setOptions(d.id, { newPerDay: 1 });
+    const a = A.add({ deck: d.id, front: "a" }), b = A.add({ deck: d.id, front: "b" });
+    const theirs = [{ card: a.id, at: T0, grade: 3, ms: 900, was: "new" }, { card: a.id, at: T0 + 10 * MIN, grade: 3, ms: 900, was: "learn" }];
+    assert.strictEqual(A.takeLog(DEV, theirs), true);
+    assert.strictEqual(A.info(a.id).state, "review");
+    assert.strictEqual(A.counts(d.id, T0 + 20 * MIN).new, 0, "their new card used up today's one");
+    assert.strictEqual(A.queue(d.id, T0 + 20 * MIN), null);
+    assert.strictEqual(A.takeLog(DEV, theirs), false, "the same log twice is not news");
+    assert.strictEqual(A.counts(d.id, T0 + DAY + MIN).new, 1, "and tomorrow b is there");
+    assert.ok(b.id);
+  });
+
+  await t("an answer made here and the same answer read from another device's log give the same card", async () => {
+    const d = A.makeDeck("Both");
+    const mine = A.add({ deck: d.id, front: "mine" }), theirs = A.add({ deck: d.id, front: "theirs" });
+    A.answer(mine.id, 3, 1, T0); A.answer(mine.id, 3, 1, T0 + 10 * MIN); A.answer(mine.id, 1, 1, T0 + 5 * DAY);
+    // The other device's entries come in out of order, as files can.
+    A.takeLog(DEV, [{ card: theirs.id, at: T0 + 5 * DAY, grade: 1, ms: 1, was: "review" }, { card: theirs.id, at: T0 + 10 * MIN, grade: 3, ms: 1, was: "learn" }, { card: theirs.id, at: T0, grade: 3, ms: 1, was: "new" }]);
+    assert.deepStrictEqual(A.info(theirs.id), A.info(mine.id));
+    assert.strictEqual(A.info(mine.id).state, "relearn");
+  });
+
+  await t("bad logs and our own are not taken, and other devices' logs survive a restart", async () => {
+    const d = A.makeDeck("Keep");
+    const c = A.add({ deck: d.id, front: "k" });
+    assert.strictEqual(A.takeLog("not-a-device", []), false);
+    assert.strictEqual(A.takeLog(A.device(), [{ card: c.id, at: T0, grade: 3 }]), false, "our own comes from our own file");
+    assert.strictEqual(A.takeLog(DEV, "nope"), false);
+    A.takeLog(DEV, [{ card: c.id, at: T0, grade: 9 }, { card: c.id, at: "x", grade: 3 }, { card: c.id, at: T0, grade: 4, ms: 5, was: "new" }]);
+    assert.strictEqual(A.info(c.id).state, "review", "only the good entry counted");
+    await flush();
+    const before = A.info(c.id);
+    A.unload();
+    await A.load();
+    assert.deepStrictEqual(A.info(c.id), before);
+  });
+
+  await t("the files sync sends are the same for the same state, with a device id of the right shape", async () => {
+    const d = A.makeDeck("Same");
+    A.add({ deck: d.id, front: "s" });
+    const one = A.docs(), two = A.docs();
+    assert.deepStrictEqual(one, two);
+    assert.ok(/^[a-z0-9]{12}$/.test(one.device));
+    assert.deepStrictEqual(Object.keys(JSON.parse(one.cards)), ["v", "cards", "gone"]);
+  });
+
   console.log("  " + passed + " passed");
 })();
