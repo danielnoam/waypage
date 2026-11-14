@@ -332,6 +332,12 @@ that has drawings, a PDF's `drawn` summary out of step with `ink.json`, and a
 note with fewer sheets than it is drawn on or a PDF that is gone. `fix` puts
 back what has one safe place and stamps a moved highlight `at` now so sync
 keeps it. It runs only when tapped, never when Settings is built.
+Recover also looks for notes gone from the library (`findDeleted`, `bringBack`):
+the folders of GitHub's `notes/` (`sync.noteFolders`, `noteListing`, `noteTitle`)
+and a phone's `pages/<id>` or a browser's `<id>:note` keys that no entry
+names (`store.orphanNotes`, `orphanFiles`). A note comes back as a new one
+(`notes.bring`, a new id), never under its old id, which may carry a deletion
+marker in sync; the old copy is left alone.
 Opening a PDF asks Keep a copy, Read from where it is or Make a note too
 (`noteFromFile`, `fileSheet`), in a browser as well; the library's Show has
 All notes (`filter "notes"`) while a note exists.
@@ -682,6 +688,11 @@ adds a line here.
 
 Things that broke once and would again. Check here before touching the
 area.
+- A build from before Notes (1.57.0 and older, and `test-omri-dev`) drops
+  every note when it syncs: `cleanMeta` keeps only entries with an address,
+  so the next merge marks them deleted and removes their folders on the
+  phone. GitHub's `notes/<id>/` is left, which is what Recover's Look for
+  deleted notes reads. Don't sync a library with Notes from such a build.
 
 - The reader's sideways swipe to the next or previous clip (`swipeInput`
   in reader.js, `clipSwipe` in app-reader.js) shares the page with the

@@ -155,5 +155,56 @@
     return m ? m.text + (m.note ? "\n\n" + m.note : "") : problem.title + ": " + problem.line;
   }
 
-  C.recover = { scan, fix, copyText, inkPages };
+  // ---- Notes that are gone from the library ----
+  // A build from before Notes (1.57.0 and older) drops every note when it
+  // syncs, marks it deleted, and removes its folder on the phone; GitHub's
+  // notes/<id>/ folder it knows nothing of stays. So the notes can be found
+  // there, and on the phone when something else lost their entries.
+  //
+  //   io = { sync: bool, folders(), listing(id), title(id), text(path),
+  //          deleted(): { id: time }, orphans(known), orphanFiles(id),
+  //          files(id, names), bring(name, paper, got) }
+  //
+  // Each candidate is { id, source: "sync" | "phone", title, sheets, strokes,
+  // names?, deletedAt?, paper? }; `skipped` names a source that wasn't searched.
+  const sheetsIn = (d) => (d && Array.isArray(d.sheets) ? d.sheets.length : 0);
+  const strokeTotal = (d) => Object.values(inkPages(d)).reduce((a, n) => a + n, 0);
+  async function findDeleted(io, known, onProgress) {
+    const found = [], skipped = [];
+    if (io.sync) {
+      try {
+        const gone = await io.deleted();
+        const ids = (await io.folders()).filter((id) => !known.has(id));
+        let done = 0;
+        for (const id of ids) {
+          const names = await io.listing(id);
+          if (names["note.json"]) {
+            const parse = async (n) => { try { return JSON.parse(await io.text("notes/" + id + "/" + n)); } catch (e) { return null; } };
+            const note = await parse("note.json");
+            const ink = names["ink.json"] ? await parse("ink.json") : null;
+            found.push({ id, source: "sync", title: (await io.title(id)) || "Untitled note", sheets: sheetsIn(note), strokes: strokeTotal(ink), names, deletedAt: gone[id] || 0, pdf: !!names["base.pdf"] });
+          }
+          if (onProgress) onProgress(++done, ids.length);
+        }
+      } catch (e) { console.error(e); skipped.push("GitHub sync couldn't be read"); }
+    } else skipped.push("GitHub sync is off, so it wasn't searched");
+    try {
+      for (const o of await io.orphans(known)) {
+        const files = await io.orphanFiles(o.id);
+        if (files) found.push({ id: o.id, source: "phone", title: o.title || "Untitled note", sheets: sheetsIn(files.note), strokes: strokeTotal(files.ink), paper: o.paper, pdf: !!files.base });
+      }
+    } catch (e) { console.error(e); }
+    return { found, skipped };
+  }
+
+  // Brings one back as a note of its own, under a new id: the old one may
+  // carry a deletion marker in sync, which would delete it again. What it
+  // was is never touched. Resolves to the new library entry, or null.
+  async function bringBack(c, io) {
+    const got = c.source === "sync" ? await io.files(c.id, c.names) : await io.orphanFiles(c.id);
+    if (!got) return null;
+    return io.bring(c.title, c.paper, got);
+  }
+
+  C.recover = { scan, fix, copyText, inkPages, findDeleted, bringBack };
 })();

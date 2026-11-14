@@ -126,5 +126,66 @@ const mark = (id, extra) => ({ id, block: 0, start: 0, endBlock: 0, end: 5, text
     assert.deepStrictEqual(seen, ["1/2", "2/2"]);
   });
 
+  // Notes that are gone from the library: GitHub's notes/ folders and the phone's.
+  const gh = {
+    "notes/aaa111/note.json": JSON.stringify({ v: 1, sheets: [{ bg: "paper" }, { bg: "paper" }] }),
+    "notes/aaa111/ink.json": JSON.stringify({ v: 1, pages: { 1: [{}, {}, {}], 2: [{}] } }),
+    "notes/bbb222/note.json": JSON.stringify({ v: 1, sheets: [{ bg: "pdf", n: 1 }] }),
+    "notes/ccc333/note.json": "{}",
+  };
+  const lostIO = (over) => ({
+    sync: true,
+    folders: async () => ["aaa111", "bbb222", "ccc333", "here44"],
+    listing: async (id) => (id === "aaa111" ? { "note.json": "s", "ink.json": "s" } : id === "bbb222" ? { "note.json": "s", "base.pdf": "s" } : id === "ccc333" ? { "note.json": "s" } : {}),
+    title: async (id) => ({ aaa111: "Debate 1", bbb222: "" }[id] || ""),
+    text: async (path) => gh[path],
+    deleted: async () => ({ aaa111: 1762849111893 }),
+    orphans: async () => [],
+    orphanFiles: async () => null,
+    files: async (id) => ({ note: JSON.parse(gh["notes/" + id + "/note.json"]), imgs: {} }),
+    bring: async (name, paper, got) => ({ id: "new1", title: name, note: { paper }, got }),
+    ...over,
+  });
+
+  await test("notes in GitHub's notes/ that the library doesn't have are found, with their sheets, strokes and when sync deleted them", async () => {
+    const r = await R.findDeleted(lostIO(), new Set(["here44"]));
+    assert.deepStrictEqual(r.found.map((c) => c.id), ["aaa111", "bbb222", "ccc333"]);
+    const a = r.found[0];
+    assert.strictEqual(a.title, "Debate 1");
+    assert.strictEqual(a.sheets, 2);
+    assert.strictEqual(a.strokes, 4);
+    assert.strictEqual(a.deletedAt, 1762849111893);
+    assert.strictEqual(r.found[1].pdf, true);
+    assert.strictEqual(r.found[1].title, "Untitled note");
+    assert.deepStrictEqual(r.skipped, []);
+  });
+
+  await test("a folder with no note.json isn't a note, and a library note isn't offered", async () => {
+    const r = await R.findDeleted(lostIO({ folders: async () => ["here44", "none99"] }), new Set(["here44"]));
+    assert.deepStrictEqual(r.found, []);
+  });
+
+  await test("with sync off it says so, and still looks on the phone", async () => {
+    const r = await R.findDeleted(lostIO({ sync: false, orphans: async () => [{ id: "orph1", title: "Old", paper: "lines" }], orphanFiles: async () => ({ note: { sheets: [{ bg: "paper" }] }, ink: { pages: { 1: [{}] } } }) }), new Set());
+    assert.strictEqual(r.skipped.length, 1);
+    assert.deepStrictEqual(r.found.map((c) => c.source + ":" + c.title + ":" + c.strokes), ["phone:Old:1"]);
+  });
+
+  await test("a sync that can't be read is reported, not thrown", async () => {
+    const r = await R.findDeleted(lostIO({ folders: async () => { throw new Error("offline"); } }), new Set());
+    assert.deepStrictEqual(r.found, []);
+    assert.ok(/couldn't be read/.test(r.skipped[0]));
+  });
+
+  await test("bringing a note back goes through bring, with its title and files, and leaves the old id alone", async () => {
+    const [a] = (await R.findDeleted(lostIO(), new Set())).found;
+    const meta = await R.bringBack(a, lostIO());
+    assert.strictEqual(meta.id, "new1");
+    assert.notStrictEqual(meta.id, a.id);
+    assert.strictEqual(meta.title, "Debate 1");
+    assert.strictEqual(meta.got.note.sheets.length, 2);
+    assert.strictEqual(await R.bringBack({ ...a, source: "phone" }, lostIO()), null);
+  });
+
   console.log(passed + " passed");
 })();

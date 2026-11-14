@@ -222,6 +222,24 @@
     return keepNew(entry(C.save.newId(), title(), { paper: kind }), [{ bg: "paper" }]);
   }
 
+  // A note brought back from its files (Recover): `got` is what sync's
+  // noteFilesIn reads, { note, ink?, imgs, base? }. It always has an id of
+  // its own, as the old one may have a deletion marker in sync.
+  async function bring(name, paper, got) {
+    const meta = entry(C.save.newId(), (name || "Note").slice(0, 300).trim(), { paper: paperOf(paper) });
+    const base = got.base ? new Blob([got.base], { type: "application/pdf" }) : null;
+    await keepNew(meta, clean(got.note).sheets, base);
+    try {
+      if (got.ink) await C.store.writeInk(meta.id, got.ink);
+      for (const [f, url] of Object.entries(got.imgs || {})) await C.store.writeInkImage(meta.id, f, url);
+    } catch (e) {
+      await C.store.removePage(meta.id);
+      throw e;
+    }
+    meta.editedAt = Date.now();
+    return meta;
+  }
+
   // A note made from a PDF (`src` is its library entry, or just { title } for a
   // file picked to be one; `blob` its bytes):
   // a copy of the PDF is kept, one sheet to a page, and the PDF itself is
@@ -332,5 +350,5 @@
     return C.pptx.writePdf(pages);
   }
 
-  C.notes = { PAPERS, LABELS, paper, toPdf, cover, layout, pdfName, create, fromPdf, open, keep, W, H };
+  C.notes = { PAPERS, LABELS, paper, toPdf, cover, layout, pdfName, create, bring, fromPdf, open, keep, W, H };
 })();

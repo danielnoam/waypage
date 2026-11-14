@@ -855,6 +855,94 @@ async function recoverDelete(prob) {
   recovered.found = recovered.found.filter((x) => x !== prob);
   renderSection();
 }
+// Notes that are gone from the library but not from GitHub or this phone:
+// an older build's sync drops them (see recover.js). Run when asked; each
+// is brought back as a new note, the old copy left where it is.
+const lostNotes = { at: 0, found: [], skipped: [], busy: "" };
+const lostIO = () => ({
+  sync: C.sync.on,
+  folders: () => C.sync.noteFolders(),
+  listing: (id) => C.sync.noteListing(id),
+  title: (id) => C.sync.noteTitle(id),
+  text: (path) => C.sync.readText(path),
+  deleted: async () => { try { const g = await C.sync.peek(); return (g && JSON.parse(g.text).deleted) || {}; } catch (e) { return {}; } },
+  orphans: (known) => C.store.orphanNotes(known),
+  orphanFiles: (id) => C.store.orphanFiles(id),
+  files: (id, names) => C.sync.noteFilesIn(id, names),
+  bring: (name, paper, got) => C.notes.bring(name, paper, got),
+});
+async function recoverLook(btn) {
+  if (lostNotes.busy) return;
+  lostNotes.busy = "Looking…";
+  const label = btn && btn.querySelector(".choice-label");
+  if (btn) btn.disabled = true;
+  try {
+    const r = await C.recover.findDeleted(lostIO(), new Set(state.pages.map((p) => p.id)), (n, of) => { if (label) label.textContent = "Looking, " + n + " of " + of; });
+    lostNotes.found = r.found;
+    lostNotes.skipped = r.skipped;
+    lostNotes.at = Date.now();
+    C.platform.log.note("recover", r.found.length + " deleted notes found");
+  } catch (e) {
+    console.error(e);
+    toast("Couldn't look for notes. Try again.");
+  }
+  lostNotes.busy = "";
+  renderSection();
+}
+async function recoverBring(list) {
+  if (lostNotes.busy) return;
+  lostNotes.busy = "Bringing back…";
+  renderSection();
+  let n = 0;
+  for (const c of list) {
+    try {
+      const meta = await C.recover.bringBack(c, lostIO());
+      if (!meta) continue;
+      state.pages.unshift(meta);
+      await C.store.writeIndex(state.pages);
+      lostNotes.found = lostNotes.found.filter((x) => x !== c);
+      n++;
+      C.platform.log.note("recover", "brought back a note (" + c.source + ")");
+      if (c.strokes) noteCoverSoon(meta, 1500);
+    } catch (e) { console.error(e); }
+  }
+  lostNotes.busy = "";
+  renderLibrary();
+  toast(n ? (n === 1 ? "Brought it back" : "Brought back " + n) : "Couldn't bring it back. Try again.");
+  renderSection();
+}
+const noteLine = (c) => {
+  const bits = [c.sheets + (c.sheets === 1 ? " sheet" : " sheets"), c.strokes + (c.strokes === 1 ? " stroke" : " strokes")];
+  if (c.pdf) bits.push("from a PDF");
+  if (c.deletedAt) bits.push("deleted " + new Date(c.deletedAt).toISOString().slice(0, 10) + " by a sync from an older version");
+  return bits.join(" · ");
+};
+function lostNotesRows() {
+  const look = el("button", { class: "row recover-look", type: "button", ...(lostNotes.busy ? { disabled: "" } : {}), onclick: () => recoverLook(look) },
+    el("span", { class: "choice-text" },
+      el("span", { class: "choice-label accent" }, lostNotes.busy || "Look for deleted notes"),
+      el("span", { class: "choice-note" }, lostNotes.at
+        ? (lostNotes.found.length ? lostNotes.found.length + (lostNotes.found.length === 1 ? " note" : " notes") + " found" : "No deleted notes found") + ", checked " + logTime(lostNotes.at)
+        : "In GitHub sync and on this phone")));
+  const kids = [el("div", { class: "group" }, look)];
+  for (const s of lostNotes.skipped) kids.push(el("p", { class: "footnote" }, s + "."));
+  if (lostNotes.found.length > 1) {
+    kids.push(el("h2", { class: "overline" }, "Actions"),
+      el("div", { class: "group" }, el("button", { class: "row", type: "button", ...(lostNotes.busy ? { disabled: "" } : {}), onclick: () => recoverBring(lostNotes.found.slice()) },
+        el("span", { class: "row-label accent" }, "Bring back all (" + lostNotes.found.length + ")"))));
+  }
+  for (const source of ["sync", "phone"]) {
+    const items = lostNotes.found.filter((x) => x.source === source);
+    if (!items.length) continue;
+    kids.push(el("h2", { class: "overline" }, source === "sync" ? "In GitHub sync" : "On this phone"),
+      el("div", { class: "group recover-list" }, ...items.map((c) => el("div", { class: "row recover-item" },
+        el("span", { class: "choice-text" },
+          el("span", { class: "choice-label", dir: "auto" }, c.title),
+          el("span", { class: "choice-note", dir: "auto" }, noteLine(c))),
+        el("button", { class: "btn-text", type: "button", ...(lostNotes.busy ? { disabled: "" } : {}), onclick: () => recoverBring([c]) }, "Bring back")))));
+  }
+  return kids;
+}
 function recoverGroup() {
   const run = el("button", { class: "row recover-go", type: "button", ...(recovered.busy ? { disabled: "" } : {}), onclick: () => recoverScan(run) },
     el("span", { class: "choice-text" },
@@ -881,7 +969,7 @@ function recoverGroup() {
         el("button", { class: "btn-text", type: "button", onclick: () => copyText(C.recover.copyText(x, state.pages), "Copied") }, "Copy"),
         x.kind === "mark-lost" ? el("button", { class: "btn-text warn", type: "button", onclick: () => recoverDelete(x) }, "Delete") : null))));
   }
-  return section("Recover", null, ...kids);
+  return section("Recover", null, ...kids, ...lostNotesRows());
 }
 function reportGroup() {
   const list = C.platform.log.list();
