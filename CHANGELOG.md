@@ -3,6 +3,13 @@
 All notable changes to Carry-on. Newest first.
 
 
+
+## [1.60.1] - 2026-11-14
+
+### Changed
+- Sync history lists a version only when it differs from the one before it, not every save. Saves that only moved where you are in a clip or a timestamp are left out.
+- The sidebar's Notes under Library sets Show to All notes, and Clips sets it to All clips, so each one lists what its name says whatever Show was on before.
+
 ## [1.60.0] - 2026-11-14
 
 ### Added
