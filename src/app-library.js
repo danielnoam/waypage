@@ -87,8 +87,25 @@ function joinFav(p, name) {
   if (on) { p.folderFav = true; p.folderFavAt = Date.now(); } else { delete p.folderFav; delete p.folderFavAt; }
   // Share reading activity's collection mark goes the same way.
   if (name && folderPages(name).some((x) => x !== p && x.folderNoShare)) p.folderNoShare = true; else delete p.folderNoShare;
+  joinTags(p, name);
   const pick = name ? coverPick(folderPages(name).filter((x) => x !== p)) : "";
   if (pick) p.coverPick = pick; else delete p.coverPick;
+}
+
+// "Tag new clips" (folderTagNew, on its clips like folderFav): a clip
+// joining the collection takes the tags every clip already in it shares.
+function joinTags(p, name, on) {
+  const mates = name ? folderPages(name).filter((x) => x !== p) : [];
+  if (!on && !mates.some((x) => x.folderTagNew)) { delete p.folderTagNew; return; }
+  p.folderTagNew = true;
+  const shared = mates.length ? (mates[0].tags || []).filter((t) => mates.every((x) => (x.tags || []).some((y) => sameTag(y, t)))) : [];
+  if (shared.length) p.tags = withTags(p.tags, shared);
+}
+async function setFolderTagNew(name, on) {
+  for (const p of folderPages(name)) { if (on) p.folderTagNew = true; else delete p.folderTagNew; }
+  await C.store.writeIndex(state.pages);
+  syncSoon();
+  toast(on ? "New clips in " + name + " get its tags" : "New clips in " + name + " come untagged");
 }
 
 // A folder's name as already spelled, if one by that name exists.
@@ -673,6 +690,9 @@ function openFolderMenu() {
     folderLook(state.folder) === "covers"
       ? item("chapters", "Show as a list", () => setFolderLook(state.folder, "list"))
       : item("grid", "Show as covers", () => setFolderLook(state.folder, "covers")),
+    // Offered once its clips have tags to give.
+    ...(list.some((p) => p.folderTagNew || (p.tags || []).length) ? [item("tag", "Tag new clips", () => setFolderTagNew(state.folder, !list.some((p) => p.folderTagNew)),
+      { note: list.some((p) => p.folderTagNew) ? "On" : "Off" })] : []),
     item("select", "Select", () => startSelect([])),
     item("send", "Export", () => setFolderMode("export")),
     ...(sharing() ? [
@@ -997,7 +1017,7 @@ async function removeFolder(withPages) {
   if (withPages) forgetWatched(list);
   for (const p of list) {
     if (withPages) { if (p.link && !p.watched) C.platform.files.release(p.link); await C.store.removePage(p.id); }
-    else { delete p.folder; delete p.folderAt; delete p.folderFav; delete p.folderFavAt; delete p.coverPick; delete p.folderNoShare; }
+    else { delete p.folder; delete p.folderAt; delete p.folderFav; delete p.folderFavAt; delete p.coverPick; delete p.folderNoShare; delete p.folderTagNew; }
   }
   if (withPages) state.pages = state.pages.filter((p) => !list.includes(p));
   await C.store.writeIndex(state.pages);

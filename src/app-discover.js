@@ -300,7 +300,9 @@ async function dzSaveStory(s) {
   try {
     const found = s.serial ? await C.discover.serialChapters(s.url) : await C.save.findChapters(s.url);
     if (!found.links.length) { savePage(s.url); return; }
-    openBatch(found.links.join("\n"), false, folderName(found.title || s.title), s.url);
+    // The story page's own tags; Discover's list row, when it gave none.
+    const siteTags = found.siteTags || (s.tags && s.tags.length ? { site: s.serial ? dzHost(s.url) : s.site || "Royal Road", tags: s.tags } : null);
+    openBatch(found.links.join("\n"), false, folderName(found.title || s.title), s.url, siteTags);
   } catch (e) { toast(e instanceof C.save.SaveError ? e.message : "Couldn't read its chapters. Try again."); }
 }
 

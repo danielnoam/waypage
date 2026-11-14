@@ -4779,6 +4779,61 @@ c("bk1", { at: 0.01 })]);
       }
     });
 
+    await test("Save with options offers a story page's own tags as one switch, off until turned on, and remembers it", async () => {
+      const q = await page(browser, 390);
+      const open = () => q.evaluate(() => openBatch("https://www.royalroad.com/fiction/1/s/chapter/1/a\nhttps://www.royalroad.com/fiction/1/s/chapter/2/b", false, "A Story",
+        "https://www.royalroad.com/fiction/1/s", { site: "Royal Road", tags: ["Fantasy", "Action", "LitRPG", "Magic"] }));
+      await open();
+      const row = q.locator(".batch-site-tags .row");
+      await row.waitFor();
+      assert.strictEqual(await row.locator(".choice-label").textContent(), "Royal Road's tags");
+      assert.strictEqual(await row.locator(".choice-note").textContent(), "Fantasy, Action, LitRPG and 1 more");
+      assert.strictEqual(await q.locator("#batchView .chip.on").count(), 0, "not added unasked");
+      await row.click();
+      assert.deepStrictEqual(await q.locator("#batchView .chip.on").allTextContents(), ["Fantasy×", "Action×", "LitRPG×", "Magic×"]);
+      await q.locator("#batchView .chip.on", { hasText: "Action" }).click();
+      await row.click();
+      assert.strictEqual(await q.locator("#batchView .chip.on").count(), 0, "off takes them back out");
+      await row.click();
+      await q.goBack();
+      await until(q, () => !state.batch);
+      await q.waitForTimeout(500);
+      await open();
+      await q.locator(".batch-site-tags .row").waitFor();
+      assert.strictEqual(await q.locator("#batchView .chip.on").count(), 4, "on stays on for the next story");
+      // With a collection and tags, its later clips can take them too (on by default).
+      const later = q.locator(".batch-tag-new .row");
+      assert.strictEqual(await later.locator(".choice-label").textContent(), "Tag new clips too");
+      assert.strictEqual(await later.locator("input").isChecked(), true);
+      // A clip joining a collection marked so takes the tags all its clips share.
+      const joined = await q.evaluate(() => {
+        const a = { id: "a1", folder: "A Story", folderTagNew: true, tags: ["Fantasy", "Magic"] };
+        const b = { id: "b1", folder: "A Story", folderTagNew: true, tags: ["fantasy", "Action"] };
+        const c = { id: "c1", tags: ["Mine"] };
+        const was = state.pages;
+        state.pages = [a, b, c];
+        joinFav(c, "A Story");
+        const out = { tags: c.tags, on: c.folderTagNew };
+        setFolderTagNew("A Story", false);
+        const d = { id: "d1" };
+        state.pages.push(d);
+        joinFav(d, "A Story");
+        out.off = d.tags || [];
+        state.pages = was;
+        return out;
+      });
+      assert.deepStrictEqual(joined, { tags: ["Mine", "Fantasy"], on: true, off: [] });
+      // Links with no story page behind them show no row.
+      await q.goBack();
+      await until(q, () => !state.batch);
+      await q.waitForTimeout(500);
+      await q.evaluate(() => openBatch("https://a.example/1\nhttps://a.example/2"));
+      await q.locator("#batchView .batch-links").waitFor();
+      assert.strictEqual(await q.locator(".batch-site-tags .row").count(), 0);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a note: New note picks paper, opens in Scroll with the pen on, can show as Pages, grows with a stroke on its last sheet, has its own settings, and has its own part of the library (2.0.0)", async () => {
       const q = await page(browser, 390);
       await q.click("#severalBtn");

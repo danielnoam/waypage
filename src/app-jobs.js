@@ -152,7 +152,7 @@ async function saveWaiting() {
 // A link that turned out to be a contents page opens as a list to check.
 function contentsFound(job) {
   dropFailed(job);
-  openBatch(job.contents.links.join("\n"), false, folderName(job.contents.title || job.site), job.url);
+  openBatch(job.contents.links.join("\n"), false, folderName(job.contents.title || job.site), job.url, job.contents.siteTags);
   toast("That's a list of chapters. Check them, then save.");
 }
 
@@ -188,12 +188,14 @@ const PACE_MS = 500;
 // saved isn't saved again; it just joins the folder at its place.
 // `tags` is a list for every link, or (an import, 1.9.0) a function
 // giving each link its own { tags, finished }.
-async function saveAll(all, folder, tags = [], mode, skipSaved, kind, source) {
+// `tagNew`: the collection's later clips take the tags its clips share.
+async function saveAll(all, folder, tags = [], mode, skipSaved, kind, source, tagNew) {
   const name = folder ? folderName(folder) : null;
   const per = typeof tags === "function" ? tags : () => ({ tags });
   const places = skipSaved && name ? placesBetween(all, name) : new Map();
+  if (name && tagNew) for (const p of folderPages(name)) p.folderTagNew = true;
   const urls = skipSaved ? all.filter((u) => !savedAs(u)) : all;
-  const jobs = urls.filter((u) => !savingAs(u)).map((u) => ({ ...newJob(u, name), tags: [], ...per(u), mode, kind, source: name ? source : undefined }));
+  const jobs = urls.filter((u) => !savingAs(u)).map((u) => ({ ...newJob(u, name), tags: [], ...per(u), mode, kind, source: name ? source : undefined, tagNew: !!(name && tagNew) }));
   state.saving = state.saving.filter((s) => !(s.error && jobs.some((j) => sameUrl(j.url, s.url))));
   const fresh = jobs.filter((j) => !savedAs(j.url));
   fresh.forEach((j) => { if (places.has(j.url)) j.folderAt = places.get(j.url); });
@@ -209,7 +211,7 @@ async function saveAll(all, folder, tags = [], mode, skipSaved, kind, source) {
     const existing = savedAs(job.url);
     if (existing) {
       had++;
-      if (name) { joinFav(existing, name); existing.folder = name; existing.folderAt = Date.now(); if (source) existing.source = source; }
+      if (name) { joinFav(existing, name); if (tagNew) existing.folderTagNew = true; existing.folder = name; existing.folderAt = Date.now(); if (source) existing.source = source; }
       if (job.tags.length) existing.tags = withTags(existing.tags, job.tags);
       if (name || job.tags.length) { await C.store.writeIndex(state.pages); renderLibrary(); if (state.folder) renderFolder(); }
       continue;
@@ -317,7 +319,7 @@ async function runJob(job) {
     if (old) {
       // Saved again: the new copy takes the old one's place, keeping its
       // collection, tags and read position.
-      for (const k of ["requested", "folder", "folderAt", "folderFav", "folderFavAt", "coverPick", "source", "tags", "at", "finished", "readAt", "readOn", "placeAt", "fav", "favAt", "marks", "noShare", "folderNoShare", "movedAt"]) if (old[k] !== undefined) meta[k] = old[k];
+      for (const k of ["requested", "folder", "folderAt", "folderFav", "folderFavAt", "coverPick", "source", "tags", "at", "finished", "readAt", "readOn", "placeAt", "fav", "favAt", "marks", "noShare", "folderNoShare", "folderTagNew", "movedAt"]) if (old[k] !== undefined) meta[k] = old[k];
       if (job.keep) Object.assign(meta, job.keep);
       C.stats.moved(old.id, meta.id);
       const i = state.pages.indexOf(old);
@@ -338,6 +340,7 @@ async function runJob(job) {
       meta.requested = job.url;
       if (job.folder) { meta.folder = folderName(job.folder); meta.folderAt = job.folderAt || Date.now(); if (job.source) meta.source = job.source; }
       if (job.tags && job.tags.length) meta.tags = withTags([], job.tags);
+      if (meta.folder) joinTags(meta, meta.folder, job.tagNew);
       if (job.finished) meta.finished = true;
       state.pages.unshift(meta);
       C.stats.saved();

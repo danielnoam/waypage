@@ -11,7 +11,7 @@
 const PICTURES_KEY = "waypage.syncPictures";
 let syncTimer = null, syncQueue = load(PICTURES_KEY, null) || [], fetchingPictures = false;
 const keepQueue = () => store(PICTURES_KEY, syncQueue.length ? [...new Set(syncQueue)] : null);
-const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "turn", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks", "noShare", "folderNoShare"];
+const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "turn", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks", "noShare", "folderNoShare", "folderTagNew"];
 // While a run of saves is on, sync waits longer (1.2.0): each sync is a
 // merge of the whole library, and one after every page landing was a
 // stutter every few seconds.
@@ -1029,11 +1029,11 @@ function neighbours(p) {
 // a line, editable), the folder to save them into, and Save.
 
 // `from` is the page read as a list of chapters, which can still be
-// saved as one page.
-function openBatch(text, fromHistory, folder, from) {
+// saved as one page; `siteTags` ({ site, tags }) the tags that page gave it.
+function openBatch(text, fromHistory, folder, from, siteTags) {
   if (state.batch) return;
   state.batch = true;
-  renderBatch(linksFrom(text).join("\n"), folder || null, from);
+  renderBatch(linksFrom(text).join("\n"), folder || null, from, siteTags);
   if (!fromHistory) history.pushState({ view: "batch", folder: state.folder || undefined }, "");
   // Set once it shows: a hidden screen keeps its old scroll.
   const shown = pushScreen($("batchView"));
@@ -1049,7 +1049,12 @@ function closeBatch() {
 
 const LONG_LIST = 50;
 
-function renderBatch(text, preset, from) {
+// The site's tags join the picked ones when this is on; off by default,
+// and remembered.
+const SITE_TAGS_KEY = "waypage.saveSiteTags";
+const TAG_NEW_KEY = "waypage.saveTagNew";
+
+function renderBatch(text, preset, from, siteTags) {
   let folder = preset;
   // The page the chapters were read from, kept on the folder (0.26.0).
   let source = from || null;
@@ -1058,6 +1063,7 @@ function renderBatch(text, preset, from) {
   let kind = preset && folderPages(preset).some((p) => p.comic) ? "comic" : "article";
   if (kind === "comic") mode = "full";
   const tags = [];
+  let drawTagNew = null;
   const area = el("textarea", { class: "batch-links", rows: "6", "aria-label": "Links, one a line", spellcheck: "false",
     autocapitalize: "off", autocomplete: "off", dir: "ltr" });
   area.value = text;
@@ -1083,6 +1089,7 @@ function renderBatch(text, preset, from) {
       if (found.links.length) {
         source = found.page || url;
         area.value = found.links.join("\n");
+        if (found.siteTags) setSiteTags(found.siteTags);
         if (!folder) choose(folderName(found.title || C.save.siteName(url)));
         sync();
       } else toast("Couldn't find a list of chapters on that page.");
@@ -1101,6 +1108,7 @@ function renderBatch(text, preset, from) {
     count.textContent = links.length ? links.length + (links.length === 1 ? " link" : " links") : "No links yet. Paste them here, one a line.";
     go.textContent = n ? "Save " + countLine(n) + (folder ? " into " + folder : "") : links.length ? "Nothing new to save" : "Save";
     go.disabled = !n;
+    if (drawTagNew) drawTagNew();
   };
   const pick = (f, typed) => { folder = f; if (!typed) input.value = ""; sync(); };
   // The collection: None, one already there, or a new one typed in.
@@ -1146,10 +1154,47 @@ function renderBatch(text, preset, from) {
         ...tags.map((t) => el("button", { class: "chip on", type: "button", "aria-label": "Remove tag " + t,
           onclick: () => { tags.splice(tags.indexOf(t), 1); drawTags(); } }, t, el("span", { class: "chip-x", "aria-hidden": "true" }, "×")))) : null,
       allTags().length ? tagPick : null, tagInput);
+    if (drawTagNew) drawTagNew();
     if (focus === "input") tagInput.focus({ preventScroll: true });
     else if (focus === "pick" && allTags().length) tagPick.querySelector(".dropdown-btn").focus({ preventScroll: true });
   };
   drawTags();
+  // A story page's own tags (Royal Road's, AO3's), offered as one switch.
+  const siteBox = el("div", { class: "batch-site-tags" });
+  let fromSite = [];
+  const useSite = (on) => {
+    tags.splice(0, tags.length, ...tags.filter((t) => !fromSite.some((x) => sameTag(x, t))));
+    fromSite = [];
+    if (on && siteTags) {
+      for (const raw of siteTags.tags) {
+        const t = cleanTag(raw);
+        if (!t || tags.some((x) => sameTag(x, t))) continue;
+        const known = allTags().find((x) => sameTag(x, t)) || t;
+        tags.push(known);
+        fromSite.push(known);
+      }
+    }
+    drawTags();
+  };
+  const setSiteTags = (got) => {
+    siteTags = got && got.tags && got.tags.length ? got : null;
+    if (!siteTags) { useSite(false); siteBox.replaceChildren(); return; }
+    const shown = siteTags.tags.slice(0, 3).join(", ") + (siteTags.tags.length > 3 ? " and " + (siteTags.tags.length - 3) + " more" : "");
+    const on = load(SITE_TAGS_KEY, false);
+    siteBox.replaceChildren(el("div", { class: "group" },
+      switchRow(siteTags.site + "'s tags", shown, on, (v) => { store(SITE_TAGS_KEY, v); useSite(v); }, { "aria-label": "Add " + siteTags.site + "'s tags" })));
+    useSite(on);
+  };
+  setSiteTags(siteTags);
+  // Clips that join the collection later (Website sync, Next, a move)
+  // take the tags its clips share.
+  let tagNew = load(TAG_NEW_KEY, true);
+  const tagNewBox = el("div", { class: "batch-tag-new" });
+  drawTagNew = () => {
+    tagNewBox.replaceChildren(folder && tags.length ? el("div", { class: "group" },
+      switchRow("Tag new clips too", "Chapters added later get these tags", tagNew, (v) => { tagNew = v; store(TAG_NEW_KEY, v); })) : "");
+  };
+  drawTagNew();
   area.addEventListener("input", sync);
   input.addEventListener("input", () => pick(cleanTag(input.value) ? folderName(input.value) : null, true));
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
@@ -1192,7 +1237,7 @@ function renderBatch(text, preset, from) {
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, "Collection"),
       el("div", { class: "tag-edit" }, folderPick, input),
       el("p", { class: "meta" }, "Clips in a collection keep the order of the links.")),
-    el("section", { class: "settings-section" }, el("h2", { class: "overline" }, "Tags"), tagBox),
+    el("section", { class: "settings-section" }, el("h2", { class: "overline" }, "Tags"), siteBox, tagBox, tagNewBox),
     go);
   form.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -1202,7 +1247,7 @@ function renderBatch(text, preset, from) {
     if (!urls.length) return;
     if (urls.length > LONG_LIST && !confirm("Save " + urls.length + " clips? They save one at a time, so a list this long takes a while. Pause and Stop are on its card.")) return;
     history.back();
-    saveAll(skipSaved ? all : urls, folder, tags, mode, skipSaved, kind, source);
+    saveAll(skipSaved ? all : urls, folder, tags, mode, skipSaved, kind, source, !!(folder && tags.length && tagNew));
   });
   $("batchBody").replaceChildren(form);
   if (folder) choose(folder);

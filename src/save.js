@@ -360,13 +360,14 @@
     const at = res.url || url;
     const doc = parse(res.text, at);
     const cover = pageImage(doc, at);
+    const siteTags = pageTags(doc, at);
     if (site) {
       const own = (site.contents && await site.contents(doc, at, res.text)) || null;
       const links = own ? own.links : site.list ? await site.list(doc, at, res.text) : [];
-      if (links.length) return { title: (own && own.title) || readTitle(doc), links, cover, page: url };
+      if (links.length) return { title: (own && own.title) || readTitle(doc), links, cover, page: url, siteTags };
       // A site whose chapters are only ever its own kind of link (a
       // Wikisource work's subpages): no guessing from the page's links.
-      if (site.ownChapters) return { title: readTitle(doc), links: [], cover, page: url };
+      if (site.ownChapters) return { title: readTitle(doc), links: [], cover, page: url, siteTags };
     }
     let links = widen(pickChapters(linkGroups(doc, at)), doc, at);
     if (links.length) links = await laterPages(doc, at, links);
@@ -380,7 +381,24 @@
       }
     }
     if (!links.length) links = namedChapters(doc, at);
-    return { title: readTitle(doc), links: links.map((l) => l.url), cover, page: url };
+    return { title: readTitle(doc), links: links.map((l) => l.url), cover, page: url, siteTags };
+  }
+
+  // The tags a story's page gives it (Royal Road's genres and tags, AO3's
+  // fandom and tags), or any page's article:tag meta: { site, tags }, or
+  // null. Offered in Save with options, never added unasked.
+  const MAX_TAGS = 10;
+  function pageTags(doc, url) {
+    const rule = siteRule(url);
+    let raw = rule && rule.tags ? rule.tags(doc) : [];
+    if (!raw.length) raw = [...doc.querySelectorAll('meta[property="article:tag"]')].map((m) => m.getAttribute("content") || "");
+    const tags = [];
+    for (const r of raw) {
+      const t = String(r).replace(/\s+/g, " ").trim().slice(0, 32);
+      if (t && !tags.some((x) => x.toLowerCase() === t.toLowerCase())) tags.push(t);
+      if (tags.length >= MAX_TAGS) break;
+    }
+    return tags.length ? { site: (rule && rule.name) || siteName(url), tags } : null;
   }
 
   // A chapter page's link to its story's contents page.
@@ -566,6 +584,7 @@
         const og = doc.querySelector('meta[property="og:title"]');
         return links.length ? { title: text(doc.querySelector(".fic-header h1")) || (og && og.content.trim()) || "", links } : null;
       },
+      tags: (doc) => [...doc.querySelectorAll(".tags a.fiction-tag, span.tags a[href*='tagsAdd=']")].map(text),
       chapter(doc) {
         removeHidden(doc);
         const inner = doc.querySelector(".chapter-inner.chapter-content, .chapter-inner");
@@ -614,6 +633,8 @@
         const nav = parse(res.text, res.url || url);
         return uniqueLinks([...nav.querySelectorAll("ol.chapter a[href], ol.index a[href]")].map((a) => absolute(a.getAttribute("href"), url)));
       },
+      // Its fandom first, then the freeform tags the author gave it.
+      tags: (doc) => [...doc.querySelectorAll("dd.fandom.tags a.tag, dd.freeform.tags a.tag")].map(text),
       chapter(doc) {
         const box = doc.querySelector("#chapters");
         const body = box && (box.querySelector(".userstuff.module, [role='article'].userstuff") || box.querySelector(".userstuff"));
@@ -655,6 +676,7 @@
         links = uniqueLinks(links).reverse();
         return links.length ? { title: text(doc.querySelector("div.fic_title")), links } : null;
       },
+      tags: (doc) => [...doc.querySelectorAll(".wi_fic_genre a.fic_genre, .wi_fic_showtags a.stag")].map(text),
       chapter(doc) {
         const raw = doc.querySelector("#chp_raw");
         if (!raw) return null;
@@ -2291,8 +2313,9 @@
       try { res.text = await site.prepare(res.text, finalUrl); } catch (e) { if (!given) throw e; }
     }
     if (site && site.contents && !comic && !asPage) {
-      const own = await site.contents(parse(res.text, finalUrl), finalUrl, res.text);
-      if (own && own.links.length) throw new ContentsPage(own);
+      const doc = parse(res.text, finalUrl);
+      const own = await site.contents(doc, finalUrl, res.text);
+      if (own && own.links.length) throw new ContentsPage({ ...own, siteTags: pageTags(doc, finalUrl) });
     }
     let got = readArticle(res.text, finalUrl, comic, site, asPage);
     let html = res.text;
@@ -2323,7 +2346,7 @@
       }
     }
     if (got && got.check) throw new SaveError("The site asked for a browser check, so Waypage can't save it yet.", true);
-    if (got && got.contents) throw new ContentsPage(got.contents);
+    if (got && got.contents) throw new ContentsPage({ ...got.contents, siteTags: pageTags(parse(html, finalUrl), finalUrl) });
     if (!got && comic) throw new SaveError("Waypage couldn't find the pictures on this page.");
     if (!got) {
       throw new SaveError(C.platform.canRender
