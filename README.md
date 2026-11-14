@@ -87,7 +87,7 @@ Each section below shows the computer (left) and the phone (right).
 <p><img src="docs/shots/saving-desktop.jpg" width="74%" alt="Save with options on a computer"> <img src="docs/shots/saving-phone.jpg" width="21%" alt="Save with options on a phone"></p>
 
 - Paste, drop or share a link; Ctrl V saves on a computer.
-- Save with options: several links at once, a file, article or comic, a collection and tags.
+- Save with options: several links at once, a file, article or comic, a collection and tags; a story page's own tags (Royal Road, AO3, Scribble Hub) with one switch.
 - Wikipedia through its REST API, with its licence line; Readability for everything else.
 - Discussions whole: Reddit, Hacker News, Lobsters, Stack Overflow and the other Stack Exchange sites, any Discourse forum, Lemmy, Substack (comments too), LessWrong and the EA Forum, Bluesky and Mastodon threads, and GitHub issues and pull requests, with who said what and replies indented. A GitHub code file as code, a repo as its README; an arXiv paper whole, from its web version.
 - Pictures as small previews, full size (capped at 1600 px WebP) or links only, per clip or in Settings; or load pictures only when tapped.

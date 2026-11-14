@@ -1477,6 +1477,7 @@ html { -webkit-tap-highlight-color: transparent; }
 .batch-find[hidden] { display: none; }
 .batch-form .group { margin-top: var(--s-3); }
 .batch-form .group[hidden] { display: none; }
+.batch-site-tags:not(:empty) { margin-bottom: var(--s-3); }
 .batch-go { display: block; width: 100%; margin-top: var(--s-6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .batch-go:disabled { opacity: 0.5; cursor: default; }
 .rc-row.follow .chip { min-width: var(--tap); }

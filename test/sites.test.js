@@ -372,10 +372,12 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
         Object.defineProperty(P, "canRender", { get: () => true, configurable: true });
         window.drawn = [];
         const rows = Array.from({ length: 8 }, (_, i) => '<tr class="chapter-row"><td><a href="/fiction/1/s/chapter/' + (i + 1) + '/c">Chapter ' + (i + 1) + "</a></td></tr>").join("");
-        P.render = async (url) => { window.drawn.push(url); return { url, text: "<html><head><title>A Story | Royal Road</title></head><body><h1>A Story</h1><table id=\"chapters\"><tbody>" + rows + "</tbody></table></body></html>" }; };
+        P.render = async (url) => { window.drawn.push(url); return { url, text: "<html><head><title>A Story | Royal Road</title></head><body><h1>A Story</h1><span class=\"tags\"><a class=\"fiction-tag\" href=\"/fictions/search?tagsAdd=fantasy\">Fantasy</a> <a class=\"fiction-tag\" href=\"/fictions/search?tagsAdd=litrpg\">  LitRPG </a><a class=\"fiction-tag\" href=\"/fictions/search?tagsAdd=fantasy\">fantasy</a></span><table id=\"chapters\"><tbody>" + rows + "</tbody></table></body></html>" }; };
         return Waypage.save.findChapters("https://www.royalroad.com/fiction/1/a-story");
       });
       assert.strictEqual(found.links.length, 8);
+      // Its tags, offered in Save with options (each once).
+      assert.deepStrictEqual(found.siteTags, { site: "Royal Road", tags: ["Fantasy", "LitRPG"] });
       assert.deepStrictEqual(await p.evaluate(() => window.drawn), ["https://www.royalroad.com/fiction/1/a-story"]);
       await ctx.close();
     });
@@ -390,6 +392,7 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       assert.match(got.links[23], /\/02\/24\/2-24\/$/);
       assert.ok(got.links.some((u) => /interlude/.test(u)), "an interlude without a number keeps its place");
       assert.strictEqual(got.cover, "https://wanderinginn.example/cover.jpg");
+      assert.strictEqual(got.siteTags, null, "a page with no tags offers none");
     });
 
     await test("Website sync: arcs in paragraphs of their own are one list", async () => {

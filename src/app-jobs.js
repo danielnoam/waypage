@@ -152,7 +152,7 @@ async function saveWaiting() {
 // A link that turned out to be a contents page opens as a list to check.
 function contentsFound(job) {
   dropFailed(job);
-  openBatch(job.contents.links.join("\n"), false, folderName(job.contents.title || job.site), job.url);
+  openBatch(job.contents.links.join("\n"), false, folderName(job.contents.title || job.site), job.url, job.contents.siteTags);
   toast("That's a list of chapters. Check them, then save.");
 }
 

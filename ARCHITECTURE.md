@@ -181,6 +181,10 @@ way); a list over pages followed by its Next link (40 pages at
 most); a chapter's own link led on to its "Table of contents" link; and
 a list of named, unnumbered chapters taken when six or more links of one
 shape share the site's first folder.
+The same read gives the page's own tags (`pageTags`: a site rule's
+`tags`, else `article:tag` meta, ten at most) as `siteTags`; Save with
+options offers them as one switch, off until turned on, remembered in
+`waypage.saveSiteTags`.
 
 ## Where clips live
 
