@@ -149,8 +149,8 @@ function jpxPdfBytes() {
 function epubBytes() { return zipOf(EPUB_FILES); }
 // A long linked book for the lazy reader (1.29.0): 200 chapters of 1600
 // characters and a picture each, over the LONG line in reader.js.
-function longEpubBytes() {
-  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+// `png`: the picture every chapter shows (1×1 unless another is given).
+function longEpubBytes(png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64")) {
   const files = [EPUB_FILES[0], EPUB_FILES[1]];
   const items = [], spine = [];
   for (let i = 0; i < 200; i++) {
@@ -1280,6 +1280,27 @@ function zipOf(files) {
       assert.ok(!/secret/.test(body), "the token was left in");
       const errs = q.errors.filter((e) => !/nothing-here/.test(e));
       assert.deepStrictEqual(errs, [], errs.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Record timings notes a page opening and its sheets, and the report carries them (Unreleased)", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ARTICLE); await q.press("#saveUrl", "Enter");
+      await until(q, async () => (await window.Waypage.store.readIndex()).length === 1);
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Report a problem" }).click();
+      await q.locator("label.row", { hasText: "Record timings" }).click();
+      await q.locator(".row", { hasText: "Copy the timings" }).waitFor();
+      await q.evaluate(() => { history.back(); history.back(); });
+      await until(q, () => !document.querySelector("#settingsView") || document.getElementById("settingsView").hidden || !document.getElementById("settingsView").offsetParent);
+      await q.evaluate(() => openPage(state.pages[0].id));
+      await until(q, () => !document.getElementById("readerContents").hidden || !document.getElementById("readerFrame").classList.contains("unready"));
+      await q.evaluate(() => openSheet("contents"));
+      const text = await q.evaluate(() => reportText());
+      assert.ok(/Timings \(ms/.test(text) && /\d+ open \d+ characters/.test(text) && /\d+ shown/.test(text) && /sheet contents/.test(text), text.slice(-600));
+      await q.evaluate(() => { localStorage.setItem("waypage.recordTimings", "false"); timingWatch(false); timing.rows = []; });
+      assert.ok(!/Timings \(ms/.test(await q.evaluate(() => reportText())), "off still reports timings");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });
 
@@ -4543,6 +4564,70 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("a big book opens at its place first and fills in the rest behind it (Unreleased)", async () => {
+      const q = await page(browser, 390);
+      // 40 chapters of 60 KB: past the 2 MB a book is cut apart from.
+      const files = [["mimetype", "application/epub+zip"], ["META-INF/container.xml", EPUB_FILES[1][1]]];
+      let man = "", spine = "";
+      for (let i = 0; i < 40; i++) {
+        let body = "<h1>Chapter " + (i + 1) + "</h1>";
+        for (let k = 0; body.length < 60000; k++) body += "<p>Words of chapter " + (i + 1) + ", paragraph " + k + ", long enough to wrap onto a few lines at phone width for the reader to lay out.</p>";
+        files.push(["OEBPS/c" + i + ".xhtml", '<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml"><body>' + body + "</body></html>"]);
+        man += '<item id="c' + i + '" href="c' + i + '.xhtml" media-type="application/xhtml+xml"/>';
+        spine += '<itemref idref="c' + i + '"/>';
+      }
+      files.push(["OEBPS/book.opf", '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Long Road</dc:title></metadata><manifest>' + man + "</manifest><spine>" + spine + "</spine></package>"]);
+      const bytes = [...zipOf(files)];
+      const id = await q.evaluate(async (b) => {
+        const file = new File([new Uint8Array(b)], "long.epub", { type: "application/epub+zip" });
+        const meta = await window.Waypage.files.bring(file, "epub", { has: () => false });
+        await window.Waypage.store.writeIndex([meta, ...(await window.Waypage.store.readIndex())]);
+        return meta.id;
+      }, bytes);
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const shown = () => until(q, () => !document.getElementById("readerFrame").classList.contains("unready") && state.open);
+      const whole = () => until(q, () => !window.Waypage.reader.filling);
+      // Unread, it opens at its start and learns where its chapters start.
+      await q.evaluate((id) => openPage(id), id);
+      await shown();
+      await whole();
+      assert.strictEqual(await q.evaluate(() => window.Waypage.reader.headings().length), 40);
+      await until(q, () => Object.keys(JSON.parse(localStorage.getItem("waypage.bookMaps") || "{}")).length === 1);
+      // A scroll within 400 ms of the reader putting the page back isn't
+      // the reader's own move, so it isn't kept as the place.
+      await q.waitForTimeout(500);
+      await q.frameLocator("#readerFrame").locator("#c30").evaluate((el) => { el.scrollIntoView(); el.ownerDocument.defaultView.scrollBy(0, 1500); });
+      await until(q, () => /^Chapter 31$/.test(window.Waypage.reader.section()) && state.pages.find((x) => x.file).spot === window.Waypage.reader.spot());
+      const left = await q.evaluate(() => state.pages.find((x) => x.file).spot);
+      await q.evaluate(() => history.back());
+      await until(q, () => !state.open);
+      // Then at its place, with the rest still to come (on a slow phone).
+      const cdp = await q.context().newCDPSession(q);
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 6 });
+      await q.evaluate((id) => openPage(id), id);
+      await shown();
+      const first = await q.evaluate(() => ({ filling: window.Waypage.reader.filling, spot: window.Waypage.reader.spot(), section: window.Waypage.reader.section(), empty: window.Waypage.reader.frameDoc.querySelectorAll("section[data-co-wait]").length }));
+      assert.strictEqual(first.filling, true);
+      assert.strictEqual(first.spot, left);
+      assert.strictEqual(first.section, "Chapter 31");
+      assert.ok(first.empty > 0, "chapters not cut");
+      // Narrate waits for the whole book, then starts.
+      await q.evaluate(() => { window.asked = 0; const go = window.startAloud; window.startAloud = function () { window.asked++; return go.apply(this, arguments); }; });
+      await q.evaluate(() => toggleBar());
+      await q.locator("#readerAloud").click();
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+      await whole();
+      const after = await q.evaluate(() => ({ spot: window.Waypage.reader.spot(), empty: window.Waypage.reader.frameDoc.querySelectorAll("section[data-co-wait]").length, words: window.Waypage.reader.frameDoc.querySelector("#c0").textContent.length, contents: window.Waypage.reader.headings().length }));
+      assert.strictEqual(after.empty, 0);
+      assert.ok(after.words > 50000, "first chapter not filled");
+      assert.strictEqual(after.contents, 40);
+      assert.strictEqual(after.spot.split("/")[0], left.split("/")[0], after.spot + " vs " + left);
+      await until(q, () => window.asked > 0);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a Kindle book (MOBI) opens with its contents, link, picture and cover; a locked one says so (1.42.0)", async () => {
       const q = await page(browser, 390);
       const got = await q.evaluate(async ([b, locked]) => {
@@ -4664,6 +4749,38 @@ c("bk1", { at: 0.01 })]);
       assert.ok(named.real && named.section === named.real, named.section + " vs " + named.real);
       // The scroll back to the place has the pictures there read.
       await until(q, () => { const d = document.getElementById("readerFrame").contentDocument; return [...d.querySelectorAll("img[data-at]")].some((i) => { const r = i.getBoundingClientRect(); return r.bottom > -innerHeight && r.top < innerHeight * 2; }); });
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("going on to the next book in a collection opens that book's own file for its pictures (Unreleased)", async () => {
+      const q = await page(browser, 390);
+      // The same picture names, a 1×1 picture in the first and a 2×2 in the second.
+      const books = { "one.epub": [...longEpubBytes()], "two.epub": [...longEpubBytes(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEUlEQVR4nGP4z8DwnwGMgRQAH+4D/dJQfRoAAAAASUVORK5CYII=", "base64"))] };
+      const ids = await q.evaluate(async (books) => {
+        const out = [];
+        for (const name of Object.keys(books)) {
+          const book = new File([new Uint8Array(books[name])], name, { type: "application/epub+zip" });
+          window.Waypage.platform.files.blob = async () => book;
+          const meta = await window.Waypage.files.bring(book, "epub", { has: () => false, link: "content://books/" + name });
+          meta.folder = "Saga"; meta.folderAt = out.length + 1;
+          await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
+          out.push(meta.id);
+        }
+        return out;
+      }, books);
+      await q.reload();
+      await q.evaluate((books) => { window.Waypage.platform.files.blob = async (link) => new File([new Uint8Array(books[link.split("/").pop()])], "x.epub"); }, books);
+      const shown = () => until(q, () => { const img = document.getElementById("readerFrame").contentDocument.querySelector(".co-body img"); return img && img.hasAttribute("data-at") && img.complete && img.naturalWidth > 0; });
+      const width = () => q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelector(".co-body img").naturalWidth);
+      await q.evaluate((id) => openPage(id), ids[0]);
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      await shown();
+      assert.strictEqual(await width(), 1);
+      await q.evaluate((id) => goTo(state.pages.find((x) => x.id === id), 1), ids[1]);
+      assert.strictEqual(await q.evaluate(() => state.open.id), ids[1]);
+      await shown();
+      assert.strictEqual(await width(), 2, "the first book's picture was shown");
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

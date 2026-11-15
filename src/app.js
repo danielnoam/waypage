@@ -154,7 +154,9 @@ function paintTheme() {
   const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
   if (meta) meta.content = bg;
   if (bg !== paintedLook) { paintedLook = bg; C.platform.look(bg, !!(themeOf(theme) || {}).dark, shownTheme() === state.theme); }
-  if (C.reader) { if (typeof paintPdfDark === "function") paintPdfDark(); C.reader.applyTheme(); }
+  // Not into a page on its way out: restyling a big book's page held
+  // up leaving it (0.5 s at 6x for a 47 MB book).
+  if (C.reader && state.open) { if (typeof paintPdfDark === "function") paintPdfDark(); C.reader.applyTheme(); }
 }
 
 // A new theme is there at once (1.11.0): the cross-fade it had was a

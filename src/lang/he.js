@@ -1,6 +1,16 @@
 // Hebrew. Keys are the English text; a missing key shows in English.
 // Plurals: one, two (optional), other. Keep {placeholders} and edge spaces.
 Keel.i18n.strings("he", {
+  "Opening the rest of the book…": "פותח את שאר הספר…",
+  "Timings": "מדידת זמנים",
+  "Record timings": "תיעוד זמנים",
+  "{n} noted": "{n} נרשמו",
+  "Timings copied": "הזמנים הועתקו",
+  "Copy the timings": "העתקת הזמנים",
+  "Clear them": "ניקוי",
+  "Hide far chapters": "הסתרת פרקים רחוקים",
+  "Off to compare, from the next book opened": "כבוי להשוואה, מהספר הבא שנפתח",
+  "For a slow screen: turn this on, do the slow thing, then send the report. It notes stalls and taps that waited, and nothing about what you read.": "למסך איטי: מפעילים את זה, עושים את הפעולה האיטית, ואז שולחים את הדוח. זה רושם תקיעות והקשות שחיכו, ושום דבר על מה שקוראים.",
   " · Saving again": " · שומר שוב",
   " and shows in the Files app under On My iPhone": " ומופיע באפליקציית הקבצים תחת ״באייפון שלי״",
   " as read": " כנקרא",
@@ -1321,7 +1331,7 @@ Keel.i18n.strings("he", {
   "Nothing is opened or saved.": "שום דבר לא נפתח או נשמר.",
   "Nothing is written yet": "עדיין לא נכתב כלום",
   "Nothing is written yet.": "עדיין לא נכתב כלום.",
-  "Nothing leaves {HERE} unless you send it. The report holds what you wrote, Waypage's version, the phone's model and system, how long opening took, and the notes below, with addresses cut to their pages. An issue on GitHub is public, so anyone can read it.": "שום דבר לא יוצא מ{HERE} בלי ששולחים אותו. הדוח כולל את מה שכתבת, את גרסת Waypage, את דגם הטלפון ומערכת ההפעלה, כמה זמן לקחה הפתיחה, וההערות למטה, עם כתובות מקוצרות לדפים שלהן. issue ב-GitHub הוא ציבורי, כך שכל אחד יכול לקרוא אותו.",
+  "Nothing leaves {HERE} unless you send it. The report holds what you wrote, Waypage's version, the phone's model and system, how long opening took, the notes below and any timings recorded, with addresses cut to their pages. An issue on GitHub is public, so anyone can read it.": "שום דבר לא יוצא מ{HERE} בלי ששולחים אותו. הדוח כולל את מה שכתבת, את גרסת Waypage, את דגם הטלפון ומערכת ההפעלה, כמה זמן לקחה הפתיחה, ההערות למטה וכל מדידת זמנים שנרשמה, עם כתובות מקוצרות לדפים שלהן. issue ב-GitHub הוא ציבורי, כך שכל אחד יכול לקרוא אותו.",
   "Nothing matches “{query}” in {filter}.": "שום דבר לא מתאים ל-“{query}” ב{filter}.",
   "Nothing matches “{query}”.": "שום דבר לא מתאים ל-“{query}”.",
   "Nothing new in {names}.": "אין שום דבר חדש ב-{names}.",

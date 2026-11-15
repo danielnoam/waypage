@@ -275,9 +275,14 @@ async function openPage(id, fromHistory) {
   // Another post in the Feeds pane takes the place of the one there.
   const swap = state.open && $("readerView").dataset.pane && !$("readerView").dataset.leaving;
   if (!fromHistory && !wait) swap ? history.replaceState(readerState(p), "") : history.pushState(readerState(p), "");
+  timingNote("open " + (html ? html.length : 0) + " characters" + (p.file ? ", a file" : ""));
   const shown = show(p, html);
   if (!wait) pushScreen($("readerView"));
-  await shown;
+  // A big book shows its place before the rest of it is in (reader.js).
+  await Promise.race([shown, C.reader.shown()]);
+  timingNote("shown" + (C.reader.filling ? ", the rest filling in" : ""));
+  C.reader.whole().then(() => setTimeout(() => { const g = C.reader.geometry(); if (g) timingNote("book: " + g); }, 1500));
+  if (C.reader.filling) C.reader.whole().then(() => timingNote("whole book in"));
   if (wait) {
     const d = $("readerFrame").contentDocument;
     await Promise.race([Promise.all([
@@ -295,6 +300,7 @@ async function openPage(id, fromHistory) {
     markAfterOpen = null;
     // After the reader has gone back to where it was left.
     await (d && d.fonts ? d.fonts.ready : null);
+    await C.reader.whole();
     const m = (p.marks || []).find((x) => x.id === id);
     requestAnimationFrame(() => { if (state.open === p && m) jumpToMark(p, m); });
   }
@@ -855,6 +861,7 @@ function showSection() {
   const section = C.reader.section();
   if ($("readerNow").textContent === (section || t("Contents"))) return;
   $("readerNow").textContent = section || t("Contents");
+  timingNote("chapter shown: " + (section || "Contents"));
   $("readerContents").setAttribute("aria-label", section ? t("Contents, now {section}", { section: section }) : t("Contents"));
   paintPart();
 }
@@ -1006,14 +1013,43 @@ function contentsList() {
   let current = -1;
   const list = C.reader.headings();
   list.forEach((h, i) => { if (h.text === now) current = i; });
-  const rows = list.map((h, i) => {
+  const row = (h, i) => {
     const b = el("button", { class: "row contents-row" + (h.level === 3 ? " sub" : ""), type: "button",
       onclick: () => { history.back(); C.reader.jumpTo(i); } }, el("span", { class: "row-label", dir: "auto" }, h.text));
     if (i === current) b.setAttribute("aria-current", "location");
     return el("li", null, b);
+  };
+  // A book of 900 chapters took 0.5 s at 6x to show its list. The rows
+  // around the one being read come first, those after it follow a few
+  // hundred a frame, and those before it only once the list is scrolled
+  // up near them: a row put in above the others restyles every row after
+  // it (the stylesheet's li + li rules), so they go in once, together.
+  let lo = Math.max(0, current - 40), hi = Math.min(list.length, Math.max(current, 0) + 60);
+  const ol = el("ol", { class: "group contents-list" }, ...list.slice(lo, hi).map((h, i) => row(h, lo + i)));
+  const nav = el("nav", { class: "contents", "aria-label": t("Contents") }, ol);
+  requestAnimationFrame(() => {
+    if (current > 0) centreIn(nav.querySelector("[aria-current]"));
+    const more = () => {
+      if (!ol.isConnected || hi >= list.length) return;
+      const to = Math.min(list.length, hi + 200);
+      ol.append(...list.slice(hi, to).map((h, i) => row(h, hi + i)));
+      hi = to;
+      requestAnimationFrame(more);
+    };
+    requestAnimationFrame(more);
+    if (!lo) return;
+    const box = $("readingBody");
+    const near = new IntersectionObserver((seen) => {
+      if (!seen.some((x) => x.isIntersecting)) return;
+      near.disconnect();
+      if (!ol.isConnected) return;
+      const tall = box.scrollHeight;
+      ol.prepend(...list.slice(0, lo).map((h, i) => row(h, i)));
+      box.scrollTop += box.scrollHeight - tall;
+      lo = 0;
+    }, { root: box, rootMargin: "1200px 0px 0px 0px" });
+    near.observe(ol.firstElementChild);
   });
-  const nav = el("nav", { class: "contents", "aria-label": t("Contents") }, el("ol", { class: "group contents-list" }, ...rows));
-  if (current > 0) requestAnimationFrame(() => centreIn(nav.querySelector("[aria-current]")));
   return nav;
 }
 
@@ -1071,7 +1107,9 @@ let heading = "";
 async function goTo(p, turn, swiped = null) {
   heading = p.id;
   let html;
-  try { html = p.note ? await openLinked(p) : await C.store.readPage(p.id); } catch (e) { html = null; }
+  // A file read from where it is opens its own file for its pictures and
+  // pages: read as a saved page, the one before's were looked up instead.
+  try { html = p.note || p.link ? await openLinked(p) : await C.store.readPage(p.id); } catch (e) { html = null; }
   const frame = $("readerFrame");
   if (swiped != null && !html) { frame.style.transform = ""; if (!M.reduced()) M.pageBack(frame, swiped); }
   if (!html) {
@@ -1145,6 +1183,7 @@ function savePositions() {
 }
 
 function closeReader() {
+  if (state.open) timingNote("leave");
   if (waiting && !state.open) { stopWaiting(); C.reader.close(); C.files.closeHeld(); popScreen($("readerView")); return; }
   stopWaiting();
   if (!state.open) return;
@@ -2713,6 +2752,7 @@ const SHEETS = {
 
 function openSheet(kind, fromHistory) {
   if (state.sheet === kind || !state.open || !SHEETS[kind]) return;
+  timingNote("sheet " + kind);
   if (state.sheet) closeSheet(true);
   state.sheet = kind;
   closeSkim();
@@ -3266,6 +3306,23 @@ function skimPart(by) {
   const to = here && at - here.at < 0.004 ? before[before.length - 2] : here;
   skimGo(to ? to.at : 0);
 }
+// While a big book's other chapters come in (reader.js, Unreleased),
+// what needs the whole book (Narrate, Find, Highlights, Aa, skimming)
+// waits for it: a tap is kept and acted on once it's in.
+for (const bar of [$("readerView").querySelector(".reader-bar"), $("readFoot")]) {
+  bar.addEventListener("click", (e) => {
+    // The collection's clips don't need the book: its list opens at once.
+    if (!C.reader.filling || !e.isTrusted || e.target.closest("#readerBack, #jumpBack, #readerFolder")) return;
+    const b = e.target.closest("button") || e.target.closest(".read-left");
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    if (!b) return;
+    const p = state.open;
+    toast(t("Opening the rest of the book…"));
+    C.reader.whole().then(() => { if (state.open === p && b.isConnected) b.click(); });
+  }, true);
+}
+$("skimTrack").addEventListener("pointerdown", (e) => { if (C.reader.filling) e.stopImmediatePropagation(); }, true);
 $("readFoot").querySelector(".read-left").addEventListener("click", (e) => {
   if (e.target.closest("button, a, input, .aloud-player") || !skimOn()) return;
   if (skimUp()) closeSkim();
@@ -3748,3 +3805,4 @@ async function renameClip(p, name) {
   renderLibrary();
   if (state.folder) renderFolder();
 }
+
