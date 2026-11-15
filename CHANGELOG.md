@@ -2,6 +2,28 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.63.0] - 2026-11-15
+
+### Added
+- Exporting a collection has a Chapter headers switch. Turn it off and each chapter starts straight with its text, without the clip's name, site and author on top, for a story whose chapters already open with their own titles. The book's contents still list every chapter by name. Works for EPUB, HTML, PDF and Markdown, and it's remembered.
+- Exporting a collection can change the exported book without touching your clips. Pick the first and last chapter to export only part of it. Book details sets the book's title and author. Clean up the text lists paragraphs that repeat in many chapters (a site's "Previous Chapter / Next Chapter", a Patreon plea) for you to leave out, and has find and replace with Edit clips' rules (`A/N: *` removes an author's note). The title, author and clean-up are kept for the next export of that collection.
+- Hebrew: every screen, button and message in Hebrew, right to left, with Heebo and Frank Ruhl Libre for its letters. Settings › Appearance › Language picks System, English or עברית; System follows the phone.
+- Record timings, in Settings › Report a problem: turn it on, do the slow thing, and the report carries what stalled and which taps waited.
+
+### Changed
+- A collection's EPUB names the first chapter's author as the book's author, not the site.
+- Animations now run on keel's shared motion engine, the same one LifeLog and new apps use. They move exactly as before.
+- A big book opens at the chapter you were reading and loads the rest behind it: a 47 MB book shows your page in about 2 s instead of 10 on a slow phone. Narrate, Find and Highlights wait the few seconds until the whole book is in.
+- A big book's Contents opens at once: the chapters around yours come first, the rest as you scroll (a 900-chapter list held the screen for half a second).
+- Leaving a big book no longer stalls on the way back to the library.
+- Taps in a big book no longer freeze the phone for seconds: the chapters far from the screen are kept out of what the phone reads from the page.
+
+### Fixed
+- A book opened from its collection in the reader (or by swiping to it) showed the book before's pictures, or blanks, until it was reopened from the library.
+- A book's first pictures (its cover) could stay blank when it was opened right after another book.
+- A very long book couldn't be scrolled or jumped past a point (chapter 600 of 840 in one), and a jump could slide a few screens once there.
+- Leaving a book while Narrate was going could forget your place and reopen it near the start.
+
 ## [1.62.0] - 2026-11-15
 
 ### Added
