@@ -1005,14 +1005,43 @@ function contentsList() {
   let current = -1;
   const list = C.reader.headings();
   list.forEach((h, i) => { if (h.text === now) current = i; });
-  const rows = list.map((h, i) => {
+  const row = (h, i) => {
     const b = el("button", { class: "row contents-row" + (h.level === 3 ? " sub" : ""), type: "button",
       onclick: () => { history.back(); C.reader.jumpTo(i); } }, el("span", { class: "row-label", dir: "auto" }, h.text));
     if (i === current) b.setAttribute("aria-current", "location");
     return el("li", null, b);
+  };
+  // A book of 900 chapters took 0.5 s at 6x to show its list. The rows
+  // around the one being read come first, those after it follow a few
+  // hundred a frame, and those before it only once the list is scrolled
+  // up near them: a row put in above the others restyles every row after
+  // it (the stylesheet's li + li rules), so they go in once, together.
+  let lo = Math.max(0, current - 40), hi = Math.min(list.length, Math.max(current, 0) + 60);
+  const ol = el("ol", { class: "group contents-list" }, ...list.slice(lo, hi).map((h, i) => row(h, lo + i)));
+  const nav = el("nav", { class: "contents", "aria-label": "Contents" }, ol);
+  requestAnimationFrame(() => {
+    if (current > 0) centreIn(nav.querySelector("[aria-current]"));
+    const more = () => {
+      if (!ol.isConnected || hi >= list.length) return;
+      const to = Math.min(list.length, hi + 200);
+      ol.append(...list.slice(hi, to).map((h, i) => row(h, hi + i)));
+      hi = to;
+      requestAnimationFrame(more);
+    };
+    requestAnimationFrame(more);
+    if (!lo) return;
+    const box = $("readingBody");
+    const near = new IntersectionObserver((seen) => {
+      if (!seen.some((x) => x.isIntersecting)) return;
+      near.disconnect();
+      if (!ol.isConnected) return;
+      const tall = box.scrollHeight;
+      ol.prepend(...list.slice(0, lo).map((h, i) => row(h, i)));
+      box.scrollTop += box.scrollHeight - tall;
+      lo = 0;
+    }, { root: box, rootMargin: "1200px 0px 0px 0px" });
+    near.observe(ol.firstElementChild);
   });
-  const nav = el("nav", { class: "contents", "aria-label": "Contents" }, el("ol", { class: "group contents-list" }, ...rows));
-  if (current > 0) requestAnimationFrame(() => centreIn(nav.querySelector("[aria-current]")));
   return nav;
 }
 
@@ -3267,11 +3296,12 @@ function skimPart(by) {
   skimGo(to ? to.at : 0);
 }
 // While a big book's other chapters come in (reader.js, Unreleased),
-// what needs the whole book (Narrate, Find, Highlights, Pages, skimming)
+// what needs the whole book (Narrate, Find, Highlights, Aa, skimming)
 // waits for it: a tap is kept and acted on once it's in.
 for (const bar of [$("readerView").querySelector(".reader-bar"), $("readFoot")]) {
   bar.addEventListener("click", (e) => {
-    if (!C.reader.filling || !e.isTrusted || e.target.closest("#readerBack, #jumpBack")) return;
+    // The collection's clips don't need the book: its list opens at once.
+    if (!C.reader.filling || !e.isTrusted || e.target.closest("#readerBack, #jumpBack, #readerFolder")) return;
     const b = e.target.closest("button") || e.target.closest(".read-left");
     e.stopImmediatePropagation();
     e.preventDefault();

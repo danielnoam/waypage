@@ -984,6 +984,11 @@ area.
   (`rest.base`). Never give a chapter a new height while it fills: one
   above the text moves it. Whatever needs every block waits for
   `C.reader.whole()`; the reader bar holds taps until then.
+- **A row put in above others restyles all that follow** (sibling rules
+  like `li + li`): a long list grows at its end, and what goes above goes
+  in once (`contentsList`). Theming the reader's page on the way out
+  restyled a 47 MB book, so `paintTheme` leaves the frame alone once the
+  reader is closed.
 - **Moving an iframe reloads it.** Wrap it where it will stay at start-up.
 - **Classic scripts share one scope:** a global function can shadow a
   `window` method (`moveTo` had to become `moveInFolder`).
