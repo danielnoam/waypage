@@ -4476,6 +4476,9 @@ c("bk1", { at: 0.01 })]);
       await whole();
       assert.strictEqual(await q.evaluate(() => window.Waypage.reader.headings().length), 40);
       await until(q, () => Object.keys(JSON.parse(localStorage.getItem("waypage.bookMaps") || "{}")).length === 1);
+      // A scroll within 400 ms of the reader putting the page back isn't
+      // the reader's own move, so it isn't kept as the place.
+      await q.waitForTimeout(500);
       await q.frameLocator("#readerFrame").locator("#c30").evaluate((el) => { el.scrollIntoView(); el.ownerDocument.defaultView.scrollBy(0, 1500); });
       await until(q, () => /^Chapter 31$/.test(window.Waypage.reader.section()) && state.pages.find((x) => x.file).spot === window.Waypage.reader.spot());
       const left = await q.evaluate(() => state.pages.find((x) => x.file).spot);
