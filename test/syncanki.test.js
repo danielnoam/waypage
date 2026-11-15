@@ -4,6 +4,7 @@
 // other, a deletion sticks, a write another device beat is merged and
 // sent again, and a device with Anki off, or the switch off, sends nothing.
 const assert = require("assert");
+require("./lang.js");
 
 const mem = new Map();
 global.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };

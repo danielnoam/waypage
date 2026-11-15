@@ -13,11 +13,13 @@
 // app-cards, app-downloads, app-search, app-draw, app-jobs, app-reader,
 // app-library, app-saving, app-places, app-settings, app-lock, and
 // app-start, which runs last and starts things up.
-const APP_VERSION = "1.62.0";
+const APP_VERSION = "1.63.0";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
 const M = C.motion;
+// index.html is written in English; its marked words turn once, here.
+if (i18n.lang !== "en") i18n.apply();
 
 // Every history entry carries this launch's mark (1.21.0). After a restart
 // the entries from before are still behind the first one, and Back into
@@ -30,15 +32,15 @@ for (const name of ["pushState", "replaceState"]) {
 // Each theme is a token set in src/styles.css; "system" (Auto) picks
 // the light or dark one chosen for it from the phone's setting.
 const THEMES = [
-  { value: "paper", label: "Paper", dark: false },
-  { value: "sepia", label: "Sepia", dark: false, note: "Warmer, for long reads" },
-  { value: "slate", label: "Slate", dark: false, note: "Cool grey" },
-  { value: "solarized", label: "Solarized", dark: false },
-  { value: "contrast", label: "High contrast", short: "Contrast", dark: false, note: "Black on white, for bright sun" },
-  { value: "night", label: "Night", dark: true, note: "For a dim cabin" },
-  { value: "black", label: "Black", dark: true, note: "True black, easy on OLED batteries" },
-  { value: "dusk", label: "Dusk", dark: true, note: "Warm and soft, for bedtime" },
-  { value: "solarized-dark", label: "Solarized Dark", short: "Solarized", dark: true },
+  { value: "paper", label: t("Paper"), dark: false },
+  { value: "sepia", label: t("Sepia"), dark: false, note: t("Warmer, for long reads") },
+  { value: "slate", label: t("Slate"), dark: false, note: t("Cool grey") },
+  { value: "solarized", label: t("Solarized"), dark: false },
+  { value: "contrast", label: t("High contrast"), short: t("Contrast"), dark: false, note: t("Black on white, for bright sun") },
+  { value: "night", label: t("Night"), dark: true, note: t("For a dim cabin") },
+  { value: "black", label: t("Black"), dark: true, note: t("True black, easy on OLED batteries") },
+  { value: "dusk", label: t("Dusk"), dark: true, note: t("Warm and soft, for bedtime") },
+  { value: "solarized-dark", label: t("Solarized Dark"), short: t("Solarized"), dark: true },
 ];
 const themeOf = (v) => THEMES.find((t) => t.value === v);
 const THEME_KEY = "waypage.theme";
@@ -64,9 +66,9 @@ const MOTION_KEY = "waypage.animations";
 const LAYOUT_KEY = "waypage.layout";
 // The library's three looks (0.28.0); Settings, Library picks one.
 const LAYOUTS = [
-  { value: "shelf", label: "Shelf", note: "Collections as a row of covers, clips listed under them" },
-  { value: "list", label: "One list", note: "Collections and clips together, grouped by date or site" },
-  { value: "grid", label: "Grid", note: "Covers three across, clips as picture cards" },
+  { value: "shelf", label: t("Shelf"), note: t("Collections as a row of covers, clips listed under them") },
+  { value: "list", label: t("One list"), note: t("Collections and clips together, grouped by date or site") },
+  { value: "grid", label: t("Grid"), note: t("Covers three across, clips as picture cards") },
 ];
 const NEW_KEY = "waypage.newChapters";
 const DAILY_KEY = "waypage.checkDaily";
@@ -128,7 +130,7 @@ function autoThemes() {
   return { light: ok(a.light, false) ? a.light : "paper", dark: ok(a.dark, true) ? a.dark : "night" };
 }
 const resolveTheme = (choice) => (themeOf(choice) ? choice : autoThemes()[darkQuery && darkQuery.matches ? "dark" : "light"]);
-const themeName = (choice) => (themeOf(choice) ? themeOf(choice).label : "Auto");
+const themeName = (choice) => (themeOf(choice) ? themeOf(choice).label : t("Auto"));
 
 function setAutoTheme(change) {
   store(AUTO_KEY, { ...autoThemes(), ...change });

@@ -22,6 +22,7 @@ line is the way it is lives in its commit and PR (`git log -S`,
 - [Versions, cache and updates](#versions-cache-and-updates)
 - [The phone apps](#the-phone-apps)
 - [Tests and screenshots](#tests-and-screenshots)
+- [Languages](#languages)
 - [Trade-offs](#trade-offs)
 - [Traps](#traps)
 - [The docs](#the-docs)
@@ -45,6 +46,8 @@ sw.js               offline cache for the web copy; its ASSETS list is also what
 manifest.json       the web copy as an installable app
 privacy.html, terms.html   the pages Google's OAuth branding links to
 src/boot.js         runs in <head>: puts the saved theme on <html> before the first frame
+src/language.js     runs in <head>: picks English or Hebrew, sets lang and dir on <html>, loads the Hebrew words; gives every script t() and tn()
+src/lang/he.js      the Hebrew for every English word the app shows, keyed by the English
 src/app.js          APP_VERSION, the shared helpers (el, load, store, toast), theme and state
 src/app-reading.js  text size, spacing, margins, alignment, fonts (bundled and added)
 src/app-cards.js    clip cards, saving cards and runs, failed saves, update and archive a clip
@@ -100,6 +103,7 @@ src/keel/platform.js  where it runs (phone, browser), app-build.json, links out 
 src/keel/releases.js  the app's releases on GitHub: the update check, the Test builds list, opening one in the browser (from keel, below)
 src/keel/motion.js  the motion engine: springs sampled into CSS linear(), every move, reduced motion and Animations off (from keel, below); src/motion.js gives it Waypage's springs
 src/keel/sw-preview.js  sw.js's half of a test build in the browser (from keel, below)
+src/keel/i18n.js    translations: t() and tn() with plurals, dir, dates and numbers in the chosen language (from keel, below)
 src/keel/drive.js   Google Drive sign-in, folder, resumable sending and keeping the newest; drive.js says what a backup is (from keel, below)
 src/styles.css      tokens, themes, layout (DESIGN.md)
 src/reader.css      the saved page inside the reader's frame
@@ -543,7 +547,7 @@ offers any version higher than its own. A merge without a bump only
 refreshes the web copy. CONTRIBUTING.md has the steps.
 
 The files listed in `keel.lock.json` (`server.js`, `src/keel/qr.js`,
-`src/keel/github.js`, `src/keel/drive.js`, `src/keel/errlog.js`, `src/keel/platform.js`, `src/keel/releases.js`, `src/keel/sw-preview.js`,
+`src/keel/github.js`, `src/keel/drive.js`, `src/keel/errlog.js`, `src/keel/platform.js`, `src/keel/releases.js`, `src/keel/sw-preview.js`, `src/keel/i18n.js`,
 `tools/release.js`, `tools/android-version.js`, `tools/keel-sync.js`, `tools/keel-checks.js`,
 `test/keel.test.js`, the github-pages skill) come from keel
 (danielnoam/keel), shared with LifeLog. Don't edit them here:
@@ -666,6 +670,26 @@ the car started is marked `car`; where it got to goes into
 SharedPreferences (`Car.heardBook`, `Car.heardClip`) and `carPlaces`
 takes it back into the library when the app opens. A clip's place there
 is its share of the text, so it lands near, not on, the sentence.
+
+## Languages
+
+English and Hebrew (1.63.0). Every word the app shows goes through
+`t("English text")`, or `tn(n, "one", "other")` for a count; the English
+is the key, and `src/lang/he.js` has the Hebrew for each. Elements in
+`index.html` carry `data-t` (their text) or `data-t-attr` (an attribute),
+turned once by `i18n.apply()` at the top of app.js. `src/language.js`
+runs in `<head>`: it reads Settings › Appearance › Language (or the
+phone's language), sets `lang` and `dir="rtl"` on `<html>`, and writes the
+Hebrew file's tag only when it's needed, so English loads nothing more.
+Changing the language reloads. A sentence is one key with `{name}` in it,
+never pieces glued together; Hebrew word order differs. `test/i18n.test.js`
+fails on a word with no Hebrew, Hebrew for a word that's gone, or a
+`{placeholder}` that doesn't match. Not translated on purpose: the problem
+report and pen test (they're read by whoever fixes it), Discover's genres
+and lists (they come from the sites), font and service names, and what's
+saved into a clip. In right to left the sidebar and desktop panes keep
+their places, since keel's motion engine slides them from the left; arrows
+for back, forward, previous and next flip.
 
 ## Trade-offs
 

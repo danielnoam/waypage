@@ -1,6 +1,7 @@
 // Sync's merge (0.30.0): `node test/sync.test.js`. Two devices changing
 // the library at once, against the last library both saw.
 const assert = require("assert");
+require("./lang.js");
 
 global.window = { Waypage: { platform: {} } };
 global.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };

@@ -159,7 +159,7 @@
     const online = navigator.onLine;
     doc.documentElement.classList.toggle("offline", !online);
     for (const note of doc.querySelectorAll(".co-video-note")) {
-      note.textContent = online ? "Tap to play on " + (note.getAttribute("data-site") || "the site") : "Plays when you're back online";
+      note.textContent = online ? (note.getAttribute("data-site") ? t("Tap to play on {site}", { site: note.getAttribute("data-site") }) : t("Tap to play on the site")) : t("Plays when you're back online");
     }
     for (const img of doc.querySelectorAll("img.co-missing:not([data-swapped])")) {
       if (!placeholders.has(img)) {
@@ -168,7 +168,7 @@
         placeholders.set(img, box);
       }
       const note = placeholders.get(img).querySelector(".co-placeholder-note");
-      if (note) note.textContent = online && onTapOnly ? "Tap to load the image" : "Image loads when you're online";
+      if (note) note.textContent = online && onTapOnly ? t("Tap to load the image") : t("Image loads when you're online");
       img.hidden = true;
     }
     for (const cap of doc.querySelectorAll("figure:not(.co-video) > figcaption")) {
@@ -178,7 +178,7 @@
         if (!label) {
           label = doc.createElement("span");
           label.className = "co-full";
-          label.textContent = "Full size online";
+          label.textContent = t("Full size online");
           cap.prepend(label);
         }
       } else if (label) label.remove();

@@ -166,7 +166,7 @@ $("saveForm").addEventListener("submit", (e) => {
     return;
   }
   const url = linkFrom($("saveUrl").value);
-  if (!url) { toast("That doesn't look like a link. Paste the page's address."); return; }
+  if (!url) { toast(t("That doesn't look like a link. Paste the page's address.")); return; }
   $("saveUrl").value = "";
   $("saveUrl").blur();
   savePage(url);
@@ -227,14 +227,14 @@ async function saveShared() {
       if (!r.ok) throw new Error("unreadable");
       const blob = await r.blob();
       await openFile(new File([blob], got.file.name || "file", { type: got.file.mime || blob.type }), null, true, got.file.link || undefined);
-    } catch (e) { toast("Couldn't read that file. Try opening it again."); }
+    } catch (e) { toast(t("Couldn't read that file. Try opening it again.")); }
     return;
   }
   if (!got || !got.text) return;
   if (sharedWords(got.text)) { await toLibrary(); saveText(got.text, got.subject); return; }
   if (linksFrom(got.text).length > 1) { await toLibrary(); openBatch(got.text); return; }
   const url = linkFrom(got.text);
-  if (!url) { toast("That share had no link in it."); return; }
+  if (!url) { toast(t("That share had no link in it.")); return; }
   await toLibrary();
   savePage(url);
 }
@@ -254,7 +254,7 @@ function sharedWords(text) {
 }
 async function saveText(text, subject) {
   const t = String(text).replace(/\r\n?/g, "\n").trim();
-  const first = (t.replace(/https?:\/\/\S+/gi, " ").split("\n").find((l) => l.trim()) || "").replace(/\s+/g, " ").trim() || "Shared text";
+  const first = (t.replace(/https?:\/\/\S+/gi, " ").split("\n").find((l) => l.trim()) || "").replace(/\s+/g, " ").trim() || i18n.t("Shared text");
   const title = (subject && subject.trim() !== t ? subject.trim() : "") || (first.length > 80 ? first.slice(0, 80).replace(/\s+\S*$/, "") + "…" : first);
   try {
     const meta = await C.files.bring(new File([t], "Shared text.txt", { type: "text/plain" }), "txt", { title });
@@ -263,10 +263,10 @@ async function saveText(text, subject) {
     await loadThumbs();
     C.store.keepStored();
     renderLibrary();
-    toast("Saved “" + meta.title + "”", "Open", () => openPage(meta.id));
+    toast(i18n.t("Saved “{title}”", { title: meta.title }), i18n.t("Open"), () => openPage(meta.id));
   } catch (e) {
     if (!(e instanceof C.files.FileError)) console.error(e);
-    toast("Couldn't keep that text. Free some space and try again.");
+    toast(i18n.t("Couldn't keep that text. Free some space and try again."));
   }
 }
 
@@ -287,7 +287,7 @@ function startLine() {
   const t = list[list.length - 1];
   if (!t) return "";
   const s = (ms) => (ms / 1000).toFixed(1) + " s";
-  return "Opened in " + s(t.shown) + " with " + countLine(t.clips) + ": scripts " + s(t.scripts) + ", library " + s(t.library) + ", first screen " + s(t.shown - t.scripts - t.library) + ".";
+  return i18n.t("Opened in {shown} with {clips}: scripts {scripts}, library {library}, first screen {first}.", { shown: s(t.shown), clips: countLine(t.clips), scripts: s(t.scripts), library: s(t.library), first: s(t.shown - t.scripts - t.library) });
 }
 
 paintPlace();
@@ -300,13 +300,13 @@ const firstIndex = C.store.ready.then(() => Promise.all([C.store.readIndex(), lo
 Promise.all([C.platform.ready, firstIndex]).then(([, [pages]]) => {
   // Google's sign-in window, back at this address only to hand over.
   if (C.drive.closing) {
-    document.body.replaceChildren(el("p", { class: "drive-done" }, "Google Drive is connected. You can close this window."));
+    document.body.replaceChildren(el("p", { class: "drive-done" }, t("Google Drive is connected. You can close this window.")));
     return;
   }
   state.pages = Array.isArray(pages) ? pages : [];
   loaded = true;
   pruneReadingFor(state.pages);
-  setTimeout(() => oneEach().then((n) => { if (n) toast("Removed " + (n === 1 ? "a clip that was" : n + " clips that were") + " saved twice."); }), 1200);
+  setTimeout(() => oneEach().then((n) => { if (n) toast(tn(n, "Removed a clip that was saved twice.", "Removed {n} clips that were saved twice.")); }), 1200);
   if (history.state && history.state.view) history.replaceState(null, "");
   paintPlace();
   noteStart();
@@ -426,7 +426,7 @@ async function checkForNewerApp(byHand) {
       setUpd({ phase: upd.latest === latest && upd.apk ? "ready" : "available", latest, notes: got.notes });
     } else setUpd({ phase: "current" });
   } catch (e) {
-    setUpd({ phase: "failed", error: "Couldn't check. Try again when you're online." });
+    setUpd({ phase: "failed", error: t("Couldn't check. Try again when you're online.") });
   }
 }
 
@@ -444,13 +444,13 @@ async function startUpdate() {
   if (upd.phase === "downloading") { openDownloads(); return; }
   const resuming = upd.phase === "paused";
   setUpd({ phase: "downloading", error: "" });
-  if (!resuming && !state.downloads) toast("Downloading Waypage " + upd.latest + ".", "Downloads", () => openDownloads());
+  if (!resuming && !state.downloads) toast(t("Downloading Waypage {latest}.", { latest: upd.latest }), t("Downloads"), () => openDownloads());
   let apk;
   try {
     apk = await C.platform.downloadUpdate(upd.key || upd.latest, (f, bytes, total) => setUpd({ pct: Math.round(f * 100), bytes: bytes || 0, total: total || 0 }), "Waypage.apk", upd.tag || undefined);
   } catch (e) {
     if (e && e.code === "PAUSED") { setUpd({ phase: "paused" }); return; }
-    setUpd({ phase: "paused", error: "The download stopped. Resume picks up where it was." });
+    setUpd({ phase: "paused", error: t("The download stopped. Resume picks up where it was.") });
     return;
   }
   if (!apk) {
@@ -477,7 +477,7 @@ async function install() {
   try {
     await C.platform.openInstaller(upd.apk);
   } catch (e) {
-    setUpd({ error: "Couldn't open the installer. Try again." });
+    setUpd({ error: t("Couldn't open the installer. Try again.") });
   }
 }
 
@@ -494,11 +494,11 @@ function paintUpdateBar() {
     return;
   }
   $("updateText").textContent = out
-    ? (upd.phase === "downloading" ? "Downloading " + upd.latest + " · " + upd.pct + "%" : upd.phase === "paused" ? "Paused: Waypage " + upd.latest + " · " + upd.pct + "%"
-      : upd.phase === "ready" ? "Waypage " + upd.latest + " is ready to install" : "Waypage " + upd.latest + " is out")
-    : "Updated to " + APP_VERSION;
+    ? (upd.phase === "downloading" ? t("Downloading {latest} · {pct}%", { latest: upd.latest, pct: upd.pct }) : upd.phase === "paused" ? t("Paused: Waypage {latest} · {pct}%", { latest: upd.latest, pct: upd.pct })
+      : upd.phase === "ready" ? t("Waypage {latest} is ready to install", { latest: upd.latest }) : t("Waypage {latest} is out", { latest: upd.latest }))
+    : t("Updated to {APP_VERSION}", { APP_VERSION: APP_VERSION });
   const btn = $("updateBtn");
-  btn.textContent = out ? "View" : "What's new";
+  btn.textContent = out ? t("View") : t("What's new");
   btn.onclick = () => (out && !upd.tag ? openNews(false, true) : out ? openSettings(false, "updates") : openNews());
   $("updateClose").onclick = () => {
     barDismissed = key;
@@ -529,21 +529,21 @@ function updatesGroup() {
     const out = UPD_OUT.includes(upd.phase);
     const preview = C.platform.previewBranch;
     const status = {
-      idle: "Tap to check for updates", checking: "Checking…", current: preview ? "No release is newer than this test build" : "You have the latest version",
-      failed: upd.error, available: "Waypage " + upd.latest + " is out",
-      downloading: "Downloading " + upd.latest + " · " + upd.pct + "%", paused: "Paused at " + upd.pct + "%", ready: "Waypage " + upd.latest + " is ready to install",
-      preview: "Test build of " + preview + builtLine(C.platform.build),
+      idle: t("Tap to check for updates"), checking: t("Checking…"), current: preview ? t("No release is newer than this test build") : t("You have the latest version"),
+      failed: upd.error, available: t("Waypage {version} is out", { version: upd.latest }),
+      downloading: t("Downloading {version} · {pct}%", { version: upd.latest, pct: upd.pct }), paused: t("Paused at {pct}%", { pct: upd.pct }), ready: t("Waypage {version} is ready to install", { version: upd.latest }),
+      preview: t("Test build of {branch}", { branch: preview }) + builtLine(C.platform.build),
     }[upd.phase];
-    list.append(versionRow("Version " + APP_VERSION, status, out && !upd.tag ? () => openNews(false, true) : null));
+    list.append(versionRow(t("Version {version}", { version: APP_VERSION }), status, out && !upd.tag ? () => openNews(false, true) : null));
     if (out && upd.error) list.append(el("div", { class: "row" }, el("span", { class: "row-label warn" }, upd.error)));
     if (C.platform.build && C.platform.build.repo) {
-      list.append(navRow("Test builds", preview ? "Back to the release is here" : "Try a branch before it's released", openPreviews));
+      list.append(navRow(t("Test builds"), preview ? t("Back to the release is here") : t("Try a branch before it's released"), openPreviews));
     }
   } else {
-    list.append(el("div", { class: "row" }, el("span", { class: "row-label" }, "Version"), el("span", { class: "row-value" }, APP_VERSION)));
-    if (webPreviews()) list.append(navRow("Test builds", pv.web ? "Test build: " + previewName(pv.web) : "Try a branch before it's released", openPreviews));
+    list.append(el("div", { class: "row" }, el("span", { class: "row-label" }, t("Version")), el("span", { class: "row-value" }, APP_VERSION)));
+    if (webPreviews()) list.append(navRow(t("Test builds"), pv.web ? t("Test build: {previewName}", { previewName: previewName(pv.web) }) : t("Try a branch before it's released"), openPreviews));
   }
-  list.append(navRow("Changelog", null, () => openNews()));
+  list.append(navRow(t("Changelog"), null, () => openNews()));
   return el("section", { class: "settings-section", id: "updatesSection" }, list);
 }
 
@@ -563,7 +563,7 @@ function versionRow(label, status, open) {
   }
   return el("div", { class: "row update-row out" },
     open ? el("button", { class: "update-text", type: "button", onclick: open }, ...text) : el("span", { class: "update-text" }, ...text),
-    el("button", { class: "btn-small", type: "button", onclick: startUpdate }, upd.phase === "downloading" ? upd.pct + "%" : C.platform.ios ? "Get it" : upd.phase === "ready" ? "Install" : upd.phase === "paused" ? "Resume" : "Update"));
+    el("button", { class: "btn-small", type: "button", onclick: startUpdate }, upd.phase === "downloading" ? upd.pct + "%" : C.platform.ios ? t("Get it") : upd.phase === "ready" ? t("Install") : upd.phase === "paused" ? t("Resume") : t("Update")));
 }
 
 // What a newer release brings (1.50.0): What's new opened from the bar's
@@ -612,7 +612,7 @@ const appReleases = window.Keel.releases.create({ name: "Waypage", fetchText: C.
 const webPreviews = () => !C.platform.native && appReleases.webReady;
 const previewName = (p) => p.title || (p.pr ? "#" + p.pr : p.branch || "preview");
 appReleases.running.then((p) => { pv.web = p; });
-const builtLine = (b) => (b && b.builtAt ? ", built " + whenText(new Date(b.builtAt).getTime()) : "");
+const builtLine = (b) => (b && b.builtAt ? ", " + t("built {when}", { when: whenText(new Date(b.builtAt).getTime()) }) : "");
 function openPreviews() {
   openSection("previews", false, true);
   loadPreviews();
@@ -630,7 +630,7 @@ async function loadPreviews() {
     pv.checkedAt = Date.now();
   } catch (e) {
     pv.phase = pv.checkedAt ? "loaded" : "failed";
-    pv.error = "Couldn't look for builds. Try again when you're online.";
+    pv.error = t("Couldn't look for builds. Try again when you're online.");
   }
   // A check that answers at once still shows its spinner for a moment.
   await new Promise((r) => setTimeout(r, Math.max(0, 500 - (Date.now() - started))));
@@ -643,17 +643,17 @@ function paintPreviews() {
 // shows it on its row as About's version row does (1.50.0, Daniel's ask):
 // the percent, Paused, Install, and a tap goes on with it.
 const fetching = (tag) => ["downloading", "paused", "ready"].includes(upd.phase) && (upd.tag || null) === tag;
-const fetchNote = () => upd.error || { downloading: "Downloading · " + upd.pct + "%", paused: "Paused at " + upd.pct + "%", ready: "Downloaded, ready to install" }[upd.phase];
-const fetchBtn = () => (upd.phase === "downloading" ? upd.pct + "%" : upd.phase === "ready" ? "Install" : "Resume");
+const fetchNote = () => upd.error || { downloading: t("Downloading · {pct}%", { pct: upd.pct }), paused: t("Paused at {pct}%", { pct: upd.pct }), ready: t("Downloaded, ready to install") }[upd.phase];
+const fetchBtn = () => (upd.phase === "downloading" ? upd.pct + "%" : upd.phase === "ready" ? t("Install") : t("Resume"));
 // The same download and installer as an update, under the preview's own
 // name; on iPhone the pre-release's page opens, as the updater's does.
 async function openWebPreview(p) {
-  if (!(await appReleases.open(p))) toast("Couldn't open that build");
+  if (!(await appReleases.open(p))) toast(t("Couldn't open that build"));
 }
 function installPreview(p) {
   if (!C.platform.native) { if (p.sha) openWebPreview(p); return; }
   if (!p.apk && !C.platform.ios) { C.platform.openOutside(C.platform.releaseUrl(p.tag)); return; }
-  Object.assign(upd, { phase: "available", latest: "test build of " + p.branch, tag: p.tag, key: p.tag + "-" + p.sha.slice(0, 7), notes: "", apk: null, error: "" });
+  Object.assign(upd, { phase: "available", latest: t("test build of {branch}", { branch: p.branch }), tag: p.tag, key: p.tag + "-" + p.sha.slice(0, 7), notes: "", apk: null, error: "" });
   startUpdate();
 }
 function backToRelease() {
@@ -669,12 +669,12 @@ function previewsSection() {
   const mine = sha ? String(sha).slice(0, 7) : null;
   const rows = [];
   if (!pv.checkedAt && (pv.phase === "idle" || pv.phase === "loading")) {
-    rows.push(el("div", { class: "row update-row" }, el("span", { class: "spinner", "aria-hidden": "true" }), el("span", { class: "row-label" }, "Looking for builds…")));
+    rows.push(el("div", { class: "row update-row" }, el("span", { class: "spinner", "aria-hidden": "true" }), el("span", { class: "row-label" }, t("Looking for builds…"))));
   } else if (pv.phase === "failed") {
     rows.push(el("button", { class: "row", type: "button", onclick: loadPreviews },
-      el("span", { class: "choice-text" }, el("span", { class: "row-label warn" }, pv.error), el("span", { class: "choice-note" }, "Tap to try again"))));
+      el("span", { class: "choice-text" }, el("span", { class: "row-label warn" }, pv.error), el("span", { class: "choice-note" }, t("Tap to try again")))));
   } else if (!pv.list.length) {
-    rows.push(el("div", { class: "row" }, el("span", { class: "row-label" }, "No branch has a build right now")));
+    rows.push(el("div", { class: "row" }, el("span", { class: "row-label" }, t("No branch has a build right now"))));
   } else {
     for (const p of pv.list) {
       const installed = !!mine && p.sha.slice(0, 7) === mine;
@@ -686,42 +686,40 @@ function previewsSection() {
         el("span", { class: "choice-text" },
           el("span", { class: "row-label" }, p.title),
           going ? el("span", { class: "choice-note " + (upd.error ? "warn" : "accent"), role: "status" }, fetchNote()) : el("span", { class: "choice-note" }, note),
-          higher ? el("span", { class: "choice-note warn" }, "Needs an uninstall to go back") : null),
-        installed ? el("span", { class: "row-value" }, web ? "Open now" : "Installed")
-          : el("span", { class: "btn-small", "aria-hidden": "true" }, going ? fetchBtn() : web ? "Open" : C.platform.ios ? "Get it" : "Install"));
+          higher ? el("span", { class: "choice-note warn" }, t("Needs an uninstall to go back")) : null),
+        installed ? el("span", { class: "row-value" }, web ? t("Open now") : t("Installed"))
+          : el("span", { class: "btn-small", "aria-hidden": "true" }, going ? fetchBtn() : web ? t("Open") : C.platform.ios ? t("Get it") : t("Install")));
       row.disabled = installed;
       rows.push(row);
     }
   }
   if (here && web) {
     rows.push(el("button", { class: "row", type: "button", onclick: backToRelease },
-      el("span", { class: "choice-text" }, el("span", { class: "row-label accent" }, "Back to the release"),
-        el("span", { class: "choice-note" }, "The released Waypage opens again"))));
+      el("span", { class: "choice-text" }, el("span", { class: "row-label accent" }, t("Back to the release")),
+        el("span", { class: "choice-note" }, t("The released Waypage opens again")))));
   } else if (here && pv.phase === "loaded") {
     const stuck = !!pv.stable && isNewerVersion(APP_VERSION, pv.stable);
     const going = fetching(null);
     const back = el("button", { class: "row update-row" + (going ? " out" : ""), type: "button", onclick: () => (going ? startUpdate() : backToRelease()) },
       going && upd.phase === "downloading" ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
       el("span", { class: "choice-text" },
-        el("span", { class: "row-label accent" }, "Back to the release"),
+        el("span", { class: "row-label accent" }, t("Back to the release")),
         going ? el("span", { class: "choice-note " + (upd.error ? "warn" : "accent"), role: "status" }, fetchNote())
-          : el("span", { class: "choice-note" + (stuck ? " warn" : "") }, stuck ? "Uninstall Waypage first: this test build's " + APP_VERSION + " is above " + pv.stable
-          : pv.stable ? "Waypage " + pv.stable + " installs over this test build" : "No release found")),
+          : el("span", { class: "choice-note" + (stuck ? " warn" : "") }, stuck ? t("Uninstall Waypage first: this test build's {APP_VERSION} is above {stable}", { APP_VERSION: APP_VERSION, stable: pv.stable })
+          : pv.stable ? t("Waypage {stable} installs over this test build", { stable: pv.stable }) : t("No release found"))),
       going ? el("span", { class: "btn-small", "aria-hidden": "true" }, fetchBtn()) : null);
     back.disabled = stuck || !pv.stable;
     rows.push(back);
   }
-  const sec = section("Branches", web
-    ? "A test build is a build of a pull request, before it's released. Open one and this browser runs it with the library you have; Back to the release, here or on the bar at the top, puts the released version back."
-    : "A test build is a build of a pull request, before it's released. It installs over the Waypage you have and keeps your library. "
-    + "Back to the release puts the released version back, as long as the branch didn't raise the version number."
-    + (C.platform.ios ? " On iPhone, Get it opens the build's page; install it with AltStore or SideStore." : ""),
+  const sec = section(t("Branches"), web
+    ? t("A test build is a build of a pull request, before it's released. Open one and this browser runs it with the library you have; Back to the release, here or on the bar at the top, puts the released version back.")
+    : t("A test build is a build of a pull request, before it's released. It installs over the Waypage you have and keeps your library. Back to the release puts the released version back, as long as the branch didn't raise the version number.{x}", { x: C.platform.ios ? t(" On iPhone, Get it opens the build's page; install it with AltStore or SideStore.") : "" }),
     el("div", { class: "group" }, ...rows),
     el("div", { class: "group" }, el("button", { class: "row update-row", type: "button", onclick: loadPreviews, disabled: pv.phase === "loading" ? "" : null },
       pv.phase === "loading" && pv.checkedAt ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
       el("span", { class: "choice-text" },
-        el("span", { class: "row-label accent" }, pv.phase === "loading" && pv.checkedAt ? "Checking…" : "Check again"),
-        pv.checkedAt && pv.phase !== "loading" ? el("span", { class: "choice-note" + (pv.error ? " warn" : ""), role: "status" }, pv.error || "Checked " + whenText(pv.checkedAt)) : null))));
+        el("span", { class: "row-label accent" }, pv.phase === "loading" && pv.checkedAt ? t("Checking…") : t("Check again")),
+        pv.checkedAt && pv.phase !== "loading" ? el("span", { class: "choice-note" + (pv.error ? " warn" : ""), role: "status" }, pv.error || t("Checked {whenText}", { whenText: whenText(pv.checkedAt) })) : null))));
   sec.id = "previewsSection";
   return sec;
 }
@@ -771,27 +769,27 @@ function readChangelog() {
 }
 
 function changelogView() {
-  if (!changelog && !(changelogLoad && changelogLoad.settled)) return [el("p", { class: "meta" }, "Loading…")];
+  if (!changelog && !(changelogLoad && changelogLoad.settled)) return [el("p", { class: "meta" }, t("Loading…"))];
   return changelog && changelog.length ? changelog.map((e) => el("section", { class: "news-entry" + (e.version === APP_VERSION ? " now" : "") },
-    el("h2", { class: "news-version" }, e.version, e.version === APP_VERSION ? el("span", { class: "news-you" }, "You have this") : null),
+    el("h2", { class: "news-version" }, e.version, e.version === APP_VERSION ? el("span", { class: "news-you" }, t("You have this")) : null),
     e.date ? el("p", { class: "meta" }, formatDay(e.date)) : null,
-    ...notesView([e]))) : [el("p", { class: "empty-text" }, "The list of changes didn't load.")];
+    ...notesView([e]))) : [el("p", { class: "empty-text" }, t("The list of changes didn't load."))];
 }
 
 // What's new for the version that's out, with its Update on top.
 function aheadView() {
   const out = UPD_OUT.includes(upd.phase) && !upd.tag && upd.latest;
-  if (!out) return [el("p", { class: "empty-text" }, "You have the latest version.")];
+  if (!out) return [el("p", { class: "empty-text" }, t("You have the latest version."))];
   const entries = comingEntries();
-  const status = { available: "You have " + APP_VERSION, downloading: "Downloading · " + upd.pct + "%", paused: "Paused at " + upd.pct + "%", ready: "Downloaded, ready to install" }[upd.phase];
+  const status = { available: t("You have {version}", { version: APP_VERSION }), downloading: t("Downloading · {pct}%", { pct: upd.pct }), paused: t("Paused at {pct}%", { pct: upd.pct }), ready: t("Downloaded, ready to install") }[upd.phase];
   return [
-    el("div", { class: "group update-card news-update" }, versionRow("Waypage " + upd.latest, upd.error || status)),
-    ...(entries === null ? [el("p", { class: "meta" }, "Loading…")]
+    el("div", { class: "group update-card news-update" }, versionRow(t("Waypage {version}", { version: upd.latest }), upd.error || status)),
+    ...(entries === null ? [el("p", { class: "meta" }, t("Loading…"))]
       : entries.length ? entries.map((e) => el("section", { class: "news-entry" },
         el("h2", { class: "news-version" }, e.version),
         e.date ? el("p", { class: "meta" }, formatDay(e.date)) : null,
         ...notesView([e])))
-      : [el("p", { class: "empty-text" }, "The list of changes didn't load. Changelog has it once you've updated.")])];
+      : [el("p", { class: "empty-text" }, t("The list of changes didn't load. Changelog has it once you've updated."))])];
 }
 
 // On a big screen (after 1.51.0, Daniel's ask) the changelog and What's new
@@ -819,7 +817,7 @@ async function openNews(fromHistory, ahead) {
   state.news = ahead ? "ahead" : true;
   const over = state.settings ? "settings" : undefined;
   if (!fromHistory) history.pushState({ view: "news", ahead: ahead || undefined, over, section: state.section || undefined, reader: over && state.open ? state.open.id : undefined }, "");
-  $("newsBody").replaceChildren(el("p", { class: "meta" }, "Loading…"));
+  $("newsBody").replaceChildren(el("p", { class: "meta" }, t("Loading…")));
   $("newsBody").scrollTop = 0;
   pushScreen($("newsView")).then(() => $("newsBack").focus());
   if (ahead) { paintNews(); return; }
@@ -841,7 +839,7 @@ function closeNews() {
 
 function formatDay(iso) {
   const d = new Date(iso + "T12:00:00");
-  return isNaN(d) ? iso : d.toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+  return isNaN(d) ? iso : d.toLocaleDateString(i18n.lang, { day: "numeric", month: "long", year: "numeric" });
 }
 
 checkForNewerApp();

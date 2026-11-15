@@ -848,7 +848,7 @@
         try {
           for (let n = 1; n <= Math.min(part.pages || 1, 60); n++) pages.push((await get(from + n)).text);
         } catch (e) {
-          throw new SaveError("Wattpad didn't send the whole chapter. Try again in a minute.");
+          throw new SaveError(t("Wattpad didn't send the whole chapter. Try again in a minute."));
         }
         const box = '<div id="co-wattpad-text">' + pages.join("\n") + "</div>";
         return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, box + "</body>") : html + box;
@@ -1136,7 +1136,7 @@
   async function getJson(url, headers) {
     const res = await get(url, { Accept: "application/json", ...headers });
     try { return { url: res.url || url, data: JSON.parse(res.text) }; }
-    catch (e) { throw new SaveError("The site's answer couldn't be read. Try again later.", true); }
+    catch (e) { throw new SaveError(t("The site's answer couldn't be read. Try again later."), true); }
   }
 
   // ---- GitHub ----
@@ -2085,14 +2085,14 @@
         if (drawn && !challengePage(drawn.text)) res = { status: 200, url: drawn.url, text: drawn.text };
       }
     } catch (e) {
-      if (/time(d)?\s?out/i.test((e && e.message) || "")) throw new SaveError("The site didn't answer. Try again, or later on a better connection.", true);
+      if (/time(d)?\s?out/i.test((e && e.message) || "")) throw new SaveError(t("The site didn't answer. Try again, or later on a better connection."), true);
       throw new SaveError(C.platform.canReadPages
-        ? "Couldn't reach this page. Check the link, or try again when you're online."
-        : "This browser can't reach that site directly. Save it in Waypage on your phone, then bring it here with a backup.", C.platform.canReadPages);
+        ? t("Couldn't reach this page. Check the link, or try again when you're online.")
+        : t("This browser can't reach that site directly. Save it in Waypage on your phone, then bring it here with a backup."), C.platform.canReadPages);
     }
-    if (res.status === 429) throw new SaveError("The site asked to slow down. Try again in a few minutes.");
-    if (res.status === 404 || res.status === 410) throw new SaveError("That page doesn't exist any more. Check the link.", false, true);
-    if (res.status >= 400) throw new SaveError("The site answered with an error (" + res.status + "). Try again later.", res.status >= 500 || res.status === 403, res.status === 403);
+    if (res.status === 429) throw new SaveError(t("The site asked to slow down. Try again in a few minutes."));
+    if (res.status === 404 || res.status === 410) throw new SaveError(t("That page doesn't exist any more. Check the link."), false, true);
+    if (res.status >= 400) throw new SaveError(t("The site answered with an error ({status}). Try again later.", { status: res.status }), res.status >= 500 || res.status === 403, res.status === 403);
     return res;
   }
 
@@ -2251,7 +2251,7 @@
       if (own && own.prev !== undefined) prev = own.prev;
       return panels ? { published: publishedAt(doc, html), doc, docTitle, headline: (own && own.title) || headline, next, prev, panels, series: (own && own.series) || "", byline: (own && own.byline) || "", blanks: standIns(doc) } : null;
     }
-    if (typeof window.Readability !== "function") throw new SaveError("The reader part of the app didn't load. Restart Waypage.");
+    if (typeof window.Readability !== "function") throw new SaveError(t("The reader part of the app didn't load. Restart Waypage."));
     const article = new window.Readability(doc, { charThreshold: 500, keepClasses: false }).parse();
     // A comic chapter nobody said was one (1.49.0): little or no text and a
     // column of large pictures. A page with real text stays an article.
@@ -2345,13 +2345,13 @@
         got = again;
       }
     }
-    if (got && got.check) throw new SaveError("The site asked for a browser check, so Waypage can't save it yet.", true);
+    if (got && got.check) throw new SaveError(t("The site asked for a browser check, so Waypage can't save it yet."), true);
     if (got && got.contents) throw new ContentsPage({ ...got.contents, siteTags: pageTags(parse(html, finalUrl), finalUrl) });
-    if (!got && comic) throw new SaveError("Waypage couldn't find the pictures on this page.");
+    if (!got && comic) throw new SaveError(t("Waypage couldn't find the pictures on this page."));
     if (!got) {
       throw new SaveError(C.platform.canRender
-        ? "Waypage couldn't find the article on this page, even after letting it draw itself."
-        : "This page builds itself with JavaScript, which Waypage can't save yet.", C.platform.canRender);
+        ? t("Waypage couldn't find the article on this page, even after letting it draw itself.")
+        : t("This page builds itself with JavaScript, which Waypage can't save yet."), C.platform.canRender);
     }
     if (got.panels) {
       const { doc, docTitle, headline, next, prev, panels, series, byline } = got;
@@ -2390,8 +2390,8 @@
   async function findArchived(url) {
     let res;
     try { res = await C.platform.fetchText("https://archive.org/wayback/available?url=" + encodeURIComponent(url)); }
-    catch (e) { throw new SaveError("Couldn't reach the Internet Archive. Try again when you're online.", true); }
-    if (res.status >= 400) throw new SaveError("The Internet Archive didn't answer. Try again later.", true);
+    catch (e) { throw new SaveError(i18n.t("Couldn't reach the Internet Archive. Try again when you're online."), true); }
+    if (res.status >= 400) throw new SaveError(i18n.t("The Internet Archive didn't answer. Try again later."), true);
     let snap = null;
     try { snap = JSON.parse(res.text).archived_snapshots.closest; } catch (e) { snap = null; }
     if (!snap || !snap.available || String(snap.status) !== "200" || !/^\d{14}$/.test(snap.timestamp || "")) return null;
@@ -2880,7 +2880,7 @@
     const out = document.implementation.createHTMLDocument("");
     const { root, media } = rebuild(got.body, got.base, got.url, out);
     if (got.comic) root.classList.add("co-comic");
-    else if (!root.textContent.trim()) throw new SaveError("Nothing readable was found on this page.");
+    else if (!root.textContent.trim()) throw new SaveError(t("Nothing readable was found on this page."));
     // The page's own headline, when the article kept it, would sit under the
     // one savedPageHtml writes.
     const norm = (t) => t.replace(/\s+/g, " ").trim().toLowerCase();
@@ -2914,7 +2914,7 @@
       meta.bytes += C.store.bytesOf(text);
     } catch (e) {
       await C.store.removePage(id);
-      throw new SaveError("Couldn't write the clip to the phone. Free some space and try again.");
+      throw new SaveError(t("Couldn't write the clip to the phone. Free some space and try again."));
     }
     return meta;
   }
@@ -3081,7 +3081,7 @@
     const got = wiki ? await fromWikipedia(wiki) : await fromAnyPage(url, () => {}, false, false);
     const out = document.implementation.createHTMLDocument("");
     const { root, media } = rebuild(got.body, got.base, got.url, out);
-    if (!root.textContent.trim()) throw new SaveError("Nothing readable was found on this page.");
+    if (!root.textContent.trim()) throw new SaveError(t("Nothing readable was found on this page."));
     const norm = (t) => t.replace(/\s+/g, " ").trim().toLowerCase();
     const first = root.querySelector("h2, h3");
     if (first && norm(first.textContent) === norm(got.title) && norm(root.textContent).startsWith(norm(first.textContent))) first.remove();

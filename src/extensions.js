@@ -58,7 +58,7 @@
         const v = window.Waypage && window.Waypage.version;
         s.src = src + (v ? "?v=" + v : "");
         s.onload = () => ok();
-        s.onerror = () => { loading.delete(src); s.remove(); no(new Error("Couldn't load " + src)); };
+        s.onerror = () => { loading.delete(src); s.remove(); no(new Error(t("Couldn't load {src}", { src: src }))); };
         document.head.append(s);
       }));
     }
@@ -73,7 +73,7 @@
 
   async function turnOn(id) {
     const x = find(id);
-    if (!x) throw new Error("There's no extension called " + id + ".");
+    if (!x) throw new Error(t("There's no extension called {id}.", { id: id }));
     write({ ...read(), [id]: { ...(read()[id] || {}), on: true } });
     try { await load(id); } catch (e) {
       // Its code didn't come: it stays off rather than half on.
@@ -137,21 +137,21 @@
 
   async function getPack(id, pid) {
     const p = packOf(id, pid);
-    if (!p) throw new Error("There's no such pack.");
-    if (run) throw new Error("A download is already running.");
+    if (!p) throw new Error(t("There's no such pack."));
+    if (run) throw new Error(t("A download is already running."));
     const r = run = { ext: id, pack: pid, step: "downloading", done: 0, total: p.bytes, stopped: false, ctl: null };
     failed = null;
     move();
     try {
       let blob;
-      try { blob = await fetchPack(p, r); } catch (e) { if (r.stopped) return; throw Object.assign(new Error("Couldn't download."), { kind: "failed" }); }
+      try { blob = await fetchPack(p, r); } catch (e) { if (r.stopped) return; throw Object.assign(new Error(t("Couldn't download.")), { kind: "failed" }); }
       if (r.stopped) return;
       r.step = "checking"; move();
-      if (blob.size !== p.bytes || await sha256(blob) !== p.sha256) throw Object.assign(new Error("The download wasn't the right file."), { kind: "bad" });
+      if (blob.size !== p.bytes || await sha256(blob) !== p.sha256) throw Object.assign(new Error(t("The download wasn't the right file.")), { kind: "bad" });
       if (r.stopped) return;
       r.step = "unpacking"; move();
       let entry;
-      try { entry = await window.Waypage.dict.add([new File([blob], p.id + ".tar.gz", { type: "application/gzip" })]); } catch (e) { throw Object.assign(new Error("The download wasn't the right file."), { kind: "bad" }); }
+      try { entry = await window.Waypage.dict.add([new File([blob], p.id + ".tar.gz", { type: "application/gzip" })]); } catch (e) { throw Object.assign(new Error(t("The download wasn't the right file.")), { kind: "bad" }); }
       const all = read();
       const mine = all[id] || {};
       write({ ...all, [id]: { ...mine, packs: { ...(mine.packs || {}), [pid]: { dict: entry.id, at: Date.now(), bytes: p.bytes } } } });

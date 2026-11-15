@@ -53,7 +53,7 @@
     }
     return LOCKED[extOf(name)] || null;
   }
-  const lockedText = (store) => "This audiobook is locked to " + (store === "Apple" ? "Apple Books" : store) + " (DRM). Waypage plays audiobooks without DRM, like MP3 and M4B.";
+  const lockedText = (store) => t("This audiobook is locked to {store} (DRM). Waypage plays audiobooks without DRM, like MP3 and M4B.", { store: store === "Apple" ? "Apple Books" : store });
 
   // ---- What the file says: chapters, names, cover ----
 

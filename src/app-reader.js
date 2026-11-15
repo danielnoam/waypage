@@ -239,8 +239,8 @@ function readerWait(p, fromHistory) {
   $("bright").hidden = true;
   $("readerContents").hidden = true;
   $("readerTranslate").hidden = true;
-  $("readerNow").textContent = "Contents";
-  $("readerContents").setAttribute("aria-label", "Contents");
+  $("readerNow").textContent = t("Contents");
+  $("readerContents").setAttribute("aria-label", t("Contents"));
   paintReaderName(p);
   if (!fromHistory) swap ? history.replaceState(readerState(p), "") : history.pushState(readerState(p), "");
   pushScreen($("readerView"));
@@ -268,7 +268,7 @@ async function openPage(id, fromHistory) {
   // Gone back, or on to another clip, while it was coming.
   if (wait && waiting !== id) return;
   if (!html) {
-    toast(trouble || "This clip's file is missing. Delete it and save it again.");
+    toast(trouble || t("This clip's file is missing. Delete it and save it again."));
     if (wait) { stopWaiting(); popScreen($("readerView")); if (history.state && history.state.view === "reader") history.back(); }
     return;
   }
@@ -329,10 +329,13 @@ function guessedName() {
 }
 const deviceName = () => String(load(DEVICE_KEY, "") || "").trim().slice(0, 40) || guessedName();
 function onDevice(name) {
-  if (!name) return "on your other device";
+  if (!name) return t("on your other device");
   const mine = name === deviceName();
-  if (GUESSED_NAMES.includes(name)) return "on your " + (mine ? "other " : "") + name;
-  return mine ? "on your other device" : "on " + name;
+  if (GUESSED_NAMES.includes(name)) {
+    const word = { tablet: t("tablet"), phone: t("phone"), computer: t("computer") }[name] || name;
+    return mine ? t("on your other {device}", { device: word }) : t("on your {device}", { device: word });
+  }
+  return mine ? t("on your other device") : t("on {device}", { device: name });
 }
 async function furtherRead(p) {
   if (!C.sync.on || C.sync.paused || !navigator.onLine || p.link || p.note) return;
@@ -344,7 +347,7 @@ async function furtherRead(p) {
   if (Math.abs(other.at - (p.at || 0)) < 0.01 && (!other.spot || other.spot === p.spot)) return;
   const pct = Math.round(other.at * 100);
   const where = onDevice(typeof other.readOn === "string" ? other.readOn : "");
-  toast(other.finished || other.at >= 0.97 ? "Read to the end " + where + "." : "Read to " + pct + "% " + where + ".", "Go there", () => {
+  toast(other.finished || other.at >= 0.97 ? t("Read to the end {where}.", { where: where }) : t("Read to {pct}% {where}.", { pct: pct, where: where }), t("Go there"), () => {
     if (state.open !== p) return;
     p.at = other.at;
     if (other.spot) p.spot = other.spot;
@@ -415,8 +418,8 @@ function show(p, html) {
   stopGlide();
   wordless = false;
   narrateOrScroll(p);
-  $("readerNow").textContent = "Contents";
-  $("readerContents").setAttribute("aria-label", "Contents");
+  $("readerNow").textContent = t("Contents");
+  $("readerContents").setAttribute("aria-label", t("Contents"));
   $("readerFolder").hidden =!(p.folder && !p.preview && folderPages(p.folder).length > 1);
   $("readerView").classList.remove("bar-away");
   jumpFrom = null;
@@ -652,9 +655,9 @@ const brightEdge = {
 // Off keeps the chosen side for when it's back.
 function brightSwitch(id) {
   if (!C.platform.brightness.available) return null;
-  return [el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Brightness slider"),
-    seg(id + "-brightSide", "Brightness slider", [
-      { value: "off", label: "Off" }, { value: "left", label: "Left" }, { value: "right", label: "Right" },
+  return [el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, t("Brightness slider")),
+    seg(id + "-brightSide", t("Brightness slider"), [
+      { value: "off", label: t("Off") }, { value: "left", label: t("Left") }, { value: "right", label: t("Right") },
     ], brightOn() ? brightSide() : "off", (v) => {
       store(BRIGHT_SWIPE_KEY, v !== "off");
       if (v !== "off") { setBrightSide(v); placeBright(); }
@@ -722,22 +725,22 @@ function spentLines(p) {
   if (!spentOn() || !p || p.preview) return null;
   const c = C.stats.clip(p.id);
   if (!c || c.readMs + c.aloudMs < C.stats.READ_DAY) return null;
-  const first = [c.readMs >= 60000 ? spanText(c.readMs) + " here" : null, c.aloudMs >= 60000 ? spanText(c.aloudMs) + (isAudiobook(p) ? " listened" : " narrated") : null].filter(Boolean).join(" · ");
-  const words = c.words >= 1000 ? "About " + (Math.round(c.words / 100) * 100).toLocaleString() + " words" : c.words >= 50 ? "About " + (Math.round(c.words / 10) * 10) + " words" : null;
-  const opened = c.opened > 1 ? "opened " + c.opened + " times" : null;
-  const done = c.finished ? "finished " + new Date(c.finished).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : null;
+  const first = [c.readMs >= 60000 ? t("{time} here", { time: spanText(c.readMs) }) : null, c.aloudMs >= 60000 ? (isAudiobook(p) ? t("{time} listened", { time: spanText(c.aloudMs) }) : t("{time} narrated", { time: spanText(c.aloudMs) })) : null].filter(Boolean).join(" · ");
+  const words = c.words >= 1000 ? t("About {n} words", { n: Math.round(c.words / 100) * 100 }) : c.words >= 50 ? t("About {n} words", { n: Math.round(c.words / 10) * 10 }) : null;
+  const opened = c.opened > 1 ? t("opened {n} times", { n: c.opened }) : null;
+  const done = c.finished ? t("finished {date}", { date: new Date(c.finished).toLocaleDateString(i18n.lang, { day: "numeric", month: "short" }) }) : null;
   const second = [words, opened, done].filter(Boolean).join(" · ");
-  return [first || "Under a minute here", second ? second.replace(/^./, (x) => x.toUpperCase()) : null].filter(Boolean);
+  return [first || t("Under a minute here"), second ? second.replace(/^./, (x) => x.toUpperCase()) : null].filter(Boolean);
 }
 // "4 h 12 min", "38 min".
 function spanText(ms) {
   const m = Math.round(ms / 60000);
-  return m < 60 ? m + " min" : Math.floor(m / 60) + " h" + (m % 60 ? " " + (m % 60) + " min" : "");
+  return m < 60 ? t("{n} min", { n: m }) : m % 60 ? t("{h} h {m} min", { h: Math.floor(m / 60), m: m % 60 }) : t("{h} h", { h: Math.floor(m / 60) });
 }
 function spentSwitch() {
   return el("label", { class: "rc-row switch-row" },
-    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Time at the end of a clip"),
-      el("span", { class: "choice-note" }, "How long you've spent on it, under its last line")),
+    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, t("Time at the end of a clip")),
+      el("span", { class: "choice-note" }, t("How long you've spent on it, under its last line"))),
     el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "spentLine", checked: spentOn(),
       onchange: (e) => {
         store(SPENT_KEY, e.target.checked);
@@ -762,8 +765,8 @@ function paintPdfDark() {
 }
 function pdfDarkSwitch() {
   const row = el("label", { class: "rc-row switch-row pdf-dark-row" },
-    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, state.open && state.open.note ? "Dark note" : "Dark PDF pages"),
-      el("span", { class: "choice-note" }, state.open && state.open.note ? "In a dark theme, the paper takes its colours" : "In a dark theme, pages take its colours")),
+    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, state.open && state.open.note ? t("Dark note") : t("Dark PDF pages")),
+      el("span", { class: "choice-note" }, state.open && state.open.note ? t("In a dark theme, the paper takes its colours") : t("In a dark theme, pages take its colours"))),
     el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "pdfDark", checked: pdfDarkOn(),
       onchange: (e) => {
         if (state.open && state.open.note) setNoteLook({ dark: e.target.checked });
@@ -780,8 +783,8 @@ function pdfDarkSwitch() {
 function volumeSwitch() {
   if (!C.platform.volumeKeys.available) return null;
   const row = el("label", { class: "rc-row switch-row volume-row" },
-    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Volume buttons turn pages"),
-      el("span", { class: "choice-note" }, "Down for next, up for back. Not while narrating.")),
+    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, t("Volume buttons turn pages")),
+      el("span", { class: "choice-note" }, t("Down for next, up for back. Not while narrating."))),
     el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "volumePages", checked: volumeOn(),
       onchange: (e) => {
         store(VOLUME_KEY, e.target.checked);
@@ -806,8 +809,8 @@ async function setTurn(v) {
 
 function swipeSwitch() {
   return el("label", { class: "rc-row switch-row" },
-    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Swipe between clips"),
-      el("span", { class: "choice-note" }, "Sideways, to the next or previous clip in a collection")),
+    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, t("Swipe between clips")),
+      el("span", { class: "choice-note" }, t("Sideways, to the next or previous clip in a collection"))),
     el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "swipeClips", checked: swipeOn(),
       onchange: (e) => {
         store(SWIPE_KEY, e.target.checked);
@@ -817,8 +820,8 @@ function swipeSwitch() {
 
 function pinchSwitch() {
   return el("label", { class: "rc-row switch-row" },
-    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Pinch for text size"),
-      el("span", { class: "choice-note" }, "Pictures and PDF pages still zoom")),
+    el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, t("Pinch for text size")),
+      el("span", { class: "choice-note" }, t("Pictures and PDF pages still zoom"))),
     el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "pinchText", checked: pinchOn(),
       onchange: (e) => {
         store(PINCH_KEY, e.target.checked);
@@ -841,7 +844,7 @@ function toggleBar() {
 function readerFoot(at) {
   const p = state.open;
   if (!p) return;
-  const left = at >= 0.995 ? "End" : partLeft(p, at) || clipLeft(p, at) + " min left";
+  const left = at >= 0.995 ? t("End") : partLeft(p, at) || t("{n} min left", { n: clipLeft(p, at) });
   paintTicks();
   const pg = C.reader.pageInfo();
   $("readLeft").textContent = Math.round(Math.min(1, Math.max(0, at)) * 100) + "%";
@@ -856,17 +859,17 @@ function readerFoot(at) {
 // above the first heading.
 function showSection() {
   const section = C.reader.section();
-  if ($("readerNow").textContent === (section || "Contents")) return;
-  $("readerNow").textContent = section || "Contents";
+  if ($("readerNow").textContent === (section || t("Contents"))) return;
+  $("readerNow").textContent = section || t("Contents");
   timingNote("chapter shown: " + (section || "Contents"));
-  $("readerContents").setAttribute("aria-label", section ? "Contents, now " + section : "Contents");
+  $("readerContents").setAttribute("aria-label", section ? t("Contents, now {section}", { section: section }) : t("Contents"));
   paintPart();
 }
 // On a phone the name hangs under the bar in a bubble, with the chapter
 // being read under it.
 function paintPart() {
   const now = $("readerNow").textContent, part = $("readerName").querySelector(".reader-part");
-  const text = now && now !== "Contents" ? now : "";
+  const text = now && now !== t("Contents") ? now : "";
   if (part) { part.textContent = text; part.hidden = !text; }
 }
 
@@ -919,11 +922,11 @@ function fitRail() {
 }
 function paintRail() {
   const p = state.open;
-  $("railBackLabel").textContent = state.folder || (state.place === "feeds" ? "Feeds" : state.place === "newsletters" ? "Newsletters" : state.place === "highlights" ? "Highlights" : state.place === "reading" ? "Stats" : state.place === "anki" ? "Anki" : "Library");
+  $("railBackLabel").textContent = state.folder || (state.place === "feeds" ? t("Feeds") : state.place === "newsletters" ? t("Newsletters") : state.place === "highlights" ? t("Highlights") : state.place === "reading" ? t("Stats") : state.place === "anki" ? t("Anki") : t("Library"));
   const pages = railPages();
   $("readerRail").classList.toggle("paged", pages.length > 0);
-  $("readerRail").setAttribute("aria-label", pages.length ? "Pages" : "Contents");
-  $("railOver").textContent = pages.length ? "Pages" : "Contents";
+  $("readerRail").setAttribute("aria-label", pages.length ? t("Pages") : t("Contents"));
+  $("railOver").textContent = pages.length ? t("Pages") : t("Contents");
   if (railSeen) railSeen.disconnect();
   if (pages.length) {
     // Each page is drawn as it scrolls into the rail.
@@ -940,7 +943,7 @@ function paintRail() {
     fill($("railList"), ...pages.map((x) => {
       const img = el("img", { class: "rail-thumb", alt: "", "data-n": x.n });
       railSeen.observe(img);
-      return el("li", null, el("button", { class: "rail-page", type: "button", "aria-label": "Page " + x.n, onclick: () => C.reader.toPrinted(x.n) },
+      return el("li", null, el("button", { class: "rail-page", type: "button", "aria-label": t("Page {n}", { n: x.n }), onclick: () => C.reader.toPrinted(x.n) },
         img, el("span", { class: "rail-num" }, String(x.n))));
     }));
   } else {
@@ -948,10 +951,10 @@ function paintRail() {
       el("button", { class: "rail-row" + (h.level === 3 ? " sub" : ""), type: "button", dir: "auto", onclick: () => C.reader.jumpTo(i) }, h.text))));
   }
   const link = /^https?:/.test(p.url || "") ? el("button", { class: "rail-original", type: "button", onclick: () => C.platform.openOutside(p.url) }) : null;
-  if (link) link.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>Read the original';
+  if (link) link.innerHTML = "<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5\"/></svg>" + t("Read the original");
   fill($("railFoot"),
-    p.licence === "wikipedia" ? el("p", { class: "rail-licence" }, "Text from Wikipedia, CC BY-SA 4.0, by Wikipedia contributors.")
-      : p.licence === "stackexchange" ? el("p", { class: "rail-licence" }, "Text from " + p.site + ", CC BY-SA, by the people named in it.") : null, link);
+    p.licence === "wikipedia" ? el("p", { class: "rail-licence" }, t("Text from Wikipedia, CC BY-SA 4.0, by Wikipedia contributors."))
+      : p.licence === "stackexchange" ? el("p", { class: "rail-licence" }, t("Text from {site}, CC BY-SA, by the people named in it.", { site: p.site })) : null, link);
   railNow();
 }
 function railNow() {
@@ -983,11 +986,11 @@ function folderList() {
       el("span", { class: "folder-n", "aria-hidden": "true" }, String(i + 1)),
       el("span", { class: "choice-text" },
         el("span", { class: "row-label", dir: "auto" }, q.title),
-        el("span", { class: "choice-note" }, q.finished ? "Finished" : readingLine(q))));
+        el("span", { class: "choice-note" }, q.finished ? t("Finished") : readingLine(q))));
     if (q === p) b.setAttribute("aria-current", "page");
     return el("li", null, b);
   });
-  const nav = el("nav", { class: "contents", "aria-label": p ? p.folder : "Collection" },
+  const nav = el("nav", { class: "contents", "aria-label": p ? p.folder : t("Collection") },
     el("p", { class: "menu-title", dir: "auto" }, p ? p.folder : ""),
     el("ol", { class: "group contents-list" }, ...rows));
   requestAnimationFrame(() => centreIn(nav.querySelector("[aria-current]")));
@@ -1023,7 +1026,7 @@ function contentsList() {
   // it (the stylesheet's li + li rules), so they go in once, together.
   let lo = Math.max(0, current - 40), hi = Math.min(list.length, Math.max(current, 0) + 60);
   const ol = el("ol", { class: "group contents-list" }, ...list.slice(lo, hi).map((h, i) => row(h, lo + i)));
-  const nav = el("nav", { class: "contents", "aria-label": "Contents" }, ol);
+  const nav = el("nav", { class: "contents", "aria-label": t("Contents") }, ol);
   requestAnimationFrame(() => {
     if (current > 0) centreIn(nav.querySelector("[aria-current]"));
     const more = () => {
@@ -1058,14 +1061,14 @@ function endLink(p) {
   if (p.note) {
     const notes = state.pages.filter((x) => x.note), i = notes.findIndex((x) => x.id === p.id);
     const nx = i >= 0 ? notes[i + 1] : null;
-    return nx ? { over: "Next note", title: nx.title, go: () => goTo(nx, true) } : null;
+    return nx ? { over: t("Next note"), title: nx.title, go: () => goTo(nx, true) } : null;
   }
   const next = neighbour(p, 1);
-  if (next) return { over: "Next in " + p.folder, title: next.title, go: () => goTo(next, true) };
+  if (next) return { over: t("Next in {folder}", { folder: p.folder }), title: next.title, go: () => goTo(next, true) };
   if (!p.next) return null;
   const had = savedAs(p.next);
-  if (had) return { over: "Next on " + p.site, title: had.title, go: () => goTo(had, true) };
-  return { over: "Next on " + p.site, title: "Save it and read on", go: () => followAndOpen(p) };
+  if (had) return { over: t("Next on {site}", { site: p.site }), title: had.title, go: () => goTo(had, true) };
+  return { over: t("Next on {site}", { site: p.site }), title: t("Save it and read on"), go: () => followAndOpen(p) };
 }
 
 // What the top of a page offers (1.23.0): the page before it in its
@@ -1073,21 +1076,21 @@ function endLink(p) {
 function startLink(p) {
   if (p.preview) return null;
   const prev = neighbour(p, -1);
-  if (prev) return { over: "Previous in " + p.folder, title: prev.title, go: () => goTo(prev, -1) };
+  if (prev) return { over: t("Previous in {folder}", { folder: p.folder }), title: prev.title, go: () => goTo(prev, -1) };
   if (typeof p.prev !== "string" || !p.prev) return null;
   const had = savedAs(p.prev);
-  if (had) return { over: "Previous on " + p.site, title: had.title, go: () => goTo(had, -1) };
-  return { over: "Previous on " + p.site, title: "Save it and read it", go: async () => {
-    if (!navigator.onLine) { toast("You're offline. The page before saves when you're back online."); return; }
-    toast("Saving the page before…");
+  if (had) return { over: t("Previous on {site}", { site: p.site }), title: had.title, go: () => goTo(had, -1) };
+  return { over: t("Previous on {site}", { site: p.site }), title: t("Save it and read it"), go: async () => {
+    if (!navigator.onLine) { toast(t("You're offline. The page before saves when you're back online.")); return; }
+    toast(t("Saving the page before…"));
     const got = await follow(p, 1, true, true);
     if (got && state.open === p) goTo(got, -1);
   } };
 }
 
 async function followAndOpen(p) {
-  if (!navigator.onLine) { toast("You're offline. The next page saves when you're back online."); return; }
-  toast("Saving the next page…");
+  if (!navigator.onLine) { toast(t("You're offline. The next page saves when you're back online.")); return; }
+  toast(t("Saving the next page…"));
   const got = await follow(p, 1, true);
   if (got && state.open === p) goTo(got, true);
 }
@@ -1111,7 +1114,7 @@ async function goTo(p, turn, swiped = null) {
   if (swiped != null && !html) { frame.style.transform = ""; if (!M.reduced()) M.pageBack(frame, swiped); }
   if (!html) {
     if (heading === p.id) { heading = ""; showAloudBar(); }
-    toast("This clip's file is missing. Delete it and save it again.");
+    toast(t("This clip's file is missing. Delete it and save it again."));
     return;
   }
   if (state.sheet) await new Promise((resolve) => { addEventListener("popstate", () => resolve(), { once: true }); history.back(); });
@@ -1268,10 +1271,10 @@ function narrateOrScroll(p) {
 }
 const scrollRate = () => clamp(Number(load(SCROLL_RATE_KEY, 1)) || 1, RATE_MIN, RATE_MAX);
 function paintGlide() {
-  const b = $("readerScroll"), label = glide.on ? "Stop auto-scrolling" : "Auto-scroll";
+  const b = $("readerScroll"), label = glide.on ? t("Stop auto-scrolling") : "Auto-scroll";
   b.setAttribute("aria-pressed", String(glide.on));
   b.setAttribute("aria-label", label);
-  b.title = label + " (S)";
+  b.title = t("{label} (S)", { label: label });
 }
 function startGlide() {
   if (!pictureBook()) return;
@@ -1328,8 +1331,8 @@ const PIECE = 600;
 
 // The sleep timer (1.32.0): pause after a while, or stop at the end of
 // this clip. For this reading only, not kept; a pause, so Play goes on.
-const SLEEPS = [{ value: "", label: "Off" }, { value: "15", label: "15 minutes" }, { value: "30", label: "30 minutes" },
-  { value: "45", label: "45 minutes" }, { value: "60", label: "1 hour" }, { value: "end", label: "End of this clip" }];
+const SLEEPS = [{ value: "", label: t("Off") }, { value: "15", label: t("15 minutes") }, { value: "30", label: t("30 minutes") },
+  { value: "45", label: t("45 minutes") }, { value: "60", label: t("1 hour") }, { value: "end", label: t("End of this clip") }];
 const sleep = { pick: "", at: 0, timer: 0 };
 const sleepEnd = () => sleep.pick === "end";
 function setSleep(v) {
@@ -1363,15 +1366,15 @@ function nextSleep() {
 }
 function tapSleep() {
   setSleep(nextSleep());
-  toast(sleepEnd() ? "Stops at the end of this clip." : sleep.at ? "Pauses in " + SLEEPS.find((o) => o.value === sleep.pick).label + "." : "Sleep timer off.");
+  toast(sleepEnd() ? t("Stops at the end of this clip.") : sleep.at ? t("Pauses in {label}.", { label: SLEEPS.find((o) => o.value === sleep.pick).label }) : t("Sleep timer off."));
 }
 function paintSleep() {
   const btn = $("aloudSleep");
   const left = sleep.at - Date.now();
   const on = sleepEnd() || left > 0;
   btn.classList.toggle("on", on);
-  $("aloudSleepLeft").textContent = sleepEnd() ? "End" : left > 0 ? Math.max(1, Math.ceil(left / 60000)) + "m" : "";
-  btn.setAttribute("aria-label", "Sleep timer: " + (sleepEnd() ? "end of this clip" : left > 0 ? Math.ceil(left / 60000) + " minutes left" : "off"));
+  $("aloudSleepLeft").textContent = sleepEnd() ? t("End") : left > 0 ? t("{n}m", { n: Math.max(1, Math.ceil(left / 60000)) }) : "";
+  btn.setAttribute("aria-label", sleepEnd() ? t("Sleep timer: end of this clip") : left > 0 ? tn(Math.ceil(left / 60000), "Sleep timer: 1 minute left", "Sleep timer: {n} minutes left") : t("Sleep timer: off"));
   clearInterval(sleepTick);
   if (left > 0) sleepTick = setInterval(paintSleep, 20000);
 }
@@ -1440,7 +1443,7 @@ async function startAloud(from, spot) {
   // Pressed just after opening: from the place, once the clip is back at it.
   if (from == null && !spot) { await C.reader.placed(); if (state.open !== p) return; }
   const texts = C.reader.readable({ footnotes: !!load(FOOTNOTES_KEY, false), edges: !!load(EDGES_KEY, false) });
-  if (!texts.length) { toast(C.files.printed(p) ? "Switch this PDF to Show as text, in ⋯, to narrate it." : "There's no text in this clip to narrate."); return; }
+  if (!texts.length) { toast(C.files.printed(p) ? t("Switch this PDF to Show as text, in ⋯, to narrate it.") : t("There's no text in this clip to narrate.")); return; }
   // From the selected word, or the sentence on the reading line.
   const at = spot ? C.reader.spotIn(spot) : from == null ? C.reader.firstShown() : { index: from, offset: 0 };
   const block = at.index;
@@ -1462,7 +1465,7 @@ async function startAloud(from, spot) {
     queueNext();
   } catch (e) {
     setAloud("stopped", -1);
-    toast("Couldn't narrate. Check the phone's text-to-speech settings.");
+    toast(t("Couldn't narrate. Check the phone's text-to-speech settings."));
   }
 }
 
@@ -1552,7 +1555,7 @@ async function translate(text) {
   hideReadHere();
   C.reader.clearSelection();
   if (await C.platform.translateText(text)) return;
-  if (!navigator.onLine) { toast("You're offline. Translate opens on the web."); return; }
+  if (!navigator.onLine) { toast(t("You're offline. Translate opens on the web.")); return; }
   C.platform.openOutside(translateUrl(text));
 }
 const translateUrl = (text) => "https://translate.google.com/?sl=auto&tl=" + myLang() + "&op=translate&text=" + encodeURIComponent(text.slice(0, 1500));
@@ -1566,7 +1569,7 @@ function showReadHere() {
   const box = (mark && mark.box) || spot || (picked && picked.box);
   if (!box) { hideReadHere(); return; }
   if (!readHere) {
-    const aloudBtn = el("button", { class: "sel-aloud", type: "button", "aria-label": "Narrate from here", onclick: () => {
+    const aloudBtn = el("button", { class: "sel-aloud", type: "button", "aria-label": t("Narrate from here"), onclick: () => {
       const s = C.reader.selectionSpot();
       hideReadHere();
       C.reader.clearSelection();
@@ -1575,18 +1578,18 @@ function showReadHere() {
       else if (s) startAloud(null, s);
     } });
     aloudBtn.innerHTML = $("readerAloud").innerHTML;
-    aloudBtn.append(el("span", { class: "sel-label" }, "Narrate from here"));
+    aloudBtn.append(el("span", { class: "sel-label" }, t("Narrate from here")));
     const markBtn = el("button", { class: "sel-mark", type: "button", onclick: (e) => {
       // A hold already opened the colours: its click doesn't highlight too.
       if (markHeld) { markHeld = false; e.preventDefault(); return; }
       if (markBtn.dataset.remove) removeMarks(markBtn.dataset.remove.split(",")); else addMark();
     } });
     markBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS.mark + "</svg>";
-    markBtn.append(el("span", { class: "sel-mark-dot", "aria-hidden": "true" }), el("span", { class: "sel-label sel-mark-label" }, "Mark"));
+    markBtn.append(el("span", { class: "sel-mark-dot", "aria-hidden": "true" }), el("span", { class: "sel-label sel-mark-label" }, t("Mark")));
     markHold(markBtn);
     // The colour the next highlight takes (1.42.0). With a mouse its dot
     // opens the five; a touch screen holds Highlight instead (styles.css).
-    const colorBtn = el("button", { class: "sel-color sel-icon", type: "button", "aria-label": "Mark colour", title: "Mark colour",
+    const colorBtn = el("button", { class: "sel-color sel-icon", type: "button", "aria-label": t("Mark colour"), title: t("Mark colour"),
       onclick: () => (selColors && !selColors.hidden ? closeSelColors() : openSelColors()) }, swatchDot(markColor()));
     markBtn.addEventListener("contextmenu", (e) => { e.preventDefault(); openSelColors(); });
     const outBtn = (cls, label, icon, act) => {
@@ -1598,13 +1601,13 @@ function showReadHere() {
       return b;
     };
     // Draw from here (2026-11): the words stay selected while you draw.
-    const drawBtn = el("button", { class: "sel-draw", type: "button", "aria-label": "Draw", title: "Draw (D)", onclick: () => { hideReadHere(); inkStart(); } });
-    drawBtn.append(inkIcon("pen"), el("span", { class: "sel-label" }, "Draw"));
+    const drawBtn = el("button", { class: "sel-draw", type: "button", "aria-label": t("Draw"), title: t("Draw (D)"), onclick: () => { hideReadHere(); inkStart(); } });
+    drawBtn.append(inkIcon("pen"), el("span", { class: "sel-label" }, t("Draw")));
     drawBtn.querySelector("svg").setAttribute("width", "20");
     drawBtn.querySelector("svg").setAttribute("height", "20");
-    readHere = el("div", { class: "read-here", role: "toolbar", "aria-label": "Selection" }, markBtn, colorBtn, drawBtn, aloudBtn,
-      outBtn("sel-lookup", "Look up", ICONS.lookup, lookUp),
-      outBtn("sel-translate", "Translate", ICONS.translate, translate));
+    readHere = el("div", { class: "read-here", role: "toolbar", "aria-label": t("Selection") }, markBtn, colorBtn, drawBtn, aloudBtn,
+      outBtn("sel-lookup", t("Look up"), ICONS.lookup, lookUp),
+      outBtn("sel-translate", t("Translate"), ICONS.translate, translate));
     $("readerView").append(readHere);
   }
   const markBtn = readHere.querySelector(".sel-mark");
@@ -1616,12 +1619,12 @@ function showReadHere() {
   // Words already highlighted (1.7.1): the button takes the highlight off.
   const on = mark ? C.reader.selectionMarks() : { all: false };
   if (on.all) markBtn.dataset.remove = on.ids.join(","); else delete markBtn.dataset.remove;
-  markBtn.querySelector(".sel-mark-label").textContent = on.all ? "Unmark" : "Mark";
-  markBtn.setAttribute("aria-label", on.all ? "Unmark" : "Mark");
+  markBtn.querySelector(".sel-mark-label").textContent = on.all ? t("Unmark") : t("Mark");
+  markBtn.setAttribute("aria-label", on.all ? t("Unmark") : t("Mark"));
   readHere.querySelector(".sel-draw").hidden = !mark || !inkReady() || C.ink.on;
   readHere.querySelector(".sel-aloud").hidden = !spot;
-  readHere.querySelector(".sel-aloud .sel-label").textContent = heard ? "Play from here" : "Narrate from here";
-  readHere.querySelector(".sel-aloud").setAttribute("aria-label", heard ? "Play from here" : "Narrate from here");
+  readHere.querySelector(".sel-aloud .sel-label").textContent = heard ? t("Play from here") : t("Narrate from here");
+  readHere.querySelector(".sel-aloud").setAttribute("aria-label", heard ? t("Play from here") : t("Narrate from here"));
   listenSelection(readHere, picked);
   if (typeof ankiSelection === "function") ankiSelection(readHere, picked);
   readHere.querySelector(".sel-translate").hidden = !picked;
@@ -1662,7 +1665,7 @@ const HOLD_MS = 380;
 function openSelColors() {
   if (!readHere || readHere.hidden || readHere.querySelector(".sel-mark").hidden) return;
   if (!selColors) {
-    selColors = el("div", { class: "sel-colors", role: "group", "aria-label": "Highlight colours", hidden: true },
+    selColors = el("div", { class: "sel-colors", role: "group", "aria-label": t("Highlight colours"), hidden: true },
       ...MARK_COLORS.map((c) => el("button", { class: "sel-swatch", type: "button", "aria-label": MARK_NAMES[c], title: MARK_NAMES[c], "data-c": c,
         onclick: () => pickMarkColor(c) }, swatchDot(c))));
     $("readerView").append(selColors);
@@ -1727,7 +1730,7 @@ function markKey(n) {
 // ---- Highlights (1.7.0) ----
 // Colours (1.42.0): yellow is a highlight with no `color`.
 const MARK_COLORS = ["yellow", "green", "blue", "pink", "purple"];
-const MARK_NAMES = { yellow: "Yellow", green: "Green", blue: "Blue", pink: "Pink", purple: "Purple" };
+const MARK_NAMES = { yellow: t("Yellow"), green: t("Green"), blue: t("Blue"), pink: t("Pink"), purple: t("Purple") };
 const MARK_COLOR_KEY = "waypage.markColor";
 const markColor = () => { const c = load(MARK_COLOR_KEY, "yellow"); return MARK_COLORS.includes(c) ? c : "yellow"; };
 const colorOf = (m) => (MARK_COLORS.includes(m.color) ? m.color : "yellow");
@@ -1742,8 +1745,8 @@ function colorChips(list, current, onpick) {
   if (used.length < 2) return null;
   const chip = (c, label) => el("button", { class: "chip" + (current === c ? " on" : ""), type: "button", "aria-pressed": String(current === c),
     onclick: () => onpick(c && current === c ? "" : c) }, c ? swatchDot(c) : null, label);
-  return el("div", { class: "chips mark-filters", role: "group", "aria-label": "Show highlights by colour" },
-    chip("", "All"), ...used.map((c) => chip(c, MARK_NAMES[c])));
+  return el("div", { class: "chips mark-filters", role: "group", "aria-label": t("Show highlights by colour") },
+    chip("", t("All")), ...used.map((c) => chip(c, MARK_NAMES[c])));
 }
 // Kept on the clip's index entry as `marks`, so they sync, back up and
 // export with it: [{ id, block, start, endBlock, end, text, note, at }].
@@ -1765,7 +1768,7 @@ async function jumpToMark(p, m, back) {
   let page = m.page || 0;
   if (!page && C.files.printed(p)) page = await C.files.findPage(m.text);
   if (state.open !== p) return;
-  if (!C.reader.toMark(m.id, back, page) && C.files.printed(p)) toast("Not found on these pages. Show as text finds it in the words.");
+  if (!C.reader.toMark(m.id, back, page) && C.files.printed(p)) toast(t("Not found on these pages. Show as text finds it in the words."));
 }
 // Ids of the open clip's highlights that this copy of it has no place for.
 let lostMarks = new Set();
@@ -1802,8 +1805,8 @@ async function addMark(color = markColor()) {
   // A hold is found by being told (2026-11): once, on a touch screen.
   if (!matchMedia("(hover: hover) and (pointer: fine)").matches && !load("waypage.holdHint", false)) {
     store("waypage.holdHint", true);
-    toast("Highlighted. Hold Highlight to pick a colour.");
-  } else toast("Highlighted. Tap it to add a note.");
+    toast(t("Highlighted. Hold Highlight to pick a colour."));
+  } else toast(t("Highlighted. Tap it to add a note."));
 }
 async function removeMarks(ids) {
   const p = state.open;
@@ -1813,7 +1816,7 @@ async function removeMarks(ids) {
   if (!p) return;
   p.marks = (p.marks || []).filter((x) => !ids.includes(x.id));
   await saveMarks(p);
-  toast(ids.length === 1 ? "Highlight removed" : ids.length + " highlights removed");
+  toast(ids.length === 1 ? t("Highlight removed") : t("{n} highlights removed", { n: ids.length }));
 }
 // A colour picked on the selection bar: words already highlighted take it,
 // others are highlighted in it, and it stays the colour for the next.
@@ -1868,8 +1871,8 @@ function marksView(p, back) {
         el("button", { class: "row mark-row", type: "button", onclick: go },
           el("span", { class: "mark-quote", "data-c": colorOf(m), dir: "auto" }, m.text),
           m.note ? el("span", { class: "mark-note", dir: "auto" }, m.note) : null,
-          lost ? el("span", { class: "meta" }, "Not found in this copy of the clip") : null),
-        el("button", { class: "icon-btn mark-edit", type: "button", "aria-label": "Note and more", onclick: () => { markFocus = m.id; draw(); } },
+          lost ? el("span", { class: "meta" }, t("Not found in this copy of the clip")) : null),
+        el("button", { class: "icon-btn mark-edit", type: "button", "aria-label": t("Note and more"), onclick: () => { markFocus = m.id; draw(); } },
           svgIcon("rename", 18)));
       return { at: m.page ? m.page : m.block || 0, row };
     });
@@ -1879,12 +1882,12 @@ function marksView(p, back) {
     for (const g of groups) {
       const lost = inReader && !g.page && !C.reader.inkBlock(g.n);
       const go = () => {
-        if (lost) { toast("Not found in this copy of the clip."); return; }
+        if (lost) { toast(t("Not found in this copy of the clip.")); return; }
         if (inReader) { history.back(); setTimeout(() => inkGoTo(p, g), 0); return; }
         inkBack().then(() => inkGoTo(p, g));
       };
       const row = inkRow(p, g, go, () => inkRemoveGroup(p, g).then(draw));
-      if (lost) row.querySelector(".ink-row-text").append(el("span", { class: "meta" }, "Not found in this copy of the clip"));
+      if (lost) row.querySelector(".ink-row-text").append(el("span", { class: "meta" }, t("Not found in this copy of the clip")));
       rows.push({ at: inkOrder(g) + 0.5, row });
     }
     rows.sort((a, b) => a.at - b.at);
@@ -1893,24 +1896,24 @@ function marksView(p, back) {
     const canDraw = inReader && inkReady();
     return el("div", { class: "marks-list" },
       el("div", { class: "export-top" },
-        back ? el("button", { class: "btn-quiet export-back", type: "button", onclick: () => back() }, "Back") : null,
+        back ? el("button", { class: "btn-quiet export-back", type: "button", onclick: () => back() }, t("Back")) : null,
         el("p", { class: "menu-title" }, title),
-        list.length ? el("button", { class: "btn-quiet marks-copy", type: "button", onclick: () => copyText(C.backup.marksMarkdown({ ...p, marks: list }), "Highlights copied") }, "Copy all") : null),
+        list.length ? el("button", { class: "btn-quiet marks-copy", type: "button", onclick: () => copyText(C.backup.marksMarkdown({ ...p, marks: list }), t("Highlights copied")) }, t("Copy all")) : null),
       // A note has its pen in the reader bar already.
       canDraw && !p.note ? el("button", { class: "row ink-start", type: "button", onclick: inkStart },
-        inkIcon("pen"), el("span", { class: "row-label" }, "Draw on this " + (p.file ? "file" : "clip"))) : null,
+        inkIcon("pen"), el("span", { class: "row-label" }, p.file ? t("Draw on this file") : t("Draw on this clip"))) : null,
       colorChips(all, sheetColor, (c) => { sheetColor = c; draw(); }),
       rows.length ? el("ol", { class: "group marks-rows" }, ...rows.map((r) => r.row))
-        : el("p", { class: "footnote" }, (pictureBook() && state.open === p ? "Tap Draw on this " + (p.file ? "file" : "clip") + " to draw on its pictures."
-          : "Select words in the text and tap Mark or Draw.") + " Highlights and drawings go with the clip to your other devices."),
+        : el("p", { class: "footnote" }, t("{x} Highlights and drawings go with the clip to your other devices.", { x: pictureBook() && state.open === p ? (p.file ? t("Tap Draw on this file to draw on its pictures.") : t("Tap Draw on this clip to draw on its pictures."))
+          : t("Select words in the text and tap Mark or Draw.") })),
       // What was on ⋯ Drawings (2026-11): drawings are highlights now.
       drawings && !sheetColor ? el("div", { class: "group" },
-        menuRow("Remove all drawings", () => {
-          if (confirm("Remove all drawings from “" + p.title + "”? This can't be undone.")) inkRemoveAll(p, groups).then(draw);
+        menuRow(t("Remove all drawings"), () => {
+          if (confirm(t("Remove all drawings from “{title}”? This can't be undone.", { title: p.title }))) inkRemoveAll(p, groups).then(draw);
         }, "warn")) : null);
   };
   const markOne = (p, m, draw) => {
-    const note = el("textarea", { class: "mark-note-field", rows: "3", placeholder: "Add a note", "aria-label": "Note", dir: "auto" });
+    const note = el("textarea", { class: "mark-note-field", rows: "3", placeholder: t("Add a note"), "aria-label": t("Note"), dir: "auto" });
     note.value = m.note || "";
     let timer = 0;
     const keepNote = () => {
@@ -1925,9 +1928,9 @@ function marksView(p, back) {
     note.addEventListener("blur", keepNote);
     return el("div", { class: "mark-one" },
       el("div", { class: "export-top" },
-        el("button", { class: "btn-quiet export-back", type: "button", onclick: () => { keepNote(); markFocus = null; draw(); } }, "All highlights")),
+        el("button", { class: "btn-quiet export-back", type: "button", onclick: () => { keepNote(); markFocus = null; draw(); } }, t("All highlights"))),
       el("blockquote", { class: "mark-quote big", "data-c": colorOf(m), dir: "auto" }, m.text),
-      el("div", { class: "mark-colors", role: "radiogroup", "aria-label": "Colour" },
+      el("div", { class: "mark-colors", role: "radiogroup", "aria-label": t("Colour") },
         ...MARK_COLORS.map((c) => el("button", { class: "mark-swatch", type: "button", role: "radio", "aria-checked": String(colorOf(m) === c),
           "aria-label": MARK_NAMES[c], title: MARK_NAMES[c], onclick: () => {
             if (colorOf(m) === c) return;
@@ -1938,9 +1941,9 @@ function marksView(p, back) {
           } }, swatchDot(c)))),
       note,
       el("div", { class: "group" },
-        inReader && !lostMarks.has(m.id) ? menuRow("Go to it", () => { keepNote(); markFocus = null; history.back(); setTimeout(() => jumpToMark(p, m, true), 0); }) : null,
-        menuRow("Copy", () => copyText(m.text + (m.note ? "\n\n" + m.note : ""), "Copied")),
-        menuRow("Remove highlight", () => {
+        inReader && !lostMarks.has(m.id) ? menuRow(t("Go to it"), () => { keepNote(); markFocus = null; history.back(); setTimeout(() => jumpToMark(p, m, true), 0); }) : null,
+        menuRow(t("Copy"), () => copyText(m.text + (m.note ? "\n\n" + m.note : ""), t("Copied"))),
+        menuRow(t("Remove highlight"), () => {
           clearTimeout(timer);
           p.marks = (p.marks || []).filter((x) => x !== m);
           markFocus = null;
@@ -1952,7 +1955,7 @@ function marksView(p, back) {
 }
 async function copyText(text, done) {
   try { await navigator.clipboard.writeText(text); toast(done); }
-  catch (e) { toast("Couldn't copy. Try Export instead."); }
+  catch (e) { toast(t("Couldn't copy. Try Export instead.")); }
 }
 
 function stopAloud() {
@@ -1972,8 +1975,8 @@ async function readNext() {
   if (state.open === p) { link.go(); return; }
   let next = neighbour(p, 1) || (p.next ? savedAs(p.next) : null);
   if (!next && p.next) {
-    if (!navigator.onLine) { aloudAuto = false; toast("You're offline. The next page saves when you're back online."); return; }
-    toast("Saving the next page…");
+    if (!navigator.onLine) { aloudAuto = false; toast(t("You're offline. The next page saves when you're back online.")); return; }
+    toast(t("Saving the next page…"));
     next = await follow(p, 1, true);
   }
   if (!next) { aloudAuto = false; return; }
@@ -2011,7 +2014,7 @@ function paintPip() {
     $("pipTitle").textContent = heard.title;
     $("pipOver").textContent = heard.over;
     $("pipView").classList.toggle("has-text", !!heard.text);
-    $("pipState").textContent = heard.paused ? "Paused" : "";
+    $("pipState").textContent = heard.paused ? t("Paused") : "";
     return;
   }
   const p = aloudPage();
@@ -2025,7 +2028,7 @@ function paintPip() {
   $("pipOver").textContent = p ? p.folder || siteOf(p) : "";
   // A small window shows only the words being read (1.27.0).
   $("pipView").classList.toggle("has-text", !!text);
-  $("pipState").textContent = aloud.state === "paused" ? "Paused" : "";
+  $("pipState").textContent = aloud.state === "paused" ? t("Paused") : "";
 }
 let pipCheck = null;
 function checkPip() {
@@ -2052,14 +2055,14 @@ function setAloud(st, index) {
   const here = aloudHere();
   const btn = $("readerAloud");
   btn.setAttribute("aria-pressed", String(on && here));
-  btn.setAttribute("aria-label", on && here ? "Stop narrating" : "Narrate");
+  btn.setAttribute("aria-label", on && here ? t("Stop narrating") : t("Narrate"));
   $("aloudPlayer").hidden = !(on && here);
   $("aloudReadNext").hidden = !(ended && here);
   $("readerView").classList.toggle("aloud", here);
   if (here && state.open) readerFoot(C.reader.position());
   const play = $("aloudPlay");
   play.classList.toggle("paused", st === "paused");
-  play.setAttribute("aria-label", st === "paused" ? "Play" : "Pause");
+  play.setAttribute("aria-label", st === "paused" ? t("Play") : t("Pause"));
   const b = blockAt(aloud.index);
   $("aloudPrev").disabled = !on || b <= 0;
   $("aloudNext").disabled = !on || b >= (aloud.map[aloud.map.length - 1] ?? 0);
@@ -2076,7 +2079,7 @@ function setAloud(st, index) {
   floatOut();
   volumeWatch();
   showAloudBar();
-  if (st === "error") toast("The phone's voice stopped. Try again, or pick another voice in Aa.");
+  if (st === "error") toast(t("The phone's voice stopped. Try again, or pick another voice in Aa."));
 }
 
 // The bar along the bottom of the app while a clip is read aloud away
@@ -2109,10 +2112,10 @@ function showAloudBar(from) {
   }
   const ended = aloud.state === "ended";
   $("aloudBarTitle").textContent = p.title;
-  bar.setAttribute("aria-label", (ended ? "Read to the end: " : aloud.state === "paused" ? "Paused: " : "Narrating: ") + p.title);
+  bar.setAttribute("aria-label", (ended ? t("Read to the end: {title}", { title: p.title }) : aloud.state === "paused" ? t("Paused: {title}", { title: p.title }) : t("Narrating: {title}", { title: p.title })));
   $("aloudBarPlay").hidden = ended;
   $("aloudBarPlay").classList.toggle("paused", aloud.state === "paused");
-  $("aloudBarPlay").setAttribute("aria-label", aloud.state === "paused" ? "Play" : "Pause");
+  $("aloudBarPlay").setAttribute("aria-label", aloud.state === "paused" ? t("Play") : t("Pause"));
   $("aloudBarNext").hidden = !ended;
   document.body.classList.add("aloud-bar-up");
   const coming = bar.hidden || bar.dataset.leaving;
@@ -2287,15 +2290,15 @@ function voiceOptions(list, saved) {
   const out = [];
   for (const k of order) {
     const vs = groups.get(k).sort((a, b) => (a.online - b.online) || ((b.quality || 0) - (a.quality || 0)) || coded(a) - coded(b));
-    if (order.length > 1) out.push({ head: k ? named(k) : "Other" });
+    if (order.length > 1) out.push({ head: k ? named(k) : t("Other") });
     let n = 0;
     for (const v of vs) {
       // Kokoro's (kokoro-af_heart): Heart, and f or m for female or
       // male; Piper's the same (piper-m_thorsten).
       const k = /^(?:kokoro-[a-z]|piper-)([fm])_(.+)$/.exec(v.name);
-      const name = k ? (/^\d+$/.test(k[2]) ? "Voice " + Number(k[2]) : k[2].charAt(0).toUpperCase() + k[2].slice(1).replace(/_/g, " ")) : /-language$/i.test(v.name) ? "Standard" : coded(v) ? "Voice " + ++n : v.name;
+      const name = k ? (/^\d+$/.test(k[2]) ? t("Voice {n}", { n: Number(k[2]) }) : k[2].charAt(0).toUpperCase() + k[2].slice(1).replace(/_/g, " ")) : /-language$/i.test(v.name) ? t("Standard") : coded(v) ? t("Voice {n}", { n: ++n }) : v.name;
       // Kokoro 1.0 and Piper both have a French Siwis: Piper's says so.
-      const tags = [/^piper-/.test(v.name) ? "Piper" : "", k ? (k[1] === "f" ? "female" : "male") : v.gender, (v.quality || 0) >= 400 ? "natural" : "", v.online ? "online" : ""].filter(Boolean);
+      const tags = [/^piper-/.test(v.name) ? "Piper" : "", k ? (k[1] === "f" ? t("female") : t("male")) : v.gender, (v.quality || 0) >= 400 ? t("natural") : "", v.online ? t("online") : ""].filter(Boolean);
       out.push({ value: v.id, label: [name, ...tags].join(" · ") });
     }
   }
@@ -2307,19 +2310,19 @@ function aloudControls() {
   const p = state.open;
   const lang = primary(langOf(p));
   const name = (() => { try { return new Intl.DisplayNames([navigator.language || "en"], { type: "language" }).of(lang); } catch (e) { return lang; } })();
-  const voiceRow = el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Voice"), el("span", { class: "meta" }, "Looking…"));
-  const note = el("p", { class: "footnote aloud-note" }, speech.background ? "Keeps reading with the screen off. Pause it from the lock screen." : p ? "Reads while this clip is open." : "");
+  const voiceRow = el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, t("Voice")), el("span", { class: "meta" }, t("Looking…")));
+  const note = el("p", { class: "footnote aloud-note" }, speech.background ? t("Keeps reading with the screen off. Pause it from the lock screen.") : p ? t("Reads while this clip is open.") : "");
   note.hidden = !note.textContent;
   const restart = () => { if (aloud.state !== "stopped" && state.open && aloud.key === state.open.id) startAloud(blockAt(aloud.index)); };
   // Another speech engine (1.33.0, Android), when the phone has more than
   // one. Kept out until the phone says it has engines: a row's own display
   // would show it through `hidden`.
   const engineSlot = el("span", { hidden: true }), moreSlot = el("span", { hidden: true });
-  const engineRow = el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Speech engine"));
+  const engineRow = el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, t("Speech engine")));
   // More speech engines: Kokoro and Piper, and each phone engine's own page
   // for adding voices (Get more voices moved there, Daniel's ask).
   const more = el("button", { class: "btn-quiet aloud-more", type: "button",
-    onclick: () => { if (state.settings) openSection("kokoro", false, true); else { closeSheet(); openSettings(false, "kokoro"); } } }, "More speech engines");
+    onclick: () => { if (state.settings) openSection("kokoro", false, true); else { closeSheet(); openSettings(false, "kokoro"); } } }, t("More speech engines"));
   const kokoro = speech.kokoro().catch(() => null);
   const enginesP = speech.engines();
   const allOn = !!load(ALL_ENGINES_KEY, false);
@@ -2344,21 +2347,21 @@ function aloudControls() {
     const packs = k ? k.packs.filter((x) => x.ready) : [];
     const piperHere = k ? (k.piper || []).filter((x) => x.ready && primary(x.lang) === lang) : [];
     const piper = piperHere.find((x) => x.voice === voiceFor(p)) || piperHere[0];
-    const ours = (e) => [...packs.map((x) => ({ value: e.name + "#" + x.id, label: x.title })), ...(piper ? [{ value: e.name + "#piper", label: "Piper" }] : [])];
+    const ours = (e) => [...packs.map((x) => ({ value: e.name + "#" + x.id, label: x.title })), ...(piper ? [{ value: e.name + "#piper", label: t("Piper") }] : [])];
     const listed = (e) => (k && e.name === k.engine && ours(e).length ? ours(e) : [{ value: e.name, label: e.label }]);
     // The phone's default engine is the first option, not listed again.
-    const options = [{ value: "*all", label: "All" }, { value: "", label: "Phone's default" + (dflt ? " (" + dflt.label + ")" : "") }, ...engines.filter((e) => e.name !== def).flatMap(listed)];
+    const options = [{ value: "*all", label: t("All") }, { value: "", label: t("Phone's default{x}", { x: dflt ? " (" + dflt.label + ")" : "" }) }, ...engines.filter((e) => e.name !== def).flatMap(listed)];
     const engine = engineOf(lang) === def ? "" : engineOf(lang);
     const picked = !k || engine !== k.engine ? engine
       : piper && voiceFor(p) === piper.voice ? engine + "#piper"
       : k.use ? engine + "#" + k.use : engine;
-    engineRow.append(dropdown({ label: "Speech engine", cls: "field-pick font-pick", options,
+    engineRow.append(dropdown({ label: t("Speech engine"), cls: "field-pick font-pick", options,
       value: allOn ? "*all" : options.some((o) => o.value === picked) ? picked : "",
       onpick: async (v) => {
         store(ALL_ENGINES_KEY, v === "*all");
         if (v === "*all") { await refresh(); return; }
         const [name, pack] = v.split("#");
-        if (pack && pack !== "piper") { try { await speech.kokoro("use", pack); } catch (e) { toast(e && e.message || "Couldn't switch. Try again."); } }
+        if (pack && pack !== "piper") { try { await speech.kokoro("use", pack); } catch (e) { toast(e && e.message || t("Couldn't switch. Try again.")); } }
         store(ENGINE_KEY, { ...enginePicks(), [lang]: name });
         if (pack) {
           const voices = load(VOICE_KEY, {});
@@ -2384,20 +2387,20 @@ function aloudControls() {
     const curEngine = engineOf(lang) === def ? "" : engineOf(lang);
     const curVoice = voiceFor(p);
     const picks = new Map([["", { engine: "", voice: "" }]]);
-    const options = [{ value: "", label: "Phone's default" }];
+    const options = [{ value: "", label: t("Phone's default") }];
     const add = (engine, voice, label) => { const k = "v" + picks.size; picks.set(k, { engine, voice }); options.push({ value: k, label }); return k; };
     let value = "";
     for (const g of groups) {
       const opts = voiceOptions(g.mine, g.engine === curEngine ? curVoice : "");
       if (!opts[0] || !opts[0].head) options.push({ head: g.label });
-      if (g.engine && g.engine === curEngine && !curVoice) value = add(g.engine, "", "Default");
+      if (g.engine && g.engine === curEngine && !curVoice) value = add(g.engine, "", t("Default"));
       for (const o of opts) {
         if (o.head) { options.push({ head: g.label + " · " + o.head }); continue; }
         const k = add(g.engine, o.value, o.label);
         if (g.engine === curEngine && o.value === curVoice) value = k;
       }
     }
-    voiceRow.lastChild.replaceWith(dropdown({ label: "Voice", cls: "field-pick font-pick voice-pick", options, value,
+    voiceRow.lastChild.replaceWith(dropdown({ label: t("Voice"), cls: "field-pick font-pick voice-pick", options, value,
       onpick: (v) => {
         const m = picks.get(v);
         store(ENGINE_KEY, { ...enginePicks(), [lang]: m.engine });
@@ -2411,14 +2414,14 @@ function aloudControls() {
   function oneEngine(all) {
     const mine = all.filter((v) => primary(v.lang) === lang);
     if (!mine.length) {
-      voiceRow.lastChild.replaceWith(el("span", { class: "meta" }, "Phone's default"));
-      note.textContent = "No " + name + " voice " + (engineOf(lang) ? "in this engine" : "on this phone") + ". " + (speech.background ? "More speech engines adds one" : "Add one in the text-to-speech settings") + ", then come back.";
+      voiceRow.lastChild.replaceWith(el("span", { class: "meta" }, t("Phone's default")));
+      note.textContent = t("No {name} voice {x}. {x2}, then come back.", { name: name, x: engineOf(lang) ? t("in this engine") : t("on this phone"), x2: speech.background ? t("More speech engines adds one") : t("Add one in the text-to-speech settings") });
       note.hidden = false;
       return;
     }
     const saved = voiceFor(p);
-    const options = [{ value: "", label: "Phone's default" }, ...voiceOptions(mine, saved)];
-    voiceRow.lastChild.replaceWith(dropdown({ label: "Voice", cls: "field-pick font-pick voice-pick", options,
+    const options = [{ value: "", label: t("Phone's default") }, ...voiceOptions(mine, saved)];
+    voiceRow.lastChild.replaceWith(dropdown({ label: t("Voice"), cls: "field-pick font-pick voice-pick", options,
       value: options.some((o) => o.value === saved) ? saved : "",
       onpick: (v) => {
         const all = load(VOICE_KEY, {});
@@ -2429,14 +2432,14 @@ function aloudControls() {
   }
   const rate = clamp(Number(load(RATE_KEY, 1)) || 1, RATE_MIN, RATE_MAX);
   const shown = el("span", { class: "rc-value" }, rateText(rate));
-  const speed = el("input", { class: "range", type: "range", min: RATE_MIN, max: RATE_MAX, step: 0.1, value: rate, "aria-label": "Speed",
+  const speed = el("input", { class: "range", type: "range", min: RATE_MIN, max: RATE_MAX, step: 0.1, value: rate, "aria-label": t("Speed"),
     "aria-valuetext": rateText(rate),
     oninput: (e) => { const v = Number(e.target.value); shown.textContent = rateText(v); e.target.setAttribute("aria-valuetext", rateText(v)); },
     // Applied when the thumb is let go: a phone's voice restarts its sentence on each change.
     onchange: (e) => { const v = Number(e.target.value); store(RATE_KEY, v); if (aloud.state !== "stopped") speech.rate(v); } });
   speed.value = rate;
   const check = aloudSwitch;
-  const mixRow = speech.background ? check(MIX_KEY, "Allow mixing", "Music or a podcast in another app keeps playing under the voice. Off: they pause while it narrates.") : null;
+  const mixRow = speech.background ? check(MIX_KEY, t("Allow mixing"), t("Music or a podcast in another app keeps playing under the voice. Off: they pause while it narrates.")) : null;
   const volRow = speech.background ? volumeRow(Number(load(MIX_VOLUME_KEY, 1)), (v) => { store(MIX_VOLUME_KEY, v); if (aloud.state !== "stopped") speech.volume(aloudVolume()); }, "rc-row") : null;
   if (mixRow) {
     volRow.hidden = !load(MIX_KEY, false);
@@ -2446,16 +2449,16 @@ function aloudControls() {
     engineSlot,
     voiceRow,
     moreSlot,
-    el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Speed", shown),
+    el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, t("Speed"), shown),
       el("div", { class: "stepper" }, speed)),
-    check(FOOTNOTES_KEY, "Read footnotes", "The notes at the end, as part of the clip."),
-    check(EDGES_KEY, "Skip headers and footers", "Just the body: no title, captions or page heads."),
-    check(GO_ON_KEY, "Go on to the next clip", "At the end, the next chapter or the page it links to starts by itself.", false),
-    check(AWAKE_KEY, "Keep the screen on", "While narrating, so you can follow along.", false),
-    check(KEEP_KEY, "Keep reading when you leave the clip", "Off: it stops when you go back or open another clip.", false, true),
+    check(FOOTNOTES_KEY, t("Read footnotes"), t("The notes at the end, as part of the clip.")),
+    check(EDGES_KEY, t("Skip headers and footers"), t("Just the body: no title, captions or page heads.")),
+    check(GO_ON_KEY, t("Go on to the next clip"), t("At the end, the next chapter or the page it links to starts by itself."), false),
+    check(AWAKE_KEY, t("Keep the screen on"), t("While narrating, so you can follow along."), false),
+    check(KEEP_KEY, t("Keep reading when you leave the clip"), t("Off: it stops when you go back or open another clip."), false, true),
     mixRow,
     volRow,
-    speech.background ? check(PIP_KEY, "Small window outside the app", "Going home, the reading stays in a window you can move. Off: only in the app.", false, true) : null,
+    speech.background ? check(PIP_KEY, t("Small window outside the app"), t("Going home, the reading stays in a window you can move. Off: only in the app."), false, true) : null,
     note);
   box.ready = Promise.all([enginesIn, voicesIn, kokoro]).catch(() => {});
   return box;
@@ -2466,13 +2469,13 @@ const rateText = (v) => (Math.round(v * 10) / 10) + "×";
 function volumeRow(value, set, cls) {
   const v0 = clamp(Number(value) || 0, 0, 2);
   const shown = el("span", { class: "rc-value" }, rateText(v0));
-  const input = el("input", { class: "range volume-range", type: "range", min: 0, max: 2, step: 0.1, value: v0, "aria-label": "Volume", "aria-valuetext": rateText(v0),
+  const input = el("input", { class: "range volume-range", type: "range", min: 0, max: 2, step: 0.1, value: v0, "aria-label": t("Volume"), "aria-valuetext": rateText(v0),
     oninput: (e) => { const v = Number(e.target.value); shown.textContent = rateText(v); e.target.setAttribute("aria-valuetext", rateText(v)); },
     onchange: (e) => set(Number(e.target.value)) });
   input.value = v0;
   return cls === "rc-row"
-    ? el("div", { class: "rc-row volume-row" }, el("span", { class: "rc-label" }, "Volume", shown), el("div", { class: "stepper" }, input))
-    : el("div", { class: "row volume-row" }, el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, "Volume"), el("span", { class: "choice-note" }, shown)), el("div", { class: "stepper" }, input));
+    ? el("div", { class: "rc-row volume-row" }, el("span", { class: "rc-label" }, t("Volume"), shown), el("div", { class: "stepper" }, input))
+    : el("div", { class: "row volume-row" }, el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, t("Volume")), el("span", { class: "choice-note" }, shown)), el("div", { class: "stepper" }, input));
 }
 function aloudSwitch(key, text, note, restart = true, on = false) {
   const input = el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!load(key, on),
@@ -2491,7 +2494,7 @@ function aloudSwitch(key, text, note, restart = true, on = false) {
 function scrollControls() {
   const rate = scrollRate();
   const shown = el("span", { class: "rc-value" }, rateText(rate));
-  const speed = el("input", { class: "range", type: "range", min: RATE_MIN, max: RATE_MAX, step: 0.1, value: rate, "aria-label": "Speed",
+  const speed = el("input", { class: "range", type: "range", min: RATE_MIN, max: RATE_MAX, step: 0.1, value: rate, "aria-label": t("Speed"),
     "aria-valuetext": rateText(rate),
     oninput: (e) => {
       const v = Number(e.target.value);
@@ -2502,11 +2505,11 @@ function scrollControls() {
     } });
   speed.value = rate;
   return el("div", { class: "aloud-controls" },
-    el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Speed", shown),
+    el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, t("Speed"), shown),
       el("div", { class: "stepper" }, speed)),
-    state.open && state.open.note ? aloudSwitch(GO_ON_KEY, "Go on to the next note", "At the end, the next note starts scrolling by itself.", false)
-      : aloudSwitch(GO_ON_KEY, "Go on to the next clip", "At the end, the next chapter starts scrolling by itself.", false),
-    aloudSwitch(AWAKE_KEY, "Keep the screen on", "While it scrolls, so you can follow along.", false));
+    state.open && state.open.note ? aloudSwitch(GO_ON_KEY, t("Go on to the next note"), t("At the end, the next note starts scrolling by itself."), false)
+      : aloudSwitch(GO_ON_KEY, t("Go on to the next clip"), t("At the end, the next chapter starts scrolling by itself."), false),
+    aloudSwitch(AWAKE_KEY, t("Keep the screen on"), t("While it scrolls, so you can follow along."), false));
 }
 
 
@@ -2534,11 +2537,11 @@ const prefsOf = (o, keys) => Object.fromEntries(keys.map((k) => [k, o[k]]));
 // Layout and Text, where the open clip's settings come from.
 function scopeRow() {
   const p = state.open;
-  const d = dropdown({ label: "Applies to", cls: "field-pick font-pick scope-pick", value: readingScope(p), onpick: setScope, options: [
-    { value: "all", label: "Everywhere" },
-    { value: "clip", label: isBook(p) ? "This book" : "This clip" },
-    ...(p.folder ? [{ value: "set", label: "This collection" }] : [])] });
-  return el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Applies to"), d);
+  const d = dropdown({ label: t("Applies to"), cls: "field-pick font-pick scope-pick", value: readingScope(p), onpick: setScope, options: [
+    { value: "all", label: t("Everywhere") },
+    { value: "clip", label: isBook(p) ? t("This book") : t("This clip") },
+    ...(p.folder ? [{ value: "set", label: t("This collection") }] : [])] });
+  return el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, t("Applies to")), d);
 }
 
 let readingGroups = 0;
@@ -2567,79 +2570,79 @@ function readingControls(withTheme) {
   // touch its pages.
   const comic = withTheme && !!state.open && !!state.open.comic;
   const note = (text) => el("span", { class: "choice-note rc-note" }, text);
-  const layout = part("layout", "Layout",
+  const layout = part("layout", t("Layout"),
     scoped ? scopeRow() : null,
-    comic ? row("Show as", seg(id + "-comicLayout", "Show as", [
-      { value: "scroll", label: "Scroll" }, { value: "pages", label: "Pages" },
+    comic ? row(t("Show as"), seg(id + "-comicLayout", t("Show as"), [
+      { value: "scroll", label: t("Scroll") }, { value: "pages", label: t("Pages") },
     ], r.comicLayout, (v) => set({ comicLayout: v })))
-      : row("Show as", seg(id + "-layout", "Show as", [
-        { value: "scroll", label: "Scroll" }, { value: "pages", label: "Pages" },
+      : row(t("Show as"), seg(id + "-layout", t("Show as"), [
+        { value: "scroll", label: t("Scroll") }, { value: "pages", label: t("Pages") },
       ], r.layout, (v) => set({ layout: v }))),
     comic ? el("div", { class: "comic-rows" },
-      row("Turn pages", seg(id + "-turn", "Turn pages", [
-        { value: "ltr", label: "Left to right" }, { value: "rtl", label: "Right to left" },
+      row(t("Turn pages"), seg(id + "-turn", t("Turn pages"), [
+        { value: "ltr", label: t("Left to right") }, { value: "rtl", label: t("Right to left") },
       ], turnOf(state.open), setTurn)),
-      state.open.manga ? note("This comic says it’s manga, read right to left") : null,
-      row("Wide pages", seg(id + "-wide", "Wide pages", [
-        { value: "split", label: "Split" }, { value: "whole", label: "Whole" },
+      state.open.manga ? note(t("This comic says it’s manga, read right to left")) : null,
+      row(t("Wide pages"), seg(id + "-wide", t("Wide pages"), [
+        { value: "split", label: t("Split") }, { value: "whole", label: t("Whole") },
       ], r.wide, (v) => set({ wide: v }))),
-      note("A two-page spread on one screen: in halves, or whole")) : null,
+      note(t("A two-page spread on one screen: in halves, or whole"))) : null,
     volumeSwitch(),
     swipeSwitch(),
-    comic ? null : row("Margins", seg(id + "-margins", "Margins", [
-      { value: "narrow", label: "Narrow" }, { value: "normal", label: "Normal" }, { value: "wide", label: "Wide" },
+    comic ? null : row(t("Margins"), seg(id + "-margins", t("Margins"), [
+      { value: "narrow", label: t("Narrow") }, { value: "normal", label: t("Normal") }, { value: "wide", label: t("Wide") },
     ], r.margins, (v) => set({ margins: v }))),
     ...(brightSwitch(id) || []),
     // Under Layout since 1.47.0: it adds a line to the page, not to the type.
-    comic ? null : row("Time left in", seg(id + "-leftIn", "Time left in", [
-      { value: "part", label: "Section" }, { value: "clip", label: "Whole" },
+    comic ? null : row(t("Time left in"), seg(id + "-leftIn", t("Time left in"), [
+      { value: "part", label: t("Section") }, { value: "clip", label: t("Whole") },
     ], leftIn(state.open), setLeftIn)),
     spentSwitch(),
     // Big screens (1.5.0): two pages side by side, and the contents
     // beside the text.
-    wide.matches ? stack("Pages on a wide window", seg(id + "-spread", "Pages on a wide window", [
-      { value: "one", label: "One" }, { value: "two", label: "Two" }, { value: "auto", label: "Auto" },
+    wide.matches ? stack(t("Pages on a wide window"), seg(id + "-spread", t("Pages on a wide window"), [
+      { value: "one", label: t("One") }, { value: "two", label: t("Two") }, { value: "auto", label: t("Auto") },
     ], r.spread, (v) => set({ spread: v }))) : null,
     wide.matches ? el("label", { class: "rc-row switch-row" },
-      el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Contents beside the text"),
-        el("span", { class: "choice-note" }, "On windows 1024 px and wider")),
+      el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, t("Contents beside the text")),
+        el("span", { class: "choice-note" }, t("On windows 1024 px and wider"))),
       el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "rail", checked: r.rail,
         onchange: (e) => set({ rail: e.target.checked }) })) : null,
-    withTheme ? stack("Theme", seg(id + "-theme", "Theme",
-      [{ value: "system", label: "Auto", swatch: autoSwatch(), auto: true }, ...themeOptions(THEMES)],
+    withTheme ? stack(t("Theme"), seg(id + "-theme", t("Theme"),
+      [{ value: "system", label: t("Auto"), swatch: autoSwatch(), auto: true }, ...themeOptions(THEMES)],
       readerThemeOn() ? state.readerTheme : state.theme, (v) => { (readerThemeOn() ? setReaderTheme : setTheme)(v); syncThemeInputs(); }, "themes scroll")) : null,
     // Only in the reader's own sheet, where a PDF is open.
     withTheme ? pdfDarkSwitch() : null);
-  const text = part("text", "Text",
+  const text = part("text", t("Text"),
     scoped ? scopeRow() : null,
-    row("Font", fontPick("font", "Font",
+    row(t("Font"), fontPick("font", t("Font"),
       FONTS.map((f) => ({ value: f.value, label: f.label, style: "font-family: " + f.family + ", var(--sans)" })))),
-    row("Hebrew", fontPick("hebrew", "Hebrew font",
+    row(t("Hebrew"), fontPick("hebrew", t("Hebrew font"),
       HEBREW.map((f) => ({ value: f.value, label: f.label,
         sample: f.family ? el("span", { class: "seg-sample", lang: "he", dir: "rtl", style: "font-family: " + f.family, "aria-hidden": "true" }, "עברית") : null })))),
-    row("Alignment", fontPick("align", "Alignment", ALIGNS)),
-    row("Text size", el("div", { class: "stepper" },
-      el("button", { class: "step-btn small", type: "button", "data-step": "-1", "aria-label": "Smaller text", onclick: () => nudge(-1) }, "A"),
-      slider("Text size", SIZE_MIN, SIZE_MAX, 1, (v) => set({ size: v }), "size"),
-      el("button", { class: "step-btn large", type: "button", "data-step": "1", "aria-label": "Larger text", onclick: () => nudge(1) }, "A")), "size"),
+    row(t("Alignment"), fontPick("align", t("Alignment"), ALIGNS)),
+    row(t("Text size"), el("div", { class: "stepper" },
+      el("button", { class: "step-btn small", type: "button", "data-step": "-1", "aria-label": t("Smaller text"), onclick: () => nudge(-1) }, "A"),
+      slider(t("Text size"), SIZE_MIN, SIZE_MAX, 1, (v) => set({ size: v }), "size"),
+      el("button", { class: "step-btn large", type: "button", "data-step": "1", "aria-label": t("Larger text"), onclick: () => nudge(1) }, "A")), "size"),
     // Text weight (1.45.0), for thin fonts on a dark theme or a dim
     // screen. Fonts made only as regular and bold go in one step.
-    row("Weight", el("div", { class: "stepper" },
-      slider("Text weight", SPACES.weight.min, SPACES.weight.max, SPACES.weight.step, (v) => set({ weight: v }), "weight")), "weight"),
+    row(t("Weight"), el("div", { class: "stepper" },
+      slider(t("Text weight"), SPACES.weight.min, SPACES.weight.max, SPACES.weight.step, (v) => set({ weight: v }), "weight")), "weight"),
     el("label", { class: "rc-row switch-row" },
-      el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, "Hyphenate"),
-        el("span", { class: "choice-note" }, "Breaks long words at the line's end, in the clip's language")),
+      el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, t("Hyphenate")),
+        el("span", { class: "choice-note" }, t("Breaks long words at the line's end, in the clip's language"))),
       el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "hyphens", checked: r.hyphens,
         onchange: (e) => set({ hyphens: e.target.checked }) })),
     pinchSwitch(),
     // Spacing (1.19.0), headed on its own so the labels stay one word.
-    el("h2", { class: "overline rc-sub" }, "Spacing"),
-    row("Lines", el("div", { class: "stepper" },
-      slider("Line spacing", SPACING_MIN, SPACING_MAX, 0.05, (v) => set({ spacing: v }), "spacing")), "spacing"),
-    ...[["letters", "Letters", "Letter spacing"], ["words", "Words", "Word spacing"], ["paras", "Paragraphs", "Paragraph spacing"]].map(([k, name, aria]) =>
+    el("h2", { class: "overline rc-sub" }, t("Spacing")),
+    row(t("Lines"), el("div", { class: "stepper" },
+      slider(t("Line spacing"), SPACING_MIN, SPACING_MAX, 0.05, (v) => set({ spacing: v }), "spacing")), "spacing"),
+    ...[["letters", t("Letters"), t("Letter spacing")], ["words", t("Words"), t("Word spacing")], ["paras", t("Paragraphs"), t("Paragraph spacing")]].map(([k, name, aria]) =>
       row(name, el("div", { class: "stepper" },
         slider(aria, SPACES[k].min, SPACES[k].max, SPACES[k].step, (v) => set({ [k]: v }), k)), k)),
-    el("button", { class: "btn-quiet reset", type: "button", onclick: () => set(prefsOf(READING_DEFAULT, TEXT_PREFS)) }, "Reset text"));
+    el("button", { class: "btn-quiet reset", type: "button", onclick: () => set(prefsOf(READING_DEFAULT, TEXT_PREFS)) }, t("Reset text")));
   const box = el("div", { class: "reading-controls" }, layout, text);
   if (all) box.dataset.all = "";
   syncReadingControls(box);
@@ -2661,10 +2664,10 @@ function syncReadingControls(box) {
   box.querySelectorAll(".volume-row").forEach((n) => { n.style.display = (p ? pagesOn(p, r) : r.layout === "pages") ? "" : "none"; });
   const shown = {
     size: r.size + " px", spacing: r.spacing.toFixed(2),
-    letters: r.letters ? (r.letters > 0 ? "+" : "") + r.letters.toFixed(2) + " em" : "Normal",
-    words: r.words ? "+" + r.words.toFixed(2) + " em" : "Normal",
-    paras: r.paras === 1 ? "Normal" : r.paras + "×",
-    weight: r.weight === 400 ? "Normal" : String(r.weight),
+    letters: r.letters ? (r.letters > 0 ? "+" : "") + r.letters.toFixed(2) + " em" : t("Normal"),
+    words: r.words ? "+" + r.words.toFixed(2) + " em" : t("Normal"),
+    paras: r.paras === 1 ? t("Normal") : r.paras + "×",
+    weight: r.weight === 400 ? t("Normal") : String(r.weight),
   };
   for (const [k, text] of Object.entries(shown)) {
     const range = box.querySelector('.range[data-pref="' + k + '"]');
@@ -2708,11 +2711,11 @@ function readerSettings() {
     const a = audio ? listenSheetPart() : comic ? scrollControls() : aloudControls();
     a.classList.add("rc-part");
     a.dataset.part = "aloud";
-    if (!audio) a.prepend(el("h2", { class: "overline" }, comic ? "Auto-scroll" : "Narrate"));
+    if (!audio) a.prepend(el("h2", { class: "overline" }, comic ? t("Auto-scroll") : t("Narrate")));
     box.append(a);
     parts.push(a);
   }
-  const names = { layout: "Layout", text: "Text", aloud: audio ? "Audiobook" : comic ? "Auto-scroll" : "Narrate" };
+  const names = { layout: t("Layout"), text: t("Text"), aloud: audio ? t("Audiobook") : comic ? "Auto-scroll" : t("Narrate") };
   let tab = load(SHEET_TAB_KEY, "text");
   if (!parts.some((x) => x.dataset.part === tab)) tab = "text";
   const show = (v) => {
@@ -2720,7 +2723,7 @@ function readerSettings() {
     store(SHEET_TAB_KEY, v);
     for (const x of parts) x.hidden = x.dataset.part !== v;
   };
-  const tabs = seg("sheet-tab", "Settings", parts.map((x) => ({ value: x.dataset.part, label: names[x.dataset.part] })), tab, show, "sheet-tabs");
+  const tabs = seg("sheet-tab", t("Settings"), parts.map((x) => ({ value: x.dataset.part, label: names[x.dataset.part] })), tab, show, "sheet-tabs");
   show(tab);
   return el("div", { class: "reader-settings" }, tabs, box);
 }
@@ -2730,21 +2733,21 @@ function readerSettings() {
 // history entry of its own, so Android's back closes it before the page.
 
 const SHEETS = {
-  reading: { button: "readerAa", label: "Reader settings", build: readerSettings },
-  page: { button: "readerMore", label: "This clip", build: () => state.open.preview ? previewSheet(state.open) : pageSheet(state.open, "reader") },
-  contents: { button: "readerContents", label: "Contents", build: contentsList },
-  folder: { button: "readerFolder", label: "Clips in this collection", build: folderList },
-  marks: { button: "readerMarks", label: "Highlights", build: () => marksView(state.open) },
+  reading: { button: "readerAa", label: t("Reader settings"), build: readerSettings },
+  page: { button: "readerMore", label: t("This clip"), build: () => state.open.preview ? previewSheet(state.open) : pageSheet(state.open, "reader") },
+  contents: { button: "readerContents", label: t("Contents"), build: contentsList },
+  folder: { button: "readerFolder", label: t("Clips in this collection"), build: folderList },
+  marks: { button: "readerMarks", label: t("Highlights"), build: () => marksView(state.open) },
   // From the text itself (1.14.0), with no button of their own.
-  note: { label: "Note", build: () => noteSheet(noteNow) },
-  lookup: { label: "Look up", build: () => lookupSheet(lookNow) },
-  link: { label: "Link", build: () => linkSheet(linkNow) },
+  note: { label: t("Note"), build: () => noteSheet(noteNow) },
+  lookup: { label: t("Look up"), build: () => lookupSheet(lookNow) },
+  link: { label: t("Link"), build: () => linkSheet(linkNow) },
   // From This clip's More (1.38.0).
   // Under ⋯, which they're opened from, on a big screen (1.42.0).
-  links: { button: "readerMore", label: "Linked pages", build: () => linksSheet(state.open) },
-  translate: { button: "readerTranslate", label: "Translation", build: () => translateSheet(state.open) },
+  links: { button: "readerMore", label: t("Linked pages"), build: () => linksSheet(state.open) },
+  translate: { button: "readerTranslate", label: t("Translation"), build: () => translateSheet(state.open) },
   // A PDF's pen drawings (1.56.0), from This clip's More.
-  ink: { button: "readerMore", label: "Try your pen", build: () => inkSheet() },
+  ink: { button: "readerMore", label: t("Try your pen"), build: () => inkSheet() },
 };
 
 function openSheet(kind, fromHistory) {
@@ -2809,15 +2812,15 @@ function openNote(note) {
   openSheet("note");
 }
 function noteSheet(n) {
-  if (!n) return el("p", { class: "meta" }, "That note isn't here any more.");
+  if (!n) return el("p", { class: "meta" }, t("That note isn't here any more."));
   return el("div", { class: "page-controls" },
-    el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, n.label ? "Note " + n.label.replace(/^\[|\]$/g, "") : "Note")),
+    el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, n.label ? t("Note {replace}", { replace: n.label.replace(/^\[|\]$/g, "") }) : t("Note"))),
     el("p", { class: "note-text", dir: "auto" }, n.text),
     n.links.length ? el("div", { class: "group" }, ...n.links.map((l) => el("button", { class: "row", type: "button", onclick: () => openLink(l.href, l.text) },
       el("span", { class: "choice-text" },
         el("span", { class: "row-label accent", dir: "auto" }, l.text || hostOf(l.href)),
         el("span", { class: "choice-note" }, hostOf(l.href)))))) : null,
-    el("div", { class: "group" }, menuRow("Go to the note", () => back().then(() => n.go()))));
+    el("div", { class: "group" }, menuRow(t("Go to the note"), () => back().then(() => n.go()))));
 }
 // ---- Look up (1.45.0) ----
 // The selected words in your own dictionaries, in a sheet over the page
@@ -2836,13 +2839,13 @@ function lookUp(text) {
   openSheet("lookup");
 }
 function lookupSheet(l) {
-  if (!l) return el("p", { class: "meta" }, "Select a word to look it up.");
+  if (!l) return el("p", { class: "meta" }, t("Select a word to look it up."));
   const head = el("div", { class: "menu-head" }, el("p", { class: "menu-title", dir: "auto" }, l.text));
-  if (!l.found) return el("div", { class: "page-controls" }, head, el("p", { class: "meta", role: "status" }, "Looking it up…"));
-  const offer = el("div", { class: "group" }, menuRow("Translate", () => back().then(() => translate(l.text))));
+  if (!l.found) return el("div", { class: "page-controls" }, head, el("p", { class: "meta", role: "status" }, t("Looking it up…")));
+  const offer = el("div", { class: "group" }, menuRow(t("Translate"), () => back().then(() => translate(l.text))));
   if (!l.found.length) {
     return el("div", { class: "page-controls" }, head,
-      el("p", { class: "meta" }, C.dict.list().length > 1 ? "It isn't in your dictionaries." : "It isn't in " + C.dict.list()[0].name + "."), offer);
+      el("p", { class: "meta" }, C.dict.list().length > 1 ? t("It isn't in your dictionaries.") : t("It isn't in {name}.", { name: C.dict.list()[0].name })), offer);
   }
   let last = "";
   return el("div", { class: "page-controls" }, head,
@@ -2861,7 +2864,7 @@ function openLink(href, text) {
   openSheet("link");
 }
 function linkSheet(l) {
-  if (!l) return el("p", { class: "meta" }, "That link isn't here any more.");
+  if (!l) return el("p", { class: "meta" }, t("That link isn't here any more."));
   const saved = savedAs(l.href);
   const go = (f) => () => back().then(f);
   return el("div", { class: "page-controls" },
@@ -2869,14 +2872,14 @@ function linkSheet(l) {
       el("p", { class: "menu-title", dir: "auto" }, saved ? saved.title : l.text && l.text.length > 2 ? l.text : hostOf(l.href)),
       el("p", { class: "link-url" }, l.href)),
     el("div", { class: "group" },
-      saved ? menuRow("Open the saved clip", go(() => openPage(saved.id))) : null,
+      saved ? menuRow(t("Open the saved clip"), go(() => openPage(saved.id))) : null,
       saved ? null : el("button", { class: "row", type: "button", onclick: go(() => saveLater(l.href)) },
         el("span", { class: "choice-text" },
-          el("span", { class: "row-label accent" }, "Save for later"),
-          el("span", { class: "choice-note" }, navigator.onLine ? "Into your library, to read offline" : "It saves when you're back online"))),
-      saved || !/^https?:/i.test(l.href) ? null : menuRow("Read it here", go(() => previewPost(null, { url: l.href }))),
-      menuRow("Open in the browser", go(() => C.platform.openOutside(l.href))),
-      menuRow("Copy the link", go(() => copyText(l.href, "Link copied")))));
+          el("span", { class: "row-label accent" }, t("Save for later")),
+          el("span", { class: "choice-note" }, navigator.onLine ? t("Into your library, to read offline") : t("It saves when you're back online")))),
+      saved || !/^https?:/i.test(l.href) ? null : menuRow(t("Read it here"), go(() => previewPost(null, { url: l.href }))),
+      menuRow(t("Open in the browser"), go(() => C.platform.openOutside(l.href))),
+      menuRow(t("Copy the link"), go(() => copyText(l.href, t("Link copied"))))));
 }
 // ---- Linked pages (1.38.0) ----
 // The pages a clip links to, to save as clips of their own: a Wikipedia
@@ -2912,9 +2915,9 @@ const trMode = (data) => !data ? "off" : data.mode || (data.show === false ? "of
 function translateButton(p) {
   const b = $("readerTranslate");
   b.hidden = !(p && !p.note && !C.files.printed(p) && !p.comic && (C.platform.translator.available || translationOf(p))) || (typeof audioWordless === "function" && audioWordless(p));
-  const label = translationOf(p) ? "Translation" : "Translate this clip";
+  const label = translationOf(p) ? t("Translation") : t("Translate this clip");
   b.setAttribute("aria-label", label);
-  b.title = label + " (L)";
+  b.title = t("{label} (L)", { label: label });
 }
 const translationOf = (p) => (p && trans.id === p.id ? trans.data : null);
 async function keepTranslation(p, data) {
@@ -2927,21 +2930,21 @@ async function startTranslate(p, to, redraw) {
   const T = C.platform.translator;
   if (state.open !== p || translating) return;
   const blocks = C.reader.translatable();
-  if (!blocks.length) { toast("There's no text in this clip to translate."); return; }
-  const job = translating = { id: p.id, to, from: primary(p.lang), stop: false, line: "Getting ready…" };
+  if (!blocks.length) { toast(t("There's no text in this clip to translate.")); return; }
+  const job = translating = { id: p.id, to, from: primary(p.lang), stop: false, line: t("Getting ready…") };
   redraw();
   try {
     if (!job.from) job.from = primary(await T.detect(blocks.slice(0, 30).map((b) => b.text).join(" ")));
-    if (!job.from) { toast("Couldn't tell what language this clip is in."); return; }
-    if (job.from === to) { toast("This clip is in " + langName(to) + " already."); return; }
+    if (!job.from) { toast(t("Couldn't tell what language this clip is in.")); return; }
+    if (job.from === to) { toast(t("This clip is in {langName} already.", { langName: langName(to) })); return; }
     const can = await T.ready(job.from, to);
-    if (can === "unavailable") { toast("Translating " + langName(job.from) + " into " + langName(to) + " isn't possible here."); return; }
+    if (can === "unavailable") { toast(t("Translating {langName} into {langName2} isn't possible here.", { langName: langName(job.from), langName2: langName(to) })); return; }
     if (can === "downloadable") {
-      if (!navigator.onLine) { toast("Connect once to download " + langName(job.from) + " and " + langName(to) + ". After that it works offline."); return; }
-      job.line = "Downloading the languages, once…";
+      if (!navigator.onLine) { toast(t("Connect once to download {langName} and {langName2}. After that it works offline.", { langName: langName(job.from), langName2: langName(to) })); return; }
+      job.line = t("Downloading the languages, once…");
       redraw();
     }
-    await T.prepare(job.from, to, (f) => { job.line = "Downloading the languages, once… " + Math.round(f * 100) + "%"; redraw(); });
+    await T.prepare(job.from, to, (f) => { job.line = t("Downloading the languages, once…") + " " + Math.round(f * 100) + "%"; redraw(); });
     const was = translationOf(p);
     const same = was && was.from === job.from && was.to === to ? was.blocks : [];
     const done = new Map(same.map((b) => [b.i + "|" + b.print, b]));
@@ -2952,16 +2955,16 @@ async function startTranslate(p, to, redraw) {
       const part = todo.slice(k, k + TR_BATCH);
       const got = await T.translate(part.map((b) => b.text.slice(0, 5000)), job.from, to);
       part.forEach((b, j) => { if (got[j]) data.blocks.push({ i: b.i, print: b.print, text: String(got[j]).slice(0, 20000) }); });
-      job.line = "Translated " + Math.round(100 * (kept.length + k + part.length) / blocks.length) + "%";
+      job.line = t("Translated {pct}%", { pct: Math.round(100 * (kept.length + k + part.length) / blocks.length) });
       redraw();
       // Kept as it goes, so a long book shows what's done.
       if ((k / TR_BATCH) % 5 === 4) { data.blocks.sort((a, b) => a.i - b.i); await keepTranslation(p, data); }
     }
     data.blocks.sort((a, b) => a.i - b.i);
     await keepTranslation(p, data);
-    toast(job.stop ? "Stopped. What's translated is kept." : "Translated into " + langName(to));
+    toast(job.stop ? t("Stopped. What's translated is kept.") : t("Translated into {langName}", { langName: langName(to) }));
   } catch (e) {
-    toast("Couldn't translate this clip" + (e && e.message ? ": " + String(e.message).slice(0, 80) : "."));
+    toast(t("Couldn't translate this clip{x}", { x: e && e.message ? ": " + String(e.message).slice(0, 80) : "." }));
   } finally {
     if (translating === job) translating = null;
     redraw();
@@ -2975,35 +2978,34 @@ function translateSheet(p) {
     const tr = translationOf(p);
     if (translating && translating.id === p.id) {
       fill(box,
-        el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, "Translating into " + langName(translating.to))),
+        el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, t("Translating into {langName}", { langName: langName(translating.to) }))),
         el("p", { class: "meta", role: "status" }, translating.line),
-        el("div", { class: "group" }, menuRow("Stop", () => { translating.stop = true; translating.line = "Stopping…"; draw(); })));
+        el("div", { class: "group" }, menuRow(t("Stop"), () => { translating.stop = true; translating.line = t("Stopping…"); draw(); })));
       return;
     }
     let to = TR_LANGS.includes(load(TR_KEY, "")) ? load(TR_KEY, "") : TR_LANGS.includes(myLang()) ? myLang() : "en";
     if (tr && to === tr.from) to = tr.to;
     const options = TR_LANGS.map((c) => ({ value: c, label: langName(c) })).sort((a, b) => a.label.localeCompare(b.label));
-    const pick = dropdown({ label: "Into", cls: "field-pick", options, value: to, onpick: (v) => { store(TR_KEY, v); draw(); } });
-    const show = tr ? dropdown({ label: "Show", value: trMode(tr),
-      options: [{ value: "off", label: "Off" }, { value: "under", label: "Under the text" }, { value: "replace", label: "Instead of the text" }],
+    const pick = dropdown({ label: t("Into"), cls: "field-pick", options, value: to, onpick: (v) => { store(TR_KEY, v); draw(); } });
+    const show = tr ? dropdown({ label: t("Show"), value: trMode(tr),
+      options: [{ value: "off", label: t("Off") }, { value: "under", label: t("Under the text") }, { value: "replace", label: t("Instead of the text") }],
       onpick: (v) => { const { show: _, ...rest } = tr; keepTranslation(p, { ...rest, mode: v }); } }) : null;
     fill(box,
-      el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, "Translation"),
-        tr ? el("p", { class: "meta" }, langName(tr.from) + " into " + langName(tr.to) + ", " + tr.blocks.length + " of " + C.reader.translatable().length + " paragraphs") : null),
+      el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, t("Translation")),
+        tr ? el("p", { class: "meta" }, t("{langName} into {langName2}, {n} of {n2} paragraphs", { langName: langName(tr.from), langName2: langName(tr.to), n: tr.blocks.length, n2: C.reader.translatable().length })) : null),
       tr ? el("div", { class: "group" },
-        el("div", { class: "row tr-show" }, el("span", { class: "row-label" }, "Show"), show)) : null,
-      T.available ? el("h3", { class: "overline" }, tr ? "Translate again" : "Translate this clip") : null,
-      T.available ? el("div", { class: "group" }, el("div", { class: "row tr-into" }, el("span", { class: "row-label" }, "Into"), pick)) : null,
+        el("div", { class: "row tr-show" }, el("span", { class: "row-label" }, t("Show")), show)) : null,
+      T.available ? el("h3", { class: "overline" }, tr ? t("Translate again") : t("Translate this clip")) : null,
+      T.available ? el("div", { class: "group" }, el("div", { class: "row tr-into" }, el("span", { class: "row-label" }, t("Into")), pick)) : null,
       T.available && !(tr && tr.to === to && tr.blocks.length >= C.reader.translatable().length)
         ? el("button", { class: "btn-primary", type: "button", onclick: () => startTranslate(p, to, draw) },
-          tr && tr.to === to ? "Translate the rest" : "Translate") : null,
+          tr && tr.to === to ? t("Translate the rest") : t("Translate")) : null,
       el("p", { class: "footnote" }, T.available
-        ? (T.byApple ? "Translated on this iPhone; the words aren't sent anywhere. The first time for a language, iOS asks to download it."
-          : T.onPhone ? "Translated on this phone; the words aren't sent anywhere. The first time for a language, the phone downloads it from Google (about 30 MB)."
-          : "Translated by this browser on this computer; the words aren't sent anywhere. The first time for a language, the browser downloads it.")
-          + " The translation stays on this device."
-        : "Translating a clip works in the app (on iPhone, iOS 18 and later) and in Chrome on a computer."),
-      tr ? el("div", { class: "group" }, menuRow("Remove the translation", () => keepTranslation(p, null).then(draw), "warn")) : null);
+        ? t("{x} The translation stays on this device.", { x: T.byApple ? t("Translated on this iPhone; the words aren't sent anywhere. The first time for a language, iOS asks to download it.")
+          : T.onPhone ? t("Translated on this phone; the words aren't sent anywhere. The first time for a language, the phone downloads it from Google (about 30 MB).")
+          : t("Translated by this browser on this computer; the words aren't sent anywhere. The first time for a language, the browser downloads it.") })
+        : t("Translating a clip works in the app (on iPhone, iOS 18 and later) and in Chrome on a computer.")),
+      tr ? el("div", { class: "group" }, menuRow(t("Remove the translation"), () => keepTranslation(p, null).then(draw), "warn")) : null);
   };
   draw();
   return box;
@@ -3012,28 +3014,28 @@ function translateSheet(p) {
 function linksSheet(p) {
   const all = p ? C.reader.links(p.url) : [];
   if (!all.length) return el("div", { class: "page-controls" },
-    el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, "Linked pages")),
-    el("p", { class: "meta" }, "This clip doesn't link to any other pages."));
+    el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, t("Linked pages"))),
+    el("p", { class: "meta" }, t("This clip doesn't link to any other pages.")));
   const home = hostOf(p.url || "");
   const picked = new Set();
   let which = "all", words = "";
   const into = p.folder || folderName(p.title);
-  const intoSwitch = el("input", { class: "switch", type: "checkbox", role: "switch", "aria-label": "Into a collection" });
+  const intoSwitch = el("input", { class: "switch", type: "checkbox", role: "switch", "aria-label": t("Into a collection") });
   const go = el("button", { class: "btn-primary links-go", type: "button" });
-  const list = el("div", { class: "group links-list", role: "group", "aria-label": "Linked pages" });
+  const list = el("div", { class: "group links-list", role: "group", "aria-label": t("Linked pages") });
   const count = el("p", { class: "meta", role: "status" });
   const shown = () => all.filter((l) => (which === "all" || (which === "here") === (hostOf(l.href) === home))
     && (!words || (l.text + " " + l.href).toLowerCase().includes(words)));
   const paint = () => {
     const n = picked.size;
-    go.textContent = n ? "Save " + countLine(n) : "Pick pages to save";
+    go.textContent = n ? t("Save {countLine}", { countLine: countLine(n) }) : t("Pick pages to save");
     go.disabled = !n;
   };
   const draw = () => {
     const rows = shown();
     const fresh = rows.filter((l) => !savedAs(l.href));
-    count.textContent = rows.length + (rows.length === 1 ? " page" : " pages") + (rows.length - fresh.length ? ", " + (rows.length - fresh.length) + " saved already" : "");
-    allBtn.textContent = fresh.length && fresh.every((l) => picked.has(l.href)) ? "Clear" : "Pick all";
+    count.textContent = tn(rows.length, "1 page", "{n} pages") + (rows.length - fresh.length ? ", " + t("{n} saved already", { n: rows.length - fresh.length }) : "");
+    allBtn.textContent = fresh.length && fresh.every((l) => picked.has(l.href)) ? t("Clear") : t("Pick all");
     allBtn.disabled = !fresh.length;
     fill(list, ...rows.map((l) => {
       const saved = savedAs(l.href);
@@ -3051,7 +3053,7 @@ function linksSheet(p) {
   };
   const allBtnText = () => {
     const fresh = shown().filter((l) => !savedAs(l.href));
-    allBtn.textContent = fresh.length && fresh.every((l) => picked.has(l.href)) ? "Clear" : "Pick all";
+    allBtn.textContent = fresh.length && fresh.every((l) => picked.has(l.href)) ? t("Clear") : t("Pick all");
   };
   const allBtn = el("button", { class: "btn-small", type: "button", onclick: () => {
     const fresh = shown().filter((l) => !savedAs(l.href));
@@ -3061,33 +3063,33 @@ function linksSheet(p) {
     paint();
   } });
   const others = all.some((l) => hostOf(l.href) !== home) && all.some((l) => hostOf(l.href) === home);
-  const chips = others ? el("div", { class: "chips" }, ...[["all", "All"], ["here", "On " + home], ["away", "Other sites"]].map(([v, label]) =>
+  const chips = others ? el("div", { class: "chips" }, ...[["all", t("All")], ["here", t("On {site}", { site: home })], ["away", t("Other sites")]].map(([v, label]) =>
     el("button", { class: "chip" + (v === which ? " on" : ""), type: "button", "aria-pressed": String(v === which), onclick: (e) => {
       which = v;
       for (const c of e.target.parentNode.children) { c.classList.toggle("on", c === e.currentTarget); c.setAttribute("aria-pressed", String(c === e.currentTarget)); }
       draw();
     } }, label))) : null;
-  const filter = all.length > LINKS_FILTER_AT ? el("input", { class: "tag-input links-filter", type: "search", placeholder: "Find a page", "aria-label": "Find a page",
+  const filter = all.length > LINKS_FILTER_AT ? el("input", { class: "tag-input links-filter", type: "search", placeholder: t("Find a page"), "aria-label": t("Find a page"),
     autocomplete: "off", spellcheck: "false", oninput: (e) => { words = e.target.value.trim().toLowerCase(); draw(); } }) : null;
   go.addEventListener("click", () => {
     const urls = all.map((l) => l.href).filter((u) => picked.has(u));
     if (!urls.length) return;
     const folder = intoSwitch.checked ? into : null;
-    if (urls.length > LONG_LIST && !confirm("Save " + urls.length + " clips? They save one at a time, so a list this long takes a while. Pause and Stop are on its card.")) return;
+    if (urls.length > LONG_LIST && !confirm(t("Save {n} clips? They save one at a time, so a list this long takes a while. Pause and Stop are on its card.", { n: urls.length }))) return;
     back().then(() => saveLinked(urls, folder));
   });
   draw();
   paint();
   return el("div", { class: "page-controls links-sheet" },
     el("div", { class: "menu-head" },
-      el("p", { class: "menu-title" }, "Linked pages"),
-      el("p", { class: "meta" }, "Pick the pages this clip links to, to read them offline too.")),
+      el("p", { class: "menu-title" }, t("Linked pages")),
+      el("p", { class: "meta" }, t("Pick the pages this clip links to, to read them offline too."))),
     chips, filter,
     el("div", { class: "links-bar" }, count, allBtn),
     list,
     el("div", { class: "group" }, el("label", { class: "row" },
       el("span", { class: "choice-text" },
-        el("span", { class: "choice-label" }, "Into a collection"),
+        el("span", { class: "choice-label" }, t("Into a collection")),
         el("span", { class: "choice-note", dir: "auto" }, into)),
       intoSwitch)),
     el("div", { class: "links-foot" }, go));
@@ -3099,7 +3101,7 @@ function noteFor(l, saved) {
   const host = hostOf(l.href);
   const tail = host === home ? decodeTail(l.href) : host;
   const same = tail.toLowerCase() === (l.text || "").toLowerCase();
-  return saved ? el("span", { class: "choice-note" }, "Saved") : same ? null : el("span", { class: "choice-note", dir: "auto" }, tail);
+  return saved ? el("span", { class: "choice-note" }, t("Saved")) : same ? null : el("span", { class: "choice-note", dir: "auto" }, tail);
 }
 function decodeTail(href) {
   try {
@@ -3116,7 +3118,7 @@ function saveLinked(urls, folder) {
   for (const url of urls) if (!savedAs(url) && !list.some((x) => sameUrl(x.url, url))) list.push({ url, folder: folder || null });
   store(LATER_KEY, list);
   showWaiting();
-  toast("They save when you're back online. They're in Downloads.");
+  toast(t("They save when you're back online. They're in Downloads."));
 }
 
 // Where Back would take you, as a mark on the skim track (1.48.4).
@@ -3268,7 +3270,7 @@ function skimText(at) {
   let part = null;
   for (const x of parts) { if (x.at > at + 0.0005) break; part = x; }
   const pg = C.reader.pageInfo();
-  const where = pg ? "Page " + (Math.round(at * (pg.pages - 1)) + 1) + " of " + pg.pages : Math.round(at * 100) + "%";
+  const where = pg ? t("Page {n} of {total}", { n: Math.round(at * (pg.pages - 1)) + 1, total: pg.pages }) : Math.round(at * 100) + "%";
   return part ? [part.text, where] : [where];
 }
 function skimAt(x) {
@@ -3316,7 +3318,7 @@ for (const bar of [$("readerView").querySelector(".reader-bar"), $("readFoot")])
     e.preventDefault();
     if (!b) return;
     const p = state.open;
-    toast("Opening the rest of the book…");
+    toast(t("Opening the rest of the book…"));
     C.reader.whole().then(() => { if (state.open === p && b.isConnected) b.click(); });
   }, true);
 }
@@ -3386,7 +3388,7 @@ function partLeft(p, at) {
   if (parts.length < 2) return "";
   const next = parts.find((x) => x.at > at + 0.001);
   const mins = Math.max(1, Math.ceil(clipMinutes(p) * Math.max(0, (next ? next.at : 1) - at)));
-  return mins + " min left in " + (isBook(p) ? "chapter" : "section");
+  return isBook(p) ? t("{n} min left in chapter", { n: mins }) : t("{n} min left in section", { n: mins });
 }
 // Settings › Reading › Layout "Time left in" (1.48.4; a button on the
 // skim bar before). One choice for books and clips alike.
@@ -3442,7 +3444,7 @@ function closeFind(now) {
 }
 function paintFind() {
   const q = $("findInput").value.trim();
-  $("findCount").textContent = !q ? "" : findCount ? (findAt + 1) + " of " + findCount : "None";
+  $("findCount").textContent = !q ? "" : findCount ? t("{findAt} of {findCount}", { findAt: findAt + 1, findCount: findCount }) : t("None");
   $("findPrev").disabled = $("findNext").disabled = findCount < 2;
 }
 function runFind() {
@@ -3719,32 +3721,32 @@ function noteSettings() {
   const p = state.open, id = "nc" + ++readingGroups, r = noteLook(p);
   const row = (text, control) => el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, text), control);
   const stack = (text, control) => el("div", { class: "rc-row stack" }, el("span", { class: "rc-label" }, text), control);
-  const scope = el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Applies to"),
-    dropdown({ label: "Applies to", cls: "field-pick font-pick scope-pick", value: noteScope(p), onpick: setNoteScope,
-      options: [{ value: "all", label: "All notes" }, { value: "note", label: "This note" }] }));
-  const layout = el("div", { class: "rc-part", "data-part": "layout" }, el("h2", { class: "overline" }, "Layout"),
+  const scope = el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, t("Applies to")),
+    dropdown({ label: t("Applies to"), cls: "field-pick font-pick scope-pick", value: noteScope(p), onpick: setNoteScope,
+      options: [{ value: "all", label: t("All notes") }, { value: "note", label: t("This note") }] }));
+  const layout = el("div", { class: "rc-part", "data-part": "layout" }, el("h2", { class: "overline" }, t("Layout")),
     scope,
-    row("Show as", seg(id + "-layout", "Show as", [
-      { value: "scroll", label: "Scroll" }, { value: "pages", label: "Pages" },
+    row(t("Show as"), seg(id + "-layout", t("Show as"), [
+      { value: "scroll", label: t("Scroll") }, { value: "pages", label: t("Pages") },
     ], r.layout, (v) => setNoteLook({ layout: v }))),
-    row("Margins", seg(id + "-margins", "Margins", [
-      { value: "narrow", label: "Narrow" }, { value: "normal", label: "Normal" }, { value: "wide", label: "Wide" },
+    row(t("Margins"), seg(id + "-margins", t("Margins"), [
+      { value: "narrow", label: t("Narrow") }, { value: "normal", label: t("Normal") }, { value: "wide", label: t("Wide") },
     ], r.margins, (v) => setNoteLook({ margins: v }))),
     ...(brightSwitch(id) || []),
-    stack("Theme", seg(id + "-theme", "Theme",
-      [{ value: "system", label: "Auto", swatch: autoSwatch(), auto: true }, ...themeOptions(THEMES)],
+    stack(t("Theme"), seg(id + "-theme", t("Theme"),
+      [{ value: "system", label: t("Auto"), swatch: autoSwatch(), auto: true }, ...themeOptions(THEMES)],
       readerThemeOn() ? state.readerTheme : state.theme, (v) => { (readerThemeOn() ? setReaderTheme : setTheme)(v); syncThemeInputs(); }, "themes scroll")),
     pdfDarkSwitch());
   const a = scrollControls();
   a.classList.add("rc-part");
   a.dataset.part = "aloud";
-  a.prepend(el("h2", { class: "overline" }, "Auto-scroll"));
+  a.prepend(el("h2", { class: "overline" }, t("Auto-scroll")));
   const parts = [layout, a];
-  const names = { layout: "Layout", aloud: "Auto-scroll" };
+  const names = { layout: t("Layout"), aloud: "Auto-scroll" };
   let tab = load(SHEET_TAB_KEY, "layout");
   if (!names[tab]) tab = "layout";
   const show = (v) => { tab = v; store(SHEET_TAB_KEY, v); for (const x of parts) x.hidden = x.dataset.part !== v; };
-  const tabs = seg("sheet-tab", "Settings", parts.map((x) => ({ value: x.dataset.part, label: names[x.dataset.part] })), tab, show, "sheet-tabs");
+  const tabs = seg("sheet-tab", t("Settings"), parts.map((x) => ({ value: x.dataset.part, label: names[x.dataset.part] })), tab, show, "sheet-tabs");
   show(tab);
   return el("div", { class: "reader-settings" }, tabs, el("div", { class: "reading-controls" }, ...parts));
 }
@@ -3755,7 +3757,7 @@ function noteSettings() {
 // without saving (a preview) has nothing to rename.
 function paintReaderName(p) {
   const title = p.preview ? el("span", { class: "reader-title" }, p.title)
-    : el("button", { class: "reader-title", type: "button", "aria-label": "Rename", title: "Rename", onclick: () => renameInReader(p) }, p.title);
+    : el("button", { class: "reader-title", type: "button", "aria-label": t("Rename"), title: t("Rename"), onclick: () => renameInReader(p) }, p.title);
   fill($("readerName"), siteOf(p) ? el("span", { class: "reader-site" }, siteOf(p)) : null, title, el("span", { class: "reader-part", dir: "auto", hidden: "" }));
   paintPart();
 }
@@ -3764,7 +3766,7 @@ function paintReaderName(p) {
 function renameInReader(p) {
   const btn = $("readerName").querySelector("button.reader-title");
   if (!btn) return;
-  const input = el("input", { class: "reader-title-input", type: "text", value: p.title, maxlength: "300", dir: "auto", enterkeyhint: "done", "aria-label": "Name" });
+  const input = el("input", { class: "reader-title-input", type: "text", value: p.title, maxlength: "300", dir: "auto", enterkeyhint: "done", "aria-label": t("Name") });
   let done = false;
   const finish = async (save) => {
     if (done) return;
@@ -3797,7 +3799,7 @@ async function renameClip(p, name) {
     await C.store.writeIndex(state.pages);
   } catch (e) {
     console.error(e);
-    toast("Couldn't rename. Try again.");
+    toast(t("Couldn't rename. Try again."));
     return;
   }
   renderLibrary();

@@ -2,6 +2,7 @@
 // src/extensions.js with a made-up fetch and dictionary: turning one on and
 // off, and a pack that is only kept when it is the file the catalogue pins.
 const assert = require("assert");
+require("./lang.js");
 const crypto = require("crypto");
 
 const mem = new Map();

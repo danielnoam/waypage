@@ -116,7 +116,7 @@
   const deck = (id) => { const d = deckById(id); return d ? { ...DEFAULTS, ...d } : null; };
   function makeDeck(name) {
     const n = String(name || "").replace(/\s+/g, " ").trim().slice(0, 60);
-    if (!n) throw new Error("Give the deck a name.");
+    if (!n) throw new Error(t("Give the deck a name."));
     const same = deckList.find((d) => d.name.toLowerCase() === n.toLowerCase());
     if (same) return { ...DEFAULTS, ...same };
     const d = { id: uid(), name: n, ...DEFAULTS, made: Date.now(), edited: Date.now() };
@@ -127,7 +127,7 @@
   function renameDeck(id, name) {
     const d = deckById(id), n = String(name || "").replace(/\s+/g, " ").trim().slice(0, 60);
     if (!d || !n) return;
-    if (deckList.some((x) => x !== d && x.name.toLowerCase() === n.toLowerCase())) throw new Error("There's a deck with that name.");
+    if (deckList.some((x) => x !== d && x.name.toLowerCase() === n.toLowerCase())) throw new Error(t("There's a deck with that name."));
     d.name = n; d.edited = Date.now();
     saveDecks();
   }
@@ -160,8 +160,8 @@
   const card = (id) => { const c = cardById(id); return c ? { ...c } : null; };
   function add(x) {
     const front = String(x.front || "").replace(/\s+/g, " ").trim();
-    if (!front) throw new Error("The card needs something on its front.");
-    if (!deckById(x.deck)) throw new Error("Pick a deck for it.");
+    if (!front) throw new Error(t("The card needs something on its front."));
+    if (!deckById(x.deck)) throw new Error(t("Pick a deck for it."));
     const c = { id: uid(), deck: x.deck, front: front.slice(0, 200), back: String(x.back || "").trim().slice(0, 4000),
       context: String(x.context || "").trim().slice(0, 600), from: x.from || null, made: Date.now(), edited: Date.now(), suspended: false, buried: 0 };
     cardList.push(c);
@@ -174,7 +174,7 @@
     if (!c) return;
     for (const k of ["front", "back", "context"]) if (patch[k] != null) c[k] = String(patch[k]).trim();
     if (patch.deck && deckById(patch.deck)) c.deck = patch.deck;
-    if (!c.front) throw new Error("The card needs something on its front.");
+    if (!c.front) throw new Error(t("The card needs something on its front."));
     c.edited = Date.now();
     saveCards();
     if (patch.deck) rebuild();
@@ -247,7 +247,7 @@
   }
   function answer(id, grade, ms, now) {
     const c = cardById(id);
-    if (!c) throw new Error("That card isn't here any more.");
+    if (!c) throw new Error(t("That card isn't here any more."));
     const before = sched.get(id) || F().fresh();
     const entry = { card: id, at: now, grade, ms: Math.max(0, Math.round(ms || 0)), was: before.state };
     logList.push(entry);

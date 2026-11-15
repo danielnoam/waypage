@@ -3,6 +3,7 @@
 // merge could land on GitHub after the winner's, and the library named a
 // text that wasn't there (2026-11).
 const assert = require("assert");
+require("./lang.js");
 
 const mem = new Map();
 global.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };

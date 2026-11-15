@@ -117,10 +117,10 @@ function groupOf(x) {
   if (state.sort === "site") return siteOf(x);
   if (state.sort === "length") return "";
   const t = state.sort === "read" ? x.readAt : x.savedAt;
-  if (!t) return "Not started";
+  if (!t) return i18n.t("Not started");
   const day = 864e5, start = new Date().setHours(0, 0, 0, 0);
-  return t >= start ? "Today" : t >= start - day ? "Yesterday" : t >= start - 6 * day ? "This week"
-    : t >= start - 29 * day ? "This month" : "Earlier";
+  return t >= start ? i18n.t("Today") : t >= start - day ? i18n.t("Yesterday") : t >= start - 6 * day ? i18n.t("This week")
+    : t >= start - 29 * day ? i18n.t("This month") : i18n.t("Earlier");
 }
 
 const layout = () => { const v = load(LAYOUT_KEY, "shelf"); return LAYOUTS.some((l) => l.value === v) ? v : "shelf"; };
@@ -179,7 +179,7 @@ function renderLibrary() {
   renderTools();
   // Until the library is read nothing is said (1.2.0): the empty state
   // showed for the second it took, as if there were no clips.
-  $("libraryMeta").textContent = n ? pagesLine(n) : loaded ? "Nothing saved yet" : "";
+  $("libraryMeta").textContent = n ? pagesLine(n) : loaded ? t("Nothing saved yet") : "";
   if (state.place === "library") $("viewBtn").hidden = !n;
   // boot.js showed Search from the first frame if the last start had
   // clips, so the bar doesn't shift when they arrive; now it's known.
@@ -223,7 +223,7 @@ function renderLibrary() {
   if (!ts.length && state.filter === "all" && !state.part) {
     const going = !state.select && load(CONTINUE_KEY, true) && continuePage();
     if (going) {
-      keep("h:continue", () => sectionHead("Continue reading"));
+      keep("h:continue", () => sectionHead(t("Continue reading")));
       keep("c:" + going.id, () => pageCard(going, null, true), pageSig(going));
     }
   }
@@ -248,7 +248,7 @@ function renderLibrary() {
     const part = !flat && state.part;
     const back = () => keep("h:part:" + part, () => el("div", { class: "section-head wide part-head" },
       el("button", { class: "btn-quiet part-back", type: "button", onclick: () => history.back() },
-        el("span", { "aria-hidden": "true" }, "‹ "), "Library")));
+        el("span", { "aria-hidden": "true" }, "‹ "), t("Library"))));
     if (part) back();
     // Files of your own (0.31.0) are a part of their own after Clips,
     // unless a search or filter lists everything together.
@@ -261,9 +261,9 @@ function renderLibrary() {
     const clips = apart ? loose.filter((p) => !p.link && !p.note) : loose;
     if (folders.length && (!part || part === "collections")) {
       const names = sorted(folders.map(asItem)).map((x) => x.folder);
-      const label = "Collections · " + names.length;
+      const label = t("Collections") + " · " + names.length;
       if (part) keep("h:folders:all", () => sectionHead(label), label);
-      else keep("h:folders", () => partHead("collections", "Collections"));
+      else keep("h:folders", () => partHead("collections", t("Collections")));
       // The strip stays and only its changed tiles are drawn again (1.1.1):
       // drawn whole, it lost where it was scrolled to with every page
       // that landed in a collection.
@@ -271,8 +271,8 @@ function renderLibrary() {
       fillStrip(nodes[nodes.length - 1], names, folderSig);
     }
     if (clips.length && (!part || part === "pages")) {
-      const label = (ts.length ? "Found" : state.filter === "all" ? "Clips"
-        : (status || favs) && folders.length ? filterName() + " clips" : filterName()) + " · " + clips.length;
+      const label = (ts.length ? t("Found") : state.filter === "all" ? t("Clips")
+        : (status || favs) && folders.length ? t("{filter} clips", { filter: filterName() }) : filterName()) + " · " + clips.length;
       if (part || ts.length || (!folders.length && !mine.length && !notes.length)) keep("h:pages", () => sectionHead(label), label);
       else keep("h:pages", () => partHead("pages", label), "link" + label);
     }
@@ -283,13 +283,13 @@ function renderLibrary() {
       } else keep("p:" + p.id, () => pageCard(p), pageSig(p));
     }
     if (notes.length && (!part || part === "notes")) {
-      const label = "Notes · " + notes.length;
+      const label = t("Notes") + " · " + notes.length;
       if (part || (!folders.length && !clips.length && !mine.length)) keep("h:notes", () => sectionHead(label), label);
       else keep("h:notes", () => partHead("notes", label), "link" + label);
       for (const p of some(notes)) keep("p:" + p.id, () => pageCard(p), pageSig(p));
     }
     if (mine.length && (!part || part === "files")) {
-      const label = "Files · " + mine.length;
+      const label = t("Files") + " · " + mine.length;
       if (part || (!folders.length && !clips.length && !notes.length)) keep("h:files", () => sectionHead(label), label);
       else keep("h:files", () => partHead("files", label), "link" + label);
       for (const p of some(mine)) keep("p:" + p.id, () => pageCard(p), pageSig(p));
@@ -299,31 +299,31 @@ function renderLibrary() {
   if (n && !pages.length && ts.length) {
     keep("none:q", () => el("div", { class: "empty wide" },
       el("p", { class: "empty-text", "data-q": "" }),
-      el("button", { class: "btn-quiet", type: "button", onclick: clearSearch }, "Clear search")));
-    nodes[nodes.length - 1].querySelector("[data-q]").textContent = searching ? "Searching…"
-      : "Nothing matches “" + state.query.trim() + "”" + (state.filter === "all" ? "." : " in " + filterName() + ".");
+      el("button", { class: "btn-quiet", type: "button", onclick: clearSearch }, t("Clear search"))));
+    nodes[nodes.length - 1].querySelector("[data-q]").textContent = searching ? t("Searching…")
+      : state.filter === "all" ? t("Nothing matches “{query}”.", { query: state.query.trim() }) : t("Nothing matches “{query}” in {filter}.", { query: state.query.trim(), filter: filterName() });
   } else if (n && !loose.length && !folders.length) {
     keep("none:" + state.filter, () => el("div", { class: "empty wide" },
-      el("p", { class: "empty-text" }, state.filter === "unread" ? "You've started everything you saved."
-        : state.filter === "finished" ? "Nothing finished yet."
-        : state.filter === "favourites" ? "No favourites yet. Hold a clip, or open a collection's ⋯, and tap Favourite." : "No clips tagged " + state.filter + "."),
-      el("button", { class: "btn-quiet", type: "button", onclick: () => setFilter("all") }, "Show all")));
+      el("p", { class: "empty-text" }, state.filter === "unread" ? t("You've started everything you saved.")
+        : state.filter === "finished" ? t("Nothing finished yet.")
+        : state.filter === "favourites" ? t("No favourites yet. Hold a clip, or open a collection's ⋯, and tap Favourite.") : t("No clips tagged {filter}.", { filter: state.filter })),
+      el("button", { class: "btn-quiet", type: "button", onclick: () => setFilter("all") }, t("Show all"))));
   }
   // Until it's read, the library says it's on its way (1.7.1); the first
   // one is in index.html, there before any script runs.
-  if (!loaded) keep("loading", () => el("div", { class: "lib-loading wide", role: "status" }, el("span", { class: "spinner", "aria-hidden": "true" }), "Opening your library"));
+  if (!loaded) keep("loading", () => el("div", { class: "lib-loading wide", role: "status" }, el("span", { class: "spinner", "aria-hidden": "true" }), t("Opening your library")));
   if (!n && loaded) {
     keep("empty", () => el("div", { class: "empty wide" },
-      el("h2", { class: "empty-title" }, "Clips you take with you"),
+      el("h2", { class: "empty-title" }, t("Clips you take with you")),
       el("p", { class: "empty-text" }, C.platform.native
-        ? "Share a page to Waypage from your browser, or paste its link below. It stays readable with no connection, with a link back to the original."
-        : "Paste a Wikipedia link below, or bring the clips you saved on your phone: back up there, then open the backup here."),
-      el("button", { class: "btn-quiet empty-open", type: "button", onclick: () => pickFile() }, "Open a file"),
+        ? t("Share a page to Waypage from your browser, or paste its link below. It stays readable with no connection, with a link back to the original.")
+        : t("Paste a Wikipedia link below, or bring the clips you saved on your phone: back up there, then open the backup here.")),
+      el("button", { class: "btn-quiet empty-open", type: "button", onclick: () => pickFile() }, t("Open a file")),
       // After a reinstall Android hides what the last install kept in
       // Documents/Waypage until it's picked again (1.1.0).
       C.platform.android && C.platform.files.canPickFolder && C.store.place.kind === "app" && androidSdk >= 30
-        ? el("button", { class: "btn-quiet empty-open", type: "button", onclick: () => changePlace("folder", "Documents/Waypage") }, "Get back your library from Documents") : null,
-      C.platform.native ? null : el("button", { class: "btn-quiet empty-open", type: "button", onclick: () => openSettings(false, "storage") }, "Open a backup")),
+        ? el("button", { class: "btn-quiet empty-open", type: "button", onclick: () => changePlace("folder", "Documents/Waypage") }, t("Get back your library from Documents")) : null,
+      C.platform.native ? null : el("button", { class: "btn-quiet empty-open", type: "button", onclick: () => openSettings(false, "storage") }, t("Open a backup"))),
     [androidSdk, C.store.place.kind].join("|"));
   }
   // Nodes that stay are left where they are and only what changed moves

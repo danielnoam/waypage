@@ -471,12 +471,12 @@
   // Waypage's words for what went wrong; the status stays on the error.
   function word(e) {
     if (!e || !e.kind || e instanceof SyncError) return e;
-    const w = new SyncError(e.kind === "offline" ? "You're offline. Sync tries again when you're back online."
-      : e.status === 401 ? "GitHub didn't accept the token. Make a new one and connect again."
-      : e.kind === "ratelimit" ? "GitHub asked Waypage to slow down. Sync tries again in a few minutes."
-      : e.status === 403 || e.status === 404 ? "The token can't reach the " + REPO + " repo. Give it Contents: Read and write on that repo."
-      : e.kind === "server" ? "GitHub isn't answering right now. Sync tries again later."
-      : "GitHub said: " + (e.detail || e.status));
+    const w = new SyncError(e.kind === "offline" ? t("You're offline. Sync tries again when you're back online.")
+      : e.status === 401 ? t("GitHub didn't accept the token. Make a new one and connect again.")
+      : e.kind === "ratelimit" ? t("GitHub asked Waypage to slow down. Sync tries again in a few minutes.")
+      : e.status === 403 || e.status === 404 ? t("The token can't reach the {repo} repo. Give it Contents: Read and write on that repo.", { repo: REPO })
+      : e.kind === "server" ? t("GitHub isn't answering right now. Sync tries again later.")
+      : t("GitHub said: {what}", { what: e.detail || e.status }));
     w.status = e.status;
     return w;
   }
@@ -606,7 +606,7 @@
   const KEY_URL = "https://github.com/settings/personal-access-tokens/new?name=Waypage+sync" +
     "&description=Keeps+Waypage%27s+library+in+step+through+a+private+repo+called+" + REPO +
     "&expires_in=none&contents=write";
-  const PUBLIC_REPO = "Your " + REPO + " repo is public, so anyone could read your library. Sync is stopped until you make it private on GitHub, in the repo's Settings.";
+  const PUBLIC_REPO = t("Your {repo} repo is public, so anyone could read your library. Sync is stopped until you make it private on GitHub, in the repo's Settings.", { repo: REPO });
   // Another device joins from a link to the web copy with the token after
   // the # (which a browser never sends to the server), as LifeLog's setup
   // link does; the app takes the same link from a QR code or pasted.
@@ -620,7 +620,7 @@
     const was = cfg;
     cfg = { token: String(tokenIn(token) || token || "").trim(), repo: REPO, branch: "main" };
     try {
-      if (!cfg.token) throw new SyncError("Paste the token first.");
+      if (!cfg.token) throw new SyncError(t("Paste the token first."));
       cfg.owner = await worded(gh().me());
       let repo = await call(API + "/repos/" + cfg.owner + "/" + REPO);
       if (repo.status === 404) repo = await adoptOld();
@@ -633,7 +633,7 @@
       else if (repo.status === 404) {
         let made;
         try { made = await gh().createRepo(REPO, "Waypage's library"); }
-        catch (e) { throw new SyncError("Waypage can't find your " + REPO + " repo. Make it in step 2, then make the token with only that repo picked."); }
+        catch (e) { throw new SyncError(t("Waypage can't find your {REPO} repo. Make it in step 2, then make the token with only that repo picked.", { REPO: REPO })); }
         cfg.branch = made.default_branch || "main";
       } else throw await fail(repo);
       if (was && was.links) cfg.links = true;
@@ -978,7 +978,7 @@
   // The library as it was in that commit, down to what Waypage writes.
   async function target(sha) {
     const got = await readJson("library.json", sha);
-    if (!got || !got.data || !Array.isArray(got.data.pages)) throw new SyncError("That version of the library can't be read.");
+    if (!got || !got.data || !Array.isArray(got.data.pages)) throw new SyncError(t("That version of the library can't be read."));
     return clean(got.data);
   }
   // What putting the library back as T was takes, done here as if by hand
@@ -1139,7 +1139,7 @@
         return res;
       } catch (e) {
         if (e instanceof Paused) return null;
-        last = { at: last.at, error: e instanceof SyncError ? e.message : "Sync stopped: " + (e && e.message ? e.message : e) };
+        last = { at: last.at, error: e instanceof SyncError ? e.message : t("Sync stopped: {why}", { why: e && e.message ? e.message : e }) };
         throw e;
       } finally { running = null; progress = null; putBack = ""; }
     })();
@@ -1232,7 +1232,7 @@
     let merged, remote;
     for (let tries = 0; ; tries++) {
       remote = await readJson("library.json");
-      if (remote && (!remote.data || !Array.isArray(remote.data.pages))) throw new SyncError("The library.json on GitHub isn't Waypage's. Move it away and sync again.");
+      if (remote && (!remote.data || !Array.isArray(remote.data.pages))) throw new SyncError(t("The library.json on GitHub isn't Waypage's. Move it away and sync again."));
       await breathe();
       // What GitHub would hold of each page, so the two compare like for
       // like; then the merge, off the main thread where it can be.

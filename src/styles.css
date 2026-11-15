@@ -240,8 +240,8 @@
 }
 
 :root {
-  --serif: "Source Serif 4", "New York", "Noto Serif", Georgia, serif;
-  --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --serif: "Source Serif 4", "Frank Ruhl Libre", "New York", "Noto Serif", Georgia, serif;
+  --sans: "Instrument Sans", "Heebo", system-ui, -apple-system, "Segoe UI", sans-serif;
   /* A QR code's paper, the same in every theme: scanners read black on white. */
   --code-paper: #ffffff;
   /* Highlights on a PDF's printed pages (1.56.0), the same in every
@@ -319,7 +319,7 @@ html.native #libraryView { padding-top: 0; }
 }
 html.native .top-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top)); }
 .top-bar.scrolled { border-bottom-color: var(--line); }
-.top-bar .screen-title { flex: 1; min-width: 0; margin-left: var(--s-1); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.top-bar .screen-title { flex: 1; min-width: 0; margin-inline-start: var(--s-1); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .top { padding: 0 var(--gutter) var(--s-2); }
 .top .meta:first-child { margin-top: 0; }
 .screen-title {
@@ -332,7 +332,7 @@ html.native .top-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top));
    only with the spaces between them taken out; each stays 44 px. */
 @media (max-width: 419px) {
   #topBar { gap: var(--s-1); }
-  #topBar .screen-title { margin-left: 0; }
+  #topBar .screen-title { margin-inline-start: 0; }
   .top-actions { gap: 0; }
 }
 .meta { margin: var(--s-1) 0 0; font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--muted); }
@@ -543,7 +543,7 @@ html.native .screen-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
   flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
   padding: var(--s-4) var(--gutter) calc(var(--s-7) + env(safe-area-inset-bottom));
 }
-.screen-body > * { max-width: 40rem; margin-left: auto; margin-right: auto; }
+.screen-body > * { max-width: 40rem; margin-inline: auto; }
 
 :is(.settings-section, .reading-controls.split) + .settings-section { margin-top: var(--s-6); }
 /* Two cards in one section (a list and its action, say) stand apart (1.48.1). */
@@ -566,7 +566,7 @@ html.native .screen-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
   display: flex; align-items: center; gap: var(--s-3);
   width: 100%; min-height: 52px; padding: var(--s-2) var(--s-4);
   background: transparent; color: var(--ink); border: 0;
-  font: inherit; text-align: left; text-decoration: none;
+  font: inherit; text-align: start; text-decoration: none;
   cursor: pointer;
 }
 .choice + .choice, .row + .row { border-top: 1px solid var(--line); }
@@ -863,7 +863,7 @@ body.aloud-bar-up .library, body.aloud-bar-up .screen-body { padding-bottom: cal
 }
 .field-pick .dropdown-face { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: start; }
 .field-pick .dropdown-face.unset { color: var(--muted); }
-.field-pick .dropdown-menu { left: 0; right: 0; max-height: 50vh; overflow-y: auto; }
+.field-pick .dropdown-menu { inset-inline: 0; max-height: 50vh; overflow-y: auto; }
 .aloud-player .icon-btn { border-radius: var(--r-full); }
 .aloud-play { background: var(--accent); color: var(--accent-ink); }
 .aloud-play .aloud-play-icon, .aloud-play.paused .aloud-pause-icon { display: none; }
@@ -1154,7 +1154,7 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 .search { position: relative; margin-top: var(--s-3); }
 .search[hidden] { display: none; }
 .search input {
-  width: 100%; height: var(--tap); padding: 0 var(--tap) 0 40px;
+  width: 100%; height: var(--tap); padding-block: 0; padding-inline: 40px var(--tap);
   border: 1px solid var(--line); border-radius: var(--r-md);
   background: var(--surface); color: var(--ink); font: inherit;
   -webkit-appearance: none; appearance: none;
@@ -1162,8 +1162,8 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 .search input::-webkit-search-cancel-button { display: none; }
 .search input::placeholder { color: var(--muted); }
 .search input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
-.search-icon { position: absolute; left: 12px; top: 13px; color: var(--muted); pointer-events: none; }
-.search-clear { position: absolute; right: 0; top: 0; color: var(--muted); }
+.search-icon { position: absolute; inset-inline-start: 12px; top: 13px; color: var(--muted); pointer-events: none; }
+.search-clear { position: absolute; inset-inline-end: 0; top: 0; color: var(--muted); }
 .search-clear[hidden] { display: none; }
 .search-note { margin: var(--s-2) 0 0; }
 .search-note[hidden] { display: none; }
@@ -1230,7 +1230,7 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 .seg.scroll.themes .seg-face { min-width: 72px; }
 .seg.fonts .seg-face { font-size: var(--fs-label); }
 .seg-sample { font-size: var(--fs-label); color: var(--ink); }
-.dropdown-text .seg-sample { margin-left: var(--s-2); }
+.dropdown-text .seg-sample { margin-inline-start: var(--s-2); }
 .rc-row.stack { flex-direction: column; align-items: stretch; gap: var(--s-2); }
 .rc-row.stack .rc-label { width: auto; }
 .rc-value { display: block; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -1542,7 +1542,7 @@ span.update-text { cursor: default; }
 .dropdown-caret { transition: transform 160ms ease; }
 .dropdown-btn[aria-expanded="true"] .dropdown-caret { transform: rotate(180deg); }
 .dropdown-menu {
-  position: absolute; top: calc(100% + var(--s-1)); right: 0; z-index: 30;
+  position: absolute; top: calc(100% + var(--s-1)); inset-inline-end: 0; z-index: 30;
   min-width: 200px; padding: var(--s-1);
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
   box-shadow: 0 12px 32px var(--shadow), 0 2px 6px var(--shadow);
@@ -1779,7 +1779,7 @@ span.update-text { cursor: default; }
 .pick-row { gap: var(--s-2); padding-inline-end: var(--s-2); }
 .pick-row .row-pick { flex: 0 1 auto; max-width: 58%; }
 .pick-row .row-pick .dropdown-btn { flex: 0 1 auto; max-width: 100%; border: 0; background: transparent; padding: 0 var(--s-2); color: var(--accent); font-weight: 500; }
-.pick-row .row-pick .dropdown-menu { left: auto; right: 0; min-width: 240px; max-width: min(80vw, 360px); }
+.pick-row .row-pick .dropdown-menu { inset-inline-start: auto; inset-inline-end: 0; min-width: 240px; max-width: min(80vw, 360px); }
 .storage-total { margin: 0 0 var(--s-3) var(--s-1); }
 .nav-row .row-value { max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-chev { flex-shrink: 0; color: var(--muted); font-size: 22px; line-height: 1; margin-inline-start: calc(-1 * var(--s-1)); }
@@ -1824,7 +1824,7 @@ span.update-text { cursor: default; }
   transition: background-color 120ms linear, border-color 120ms linear;
 }
 .switch::before {
-  content: ""; position: absolute; top: 4px; left: 4px; width: 20px; height: 20px;
+  content: ""; position: absolute; top: 4px; inset-inline-start: 4px; width: 20px; height: 20px;
   border-radius: var(--r-full); background: var(--muted);
   transition: transform var(--spring-control-ms, 300ms) var(--spring-control, ease-out), width var(--spring-control-ms, 300ms) var(--spring-control, ease-out), background-color 120ms linear;
 }
@@ -1925,7 +1925,7 @@ span.update-text { cursor: default; }
 .lib-tools .dropdown { min-width: 0; }
 .lib-tools .dropdown-face { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .show-wrap.on .dropdown-btn { color: var(--accent); font-weight: 600; }
-.dropdown.start .dropdown-menu { right: auto; left: 0; }
+.dropdown.start .dropdown-menu { inset-inline-end: auto; inset-inline-start: 0; }
 .dropdown-menu.up { top: auto; bottom: calc(100% + var(--s-1)); }
 /* A group clips its rounded corners; while one of its menus is open the
    menu has to show past them (1.12.1: the Voice menu in Settings opened
@@ -2076,7 +2076,7 @@ span.update-text { cursor: default; }
 
 /* ---- 0.27.10: Select beside Order, search behind its button ---- */
 .lib-tools-end { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
-.lib-tools-end .dropdown.sort-wrap { margin-right: 0; }
+.lib-tools-end .dropdown.sort-wrap { margin-inline-end: 0; }
 
 /* ---- 0.27.11: the collection as a book page ---- */
 /* Favourite, Edit and ⋯ share the right; the title stays centred while
@@ -2475,7 +2475,7 @@ span.update-text { cursor: default; }
   position: relative; display: flex; align-items: center; gap: var(--s-3);
   min-height: 64px; padding: var(--s-3) var(--s-2) var(--s-3) var(--s-4);
 }
-.post > .post-act + .post-act, .post > .post-act + .post-saved { margin-left: calc(-1 * var(--s-2)); }
+.post > .post-act + .post-act, .post > .post-act + .post-saved { margin-inline-start: calc(-1 * var(--s-2)); }
 .post + .post { border-top: 1px solid var(--line); }
 .post-open { position: absolute; inset: 0; padding: 0; border: 0; background: transparent; cursor: pointer; }
 .post-open:active { background: var(--press); }
@@ -2823,12 +2823,12 @@ kbd {
   #settingsView .nav-row + .nav-row { border-top: 0; }
   #settingsView .nav-row .row-chev { display: none; }
   #settingsView .nav-row[aria-current] { background: var(--bar); font-weight: 600; }
-  #sectionView { left: var(--settings-w); z-index: 11; box-shadow: none; border-inline-start: 1px solid var(--line); }
+  #sectionView { inset-inline-start: var(--settings-w); z-index: 11; box-shadow: none; border-inline-start: 1px solid var(--line); }
   #sectionView .screen-bar { display: block; padding: var(--s-6) var(--s-7) 0; border: 0; }
   #sectionBack, #sectionView .bar-spacer { display: none; }
   #sectionView .bar-title { text-align: start; font: 700 var(--fs-screen)/var(--lh-screen) var(--serif); }
   #sectionView .screen-body { padding: var(--s-5) var(--s-7) var(--s-8); }
-  #sectionView .screen-body > * { margin-left: 0; max-width: 42rem; }
+  #sectionView .screen-body > * { margin-inline-start: 0; max-width: 42rem; }
 
   /* Settings' window (1.49.0): the menu and section inside a box over the
      library, grown from the gear (openWin in app-reader.js). The box
@@ -3253,3 +3253,11 @@ body.listen-bar-up .library, body.listen-bar-up .screen-body { padding-bottom: c
 .anki-fill .field-pick { min-width: 0; }
 .anki-pack { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .anki-found { margin: 0; }
+
+/* Right to left (2026-11): Hebrew turns the page's direction; arrows that
+   mean back, forward, previous or next turn with it. The sidebar and the
+   desktop panes keep their places, since the motion engine slides them
+   from the left. */
+:root[dir="rtl"] svg:has(> path:is([d="M15 5l-7 7 7 7"], [d="M9 5l7 7-7 7"], [d="M6 5v14M18 5l-8 7 8 7"], [d="M6 5h2v14H6zM20 5v14L9.5 12z"])) { transform: scaleX(-1); }
+/* Hebrew has no capitals, and spaced letters read as separate words. */
+:root:lang(he) .overline { letter-spacing: 0; }

@@ -104,14 +104,14 @@
     const entries = await B().zipEntries(file);
     const read = async (path) => {
       const e = entries.get(path);
-      if (!e) throw new FileError("This EPUB is missing a part (" + path + ").");
+      if (!e) throw new FileError(t("This EPUB is missing a part ({path}).", { path: path }));
       return B().zipRead(file, e);
     };
     const xml = async (path) => new DOMParser().parseFromString(decode(await read(path)), "application/xml");
     const container = await xml("META-INF/container.xml");
     const rootfile = container.getElementsByTagName("rootfile")[0];
     const opfPath = rootfile && rootfile.getAttribute("full-path");
-    if (!opfPath) throw new FileError("This EPUB has no table of its parts.");
+    if (!opfPath) throw new FileError(t("This EPUB has no table of its parts."));
     const opf = await xml(opfPath);
     const first = (tag) => { const n = opf.getElementsByTagNameNS("*", tag)[0]; return n ? n.textContent.replace(/\s+/g, " ").trim() : ""; };
     const manifest = new Map();
@@ -121,7 +121,7 @@
     const spine = [...opf.getElementsByTagNameNS("*", "itemref")]
       .map((r) => manifest.get(r.getAttribute("idref")))
       .filter((it) => it && /html/.test(it.type) && entries.has(it.path));
-    if (!spine.length) throw new FileError("This EPUB has no chapters Waypage can read.");
+    if (!spine.length) throw new FileError(t("This EPUB has no chapters Waypage can read."));
     const chapterOf = new Map(spine.map((it, i) => [it.path, i]));
     const pics = pictures();
     const picAt = new Map();
@@ -308,7 +308,7 @@
     return rec.byteLength === 14 && new DataView(rec).getUint16(12) !== 0;
   }
   async function fromMobi(file, out) {
-    if (await mobiLocked(file)) throw new FileError("This book is locked to Kindle (DRM). Waypage opens Kindle books without DRM.");
+    if (await mobiLocked(file)) throw new FileError(t("This book is locked to Kindle (DRM). Waypage opens Kindle books without DRM."));
     const { MOBI } = await loadMobi();
     const book = await new MOBI({ unzlib: async () => { throw new Error("fonts aren't kept"); } }).open(file);
     try {
@@ -332,7 +332,7 @@
         if (doc.getElementsByTagName("parsererror").length || !doc.body) doc = new DOMParser().parseFromString(text, "text/html");
         if (doc.body) docs.set(i, doc);
       }
-      if (!docs.size) throw new FileError("This book has no text Waypage can read.");
+      if (!docs.size) throw new FileError(t("This book has no text Waypage can read."));
       // Where a link or a contents entry lands: "c<part>-<id>", the id
       // made up when the place has none.
       let made = 0;
@@ -430,7 +430,7 @@
     if (head[0] !== 0x50 || head[1] !== 0x4b) return new Uint8Array(await file.arrayBuffer());
     const entries = await B().zipEntries(file);
     const name = [...entries.keys()].find((n) => /\.fb2$/i.test(n));
-    if (!name) throw new FileError("There's no FB2 book in this zip.");
+    if (!name) throw new FileError(t("There's no FB2 book in this zip."));
     return B().zipRead(file, entries.get(name));
   }
   // An XML file in the encoding its first line names (windows-1251 is common).
@@ -445,7 +445,7 @@
   function fromFb2(bytes, out) {
     const doc = new DOMParser().parseFromString(xmlText(bytes), "application/xml");
     const book = doc.documentElement;
-    if (doc.getElementsByTagName("parsererror").length || !book || book.localName !== "FictionBook") throw new FileError("This FB2 book is damaged.");
+    if (doc.getElementsByTagName("parsererror").length || !book || book.localName !== "FictionBook") throw new FileError(t("This FB2 book is damaged."));
     const kids = (n, name) => (n ? [...n.children].filter((c) => c.localName === name) : []);
     const one = (n, ...path) => path.reduce((at, name) => kids(at, name)[0], n);
     const words = (n) => (n ? n.textContent.replace(/\s+/g, " ").trim() : "");
@@ -746,7 +746,7 @@
     const from = headerWords(top.headers.from);
     const sender = (from.match(/^\s*"?([^"<]*?)"?\s*</) || [])[1] || from.replace(/[<>]/g, "");
     const when = Date.parse((top.headers.date || "").replace(/\s*\([^)]*\)\s*$/, ""));
-    if (got.html == null && got.text == null) throw new FileError("There's nothing to read in this email.");
+    if (got.html == null && got.text == null) throw new FileError(t("There's nothing to read in this email."));
     const pics = pictures();
     const doc = new DOMParser().parseFromString(got.html != null ? got.html : plain(got.text), "text/html");
     for (const img of doc.querySelectorAll("img[src]")) {
@@ -767,7 +767,7 @@
   async function fromCbz(file, out, name) {
     const entries = await B().zipEntries(file);
     const names = [...entries.keys()].filter((n) => PICTURE.test(n) && !/(^|\/)(__MACOSX|\.)/.test(n)).sort(naturally);
-    if (!names.length) throw new FileError("There are no pictures in this comic.");
+    if (!names.length) throw new FileError(t("There are no pictures in this comic."));
     let title = "", series = null, manga = false;
     const info = [...entries.keys()].find((n) => /(^|\/)ComicInfo\.xml$/i.test(n));
     if (info) {
@@ -803,8 +803,8 @@
       got = await C.pdf.read(bytes, (done, total, stage) => onProgress && onProgress(done, total, stage === "pages" ? "pictures" : "words"),
         pics.link ? { sizes: true, maxDraw: 1, cover: true } : { cover: true });
     } catch (e) {
-      throw new FileError(/password|encrypt/i.test(String(e.message)) ? "This PDF is locked with a password."
-        : "Waypage couldn't read this PDF. It may be damaged." + why(e));
+      throw new FileError(/password|encrypt/i.test(String(e.message)) ? t("This PDF is locked with a password.")
+        : t("Waypage couldn't read this PDF. It may be damaged.") + why(e));
     }
     const root = out.createElement("div");
     root.className = "co-body";
@@ -824,7 +824,7 @@
         if (i === 0 && got.images[0]) await pics.put(img, got.images[0], "image/jpeg", false, "page:1");
         else { img.setAttribute("data-in", "page:" + (i + 1)); pics.n++; }
       }
-      if (!pics.n) throw new FileError("There's nothing to read in this PDF.");
+      if (!pics.n) throw new FileError(t("There's nothing to read in this PDF."));
     } else if (got.images) {
       root.classList.add("co-comic");
       for (const [i, b] of got.images.entries()) {
@@ -835,7 +835,7 @@
         await pics.put(img, b, "image/jpeg", false, "page:" + (i + 1));
         if (onProgress) onProgress(i + 1, got.images.length, "pictures");
       }
-      if (!pics.n) throw new FileError("There's nothing to read in this PDF.");
+      if (!pics.n) throw new FileError(t("There's nothing to read in this PDF."));
     } else {
       let page = 1;
       // A PDF in two directions, Hebrew and English say, gives each
@@ -849,7 +849,7 @@
         root.append(el);
         if (!at.has(page)) at.set(page, el);
       }
-      if (!root.textContent.trim()) throw new FileError("There's nothing to read in this PDF.");
+      if (!root.textContent.trim()) throw new FileError(t("There's nothing to read in this PDF."));
       // The first page as the card's picture (1.2.1).
       if (got.cover) await pics.cover(got.cover, "image/jpeg");
     }
@@ -902,7 +902,7 @@
     } catch (e) {
       // Only for the contents: a file out of reach still opens.
       if (!slotted && !printed(meta)) return html;
-      throw new FileError("Waypage can't find " + meta.file.name + " any more. It may have been moved or deleted.");
+      throw new FileError(t("Waypage can't find {name} any more. It may have been moved or deleted.", { name: meta.file.name }));
     }
     if (isPdf) {
       const doc = new DOMParser().parseFromString(html, "text/html");
@@ -911,7 +911,7 @@
     const entries = await B().zipEntries(blob).catch(() => null);
     if (!entries) {
       if (!slotted) return html;
-      throw new FileError("Waypage can't read " + meta.file.name + " any more.");
+      throw new FileError(t("Waypage can't read {name} any more.", { name: meta.file.name }));
     }
     if (slotted) held = { zip: { blob, entries }, urls: new Map(), busy: false, frame: null };
     if (!unmarked) return html;
@@ -1041,7 +1041,7 @@
       // A note hands over its own stand-in for the open document.
       pdf = blob && typeof blob.draw === "function" ? blob : await C.pdf.open(blob);
     } catch (e) {
-      throw new FileError("Waypage can't read " + meta.file.name + " any more.");
+      throw new FileError(t("Waypage can't read {name} any more.", { name: meta.file.name }));
     }
     // `words`: its pages get a layer of their words, to select (1.56.0).
     const h = held = { pdf, urls: new Map(), busy: false, frame: null, words: !!into, texts: new Map(), asking: new Set(), token: "h" + (++heldSeq) };
@@ -1334,7 +1334,7 @@
         else p.img.remove();
         if (onProgress) onProgress(i + 1, got.panels.length, "pictures");
       }
-      if (!pics.n) throw new FileError("There are no pictures in this comic Waypage can show.");
+      if (!pics.n) throw new FileError(t("There are no pictures in this comic Waypage can show."));
       return { root: got.root, title: got.title, series: got.series, manga: got.manga };
     }
     let got;
@@ -1355,7 +1355,7 @@
       }
     }
     const { root, images } = C.save.cleanSaved(got.body, out);
-    if (!root.textContent.trim() && !root.querySelector("img")) throw new FileError("There's nothing to read in this file.");
+    if (!root.textContent.trim() && !root.querySelector("img")) throw new FileError(t("There's nothing to read in this file."));
     // The book's stand-ins are swapped for their bytes, and any real data:
     // picture (an HTML file can carry them) decoded.
     const list = [];
@@ -1435,9 +1435,9 @@
   // it; its pictures then stay in the file. Resolves to the clip's index
   // entry, or { already } when `has(name, size)` says it's here.
   async function bring(file, kind, { has, onProgress, link = null, title = "" } = {}) {
-    if (!KINDS[kind]) throw new FileError("Waypage can't open this kind of file.");
+    if (!KINDS[kind]) throw new FileError(t("Waypage can't open this kind of file."));
     if (has && has(file.name, file.size)) return { already: true };
-    if (!file.size) throw new FileError("Waypage got nothing from " + file.name + ". If it's in a cloud folder, make it available offline and try again.");
+    if (!file.size) throw new FileError(t("Waypage got nothing from {name}. If it's in a cloud folder, make it available offline and try again.", { name: file.name }));
     const id = C.save.newId();
     const out = document.implementation.createHTMLDocument("");
     const ext = kind === "epub" || kind === "cbz" || !EXTS[extOf(file.name)] ? kind : extOf(file.name);
@@ -1448,7 +1448,7 @@
     } catch (e) {
       await S().removePage(id);
       if (!(e instanceof FileError)) console.error(e);
-      throw e instanceof FileError ? e : new FileError("Waypage couldn't read this " + KINDS[kind] + " file. It may be damaged." + why(e));
+      throw e instanceof FileError ? e : new FileError(t("Waypage couldn't read this {kind} file. It may be damaged.", { kind: KINDS[kind] }) + why(e));
     }
     const { root } = got;
     const words = root.textContent;
@@ -1480,7 +1480,7 @@
       await S().writeText(id, text);
     } catch (e) {
       await S().removePage(id);
-      throw new FileError("Couldn't keep this file on " + (C.platform.native ? "the phone" : "this browser") + ". Free some space and try again.");
+      throw new FileError(C.platform.native ? t("Couldn't keep this file on the phone. Free some space and try again.") : t("Couldn't keep this file on this browser. Free some space and try again."));
     }
     return meta;
   }
@@ -1529,7 +1529,7 @@
       }
       if (onProgress) onProgress(i + 1, pages.length);
     }
-    if (!n) throw new FileError("There are no pictures here to put in a comic.");
+    if (!n) throw new FileError(t("There are no pictures here to put in a comic."));
     await zip.add("ComicInfo.xml", new TextEncoder().encode(comicInfo(pages, title, n)));
     await zip.finish();
     return native ? { uri: await file.uri(), name } : { blob: new Blob(parts, { type: CBZ_MIME }), name };

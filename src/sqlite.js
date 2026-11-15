@@ -50,22 +50,22 @@
       else if (t === 9) row.push(1);
       else if (t >= 12 && t % 2 === 0) { const n = (t - 12) / 2; row.push(buf.slice(q, q + n)); q += n; }
       else if (t >= 13) { const n = (t - 13) / 2; row.push(dec.decode(buf.subarray(q, q + n))); q += n; }
-      else throw new Error("That database has a column type this can't read.");
+      else throw new Error(i18n.t("That database has a column type this can't read."));
     }
     return row;
   }
 
   function open(bytes) {
-    if (!(bytes instanceof Uint8Array) || bytes.length < 100 || dec.decode(bytes.subarray(0, 16)) !== MAGIC) throw new Error("That isn't a SQLite database.");
+    if (!(bytes instanceof Uint8Array) || bytes.length < 100 || dec.decode(bytes.subarray(0, 16)) !== MAGIC) throw new Error(t("That isn't a SQLite database."));
     const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     let size = dv.getUint16(16);
     if (size === 1) size = 65536;
-    if (size < 512 || (size & (size - 1))) throw new Error("That database's pages are an odd size.");
+    if (size < 512 || (size & (size - 1))) throw new Error(t("That database's pages are an odd size."));
     const usable = size - bytes[20];
     const enc = dv.getUint32(56);
-    if (enc > 1) throw new Error("That database's text isn't UTF-8.");
+    if (enc > 1) throw new Error(t("That database's text isn't UTF-8."));
     const pages = Math.floor(bytes.length / size);
-    const at = (n) => { if (!(n >= 1 && n <= pages)) throw new Error("That database is cut short or damaged."); return (n - 1) * size; };
+    const at = (n) => { if (!(n >= 1 && n <= pages)) throw new Error(t("That database is cut short or damaged.")); return (n - 1) * size; };
 
     // A cell's payload: what is on the page, then the pages it overflows into.
     function payload(p, total) {
@@ -77,7 +77,7 @@
       out.set(bytes.subarray(p, p + local));
       let got = local, next = dv.getUint32(p + local);
       for (let hops = 0; next && got < total; hops++) {
-        if (hops > pages) throw new Error("That database is damaged.");
+        if (hops > pages) throw new Error(t("That database is damaged."));
         const base = at(next), n = Math.min(usable - 4, total - got);
         out.set(bytes.subarray(base + 4, base + 4 + n), got);
         got += n;
@@ -90,7 +90,7 @@
     function walk(root, fn) {
       let seen = 0;
       const visit = (pg, depth) => {
-        if (depth > 32 || ++seen > pages * 2) throw new Error("That database is damaged.");
+        if (depth > 32 || ++seen > pages * 2) throw new Error(t("That database is damaged."));
         const base = at(pg), h = pg === 1 ? base + 100 : base;
         const type = bytes[h], n = dv.getUint16(h + 3);
         if (type === 13) {
@@ -103,7 +103,7 @@
         } else if (type === 5) {
           for (let i = 0; i < n; i++) visit(dv.getUint32(base + dv.getUint16(h + 12 + 2 * i)), depth + 1);
           visit(dv.getUint32(h + 8), depth + 1);
-        } else throw new Error("That database has a page this can't read.");
+        } else throw new Error(t("That database has a page this can't read."));
       };
       visit(root, 0);
     }
@@ -115,7 +115,7 @@
     return {
       tables: () => [...master.keys()],
       rows(name, fn) {
-        if (!master.has(name)) throw new Error("That database has no " + name + " table.");
+        if (!master.has(name)) throw new Error(t("That database has no {name} table.", { name: name }));
         walk(master.get(name), fn);
       },
     };
