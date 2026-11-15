@@ -909,9 +909,9 @@
     "application/x-mobipocket-ebook", "application/vnd.amazon.ebook", "application/x-mobi8-ebook", "application/x-fictionbook+xml",
     "application/x-fictionbook", "text/xml", "application/xml", "application/octet-stream",
     // Audiobooks (2026-11).
-    "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/x-m4b", "audio/m4b", "audio/aac", "audio/ogg", "audio/opus", "audio/flac", "audio/x-flac", "audio/wav", "audio/x-wav"];
+    "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/x-m4b", "audio/m4b", "audio/aac", "audio/ogg", "audio/opus", "audio/flac", "audio/x-flac", "audio/wav", "audio/x-wav", "audio/x-m4p", "audio/vnd.audible.aax", "audio/audible"];
   const FILE_EXTS = [".epub", ".mobi", ".azw", ".azw3", ".prc", ".fb2", ".md", ".markdown", ".txt", ".html", ".htm", ".eml", ".pdf", ".pptx", ".cbz", ".csv", ".json", ".zip",
-    ".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".oga", ".opus", ".flac", ".wav"];
+    ".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".oga", ".opus", ".flac", ".wav", ".aa", ".aax", ".aaxc", ".m4p"];
   const PIECE = 4 << 20;
   const KEEP = 64 << 20;
 
