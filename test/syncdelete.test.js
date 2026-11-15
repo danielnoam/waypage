@@ -32,6 +32,7 @@ global.fetch = async (url) => {
 };
 
 mem.set("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t", looked: Date.now(), scoped: true, what: { stats: false } }));
+require("../src/keel/github.js");
 require("../src/sync.js");
 const S = window.Waypage.sync;
 

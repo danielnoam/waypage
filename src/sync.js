@@ -459,32 +459,35 @@
 
   // ---- GitHub ----
 
-  const b64encode = (s) => btoa(unescape(encodeURIComponent(s)));
-  const b64decode = (s) => decodeURIComponent(escape(atob(s.replace(/\s/g, ""))));
-  const headers = (extra) => Object.assign({ Authorization: "Bearer " + cfg.token, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" }, extra || {});
+  // The requests themselves come from keel (src/keel/github.js), shared
+  // with LifeLog; what's in the repo and how it merges stay here.
+  const gh = () => window.Keel.github.client(() => cfg);
   const contents = (path) => API + "/repos/" + cfg.owner + "/" + cfg.repo + "/contents/" + path;
 
   class SyncError extends Error {}
   // Paused part way (0.30.4): what was done so far stays, the rest waits.
   class Paused extends Error {}
   const halt = () => { if (cfg && cfg.paused) throw new Paused(); };
+  // Waypage's words for what went wrong; the status stays on the error.
+  function word(e) {
+    if (!e || !e.kind || e instanceof SyncError) return e;
+    const w = new SyncError(e.kind === "offline" ? "You're offline. Sync tries again when you're back online."
+      : e.status === 401 ? "GitHub didn't accept the token. Make a new one and connect again."
+      : e.kind === "ratelimit" ? "GitHub asked Waypage to slow down. Sync tries again in a few minutes."
+      : e.status === 403 || e.status === 404 ? "The token can't reach the " + REPO + " repo. Give it Contents: Read and write on that repo."
+      : e.kind === "server" ? "GitHub isn't answering right now. Sync tries again later."
+      : "GitHub said: " + (e.detail || e.status));
+    w.status = e.status;
+    return w;
+  }
+  const worded = (p) => p.catch((e) => { throw word(e); });
   async function fail(r) {
-    let msg = "";
-    try { msg = (await r.json()).message || ""; } catch (e) { /* none */ }
-    const e = new SyncError(r.status === 401 ? "GitHub didn't accept the token. Make a new one and connect again."
-      : (r.status === 403 || r.status === 429) && /rate limit/i.test(msg) ? "GitHub asked Waypage to slow down. Sync tries again in a few minutes."
-      : r.status === 403 || r.status === 404 ? "The token can't reach the " + REPO + " repo. Give it Contents: Read and write on that repo."
-      : r.status >= 500 ? "GitHub isn't answering right now. Sync tries again later."
-      : "GitHub said: " + (msg || r.status));
-    e.status = r.status;
-    return e;
+    let text = "";
+    try { text = await r.text(); } catch (e) { /* none */ }
+    return word(window.Keel.github.httpError(r.status, text, r));
   }
-  async function call(url, opts) {
-    let r;
-    try { r = await fetch(url, Object.assign({ cache: "no-store" }, opts)); }
-    catch (e) { throw new SyncError("You're offline. Sync tries again when you're back online."); }
-    return r;
-  }
+  // A Response from anywhere in the API (`opts.body` an object).
+  const call = (url, opts) => worded(gh().request(url, opts));
 
   // A look at the library on GitHub without a sync (1.3.0): for the
   // furthest-read check when a clip opens, and for the poll while the app
@@ -494,26 +497,15 @@
   let peeked = null;
   async function peek() {
     if (!cfg || cfg.paused) return null;
-    const h = headers({ Accept: "application/vnd.github.object+json" });
-    if (peeked && peeked.etag) h["If-None-Match"] = peeked.etag;
-    const r = await call(contents("library.json") + "?ref=" + encodeURIComponent(cfg.branch), { headers: h });
-    if (r.status === 304 && peeked) return { ...peeked, changed: false };
-    if (r.status === 404) { peeked = null; return null; }
-    if (!r.ok) throw await fail(r);
-    const j = await r.json();
-    let b64 = j.content;
-    if (!b64 && j.size) {
-      const br = await call(API + "/repos/" + cfg.owner + "/" + cfg.repo + "/git/blobs/" + j.sha, { headers: headers() });
-      if (!br.ok) throw await fail(br);
-      b64 = (await br.json()).content;
-    }
-    if (!b64) return null;
-    const text = b64decode(b64);
+    const f = await worded(gh().getFile("library.json", { etag: peeked && peeked.etag }));
+    if (f && f.notModified && peeked) return { ...peeked, changed: false };
+    if (!f || f.notModified) { peeked = null; return null; }
+    if (!f.text) return null;
     let data;
-    try { data = JSON.parse(text); } catch (e) { return null; }
+    try { data = JSON.parse(f.text); } catch (e) { return null; }
     const pages = data && Array.isArray(data.pages) ? data.pages : [];
-    const changed = !peeked || peeked.sha !== j.sha;
-    peeked = { etag: r.headers.get("ETag") || "", sha: j.sha, pages, text };
+    const changed = !peeked || peeked.sha !== f.sha;
+    peeked = { etag: f.etag, sha: f.sha, pages, text: f.text };
     return { ...peeked, changed };
   }
   // Whether the library on GitHub differs from what this device last
@@ -526,55 +518,25 @@
     return got.text !== baseText;
   }
 
-  // { data, sha } or null. Files past 1 MB come as a blob, as in LifeLog.
+  // { data, sha } or null. Files past 1 MB come as a blob (keel).
   async function readJson(path, ref) {
-    const r = await call(contents(path) + "?ref=" + encodeURIComponent(ref || cfg.branch), { headers: headers({ Accept: "application/vnd.github.object+json" }) });
-    if (r.status === 404) return null;
-    if (!r.ok) throw await fail(r);
-    const j = await r.json();
-    let b64 = j.content;
-    if (!b64 && j.size) {
-      const br = await call(API + "/repos/" + cfg.owner + "/" + cfg.repo + "/git/blobs/" + j.sha, { headers: headers() });
-      if (!br.ok) throw await fail(br);
-      b64 = (await br.json()).content;
-    }
-    if (!b64) return null;
-    return { data: JSON.parse(b64decode(b64)), sha: j.sha };
+    const f = await worded(gh().getFile(path, { ref }));
+    if (!f || !f.text) return null;
+    return { data: JSON.parse(f.text), sha: f.sha };
   }
   async function readBytes(path, ref) {
-    const r = await call(contents(path) + "?ref=" + encodeURIComponent(ref || cfg.branch), { headers: headers({ Accept: "application/vnd.github.raw" }) });
-    if (!r.ok) throw await fail(r);
-    return new Uint8Array(await r.arrayBuffer());
+    const b = await worded(gh().getRaw(path, { ref, as: "bytes" }));
+    if (!b) throw word(window.Keel.github.httpError(404, ""));
+    return b;
   }
-  async function readText(path, ref) {
-    const r = await call(contents(path) + "?ref=" + encodeURIComponent(ref || cfg.branch), { headers: headers({ Accept: "application/vnd.github.raw" }) });
-    if (r.status === 404) return null;
-    if (!r.ok) throw await fail(r);
-    return r.text();
-  }
-  async function write(path, text, sha, message, bytes) {
-    const body = { message, content: bytes ? C.store.toBase64(bytes) : b64encode(text), branch: cfg.branch };
-    if (sha) body.sha = sha;
-    const r = await call(contents(path), { method: "PUT", headers: headers({ "Content-Type": "application/json" }), body: JSON.stringify(body) });
-    if (!r.ok) throw await fail(r);
-    return (await r.json()).content.sha;
-  }
+  const readText = (path, ref) => worded(gh().getRaw(path, { ref }));
+  const write = (path, text, sha, message, bytes) => worded(gh().putFile(path, { text, bytes, sha, message }));
   // Writes a file whether or not this device knew its sha: one already
-  // there under another is asked for and written again.
+  // there under another is written over.
   async function put(path, text, sha, message, bytes) {
-    try { return await write(path, text, sha, message, bytes); }
-    catch (e) {
-      if (e.status !== 409 && e.status !== 422) throw e;
-      const now = await call(contents(path) + "?ref=" + encodeURIComponent(cfg.branch), { headers: headers({ Accept: "application/vnd.github.object+json" }) });
-      if (!now.ok) throw await fail(now);
-      return write(path, text, (await now.json()).sha, message, bytes);
-    }
+    return (await worded(gh().saveFile(path, { text, bytes, sha, message, tries: 1 }))).sha;
   }
-  async function remove(path, sha) {
-    const r = await call(contents(path), { method: "DELETE", headers: headers({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ message: "Remove " + path, sha, branch: cfg.branch }) });
-    if (!r.ok && r.status !== 404 && r.status !== 409 && r.status !== 422) throw await fail(r);
-  }
+  const remove = (path, sha) => worded(gh().removeFile(path, sha));
 
   // ---- Sending in batches (1.15.0) ----
   // A first sync sent each clip with its own Contents PUT, each its own
@@ -585,40 +547,12 @@
   const BATCH = 50;
   const BATCH_BYTES = 8 * 1024 * 1024;
   const utf8 = (t) => new TextEncoder().encode(t);
-  // The sha GitHub gives a file's contents, worked out here, since a tree
-  // made with inline text doesn't say it for files in a folder.
-  async function blobSha(bytes) {
-    const head = utf8("blob " + bytes.length + "\0");
-    const all = new Uint8Array(head.length + bytes.length);
-    all.set(head);
-    all.set(bytes, head.length);
-    const h = new Uint8Array(await crypto.subtle.digest("SHA-1", all));
-    return [...h].map((b) => b.toString(16).padStart(2, "0")).join("");
-  }
+  const blobSha = (bytes) => window.Keel.github.blobSha(bytes);
   async function git(path, opts) {
-    const r = await call(API + "/repos/" + cfg.owner + "/" + cfg.repo + "/git/" + path,
-      Object.assign({ headers: headers({ "Content-Type": "application/json" }) }, opts));
-    if (!r.ok) throw await fail(r);
-    return r.json();
+    return worded(gh().json((opts && opts.method) || "GET", "git/" + path, opts && opts.body ? JSON.parse(opts.body) : undefined));
   }
   // files: [{ path, text } | { path, sha }], sha null removing it.
-  async function commitFiles(files, message) {
-    const tree = files.map((f) => (f.text != null ? { path: f.path, mode: "100644", type: "blob", content: f.text }
-      : { path: f.path, mode: "100644", type: "blob", sha: f.sha }));
-    for (let tries = 0; ; tries++) {
-      halt();
-      const head = (await git("ref/heads/" + encodeURIComponent(cfg.branch))).object.sha;
-      const base = (await git("commits/" + head)).tree.sha;
-      const made = await git("trees", { method: "POST", body: JSON.stringify({ base_tree: base, tree }) });
-      const commit = await git("commits", { method: "POST", body: JSON.stringify({ message, tree: made.sha, parents: [head] }) });
-      try {
-        await git("refs/heads/" + encodeURIComponent(cfg.branch), { method: "PATCH", body: JSON.stringify({ sha: commit.sha, force: false }) });
-        return;
-      } catch (e) {
-        if (e.status !== 422 || tries >= 3) throw e;
-      }
-    }
-  }
+  const commitFiles = (files, message) => worded(gh().commitFiles(files, message, { beforeTry: halt }));
   // Sends `list` ([{ p, html, packs, was }]) a batch at a time; `sent(p,
   // file)` is told of each page once its batch is on GitHub.
   async function sendBatches(list, sent, onProgress, total, from) {
@@ -687,10 +621,8 @@
     cfg = { token: String(tokenIn(token) || token || "").trim(), repo: REPO, branch: "main" };
     try {
       if (!cfg.token) throw new SyncError("Paste the token first.");
-      const me = await call(API + "/user", { headers: headers() });
-      if (!me.ok) throw await fail(me);
-      cfg.owner = (await me.json()).login;
-      let repo = await call(API + "/repos/" + cfg.owner + "/" + REPO, { headers: headers() });
+      cfg.owner = await worded(gh().me());
+      let repo = await call(API + "/repos/" + cfg.owner + "/" + REPO);
       if (repo.status === 404) repo = await adoptOld();
       if (repo.ok) {
         const j = await repo.json();
@@ -699,10 +631,10 @@
         cfg.repo = j.name || cfg.repo;
       }
       else if (repo.status === 404) {
-        const made = await call(API + "/user/repos", { method: "POST", headers: headers({ "Content-Type": "application/json" }),
-          body: JSON.stringify({ name: REPO, private: true, auto_init: true, description: "Waypage's library" }) });
-        if (!made.ok) throw new SyncError("Waypage can't find your " + REPO + " repo. Make it in step 2, then make the token with only that repo picked.");
-        cfg.branch = (await made.json()).default_branch || "main";
+        let made;
+        try { made = await gh().createRepo(REPO, "Waypage's library"); }
+        catch (e) { throw new SyncError("Waypage can't find your " + REPO + " repo. Make it in step 2, then make the token with only that repo picked."); }
+        cfg.branch = made.default_branch || "main";
       } else throw await fail(repo);
       if (was && was.links) cfg.links = true;
       cfg.scoped = true;
@@ -767,10 +699,7 @@
     }
   }
   async function shaOf(path) {
-    const r = await call(contents(path) + "?ref=" + encodeURIComponent(cfg.branch), { headers: headers({ Accept: "application/vnd.github.object+json" }) });
-    if (r.status === 404) return null;
-    if (!r.ok) throw await fail(r);
-    return (await r.json()).sha;
+    return worded(gh().shaOf(path));
   }
   async function noteFilesOut(p) {
     const note = await C.store.readNote(p.id);
@@ -1016,7 +945,7 @@
   async function history(page = 1) {
     if (!cfg) return { list: [], more: false };
     const r = await call(API + "/repos/" + cfg.owner + "/" + cfg.repo + "/commits?path=library.json&sha=" + encodeURIComponent(cfg.branch)
-      + "&per_page=" + HISTORY_PAGE + "&page=" + page, { headers: headers() });
+      + "&per_page=" + HISTORY_PAGE + "&page=" + page);
     if (!r.ok) throw await fail(r);
     const raw = await r.json();
     const list = parseHistory(raw), known = load(PRINTS_KEY, {});
@@ -1153,10 +1082,9 @@
   // token may (one made before 1.29.1 has Administration: write),
   // used as it is when not. Resolves to the repo's response, or the 404.
   async function adoptOld() {
-    const old = await call(API + "/repos/" + cfg.owner + "/" + OLD_REPO, { headers: headers() });
+    const old = await call(API + "/repos/" + cfg.owner + "/" + OLD_REPO);
     if (!old.ok) return old;
-    const moved = await call(API + "/repos/" + cfg.owner + "/" + OLD_REPO, { method: "PATCH",
-      headers: headers({ "Content-Type": "application/json" }), body: JSON.stringify({ name: REPO, description: "Waypage's library" }) });
+    const moved = await call(API + "/repos/" + cfg.owner + "/" + OLD_REPO, { method: "PATCH", body: { name: REPO, description: "Waypage's library" } });
     if (moved.ok) cfg.repo = REPO;
     else cfg.repo = OLD_REPO;
     return moved.ok ? moved : old;
@@ -1167,7 +1095,7 @@
   // and nothing goes up.
   async function settle() {
     if (!cfg || (cfg.repo === REPO && cfg.looked > Date.now() - DAY)) return false;
-    const r = await call(API + "/repos/" + cfg.owner + "/" + cfg.repo, { headers: headers() });
+    const r = await call(API + "/repos/" + cfg.owner + "/" + cfg.repo);
     if (!r.ok) return false;
     const j = await r.json();
     if (j.name && j.name !== cfg.repo) cfg.repo = j.name;
@@ -1187,7 +1115,7 @@
   function space() {
     if (!cfg || asking || (cfg.sizeAt && Date.now() - cfg.sizeAt < 10 * 60 * 1000)) return asking || Promise.resolve(false);
     asking = (async () => {
-      const r = await call(API + "/repos/" + cfg.owner + "/" + cfg.repo, { headers: headers() });
+      const r = await call(API + "/repos/" + cfg.owner + "/" + cfg.repo);
       if (!r.ok) return false;
       const was = cfg.size;
       took(await r.json());
@@ -1646,7 +1574,7 @@
   async function syncStats() {
     if (!C.stats) return;
     const dev = C.stats.device;
-    const r = await call(contents("stats") + "?ref=" + encodeURIComponent(cfg.branch), { headers: headers() });
+    const r = await call(contents("stats") + "?ref=" + encodeURIComponent(cfg.branch));
     if (!r.ok && r.status !== 404) throw await fail(r);
     const list = r.ok ? await r.json() : [];
     const known = load(STATS_KEY, {}) || {};
@@ -1689,7 +1617,7 @@
     known.log = known.log || {};
     known.sent = known.sent || {};
     const list = async (path) => {
-      const r = await call(contents(path) + "?ref=" + encodeURIComponent(cfg.branch), { headers: headers() });
+      const r = await call(contents(path) + "?ref=" + encodeURIComponent(cfg.branch));
       if (r.status === 404) return [];
       if (!r.ok) throw await fail(r);
       const l = await r.json();
@@ -1758,7 +1686,7 @@
     if (!C.sync.what.activity) {
       if (!cfg.activityGone) return;
       halt();
-      const r = await call(contents(ACT_PATH) + "?ref=" + encodeURIComponent(cfg.branch), { headers: headers({ Accept: "application/vnd.github.object+json" }) });
+      const r = await call(contents(ACT_PATH) + "?ref=" + encodeURIComponent(cfg.branch), { accept: "application/vnd.github.object+json" });
       if (r.ok) await remove(ACT_PATH, (await r.json()).sha);
       else if (r.status !== 404) throw await fail(r);
       delete cfg.activityGone;

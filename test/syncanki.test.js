@@ -52,6 +52,7 @@ let extOn = true;
 window.Waypage.ext = { on: () => extOn, load: async () => true };
 require("../src/fsrs.js");
 require("../src/anki.js");
+require("../src/keel/github.js");
 require("../src/sync.js");
 const S = window.Waypage.sync, A = window.Waypage.anki;
 

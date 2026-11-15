@@ -6,6 +6,7 @@ const assert = require("assert");
 
 global.window = { Waypage: { platform: {} } };
 require("../src/backup.js");
+require("../src/keel/github.js");
 require("../src/sync.js");
 require("../src/listen.js");
 const L = window.Waypage.listen;

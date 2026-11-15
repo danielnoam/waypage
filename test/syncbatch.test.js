@@ -55,6 +55,7 @@ global.fetch = async (url, opts = {}) => {
   throw new Error("unexpected " + method + " " + path);
 };
 
+require("../src/keel/github.js");
 require("../src/sync.js");
 const S = window.Waypage.sync;
 
