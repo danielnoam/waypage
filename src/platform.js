@@ -35,49 +35,10 @@
   } catch (e) { /* storage blocked: nothing to copy */ }
 
   // What went wrong lately (1.9.0), for Report a problem: errors nothing
-  // caught, console errors, and saves that failed, the last LOG_KEEP of
-  // them in localStorage. Addresses keep their page but lose their query,
-  // where sign-in tokens and tracking live, and anything that looks like a
-  // GitHub or Google token is cut (1.29.1). Nothing leaves the phone
-  // unless the person sends a report.
-  const LOG_KEY = "waypage.log";
-  const LOG_KEEP = 60;
-  const cleanText = (t) => String(t == null ? "" : t)
-    .replace(/(https?:\/\/[^\s?#"'<>)]+)[?#][^\s"'<>)]*/g, "$1")
-    .replace(/(token|key|password|secret)=[^\s&]+/gi, "$1=…")
-    .replace(/\b(github_pat_|gh[pousr]_|ya29\.)[\w.-]+/g, "$1…")
-    .replace(/(Bearer\s+)\S+/gi, "$1…")
-    .slice(0, 600);
-  function logList() {
-    try { const v = JSON.parse(localStorage.getItem(LOG_KEY)); return Array.isArray(v) ? v : []; } catch (e) { return []; }
-  }
-  let logging = false;
-  function note(kind, text) {
-    if (logging) return;
-    logging = true;
-    try {
-      const list = logList();
-      const msg = cleanText(text);
-      const last = list[list.length - 1];
-      // The same error over and over is one line with a count.
-      if (last && last.kind === kind && last.msg === msg) { last.n = (last.n || 1) + 1; last.at = Date.now(); }
-      else list.push({ at: Date.now(), kind, msg });
-      localStorage.setItem(LOG_KEY, JSON.stringify(list.slice(-LOG_KEEP)));
-    } catch (e) { /* storage full or blocked: not kept */ }
-    logging = false;
-  }
-  const errorText = (e) => (e && (e.stack || e.message)) ? String(e.stack || e.message).split("\n").slice(0, 4).join(" | ") : String(e);
-  addEventListener("error", (e) => {
-    if (e.error || e.message) note("error", (e.message || errorText(e.error)) + (e.filename ? " @ " + e.filename.split("/").pop() + ":" + e.lineno : ""));
-  });
-  addEventListener("unhandledrejection", (e) => note("error", errorText(e.reason)));
-  const consoleError = console.error.bind(console);
-  console.error = (...args) => { note("console", args.map((a) => (a instanceof Error ? errorText(a) : typeof a === "string" ? a : (() => { try { return JSON.stringify(a); } catch (x) { return String(a); } })())).join(" ")); consoleError(...args); };
-  const log = {
-    note,
-    list: logList,
-    clear() { try { localStorage.removeItem(LOG_KEY); } catch (e) { /* none */ } },
-  };
+  // caught, console errors, and saves that failed. keel's errlog.js keeps
+  // them (index.html sets it up), with addresses cut to their pages and
+  // tokens cut. Nothing leaves the phone unless the person sends a report.
+  const log = window.Keel.errlog;
 
   let build = null;
   const ready = native
