@@ -39,6 +39,22 @@
     return ext === "mp3" || ext === "aac" ? ext : null;
   }
 
+  // Locked to a store (DRM): Audible's AA and AAX, Apple's protected
+  // M4P. Never played; the app says why. The store's name, or null.
+  const LOCKED = { aa: "Audible", aax: "Audible", aaxc: "Audible", m4p: "Apple" };
+  function locked(head, name) {
+    if (head && head.length >= 12) {
+      if (head[4] === 0x57 && head[5] === 0x90 && head[6] === 0x75 && head[7] === 0x36) return "Audible";
+      if (str(head, 4, 8) === "ftyp") {
+        const brand = str(head, 8, 12);
+        if (/^aax/i.test(brand)) return "Audible";
+        if (brand === "M4P ") return "Apple";
+      }
+    }
+    return LOCKED[extOf(name)] || null;
+  }
+  const lockedText = (store) => "This audiobook is locked to " + (store === "Apple" ? "Apple Books" : store) + " (DRM). Waypage plays audiobooks without DRM, like MP3 and M4B.";
+
   // ---- What the file says: chapters, names, cover ----
 
   // MP4 (M4B, M4A): Nero's chpl list, else a QuickTime chapter track (a
@@ -346,6 +362,40 @@
     return out;
   }
 
+  // Where a phrase was heard: each time, with a few words either side.
+  // Any case, punctuation ignored; the phrase's first word may end, and
+  // its last begin, a heard word ("blér" finds "Blériot").
+  function findHeard(words, query, { limit = 300, around = 7 } = {}) {
+    const q = String(query).split(/\s+/).map(norm).filter(Boolean);
+    const out = [];
+    if (!q.length) return out;
+    const last = q.length - 1;
+    const fits = (w, k) => (q.length === 1 ? w.includes(q[0]) : k === 0 ? w.endsWith(q[0]) : k === last ? w.startsWith(q[k]) : w === q[k]);
+    const text = (from, to) => words.slice(Math.max(0, from), to).map((x) => x.w).join(" ");
+    for (let i = 0; i + q.length <= words.length && out.length < limit; i++) {
+      let hit = true;
+      for (let k = 0; k <= last; k++) if (!fits(norm(words[i + k].w), k)) { hit = false; break; }
+      if (!hit) continue;
+      out.push({ t: words[i].t, before: text(i - around, i), hit: text(i, i + q.length), after: text(i + q.length, i + q.length + around),
+        more: [i - around > 0, i + q.length + around < words.length] });
+      i += last;
+    }
+    return out;
+  }
+
+  // The transcript as Markdown, from paragraphs(): the book's name, its
+  // chapters as headings, and each paragraph after the time it starts.
+  function transcriptMarkdown(title, byline, parts) {
+    const out = ["# " + String(title).trim()];
+    if (byline) out.push(String(byline).trim());
+    for (const p of parts) {
+      if (p.head) out.push("## " + p.head);
+      else if (p.gap) out.push("…");
+      else if (p.words && p.words.length) out.push("[" + timeText(p.words[0].t) + "] " + p.words.map((w) => w.w).join(" "));
+    }
+    return out.join("\n\n") + "\n";
+  }
+
   // The transcript as a clip's body (a div.co-body made in `out`).
   function transcriptBody(out, parts, { empty = "" } = {}) {
     const root = out.createElement("div");
@@ -608,7 +658,7 @@
     return m >= 60 ? Math.floor(m / 60) + " h" + (m % 60 ? " " + (m % 60) + " min" : "") : m + " min";
   };
 
-  C.listen = { EXTS, MIMES, extOf, isAudioName, sniff, tags, id3, mp4Chapters, inOrder, baseName, partAt, startOf, onBookClock, mendTimes, covered, chapterAt,
-    timedWords, applyFixes, countHeard, norm, paragraphs, transcriptBody, bookWords, align, syncOf, matched, wordAt, timeAt,
+  C.listen = { EXTS, MIMES, extOf, isAudioName, sniff, locked, lockedText, tags, id3, mp4Chapters, inOrder, baseName, partAt, startOf, onBookClock, mendTimes, covered, chapterAt,
+    timedWords, applyFixes, countHeard, norm, paragraphs, findHeard, transcriptMarkdown, transcriptBody, bookWords, align, syncOf, matched, wordAt, timeAt,
     clock, overlays, overlaySync, timeText, lengthText };
 })();

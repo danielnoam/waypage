@@ -716,7 +716,7 @@ function spentLines(p) {
   if (!spentOn() || !p || p.preview) return null;
   const c = C.stats.clip(p.id);
   if (!c || c.readMs + c.aloudMs < C.stats.READ_DAY) return null;
-  const first = [c.readMs >= 60000 ? spanText(c.readMs) + " here" : null, c.aloudMs >= 60000 ? spanText(c.aloudMs) + " narrated" : null].filter(Boolean).join(" · ");
+  const first = [c.readMs >= 60000 ? spanText(c.readMs) + " here" : null, c.aloudMs >= 60000 ? spanText(c.aloudMs) + (isAudiobook(p) ? " listened" : " narrated") : null].filter(Boolean).join(" · ");
   const words = c.words >= 1000 ? "About " + (Math.round(c.words / 100) * 100).toLocaleString() + " words" : c.words >= 50 ? "About " + (Math.round(c.words / 10) * 10) + " words" : null;
   const opened = c.opened > 1 ? "opened " + c.opened + " times" : null;
   const done = c.finished ? "finished " + new Date(c.finished).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : null;
@@ -3360,6 +3360,7 @@ function paintTicks() {
 let findTimer = 0, findCount = 0, findAt = -1;
 function openFind() {
   if (!state.open) return;
+  if (findsTranscript(state.open)) { if (state.sheet) back().then(() => openSheet("listenSearch")); else openSheet("listenSearch"); return; }
   if (state.finding) { $("findInput").focus(); return; }
   if (state.sheet) { back().then(openFind); return; }
   state.finding = true;

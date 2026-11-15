@@ -3170,7 +3170,8 @@ html.locked body > :not(.lock-view):not(script) { visibility: hidden !important;
 @media (prefers-reduced-motion: reduce) { .listen-knob { transition: none; } }
 :root[data-motion="off"] .listen-knob { transition: none; }
 .listen-times { display: flex; justify-content: space-between; font: var(--fs-meta)/1 var(--sans); color: var(--muted); font-variant-numeric: tabular-nums; }
-.listen-ctl { display: flex; align-items: center; justify-content: space-between; gap: var(--s-1); margin-top: var(--s-1); }
+.listen-ctl { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--s-1); margin-top: var(--s-1); }
+.listen-side { display: flex; align-items: center; justify-content: space-around; }
 .listen-ctl .icon-btn { border-radius: var(--r-full); color: var(--ink); }
 .listen-ctl .listen-play { width: 52px; height: 52px; background: var(--accent); color: var(--accent-ink); }
 .listen-speed {
@@ -3181,6 +3182,16 @@ html.locked body > :not(.lock-view):not(script) { visibility: hidden !important;
 .listen-skip > span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 700 9px/1 var(--sans); padding-top: 1px; }
 .listen-sleep.on { color: var(--accent); }
 .listen-sleep.on svg { fill: currentColor; }
+.listen-mark.on { color: var(--accent); }
+.listen-mark.on svg { fill: currentColor; }
+/* Bookmarks under the chapters: the moment to play from, and its note's button. */
+.listen-marks-head { margin-top: var(--s-4); }
+.listen-marks li { display: flex; align-items: center; }
+.listen-marks li > .row { flex: 1; min-width: 0; }
+.listen-marks .icon-btn { flex: none; color: var(--muted); }
+/* Search the transcript: each time it was heard, the words around it. */
+.listen-hits .choice-label { font-weight: 400; }
+.listen-hits mark { background: var(--preview); color: inherit; border-radius: 2px; }
 /* The bar along the bottom while it plays from elsewhere: Narrate's card,
    with the chapter and what's left under the name. */
 .listen-bar { width: min(320px, calc(100vw - 2 * var(--gutter))); cursor: default; touch-action: auto; }

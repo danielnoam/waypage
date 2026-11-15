@@ -153,7 +153,7 @@
 
   // Highlights (1.7.0), by id like tags: what either added stays, what
   // either removed goes, and one changed on both keeps the later change.
-  function mergeMarks(b, l, r) {
+  function mergeById(b, l, r) {
     const B = new Set((b || []).map((m) => m.id)), L = new Map((l || []).map((m) => [m.id, m])), R = new Map((r || []).map((m) => [m.id, m]));
     const out = [];
     for (const [id, m] of L) {
@@ -161,7 +161,10 @@
       else if (!B.has(id)) out.push(m);
     }
     for (const [id, m] of R) if (!L.has(id) && !B.has(id)) out.push(m);
-    return out.sort((x, y) => (x.page ? 1 : 0) - (y.page ? 1 : 0) || (x.page ? x.page - y.page : x.block - y.block) || x.start - y.start);
+    return out;
+  }
+  function mergeMarks(b, l, r) {
+    return mergeById(b, l, r).sort((x, y) => (x.page ? 1 : 0) - (y.page ? 1 : 0) || (x.page ? x.page - y.page : x.block - y.block) || x.start - y.start);
   }
 
   // Drawings (2026-11), stroke by stroke, like highlights: what either
@@ -187,8 +190,8 @@
   // An audiobook's listening (2026-11).
   const fixKey = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
   // Both sides changed it: the place from the one listened last, fixes
-  // from both (the newer of two for the same words), the rest from the
-  // side that changed last.
+  // from both (the newer of two for the same words), bookmarks from both,
+  // the rest from the side that changed last.
   function mergeListen(b, l, r) {
     if (!l || !r) return l || r;
     const newer = (r.tAt || 0) > (l.tAt || 0) ? r : l;
@@ -206,6 +209,9 @@
       for (const k of base) if (!has.has(k)) fixes.delete(k);
     }
     if (fixes.size) out.fixes = [...fixes.values()]; else delete out.fixes;
+    // Bookmarks like highlights: what either added stays, what either removed goes.
+    const marks = mergeById(b && b.bookmarks, l.bookmarks, r.bookmarks).sort((x, y) => x.t - y.t);
+    if (marks.length) out.bookmarks = marks; else delete out.bookmarks;
     return out;
   }
 

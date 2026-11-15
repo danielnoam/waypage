@@ -2058,7 +2058,7 @@ async function saveHighlights(btn) {
 // (0.31.0): a backup is restored, a clip sent as a file comes back, and
 // a book, a note, a page or a comic becomes a clip of its own. `open`
 // opens it once it's in.
-const FILE_ACCEPT = ".m4b,.m4a,.mp3,.aac,.ogg,.opus,.flac,.wav,audio/*,.epub,.mobi,.azw,.azw3,.prc,.fb2,.md,.markdown,.txt,.html,.htm,.eml,.cbz,.pdf,.pptx,.csv,.json,.zip,.opml,.xml,application/epub+zip,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,text/html,message/rfc822,text/csv,application/json,application/zip";
+const FILE_ACCEPT = ".m4b,.m4a,.mp3,.aa,.aax,.aaxc,.m4p,.aac,.ogg,.opus,.flac,.wav,audio/*,.epub,.mobi,.azw,.azw3,.prc,.fb2,.md,.markdown,.txt,.html,.htm,.eml,.cbz,.pdf,.pptx,.csv,.json,.zip,.opml,.xml,application/epub+zip,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,text/html,message/rfc822,text/csv,application/json,application/zip";
 // The system's picker where there is one (it also grants a lasting
 // permission, for a clip that reads from the file); the browser's own
 // otherwise.
