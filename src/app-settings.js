@@ -848,7 +848,7 @@ timingWatch(load(TIMINGS_KEY, false));
 const FAR_KEY = "waypage.hideFar";
 const farHidden = () => load(FAR_KEY, true) !== false;
 C.reader.hideFar = farHidden();
-C.reader.note = timingNote;
+C.reader.note = C.timingNote = timingNote;
 addEventListener("visibilitychange", () => timingNote(document.hidden ? "app hidden" : "app shown"));
 function timingsGroup() {
   const on = !!timing.watch.length;

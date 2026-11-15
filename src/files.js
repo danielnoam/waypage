@@ -964,8 +964,12 @@
     const win = frame && frame.contentWindow;
     if (!h || !h.zip || !win || !win.document) { if (onFirst) onFirst(); return; }
     h.frame = frame;
-    if (h.busy) { if (onFirst) onFirst(); return; }
+    // A call while it's busy (the book's own first one, as the page before
+    // it was still scrolling) runs it again once it's done, not never: the
+    // cover at a book's start stayed blank.
+    if (h.busy) { h.again = true; if (C.timingNote) C.timingNote("pictures: asked while busy, again after"); if (onFirst) onFirst(); return; }
     h.busy = true;
+    h.again = false;
     try {
       for (;;) {
         if (held !== h) return;
@@ -1003,15 +1007,21 @@
             url = URL.createObjectURL(new Blob([bytes], { type: B().imageType(bytes) || "image/jpeg" }));
           }
         } catch (err) { url = null; }
-        if (held !== h) { if (url) URL.revokeObjectURL(url); return; }
+        // Gone, or the frame went on to another document while it was read.
+        if (held !== h || next.ownerDocument !== win.document || !next.isConnected) { if (C.timingNote) C.timingNote("pictures: " + at + " read for a page no longer shown"); if (url) URL.revokeObjectURL(url); if (held !== h) return; continue; }
         next.removeAttribute("data-in");
         if (!url) { next.className = "co-missing"; continue; }
         h.urls.set(at, url);
         next.setAttribute("data-at", at);
         next.setAttribute("src", url);
+        if (!h.shown && C.timingNote) { h.shown = true; C.timingNote("pictures: first in, " + at); }
         if (onFirst) { onFirst(); onFirst = null; }
       }
-    } finally { h.busy = false; if (onFirst) onFirst(); }
+    } finally {
+      h.busy = false;
+      if (onFirst) onFirst();
+      if (h.again && held === h) { h.again = false; fillNear(frame); }
+    }
   }
 
   // A scan read from its PDF (1.1.0): the PDF is kept open and each page
