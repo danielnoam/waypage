@@ -2,8 +2,47 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.62.0] - 2026-11-15
 
+### Added
+- Add a folder, on the Add page: every book, note and comic in the folder you pick (and its folders) is added on its own, in a collection named after its folder. In the app each file is read from where it is; in a browser the files are copied in.
+- Audiobook bookmarks. The bookmark button in the player marks where you are, with a note if you like. They're listed under the chapters, play from there when tapped, and sync with the book.
+- Search the transcript: every time a word or phrase was heard in the whole audiobook, not just the chapter on the page, with the words around it. Tap one to play from there. Find in this clip opens it on a transcript, and so does ⋯ › Read along.
+- Export the transcript as Markdown, with its chapters and the time each paragraph starts (⋯ › Read along).
+- Draw in the margins: beside a clip's text, and beside a PDF page or a note's sheet. A drawing there stays next to its paragraph, and a narrower screen shows what fits.
+- A book or PDF too long for one note (over 500 pages) asks which chapters, or which pages, to make the note from. It's measured first, so you don't wait for the whole book to be laid out before hearing it's too long.
+- Comics export as CBZ: a comic clip, or a whole collection of comics in order, becomes one comic book file for any comic reader, with its title, series and right-to-left reading kept. CBR can't be offered, RAR files can't be written freely.
+- iPhone: App lock can use Face ID or Touch ID, and while a lock is on the app switcher shows a plain page instead of what you were reading.
+- iPhone: reading widgets (This week, Today, Days in a row) and a Collection widget; pick its collection with Edit Widget (iOS 17).
+- iPhone: Translate this clip, on the phone with Apple's translation (iOS 18).
+- iPhone: your Personal Voice (iOS 17) can read in Narrate; allow it in More speech engines.
+- Save with options offers a story page's own tags when saving it as a collection (Royal Road, AO3, Scribble Hub, or any page that lists its tags), from Discover or a pasted link. One switch adds them all; it's off until you turn it on, and stays as you left it.
+- Tag new clips: a collection can give its tags to every clip that joins it later (new chapters from Website sync or Next, or a clip moved in). Save with options turns it on with the tags you pick ("Tag new clips too"), and the collection's ⋯ menu turns it on or off.
+- Stats has All time next to Week, Month and Year: everything since Waypage began counting, from every device, with a bar a month (a year once it's past two years), the totals, and the clips you've spent most time on overall.
 
+### Changed
+- The Add page's options are now Add a file, Add a folder, Add an audiobook folder (was Open an audiobook folder) and New note.
+- An audiobook locked to Audible (AA, AAX) or Apple Books (M4P) says so, instead of "can't play this file".
+- Stats calls Narrate and audiobooks together "Listening" (was "Narrated"), and an audiobook's own time says "listened".
+- Waypage now has a Content-Security-Policy: the app runs only its own scripts, so a saved page or a bad link can't run code in it.
+- Exporting a clip or a collection shows it's working: the button you pressed turns a spinner and says what it's on ("Chapter 12 of 48", "Packing the book…", "Making the comic…") over a bar that fills as it goes, instead of just greying out.
+- iPhone: Narrate keeps the screen on, keeps the sleep timer with the app put away, and goes on to the next clip with the app put away, as on Android.
+- iPhone: a deck turned into a PDF opens from where you saved it, and moving a big library copies the files natively, as on Android.
+- iPhone: a page drawn by script on a site you saved signed in to now draws signed in.
+- Google Drive backups now go through keel's shared Drive code, which LifeLog will use too.
+- The log behind Report a problem is now keel's shared error log, the same as LifeLog's. Each entry also keeps the first lines of where the error happened, and the report includes them.
+- Sync's requests to GitHub now go through keel's shared GitHub code, the same as LifeLog's.
+- Where the app runs, and links to other sites opening in the phone's browser, now come from keel's shared code, the same as LifeLog's.
+- The update check, the Test builds list and test builds in the browser now go through keel's shared code, the same as LifeLog's.
+- In the browser, a file a test build's commit doesn't have now loads from the release instead of failing.
+- The shared build tools, local server and setup-link QR code now come from keel, one copy kept with LifeLog instead of two.
+
+### Fixed
+- Export no longer offers "Page source" for a file, which has no page to fetch.
+- Very big books open far faster. A 47 MB EPUB (900 chapters) opened at chapter 772 in about 90 s on a slowed-down test phone, now about 11 s; jumping to a chapter from Contents took 2.4 s, now under a tenth of a second.
+- The local server (`node server.js`) only answers this computer, no longer serves files from a folder next to Waypage's whose name starts the same way, and no longer stops on a malformed address.
+- PDF pages whose pictures are JPEG 2000, as many scanned books from the Internet Archive are, showed blank. They now show their pictures.
+- Swiping between feeds in Feeds and Newsletters moved the search field along with the posts. It now stays put with the chips, and only the list slides.
 
 ## [1.61.0] - 2026-11-14
 
