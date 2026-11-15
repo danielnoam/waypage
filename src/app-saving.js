@@ -858,7 +858,8 @@ function syncWhat() {
 // reads only the token from it.
 function syncShare() {
   const link = C.sync.setupLink(C.platform.webUrl() || location.origin + location.pathname);
-  const svg = C.qr && C.qr.fits(link) ? C.qr.svg(link, { size: 200 }) : null;
+  const encoder = window.Keel && window.Keel.qr;
+  const svg = encoder && encoder.fits(link) ? encoder.svg(link, { size: 200 }) : null;
   const qr = svg ? el("div", { class: "sync-qr", role: "img", "aria-label": "Setup code" }) : null;
   if (qr) qr.innerHTML = svg;
   const copy = async () => {
