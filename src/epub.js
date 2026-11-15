@@ -59,8 +59,9 @@
 
   // One saved page as an XHTML chapter. `addImage(bytes, type)` stores a
   // picture in the book and returns its path from the chapter.
-  async function chapter(p, n, addImage, withHead) {
+  async function chapter(p, n, addImage, withHead, fix) {
     const src = new DOMParser().parseFromString(await S().readPage(p.id), "text/html");
+    if (fix) fix(src);
     if (!withHead) src.querySelectorAll(".co-head").forEach((x) => x.remove());
     const lang = src.documentElement.getAttribute("lang") || p.lang || "";
     const dir = src.documentElement.getAttribute("dir") || p.dir || "";
@@ -284,13 +285,13 @@
       return "../" + file;
     };
     const chapters = [];
-    for (const [i, p] of pages.entries()) { chapters.push(await chapter(p, i + 1, addImage, withHeads)); say(i + 1, pages.length, false); }
+    for (const [i, p] of pages.entries()) { chapters.push(await chapter(p, i + 1, addImage, withHeads, opts && opts.fix)); say(i + 1, pages.length, false); }
     const lang = chapters[0].lang || "en";
     const rtl = chapters[0].dir === "rtl";
     const uid = "urn:uuid:" + uuid();
     const modified = new Date().toISOString().replace(/\.\d+Z$/, "Z");
     const first = pages[0];
-    const creator = pages.length === 1 ? (first.byline || first.site || "") : (first.site || "");
+    const creator = opts && opts.author ? clean(opts.author) : pages.length === 1 ? (first.byline || first.site || "") : (first.site || "");
     const wiki = pages.some((p) => p.licence === "wikipedia");
     const items = chapters.map(outline);
 
