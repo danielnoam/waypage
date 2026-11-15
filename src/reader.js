@@ -933,7 +933,8 @@
   // Chrome lays nothing out past 33,554,431 px (its largest length), so a
   // book guessed taller than that ended there: a Contents jump to chapter
   // 800 of 900 stopped at 772, and on Daniel's phone the scroll ended at
-  // 600 of 840. No fixed height can be trusted for every book and phone,
+  // 600 of 840. On Android that's in the screen's own pixels, so a third
+  // of it on a Pixel 8 (11,184,811 px). No fixed height can be trusted,
   // so after each guess the end is looked at: while the last chapters pile
   // up at one height, every unseen chapter is guessed shorter. Each takes
   // its real height as it's reached.
@@ -949,7 +950,8 @@
   function sizeChunks() {
     const [perChar, w] = guessedWith;
     const tall = chunks.map((c) => c.chars * perChar + c.imgs * w * 0.75);
-    const fit = Math.min(1, TALLEST / tall.reduce((a, b) => a + b, 0)) * squeeze;
+    const most = TALLEST / ((frame && frame.contentWindow && frame.contentWindow.devicePixelRatio) || 1);
+    const fit = Math.min(1, most / tall.reduce((a, b) => a + b, 0)) * squeeze;
     chunks.forEach((c, i) => { c.el.style.containIntrinsicBlockSize = "auto " + Math.max(1, Math.round(tall[i] * fit)) + "px"; });
   }
   // Called after a guess, before a jump, and when a scroll settles.
