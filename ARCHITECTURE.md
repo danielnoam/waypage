@@ -93,7 +93,7 @@ src/anki-import.js  reads an Anki deck (.apkg: a zip with a SQLite collection) i
 src/anki.js         the Anki extension's engine: decks, cards and a review log (anki/ beside the library, per-device log), each card's schedule replayed from the log
 src/app-anki.js     the Anki extension's screens: the selection bar's button and card sheet, the place (decks, study, browse, edit, options)
 src/motion.js       the springs from DESIGN.md, sampled into CSS linear()
-src/qr.js           QR code for sync's setup link, made on the device so the token never leaves it
+src/keel/qr.js      QR code for sync's setup link, made on the device so the token never leaves it (from keel, below)
 src/styles.css      tokens, themes, layout (DESIGN.md)
 src/reader.css      the saved page inside the reader's frame
 src/fonts.css       the bundled fonts (src/fonts/)
@@ -105,6 +105,7 @@ native/share/       the Capacitor plugin package (Android Java, iOS Swift): shar
 tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-build.json
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
 tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
+tools/keel-sync.js  brings the files shared with LifeLog up to a keel release (below)
 tools/sign-apk.sh   signs the APK with the release key in CI
 tools/sherpa-lib.sh   fetches sherpa-onnx's arm64 library (Kokoro voices) into the Android build, pinned and checked
 tools/test-build.sh        puts a labelled pull request's build on its test-<branch> pre-release
@@ -112,6 +113,7 @@ tools/packs/build-lang.js  builds Anki's language packs (a StarDict .tar.gz) fro
 tools/shots.js      retakes the README's screenshots (tools/shots/demo is the demo library)
 tools/check-discover.js  checks every feed, sign-up and serial in Discover's list still answers (weekly, discover-check.yml)
 test/               node test/run-all.js runs every *.test.js
+keel.config.json, keel.lock.json  the files shared with LifeLog through keel (see Versions, cache and updates)
 design/             the design canvas's artboards, for the exact markup
 docs/PROPOSAL.md    the original architecture, storage, legal and store reasoning
 docs/shots/         the README's screenshots
@@ -531,6 +533,13 @@ A merge to `main` with a new `APP_VERSION` publishes the release; the
 built-in updater (`app-start.js`) reads the repo's GitHub releases and
 offers any version higher than its own. A merge without a bump only
 refreshes the web copy. CONTRIBUTING.md has the steps.
+
+The files listed in `keel.lock.json` (`server.js`, `src/keel/qr.js`,
+`tools/release.js`, `tools/android-version.js`, `tools/keel-sync.js`,
+`test/keel.test.js`, the github-pages skill) come from keel
+(danielnoam/keel), shared with LifeLog. Don't edit them here:
+`keel.test.js` fails. Change them in keel, tag a release there, then run
+`node tools/keel-sync.js v<version>` in a PR here.
 
 ## The phone apps
 
