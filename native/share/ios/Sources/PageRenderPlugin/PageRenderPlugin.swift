@@ -11,7 +11,8 @@ import WebKit
 //
 // The page runs in its own WKWebView, out of sight behind the app's: no
 // Capacitor bridge, no message handlers, a data store of its own that keeps
-// nothing, http(s) only, and no pictures, media or fonts loaded. Only the
+// nothing but the cookies a signed-in site left (SignInPlugin), copied in
+// for that site alone, http(s) only, and no pictures, media or fonts loaded. Only the
 // HTML it ends up with comes back, and save.js turns that into the same
 // script-free copy as any other page.
 @objc(PageRenderPlugin)
@@ -119,7 +120,29 @@ public class PageRenderPlugin: CAPPlugin, CAPBridgedPlugin {
             host.insertSubview(w, at: 0)
             web = w
             DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in self?.take() }
-            w.load(URLRequest(url: url))
+            // A site signed in to with Save signed in (SignInPlugin) keeps
+            // its cookies in the default store: this page's own are copied
+            // into its store that keeps nothing, so a page drawn by script
+            // draws signed in, as on Android.
+            let host = url.host?.lowercased() ?? ""
+            WKWebsiteDataStore.default().httpCookieStore.getAllCookies { all in
+                let now = Date()
+                let mine = all.filter { c in
+                    let d = c.domain.lowercased()
+                    let bare = d.hasPrefix(".") ? String(d.dropFirst()) : d
+                    return !host.isEmpty && (host == bare || host.hasSuffix("." + bare)) && (c.expiresDate.map { $0 > now } ?? true)
+                }
+                let store = w.configuration.websiteDataStore.httpCookieStore
+                let group = DispatchGroup()
+                for c in mine {
+                    group.enter()
+                    store.setCookie(c) { group.leave() }
+                }
+                group.notify(queue: .main) { [weak self] in
+                    guard let self = self, !self.done else { return }
+                    w.load(URLRequest(url: self.url))
+                }
+            }
         }
 
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {

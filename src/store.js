@@ -721,8 +721,8 @@
     return out;
   }
 
-  // On Android the files go across in Java, at disk speed, instead of each
-  // one through the bridge as base64 (1.19.0).
+  // In the app the files go across natively, at disk speed, instead of
+  // each one through the bridge as base64 (1.19.0 Android, iOS later).
   async function endOf(b) {
     if (b.place.kind === "folder") return { tree: b.place.tree };
     const { uri } = await FS().getUri({ path: b.pre, directory: b.directory });
@@ -758,7 +758,7 @@
       try { there = JSON.parse(await to.read("library.json")); } catch (e) { there = []; }
       const files = [...await walkAll(from, "pages"), ...await walkAll(from, "fonts")];
       if (onProgress) onProgress(0, files.length);
-      if (P.android && files.length) await copyNative(from, to, files, onProgress);
+      if ((P.android || P.ios) && files.length) await copyNative(from, to, files, onProgress);
       else {
         let done = 0;
         for (const path of files) {

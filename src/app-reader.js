@@ -2295,7 +2295,7 @@ function aloudControls() {
     box.replaceChildren(...box.querySelectorAll(":scope > h2.overline"), ...fresh.childNodes);
   };
   const enginesIn = Promise.all([enginesP, kokoro]).then(([{ engines, default: def }, k]) => {
-    if (engines.length || k) moreSlot.replaceWith(more);
+    if (engines.length || k || speech.hasPersonalVoice) moreSlot.replaceWith(more);
     if (engines.length < 2) return;
     const dflt = engines.find((e) => e.name === def);
     // Each downloaded Kokoro version is its own option (Daniel's ask),
@@ -2958,10 +2958,11 @@ function translateSheet(p) {
         ? el("button", { class: "btn-primary", type: "button", onclick: () => startTranslate(p, to, draw) },
           tr && tr.to === to ? "Translate the rest" : "Translate") : null,
       el("p", { class: "footnote" }, T.available
-        ? (T.onPhone ? "Translated on this phone; the words aren't sent anywhere. The first time for a language, the phone downloads it from Google (about 30 MB)."
+        ? (T.byApple ? "Translated on this iPhone; the words aren't sent anywhere. The first time for a language, iOS asks to download it."
+          : T.onPhone ? "Translated on this phone; the words aren't sent anywhere. The first time for a language, the phone downloads it from Google (about 30 MB)."
           : "Translated by this browser on this computer; the words aren't sent anywhere. The first time for a language, the browser downloads it.")
           + " The translation stays on this device."
-        : "Translating a clip works in the Android app and in Chrome on a computer."),
+        : "Translating a clip works in the app (on iPhone, iOS 18 and later) and in Chrome on a computer."),
       tr ? el("div", { class: "group" }, menuRow("Remove the translation", () => keepTranslation(p, null).then(draw), "warn")) : null);
   };
   draw();

@@ -960,6 +960,15 @@ area.
   +6 dB). A new MediaPlayer per part means a new session: `release()`
   drops the enhancer and `applyVolume()` makes it again. iOS's
   utterance volume also stops at 1, so iPhone Narrate can't go louder.
+- **iOS frameworks newer than the app's oldest iOS:** Swift links what it
+  imports strongly, and a framework the phone doesn't have stops the app
+  before it opens. `Translation` (iOS 17.4+) is in WaypageShare.podspec's
+  `weak_frameworks`; anything else newer than iOS 15.5 imported by the
+  app's plugins needs the same. The widgets are their own target, iOS 17
+  and later, so AppIntents is fine there.
+- **iOS Translation needs a SwiftUI view:** a `TranslationSession` only
+  comes from `translationTask`, so TranslatePlugin keeps a one-point
+  SwiftUI view behind the WebView and runs one job at a time in it.
 
 ## The docs
 
