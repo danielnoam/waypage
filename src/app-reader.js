@@ -858,6 +858,7 @@ function showSection() {
   const section = C.reader.section();
   if ($("readerNow").textContent === (section || "Contents")) return;
   $("readerNow").textContent = section || "Contents";
+  timingNote("chapter shown: " + (section || "Contents"));
   $("readerContents").setAttribute("aria-label", section ? "Contents, now " + section : "Contents");
   paintPart();
 }

@@ -938,7 +938,7 @@
   // up at one height, every unseen chapter is guessed shorter. Each takes
   // its real height as it's reached.
   const TALLEST = 30000000;
-  let squeeze = 1, endCheck = 0, guessedWith = null;
+  let squeeze = 1, endCheck = 0, guessedWith = null, noteHook = null;
   function guessAll(perChar, w) {
     guessedWith = [perChar, w];
     sizeChunks();
@@ -956,8 +956,9 @@
   function fitEnd() {
     for (let k = 0; k < 8 && guessedWith && chunks.length > 1 && !isPaged() && squeeze > 0.02; k++) {
       const n = chunks.length, a = chunks[n - 2].el.getBoundingClientRect(), b = chunks[n - 1].el.getBoundingClientRect();
-      if (b.top >= a.top + a.height / 2) return;
+      if (b.top >= a.top + a.height / 2 || chunks[n - 2].el.contains(chunks[n - 1].el)) return;
       squeeze *= 0.6;
+      if (noteHook) noteHook("squeezed to " + squeeze.toFixed(2) + ": " + (chunks[n - 2].el.id || "?") + " at " + Math.round(a.top) + " + " + Math.round(a.height) + ", " + (chunks[n - 1].el.id || "?") + " at " + Math.round(b.top));
       sizeChunks();
     }
   }
@@ -2525,6 +2526,7 @@
           scrollTimer = setTimeout(() => {
             scrollTimer = null;
             swapNearImages();
+            scrollEnded();
             // The scroll that put the page back where it was isn't a move.
             if (tell && performance.now() - restoredAt > 400) tell();
           }, 150);
@@ -2592,13 +2594,24 @@
   // A move not yet told (the scroll stopped under 150 ms ago) is told
   // now, before the reader closes or the app goes away (1.30.2): a Back,
   // a widget or the home button right after a scroll lost it.
+  // When a scroll settles: the end still fits (fitEnd), and for Record
+  // timings, a note when the scroll ran out before the last chapters.
+  function scrollEnded() {
+    if (!(doc && frame && frame.clientHeight)) return;
+    fitEnd();
+    const w = frame.contentWindow, root = doc.documentElement;
+    if (noteHook && chunks.length && heads.length > 2 && w.scrollY + w.innerHeight >= root.scrollHeight - 2) {
+      const now = section(), i = heads.findIndex((h) => clean(h) === now);
+      if (i >= 0 && i < heads.length - 2) noteHook("end of the page at " + now + " (" + (i + 1) + " of " + heads.length + "): " + geometry() + ", hidden " + doc.querySelectorAll(".co-far").length + ", waiting " + doc.querySelectorAll("[data-co-wait]").length);
+    }
+  }
+
   function settle() {
     if (!scrollTimer) return;
     clearTimeout(scrollTimer);
     scrollTimer = null;
     // Not once the reader is out of sight (Back after Narrate): the hidden
     // frame measures as the end of the page, and that was kept as the place.
-    if (doc && frame && frame.clientHeight) fitEnd();
     if (doc && tell && frame && frame.getClientRects().length && frame.clientHeight && performance.now() - restoredAt > 400) tell();
   }
 
@@ -2663,5 +2676,5 @@
       return line;
     }));
   }
-  C.reader = { get filling() { return !!rest; }, whole: () => wholeP, shown: () => shownP, say, spotOfId, blockCount, pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, set hideFar(v) { hideFar = !!v; }, geometry, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionContext, selectionMark, selectionMarks, paintMarks, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, inkRoot, inkBlock, inkBlocks, inkBlockBox, inkBlockAt, inkBlocksNear, inkBlockWords, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
+  C.reader = { get filling() { return !!rest; }, whole: () => wholeP, shown: () => shownP, say, spotOfId, blockCount, pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, set hideFar(v) { hideFar = !!v; }, set note(f) { noteHook = f; }, geometry, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionContext, selectionMark, selectionMarks, paintMarks, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, inkRoot, inkBlock, inkBlocks, inkBlockBox, inkBlockAt, inkBlocksNear, inkBlockWords, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
 })();
