@@ -1795,6 +1795,60 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a collection's export edits change only the exported copy: chapters, title, author, repeated lines, find and replace", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const c = (i) => ({ id: "ee" + i, url: "https://example.com/ee" + i, title: "Part " + i, site: "example.com", byline: "Ann Author", savedAt: 1000 + i, minutes: 1, mode: "links", at: 0, finished: false, folder: "Saga", folderAt: i });
+        await window.Waypage.store.writeIndex([1, 2, 3, 4, 5].map(c));
+        for (const i of [1, 2, 3, 4, 5]) await window.Waypage.store.writePage("ee" + i, "<!doctype html><html><body><header class=\"co-head\"><h1>Part " + i + "</h1></header><div class=\"co-body\"><p>Previous Chapter Next Chapter</p><p>Words of part " + i + ".</p><p>A/N: thanks for reading " + i + "</p></div></body></html>", c(i));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => { openFolder("Saga"); setFolderMode("export"); });
+      const box = q.locator(".export");
+      await box.locator(".nav-row", { hasText: "Clean up the text" }).click();
+      await box.locator(".export-lines .switch").first().waitFor();
+      assert.match(await box.locator(".export-lines").innerText(), /Previous Chapter Next Chapter[\s\S]*In 5 of 5 chapters/);
+      await box.locator(".export-lines .switch").first().check();
+      await box.locator("input.feed-input").first().fill("A/N: *");
+      await box.locator(".export-back").click();
+      await box.locator(".nav-row", { hasText: "Book details" }).click();
+      await box.locator("input.feed-input").nth(0).fill("The Saga");
+      await box.locator("input.feed-input").nth(1).fill("A. Writer");
+      await box.locator(".export-back").click();
+      assert.match(await box.innerText(), /1 repeated line left out, 1 find and replace/);
+      // The pick rows' drop-downs: pick chapters 2 to 3 the way a person does.
+      for (const [label, option] of [["First chapter", "2. Part 2"], ["Last chapter", "3. Part 3"]]) {
+        await box.locator(".pick-row", { hasText: label }).locator(".dropdown-btn").click();
+        await q.getByRole("listbox", { name: label }).getByRole("option", { name: option }).click();
+      }
+      const out = await q.evaluate(async () => {
+        const B = window.Waypage.backup;
+        let got = null, name = null;
+        window.Waypage.platform.download = (n, blob) => { name = n; got = blob; };
+        document.querySelector(".export .export-save").click();
+        await new Promise((r) => { const t = setInterval(() => { if (got) { clearInterval(t); r(); } }, 20); });
+        const files = await B.zipEntries(got);
+        const read = async (n) => new TextDecoder().decode(await B.zipRead(got, files.get(n)));
+        const opf = await read("OEBPS/content.opf");
+        const chapters = [...files.keys()].filter((k) => /^OEBPS\/text\/\d+\.xhtml$/.test(k));
+        const one = await read("OEBPS/text/1.xhtml");
+        const kept = await window.Waypage.store.readPage("ee2");
+        return { name, opf, chapters: chapters.length, one, kept, stored: JSON.parse(localStorage.getItem("waypage.exportEdits")).Saga };
+      });
+      assert.strictEqual(out.name, "The Saga.epub");
+      assert.match(out.opf, /<dc:title>The Saga<\/dc:title>/);
+      assert.match(out.opf, /<dc:creator>A\. Writer<\/dc:creator>/);
+      assert.strictEqual(out.chapters, 2, "chapters 2 and 3 only");
+      assert.ok(/Words of part 2/.test(out.one) && !/Previous Chapter|A\/N|thanks for reading/.test(out.one), out.one);
+      assert.ok(/Previous Chapter Next Chapter/.test(out.kept) && /A\/N: thanks/.test(out.kept), "the clip itself is untouched");
+      assert.deepStrictEqual(out.stored, { title: "The Saga", author: "A. Writer", lines: ["Previous Chapter Next Chapter"], rules: [{ find: "A/N: *", put: "" }] });
+      // Opening the collection reaches for the site, which tests have no way to.
+      const errs = q.errors.filter((e) => !/example\.com%2Fee/.test(e));
+      assert.deepStrictEqual(errs, [], errs.join(" | "));
+      await q.context().close();
+    });
+
     await test("a picked collection's ring goes round its name and progress (1.23.1)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

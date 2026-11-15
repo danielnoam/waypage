@@ -560,8 +560,11 @@
 
   // The page as one HTML file: its saved pictures inlined, its index entry
   // in a <meta> for importing it back. Resolves to { name, html }.
-  async function exportPage(p) {
+  // `fix(doc)` changes the copy before it's written: a collection's
+  // export edits, never the clip.
+  async function exportPage(p, fix) {
     const doc = new DOMParser().parseFromString(await S().readPage(p.id), "text/html");
+    if (fix) fix(doc);
     for (const img of doc.querySelectorAll("img[src]")) {
       const src = img.getAttribute("src");
       if (!LOCAL.test(src)) continue;
@@ -694,8 +697,9 @@
   // source first, the licence line last.
   // `heads` false leaves the title, byline and source out, for a
   // collection's chapters exported without headers.
-  async function exportMarkdown(p, heads = true) {
+  async function exportMarkdown(p, heads = true, fix) {
     const doc = new DOMParser().parseFromString(await S().readPage(p.id), "text/html");
+    if (fix) fix(doc);
     const out = [];
     mdBlocks(doc.body, out);
     const head = [];
@@ -739,7 +743,7 @@
     h.textContent = title;
     out.body.append(h);
     for (const [i, p] of pages.entries()) {
-      const doc = new DOMParser().parseFromString((await exportPage(p)).html, "text/html");
+      const doc = new DOMParser().parseFromString((await exportPage(p, opts && opts.fix)).html, "text/html");
       const part = out.createElement("section");
       part.className = "co-part";
       part.append(...[...doc.body.childNodes].map((n) => out.importNode(n, true)));
@@ -755,7 +759,7 @@
     const heads = !opts || opts.heads !== false;
     const parts = [];
     for (const [i, p] of pages.entries()) {
-      parts.push((await exportMarkdown(p, heads)).text.replace(/^# /, "## ").trim());
+      parts.push((await exportMarkdown(p, heads, opts && opts.fix)).text.replace(/^# /, "## ").trim());
       if (onProgress) onProgress(i + 1, pages.length);
     }
     return { name: pageSlug(title) + ".md", text: "# " + mdEscape(title) + "\n\n" + parts.join("\n\n---\n\n") + "\n" };
