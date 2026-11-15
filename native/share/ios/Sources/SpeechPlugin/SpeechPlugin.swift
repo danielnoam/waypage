@@ -9,7 +9,12 @@ import UIKit
 // calls as Android's SpeechPlugin.java: voices(), play({ items, start, lang,
 // voice, rate, title, subtitle, key }), pause(), resume(), stop(),
 // seek({ index }), skip({ by }), rate({ rate }), state(), and a "progress"
-// event { key, index, state }.
+// event { key, index, state }. And, as on Android:
+// keepScreen({ on }), sleep({ seconds }) with a "sleep" event { at },
+// queue({ after, items, start, lang, voice, title, subtitle, key }) for the
+// clip to go on to while the app is put away, and personalVoice() (iOS 17),
+// which asks once to use the voice the person made in Settings and
+// resolves { state }: "authorized", "denied", "unsupported" or "unknown".
 //
 // What's left of the page is queued in the synthesizer at once, so it reads
 // on between paragraphs while the app is suspended.
@@ -27,7 +32,11 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
         CAPPluginMethod(name: "skip", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "rate", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "volume", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "state", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "state", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "keepScreen", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "sleep", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "queue", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "personalVoice", returnType: CAPPluginReturnPromise)
     ]
 
     private let synth = AVSpeechSynthesizer()
@@ -51,6 +60,14 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
     // can turn the voice down but not above normal.
     private var volume: Float = 1
     private var commandsSet = false
+    // The sleep timer, in ms since 1970 as the app keeps it; 0 is off. Also
+    // checked as each paragraph starts, since a timer can run late while
+    // the phone is locked.
+    private var sleepAt: Double = 0
+    private var sleeper: DispatchWorkItem?
+    // The clip to go on to when the one with key `nextAfter` ends.
+    private var next: [String: Any]?
+    private var nextAfter = ""
 
     override public func load() {
         synth.delegate = self
@@ -60,6 +77,7 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
         let list = AVSpeechSynthesisVoice.speechVoices().map { v -> [String: Any] in
             var quality = v.quality == .enhanced ? 400 : 300
             if #available(iOS 16.0, *), v.quality == .premium { quality = 500 }
+            if #available(iOS 17.0, *), v.voiceTraits.contains(.isPersonalVoice) { quality = 600 }
             let gender = v.gender == .female ? "female" : v.gender == .male ? "male" : ""
             return ["id": v.identifier, "name": v.name, "lang": v.language, "online": false, "quality": quality, "gender": gender]
         }
@@ -130,6 +148,93 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
         DispatchQueue.main.async { call.resolve(["key": self.key, "index": self.index, "state": self.state]) }
     }
 
+    @objc func keepScreen(_ call: CAPPluginCall) {
+        let on = call.getBool("on") ?? false
+        DispatchQueue.main.async {
+            UIApplication.shared.isIdleTimerDisabled = on
+            call.resolve()
+        }
+    }
+
+    @objc func sleep(_ call: CAPPluginCall) {
+        let seconds = max(0, call.getInt("seconds") ?? 0)
+        DispatchQueue.main.async {
+            self.setSleep(seconds > 0 ? Date().timeIntervalSince1970 * 1000 + Double(seconds) * 1000 : 0)
+            call.resolve()
+        }
+    }
+
+    @objc func queue(_ call: CAPPluginCall) {
+        let list = (call.getArray("items") ?? []).compactMap { $0 as? String }
+        var job: [String: Any]?
+        if !list.isEmpty {
+            job = ["items": list, "start": call.getInt("start") ?? 0, "lang": call.getString("lang") ?? "",
+                   "voice": call.getString("voice") ?? "", "title": call.getString("title") ?? "Narrate",
+                   "subtitle": call.getString("subtitle") ?? "", "key": call.getString("key") ?? ""]
+        }
+        let after = call.getString("after") ?? ""
+        DispatchQueue.main.async {
+            self.next = job
+            self.nextAfter = job == nil ? "" : after
+            call.resolve()
+        }
+    }
+
+    @objc func personalVoice(_ call: CAPPluginCall) {
+        guard #available(iOS 17.0, *) else {
+            call.resolve(["state": "unsupported"])
+            return
+        }
+        AVSpeechSynthesizer.requestPersonalVoiceAuthorization { status in
+            let state: String
+            switch status {
+            case .authorized: state = "authorized"
+            case .denied: state = "denied"
+            case .unsupported: state = "unsupported"
+            default: state = "unknown"
+            }
+            call.resolve(["state": state])
+        }
+    }
+
+    private func setSleep(_ at: Double) {
+        sleeper?.cancel()
+        sleeper = nil
+        sleepAt = at
+        if at > 0 {
+            let work = DispatchWorkItem { [weak self] in self?.sleepNow() }
+            sleeper = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + max(0, (at - Date().timeIntervalSince1970 * 1000) / 1000), execute: work)
+        }
+        notifyListeners("sleep", data: ["at": at])
+    }
+
+    private func sleepNow() {
+        setSleep(0)
+        pauseNow()
+    }
+
+    private func sleepDue() -> Bool {
+        sleepAt > 0 && Date().timeIntervalSince1970 * 1000 >= sleepAt
+    }
+
+    // The queued clip, read on from where the app said, at this speed and
+    // volume.
+    private func goOn() -> Bool {
+        guard let job = next, nextAfter == key, let list = job["items"] as? [String], !list.isEmpty else { return false }
+        next = nil
+        nextAfter = ""
+        items = list
+        key = job["key"] as? String ?? ""
+        lang = job["lang"] as? String ?? ""
+        voice = job["voice"] as? String ?? ""
+        title = job["title"] as? String ?? "Narrate"
+        subtitle = job["subtitle"] as? String ?? ""
+        held = []
+        queue(from: max(0, min(job["start"] as? Int ?? 0, list.count - 1)))
+        return true
+    }
+
     private func utterance(_ text: String) -> AVSpeechUtterance {
         let u = AVSpeechUtterance(string: text)
         if !voice.isEmpty, let v = AVSpeechSynthesisVoice(identifier: voice) {
@@ -186,6 +291,7 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
     }
 
     private func finish(_ how: String) {
+        if sleepAt != 0 { setSleep(0) }
         queued = [:]
         if synth.isSpeaking || synth.isPaused { synth.stopSpeaking(at: .immediate) }
         state = how
@@ -240,6 +346,7 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
         DispatchQueue.main.async {
             guard let i = self.queued[ObjectIdentifier(u)] else { return }
             self.index = i
+            if self.sleepDue() { self.sleepNow(); return }
             self.report()
         }
     }
@@ -248,7 +355,7 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
         DispatchQueue.main.async {
             guard let i = self.queued[ObjectIdentifier(u)] else { return }
             self.queued[ObjectIdentifier(u)] = nil
-            if i == self.items.count - 1 { self.finish("ended") }
+            if i == self.items.count - 1, !self.goOn() { self.finish("ended") }
         }
     }
 }

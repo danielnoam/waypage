@@ -5224,6 +5224,74 @@ c("bk1", { at: 0.01 })]);
       await ctx.close();
     });
 
+    await test("an audiobook's bookmarks, and searching and finding in its whole transcript (2026-11)", async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      const errors = [];
+      q.on("pageerror", (e) => errors.push(e.message));
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      const id = await q.evaluate(async () => {
+        const A = window.Waypage.platform.audio;
+        window.heard = [];
+        A.play = async (o) => { heard.push("play " + o.pos / 1000); };
+        A.seek = (part, ms) => { heard.push("seek " + ms / 1000); };
+        const m = await newAudiobook({ title: "Marks", byline: "", file: { name: "m.mp3", kind: "audio", ext: "mp3", size: 10 }, link: "x",
+          audio: { parts: [{ ref: "x", name: "m.mp3", size: 10, dur: 600 }], chapters: [{ t: 0, title: "One" }, { t: 300, title: "Two" }], dur: 600 } }, null);
+        m.listen.t = 42;
+        arrived(m);
+        return m.id;
+      });
+      await q.evaluate((i) => { openPage(i); }, id);
+      await until(q, () => !document.getElementById("listenPlayer").hidden);
+      await until(q, () => { document.getElementById("toast").hidden = true; if (state.sheet) closeSheet(true); return !state.sheet; });
+      // Play sits in the middle of the player, with the bookmark on the right.
+      const mid = await q.evaluate(() => { const p = document.getElementById("listenPlay").getBoundingClientRect(), b = document.getElementById("listenPlayer").getBoundingClientRect(); return Math.abs(p.left + p.width / 2 - (b.left + b.width / 2)); });
+      assert.ok(mid < 2, "play is off centre by " + mid);
+      await q.click("#listenMark");
+      await until(q, () => (state.open.listen.bookmarks || []).length === 1 && /Bookmarked at 0:42/.test(document.getElementById("toast").textContent));
+      assert.ok(await q.evaluate(() => document.getElementById("listenMark").classList.contains("on")), "the button shows a bookmark is here");
+      await q.click("#toast .toast-act");
+      await until(q, () => state.sheet === "listenMark");
+      await q.fill("#readingBody .tag-input", "The storm");
+      await q.click("#readingBody .btn-primary");
+      await until(q, () => state.open.listen.bookmarks[0].note === "The storm");
+      // Under the chapters, where tapping it plays from there.
+      await q.evaluate(() => { if (state.sheet) closeSheet(true); });
+      await q.click("#readerChapters");
+      await until(q, () => !!document.querySelector(".listen-marks .row"));
+      assert.match(await q.textContent(".listen-marks .row"), /The storm.*0:42.*One/);
+      await q.click(".listen-marks .row");
+      await until(q, () => heard.length > 0);
+      assert.deepStrictEqual(await q.evaluate(() => heard), ["play 42"]);
+      // A bookmark at the same moment opens the one there; Remove takes it away.
+      await q.evaluate(() => { if (state.sheet) closeSheet(true); lis.state = "stopped"; lis.key = ""; });
+      await q.click("#listenMark");
+      await until(q, () => state.sheet === "listenMark");
+      await q.click("#readingBody .btn-quiet");
+      await until(q, () => !state.open.listen.bookmarks);
+      // The whole transcript, both chapters, from Find in this clip.
+      await q.evaluate(async () => {
+        const a = state.open;
+        a.listen.mode = "transcript";
+        const piece = (t0, text) => ({ t0, t1: t0 + 4, text, words: text.split(" "), times: text.split(" ").map((_, i) => t0 + i) });
+        await C.store.writeListen(a.id, { pieces: [piece(10, "Louis Blériot crossed the channel."), piece(310, "Later Blériot landed at Dover.")], ranges: [[0, 600]] });
+        lis.data = null; lis.dataFor = "";
+        closeSheet(true);
+      });
+      await q.evaluate(() => openFind());
+      await until(q, () => state.sheet === "listenSearch");
+      await q.fill("#readingBody input[type=search]", "bleriot");
+      await until(q, () => document.querySelectorAll(".listen-hits .row").length === 2);
+      assert.match(await q.textContent("#readingBody .menu-head .meta"), /Heard 2 times/);
+      assert.match(await q.textContent(".listen-hits .row:nth-child(2)"), /Later Blériot landed.*5:11.*Two/);
+      await q.click(".listen-hits .row:nth-child(2)");
+      await until(q, () => heard.length > 1);
+      assert.strictEqual((await q.evaluate(() => heard))[1], "play 310.7");
+      assert.deepStrictEqual(errors, []);
+      await ctx.close();
+    });
+
     for (const width of [390, 1280]) {
       for (const theme of THEMES) {
         await test("opens at " + width + " px in " + theme + " with no errors", async () => {

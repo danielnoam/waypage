@@ -10,7 +10,8 @@ import WidgetKit
 //
 //   update({ reading, feeds, favourites, collections })   what they draw,
 //             written to the App Group for the widget extension (WPStore)
-//   renamed({ from, to })   nothing to do: iOS has no collection widget yet
+//   renamed({ from, to })   a collection widget follows its collection's
+//             new name: kept in the App Group's renames.json
 //   take()    { kind, id, url, name } once, what a widget's tap asked to open
 //
 //   copied()  { text }, what's on the clipboard, for Save the copied link
@@ -66,6 +67,8 @@ public class WidgetsPlugin: CAPPlugin, CAPBridgedPlugin {
         let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         var out: [String: Any] = ["kind": kind]
         if kind == "page" || kind == "mark", let id = url.pathComponents.last, id != "/" { out["id"] = id }
+        if kind == "page", q.first(where: { $0.name == "next" })?.value == "1" { out["next"] = true }
+        if kind == "page", q.first(where: { $0.name == "aloud" })?.value == "1" { out["aloud"] = true }
         if kind == "mark" { out["mark"] = q.first { $0.name == "mark" }?.value ?? "" }
         if kind == "post" { out["url"] = q.first { $0.name == "url" }?.value ?? "" }
         if kind == "collection" { out["name"] = q.first { $0.name == "name" }?.value ?? "" }
@@ -84,6 +87,18 @@ public class WidgetsPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func renamed(_ call: CAPPluginCall) {
+        guard let from = call.getString("from"), let to = call.getString("to"), from != to else {
+            call.resolve()
+            return
+        }
+        var renames = (WPStore.read("renames.json") as? [String: String]) ?? [:]
+        renames.removeValue(forKey: to)
+        for (k, v) in renames where v == from { renames[k] = to }
+        renames[from] = to
+        WPStore.write("renames.json", renames)
+        #if canImport(WidgetKit)
+        WidgetCenter.shared.reloadAllTimelines()
+        #endif
         call.resolve()
     }
 

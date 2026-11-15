@@ -99,7 +99,7 @@
 
   // The listening part of an index entry, as read from sync or a backup:
   // where you are (t seconds, at tAt), how fast, what you read along
-  // with, and your fixes. null when there's nothing usable.
+  // with, your fixes and your bookmarks. null when there's nothing usable.
   function cleanListen(v) {
     if (!v || typeof v !== "object" || Array.isArray(v)) return null;
     const out = { t: Math.max(0, num(v.t)), tAt: Math.max(0, num(v.tAt)) };
@@ -116,6 +116,9 @@
     const fixes = Array.isArray(v.fixes) ? v.fixes.slice(0, 500).filter((f) => f && typeof f.from === "string" && typeof f.to === "string" && f.from.trim() && f.to.trim())
       .map((f) => ({ from: f.from.replace(/\s+/g, " ").trim().slice(0, 100), to: f.to.replace(/\s+/g, " ").trim().slice(0, 100), at: num(f.at) })) : [];
     if (fixes.length) out.fixes = fixes;
+    const marks = Array.isArray(v.bookmarks) ? v.bookmarks.slice(0, 1000).filter((m) => m && typeof m.id === "string" && /^[a-z0-9]{4,24}$/.test(m.id) && typeof m.t === "number" && m.t >= 0)
+      .map((m) => ({ id: m.id, t: Math.round(num(m.t) * 10) / 10, at: num(m.at), ...(typeof m.note === "string" && m.note.trim() ? { note: m.note.replace(/\s+/g, " ").trim().slice(0, 500) } : {}) })) : [];
+    if (marks.length) out.bookmarks = marks;
     return out;
   }
   // Highlights (1.7.0): where each is in the clip's text blocks, its words,

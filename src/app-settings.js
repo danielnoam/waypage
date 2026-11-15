@@ -361,6 +361,18 @@ async function fillKokoro(slot) {
     ...phone.map((e) => el("div", { class: "row" },
       el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, e.label)),
       el("button", { class: "btn-text", type: "button", onclick: () => speech.moreVoices(e.name) }, "Get more voices")))))] : [];
+  // iOS's Personal Voice (iOS 17), made in Settings › Accessibility:
+  // the app may use it once the person allows it here.
+  if (speech.hasPersonalVoice) {
+    const note = el("span", { class: "choice-note" }, "The voice you made in Settings › Accessibility › Personal Voice");
+    const allow = el("button", { class: "btn-text", type: "button", onclick: async () => {
+      const got = await speech.personalVoice();
+      note.textContent = got === "authorized" ? "Allowed. Pick it as the voice in Narrate's Aa." : got === "denied" ? "Not allowed. Turn it on in Settings › Waypage." : "This iPhone has no Personal Voice yet.";
+      if (got === "authorized") allow.remove();
+    } }, "Allow");
+    phoneSection.push(section("Phone's voices", null, el("div", { class: "group" },
+      el("div", { class: "row" }, el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, "Personal Voice"), note), allow))));
+  }
   if (!s) { slot.replaceChildren(...phoneSection, el("p", { class: "footnote" }, "Kokoro voices need an Android phone with a 64-bit processor.")); return; }
   kokoroArrived(s);
   piperArrived(s);

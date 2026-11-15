@@ -281,21 +281,25 @@
   }
 
   // A whole clip translated on this device (1.42.0): ML Kit through the
-  // Translate plugin on Android, the browser's own Translator elsewhere
-  // (Chrome on a computer). Neither sends the words anywhere; each
-  // downloads a language once. Not on iOS yet, or in other browsers.
-  const held = { translator: null, pair: "" };
+  // Translate plugin on Android, Apple's Translation on iOS 18 and later,
+  // the browser's own Translator elsewhere (Chrome on a computer). None
+  // sends the words anywhere; each downloads a language once. Not in
+  // other browsers.
+  const held = { translator: null, pair: "", ios: false };
+  if (os === "ios" && plugin("Translate")) plugin("Translate").supported().then((r) => { held.ios = !!(r && r.ok); }).catch(() => {});
+  const phoneTranslates = () => (os === "android" && !!plugin("Translate")) || (os === "ios" && held.ios);
   const translator = {
     get available() {
-      if (os === "android") return !!plugin("Translate");
-      return !native && typeof self.Translator === "function";
+      if (native) return phoneTranslates();
+      return typeof self.Translator === "function";
     },
-    get onPhone() { return os === "android"; },
+    get onPhone() { return native; },
+    get byApple() { return os === "ios"; },
     // The language of a clip whose page didn't say: "" when it can't tell.
     async detect(text) {
       const T = plugin("Translate");
       try {
-        if (os === "android" && T) return (await T.detect({ text: text.slice(0, 2000) })).lang || "";
+        if (T && phoneTranslates()) return (await T.detect({ text: text.slice(0, 2000) })).lang || "";
         if (typeof self.LanguageDetector !== "function") return "";
         const d = await self.LanguageDetector.create();
         const [best] = await d.detect(text.slice(0, 2000));
@@ -306,7 +310,7 @@
     async ready(from, to) {
       const T = plugin("Translate");
       try {
-        if (os === "android" && T) return (await T.ready({ from, to })).state;
+        if (T && phoneTranslates()) return (await T.ready({ from, to })).state;
         const s = await self.Translator.availability({ sourceLanguage: from, targetLanguage: to });
         return s === "unavailable" ? "unavailable" : s === "available" ? "available" : "downloadable";
       } catch (e) { return "unavailable"; }
@@ -315,7 +319,7 @@
     // to start from a tap, so it is the first thing a tap on Translate does.
     async prepare(from, to, onProgress) {
       const T = plugin("Translate");
-      if (os === "android" && T) { await T.prepare({ from, to }); return; }
+      if (T && phoneTranslates()) { await T.prepare({ from, to }); return; }
       held.translator = null;
       held.translator = await self.Translator.create({ sourceLanguage: from, targetLanguage: to,
         monitor: (m) => m.addEventListener("downloadprogress", (e) => { if (onProgress) onProgress(e.loaded); }) });
@@ -323,7 +327,7 @@
     },
     async translate(texts, from, to) {
       const T = plugin("Translate");
-      if (os === "android" && T) return (await T.clip({ from, to, texts })).texts || [];
+      if (T && phoneTranslates()) return (await T.clip({ from, to, texts })).texts || [];
       if (!held.translator || held.pair !== from + ">" + to) throw new Error("Not ready to translate");
       const out = [];
       for (const t of texts) out.push(await held.translator.translate(t));
@@ -484,18 +488,18 @@
       if (S) return S.volume({ volume }).catch(() => {});
     },
     // The sleep timer (1.32.0): pause after `seconds`, 0 to cancel. The
-    // Android service keeps the time itself, put away; elsewhere the page
-    // does. Resolves whether the phone took it.
+    // phone keeps the time itself, put away; in a browser the page does.
+    // Resolves whether the phone took it.
     async sleep(seconds) {
       const S = plugin("Speech");
-      if (!S || os !== "android") return false;
+      if (!S) return false;
       try { await S.sleep({ seconds: Math.max(0, Math.round(seconds)) }); return true; } catch (e) { return false; }
     },
-    // Told { at } when Android's lock-screen Sleep 15 min sets the timer
-    // or it runs out (1.36.0).
+    // Told { at } when the lock screen's Sleep 15 min (Android) sets the
+    // timer or it runs out (1.36.0).
     onSleep(fn) {
       const S = plugin("Speech");
-      if (S && os === "android" && S.addListener) S.addListener("sleep", (e) => fn(Number((e && e.at) || 0)));
+      if (S && S.addListener) S.addListener("sleep", (e) => fn(Number((e && e.at) || 0)));
     },
     async stop() {
       const S = plugin("Speech");
@@ -535,6 +539,15 @@
       if (!S || awake.noPip) return false;
       try { return !!(await S.pipState()).on; } catch (e) { return false; }
     },
+    // The Personal Voice the person made in iOS's Settings (iOS 17): asks
+    // once, then it is among the voices. "authorized", "denied",
+    // "unsupported", or null where there's no such thing.
+    async personalVoice() {
+      const S = plugin("Speech");
+      if (!S || os !== "ios") return null;
+      try { return (await S.personalVoice()).state || null; } catch (e) { return null; }
+    },
+    get hasPersonalVoice() { return os === "ios" && !!plugin("Speech"); },
     async state() {
       const S = plugin("Speech");
       if (S) { try { return await S.state(); } catch (e) { return { key: "", index: -1, state: "stopped" }; } }
@@ -543,11 +556,11 @@
     // The clip to go on to when the clip `after` ends (1.23.0), read by
     // the phone with no help from the page, which can't draw it while the
     // app is put away. { after, items, start, lang, voice, title, subtitle, key };
-    // no items clears it. Resolves false where the phone can't (iOS for
-    // now, a browser): the app goes on itself at the end, as before.
+    // no items clears it. Resolves false where the phone can't (a
+    // browser): the app goes on itself at the end, as before.
     async queue(o) {
       const S = plugin("Speech");
-      if (!S || os !== "android") return false;
+      if (!S) return false;
       try { await S.queue(o); return true; } catch (e) { return false; }
     },
   };
@@ -718,7 +731,7 @@
   // the person picks, with a lasting permission so a clip can read from
   // it. `near` is a file whose folder the picker opens in. Resolves to
   // { saved, ref }: ref is null when the place can't be held on to (no
-  // such picker, or iOS), and saved false when it was put away.
+  // such picker), and saved false when it was put away.
   async function saveLinked(blob, name, mime, near) {
     const F = plugin("FileSave");
     if (F) {
@@ -909,9 +922,9 @@
     "application/x-mobipocket-ebook", "application/vnd.amazon.ebook", "application/x-mobi8-ebook", "application/x-fictionbook+xml",
     "application/x-fictionbook", "text/xml", "application/xml", "application/octet-stream",
     // Audiobooks (2026-11).
-    "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/x-m4b", "audio/m4b", "audio/aac", "audio/ogg", "audio/opus", "audio/flac", "audio/x-flac", "audio/wav", "audio/x-wav"];
+    "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/x-m4b", "audio/m4b", "audio/aac", "audio/ogg", "audio/opus", "audio/flac", "audio/x-flac", "audio/wav", "audio/x-wav", "audio/x-m4p", "audio/vnd.audible.aax", "audio/audible"];
   const FILE_EXTS = [".epub", ".mobi", ".azw", ".azw3", ".prc", ".fb2", ".md", ".markdown", ".txt", ".html", ".htm", ".eml", ".pdf", ".pptx", ".cbz", ".csv", ".json", ".zip",
-    ".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".oga", ".opus", ".flac", ".wav"];
+    ".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".oga", ".opus", ".flac", ".wav", ".aa", ".aax", ".aaxc", ".m4p"];
   const PIECE = 4 << 20;
   const KEEP = 64 << 20;
 
@@ -1288,20 +1301,20 @@
       set: (level) => plugin("Brightness").set(level == null ? {} : { level }),
     },
     // App lock (1.38.0): the phone's fingerprint or face, native/share's
-    // AppLock plugin on Android (iOS later); the passcode
+    // AppLock plugin (Face ID or Touch ID on iOS); the passcode
     // itself is checked in app-lock.js.
     lock: {
       async biometric() {
-        const L = os === "android" && plugin("AppLock");
+        const L = plugin("AppLock");
         if (!L) return false;
         try { return !!(await L.available()).ok; } catch (e) { return false; }
       },
       async verify(title) {
-        const L = os === "android" && plugin("AppLock");
+        const L = plugin("AppLock");
         if (!L) return false;
         try { return !!(await L.verify({ title })).ok; } catch (e) { return false; }
       },
-      hideRecents(on) { const L = os === "android" && plugin("AppLock"); if (L) L.hideRecents({ on: !!on }).catch(() => {}); },
+      hideRecents(on) { const L = plugin("AppLock"); if (L) L.hideRecents({ on: !!on }).catch(() => {}); },
     },
     // Volume buttons turn pages (1.32.0), native/share's VolumeKeys
     // plugin on Android; `f` hears "up" or "down".

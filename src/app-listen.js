@@ -80,8 +80,10 @@ async function partLength(part, file) {
 
 // One sound file (`file` from the picker, `ref` its lasting permission).
 async function addAudiobook(file, ref) {
-  if (!ref) { toast("Waypage plays an audiobook from where it is, so it needs lasting access. Add it with Add a file."); return; }
   const head = new Uint8Array(await file.slice(0, 64).arrayBuffer());
+  const lock = L.locked(head, file.name);
+  if (lock) { if (ref) C.platform.files.release(ref); toast(L.lockedText(lock)); return; }
+  if (!ref) { toast("Waypage plays an audiobook from where it is, so it needs lasting access. Add it with Add a file."); return; }
   const kind = L.sniff(head, file.name) || "mp3";
   const dup = state.pages.find((p) => isAudiobook(p) && p.file && p.file.name === file.name && p.file.size === file.size);
   if (dup) { C.platform.files.release(ref); toast("Already in your library"); openPage(dup.id); return; }
@@ -120,7 +122,12 @@ async function addAudiobookFolder() {
   if (!got) return;
   const scan = await C.platform.files.scan(got.ref);
   const files = L.inOrder(scan.files || []);
-  if (!scan.ok || !files.length) { toast("There are no sound files in " + got.name + "."); C.platform.files.release(got.ref); return; }
+  if (!scan.ok || !files.length) {
+    const lock = scan.ok && (scan.files || []).map((f) => L.locked(null, f.name)).find(Boolean);
+    toast(lock ? L.lockedText(lock) : "There are no sound files in " + got.name + ".");
+    C.platform.files.release(got.ref);
+    return;
+  }
   if (state.pages.some((p) => isAudiobook(p) && p.link === got.ref)) { toast("Already in your library"); return; }
   toast("Adding “" + (scan.name || got.name) + "”, " + files.length + " files…");
   const parts = [], chapters = [];
@@ -384,7 +391,7 @@ function paintListen() {
   }
   const show = !!here;
   if (here && !here.audio.overlay && modeOf(here) === "transcript" && state.open === here && chapterNow(here, placeNow(here)) !== pageCh[here.id]) turnPage(here);
-  $("readerChapters").hidden = !here || chaptersOf(playerBook()).length < 2;
+  $("readerChapters").hidden = !here || (chaptersOf(playerBook()).length < 2 && !bookmarksOf(playerBook()).length);
   const box = $("listenPlayer");
   const was = box.hidden;
   box.hidden = !show;
@@ -410,6 +417,7 @@ function paintListen() {
     $("listenPlay").classList.toggle("paused", !playing);
     $("listenPlay").setAttribute("aria-label", playing ? "Pause" : "Play");
     $("listenSleep").classList.toggle("on", !!lis.sleepAt);
+    $("listenMark").classList.toggle("on", bookmarksOf(b).some((m) => Math.abs(m.t - t) < 3));
     if (was) $("readFoot").style.bottom = "";
     $("readFoot").style.bottom = box.offsetHeight + "px";
   } else $("readFoot").style.bottom = "";
@@ -467,6 +475,7 @@ function writtenTo(data, t) {
   $("listenOn").addEventListener("click", () => (mine() ? listenSkip(listenPrefs().on) : null));
   $("listenSpeed").addEventListener("click", listenSpeed);
   $("listenSleep").addEventListener("click", () => toggleSheet("listenSleep"));
+  $("listenMark").addEventListener("click", listenBookmark);
   $("readerChapters").addEventListener("click", () => toggleSheet("listenChapters"));
   $("listenBarPlay").addEventListener("click", listenToggle);
   $("listenBarBack").addEventListener("click", () => listenSkip(-listenPrefs().back));
@@ -842,6 +851,8 @@ function listenAlongRows(p) {
       } });
     const transcriptRows = () => [
       writeRestButton(a, () => closeSheet()),
+      data && data.pieces && data.pieces.length ? row("Search the transcript", "Every time a word or phrase was heard", () => { closeSheet(true); openSheet("listenSearch"); }, true) : null,
+      data && data.pieces && data.pieces.length ? row("Export the transcript", "As Markdown, with the chapters and times", () => exportTranscript(a), true) : null,
       data && data.pieces && data.pieces.length ? row("Write the transcript again", "From the start, with the model picked in Settings › Audiobooks", async () => {
         if (!confirm("Write the transcript again from the start? Your fixes stay.")) return;
         await C.platform.audio.stopTranscribing();
@@ -912,7 +923,7 @@ function listenChaptersSheet() {
   const now = L.chapterAt(ch, t);
   const rows = ch.map((c, i) => {
     const next = ch[i + 1] ? ch[i + 1].t : durOf(a);
-    const b = el("button", { class: "row contents-row folder-row", type: "button", onclick: () => { closeSheet(); if (lis.key === a.id) listenSeek(c.t + 0.01); else listenPlay(a, c.t + 0.01); } },
+    const b = el("button", { class: "row contents-row folder-row", type: "button", onclick: () => { closeSheet(); playFrom(a, c.t + 0.01); } },
       el("span", { class: "folder-n", "aria-hidden": "true" }, String(i + 1)),
       el("span", { class: "choice-text" },
         el("span", { class: "row-label", dir: "auto" }, c.title || "Chapter " + (i + 1)),
@@ -927,7 +938,8 @@ function listenChaptersSheet() {
   const nav = el("nav", { class: "contents", "aria-label": a.title },
     el("p", { class: "menu-title", dir: "auto" }, a.title),
     el("p", { class: "meta" }, ["Audiobook", L.lengthText(durOf(a)), ch.length + " chapters", a.audio.folder ? a.audio.parts.length + " files" : ""].filter(Boolean).join(" · ")),
-    el("ol", { class: "group contents-list" }, ...rows));
+    ch.length > 1 ? el("ol", { class: "group contents-list" }, ...rows) : null,
+    ...bookmarkRows(a));
   requestAnimationFrame(() => centreIn(nav.querySelector("[aria-current]")));
   // Each chapter's transcript, kept up while the sheet is open.
   if (wantsWords(a) && A.canTranscribe) {
@@ -1090,7 +1102,133 @@ function listenSelection(bar, picked) {
   b.hidden = !(picked && isAudiobook(p) && modeOf(p) === "transcript" && picked.text.trim().split(/\s+/).length <= 6);
 }
 
+// ---- Bookmarks (2026-11): a moment in the book, with a note if you like ----
+// Kept in the listen field, so they sync with the place.
+const bookmarksOf = (a) => ((a && a.listen && a.listen.bookmarks) || []).slice().sort((x, y) => x.t - y.t);
+function playFrom(a, t) {
+  if (lis.key === a.id) listenSeek(t);
+  else listenPlay(a, t);
+}
+async function saveBookmarks(a, list) {
+  a.listen = { ...(a.listen || {}), bookmarks: list };
+  if (!list.length) delete a.listen.bookmarks;
+  await C.store.writeIndexOnly(state.pages);
+  if (C.sync.on) syncSoon();
+  paintListen();
+}
+let marking = null;
+async function listenBookmark() {
+  const a = playerBook();
+  if (!a) return;
+  const t = Math.round((lis.key === a.id ? lis.t : placeOf(a)) * 10) / 10;
+  const list = bookmarksOf(a);
+  const near = list.find((m) => Math.abs(m.t - t) < 3);
+  if (near) { marking = { a, id: near.id }; openSheet("listenMark"); return; }
+  const m = { id: C.save.newId(), t, at: Date.now() };
+  await saveBookmarks(a, [...list, m]);
+  toast("Bookmarked at " + L.timeText(t), "Add a note", () => { marking = { a, id: m.id }; openSheet("listenMark"); });
+}
+function bookmarkRows(a) {
+  const marks = bookmarksOf(a);
+  if (!marks.length) return [];
+  return [el("h3", { class: "overline listen-marks-head" }, "Bookmarks"),
+    el("ol", { class: "group contents-list listen-marks" }, ...marks.map((m) => el("li", null,
+      el("button", { class: "row", type: "button", onclick: () => { closeSheet(); playFrom(a, m.t); } },
+        el("span", { class: "choice-text" },
+          el("span", { class: "row-label", dir: "auto" }, m.note || L.timeText(m.t)),
+          el("span", { class: "choice-note", dir: "auto" }, [m.note ? L.timeText(m.t) : "", chapterName(a, m.t)].filter(Boolean).join(" · ")))),
+      el("button", { class: "icon-btn", type: "button", "aria-label": "Edit the bookmark at " + L.timeText(m.t), onclick: () => { marking = { a, id: m.id }; closeSheet(true); openSheet("listenMark"); } },
+        svgIcon("rename", 18)))))];
+}
+function listenMarkSheet() {
+  const k = marking;
+  const m = k && bookmarksOf(k.a).find((x) => x.id === k.id);
+  if (!m) return el("div");
+  const input = el("input", { class: "tag-input", type: "text", value: m.note || "", placeholder: "A note", "aria-label": "Note", autocomplete: "off", dir: "auto", maxlength: "500" });
+  const save = async () => {
+    const note = input.value.replace(/\s+/g, " ").trim().slice(0, 500);
+    const list = bookmarksOf(k.a).map((x) => (x.id === m.id ? { id: x.id, t: x.t, at: Date.now(), ...(note ? { note } : {}) } : x));
+    closeSheet();
+    await saveBookmarks(k.a, list);
+  };
+  const remove = async () => {
+    closeSheet();
+    await saveBookmarks(k.a, bookmarksOf(k.a).filter((x) => x.id !== m.id));
+    toast("Bookmark removed");
+  };
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); save(); } });
+  setTimeout(() => { if (input.isConnected) input.focus(); }, 300);
+  return el("div", { class: "page-controls" },
+    el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, "Bookmark at " + L.timeText(m.t)),
+      el("p", { class: "meta", dir: "auto" }, chapterName(k.a, m.t) || k.a.title)),
+    el("div", { class: "group" }, el("div", { class: "row" }, input)),
+    el("div", { class: "export-actions" },
+      el("button", { class: "btn-quiet", type: "button", onclick: remove }, "Remove"),
+      el("button", { class: "btn-primary", type: "button", onclick: save }, "Save")));
+}
+
+// ---- Search and export the transcript (2026-11) ----
+// The whole transcript, not just the chapter on the page.
+let heardSearch = { id: "", q: "", words: null };
+function listenSearchSheet() {
+  const a = audioFor(state.open);
+  if (!a) return el("div");
+  if (heardSearch.id !== a.id) heardSearch = { id: a.id, q: "", words: null };
+  const s = heardSearch;
+  const input = el("input", { class: "tag-input", type: "search", value: s.q, placeholder: "A word or phrase", "aria-label": "Search the transcript", autocomplete: "off", spellcheck: "false", enterkeyhint: "search", dir: "auto" });
+  const meta = el("p", { class: "meta" });
+  const list = el("div", { class: "group listen-hits" });
+  const draw = () => {
+    if (!s.words) { meta.textContent = "Reading the transcript…"; list.replaceChildren(); return; }
+    const hits = s.q.trim() ? L.findHeard(s.words, s.q) : [];
+    meta.textContent = !s.q.trim() ? (s.words.length ? "In what's written so far" : "Nothing is written yet")
+      : hits.length ? (hits.length >= 300 ? "The first 300 times" : hits.length === 1 ? "Heard once" : "Heard " + hits.length + " times") : "Not heard in what's written so far";
+    list.hidden = !hits.length;
+    list.replaceChildren(...hits.map((h) => el("button", { class: "row", type: "button", onclick: () => { closeSheet(); playFrom(a, Math.max(0, h.t - 0.3)); } },
+      el("span", { class: "choice-text" },
+        el("span", { class: "choice-label", dir: "auto" }, (h.before ? (h.more[0] ? "…" : "") + h.before + " " : ""), el("mark", null, h.hit),
+          (h.after ? " " + h.after + (h.more[1] && !/[.!?…]$/.test(h.after) ? "…" : "") : "")),
+        el("span", { class: "choice-note" }, [L.timeText(h.t), chapterName(a, h.t)].filter(Boolean).join(" · "))))));
+  };
+  let timer = 0;
+  input.addEventListener("input", () => { s.q = input.value; clearTimeout(timer); timer = setTimeout(draw, 150); });
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); clearTimeout(timer); draw(); input.blur(); } });
+  if (!s.words) loadListenData(a).then((data) => { s.words = heardWords(a, data); if (list.isConnected) draw(); });
+  draw();
+  setTimeout(() => { if (input.isConnected) input.focus(); }, 300);
+  return el("div", { class: "page-controls" },
+    el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, "Search the transcript"), meta),
+    el("div", { class: "group" }, el("div", { class: "row" }, input)),
+    list);
+}
+// Find in this clip, on an audiobook's transcript, looks through all of it.
+const findsTranscript = (p) => !!p && isAudiobook(p) && modeOf(p) === "transcript";
+
+async function exportTranscript(a) {
+  closeSheet();
+  const data = await loadListenData(a);
+  const words = heardWords(a, data);
+  if (!words.length) { toast("Nothing is written yet."); return; }
+  const parts = L.paragraphs(words, { chapters: chaptersOf(a), pauses: listenPrefs().pauses, ranges: data.ranges || [] });
+  const text = L.transcriptMarkdown(a.title, a.byline, parts);
+  const name = (a.title.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "Audiobook") + " transcript.md";
+  try {
+    const uri = await C.platform.writeCache(name, text);
+    if (!uri) C.platform.download(name, new Blob([text], { type: "text/markdown" }));
+    else {
+      const saved = await C.platform.saveFile(uri, name, "text/markdown");
+      if (saved === null) await C.platform.shareFile(uri, name);
+      else if (saved) toast("Saved " + name);
+    }
+  } catch (e) {
+    console.error(e);
+    toast("Couldn't make the file. Try again.");
+  }
+}
+
 SHEETS.listenSleep = { button: "listenSleep", label: "Sleep timer", build: listenSleepSheet };
+SHEETS.listenMark = { button: "listenMark", label: "Bookmark", build: listenMarkSheet };
+SHEETS.listenSearch = { button: "readerMore", label: "Search the transcript", build: listenSearchSheet };
 SHEETS.listenChapters = { button: "readerChapters", label: "Chapters", build: listenChaptersSheet };
 SHEETS.listenBook = { button: "readerMore", label: "A book to read along with", build: listenBookSheet };
 SHEETS.listenFind = { button: "readerMore", label: "Find the book in Discover", build: listenFindSheet };

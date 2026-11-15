@@ -12,6 +12,8 @@ Pod::Spec.new do |s|
   s.source = { :git => 'https://github.com/danielnoam/waypage.git' }
   s.source_files = 'ios/Sources/**/*.swift', 'ios/Shared/**/*.swift'
   s.ios.deployment_target = '15.0'
+  # Translation is iOS 17.4+: weak, so the app still opens on older iOS.
+  s.weak_frameworks = 'Translation'
   s.dependency 'Capacitor'
   s.swift_version = '5.1'
 end
