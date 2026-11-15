@@ -1548,6 +1548,7 @@ const MENUS = {
   send: { label: "Saving a page", build: () => sendSheet() },
   newNote: { label: "New note", build: () => newNoteSheet() },
   noteText: { label: "Text", build: () => noteTextSheet() },
+  noteParts: { label: "Make a note", build: () => notePartsSheet() },
 };
 let menuUnder = [];
 let menuFrom = null;
@@ -1584,6 +1585,10 @@ function closeMenu() {
   if (state.menu.kind === "file" && askingFile && !askingFile.answered) {
     askingFile.answered = true;
     askingFile.done(null);
+  }
+  if (state.menu.kind === "noteParts" && askingParts && !askingParts.answered) {
+    askingParts.answered = true;
+    askingParts.done(null);
   }
   state.menu = null;
   const was = menuUnder;
@@ -2831,7 +2836,10 @@ async function noteFromFile(file, open) {
   toast("Making the note…");
   let meta;
   try {
-    meta = await C.notes.fromPdf({ title: file.name.replace(/\.pdf$/i, "") }, file);
+    const title = file.name.replace(/\.pdf$/i, "");
+    const part = await pdfPart({ title }, file);
+    if (!part) return;
+    meta = await C.notes.fromPdf({ title: part.name || title }, file, part.range);
   } catch (e) {
     console.error(e);
     toast(e instanceof C.files.FileError ? e.message : "Couldn't make the note. Try again.");
@@ -2845,23 +2853,38 @@ async function noteFromFile(file, open) {
 }
 // A note made from any file (2026-11): a PDF's own pages, a comic's
 // pictures one to a page, anything else set as pages. It is a copy to
-// write on: the file and anything drawn on it stay as they are.
+// write on: the file and anything drawn on it stay as they are. A note
+// holds 500 pages, so for a longer book or PDF you pick the chapters (or
+// runs of pages) first; the book is measured before anything is drawn.
 async function makeNoteFrom(p) {
   if (!C.files.convertible(p)) return;
   const say = (n) => toast(n ? "Making the note… " + n + " pages" : "Making the note…");
   say(0);
   let meta;
   try {
-    let blob;
-    if (p.link && p.file.kind === "pdf") blob = await C.platform.files.blob(p.link, p.file.size);
-    else {
+    let blob, range = null, name = p.title;
+    if (p.link && p.file.kind === "pdf") {
+      blob = await C.platform.files.blob(p.link, p.file.size);
+      const part = await pdfPart(p, blob);
+      if (!part) return;
+      meta = await C.notes.fromPdf({ ...p, title: part.name || name }, blob, part.range);
+    } else {
       const html = p.link ? await C.files.openLinked(p) : await C.store.readPage(p.id);
       const root = new DOMParser().parseFromString(html, "text/html").querySelector(".co-body");
       if (!root) throw new C.files.FileError("Waypage can't read this one to make a note of it.");
+      const title = p.comic ? "" : p.title;
+      const plan = await C.notes.plan(root, !!p.comic, title);
+      if (!plan.fits) {
+        const pick = await askParts(p, plan);
+        if (!pick) return;
+        range = { from: pick.from, to: pick.to };
+        name = p.title + ", " + pick.name;
+        say(0);
+      }
       let last = 0;
-      blob = await C.notes.layout(root, !!p.comic, await C.files.pictureSource(p), (n) => { if (n - last >= 10) { last = n; say(n); } }, p.comic ? "" : p.title);
+      blob = await C.notes.layout(root, !!p.comic, await C.files.pictureSource(p), (n) => { if (n - last >= 10) { last = n; say(n); } }, title, range);
+      meta = await C.notes.fromPdf({ ...p, title: name }, blob);
     }
-    meta = await C.notes.fromPdf(p, blob);
   } catch (e) {
     console.error(e);
     toast(e instanceof C.files.FileError ? e.message : "Couldn't make the note." + (p.link ? " Is the file still where it was?" : " Try again."));
@@ -2873,4 +2896,63 @@ async function makeNoteFrom(p) {
   noteCoversSoon();
   if (state.open) await goTo(meta, true);
   else openPage(meta.id);
+}
+// A PDF longer than a note: which run of its pages. { range, name } (both
+// null when it fits), or null when put away.
+async function pdfPart(p, blob) {
+  const pages = await C.notes.pdfPages(blob), max = C.notes.MAX_SHEETS;
+  if (pages <= max) return { range: null, name: null };
+  const parts = [];
+  for (let a = 1; a <= pages; a += 50) {
+    const z = Math.min(pages, a + 49);
+    parts.push({ title: "Pages " + a + "–" + z, run: true, from: a, to: z + 1, first: a, pages: z - a + 1 });
+  }
+  const pick = await askParts(p, { pages, parts, max });
+  return pick && { range: { from: pick.from, to: pick.to - 1 }, name: p.title + ", " + pick.name };
+}
+// Which part of a long book goes into the note: From and To over its
+// chapters, the pages it comes to, and Make the note while it fits.
+// Resolves to { from, to, name } (to is the end, not taken), or null.
+let askingParts = null;
+function askParts(p, plan) {
+  if (state.menu) history.back();
+  return new Promise((done) => {
+    const parts = plan.parts;
+    let to = 0, sum = 0;
+    while (to < parts.length && sum + parts[to].pages <= plan.max) sum += parts[to++].pages;
+    askingParts = { p, plan, done, answered: false, from: 0, to: Math.max(0, to - 1) };
+    setTimeout(() => openMenu("noteParts"), 0);
+  });
+}
+function notePartsSheet() {
+  const a = askingParts;
+  if (!a) return el("div");
+  const parts = a.plan.parts;
+  const pagesOf = () => parts.slice(a.from, a.to + 1).reduce((n, x) => n + x.pages, 0);
+  const total = el("p", { class: "meta" });
+  const make = el("button", { class: "row", type: "button", onclick: () => {
+    if (a.answered || pagesOf() > a.plan.max) return;
+    a.answered = true;
+    const f = parts[a.from], t = parts[a.to];
+    a.done({ from: f.from, to: t.to, name: f.run ? "pages " + f.first + "–" + (t.first + t.pages - 1) : a.from === a.to ? f.title : f.title + " to " + t.title });
+    history.back();
+  } }, el("span", { class: "row-label accent" }, "Make the note"));
+  const update = () => {
+    const n = pagesOf(), over = n > a.plan.max;
+    total.textContent = "About " + n + " pages" + (over ? ", over the " + a.plan.max + " a note holds" : "");
+    total.classList.toggle("warn", over);
+    make.disabled = over;
+  };
+  const options = parts.map((x, i) => ({ value: String(i), label: x.title }));
+  let toRow;
+  const fromRow = pickRow({ label: "From", options, get: () => String(a.from), set: (v) => { a.from = Number(v); if (a.to < a.from) { a.to = a.from; toRow.set(String(a.to)); } update(); } });
+  toRow = pickRow({ label: "To", options, get: () => String(a.to), set: (v) => { a.to = Number(v); if (a.from > a.to) { a.from = a.to; fromRow.set(String(a.from)); } update(); } });
+  update();
+  return el("div", { class: "page-controls" },
+    el("div", { class: "menu-head" },
+      el("p", { class: "menu-title", dir: "auto" }, a.p.title),
+      el("p", { class: "meta" }, "About " + a.plan.pages + " pages. A note holds " + a.plan.max + ", so pick the part to make it from.")),
+    el("div", { class: "group" }, fromRow, toRow),
+    total,
+    el("div", { class: "group" }, make));
 }
