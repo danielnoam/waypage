@@ -281,6 +281,7 @@ async function openPage(id, fromHistory) {
   // A big book shows its place before the rest of it is in (reader.js).
   await Promise.race([shown, C.reader.shown()]);
   timingNote("shown" + (C.reader.filling ? ", the rest filling in" : ""));
+  C.reader.whole().then(() => setTimeout(() => { const g = C.reader.geometry(); if (g) timingNote("book: " + g); }, 1500));
   if (C.reader.filling) C.reader.whole().then(() => timingNote("whole book in"));
   if (wait) {
     const d = $("readerFrame").contentDocument;

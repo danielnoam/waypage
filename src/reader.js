@@ -606,6 +606,7 @@
     if (!h || !frame) return;
     if (onJump) onJump(spot());
     if (isPaged()) { goPage(pageOf(h), true); return; }
+    fitEnd();
     const w = frame.contentWindow, d = doc;
     const want = () => (topSpace ? topSpace() : 0) + 8;
     w.scrollTo(0, h.getBoundingClientRect().top + w.scrollY - want());
@@ -620,7 +621,8 @@
     const hold = () => {
       if (stop || doc !== d || performance.now() > until) return;
       const by = h.getBoundingClientRect().top - want();
-      if (Math.abs(by) > 2) w.scrollTo(0, w.scrollY + by);
+      // Like Narrate's scrolling, it leaves the bar where it is.
+      if (Math.abs(by) > 2) { followUntil = Date.now() + 250; w.scrollTo(0, w.scrollY + by); }
       requestAnimationFrame(hold);
     };
     requestAnimationFrame(hold);
@@ -848,6 +850,8 @@
   }
   function chunkUp() {
     chunks = [];
+    squeeze = 1;
+    guessedWith = null;
     if (!doc) return;
     // Nothing is laid out before this runs out, so the chunks take over
     // from the parse's rule without the whole book being laid out between.
@@ -928,14 +932,40 @@
   }
   // Chrome lays nothing out past 33,554,431 px (its largest length), so a
   // book guessed taller than that ended there: a Contents jump to chapter
-  // 800 of 900 stopped at 772. The unseen chapters are guessed shorter to
-  // fit; each takes its real height as it's reached.
+  // 800 of 900 stopped at 772, and on Daniel's phone the scroll ended at
+  // 600 of 840. No fixed height can be trusted for every book and phone,
+  // so after each guess the end is looked at: while the last chapters pile
+  // up at one height, every unseen chapter is guessed shorter. Each takes
+  // its real height as it's reached.
   const TALLEST = 30000000;
+  let squeeze = 1, endCheck = 0, guessedWith = null;
   function guessAll(perChar, w) {
+    guessedWith = [perChar, w];
+    sizeChunks();
+    cancelAnimationFrame(endCheck);
+    const d = doc;
+    endCheck = requestAnimationFrame(() => { if (doc === d) fitEnd(); });
+  }
+  function sizeChunks() {
+    const [perChar, w] = guessedWith;
     const tall = chunks.map((c) => c.chars * perChar + c.imgs * w * 0.75);
-    const sum = tall.reduce((a, b) => a + b, 0);
-    const fit = sum > TALLEST ? TALLEST / sum : 1;
-    chunks.forEach((c, i) => { c.el.style.containIntrinsicBlockSize = "auto " + Math.round(tall[i] * fit) + "px"; });
+    const fit = Math.min(1, TALLEST / tall.reduce((a, b) => a + b, 0)) * squeeze;
+    chunks.forEach((c, i) => { c.el.style.containIntrinsicBlockSize = "auto " + Math.max(1, Math.round(tall[i] * fit)) + "px"; });
+  }
+  // Called after a guess, before a jump, and when a scroll settles.
+  function fitEnd() {
+    for (let k = 0; k < 8 && guessedWith && chunks.length > 1 && !isPaged() && squeeze > 0.02; k++) {
+      const n = chunks.length, a = chunks[n - 2].el.getBoundingClientRect(), b = chunks[n - 1].el.getBoundingClientRect();
+      if (b.top >= a.top + a.height / 2) return;
+      squeeze *= 0.6;
+      sizeChunks();
+    }
+  }
+  // How a long clip is laid out, for Record timings (app-settings.js).
+  function geometry() {
+    if (!doc || !chunks.length) return "";
+    const n = chunks.length, last = chunks[n - 1].el.getBoundingClientRect(), w = frame.contentWindow;
+    return n + " chunks, " + Math.round(doc.documentElement.scrollHeight) + " px tall, last starts at " + Math.round(last.top + w.scrollY) + ", " + lastPerChar.toFixed(2) + " px a letter, squeezed " + squeeze.toFixed(2);
   }
 
   const BREAKS = new Set(("BR HR P DIV SECTION ARTICLE HEADER FOOTER MAIN FIGURE TABLE UL OL DL LI BLOCKQUOTE PRE " +
@@ -2568,6 +2598,7 @@
     scrollTimer = null;
     // Not once the reader is out of sight (Back after Narrate): the hidden
     // frame measures as the end of the page, and that was kept as the place.
+    if (doc && frame && frame.clientHeight) fitEnd();
     if (doc && tell && frame && frame.getClientRects().length && frame.clientHeight && performance.now() - restoredAt > 400) tell();
   }
 
@@ -2632,5 +2663,5 @@
       return line;
     }));
   }
-  C.reader = { get filling() { return !!rest; }, whole: () => wholeP, shown: () => shownP, say, spotOfId, blockCount, pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, set hideFar(v) { hideFar = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionContext, selectionMark, selectionMarks, paintMarks, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, inkRoot, inkBlock, inkBlocks, inkBlockBox, inkBlockAt, inkBlocksNear, inkBlockWords, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
+  C.reader = { get filling() { return !!rest; }, whole: () => wholeP, shown: () => shownP, say, spotOfId, blockCount, pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, set hideFar(v) { hideFar = !!v; }, geometry, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionContext, selectionMark, selectionMarks, paintMarks, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, inkRoot, inkBlock, inkBlocks, inkBlockBox, inkBlockAt, inkBlocksNear, inkBlockWords, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
 })();

@@ -973,7 +973,7 @@ area.
   `<html>` skips every part of the body: without it Chrome lays out the
   growing book again and again (a 47 MB book, 54 s at 6x against 7 s).
   `textContent` on a whole book is a 40 MB string; count with a walker.
-- **Chrome lays nothing out past 33,554,431 px** (`reader.js guessAll`): a 900-chapter book guessed taller ended there, so jumps past it stopped short. Unseen chunks' guesses are scaled to fit 30,000,000 px; `jumpTo` holds the heading in place for 1.5 s (until a touch) while the chapters around it take real heights.
+- **Chrome lays nothing out past 33,554,431 px** (`reader.js guessAll, fitEnd`): a 900-chapter book guessed taller ended there, so jumps and scrolling stopped short (chapter 600 of 840 on Daniel's phone, with guesses already capped at 30,000,000 px). No fixed cap is safe, so `fitEnd` checks after each guess, before a jump and when a scroll settles that the last chunk starts below the one before it, and guesses every unseen chunk shorter until it does. `jumpTo` holds the heading in place for 1.5 s (until a touch) while the chapters around it take real heights.
 - **A chunk far from the screen is content-visibility: hidden** (`reader.js lazy`, `co-far`): `auto` still keeps a chunk in the accessibility tree, and an Android WebView with anything reading it (Daniel's Pixel 8, no accessibility service on) described a 47 MB book on every tap: 5 s to open Contents, and a 4.8 s layout in a sheet's closing `focus()`. Chunks over two screens away go hidden; desktop Chrome only shows it with `--force-renderer-accessibility`.
 - **A big book opens at its place first** (`reader.js slimmed`): an EPUB
   page over 2 MB is cut apart as a string at its `<section id="cN">`
