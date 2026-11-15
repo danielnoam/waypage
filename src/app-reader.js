@@ -3794,3 +3794,32 @@ async function renameClip(p, name) {
   renderLibrary();
   if (state.folder) renderFolder();
 }
+
+// TEMPORARY, test build only (PR #320, removed before merging): what the
+// phone spends its time on around a big book, copied from a toast after
+// leaving the reader, since the phone couldn't be inspected over USB.
+const tmzRows = [];
+const tmzNote = (what) => { tmzRows.push(Math.round(performance.now()) + " " + what); if (tmzRows.length > 600) tmzRows.splice(0, 100); };
+const tmzObserve = (type, opts, line) => {
+  try { new PerformanceObserver((l) => l.getEntries().forEach((e) => { const t = line(e); if (t) tmzNote(t); })).observe({ type, buffered: false, ...opts }); } catch (e) { tmzNote("no " + type); }
+};
+const tmzMs = (n) => Math.round(n);
+tmzObserve("long-animation-frame", {}, (e) => "FRAME " + tmzMs(e.duration) + "ms (block " + tmzMs(e.blockingDuration) + ", style+layout " + tmzMs(e.startTime + e.duration - (e.styleAndLayoutStart || e.startTime + e.duration)) + ", render from " + tmzMs((e.renderStart || 0) - e.startTime) + ") " +
+  (e.scripts || []).filter((s) => s.duration >= 5).map((s) => (s.sourceFunctionName || s.invoker || "?") + "@" + String(s.sourceURL || "").split("/").pop().split("?")[0] + ":" + s.sourceCharPosition + "=" + tmzMs(s.duration) + " (layout " + tmzMs(s.forcedStyleAndLayoutDuration || 0) + ")").join(", "));
+tmzObserve("event", { durationThreshold: 40 }, (e) => !/^(click|pointerdown|pointerup|keydown)$/.test(e.name) ? "" : "TAP " + e.name + " " + ((e.target && (e.target.id || e.target.className)) || "") + " total " + tmzMs(e.duration) + " wait " + tmzMs(e.processingStart - e.startTime) + " run " + tmzMs(e.processingEnd - e.processingStart));
+tmzObserve("longtask", {}, (e) => "LONG " + tmzMs(e.duration));
+{
+  const sheet = openSheet, open = openPage, close = closeReader;
+  openSheet = function (kind) { tmzNote("sheet " + kind); return sheet.apply(this, arguments); };
+  openPage = function (id) { const p = state.pages.find((x) => x.id === id); tmzNote("open " + (p ? p.title + " " + (p.bytes || "") : id)); return open.apply(this, arguments).then((r) => { tmzNote("open done, filling " + C.reader.filling); C.reader.whole().then(() => tmzNote("whole")); return r; }); };
+  closeReader = function () {
+    const had = !!state.open;
+    tmzNote("leave");
+    const r = close.apply(this, arguments);
+    if (had) setTimeout(() => toast("Timings recorded.", "Copy", async () => {
+      const text = ["Waypage " + C.version, navigator.userAgent, "cores " + navigator.hardwareConcurrency + ", memory " + (navigator.deviceMemory || "?"), ...tmzRows].join("\n");
+      try { await navigator.clipboard.writeText(text); toast("Copied. Paste it in the chat."); } catch (e) { toast("Couldn't copy."); }
+    }), 1500);
+    return r;
+  };
+}
