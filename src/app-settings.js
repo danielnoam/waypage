@@ -851,12 +851,13 @@ C.reader.hideFar = farHidden();
 addEventListener("visibilitychange", () => timingNote(document.hidden ? "app hidden" : "app shown"));
 function timingsGroup() {
   const on = !!timing.watch.length;
-  return section("Timings", "For a slow screen: turn this on, do the slow thing, then send the report. It notes the stalls and taps that waited, and what was opening at the time, and nothing about what you read.",
+  return section("Timings", null,
     el("div", { class: "group" },
       switchRow("Record timings", on ? timing.rows.length + " noted" : "Off", on, (v) => { store(TIMINGS_KEY, v); timing.rows = []; timingWatch(v); renderSection(); }),
       on ? el("button", { class: "row", type: "button", onclick: () => copyText(timing.rows.join("\n") || "Nothing noted yet", "Timings copied") }, el("span", { class: "row-label accent" }, "Copy the timings")) : null,
       on && timing.rows.length ? el("button", { class: "row", type: "button", onclick: () => { timing.rows = []; timingNote("cleared"); renderSection(); } }, el("span", { class: "row-label accent" }, "Clear them")) : null,
-      on ? switchRow("Hide far chapters", "Off to compare, from the next book opened", farHidden(), (v) => { store(FAR_KEY, v); C.reader.hideFar = v; timingNote("hide far chapters " + (v ? "on" : "off")); }) : null));
+      on ? switchRow("Hide far chapters", "Off to compare, from the next book opened", farHidden(), (v) => { store(FAR_KEY, v); C.reader.hideFar = v; timingNote("hide far chapters " + (v ? "on" : "off")); }) : null),
+    el("p", { class: "footnote" }, "For a slow screen: turn this on, do the slow thing, then send the report. It notes stalls and taps that waited, and nothing about what you read."));
 }
 function reportGroup() {
   const list = C.platform.log.list();
