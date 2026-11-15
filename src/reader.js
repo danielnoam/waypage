@@ -294,6 +294,8 @@
       let id = href.slice(1);
       try { id = decodeURIComponent(id); } catch (err) { /* as is */ }
       const target = doc.getElementById(id);
+      // In a chapter of a big book that isn't in yet.
+      if (!target && rest) { const d = doc; wholeP.then(() => { const t = doc === d && doc.getElementById(id); if (t) goTo(t); }); return; }
       if (!target) return;
       const note = onNote && noteOf(a, target);
       if (note) { onNote(note); return; }
@@ -409,8 +411,10 @@
   // (1.30.2, the "c"), where the eye is; before, it was the top edge
   // under the bar, and those spots ("12/37") still go back there.
   let anchors = [];
+  const anchorsUnder = (root) => [...root.querySelectorAll(BLOCKS + ", .co-comic img")].filter((el) => !el.closest(SKIP) && (!el.firstElementChild || !el.querySelector(BLOCKS)));
   function findAnchors() {
-    anchors = doc ? [...doc.body.querySelectorAll(BLOCKS + ", .co-comic img")].filter((el) => !el.closest(SKIP) && (!el.firstElementChild || !el.querySelector(BLOCKS))) : [];
+    if (rest) { fillAnchors(); return; }
+    anchors = doc ? anchorsUnder(doc.body) : [];
   }
   // A spot's block as words (1.38.0), read from a clip's saved HTML, and
   // the same block found again in a new copy of it: Update from the site
@@ -442,11 +446,13 @@
     return top + Math.max(0, frame.contentWindow.innerHeight - top - bottom) / 2;
   }
   function spot() {
-    if (!doc || !anchors.length) return "";
+    if (rest) fillAnchors();
+    if (!doc || !anchors.length || (rest && rest.base == null)) return "";
+    const base = rest ? rest.base : 0;
     if (isPaged()) {
       const p = page();
       const i = anchors.findIndex((el) => pageOf(el) === p);
-      return i < 0 ? "" : i + "/0";
+      return i < 0 ? "" : base + i + "/0";
     }
     const edge = midLine();
     // Measuring every block up to the one on screen would lay out every
@@ -462,14 +468,15 @@
     for (let i = lo; i < anchors.length; i++) {
       const rct = anchors[i].getBoundingClientRect();
       if (rct.bottom <= edge || !rct.height) continue;
-      return i + "/" + Math.max(0, Math.min(99, Math.round((edge - rct.top) / rct.height * 100))) + "c";
+      return base + i + "/" + Math.max(0, Math.min(99, Math.round((edge - rct.top) / rct.height * 100))) + "c";
     }
     return "";
   }
   // Scrolls (or turns) to a spot; false when it names nothing here.
   function toSpot(s, smooth) {
     const m = /^(\d+)\/(\d+)(c?)$/.exec(s || "");
-    const el = m && anchors[Number(m[1])];
+    if (rest) { if (rest.base == null) return false; fillAnchors(); }
+    const el = m && anchors[Number(m[1]) - (rest ? rest.base : 0)];
     if (!el || !doc) return false;
     const w = frame.contentWindow;
     if (isPaged()) { goPage(pageOf(el), true); return true; }
@@ -485,6 +492,7 @@
   // toast), or back to where you were, gliding there in Scroll (1.45.3).
   function jump(at, s, smooth) {
     if (!doc) return;
+    if (rest) { const d = doc; wholeP.then(() => { if (doc === d) jump(at, s, smooth); }); return; }
     smooth = !!smooth && !C.motion.reduced();
     if (toSpot(s, smooth)) return;
     const w = frame.contentWindow;
@@ -504,6 +512,10 @@
   // A book's own contents (1.27.2) name each entry in data-toc-t.
   const clean = (h) => (h.getAttribute("data-toc-t") || h.textContent).replace(/\s+/g, " ").trim();
 
+  function headsOf() {
+    const marked = [...doc.body.querySelectorAll("[data-toc]")].filter((h) => clean(h));
+    return marked.length > 1 ? marked : [...doc.body.querySelectorAll("h2, h3")].filter((h) => clean(h));
+  }
   function headings() {
     return heads.map((h) => ({ level: h.hasAttribute("data-toc") ? (Number(h.getAttribute("data-toc")) > 1 ? 3 : 2) : h.tagName === "H3" ? 3 : 2, text: clean(h) }));
   }
@@ -650,6 +662,146 @@
   }
   const SKIP = ".co-meta, .co-licence, .co-next, .co-spent, .co-video, nav, aside";
 
+  // ---- A big book opens at its place first (Unreleased) ----
+  // Parsing a 47 MB book's HTML took 7 s at 6x before anything showed.
+  // A book whose chapters are <section id="cN"> straight under .co-body
+  // (EPUBs, files.js) is cut apart as a string instead: the chapter the
+  // place is in and the ones either side go in the page, the rest as
+  // empty sections (their contents names kept on them), and the rest
+  // are put in a few at a time once it shows, nearest first. The place
+  // is a block number counted over the whole book, so which chapter it
+  // is in comes from a map of each chapter's first block, kept on this
+  // device the first time the book is open whole. Anything that needs
+  // the whole book (Narrate, Find, highlights, Pages) waits for whole().
+  const SLIM = 2000000, MAPS = "waypage.bookMaps";
+  let rest = null, wholeP = Promise.resolve(), shownP = Promise.resolve();
+  function readMaps() {
+    try { return JSON.parse(localStorage.getItem(MAPS) || "{}") || {}; } catch (e) { return {}; }
+  }
+  function keepMap(id, len, first) {
+    const maps = readMaps();
+    maps[id] = { len, first, t: Date.now() };
+    // Only the last few books opened.
+    const ids = Object.keys(maps).sort((a, b) => maps[b].t - maps[a].t);
+    for (const old of ids.slice(6)) delete maps[old];
+    try { localStorage.setItem(MAPS, JSON.stringify(maps)); } catch (e) { /* not kept: opens whole */ }
+  }
+  // The book's chapters as strings: { head, parts: [{ tag, inner, length }], tail }, or null.
+  function chaptersOf(html) {
+    const starts = [];
+    for (let at = html.indexOf('<section id="c'); at >= 0; at = html.indexOf('<section id="c', at + 14)) {
+      let j = at + 14;
+      while (j < html.length && html.charCodeAt(j) >= 48 && html.charCodeAt(j) <= 57) j++;
+      if (j > at + 14 && html[j] === '"') starts.push(at);
+    }
+    if (starts.length < 4) return null;
+    const parts = [];
+    for (let k = 0; k < starts.length; k++) {
+      const end = k + 1 < starts.length ? starts[k + 1] : html.lastIndexOf("</section>") + 10;
+      const open = html.indexOf(">", starts[k]) + 1, close = html.lastIndexOf("</section>", end - 1);
+      if (!open || close < open || /\S/.test(html.slice(close + 10, end))) return null;
+      parts.push({ tag: html.slice(starts[k], open), inner: html.slice(open, close), length: close - open });
+    }
+    return { head: html.slice(0, starts[0]), parts, tail: html.slice(starts[starts.length - 1] + parts[parts.length - 1].tag.length + parts[parts.length - 1].length + 10) };
+  }
+  // The page to show first, or null for the whole book as before.
+  function slimmed(html, meta, at, spotAt) {
+    if (html.length < SLIM) return null;
+    const book = chaptersOf(html);
+    if (!book) return null;
+    const map = readMaps()[meta.id];
+    const fits = map && map.len === html.length && map.first.length === book.parts.length;
+    const m = /^(\d+)\//.exec(spotAt || "");
+    let k;
+    if (m && fits) {
+      const n = Number(m[1]);
+      k = 0;
+      while (k + 1 < map.first.length && map.first[k + 1] <= n) k++;
+    } else if (!at && !m) k = 0;
+    else return null;
+    const lo = Math.max(0, k - 1), hi = Math.min(book.parts.length - 1, k + 1);
+    const out = [book.head];
+    book.parts.forEach((p, i) => out.push(i >= lo && i <= hi ? p.tag + p.inner : "<section data-co-wait" + p.tag.slice(8), "</section>"));
+    out.push(book.tail);
+    return { html: out.join(""), parts: book.parts, lo, hi, map: fits ? map : null, len: html.length, id: meta.id, els: [], made: [], base: null };
+  }
+  // The page's blocks while it fills: the chapters in so far, which run
+  // without a gap, numbered from the first's place in the whole book.
+  function fillAnchors() {
+    if (!rest.stale) return;
+    rest.stale = false;
+    const out = [];
+    for (let i = rest.lo; i <= rest.hi; i++) {
+      if (!rest.made[i]) rest.made[i] = anchorsUnder(rest.els[i]);
+      for (const a of rest.made[i]) out.push(a);
+    }
+    anchors = out;
+  }
+  // One chapter put in from its string, as the page's own were.
+  function fillOne(i) {
+    const el = rest.els[i];
+    let inner = rest.parts[i].inner;
+    if (onTapOnly) inner = holdPictures(inner);
+    inner = inner.replace(/<img(?=[\s>])(?![^>]*\sloading=)/gi, '<img loading="lazy"');
+    el.innerHTML = inner;
+    el.removeAttribute("data-co-wait");
+    wrapLoose(el);
+    // Its guessed height stays until it's reached: a new one for a
+    // chapter above would move the text being read.
+    const c = chunks[i];
+    if (c) { c.chars = lettersIn(el); c.imgs = el.querySelectorAll("img").length; }
+    rest.made[i] = anchorsUnder(el);
+    if (i < rest.lo) {
+      rest.lo = i;
+      if (rest.base != null) rest.base -= rest.made[i].length;
+    } else rest.hi = i;
+    rest.stale = true;
+  }
+  // A plain task between turns, so taps, scrolling and drawing go first.
+  // A message, not a timer: timers are clamped, and slowed in the background.
+  const breather = () => new Promise((r) => { const c = new MessageChannel(); c.port1.onmessage = () => r(); c.port2.postMessage(0); });
+  // The rest, a few chapters a turn, from the side the reader is nearer.
+  async function fillRest(r) {
+    const tall = () => frame.contentWindow.innerHeight || 800;
+    while (rest === r && doc && (r.lo > 0 || r.hi < r.parts.length - 1)) {
+      const t0 = performance.now();
+      let up = r.lo > 0;
+      if (up && r.hi < r.parts.length - 1) up = -r.els[r.lo].getBoundingClientRect().top < r.els[r.hi].getBoundingClientRect().bottom - tall();
+      do fillOne(up ? r.lo - 1 : r.hi + 1);
+      while (performance.now() - t0 < 30 && (up ? r.lo > 0 : r.hi < r.parts.length - 1));
+      await breather();
+    }
+  }
+  // Each chapter's first block, by halving over the blocks in order.
+  function mapOf() {
+    const els = chunks.map((c) => c.el);
+    let lo = 0;
+    return els.map((el) => {
+      let hi = anchors.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (el.compareDocumentPosition(anchors[mid]) & Node.DOCUMENT_POSITION_PRECEDING) lo = mid + 1; else hi = mid;
+      }
+      return lo;
+    });
+  }
+  // Once the whole book is in: blocks and headings again, and the place
+  // put right if the reader hasn't moved.
+  function wholeAgain(r, spotAt) {
+    if (rest !== r || !doc) return;
+    rest = null;
+    // The blocks as findAnchors finds them, from each chapter's own.
+    const first = [];
+    anchors = r.head.slice();
+    r.made.forEach((m) => { first.push(anchors.length); for (const a of m) anchors.push(a); });
+    for (const a of r.tail) anchors.push(a);
+    heads = headsOf();
+    partsKey = "";
+    if (!r.map || first.join() !== r.map.first.join()) keepMap(r.id, r.len, first);
+    if (r.base == null && !touched) toSpot(spotAt);
+    else if (r.base == null && tell) tell();
+  }
+
   // ---- Long clips lay out as they're reached (1.29.0) ----
   // A book is one document of hundreds of chapters, and laying all of it
   // out before the first page showed took a 400-chapter EPUB 12 to 20 s
@@ -663,7 +815,7 @@
   // corrected. Pages mode needs the whole book laid out for its columns,
   // so there the guesses are taken off.
   const LONG = 150000, PIECE = 24;
-  let chunks = [];
+  let chunks = [], lastPerChar = 0.85;
   // How many characters of text an element holds, counting no further than
   // `upTo`: textContent on a whole book builds a 40 MB string to measure.
   function leadingText(el, upTo) {
@@ -686,8 +838,25 @@
     doc.documentElement.classList.remove("co-parsing");
     if (comic) return;
     const body = doc.querySelector(".co-body") || doc.body;
-    if (lettersIn(body, LONG) < LONG) return;
+    if (!rest && lettersIn(body, LONG) < LONG) return;
     let parts = [...body.children].filter((el) => el.localName === "section");
+    if (rest) {
+      // The chapters still to come are guessed from their HTML's length
+      // at the rate of the ones already in.
+      parts = rest.els;
+      let chars = 0, len = 0;
+      chunks = parts.map((el, i) => {
+        if (i < rest.lo || i > rest.hi) return { el, chars: 0, imgs: 0 };
+        const c = { el, chars: lettersIn(el), imgs: el.querySelectorAll("img").length };
+        chars += c.chars;
+        len += rest.parts[i].length;
+        return c;
+      });
+      const rate = len ? chars / len : 0.9;
+      chunks.forEach((c, i) => { if (i < rest.lo || i > rest.hi) c.chars = Math.round(rest.parts[i].length * rate); });
+      lazy(true);
+      return;
+    }
     if (parts.length < 4) {
       parts = [];
       let run = [];
@@ -709,7 +878,7 @@
   function lazy(on) {
     const w = (frame && frame.contentWindow && frame.contentWindow.innerWidth) || 390;
     // About 35 characters a line and a 30 px line until a chunk's measured.
-    let perChar = 0.85;
+    let perChar = lastPerChar = 0.85;
     for (const c of chunks) {
       c.el.classList.toggle("co-lazy", on);
       c.el.style.containIntrinsicBlockSize = on ? "auto " + Math.round(c.chars * perChar + c.imgs * w * 0.75) + "px" : "";
@@ -726,6 +895,7 @@
     if (!shown) return;
     const perChar = (shown.el.offsetHeight - shown.imgs * w * 0.75) / shown.chars;
     if (!(perChar > 0.2 && perChar < 5)) return;
+    lastPerChar = perChar;
     for (const c of chunks) c.el.style.containIntrinsicBlockSize = "auto " + Math.round(c.chars * perChar + c.imgs * w * 0.75) + "px";
   }
 
@@ -737,11 +907,13 @@
   // read or light, so each run of it between line breaks is wrapped in an
   // inline span.co-run, which changes nothing on screen.
   const LEAF = new Set(BLOCKS.split(", "));
-  function wrapLoose() {
-    if (doc.body.dataset.coRuns) return;
-    doc.body.dataset.coRuns = "1";
+  function wrapLoose(root) {
+    if (!root) {
+      if (doc.body.dataset.coRuns) return;
+      doc.body.dataset.coRuns = "1";
+    }
     const holders = new Set();
-    const walk = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+    const walk = doc.createTreeWalker(root || doc.body, NodeFilter.SHOW_TEXT);
     for (let t = walk.nextNode(); t; t = walk.nextNode()) {
       const up = t.parentElement;
       // A paragraph of plain words, most of a book, is a block of its own.
@@ -2115,7 +2287,8 @@
   function open(iframe, html, meta, { at = 0, spot: spotAt = "", onPosition, onScroll, next, prev, top, onImage: image, onTap: tap, onMark: mark, onSelect, pages: asPages, turn: turnWay, wide: wideWay, bottom, onKey, onEdge: edge, onPinch: pinchTo, onSwipe: swipeTo, onLink: link, onNote: note, onJump: jumped, spotWords: wordsAt, end } = {}) {
     // The clip before tells where it was left before this one comes in.
     settle();
-    tell = onPosition ? () => onPosition(position(), spot()) : null;
+    // Not while a big book fills without knowing its blocks' numbers.
+    tell = onPosition ? () => { if (!(rest && rest.base == null)) onPosition(position(), spot()); } : null;
     touched = false;
     frame = iframe;
     turning = null;
@@ -2156,7 +2329,13 @@
     prevLink = null;
     onPrev = prev ? prev.go : null;
     placeholders = new WeakMap();
-    return new Promise((resolve) => {
+    const whole = html;
+    rest = asPages ? null : slimmed(html, meta, at, spotAt);
+    if (rest) html = rest.html;
+    const r = rest;
+    let shown;
+    shownP = new Promise((s) => { shown = s; });
+    const opened = new Promise((resolve) => {
       iframe.onload = () => {
         doc = iframe.contentDocument;
         // Pages saved before 0.4.0 may not carry their direction.
@@ -2188,8 +2367,7 @@
         if (prev) doc.body.prepend(prevLink = stepLink(prev, "co-before"));
         // A book's own table of contents when it came with one (1.27.2),
         // else the page's h2 and h3 headings.
-        const marked = [...doc.body.querySelectorAll("[data-toc]")].filter((h) => clean(h));
-        heads = marked.length > 1 ? marked : [...doc.body.querySelectorAll("h2, h3")].filter((h) => clean(h));
+        heads = headsOf();
         doc.addEventListener("click", onClick);
         // The line over the title is where it's from and when it was
         // saved; clips saved before 1.37.0 also carry "· 18 min", which
@@ -2223,7 +2401,24 @@
         if (isPaged()) doc.documentElement.classList.add("co-paged");
         if (picsPaged()) { doc.documentElement.classList.add("co-pics"); doc.body.setAttribute("dir", picsDir); }
         if (comic) doc.addEventListener("load", picsLoaded, true);
+        if (rest) {
+          rest.els = rest.parts.map((p) => doc.getElementById(p.tag.slice(13, p.tag.indexOf('"', 13))));
+          // Not the chapters that were cut: the whole book after all.
+          if (rest.els.some((el) => !el || el.parentElement !== rest.els[0].parentElement)) {
+            rest = null;
+            iframe.srcdoc = srcdoc(whole, C.store.pageDirUrl(meta.id), true);
+            return;
+          }
+        }
         chunkUp();
+        if (rest) {
+          // The blocks outside the chapters (the title) are all here already.
+          const all = anchorsUnder(doc.body), first = rest.els[0], last = rest.els[rest.els.length - 1];
+          rest.head = all.filter((el) => first.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING);
+          rest.tail = all.filter((el) => last.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING && !last.contains(el));
+          rest.base = rest.map ? rest.map.first[rest.lo] : rest.lo === 0 ? rest.head.length : null;
+          rest.stale = true;
+        }
         pagedInput();
         zoomInput();
         glideInput();
@@ -2234,12 +2429,18 @@
         textPinchInput();
         // Keys pressed in the page that it doesn't use itself go to the
         // app's shortcuts (1.5.0).
-        if (onKey) doc.addEventListener("keydown", (e) => { if (!e.defaultPrevented) onKey(e); });
+        if (onKey) doc.addEventListener("keydown", (e) => {
+          if (e.defaultPrevented) return;
+          if (rest) { const d = doc; wholeP.then(() => { if (doc === d) onKey(e); }); return; }
+          onKey(e);
+        });
         if (onSelect) {
           let selTimer = 0;
           doc.addEventListener("selectionchange", () => {
             clearTimeout(selTimer);
-            selTimer = setTimeout(() => { if (doc) onSelect(selectionSpot()); }, 250);
+            // Not while a big book is still coming in: a highlight is
+            // kept by its block in the whole book.
+            selTimer = setTimeout(() => { if (doc && !rest) onSelect(selectionSpot()); }, 250);
           });
         }
         iframe.contentWindow.addEventListener("scroll", () => {
@@ -2266,7 +2467,7 @@
           if (!doc) return;
           const w = iframe.contentWindow;
           findAnchors();
-          if (wordsAt) spotAt = respot(spotAt, wordsAt);
+          if (wordsAt && !rest) spotAt = respot(spotAt, wordsAt);
           // A finished clip starts again from the top, but only when it was
           // left at the very end (1.30.2): 97% of a long book is still many
           // screens from it, and 1% of one is a chapter in.
@@ -2293,14 +2494,30 @@
           }
           if (!back && onPosition && position() === 1) onPosition(1, spot());
           if (onScroll) onScroll(position(), isPaged() ? 0 : w.scrollY);
-        }).finally(() => iframe.classList.remove("unready"));
-        resolve();
+        }).finally(() => { iframe.classList.remove("unready"); shown(); });
+        if (r && rest === r) {
+          const d = doc;
+          placed.then(() => fillRest(r)).then(() => wholeAgain(r, spotAt)).then(() => { if (doc === d) resolve(); });
+        } else {
+          resolve();
+          if (whole.length >= SLIM && !paged) {
+            const d = doc;
+            placed.then(() => setTimeout(() => {
+              if (doc !== d || rest || !chunks.length || chunks[0].el.localName !== "section") return;
+              const map = readMaps()[meta.id];
+              const first = mapOf();
+              if (!map || map.len !== whole.length || map.first.join() !== first.join()) keepMap(meta.id, whole.length, first);
+            }, 1500));
+          }
+        }
       };
       // Kept out of sight until it's themed and back at its place
       // (1.26.4): before, its first frame showed unstyled, on white.
       iframe.classList.add("unready");
-      iframe.srcdoc = srcdoc(html, C.store.pageDirUrl(meta.id), !paged && html.length > LONG);
+      iframe.srcdoc = srcdoc(html, C.store.pageDirUrl(meta.id), !paged && (!!rest || html.length > LONG));
     });
+    wholeP = opened;
+    return opened;
   }
 
   // A move not yet told (the scroll stopped under 150 ms ago) is told
@@ -2310,7 +2527,9 @@
     if (!scrollTimer) return;
     clearTimeout(scrollTimer);
     scrollTimer = null;
-    if (doc && tell && performance.now() - restoredAt > 400) tell();
+    // Not once the reader is out of sight (Back after Narrate): the hidden
+    // frame measures as the end of the page, and that was kept as the place.
+    if (doc && tell && frame && frame.getClientRects().length && frame.clientHeight && performance.now() - restoredAt > 400) tell();
   }
 
   function close() {
@@ -2318,6 +2537,7 @@
     settle();
     tell = null;
     if (frame) { frame.onload = null; frame.srcdoc = ""; }
+    rest = null;
     frame = null;
     doc = null;
     topSpace = null;
@@ -2372,5 +2592,5 @@
       return line;
     }));
   }
-  C.reader = { say, spotOfId, blockCount, pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionContext, selectionMark, selectionMarks, paintMarks, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, inkRoot, inkBlock, inkBlocks, inkBlockBox, inkBlockAt, inkBlocksNear, inkBlockWords, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
+  C.reader = { get filling() { return !!rest; }, whole: () => wholeP, shown: () => shownP, say, spotOfId, blockCount, pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionContext, selectionMark, selectionMarks, paintMarks, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, inkRoot, inkBlock, inkBlocks, inkBlockBox, inkBlockAt, inkBlocksNear, inkBlockWords, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
 })();

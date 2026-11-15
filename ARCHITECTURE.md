@@ -973,6 +973,17 @@ area.
   `<html>` skips every part of the body: without it Chrome lays out the
   growing book again and again (a 47 MB book, 54 s at 6x against 7 s).
   `textContent` on a whole book is a 40 MB string; count with a walker.
+- **A big book opens at its place first** (`reader.js slimmed`): an EPUB
+  page over 2 MB is cut apart as a string at its `<section id="cN">`
+  chapters; the page shows the place's chapter and the ones either side,
+  the rest are empty sections (`data-co-wait`) that `fillRest` fills a
+  few a turn, nearest first. A spot is a block number in the whole book,
+  so which chapter it's in comes from `waypage.bookMaps` in localStorage
+  (each chapter's first block, written the first time it's open whole),
+  and while it fills `spot`/`toSpot` count from the first chapter in
+  (`rest.base`). Never give a chapter a new height while it fills: one
+  above the text moves it. Whatever needs every block waits for
+  `C.reader.whole()`; the reader bar holds taps until then.
 - **Moving an iframe reloads it.** Wrap it where it will stay at start-up.
 - **Classic scripts share one scope:** a global function can shadow a
   `window` method (`moveTo` had to become `moveInFolder`).

@@ -277,7 +277,8 @@ async function openPage(id, fromHistory) {
   if (!fromHistory && !wait) swap ? history.replaceState(readerState(p), "") : history.pushState(readerState(p), "");
   const shown = show(p, html);
   if (!wait) pushScreen($("readerView"));
-  await shown;
+  // A big book shows its place before the rest of it is in (reader.js).
+  await Promise.race([shown, C.reader.shown()]);
   if (wait) {
     const d = $("readerFrame").contentDocument;
     await Promise.race([Promise.all([
@@ -295,6 +296,7 @@ async function openPage(id, fromHistory) {
     markAfterOpen = null;
     // After the reader has gone back to where it was left.
     await (d && d.fonts ? d.fonts.ready : null);
+    await C.reader.whole();
     const m = (p.marks || []).find((x) => x.id === id);
     requestAnimationFrame(() => { if (state.open === p && m) jumpToMark(p, m); });
   }
@@ -3264,6 +3266,22 @@ function skimPart(by) {
   const to = here && at - here.at < 0.004 ? before[before.length - 2] : here;
   skimGo(to ? to.at : 0);
 }
+// While a big book's other chapters come in (reader.js, Unreleased),
+// what needs the whole book (Narrate, Find, Highlights, Pages, skimming)
+// waits for it: a tap is kept and acted on once it's in.
+for (const bar of [$("readerView").querySelector(".reader-bar"), $("readFoot")]) {
+  bar.addEventListener("click", (e) => {
+    if (!C.reader.filling || !e.isTrusted || e.target.closest("#readerBack, #jumpBack")) return;
+    const b = e.target.closest("button") || e.target.closest(".read-left");
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    if (!b) return;
+    const p = state.open;
+    toast("Opening the rest of the book…");
+    C.reader.whole().then(() => { if (state.open === p && b.isConnected) b.click(); });
+  }, true);
+}
+$("skimTrack").addEventListener("pointerdown", (e) => { if (C.reader.filling) e.stopImmediatePropagation(); }, true);
 $("readFoot").querySelector(".read-left").addEventListener("click", (e) => {
   if (e.target.closest("button, a, input, .aloud-player") || !skimOn()) return;
   if (skimUp()) closeSkim();

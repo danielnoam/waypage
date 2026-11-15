@@ -4446,6 +4446,67 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("a big book opens at its place first and fills in the rest behind it (Unreleased)", async () => {
+      const q = await page(browser, 390);
+      // 40 chapters of 60 KB: past the 2 MB a book is cut apart from.
+      const files = [["mimetype", "application/epub+zip"], ["META-INF/container.xml", EPUB_FILES[1][1]]];
+      let man = "", spine = "";
+      for (let i = 0; i < 40; i++) {
+        let body = "<h1>Chapter " + (i + 1) + "</h1>";
+        for (let k = 0; body.length < 60000; k++) body += "<p>Words of chapter " + (i + 1) + ", paragraph " + k + ", long enough to wrap onto a few lines at phone width for the reader to lay out.</p>";
+        files.push(["OEBPS/c" + i + ".xhtml", '<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml"><body>' + body + "</body></html>"]);
+        man += '<item id="c' + i + '" href="c' + i + '.xhtml" media-type="application/xhtml+xml"/>';
+        spine += '<itemref idref="c' + i + '"/>';
+      }
+      files.push(["OEBPS/book.opf", '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Long Road</dc:title></metadata><manifest>' + man + "</manifest><spine>" + spine + "</spine></package>"]);
+      const bytes = [...zipOf(files)];
+      const id = await q.evaluate(async (b) => {
+        const file = new File([new Uint8Array(b)], "long.epub", { type: "application/epub+zip" });
+        const meta = await window.Waypage.files.bring(file, "epub", { has: () => false });
+        await window.Waypage.store.writeIndex([meta, ...(await window.Waypage.store.readIndex())]);
+        return meta.id;
+      }, bytes);
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const shown = () => until(q, () => !document.getElementById("readerFrame").classList.contains("unready") && state.open);
+      const whole = () => until(q, () => !window.Waypage.reader.filling);
+      // Unread, it opens at its start and learns where its chapters start.
+      await q.evaluate((id) => openPage(id), id);
+      await shown();
+      await whole();
+      assert.strictEqual(await q.evaluate(() => window.Waypage.reader.headings().length), 40);
+      await until(q, () => Object.keys(JSON.parse(localStorage.getItem("waypage.bookMaps") || "{}")).length === 1);
+      await q.frameLocator("#readerFrame").locator("#c30").evaluate((el) => { el.scrollIntoView(); el.ownerDocument.defaultView.scrollBy(0, 1500); });
+      await until(q, () => /^Chapter 31$/.test(window.Waypage.reader.section()) && state.pages.find((x) => x.file).spot === window.Waypage.reader.spot());
+      const left = await q.evaluate(() => state.pages.find((x) => x.file).spot);
+      await q.evaluate(() => history.back());
+      await until(q, () => !state.open);
+      // Then at its place, with the rest still to come (on a slow phone).
+      const cdp = await q.context().newCDPSession(q);
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 6 });
+      await q.evaluate((id) => openPage(id), id);
+      await shown();
+      const first = await q.evaluate(() => ({ filling: window.Waypage.reader.filling, spot: window.Waypage.reader.spot(), section: window.Waypage.reader.section(), empty: window.Waypage.reader.frameDoc.querySelectorAll("section[data-co-wait]").length }));
+      assert.strictEqual(first.filling, true);
+      assert.strictEqual(first.spot, left);
+      assert.strictEqual(first.section, "Chapter 31");
+      assert.ok(first.empty > 0, "chapters not cut");
+      // Narrate waits for the whole book, then starts.
+      await q.evaluate(() => { window.asked = 0; const go = window.startAloud; window.startAloud = function () { window.asked++; return go.apply(this, arguments); }; });
+      await q.evaluate(() => toggleBar());
+      await q.locator("#readerAloud").click();
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+      await whole();
+      const after = await q.evaluate(() => ({ spot: window.Waypage.reader.spot(), empty: window.Waypage.reader.frameDoc.querySelectorAll("section[data-co-wait]").length, words: window.Waypage.reader.frameDoc.querySelector("#c0").textContent.length, contents: window.Waypage.reader.headings().length }));
+      assert.strictEqual(after.empty, 0);
+      assert.ok(after.words > 50000, "first chapter not filled");
+      assert.strictEqual(after.contents, 40);
+      assert.strictEqual(after.spot.split("/")[0], left.split("/")[0], after.spot + " vs " + left);
+      await until(q, () => window.asked > 0);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a Kindle book (MOBI) opens with its contents, link, picture and cover; a locked one says so (1.42.0)", async () => {
       const q = await page(browser, 390);
       const got = await q.evaluate(async ([b, locked]) => {
