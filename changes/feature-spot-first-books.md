@@ -8,4 +8,5 @@
 - Taps in a big book no longer freeze the phone for seconds: the chapters far from the screen are kept out of what the phone reads from the page.
 
 ### Fixed
+- A Contents jump far into a very long book (chapter 800 of 900) stopped short, around chapter 772, and a jump could slide a few screens once there.
 - Leaving a book while Narrate was going could forget your place and reopen it near the start.

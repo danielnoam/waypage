@@ -606,8 +606,24 @@
     if (!h || !frame) return;
     if (onJump) onJump(spot());
     if (isPaged()) { goPage(pageOf(h), true); return; }
-    const w = frame.contentWindow;
-    w.scrollTo(0, h.getBoundingClientRect().top + w.scrollY - (topSpace ? topSpace() : 0) - 8);
+    const w = frame.contentWindow, d = doc;
+    const want = () => (topSpace ? topSpace() : 0) + 8;
+    w.scrollTo(0, h.getBoundingClientRect().top + w.scrollY - want());
+    // A long book's chapters around it take their real heights over the
+    // next frames and can push it off the screen, so it's held in place
+    // for a moment, until the reader touches the page.
+    if (!chunks.length) return;
+    let stop = false;
+    const off = () => { stop = true; };
+    for (const t of ["pointerdown", "wheel", "keydown"]) d.addEventListener(t, off, { once: true, capture: true });
+    const until = performance.now() + 1500;
+    const hold = () => {
+      if (stop || doc !== d || performance.now() > until) return;
+      const by = h.getBoundingClientRect().top - want();
+      if (Math.abs(by) > 2) w.scrollTo(0, w.scrollY + by);
+      requestAnimationFrame(hold);
+    };
+    requestAnimationFrame(hold);
   }
 
   // A book of pictures (1.5.1): a scan or a PDF read from its file, or a
@@ -888,9 +904,9 @@
     if (far) { far.disconnect(); far = null; }
     for (const c of chunks) {
       c.el.classList.toggle("co-lazy", on);
-      if (!on) c.el.classList.remove("co-far");
-      c.el.style.containIntrinsicBlockSize = on ? "auto " + Math.round(c.chars * perChar + c.imgs * w * 0.75) + "px" : "";
+      if (!on) { c.el.classList.remove("co-far"); c.el.style.containIntrinsicBlockSize = ""; }
     }
+    if (on) guessAll(perChar, w);
     if (!on || !chunks.length || !hideFar) return;
     far = new IntersectionObserver((seen) => { for (const x of seen) x.target.classList.toggle("co-far", !x.isIntersecting); },
       { root: doc, rootMargin: "200% 0px" });
@@ -908,7 +924,18 @@
     const perChar = (shown.el.offsetHeight - shown.imgs * w * 0.75) / shown.chars;
     if (!(perChar > 0.2 && perChar < 5)) return;
     lastPerChar = perChar;
-    for (const c of chunks) c.el.style.containIntrinsicBlockSize = "auto " + Math.round(c.chars * perChar + c.imgs * w * 0.75) + "px";
+    guessAll(perChar, w);
+  }
+  // Chrome lays nothing out past 33,554,431 px (its largest length), so a
+  // book guessed taller than that ended there: a Contents jump to chapter
+  // 800 of 900 stopped at 772. The unseen chapters are guessed shorter to
+  // fit; each takes its real height as it's reached.
+  const TALLEST = 30000000;
+  function guessAll(perChar, w) {
+    const tall = chunks.map((c) => c.chars * perChar + c.imgs * w * 0.75);
+    const sum = tall.reduce((a, b) => a + b, 0);
+    const fit = sum > TALLEST ? TALLEST / sum : 1;
+    chunks.forEach((c, i) => { c.el.style.containIntrinsicBlockSize = "auto " + Math.round(tall[i] * fit) + "px"; });
   }
 
   const BREAKS = new Set(("BR HR P DIV SECTION ARTICLE HEADER FOOTER MAIN FIGURE TABLE UL OL DL LI BLOCKQUOTE PRE " +
