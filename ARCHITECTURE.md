@@ -973,6 +973,7 @@ area.
   `<html>` skips every part of the body: without it Chrome lays out the
   growing book again and again (a 47 MB book, 54 s at 6x against 7 s).
   `textContent` on a whole book is a 40 MB string; count with a walker.
+- **A chunk far from the screen is content-visibility: hidden** (`reader.js lazy`, `co-far`): `auto` still keeps a chunk in the accessibility tree, and an Android WebView with anything reading it (Daniel's Pixel 8, no accessibility service on) described a 47 MB book on every tap: 5 s to open Contents, and a 4.8 s layout in a sheet's closing `focus()`. Chunks over two screens away go hidden; desktop Chrome only shows it with `--force-renderer-accessibility`.
 - **A big book opens at its place first** (`reader.js slimmed`): an EPUB
   page over 2 MB is cut apart as a string at its `<section id="cN">`
   chapters; the page shows the place's chapter and the ones either side,

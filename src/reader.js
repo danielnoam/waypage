@@ -875,15 +875,27 @@
     chunks = parts.map((el) => ({ el, chars: lettersIn(el), imgs: el.querySelectorAll("img").length }));
     lazy(!isPaged());
   }
+  // content-visibility: auto still keeps a chunk in the accessibility
+  // tree, and with any accessibility service on (a password manager is
+  // enough) Android's WebView described the whole 47 MB book on every
+  // tap: 5 s to open Contents on a Pixel 8. Chunks two screens away are
+  // hidden instead, which leaves them out of it.
+  let far = null, hideFar = true;
   function lazy(on) {
     const w = (frame && frame.contentWindow && frame.contentWindow.innerWidth) || 390;
     // About 35 characters a line and a 30 px line until a chunk's measured.
     let perChar = lastPerChar = 0.85;
+    if (far) { far.disconnect(); far = null; }
     for (const c of chunks) {
       c.el.classList.toggle("co-lazy", on);
+      if (!on) c.el.classList.remove("co-far");
       c.el.style.containIntrinsicBlockSize = on ? "auto " + Math.round(c.chars * perChar + c.imgs * w * 0.75) + "px" : "";
     }
-    if (on) requestAnimationFrame(guessHeights);
+    if (!on || !chunks.length || !hideFar) return;
+    far = new IntersectionObserver((seen) => { for (const x of seen) x.target.classList.toggle("co-far", !x.isIntersecting); },
+      { root: doc, rootMargin: "200% 0px" });
+    for (const c of chunks) far.observe(c.el);
+    requestAnimationFrame(guessHeights);
   }
   // The chunk on screen is laid out for real: its height per character
   // becomes every unseen chunk's guess.
@@ -2537,6 +2549,7 @@
     settle();
     tell = null;
     if (frame) { frame.onload = null; frame.srcdoc = ""; }
+    if (far) { far.disconnect(); far = null; }
     rest = null;
     frame = null;
     doc = null;
@@ -2592,5 +2605,5 @@
       return line;
     }));
   }
-  C.reader = { get filling() { return !!rest; }, whole: () => wholeP, shown: () => shownP, say, spotOfId, blockCount, pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionContext, selectionMark, selectionMarks, paintMarks, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, inkRoot, inkBlock, inkBlocks, inkBlockBox, inkBlockAt, inkBlocksNear, inkBlockWords, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
+  C.reader = { get filling() { return !!rest; }, whole: () => wholeP, shown: () => shownP, say, spotOfId, blockCount, pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, set hideFar(v) { hideFar = !!v; }, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionContext, selectionMark, selectionMarks, paintMarks, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, inkRoot, inkBlock, inkBlocks, inkBlockBox, inkBlockAt, inkBlocksNear, inkBlockWords, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
 })();

@@ -1283,6 +1283,27 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("Record timings notes a page opening and its sheets, and the report carries them (Unreleased)", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ARTICLE); await q.press("#saveUrl", "Enter");
+      await until(q, async () => (await window.Waypage.store.readIndex()).length === 1);
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Report a problem" }).click();
+      await q.locator("label.row", { hasText: "Record timings" }).click();
+      await q.locator(".row", { hasText: "Copy the timings" }).waitFor();
+      await q.evaluate(() => { history.back(); history.back(); });
+      await until(q, () => !document.querySelector("#settingsView") || document.getElementById("settingsView").hidden || !document.getElementById("settingsView").offsetParent);
+      await q.evaluate(() => openPage(state.pages[0].id));
+      await until(q, () => !document.getElementById("readerContents").hidden || !document.getElementById("readerFrame").classList.contains("unready"));
+      await q.evaluate(() => openSheet("contents"));
+      const text = await q.evaluate(() => reportText());
+      assert.ok(/Timings \(ms/.test(text) && /\d+ open \d+ characters/.test(text) && /\d+ shown/.test(text) && /sheet contents/.test(text), text.slice(-600));
+      await q.evaluate(() => { localStorage.setItem("waypage.recordTimings", "false"); timingWatch(false); timing.rows = []; });
+      assert.ok(!/Timings \(ms/.test(await q.evaluate(() => reportText())), "off still reports timings");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a Pocket export imports with its tags, archived clips finished", async () => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), "waypage-"));
       const file = path.join(dir, "ril_export.html");

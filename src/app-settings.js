@@ -807,7 +807,56 @@ async function reportText() {
     load(START_KEY, []).map((t) => "Start: " + t.shown + " ms (scripts " + t.scripts + ", library " + t.library + ") with " + t.clips + " clips").join("\n") || "Start: not measured",
     "",
     lines.length ? "Log:\n" + lines.join("\n") : "Log: empty",
+    timing.rows.length ? "\nTimings (ms since the app started):\n" + timing.rows.join("\n") : "",
   ].join("\n");
+}
+// Record timings (Unreleased, Daniel's ask): a switch here that notes
+// what the phone spends its time on (frames that stall, taps that wait,
+// opening and leaving a page, sheets) for the report to carry. Off it
+// watches nothing. It sees only Waypage's own work: what the WebView does
+// for itself shows as a stall with no script in it, and for that a USB
+// inspect is the tool.
+const TIMINGS_KEY = "waypage.recordTimings";
+const timing = { rows: [], watch: [] };
+function timingNote(what) {
+  if (!timing.watch.length) return;
+  timing.rows.push(Math.round(performance.now()) + " " + what);
+  if (timing.rows.length > 800) timing.rows.splice(0, 200);
+}
+function timingWatch(on) {
+  for (const o of timing.watch) o.disconnect();
+  timing.watch = [];
+  if (!on) return;
+  const ms = Math.round;
+  const watch = (type, opts, line) => {
+    try {
+      const o = new PerformanceObserver((l) => l.getEntries().forEach((e) => { const t = line(e); if (t) timingNote(t); }));
+      o.observe({ type, ...opts });
+      timing.watch.push(o);
+    } catch (e) { /* not in this WebView */ }
+  };
+  const script = (x) => (x.sourceFunctionName || x.invoker || "?") + "@" + String(x.sourceURL || "").split("/").pop().split("?")[0] + ":" + x.sourceCharPosition + "=" + ms(x.duration) + (x.forcedStyleAndLayoutDuration >= 5 ? " (layout " + ms(x.forcedStyleAndLayoutDuration) + ")" : "");
+  watch("long-animation-frame", {}, (e) => "FRAME " + ms(e.duration) + "ms (block " + ms(e.blockingDuration) + ", render from " + ms((e.renderStart || e.startTime) - e.startTime) + ") " +
+    ((e.scripts || []).filter((x) => x.duration >= 5).map(script).join(", ") || "no script: the WebView's own work"));
+  watch("event", { durationThreshold: 40 }, (e) => /^(click|pointerdown|pointerup|keydown)$/.test(e.name) && e.target
+    ? "TAP " + e.name + " " + (e.target.id || String(e.target.className && e.target.className.baseVal != null ? e.target.className.baseVal : e.target.className).split(" ")[0] || e.target.localName) + " total " + ms(e.duration) + " wait " + ms(e.processingStart - e.startTime) + " run " + ms(e.processingEnd - e.processingStart) : "");
+  watch("longtask", {}, (e) => "LONG " + ms(e.duration));
+  timingNote("recording, " + navigator.hardwareConcurrency + " cores, " + (navigator.deviceMemory || "?") + " GB, " + innerWidth + "×" + innerHeight);
+}
+timingWatch(load(TIMINGS_KEY, false));
+// To compare with and without on a phone (reader.js, lazy); on unless turned off here.
+const FAR_KEY = "waypage.hideFar";
+const farHidden = () => load(FAR_KEY, true) !== false;
+C.reader.hideFar = farHidden();
+addEventListener("visibilitychange", () => timingNote(document.hidden ? "app hidden" : "app shown"));
+function timingsGroup() {
+  const on = !!timing.watch.length;
+  return section("Timings", "For a slow screen: turn this on, do the slow thing, then send the report. It notes the stalls and taps that waited, and what was opening at the time, and nothing about what you read.",
+    el("div", { class: "group" },
+      switchRow("Record timings", on ? timing.rows.length + " noted" : "Off", on, (v) => { store(TIMINGS_KEY, v); timing.rows = []; timingWatch(v); renderSection(); }),
+      on ? el("button", { class: "row", type: "button", onclick: () => copyText(timing.rows.join("\n") || "Nothing noted yet", "Timings copied") }, el("span", { class: "row-label accent" }, "Copy the timings")) : null,
+      on && timing.rows.length ? el("button", { class: "row", type: "button", onclick: () => { timing.rows = []; timingNote("cleared"); renderSection(); } }, el("span", { class: "row-label accent" }, "Clear them")) : null,
+      on ? switchRow("Hide far chapters", "Off to compare, from the next book opened", farHidden(), (v) => { store(FAR_KEY, v); C.reader.hideFar = v; timingNote("hide far chapters " + (v ? "on" : "off")); }) : null));
 }
 function reportGroup() {
   const list = C.platform.log.list();
@@ -826,7 +875,7 @@ function reportGroup() {
     const body = text.length > 6000 ? text.slice(0, 1500) + "\n…\n" + text.slice(-4400) : text;
     C.platform.openOutside(REPORT_REPO + "/issues/new?title=" + encodeURIComponent(title) + "&body=" + encodeURIComponent("```\n" + body + "\n```"));
   };
-  const sec = section("The report", "Nothing leaves " + HERE + " unless you send it. The report holds what you wrote, Waypage's version, the phone's model and system, how long opening took, and the notes below, with addresses cut to their pages. An issue on GitHub is public, so anyone can read it.",
+  const sec = section("The report", "Nothing leaves " + HERE + " unless you send it. The report holds what you wrote, Waypage's version, the phone's model and system, how long opening took, the notes below and any timings recorded, with addresses cut to their pages. An issue on GitHub is public, so anyone can read it.",
     field,
     el("div", { class: "group" },
       el("button", { class: "row", type: "button", onclick: send }, el("span", { class: "row-label accent" }, "Send the report")),
@@ -1231,7 +1280,7 @@ const SECTIONS = {
   credits: { title: "Credits", build: creditsSections, value: () => "", parent: "updates" },
   news: { title: "Changelog", build: () => newsSections(), value: () => "", parent: "updates" },
   ahead: { title: "What's new", build: () => aheadSections(), value: () => "", parent: "updates" },
-  report: { title: "Report a problem", build: () => [reportGroup()], value: () => { const n = C.platform.log.list().length; return n ? n + (n === 1 ? " note" : " notes") : ""; } },
+  report: { title: "Report a problem", build: () => [reportGroup(), timingsGroup()], value: () => { const n = C.platform.log.list().length; return n ? n + (n === 1 ? " note" : " notes") : ""; } },
 };
 
 function renderSettings() {
@@ -1271,6 +1320,7 @@ const FIND_ALIASES = {
   Version: "update check app", Changelog: "what's new release notes", "Continue reading": "last clip resume",
   Audiobooks: "audio listen m4b mp3 read along", Transcripts: "transcribe speech to text audiobook read along",
   "Test builds": "beta branch preview pull request",
+  "Record timings": "slow lag performance debug testing mode",
   Sidebar: "fold collapse collapsible menu side recent favourites",
 };
 let settingsIdx = null;
