@@ -92,12 +92,13 @@ src/sqlite.js       a read-only SQLite reader (table b-trees and overflow pages,
 src/anki-import.js  reads an Anki deck (.apkg: a zip with a SQLite collection) into cards and reviews, and Anki's text export's counterpart lives in anki.js; loaded with the Anki extension
 src/anki.js         the Anki extension's engine: decks, cards and a review log (anki/ beside the library, per-device log), each card's schedule replayed from the log
 src/app-anki.js     the Anki extension's screens: the selection bar's button and card sheet, the place (decks, study, browse, edit, options)
-src/motion.js       the springs from DESIGN.md, sampled into CSS linear()
+src/motion.js       Waypage's springs from DESIGN.md, given to keel's motion engine (src/keel/motion.js)
 src/keel/qr.js      QR code for sync's setup link, made on the device so the token never leaves it (from keel, below)
 src/keel/github.js  the GitHub requests sync.js makes: reading, writing and committing files, errors with a kind (from keel, below)
 src/keel/errlog.js  the errors this device hit, for Report a problem; loaded first, set up by its tag in index.html (from keel, below)
 src/keel/platform.js  where it runs (phone, browser), app-build.json, links out to the phone's browser (from keel, below); src/platform.js builds on it
 src/keel/releases.js  the app's releases on GitHub: the update check, the Test builds list, opening one in the browser (from keel, below)
+src/keel/motion.js  the motion engine: springs sampled into CSS linear(), every move, reduced motion and Animations off (from keel, below); src/motion.js gives it Waypage's springs
 src/keel/sw-preview.js  sw.js's half of a test build in the browser (from keel, below)
 src/keel/drive.js   Google Drive sign-in, folder, resumable sending and keeping the newest; drive.js says what a backup is (from keel, below)
 src/styles.css      tokens, themes, layout (DESIGN.md)
@@ -130,7 +131,7 @@ docs/shots/         the README's screenshots
 ## Load order and the one scope
 
 `index.html` loads every script as a classic `<script>`, in the order
-listed there: platform, motion, Readability, store, save, feeds, backup,
+listed there: platform, motion (keel's, then Waypage's), Readability, store, save, feeds, backup,
 imports, dict, sync, drive, qr, stats, activity, epub, files, pdf, reader, then the
 shell (`app.js` and the `app-*.js` files). No modules, no bundler.
 

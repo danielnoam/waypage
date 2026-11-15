@@ -1836,6 +1836,7 @@ span.update-text { cursor: default; }
 /* Export (0.25.2): the page sheet's kinds, then Save and Send. */
 .export-top { display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-2); }
 .export-top .menu-title { flex: 1; min-width: 0; margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.export-rule-del { align-self: flex-start; min-height: var(--tap); }
 .export-actions { display: flex; gap: var(--s-2); margin-top: var(--s-4); }
 .export-actions > * { flex: 1; height: 48px; }
 .export-actions [hidden] { display: none; }

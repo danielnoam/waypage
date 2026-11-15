@@ -1832,26 +1832,180 @@ function exportControls(what, done) {
   let kind = load(key, first);
   if (!kinds.some((e) => e.value === kind)) kind = first;
   const p = what;
-  const save = el("button", { class: "btn-primary export-save", type: "button", onclick: () => exportAs(p, kind, "save", save) });
-  const send = el("button", { class: "btn-quiet export-send", type: "button", onclick: () => exportAs(p, kind, "send", send) }, "Send");
+  // A collection's chapters open with their clip's header (its name, site
+  // and author) unless turned off, for a story whose chapters already
+  // start with their own titles.
+  let heads = load(EXPORT_HEADS_KEY, true);
+  const x = folder ? exportEdits(what) : null;
+  const opts = () => (folder ? { heads, ...x.opts() } : { heads: true });
+  const save = el("button", { class: "btn-primary export-save", type: "button", onclick: () => exportAs(p, kind, "save", save, opts()) });
+  const send = el("button", { class: "btn-quiet export-send", type: "button", onclick: () => exportAs(p, kind, "send", send, opts()) }, "Send");
+  const headsRow = folder ? switchRow("Chapter headers", "Each chapter opens with its clip's name", heads, (on) => { heads = on; store(EXPORT_HEADS_KEY, on); }, { "data-pref": "exportHeads" }) : null;
   const sync = () => {
     save.textContent = kind === "pdf" ? "Print or save as PDF" : C.platform.native ? "Save to device" : "Download";
     send.hidden = kind === "pdf" || !C.platform.native;
+    if (headsRow) headsRow.hidden = kind === "cbz";
+    if (x) x.kind(kind);
   };
-  const group = choiceGroup({ key: "export-kind", label: "Export as", options: kinds, get: () => kind,
-    set: (v) => { kind = v; store(key, v); sync(); } });
+  const group = section("", null, el("div", { class: "group" }, pickRow({ key: "export-kind", label: "Export as", options: kinds, get: () => kind,
+    set: (v) => { kind = v; store(key, v); sync(); } }), headsRow, ...(x ? x.rangeRows : [])));
+  const box = el("div", { class: "export" });
+  const top = (title, back) => el("div", { class: "export-top" },
+    el("button", { class: "btn-quiet export-back", type: "button", onclick: back }, "Back"),
+    el("p", { class: "menu-title", dir: "auto" }, title));
+  const main = [top(folder ? what.title : p.title, done), group, x ? x.mainRows : null, el("div", { class: "export-actions" }, save, send)].filter(Boolean);
+  const show = (screen) => {
+    if (!screen) { box.replaceChildren(...main); x && x.refresh(); }
+    else box.replaceChildren(top(screen.title, () => { show(null); focusFirst(box); }), ...screen.nodes);
+  };
+  if (x) x.open = (screen) => { show(screen); focusFirst(box); };
   sync();
-  return el("div", { class: "export" },
-    el("div", { class: "export-top" },
-      el("button", { class: "btn-quiet export-back", type: "button", onclick: done }, "Back"),
-      el("p", { class: "menu-title", dir: "auto" }, folder ? what.title : p.title)),
-    group,
-    el("div", { class: "export-actions" }, save, send));
+  show(null);
+  return box;
 }
 
-async function exportAs(p, kind, how, btn) {
+// ---- A collection's export edits (2026-11, Daniel's ask) ----
+// Changes made only to the exported copy, never the clips: which
+// chapters, the book's title and author, paragraphs that repeat in many
+// chapters (a site's Next chapter links, a Patreon plea), and find and
+// replace with Edit clips' rules. Kept per collection, so the next export
+// of a growing story starts from them; the range isn't kept.
+const EXPORT_EDITS_KEY = "waypage.exportEdits";
+const EXPORT_LEAVES = "p, li, h1, h2, h3, h4, h5, h6, figcaption, blockquote, pre, td, th, dt, dd, caption, summary";
+const EXPORT_OURS = ".co-head, .co-licence, .co-next, .co-credit";
+const lineText = (n) => n.textContent.replace(/\s+/g, " ").trim();
+// The paragraphs that are no more than text: none inside another one.
+const exportLines = (doc) => [...doc.body.querySelectorAll(EXPORT_LEAVES)].filter((n) => !n.closest(EXPORT_OURS) && !n.querySelector(EXPORT_LEAVES) && !n.querySelector("img"));
+function exportPattern(find) {
+  if (!find) return null;
+  // A * at the end runs to the end of the paragraph.
+  const src = find.split("*").map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")).join("[\\s\\S]*?").replace(/\[\\s\\S\]\*\?$/, "[\\s\\S]*");
+  try { return new RegExp(src, "gi"); } catch (e) { return null; }
+}
+
+function exportEdits(what) {
+  const pages = what.pages;
+  const all = load(EXPORT_EDITS_KEY, {}) || {};
+  const kept = all[what.title] || {};
+  const ed = { title: kept.title || "", author: kept.author || "", lines: Array.isArray(kept.lines) ? kept.lines.filter((l) => typeof l === "string") : [],
+    rules: Array.isArray(kept.rules) ? kept.rules.filter((r) => r && typeof r.find === "string").map((r) => ({ find: r.find, put: String(r.put || "") })) : [] };
+  const keep = () => {
+    const now = load(EXPORT_EDITS_KEY, {}) || {};
+    const rules = ed.rules.filter((r) => r.find);
+    if (ed.title || ed.author || ed.lines.length || rules.length) now[what.title] = { title: ed.title, author: ed.author, lines: ed.lines, rules };
+    else delete now[what.title];
+    store(EXPORT_EDITS_KEY, now);
+  };
+  let from = 0, to = pages.length - 1, kind = "", found = null, looking = null;
+  const api = { open: () => {} };
+
+  const names = pages.map((q, i) => ({ value: String(i), label: (i + 1) + ". " + q.title }));
+  const rangeRows = pages.length > 1 ? [
+    pickRow({ key: "export-from", label: "First chapter", options: names, get: () => String(from), set: (v) => { from = +v; if (to < from) { to = from; toRow.set(String(to)); } } }),
+  ] : [];
+  const toRow = pages.length > 1 ? pickRow({ key: "export-to", label: "Last chapter", options: names, get: () => String(to), set: (v) => { to = +v; if (from > to) { from = to; rangeRows[0].set(String(from)); } } }) : null;
+  if (toRow) rangeRows.push(toRow);
+
+  const detailsNote = el("span", { class: "choice-note", dir: "auto" });
+  const cleanNote = el("span", { class: "choice-note" });
+  const nav = (label, note, onclick) => el("button", { class: "row nav-row", type: "button", onclick },
+    el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, label), note),
+    el("span", { class: "row-chev", "aria-hidden": "true" }, "›"));
+  const cleanRow = nav("Clean up the text", cleanNote, () => api.open(cleanScreen()));
+  const mainRows = section("Only in this export", null, el("div", { class: "group" },
+    nav("Book details", detailsNote, () => api.open(detailsScreen())), cleanRow),
+    el("p", { class: "footnote" }, "Your clips stay as they are."));
+  const author0 = () => pages[0] ? pages[0].byline || pages[0].site || "" : "";
+  const rules = () => ed.rules.filter((r) => exportPattern(r.find));
+  api.refresh = () => {
+    detailsNote.textContent = [ed.title || what.title, ed.author || author0()].filter(Boolean).join(" · ");
+    const n = ed.lines.length, r = rules().length;
+    cleanNote.textContent = !n && !r ? "Nothing changed" : [n ? n + (n === 1 ? " repeated line" : " repeated lines") + " left out" : "", r ? r + (r === 1 ? " find and replace" : " finds and replaces") : ""].filter(Boolean).join(", ");
+  };
+  api.kind = (k) => { kind = k; cleanRow.hidden = k === "cbz"; };
+
+  // What exportAs needs: the chapters picked and a fix for each copy.
+  api.opts = () => {
+    const out = { from, to, title: ed.title.trim(), author: ed.author.trim() || author0() };
+    if (kind === "cbz") return out;
+    const gone = new Set(ed.lines);
+    const res = rules().map((r) => ({ re: exportPattern(r.find), put: r.put }));
+    if (gone.size || res.length) out.fix = (doc) => {
+      if (gone.size) for (const n of exportLines(doc)) if (gone.has(lineText(n))) n.remove();
+      for (const r of res) C.save.replaceText(doc.body, r.re, () => r.put);
+    };
+    return out;
+  };
+
+  function field(label, value, placeholder, set) {
+    const id = "exp" + Math.random().toString(36).slice(2, 8);
+    return el("div", { class: "rc-row stack" },
+      el("label", { class: "rc-label", for: id }, label),
+      el("input", { class: "feed-input", id, type: "text", autocomplete: "off", spellcheck: "false", dir: "auto", value, placeholder, oninput: (e) => { set(e.target.value); keep(); } }));
+  }
+  function detailsScreen() {
+    return { title: "Book details", nodes: [
+      section("", null, el("div", { class: "group" }, el("div", { class: "rc-list" },
+        field("Title", ed.title, what.title, (v) => { ed.title = v; }),
+        field("Author", ed.author, author0() || "Nobody named", (v) => { ed.author = v; }))),
+      el("p", { class: "footnote" }, "Empty takes what's shown in grey. The cover is the collection's own: pick one in the collection's Edit.")),
+    ] };
+  }
+
+  // Paragraphs found word for word in at least a fifth of the chapters
+  // (and in two or more), most common first.
+  async function look(redraw) {
+    if (found || looking) return looking;
+    looking = (async () => {
+      const seen = new Map();
+      for (const [i, q] of pages.entries()) {
+        const html = await C.store.readPage(q.id).catch(() => null);
+        if (html) {
+          const doc = new DOMParser().parseFromString(html, "text/html");
+          for (const t of new Set(exportLines(doc).map(lineText))) if (t && t.length <= 300) seen.set(t, (seen.get(t) || 0) + 1);
+        }
+        if (i % 10 === 9) { redraw("Looking… " + (i + 1) + " of " + pages.length); await new Promise((go) => setTimeout(go, 0)); }
+      }
+      const least = Math.max(2, Math.ceil(pages.length / 5));
+      found = [...seen].filter(([, n]) => n >= least).sort((a, b) => b[1] - a[1]).slice(0, 12);
+      for (const l of ed.lines) if (!found.some(([t]) => t === l)) found.push([l, seen.get(l) || 0]);
+      looking = null;
+      redraw();
+    })();
+    return looking;
+  }
+
+  function cleanScreen() {
+    const lines = el("div", { class: "group export-lines" });
+    const drawLines = (busy) => {
+      if (!found) { lines.replaceChildren(el("div", { class: "row" }, el("span", { class: "choice-note", role: "status" }, busy || "Looking…"))); return; }
+      if (!found.length) { lines.replaceChildren(el("div", { class: "row" }, el("span", { class: "choice-note" }, pages.length < 2 ? "There's only one chapter." : "No paragraph repeats in many chapters."))); return; }
+      lines.replaceChildren(...found.map(([t, n]) => switchRow("“" + (t.length > 90 ? t.slice(0, 88) + "…" : t) + "”", n ? "In " + n + " of " + pages.length + " chapters" : "Not in these chapters now", ed.lines.includes(t),
+        (on) => { ed.lines = ed.lines.filter((l) => l !== t); if (on) ed.lines.push(t); keep(); }, { "aria-label": "Leave out " + t.slice(0, 60) })));
+    };
+    drawLines();
+    look(drawLines);
+    if (!ed.rules.length) ed.rules.push({ find: "", put: "" });
+    const list = el("div", {});
+    const drawRules = () => list.replaceChildren(...ed.rules.map((r, i) => el("div", { class: "group" }, el("div", { class: "rc-list" },
+      field("Find", r.find, "Words, or A/N: *", (v) => { r.find = v; }),
+      field("Replace with", r.put, "Nothing: it's removed", (v) => { r.put = v; }),
+      ed.rules.length > 1 ? el("button", { class: "btn-quiet export-rule-del", type: "button", onclick: () => { ed.rules.splice(i, 1); keep(); drawRules(); } }, "Remove") : null))));
+    drawRules();
+    return { title: "Clean up the text", nodes: [
+      section("Lines in many chapters", null, lines, el("p", { class: "footnote" }, "Turn one on to leave it out of every chapter.")),
+      section("Find and replace", null, list,
+        el("div", { class: "group" }, el("button", { class: "row", type: "button", onclick: () => { ed.rules.push({ find: "", put: "" }); drawRules(); const f = list.querySelectorAll("input"); f[f.length - 2].focus(); } }, el("span", { class: "row-label accent" }, "Add another"))),
+        el("p", { class: "footnote" }, "* stands for any words in the same paragraph: A/N: * removes an author's note that starts with A/N:. Kept for the next export of this collection.")),
+    ] };
+  }
+  return Object.assign(api, { rangeRows, mainRows });
+}
+
+async function exportAs(p, kind, how, btn, opts = { heads: true }) {
+  if (p.pages && (opts.from != null || opts.title)) p = { pages: p.pages.slice(opts.from || 0, opts.to == null ? undefined : opts.to + 1), title: opts.title || p.title };
   const pages = p.pages || null;
-  if (kind === "pdf") { await (pages ? printPages(pages, p.title, btn) : printPage(p, btn)); return; }
+  if (kind === "pdf") { await (pages ? printPages(pages, p.title, btn, opts) : printPage(p, btn)); return; }
   if (kind === "source" && !navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
   const mime = EXPORTS.find((e) => e.value === kind).mime;
   const book = kind === "epub";
@@ -1859,9 +2013,9 @@ async function exportAs(p, kind, how, btn) {
   try {
     let name, text = null, uri = null, blob = null;
     if (kind === "cbz") ({ name, uri = null, blob = null } = await C.files.exportComic(pages || [p], pages ? p.title : undefined, busy.count));
-    else if (kind === "epub") ({ name, uri = null, blob = null } = await C.epub.exportBook(pages || [p], pages ? p.title : undefined, pages ? await coverBytes(pages) : null, busy.count));
-    else if (kind === "md") ({ name, text } = await (pages ? C.backup.exportMarkdownAll(pages, p.title, busy.count) : C.backup.exportMarkdown(p)));
-    else if (kind === "html") ({ name, html: text } = await (pages ? C.backup.exportPages(pages, p.title, busy.count) : C.backup.exportPage(p)));
+    else if (kind === "epub") ({ name, uri = null, blob = null } = await C.epub.exportBook(pages || [p], pages ? p.title : undefined, pages ? await coverBytes(pages) : null, busy.count, opts));
+    else if (kind === "md") ({ name, text } = await (pages ? C.backup.exportMarkdownAll(pages, p.title, busy.count, opts) : C.backup.exportMarkdown(p)));
+    else if (kind === "html") ({ name, html: text } = await (pages ? C.backup.exportPages(pages, p.title, busy.count, opts) : C.backup.exportPage(p)));
     else ({ name, html: text } = await C.save.pageSource(p.url));
     if (!uri && text != null) uri = await C.platform.writeCache(name, text);
     busy.made();
@@ -1931,7 +2085,7 @@ async function sendBook(pages, btn, title) {
 // The page file with a plain print style, on the phone's print screen;
 // it runs no scripts and loads nothing, its pictures are inside it.
 const printPage = (p, btn) => printFile(() => C.backup.exportPage(p), btn);
-const printPages = (pages, title, btn) => printFile((count) => C.backup.exportPages(pages, title, count), btn);
+const printPages = (pages, title, btn, opts) => printFile((count) => C.backup.exportPages(pages, title, count, opts), btn);
 async function printFile(make, btn) {
   const busy = exportBusy(btn, "Getting it ready…");
   try {

@@ -560,8 +560,11 @@
 
   // The page as one HTML file: its saved pictures inlined, its index entry
   // in a <meta> for importing it back. Resolves to { name, html }.
-  async function exportPage(p) {
+  // `fix(doc)` changes the copy before it's written: a collection's
+  // export edits, never the clip.
+  async function exportPage(p, fix) {
     const doc = new DOMParser().parseFromString(await S().readPage(p.id), "text/html");
+    if (fix) fix(doc);
     for (const img of doc.querySelectorAll("img[src]")) {
       const src = img.getAttribute("src");
       if (!LOCAL.test(src)) continue;
@@ -692,13 +695,19 @@
 
   // { name, text } for a saved page as Markdown: its title, byline and
   // source first, the licence line last.
-  async function exportMarkdown(p) {
+  // `heads` false leaves the title, byline and source out, for a
+  // collection's chapters exported without headers.
+  async function exportMarkdown(p, heads = true, fix) {
     const doc = new DOMParser().parseFromString(await S().readPage(p.id), "text/html");
+    if (fix) fix(doc);
     const out = [];
     mdBlocks(doc.body, out);
-    const head = ["# " + mdEscape(p.title)];
-    if (p.byline) head.push("*" + mdEscape(p.byline) + "*");
-    head.push("[" + mdEscape(p.site || p.url) + "](" + webUrl(p.url) + ")");
+    const head = [];
+    if (heads) {
+      head.push("# " + mdEscape(p.title));
+      if (p.byline) head.push("*" + mdEscape(p.byline) + "*");
+      head.push("[" + mdEscape(p.site || p.url) + "](" + webUrl(p.url) + ")");
+    }
     const licence = doc.querySelector(".co-licence");
     const foot = licence ? "---\n\n" + mdInline(licence).trim() : "";
     const marks = (p.marks || []).length || (p.ink && Object.keys(p.ink).length) ? "## Highlights\n\n" + marksBody(p) : "";
@@ -723,7 +732,8 @@
 
   // A folder as one file (0.26.0): its pages in order, each with its own
   // title and licence line, pictures inside.
-  async function exportPages(pages, title, onProgress) {
+  async function exportPages(pages, title, onProgress, opts) {
+    const heads = !opts || opts.heads !== false;
     const out = document.implementation.createHTMLDocument(title);
     const charset = out.createElement("meta");
     charset.setAttribute("charset", "utf-8");
@@ -733,10 +743,11 @@
     h.textContent = title;
     out.body.append(h);
     for (const [i, p] of pages.entries()) {
-      const doc = new DOMParser().parseFromString((await exportPage(p)).html, "text/html");
+      const doc = new DOMParser().parseFromString((await exportPage(p, opts && opts.fix)).html, "text/html");
       const part = out.createElement("section");
       part.className = "co-part";
       part.append(...[...doc.body.childNodes].map((n) => out.importNode(n, true)));
+      if (!heads) part.querySelectorAll(".co-head").forEach((n) => n.remove());
       part.querySelectorAll(".co-head h1").forEach((n) => { const h2 = out.createElement("h2"); h2.textContent = n.textContent; n.replaceWith(h2); });
       out.body.append(part);
       if (onProgress) onProgress(i + 1, pages.length);
@@ -744,10 +755,11 @@
     return { name: pageSlug(title) + ".html", html: "<!doctype html>\n" + out.documentElement.outerHTML };
   }
 
-  async function exportMarkdownAll(pages, title, onProgress) {
+  async function exportMarkdownAll(pages, title, onProgress, opts) {
+    const heads = !opts || opts.heads !== false;
     const parts = [];
     for (const [i, p] of pages.entries()) {
-      parts.push((await exportMarkdown(p)).text.replace(/^# /, "## ").trim());
+      parts.push((await exportMarkdown(p, heads, opts && opts.fix)).text.replace(/^# /, "## ").trim());
       if (onProgress) onProgress(i + 1, pages.length);
     }
     return { name: pageSlug(title) + ".md", text: "# " + mdEscape(title) + "\n\n" + parts.join("\n\n---\n\n") + "\n" };
