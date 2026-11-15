@@ -82,7 +82,7 @@ function lockPaint(note, warn) {
   fill($("lockDots"), ...Array.from({ length: Math.min(LOCK_MAX, n) }, (_, i) => el("span", { class: "lock-dot" + (i < lock.code.length ? " on" : "") })));
   $("lockDots").setAttribute("aria-label", lock.code.length + (lock.code.length === 1 ? " number" : " numbers") + " entered");
   const text = waiting ? "Too many wrong tries. Try again in " + lockWaitText(t.until - Date.now()) + "."
-    : note || (lock.mode === "set" && !lock.first ? LOCK_MIN + " to " + LOCK_MAX + " numbers." + (C.platform.os === "android" ? " Fingerprint or face can be added after." : "") : "");
+    : note || (lock.mode === "set" && !lock.first ? LOCK_MIN + " to " + LOCK_MAX + " numbers." + (C.platform.native ? " Fingerprint or face can be added after." : "") : "");
   $("lockNote").textContent = text;
   $("lockNote").classList.toggle("warn", !!warn || waiting);
   $("lockNext").hidden = lock.mode !== "set";
@@ -310,7 +310,7 @@ function lockSections() {
       el("button", { class: "row", type: "button", onclick: turnLockOn },
         el("span", { class: "choice-text" },
           el("span", { class: "choice-label accent" }, "Turn on app lock"),
-          el("span", { class: "choice-note" }, "A passcode" + (C.platform.os === "android" ? ", fingerprint or face" : ""))))))];
+          el("span", { class: "choice-note" }, "A passcode" + (C.platform.native ? ", fingerprint or face" : ""))))))];
   const bio = el("label", { class: "row", hidden: "" });
   C.platform.lock.biometric().then((ok) => {
     if (!ok) return;
