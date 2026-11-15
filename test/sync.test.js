@@ -4,6 +4,7 @@ const assert = require("assert");
 
 global.window = { Waypage: { platform: {} } };
 global.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+require("../src/keel/github.js");
 require("../src/sync.js");
 const S = window.Waypage.sync;
 

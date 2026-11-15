@@ -94,6 +94,7 @@ src/anki.js         the Anki extension's engine: decks, cards and a review log (
 src/app-anki.js     the Anki extension's screens: the selection bar's button and card sheet, the place (decks, study, browse, edit, options)
 src/motion.js       the springs from DESIGN.md, sampled into CSS linear()
 src/keel/qr.js      QR code for sync's setup link, made on the device so the token never leaves it (from keel, below)
+src/keel/github.js  the GitHub requests sync.js makes: reading, writing and committing files, errors with a kind (from keel, below)
 src/styles.css      tokens, themes, layout (DESIGN.md)
 src/reader.css      the saved page inside the reader's frame
 src/fonts.css       the bundled fonts (src/fonts/)
@@ -535,6 +536,7 @@ offers any version higher than its own. A merge without a bump only
 refreshes the web copy. CONTRIBUTING.md has the steps.
 
 The files listed in `keel.lock.json` (`server.js`, `src/keel/qr.js`,
+`src/keel/github.js`,
 `tools/release.js`, `tools/android-version.js`, `tools/keel-sync.js`,
 `test/keel.test.js`, the github-pages skill) come from keel
 (danielnoam/keel), shared with LifeLog. Don't edit them here:
