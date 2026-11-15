@@ -3,6 +3,7 @@
 // engine (src/anki.js) through a made-up store: queue, limits, answering,
 // undo, and a schedule that comes back the same from the log alone.
 const assert = require("assert");
+require("./lang.js");
 
 const files = new Map();
 const mem = new Map();

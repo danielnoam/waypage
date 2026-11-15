@@ -59,13 +59,13 @@ const newJob = (url, folder) => ({ key: url, url, site: C.save.siteName(url), do
 async function savePage(url, folder, how) {
   if (!(how && how.given) && fileLinkName(url)) return saveFileLink(url);
   const existing = savedAs(url);
-  if (existing) { toast("Already in your library"); openPage(existing.id); return; }
+  if (existing) { toast(t("Already in your library")); openPage(existing.id); return; }
   if (state.saving.some((s) => !s.error && sameUrl(s.url, url))) return;
   state.saving = state.saving.filter((s) => !(s.error && sameUrl(s.url, url)));
   const job = { ...newJob(url, folder), ...how };
   state.saving.unshift(job);
   renderLibrary();
-  toast(waitsForWifi(DATA_SAVE_KEY) ? "It saves when you're on Wi-Fi. It's in Downloads." : "Saving. It's in Downloads.");
+  toast(waitsForWifi(DATA_SAVE_KEY) ? t("It saves when you're on Wi-Fi. It's in Downloads.") : t("Saving. It's in Downloads."));
   await wifiGate(job);
   if (!state.saving.includes(job)) return;
   job.waiting = false;
@@ -93,10 +93,10 @@ async function isFileBlob(blob) {
   return FILE_HEADS.some((h) => h.every((b, i) => head[i] === b));
 }
 async function saveFileLink(url, name, page) {
-  if (!navigator.onLine) { toast("You're offline. Add it when you're back online."); return; }
-  if (!C.platform.canReadPages) { toast("This browser can't download from that site. Add it in Waypage on your phone."); return; }
+  if (!navigator.onLine) { toast(t("You're offline. Add it when you're back online.")); return; }
+  if (!C.platform.canReadPages) { toast(t("This browser can't download from that site. Add it in Waypage on your phone.")); return; }
   name = name || fileLinkName(url) || "file";
-  toast("Downloading “" + name.replace(/\.[a-z0-9]+$/i, "") + "”…");
+  toast(t("Downloading “{replace}”…", { replace: name.replace(/\.[a-z0-9]+$/i, "") }));
   try {
     let got = await C.platform.fetchBytes(url, name);
     // Some sites answer the first download with a page that links the file
@@ -113,7 +113,7 @@ async function saveFileLink(url, name, page) {
     if (!(await isFileBlob(got.blob))) throw new Error("not a file");
     await openFile(new File([got.blob], name, { type: got.blob.type || got.type || "" }), null, true, null, {});
   } catch (e) {
-    toast("Couldn't download it just now. Try again later" + (page ? ", or open it on the site." : "."));
+    toast(t("Couldn't download it just now. Try again later{x}", { x: page ? t(", or open it on the site.") : "." }));
   }
 }
 
@@ -126,7 +126,7 @@ function saveLater(url, folder) {
   const list = load(LATER_KEY, []);
   if (!list.some((x) => sameUrl(x.url, url))) { list.push({ url, folder: folder || null }); store(LATER_KEY, list); }
   showWaiting();
-  toast("It saves when you're back online. It's in Downloads.");
+  toast(t("It saves when you're back online. It's in Downloads."));
 }
 function showWaiting() {
   for (const x of load(LATER_KEY, [])) {
@@ -153,7 +153,7 @@ async function saveWaiting() {
 function contentsFound(job) {
   dropFailed(job);
   openBatch(job.contents.links.join("\n"), false, folderName(job.contents.title || job.site), job.url, job.contents.siteTags);
-  toast("That's a list of chapters. Check them, then save.");
+  toast(t("That's a list of chapters. Check them, then save."));
 }
 
 // Waiting for Wi-Fi (1.4.1): with "Wait for Wi-Fi" on and the phone on
@@ -204,7 +204,7 @@ async function saveAll(all, folder, tags = [], mode, skipSaved, kind, source, ta
   state.saving = [...fresh, ...state.saving];
   renderLibrary();
   if (state.folder) renderFolder();
-  if (run) toast("Saving " + countLine(fresh.length) + ". They're in Downloads.");
+  if (run) toast(t("Saving {countLine}. They're in Downloads.", { countLine: countLine(fresh.length) }));
   let saved = 0, failed = 0, had = 0, stopped = 0;
   for (const job of jobs) {
     if (job.waiting && !state.saving.includes(job)) { stopped++; continue; }
@@ -231,9 +231,9 @@ async function saveAll(all, folder, tags = [], mode, skipSaved, kind, source, ta
   if (run) renderLibrary();
   if (name && source) updateCover(name);
   if (!jobs.length) return;
-  toast([saved ? "Saved " + countLine(saved) + (name ? " into " + name : "") : "",
-    had ? had + " already saved" + (name && !saved ? ", now in " + name : "") : "",
-    failed ? failed + " couldn't be saved" : "", stopped ? "stopped before " + countLine(stopped) : ""].filter(Boolean).join(" · ") + ".");
+  toast([saved ? (name ? t("Saved {clips} into {folder}", { clips: countLine(saved), folder: name }) : t("Saved {clips}", { clips: countLine(saved) })) : "",
+    had ? (name && !saved ? t("{n} already saved, now in {folder}", { n: had, folder: name }) : t("{n} already saved", { n: had })) : "",
+    failed ? t("{n} couldn't be saved", { n: failed }) : "", stopped ? t("stopped before {clips}", { clips: countLine(stopped) }) : ""].filter(Boolean).join(" · ") + ".");
 }
 
 // Where new pages go in a folder when the pages around them in the list
@@ -351,7 +351,7 @@ async function runJob(job) {
     renderLibraryLater();
     return meta;
   } catch (e) {
-    job.error = e instanceof C.save.SaveError ? e.message : "Couldn't save this clip. Try again.";
+    job.error = e instanceof C.save.SaveError ? e.message : t("Couldn't save this clip. Try again.");
     job.gone = e instanceof C.save.SaveError && e.gone && !job.archived;
     if (e instanceof C.save.ContentsPage) job.contents = e.contents;
     if (!(e instanceof C.save.SaveError)) console.error(e);

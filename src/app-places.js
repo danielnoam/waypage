@@ -41,7 +41,7 @@ function renderHighlights() {
   const drawnIn = state.pages.filter(hasDrawings);
   const drawings = drawnIn.reduce((n, p) => n + inkTotal(p), 0);
   if (!marksHead) {
-    const input = el("input", { type: "search", placeholder: "Search your highlights", "aria-label": "Search your highlights",
+    const input = el("input", { type: "search", placeholder: t("Search your highlights"), "aria-label": t("Search your highlights"),
       autocomplete: "off", spellcheck: "false", enterkeyhint: "search", dir: "auto" });
     input.addEventListener("input", () => { marksQuery = input.value; renderHighlights(); });
     const box = el("div", { class: "search hl-search", role: "search" }, input);
@@ -51,8 +51,8 @@ function renderHighlights() {
         el("p", { class: "meta hl-count", role: "status" }),
         el("button", { class: "btn-text hl-copy", type: "button", onclick: () => {
           const text = marksShown().map((c) => C.backup.marksMarkdown({ ...c.p, marks: c.list })).join("\n");
-          copyText(text, "Highlights copied");
-        } }, "Copy all")),
+          copyText(text, t("Highlights copied"));
+        } }, t("Copy all"))),
       el("div", { class: "hl-colors" }));
   }
   const everyMark = state.pages.flatMap((p) => p.marks || []);
@@ -64,14 +64,14 @@ function renderHighlights() {
   if (marksQuery !== marksList) { marksList = marksQuery; marksUpTo = MARKS_FIRST; }
   const more = clips.length > marksUpTo;
   marksHead.hidden = !total && !drawings;
-  const hl = (n) => (n === 1 ? "1 highlight" : n + " highlights");
+  const hl = (n) => tn(n, "1 highlight", "{n} highlights");
   marksHead.querySelector(".hl-count").textContent = marksQuery.trim() || marksColor
-    ? hl(shown) + " found"
-    : [total || !drawings ? hl(total) : null, drawings ? inkWord(drawings) : null].filter(Boolean).join(" · ") + " in " + (clips.length === 1 ? "1 clip" : clips.length + " clips");
+    ? t("{hl} found", { hl: hl(shown) })
+    : t("{what} in {clips}", { what: [total || !drawings ? hl(total) : null, drawings ? inkWord(drawings) : null].filter(Boolean).join(" · "), clips: countLine(clips.length) });
   marksHead.querySelector(".hl-copy").hidden = !shown;
   const nodes = clips.slice(0, marksUpTo).map(({ p, list, ink }) => {
     const rows = list.map((m) => ({ at: m.page ? m.page : m.block || 0, row: el("li", { class: "mark-item" },
-      el("button", { class: "row mark-row", type: "button", "aria-label": m.text.slice(0, 120) + ", in " + p.title, onclick: () => goToMark(p, m.id) },
+      el("button", { class: "row mark-row", type: "button", "aria-label": t("{slice}, in {title}", { slice: m.text.slice(0, 120), title: p.title }), onclick: () => goToMark(p, m.id) },
         el("span", { class: "mark-quote", "data-c": colorOf(m), dir: "auto" }, m.text),
         m.note ? el("span", { class: "mark-note", dir: "auto" }, m.note) : null)) }));
     const all = inkOpen.has(p.id);
@@ -79,7 +79,7 @@ function renderHighlights() {
     rows.sort((a, b) => a.at - b.at);
     const more = !all && ink.length > INK_FIRST
       ? el("li", { class: "mark-item" }, el("button", { class: "row hl-more", type: "button", onclick: () => { inkOpen.add(p.id); renderHighlights(); } },
-        "Show all " + ink.length + (ink[0].page ? " pages" : " drawings")))
+        ink[0].page ? t("Show all {n} pages", { n: ink.length }) : t("Show all {n} drawings", { n: ink.length })))
       : null;
     return el("section", { class: "hl-clip", "data-key": "hl:" + p.id },
       el("button", { class: "hl-title", type: "button", onclick: () => openPage(p.id) },
@@ -89,9 +89,9 @@ function renderHighlights() {
   });
   if (!total && !drawings) {
     nodes.push(el("div", { class: "empty" },
-      el("h2", { class: "empty-title" }, "No highlights yet"),
-      el("p", { class: "empty-text" }, "Select words in a clip and tap Mark, or Draw. Every highlight and drawing in your library gathers here.")));
-  } else if (!clips.length) nodes.push(el("p", { class: "empty-text hl-none" }, "No highlights match that."));
+      el("h2", { class: "empty-title" }, t("No highlights yet")),
+      el("p", { class: "empty-text" }, t("Select words in a clip and tap Mark, or Draw. Every highlight and drawing in your library gathers here."))));
+  } else if (!clips.length) nodes.push(el("p", { class: "empty-text hl-none" }, t("No highlights match that.")));
   if (more) nodes.push(el("div", { class: "lib-more", "aria-hidden": "true" }));
   // The search field stays put, so typing in it keeps its focus.
   if (marksHead.parentNode !== root) root.replaceChildren(marksHead, el("div", { class: "hl-list" }));
@@ -114,7 +114,7 @@ function renderHighlights() {
 // added up (stats.js). All time (2026-11) is everything since counting
 // began: every day is kept, so nothing in it is cut short.
 const SPAN_KEY = "waypage.readingSpan";
-const SPANS = { week: "Week", month: "Month", year: "Year", all: "All time" };
+const SPANS = { week: t("Week"), month: t("Month"), year: t("Year"), all: t("All time") };
 let readSpan = SPANS[load(SPAN_KEY, "week")] ? load(SPAN_KEY, "week") : "week";
 let readBack = 0; // how many weeks, months or years before this one
 const dayAt = (k) => new Date(k + "T12:00:00");
@@ -134,7 +134,7 @@ function readRange(span = readSpan, back = readBack) {
   now.setHours(12, 0, 0, 0);
   if (span === "all") {
     const from = C.stats.dayKey(C.stats.since());
-    return { from, to: keyOf(now), title: "Since " + dayAt(from).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" }), now: null, all: true };
+    return { from, to: keyOf(now), title: t("Since {toLocaleDateString}", { toLocaleDateString: dayAt(from).toLocaleDateString(i18n.lang, { day: "numeric", month: "long", year: "numeric" }) }), now: null, all: true };
   }
   if (span === "week") {
     const a = new Date(now);
@@ -145,15 +145,15 @@ function readRange(span = readSpan, back = readBack) {
     if (b.getFullYear() !== now.getFullYear()) opts.year = "numeric";
     const f = new Intl.DateTimeFormat(undefined, opts);
     const title = f.formatRange ? f.formatRange(a, b) : f.format(a) + " – " + f.format(b);
-    return { from: keyOf(a), to: keyOf(b), title, now: back === 0 ? "This week" : back === 1 ? "Last week" : null };
+    return { from: keyOf(a), to: keyOf(b), title, now: back === 0 ? t("This week") : back === 1 ? t("Last week") : null };
   }
   if (span === "month") {
     const a = new Date(now.getFullYear(), now.getMonth() - back, 1, 12);
     const b = new Date(a.getFullYear(), a.getMonth() + 1, 0, 12);
-    return { from: keyOf(a), to: keyOf(b), title: a.toLocaleDateString(undefined, { month: "long", year: "numeric" }), now: back === 0 ? "This month" : null };
+    return { from: keyOf(a), to: keyOf(b), title: a.toLocaleDateString(i18n.lang, { month: "long", year: "numeric" }), now: back === 0 ? t("This month") : null };
   }
   const y = now.getFullYear() - back;
-  return { from: y + "-01-01", to: y + "-12-31", title: String(y), now: back === 0 ? "This year" : null };
+  return { from: y + "-01-01", to: y + "-12-31", title: String(y), now: back === 0 ? t("This year") : null };
 }
 // The days in a range. All time goes over the days there are: days()
 // walks every day and stops at 400.
@@ -180,8 +180,8 @@ function allBars(range, days) {
     at[k] = bars.length;
     // Months before counting began are left empty, not drawn as none read.
     bars.push({ read: 0, aloud: 0, today: i === n - 1, future: k < range.from.slice(0, 7),
-      label: n <= 12 ? t.toLocaleDateString(undefined, { month: "narrow" }) : i === 0 || t.getMonth() === 0 ? String(t.getFullYear()) : "",
-      name: t.toLocaleDateString(undefined, { month: "long", year: "numeric" }) });
+      label: n <= 12 ? t.toLocaleDateString(i18n.lang, { month: "narrow" }) : i === 0 || t.getMonth() === 0 ? String(t.getFullYear()) : "",
+      name: t.toLocaleDateString(i18n.lang, { month: "long", year: "numeric" }) });
   }
   for (const d of days) { const b = bars[at[d.key.slice(0, 7)]]; if (b) { b.read += d.readMs; b.aloud += d.aloudMs; } }
   return Object.assign(bars, { unit: "month", dense: bars.length > 12 });
@@ -193,15 +193,15 @@ function readBars(range, days = readDays(range)) {
   if (readSpan !== "year") {
     return days.map((d, i) => {
       const t = dayAt(d.key);
-      const label = readSpan === "week" ? t.toLocaleDateString(undefined, { weekday: "narrow" })
+      const label = readSpan === "week" ? t.toLocaleDateString(i18n.lang, { weekday: "narrow" })
         : (i % 7 === 0 ? String(t.getDate()) : "");
       return { read: d.readMs, aloud: d.aloudMs, label, today: d.key === today, future: d.key > today,
-        name: t.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }) };
+        name: t.toLocaleDateString(i18n.lang, { weekday: "long", day: "numeric", month: "long" }) };
     });
   }
   const months = [];
-  for (let m = 0; m < 12; m++) months.push({ read: 0, aloud: 0, label: new Date(2000, m, 1).toLocaleDateString(undefined, { month: "narrow" }),
-    name: new Date(2000, m, 1).toLocaleDateString(undefined, { month: "long" }), today: false, future: false });
+  for (let m = 0; m < 12; m++) months.push({ read: 0, aloud: 0, label: new Date(2000, m, 1).toLocaleDateString(i18n.lang, { month: "narrow" }),
+    name: new Date(2000, m, 1).toLocaleDateString(i18n.lang, { month: "long" }), today: false, future: false });
   const thisMonth = today.slice(0, 7);
   for (const d of days) { const m = Number(d.key.slice(5, 7)) - 1; months[m].read += d.readMs; months[m].aloud += d.aloudMs; }
   months.forEach((m, i) => { const k = range.from.slice(0, 4) + "-" + String(i + 1).padStart(2, "0"); m.today = k === thisMonth; m.future = k > thisMonth; });
@@ -227,12 +227,12 @@ function readChart(bars) {
     return c;
   };
   const said = bars.filter((b) => b.read + b.aloud >= 60000).map((b) => b.name + " " + spanText(b.read + b.aloud)).join(", ");
-  return el("div", { class: "rs-chart rs-" + readSpan + (bars.dense ? " rs-dense" : ""), role: "img", "aria-label": said ? "Time a " + (bars.unit || "day") + ": " + said : readSpan === "all" ? "No reading yet" : "No reading in this " + readSpan },
+  return el("div", { class: "rs-chart rs-" + readSpan + (bars.dense ? " rs-dense" : ""), role: "img", "aria-label": said ? ({ year: t("Time a year: {said}", { said }), month: t("Time a month: {said}", { said }) }[bars.unit] || t("Time a day: {said}", { said })) : ({ all: t("No reading yet"), year: t("No reading this year"), month: t("No reading this month") }[readSpan] || t("No reading this week")) },
     el("span", { class: "rs-top meta" }, spanText(top)),
     el("div", { class: "rs-cols" }, ...bars.map(col)));
 }
 function readFigure(n, label) {
-  return el("div", { class: "rs-fig" }, el("b", null, n.toLocaleString()), el("span", null, label));
+  return el("div", { class: "rs-fig" }, el("b", null, n.toLocaleString(i18n.lang)), el("span", null, label));
 }
 function readStreak() {
   const s = C.stats.streak();
@@ -243,11 +243,11 @@ function readStreak() {
     dots.push(el("i", { class: d.readMs + d.aloudMs >= C.stats.READ_DAY ? "on" : "" }));
   }
   const best = s.best > s.now && s.bestEnd
-    ? "Longest: " + s.best + " days, in " + dayAt(s.bestEnd).toLocaleDateString(undefined, { month: "long" }) : s.now ? "Your longest yet" : "A minute a day keeps a run going";
+    ? t("Longest: {n} days, in {month}", { n: s.best, month: dayAt(s.bestEnd).toLocaleDateString(i18n.lang, { month: "long" }) }) : s.now ? t("Your longest yet") : t("A minute a day keeps a run going");
   return el("div", { class: "rs-streak" },
     el("div", { class: "rs-dots", "aria-hidden": "true" }, ...dots),
     el("div", null,
-      el("p", { class: "rs-streak-n" }, s.now === 1 ? "1 day in a row" : s.now ? s.now + " days in a row" : "No run of days yet"),
+      el("p", { class: "rs-streak-n" }, s.now === 1 ? t("1 day in a row") : s.now ? t("{now} days in a row", { now: s.now }) : t("No run of days yet")),
       el("p", { class: "meta" }, best)));
 }
 // What the Reading widgets show (1.39.0), worked out here for the day
@@ -263,14 +263,14 @@ function statsWidget() {
   return {
     day: today, weekTo: week.to,
     week: spanText(ms),
-    weekMeta: [run.now ? (run.now === 1 ? "1 day in a row" : run.now + " days in a row") : null, finished ? finished + " finished" : null].filter(Boolean).join(" · ") || week.title,
+    weekMeta: [run.now ? (run.now === 1 ? i18n.t("1 day in a row") : i18n.t("{now} days in a row", { now: run.now })) : null, finished ? i18n.t("{n} finished", { n: finished }) : null].filter(Boolean).join(" · ") || week.title,
     bars: days.map((d) => ({ day: d.key, r: Math.round(d.readMs / 6000) / 10, a: Math.round(d.aloudMs / 6000) / 10,
-      label: dayAt(d.key).toLocaleDateString(undefined, { weekday: "narrow" }) })),
+      label: dayAt(d.key).toLocaleDateString(i18n.lang, { weekday: "narrow" }) })),
     today: spanText(t.readMs + t.aloudMs),
-    todayMeta: t.readMs + t.aloudMs < 60000 ? "Nothing yet today" : t.aloudMs >= 60000 ? spanText(t.readMs) + " reading, " + spanText(t.aloudMs) + " listening" : t.words >= 50 ? "About " + (Math.round(t.words / 10) * 10).toLocaleString() + " words" : "Reading",
+    todayMeta: t.readMs + t.aloudMs < 60000 ? i18n.t("Nothing yet today") : t.aloudMs >= 60000 ? i18n.t("{read} reading, {aloud} listening", { read: spanText(t.readMs), aloud: spanText(t.aloudMs) }) : t.words >= 50 ? i18n.t("About {n} words", { n: Math.round(t.words / 10) * 10 }) : i18n.t("Reading"),
     readToday: t.readMs + t.aloudMs >= S.READ_DAY,
-    run: run.now === 1 ? "1 day" : run.now + " days",
-    runMeta: run.best > run.now ? "Longest " + run.best : run.now ? "Your longest yet" : "Read a minute today to start",
+    run: i18n.tn(run.now, "1 day", "{n} days"),
+    runMeta: run.best > run.now ? i18n.t("Longest {n}", { n: run.best }) : run.now ? i18n.t("Your longest yet") : i18n.t("Read a minute today to start"),
   };
 }
 function renderReading() {
@@ -281,15 +281,15 @@ function renderReading() {
   const since = C.stats.dayKey(C.stats.since());
   const older = range.all || range.from <= since;
   const step = (n) => () => { readBack = Math.max(0, readBack + n); renderReading(); };
-  const seg = el("div", { class: "rs-seg", role: "tablist", "aria-label": "Show" }, ...Object.keys(SPANS).map((s) => {
+  const seg = el("div", { class: "rs-seg", role: "tablist", "aria-label": t("Show") }, ...Object.keys(SPANS).map((s) => {
     const b = el("button", { class: "rs-tab", type: "button", role: "tab", "aria-selected": String(s === readSpan),
       onclick: () => { readSpan = s; readBack = 0; store(SPAN_KEY, s); renderReading(); } }, SPANS[s]);
     return b;
   }));
-  const back = el("button", { class: "icon-btn", type: "button", "aria-label": "Before", onclick: step(1) });
+  const back = el("button", { class: "icon-btn", type: "button", "aria-label": t("Before"), onclick: step(1) });
   back.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
   back.disabled = older;
-  const on = el("button", { class: "icon-btn", type: "button", "aria-label": "After", onclick: step(-1) });
+  const on = el("button", { class: "icon-btn", type: "button", "aria-label": t("After"), onclick: step(-1) });
   on.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
   on.disabled = readBack === 0;
   const tops = C.stats.top(range.from, range.to, 12).map((t) => ({ ...t, p: state.pages.find((p) => p.id === t.id) }))
@@ -299,35 +299,33 @@ function renderReading() {
   fill(root,
     seg,
     el("div", { class: "rs-range" }, back, el("p", { class: "rs-title", "aria-live": "polite" }, range.title), on),
-    el("p", { class: "rs-total" }, read + aloud >= 60000 ? spanText(read + aloud) : "0 min"),
-    el("p", { class: "meta rs-split" }, spanText(read) + " reading · " + spanText(aloud) + " listening"),
+    el("p", { class: "rs-total" }, read + aloud >= 60000 ? spanText(read + aloud) : t("0 min")),
+    el("p", { class: "meta rs-split" }, t("{spanText} reading · {spanText2} listening", { spanText: spanText(read), spanText2: spanText(aloud) })),
     readChart(readBars(range, days)),
-    el("div", { class: "rs-legend meta", "aria-hidden": "true" }, el("span", null, el("i", { class: "rs-key-read" }), "Reading"), el("span", null, el("i", { class: "rs-key-aloud" }), "Listening")),
-    older && !range.all ? el("p", { class: "meta rs-since" }, "Counting since " + dayAt(since).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })) : null,
+    el("div", { class: "rs-legend meta", "aria-hidden": "true" }, el("span", null, el("i", { class: "rs-key-read" }), t("Reading")), el("span", null, el("i", { class: "rs-key-aloud" }), t("Listening"))),
+    older && !range.all ? el("p", { class: "meta rs-since" }, t("Counting since {toLocaleDateString}", { toLocaleDateString: dayAt(since).toLocaleDateString(i18n.lang, { day: "numeric", month: "long", year: "numeric" }) })) : null,
     el("div", { class: "rs-figs" },
       readFigure(Math.round(words / 100) * 100 || words, "words"),
       readFigure(C.stats.finishedIn(range.from, range.to), "clips finished"),
       readFigure(opened, "clips opened"),
       readFigure(saved, "clips saved")),
     readStreak(),
-    tops.length ? el("h2", { class: "overline rs-over" }, "Most time " + (range.all ? "overall" : range.now ? range.now.toLowerCase() : "then")) : null,
+    tops.length ? el("h2", { class: "overline rs-over" }, range.all ? t("Most time overall") : range.now ? t("Most time {x}", { x: range.now.toLowerCase() }) : t("Most time then")) : null,
     tops.length ? el("ul", { class: "rs-top-list" }, ...tops.map((t) => el("li", null,
       el("button", { class: "rs-clip", type: "button", onclick: () => openPage(t.p.id) },
         clipCover(t.p),
         el("span", { class: "rs-clip-text" },
           el("span", { class: "rs-clip-title", dir: "auto" }, t.p.title),
-          el("span", { class: "meta" }, [t.p.link ? "Files" : siteOf(t.p), (C.stats.clip(t.p.id) || {}).finished ? "finished" : null].filter(Boolean).join(" · "))),
+          el("span", { class: "meta" }, [t.p.link ? i18n.t("Files") : siteOf(t.p), (C.stats.clip(t.p.id) || {}).finished ? i18n.t("finished") : null].filter(Boolean).join(" · "))),
         el("span", { class: "rs-clip-time" }, spanText(t.ms)))))) : null,
-    el("p", { class: "footnote rs-note" }, (C.sync.on
-      ? "Each of your devices counts its own, and GitHub sync adds them up. "
-      : "Counted on this device; with GitHub sync on, your other devices' time adds in here. ")
-      + "A clip's time counts while it's on screen, until a little after the words on screen should have taken you. "
-      + (C.stats.paceKnown() ? "Your pace is about " + C.stats.pace() + " words a minute, from the last 30 days; clips' minutes go by it."
-        : "Clips' minutes go by 230 words a minute until Waypage has seen enough of your reading to know your pace.")));
+    el("p", { class: "footnote rs-note" }, t("{x}A clip's time counts while it's on screen, until a little after the words on screen should have taken you. {x2}", { x: C.sync.on
+      ? t("Each of your devices counts its own, and GitHub sync adds them up. ")
+      : t("Counted on this device; with GitHub sync on, your other devices' time adds in here. "), x2: C.stats.paceKnown() ? t("Your pace is about {n} words a minute, from the last 30 days; clips' minutes go by it.", { n: C.stats.pace() })
+        : t("Clips' minutes go by 230 words a minute until Waypage has seen enough of your reading to know your pace.") })));
 }
 
 async function checkNow(f) {
-  if (!navigator.onLine) { toast("You're offline. Check again when you're back online."); return; }
+  if (!navigator.onLine) { toast(t("You're offline. Check again when you're back online.")); return; }
   if (f) { feedsChecking = true; paintFeeds(); try { await checkFeed(f); } finally { feedsChecking = false; paintFeeds(); } }
   else await checkFeeds(true);
 }
@@ -340,12 +338,12 @@ function postRow(f, it, withFeed) {
   const when = whenText(postAt(it));
   const key = f.url + " " + postKey(it);
   const open = () => (state.feedPick ? tapPost(key) : saved ? openPage(saved.id) : previewPost(f, it));
-  const outside = el("button", { class: "post-act", type: "button", "aria-label": "Open " + it.title + " in the browser",
+  const outside = el("button", { class: "post-act", type: "button", "aria-label": t("Open {title} in the browser", { title: it.title }),
     onclick: () => C.platform.openOutside(it.url) }, feedIcon("out", 18));
   let right;
-  if (saved) right = el("span", { class: "post-saved" }, "Saved");
+  if (saved) right = el("span", { class: "post-saved" }, t("Saved"));
   else {
-    right = el("button", { class: "post-act post-save", type: "button", "aria-label": busy ? "Saving " + it.title : "Save " + it.title,
+    right = el("button", { class: "post-act post-save", type: "button", "aria-label": busy ? t("Saving {title}", { title: it.title }) : t("Save {title}", { title: it.title }),
       onclick: () => saveFeedPosts([{ f, it }]) });
     if (busy) { right.disabled = true; right.append(el("span", { class: "spinner", "aria-hidden": "true" })); }
     else right.append(feedIcon("add", 18));
@@ -419,8 +417,8 @@ function paintPostPicks() {
   }
   const list = pickedPosts();
   const all = feedPostsShown();
-  $("selectCount").textContent = list.length ? list.length + (list.length === 1 ? " post" : " posts") + " picked" : "Pick posts";
-  $("selectAll").textContent = all.length && all.every((x) => state.feedPick.has(x.key)) ? "Pick none" : "Select all";
+  $("selectCount").textContent = list.length ? tn(list.length, "1 post picked", "{n} posts picked") : t("Pick posts");
+  $("selectAll").textContent = all.length && all.every((x) => state.feedPick.has(x.key)) ? t("Pick none") : t("Select all");
   $("selOpen").disabled = !list.length;
   $("selSave").disabled = !list.some((x) => !savedAs(x.it.url) && !savingUrl(x.it.url));
 }
@@ -438,7 +436,7 @@ async function savePickedPosts() {
   if (!list.length) return;
   await back();
   saveFeedPosts(list);
-  toast("Saving " + countLine(list.length));
+  toast(t("Saving {countLine}", { countLine: countLine(list.length) }));
 }
 
 // A post read in the app without saving it: the reader shows it, and
@@ -448,15 +446,15 @@ let previewing = null;
 // The last few read this way, so Back from a link read here comes to them.
 const previewsKept = new Map();
 async function previewPost(f, it) {
-  if (!navigator.onLine) { toast("You're offline. Save posts while you're online to read them here."); return; }
+  if (!navigator.onLine) { toast(t("You're offline. Save posts while you're online to read them here.")); return; }
   if (previewing) return;
   previewing = it.url;
-  toast("Opening…");
+  toast(t("Opening…"));
   let got;
   try { got = await C.save.preview(it.url); }
   catch (e) {
     toast(e instanceof C.save.SaveError ? e.message : C.platform.canReadPages
-      ? "Couldn't open that post. Try the browser button." : "This browser can't reach that site. Try the browser button.");
+      ? t("Couldn't open that post. Try the browser button.") : t("This browser can't reach that site. Try the browser button."));
     return;
   } finally { previewing = null; }
   if (f) got.meta.feed = f.url;
@@ -478,14 +476,14 @@ function previewSheet(p) {
   return el("div", { class: "page-controls" },
     el("div", { class: "menu-head" },
       el("p", { class: "menu-title", dir: "auto" }, p.title),
-      el("p", { class: "meta" }, [p.site, clipMinutes(p) + " min", "Not saved"].join(" · "))),
+      el("p", { class: "meta" }, [p.site, t("{n} min", { n: clipMinutes(p) }), t("Not saved")].join(" · "))),
     el("div", { class: "tile-row" },
-      tileButton("add", saved ? "Saved" : "Save", saved ? () => {} : () => {
+      tileButton("add", saved ? t("Saved") : t("Save"), saved ? () => {} : () => {
         if (f) saveFeedPosts([{ f, it: { url: p.post, date: Date.now() } }]);
         else savePage(p.post || p.url);
         history.back();
       }),
-      tileButton("original", "Browser", () => C.platform.openOutside(p.url))));
+      tileButton("original", t("Browser"), () => C.platform.openOutside(p.url))));
 }
 
 // ---- Newsletters (1.43.0) ----
@@ -548,7 +546,7 @@ async function saveMail(f, it) {
       const res = await C.platform.fetchText(full.url);
       if (res.status >= 400) throw new Error(String(res.status));
       html = res.text;
-    } catch (e) { toast("Couldn't reach that email. Kill the Newsletter keeps them a month."); return; }
+    } catch (e) { toast(t("Couldn't reach that email. Kill the Newsletter keeps them a month.")); return; }
   }
   const folder = f.folder ? folderName(f.folder) : undefined;
   await savePage(full.url, folder, { mode: C.platform.native ? f.images || feedImages() : undefined, given: mailPage(f, full, html) });
@@ -589,12 +587,12 @@ function mailRow(f, it, withBox) {
   const when = whenText(postAt(it));
   const open = el("button", { class: "post-open", type: "button", "aria-label": (saved ? "Read " : "Open ") + it.title, onclick: () => openMail(f, it) });
   let right;
-  if (saved) right = el("span", { class: "post-saved" }, "Saved");
+  if (saved) right = el("span", { class: "post-saved" }, t("Saved"));
   else if (confirm) {
-    right = el("button", { class: "btn-small nl-confirm", type: "button", "aria-label": "Confirm the subscription in the browser",
-      onclick: () => { if (it.act) { it.opened = true; store(FEEDS_KEY, feeds); C.platform.openOutside(it.act); paintFeeds(); } else openMail(f, it); } }, "Confirm");
+    right = el("button", { class: "btn-small nl-confirm", type: "button", "aria-label": t("Confirm the subscription in the browser"),
+      onclick: () => { if (it.act) { it.opened = true; store(FEEDS_KEY, feeds); C.platform.openOutside(it.act); paintFeeds(); } else openMail(f, it); } }, t("Confirm"));
   } else {
-    right = el("button", { class: "post-act post-save", type: "button", "aria-label": busy ? "Saving " + it.title : "Save " + it.title,
+    right = el("button", { class: "post-act post-save", type: "button", "aria-label": busy ? t("Saving {title}", { title: it.title }) : t("Save {title}", { title: it.title }),
       onclick: () => saveFeedPosts([{ f, it }]) });
     if (busy) { right.disabled = true; right.append(el("span", { class: "spinner", "aria-hidden": "true" })); }
     else right.append(feedIcon("add", 18));
@@ -604,7 +602,7 @@ function mailRow(f, it, withBox) {
     open,
     el("span", { class: "post-body" },
       el("span", { class: "post-feed", dir: "auto" }, withBox && senderOf(f, it) !== f.title ? senderOf(f, it) + " · " + f.title : senderOf(f, it)),
-      el("span", { class: "post-title", dir: "auto" }, (unread ? el("span", { class: "visually-hidden" }, "Unread: ") : null), it.title),
+      el("span", { class: "post-title", dir: "auto" }, (unread ? el("span", { class: "visually-hidden" }, t("Unread: ")) : null), it.title),
       el("span", { class: "post-meta" }, saved ? readingLine(saved) + " · " + when : when)),
     right);
 }
@@ -623,9 +621,9 @@ function renderNewsletters() {
   if (!boxes.length) {
     leavePostSearch();
     nodes.push(el("div", { class: "empty" },
-      el("h2", { class: "empty-title" }, "Read newsletters here"),
-      el("p", { class: "empty-text" }, "Make an email address for newsletters and sign up with it. Each email arrives here, and is saved for reading offline."),
-      el("button", { class: "btn-primary", type: "button", onclick: () => $("saveUrl").focus() }, "Make an address")));
+      el("h2", { class: "empty-title" }, t("Read newsletters here")),
+      el("p", { class: "empty-text" }, t("Make an email address for newsletters and sign up with it. Each email arrives here, and is saved for reading offline.")),
+      el("button", { class: "btn-primary", type: "button", onclick: () => $("saveUrl").focus() }, t("Make an address"))));
     root.replaceChildren(...nodes);
     return;
   }
@@ -643,18 +641,18 @@ function renderNewsletters() {
   };
   const unread = new Map();
   for (const x of all) if (mailUnread(x.it)) unread.set(x.f, (unread.get(x.f) || 0) + 1);
-  nodes.push(el("div", { class: "chips filters feed-chips", role: "group", "aria-label": "Addresses" },
-    chip("All", [...unread.values()].reduce((n, k) => n + k, 0), !picked, () => pickBox(null), "chip:all"),
+  nodes.push(el("div", { class: "chips filters feed-chips", role: "group", "aria-label": t("Addresses") },
+    chip(t("All"), [...unread.values()].reduce((n, k) => n + k, 0), !picked, () => pickBox(null), "chip:all"),
     ...boxes.map((f) => chip(f.title, unread.get(f) || 0, picked === f, () => pickBox(f.url), "chip:" + f.url, f.url))));
   const checked = Math.max(0, ...(picked ? [picked] : boxes).map((f) => f.checkedAt || 0));
-  const line = ts.length ? (list.length === 1 ? "1 email found" : list.length + " emails found")
-    : !C.platform.canFetchPages ? "Your phone collects these. Saved ones come here through sync."
-    : feedsChecking ? "Checking…" : picked && picked.error ? picked.error : checked ? "Checked " + whenText(checked) : "Not checked yet";
+  const line = ts.length ? tn(list.length, "1 email found", "{n} emails found")
+    : !C.platform.canFetchPages ? t("Your phone collects these. Saved ones come here through sync.")
+    : feedsChecking ? t("Checking…") : picked && picked.error ? picked.error : checked ? t("Checked {when}", { when: whenText(checked) }) : t("Not checked yet");
   nodes.push(el("div", { class: "feed-head" },
     el("p", { class: "meta" + (picked && picked.error && !feedsChecking && !ts.length ? " warn" : ""), role: ts.length ? "status" : null },
       one ? el("span", { class: "nl-mail" }, mailAddress(one)) : null, one ? el("br") : null, line),
     one ? el("span", { class: "feed-head-acts" },
-      el("button", { class: "btn-text", type: "button", "data-key": "copy", onclick: () => copyText(mailAddress(one), "Address copied. Sign up with it.") }, "Copy address")) : null));
+      el("button", { class: "btn-text", type: "button", "data-key": "copy", onclick: () => copyText(mailAddress(one), t("Address copied. Sign up with it.")) }, t("Copy address"))) : null));
   let day = null, group = null;
   for (const x of list) {
     const d = dayName(postAt(x.it));
@@ -662,16 +660,16 @@ function renderNewsletters() {
       day = d;
       const open = list.filter((y) => dayName(postAt(y.it)) === d && !savedAs(y.it.url) && !savingUrl(y.it.url) && !isConfirm(y.it) && y.f.items.includes(y.it));
       nodes.push(sectionHead(d, open.length > 1
-        ? el("button", { class: "btn-text", type: "button", "data-key": "all:" + d, onclick: () => saveFeedPosts(open) }, "Save all " + open.length) : null));
+        ? el("button", { class: "btn-text", type: "button", "data-key": "all:" + d, onclick: () => saveFeedPosts(open) }, t("Save all {n}", { n: open.length })) : null));
       group = el("div", { class: "group feed-group" });
       nodes.push(group);
     }
     group.append(mailRow(x.f, x.it, !picked && boxes.length > 1));
   }
-  if (!list.length && ts.length) nodes.push(el("p", { class: "empty-text hl-none" }, "No emails match that."));
+  if (!list.length && ts.length) nodes.push(el("p", { class: "empty-text hl-none" }, t("No emails match that.")));
   else if (!list.length) {
     nodes.push(el("div", { class: "empty" },
-      el("p", { class: "empty-text" }, (picked && picked.error) || (one ? "No emails yet. Copy the address and sign up to a newsletter with it." : "No emails yet."))));
+      el("p", { class: "empty-text" }, (picked && picked.error) || (one ? t("No emails yet. Copy the address and sign up to a newsletter with it.") : t("No emails yet.")))));
   }
   fillPosts(root, box, nodes);
   const chips = root.querySelector(".feed-chips");
@@ -682,56 +680,56 @@ function renderNewsletters() {
 // you like, from the bottom field (1.43.1). A browser can't (no CORS), so
 // there a sheet asks for the feed link of one made on their page.
 async function addMailBox(url, title) {
-  if (feeds.some((f) => sameUrl(f.url, url))) { toast("That address is here already."); return false; }
+  if (feeds.some((f) => sameUrl(f.url, url))) { toast(t("That address is here already.")); return false; }
   const f = { url, title, link: "", icon: "", mode: "save", images: feedImages(), folder: title, days: MAIL_DAYS,
     addedAt: Date.now(), checkedAt: 0, error: "", items: [] };
   feeds.push(f);
   askToNotify = true;
   saveFeeds();
   await goPlace("newsletters", f.url);
-  toast("Your address is ready. Copy it and sign up with it.");
+  toast(t("Your address is ready. Copy it and sign up with it."));
   return true;
 }
 let makingMail = false;
 async function makeMailBox(name) {
-  const title = name || "Newsletters";
+  const title = name || t("Newsletters");
   if (!C.platform.canFetchPages) { openMenu("newMail", { name: title }); return false; }
-  if (!navigator.onLine) { toast("You're offline. Make it when you're back online."); return false; }
+  if (!navigator.onLine) { toast(t("You're offline. Make it when you're back online.")); return false; }
   if (makingMail) return false;
   makingMail = true;
-  toast("Making the address…");
+  toast(t("Making the address…"));
   try {
     const res = await C.platform.postForm("https://" + KTN + "/feeds", { title }, { headers: { "CSRF-Protection": "true" } });
     const got = res.status < 400 ? JSON.parse(res.text) : null;
     if (!got || !MAIL_FEED.test(got.feed)) throw new Error(String(res.status));
     return await addMailBox(got.feed, title);
   } catch (e) {
-    toast("Kill the Newsletter didn't make one just now. Try again in a while.");
+    toast(t("Kill the Newsletter didn't make one just now. Try again in a while."));
     return false;
   } finally { makingMail = false; }
 }
 function newMailSheet() {
-  const name = el("input", { class: "feed-input", type: "text", placeholder: "Newsletters", "aria-label": "Name", maxlength: "32",
+  const name = el("input", { class: "feed-input", type: "text", placeholder: t("Newsletters"), "aria-label": t("Name"), maxlength: "32",
     value: (state.menu && state.menu.page && state.menu.page.name) || "", autocomplete: "off", autocapitalize: "sentences", enterkeyhint: "next" });
   const link = el("input", { class: "feed-input", type: "url", inputmode: "url", placeholder: "https://kill-the-newsletter.com/feeds/….xml",
-    "aria-label": "Its feed link", autocomplete: "off", autocapitalize: "off", spellcheck: "false", enterkeyhint: "go" });
-  const help = el("p", { class: "footnote" }, "Make it in Waypage on your phone, or make one on Kill the Newsletter's page and paste its feed link here.");
-  const go = el("button", { class: "btn-primary", type: "button" }, "Add it");
+    "aria-label": t("Its feed link"), autocomplete: "off", autocapitalize: "off", spellcheck: "false", enterkeyhint: "go" });
+  const help = el("p", { class: "footnote" }, t("Make it in Waypage on your phone, or make one on Kill the Newsletter's page and paste its feed link here."));
+  const go = el("button", { class: "btn-primary", type: "button" }, t("Add it"));
   go.addEventListener("click", async () => {
     const url = link.value.trim();
-    if (!MAIL_FEED.test(url)) { help.className = "footnote warn"; help.textContent = "That isn't a Kill the Newsletter feed link. It ends in .xml."; link.focus(); return; }
+    if (!MAIL_FEED.test(url)) { help.className = "footnote warn"; help.textContent = t("That isn't a Kill the Newsletter feed link. It ends in .xml."); link.focus(); return; }
     await back();
-    if (await addMailBox(url, cleanTag(name.value) || "Newsletters")) $("saveUrl").value = "";
+    if (await addMailBox(url, cleanTag(name.value) || t("Newsletters"))) $("saveUrl").value = "";
   });
   name.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); link.focus(); } });
   link.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); go.click(); } });
   setTimeout(() => link.focus({ preventScroll: true }), 50);
   return el("div", { class: "page-controls add-feed" },
-    el("h2", { class: "menu-title" }, "New newsletter address"),
+    el("h2", { class: "menu-title" }, t("New newsletter address")),
     el("div", { class: "feed-field" }, name, link, help),
-    el("button", { class: "sheet-row", type: "button", onclick: () => C.platform.openOutside("https://" + KTN + "/") }, "Open Kill the Newsletter"),
+    el("button", { class: "sheet-row", type: "button", onclick: () => C.platform.openOutside("https://" + KTN + "/") }, t("Open Kill the Newsletter")),
     go,
-    el("p", { class: "footnote" }, "Kill the Newsletter, a free service, receives the emails, so it can read them. Anyone with the address can send to it. Waypage keeps it on this device and in your sync."));
+    el("p", { class: "footnote" }, t("Kill the Newsletter, a free service, receives the emails, so it can read them. Anyone with the address can send to it. Waypage keeps it on this device and in your sync.")));
 }
 
 // Deleting an address there too, so mail sent to it bounces. The app
@@ -747,7 +745,7 @@ async function removeMailBox(f) {
   if (state.feed === f.url) state.feed = null;
   await back();
   paintFeeds();
-  toast((C.platform.canFetchPages ? "Deleted " : "Removed ") + f.title + ". The emails you saved stay.");
+  toast(C.platform.canFetchPages ? t("Deleted {title}. The emails you saved stay.", { title: f.title }) : t("Removed {title}. The emails you saved stay.", { title: f.title }));
 }
 
 // ---- The sidebar ----
@@ -857,7 +855,7 @@ function sideFold(name, head, subs) {
   const group = el("div", { class: "side-group" + (folded ? " folded" : ""), id: "sideGroup-" + name }, el("div", { class: "side-group-in" }, ...subs));
   group.inert = folded;
   const label = head.querySelector(".side-label").textContent;
-  const fold = el("button", { class: "side-fold", type: "button", "aria-expanded": String(!folded), "aria-controls": group.id, "aria-label": label + " items",
+  const fold = el("button", { class: "side-fold", type: "button", "aria-expanded": String(!folded), "aria-controls": group.id, "aria-label": t("{label} items", { label: label }),
     onclick: () => {
       const shut = !group.classList.contains("folded");
       group.classList.toggle("folded", shut);
@@ -890,10 +888,10 @@ function renderSide() {
   const hasFolders = allFolders().length > 0;
   fill($("sidebar"),
     el("div", { class: "side-head" },
-      el("p", { class: "side-title" }, "Waypage")),
+      el("p", { class: "side-title" }, t("Waypage"))),
     // From inside Collections, Clips, a collection or the favourites
     // (1.20.0), Library steps all the way back to the library itself.
-    ...sideFold("library", item(feedIcon("library"), "Library", inLibrary, null, () =>
+    ...sideFold("library", item(feedIcon("library"), t("Library"), inLibrary, null, () =>
       inLib && (state.part || state.folder || state.filter === "favourites" || state.filter === "notes")
         ? toLibrary().then(() => { if (state.filter === "favourites" || state.filter === "notes") setFilter("all"); return goPlace("library"); })
         : goPlace("library")), [
@@ -902,40 +900,40 @@ function renderSide() {
       : item(clipCover(f.page), f.page.title, state.open === f.page, null, () => fromSide().then(() => openPage(f.page.id)), "side-sub")),
     // Favourites, always there (2026-11, Daniel's ask): the library's
     // favourites filter, collections and clips alike.
-    item(sideMark("star"), "Favourites", inLib && !state.part && !state.folder && state.filter === "favourites", count(favs.length),
+    item(sideMark("star"), t("Favourites"), inLib && !state.part && !state.folder && state.filter === "favourites", count(favs.length),
       () => toLibrary().then(() => goPlace("library")).then(() => setFilter("favourites")), "side-sub"),
     // The library's parts (1.14.0), each opening alone.
-    hasFolders ? item(sideMark("folder"), "Collections", inLib && state.part === "collections", null, () => partFromSide("collections"), "side-sub") : null,
-    item(sideMark("open"), "Clips", inLib && state.part === "pages", null, () => partFromSide("pages"), "side-sub"),
+    hasFolders ? item(sideMark("folder"), t("Collections"), inLib && state.part === "collections", null, () => partFromSide("collections"), "side-sub") : null,
+    item(sideMark("open"), t("Clips"), inLib && state.part === "pages", null, () => partFromSide("pages"), "side-sub"),
     // Notes (2.0.0), above Files (2026-11) as in the library.
-    state.pages.some((p) => p.note) ? item(sideMark("open"), "Notes", inLib && !state.part && !state.folder && state.filter === "notes", null, notesFromSide, "side-sub") : null,
+    state.pages.some((p) => p.note) ? item(sideMark("open"), t("Notes"), inLib && !state.part && !state.folder && state.filter === "notes", null, notesFromSide, "side-sub") : null,
     // Files of your own (0.31.0), their part of the library.
-    state.pages.some((p) => p.link && !p.note) ? item(fileMark(), "Files", inLib && state.part === "files", null, () => partFromSide("files"), "side-sub") : null]),
-    ...sideFold("feeds", item(feedIcon("feeds"), "Feeds", inFeeds && !state.feed, fresh ? el("span", { class: "side-pill" }, fresh + " new") : null,
+    state.pages.some((p) => p.link && !p.note) ? item(fileMark(), t("Files"), inLib && state.part === "files", null, () => partFromSide("files"), "side-sub") : null]),
+    ...sideFold("feeds", item(feedIcon("feeds"), t("Feeds"), inFeeds && !state.feed, fresh ? el("span", { class: "side-pill" }, t("{fresh} new", { fresh: fresh })) : null,
       () => goPlace("feeds")), siteFeeds().sort((a, b) => latest(b) - latest(a)).slice(0, SIDE_MAX).map((f) =>
       withFeed(item(feedMark(f, true), f.title, inFeeds && state.feed === f.url, null, () => goPlace("feeds", f.url), "side-sub"), f))),
     // Newsletters (1.43.0): their own place, under Feeds.
-    ...sideFold("newsletters", item(sideSvg("mail"), "Newsletters", state.place === "newsletters" && !state.feed, freshMail ? el("span", { class: "side-pill" }, freshMail + " new") : null,
+    ...sideFold("newsletters", item(sideSvg("mail"), t("Newsletters"), state.place === "newsletters" && !state.feed, freshMail ? el("span", { class: "side-pill" }, t("{freshMail} new", { freshMail: freshMail })) : null,
       () => goPlace("newsletters")), sideBoxes(mails).map(({ f, fresh: n }) =>
       withFeed(item(mailMark(f), f.title, state.place === "newsletters" && state.feed === f.url, count(n), () => goPlace("newsletters", f.url), "side-sub"), f))),
     // Discover: new things to follow, last of the places you follow from.
-    item(sideSvg("discover"), "Discover", state.place === "discover", null, () => goPlace("discover")),
+    item(sideSvg("discover"), t("Discover"), state.place === "discover", null, () => goPlace("discover")),
     // Every highlight in the library (1.8.0), a place of its own.
-    item(sideSvg("marks"), "Highlights", inMarks, null, () => goPlace("highlights")),
+    item(sideSvg("marks"), t("Highlights"), inMarks, null, () => goPlace("highlights")),
     // Anki, once its extension is on (Settings › Extensions): practise the decks.
-    C.ext.on("anki") ? item(sideSvg("anki"), "Anki", state.place === "anki", null, () => goPlace("anki")) : null,
-    item(sideSvg("reading"), "Stats", state.place === "reading", null, () => goPlace("reading")),
+    C.ext.on("anki") ? item(sideSvg("anki"), t("Anki"), state.place === "anki", null, () => goPlace("anki")) : null,
+    item(sideSvg("reading"), t("Stats"), state.place === "reading", null, () => goPlace("reading")),
     // On a big screen the sidebar carries the rest (1.5.0): the tags,
     // and Settings at its foot. Feeds are added from the Feeds place.
     ...(big ? sideMore() : []),
-    el("p", { class: "side-version" }, "Version " + APP_VERSION));
+    el("p", { class: "side-version" }, t("Version {APP_VERSION}", { APP_VERSION: APP_VERSION })));
 }
 
 function sideMore() {
   const tags = allTags().slice(0, 12);
   return [
     tags.length ? el("div", { class: "side-space", "aria-hidden": "true" }) : null,
-    tags.length ? el("p", { class: "side-over" }, "Tags") : null,
+    tags.length ? el("p", { class: "side-over" }, t("Tags")) : null,
     tags.length ? el("div", { class: "side-tags" }, ...tags.map((t) => {
       const on = state.place === "library" && state.filter === "#" + t;
       const b = el("button", { class: "chip side-tag" + (on ? " on" : ""), type: "button", "aria-pressed": String(on), dir: "auto",
@@ -1056,21 +1054,21 @@ function fitWidth() {
 // rest of the app has letters too, listed behind "?". Keys pressed in
 // the reader's page come here through reader.js.
 const KEYS = [
-  ["Anywhere", [["/", "Search"], [(/Mac/.test(navigator.platform) && navigator.maxTouchPoints < 2 ? "⌘" : "Ctrl") + " V", "Save a copied link"],
-    ["1  2  3  4  5  6", "Library, Feeds, Newsletters, Highlights, Stats, Discover"], ["G then L", "Go to the library"],
-    ["G then F", "Go to Feeds"], ["G then N", "Go to Newsletters"], ["G then H", "Go to Highlights"], ["G then S", "Go to Stats"], ["G then E", "Go to Discover"], ["D", "Downloads"], [",", "Settings"], ["?", "These shortcuts"]]],
-  ["In the library", [["↑ ↓", "Move between clips"], ["Enter", "Open"], ["X", "Pick, to act on several"], ["Shift-click", "Pick a run"],
-    ["F", "Favourite"], ["E", "Export"], ["F2", "Rename"], ["Del", "Delete"]]],
-  ["Reading", [["Space  ← →", "Next or previous page"], ["J  K", "Next or previous section"], ["T", "Contents beside the text"],
-    ["S", "Narrate, or auto-scroll a comic"], ["A", "Reader settings"], ["H", "Highlights"], ["1–5", "Highlight the selected words in a colour"], ["D", "Draw, then P pen, B highlighter, E eraser, [ ] size"], ["L", "Translate this clip"], ["/", "Find in this clip"], ["+  −", "Text size"], ["O", "Open the original"], ["Esc", "Back"]]],
+  [t("Anywhere"), [["/", t("Search")], [(/Mac/.test(navigator.platform) && navigator.maxTouchPoints < 2 ? "⌘" : "Ctrl") + " V", t("Save a copied link")],
+    ["1  2  3  4  5  6", "Library, Feeds, Newsletters, Highlights, Stats, Discover"], [t("G then L"), t("Go to the library")],
+    [t("G then F"), t("Go to Feeds")], [t("G then N"), t("Go to Newsletters")], [t("G then H"), t("Go to Highlights")], [t("G then S"), t("Go to Stats")], [t("G then E"), t("Go to Discover")], ["D", t("Downloads")], [",", t("Settings")], ["?", t("These shortcuts")]]],
+  [t("In the library"), [["↑ ↓", t("Move between clips")], ["Enter", t("Open")], ["X", t("Pick, to act on several")], ["Shift-click", t("Pick a run")],
+    ["F", t("Favourite")], ["E", t("Export")], ["F2", t("Rename")], ["Del", t("Delete")]]],
+  [t("Reading"), [["Space  ← →", t("Next or previous page")], ["J  K", t("Next or previous section")], ["T", t("Contents beside the text")],
+    ["S", t("Narrate, or auto-scroll a comic")], ["A", t("Reader settings")], ["H", t("Highlights")], ["1–5", t("Highlight the selected words in a colour")], ["D", "Draw, then P pen, B highlighter, E eraser, [ ] size"], ["L", t("Translate this clip")], ["/", t("Find in this clip")], ["+  −", t("Text size")], ["O", t("Open the original")], [t("Esc"), t("Back")]]],
 ];
 function keysSheet() {
   return el("div", { class: "keys-sheet" },
-    el("h2", { class: "menu-title" }, "Keyboard shortcuts"),
+    el("h2", { class: "menu-title" }, t("Keyboard shortcuts")),
     el("div", { class: "keys-groups" }, ...KEYS.map(([title, rows]) => el("section", { class: "keys-group" },
       el("h3", { class: "overline" }, title),
       el("dl", { class: "keys-list" }, ...rows.flatMap(([k, what]) => [
-        el("dt", null, ...k.split(/(\s+then\s+|\s{2}|\s(?=\S))/).filter((x) => x.trim()).map((x) => /then/.test(x) ? el("span", { class: "keys-then" }, " then ") : el("kbd", null, x.trim()))),
+        el("dt", null, ...k.split(/(\s+then\s+|\s{2}|\s(?=\S))/).filter((x) => x.trim()).map((x) => /then/.test(x) ? el("span", { class: "keys-then" }, t(" then ")) : el("kbd", null, x.trim()))),
         el("dd", null, what)]))))));
 }
 
@@ -1255,7 +1253,7 @@ function saveTyped(text) {
   if (state.place === "feeds") { openMenu("addFeed", { url: text.trim() }); return; }
   if (linksFrom(text).length > 1) { openBatch(text); return; }
   const url = linkFrom(text);
-  if (!url) { toast("That doesn't look like a link. Paste the page's address."); return; }
+  if (!url) { toast(t("That doesn't look like a link. Paste the page's address.")); return; }
   savePage(url);
 }
 {
@@ -1275,8 +1273,8 @@ function saveTyped(text) {
     if (!shown(e)) return;
     depth++;
     if (zone.hidden) {
-      $("dropTitle").textContent = filey(e) ? "Drop to open" : state.place === "feeds" ? "Drop to follow" : "Drop to save";
-      $("dropNote").textContent = filey(e) ? FILE_KINDS_LINE : state.place === "feeds" ? "Followed like an added feed" : "Saved for reading offline, like a pasted link";
+      $("dropTitle").textContent = filey(e) ? t("Drop to open") : state.place === "feeds" ? t("Drop to follow") : t("Drop to save");
+      $("dropNote").textContent = filey(e) ? FILE_KINDS_LINE : state.place === "feeds" ? t("Followed like an added feed") : t("Saved for reading offline, like a pasted link");
       zone.hidden = false;
     }
   });
@@ -1528,61 +1526,60 @@ function pullToCheck(root) {
 async function pullChapters(app) {
   if (navigator.onLine && !allFolders().some((n) => isSeries(folderPages(n)))) {
     await app;
-    toast(updateOut() ? "Waypage " + upd.latest + " is out." : "Nothing new.");
+    toast(updateOut() ? t("Waypage {latest} is out.", { latest: upd.latest }) : t("Nothing new."));
     return;
   }
   await Promise.all([checkChapters(), app]);
 }
 
 async function checkChapters() {
-  if (!navigator.onLine) { toast("You're offline. Check again when you're back online."); return; }
-  if (!allFolders().some((n) => isSeries(folderPages(n)))) { toast("No collections follow a series yet."); return; }
+  if (!navigator.onLine) { toast(t("You're offline. Check again when you're back online.")); return; }
+  if (!allFolders().some((n) => isSeries(folderPages(n)))) { toast(t("No collections follow a series yet.")); return; }
   const found = await dailyCheck(true);
   renderLibrary();
-  toast(found ? "New chapters in " + found + (found === 1 ? " collection" : " collections") + "." : "No new chapters.");
+  toast(found ? tn(found, "New chapters in 1 collection.", "New chapters in {n} collections.") : t("No new chapters."));
 }
 
 // ---- Add a feed, and a feed's settings ----
 
 const picturesLine = (mode) => !C.platform.native ? ""
-  : mode === "full" ? ", with full pictures" : mode === "links" ? ", with pictures as links" : ", with pictures as previews";
+  : mode === "full" ? t(", with full pictures") : mode === "links" ? t(", with pictures as links") : t(", with pictures as previews");
 
 function addFeedSheet() {
   let found = null, mode = "show";
-  const input = el("input", { class: "feed-input", type: "url", inputmode: "url", placeholder: "A site or its feed", "aria-label": "A site or its feed",
+  const input = el("input", { class: "feed-input", type: "url", inputmode: "url", placeholder: t("A site or its feed"), "aria-label": t("A site or its feed"),
     autocomplete: "off", autocapitalize: "off", spellcheck: "false", enterkeyhint: "go" });
-  const help = el("p", { class: "footnote" }, "A site's address is enough: Waypage finds its feed.");
+  const help = el("p", { class: "footnote" }, t("A site's address is enough: Waypage finds its feed."));
   const card = el("div", { class: "found-feed" });
   const note = el("p", { class: "footnote" });
   const modeBox = el("div", { class: "feed-mode" },
-    el("h2", { class: "overline" }, "New posts"),
-    seg("add-feed-mode", "New posts", [{ value: "show", label: "Show them" }, { value: "save", label: "Save them" }], mode,
+    el("h2", { class: "overline" }, t("New posts")),
+    seg("add-feed-mode", t("New posts"), [{ value: "show", label: t("Show them") }, { value: "save", label: t("Save them") }], mode,
       (v) => { mode = v; paintNote(); }),
     note);
-  const go = el("button", { class: "btn-primary", type: "button" }, "Find its feed");
+  const go = el("button", { class: "btn-primary", type: "button" }, t("Find its feed"));
   const paintNote = () => {
     if (!found) return;
-    note.textContent = (mode === "save" ? "New posts save themselves while you're online. " : "New posts wait in Feeds for you to save. ")
-      + "Saved posts go into a collection called " + cleanTag(found.feed.title) + picturesLine(feedImages()) + ".";
+    note.textContent = t("{x}Saved posts go into a collection called {cleanTag}{picturesLine}.", { x: mode === "save" ? t("New posts save themselves while you're online. ") : t("New posts wait in Feeds for you to save. "), cleanTag: cleanTag(found.feed.title), picturesLine: picturesLine(feedImages()) });
   };
   const reset = () => {
     found = null;
     card.hidden = true;
     modeBox.hidden = true;
-    go.textContent = "Find its feed";
+    go.textContent = t("Find its feed");
     help.className = "footnote";
-    help.textContent = "A site's address is enough: Waypage finds its feed.";
+    help.textContent = t("A site's address is enough: Waypage finds its feed.");
   };
   reset();
   const find = async () => {
     const typed = input.value.trim();
     if (!typed) { input.focus(); return; }
     go.disabled = true;
-    go.textContent = "Looking for its feed…";
+    go.textContent = t("Looking for its feed…");
     try {
       const got = await C.feeds.findFeed(linkFrom(typed) || typed);
       const had = feeds.find((f) => sameUrl(f.url, got.url));
-      if (had) throw new C.feeds.FeedError("You already follow " + had.title + ".");
+      if (had) throw new C.feeds.FeedError(t("You already follow {title}.", { title: had.title }));
       if (input.value.trim() !== typed) return;
       found = got;
       fill(card, feedMark({ url: got.url, link: got.feed.link, icon: got.feed.icon, title: got.feed.title }),
@@ -1592,13 +1589,13 @@ function addFeedSheet() {
       card.hidden = false;
       modeBox.hidden = false;
       help.className = "footnote";
-      help.textContent = C.feeds.siteOf(got.url) + " · " + (got.feed.items.length === 1 ? "1 post" : got.feed.items.length + " posts") + " in its feed";
-      go.textContent = "Follow";
+      help.textContent = C.feeds.siteOf(got.url) + " · " + tn(got.feed.items.length, "1 post in its feed", "{n} posts in its feed");
+      go.textContent = t("Follow");
       paintNote();
     } catch (e) {
       reset();
       help.className = "footnote warn";
-      help.textContent = e instanceof C.feeds.FeedError ? e.message : "Couldn't read that. Check the address and try again.";
+      help.textContent = e instanceof C.feeds.FeedError ? e.message : t("Couldn't read that. Check the address and try again.");
     } finally {
       go.disabled = false;
     }
@@ -1617,7 +1614,7 @@ function addFeedSheet() {
     saveFeeds();
     await back();
     await goPlace(mail ? "newsletters" : "feeds", f.url);
-    toast("Following " + f.title);
+    toast(t("Following {title}", { title: f.title }));
     if (mode === "save") autoSave(f);
   };
   go.addEventListener("click", () => (found ? follow() : find()));
@@ -1627,7 +1624,7 @@ function addFeedSheet() {
   if (preset) { input.value = preset; setTimeout(find, 0); }
   else setTimeout(() => input.focus({ preventScroll: true }), 50);
   return el("div", { class: "page-controls add-feed" },
-    el("h2", { class: "menu-title" }, "Add a feed"),
+    el("h2", { class: "menu-title" }, t("Add a feed")),
     el("div", { class: "feed-field" }, input, help),
     card, modeBox, go);
 }
@@ -1637,7 +1634,7 @@ function feedSheet() {
   const mail = isMail(f);
   const set = (change) => { Object.assign(f, change); saveFeeds(); paintFeeds(); };
   const row = (label, control) => el("div", { class: "rc-row stack" }, el("span", { class: "rc-label" }, label), control);
-  const into = el("input", { class: "tag-input", type: "text", value: f.folder || "", placeholder: "No collection", "aria-label": "Save into",
+  const into = el("input", { class: "tag-input", type: "text", value: f.folder || "", placeholder: t("No collection"), "aria-label": t("Save into"),
     maxlength: "32", enterkeyhint: "done", autocapitalize: "sentences" });
   into.addEventListener("change", () => set({ folder: cleanTag(into.value) }));
   into.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); into.blur(); } });
@@ -1647,26 +1644,26 @@ function feedSheet() {
       el("p", { class: "menu-title", dir: "auto" }, f.title),
       el("p", { class: "meta" }, shortUrl)),
     el("div", { class: "rc-list" },
-      row(mail ? "New emails" : "New posts", seg("feed-mode", mail ? "New emails" : "New posts", [{ value: "show", label: "Show them" }, { value: "save", label: "Save them" }], f.mode,
+      row(mail ? t("New emails") : t("New posts"), seg("feed-mode", mail ? t("New emails") : t("New posts"), [{ value: "show", label: t("Show them") }, { value: "save", label: t("Save them") }], f.mode,
         (v) => { set({ mode: v }); if (v === "save") autoSave(f); })),
-      C.platform.native ? row("Pictures", seg("feed-images", "Pictures", [
-        { value: "previews", label: "Previews" }, { value: "full", label: "Full" }, { value: "links", label: "Links" },
+      C.platform.native ? row(t("Pictures"), seg("feed-images", t("Pictures"), [
+        { value: "previews", label: t("Previews") }, { value: "full", label: t("Full") }, { value: "links", label: t("Links") },
       ], f.images || feedImages(), (v) => set({ images: v }))) : null,
-      row("Save into", into),
-      row(mail ? "Skip emails older than" : "Skip posts older than", seg("feed-days", mail ? "Skip emails older than" : "Skip posts older than", FEED_DAYS, String(f.days || 7), (v) => set({ days: Number(v) }))),
-      C.platform.native && notesPrefs().on ? row("Notifications", seg("feed-notes", "Notifications", [{ value: "on", label: "On" }, { value: "off", label: "Off" }],
+      row(t("Save into"), into),
+      row(mail ? t("Skip emails older than") : t("Skip posts older than"), seg("feed-days", mail ? t("Skip emails older than") : t("Skip posts older than"), FEED_DAYS, String(f.days || 7), (v) => set({ days: Number(v) }))),
+      C.platform.native && notesPrefs().on ? row(t("Notifications"), seg("feed-notes", t("Notifications"), [{ value: "on", label: t("On") }, { value: "off", label: t("Off") }],
         feedQuiet(f) ? "off" : "on", (v) => setFeedQuiet(f, v === "off"))) : null),
-    el("p", { class: "footnote" + (f.error ? " warn" : "") }, f.error || (f.checkedAt ? "Checked " + whenText(f.checkedAt) + ". " : "") + (mail ? rateLine(f.items).replace(/post/g, "email") : rateLine(f.items)) + "."),
+    el("p", { class: "footnote" + (f.error ? " warn" : "") }, f.error || (f.checkedAt ? t("Checked {when}", { when: whenText(f.checkedAt) }) + ". " : "") + rateLine(f.items, mail) + "."),
     mail && !C.platform.canFetchPages ? null : el("button", { class: "sheet-row", type: "button", onclick: (e) => {
       e.currentTarget.disabled = true;
-      e.currentTarget.textContent = "Checking…";
+      e.currentTarget.textContent = t("Checking…");
       checkNow(f).then(redrawMenu);
-    } }, "Check now"),
-    mail ? el("button", { class: "sheet-row", type: "button", onclick: () => copyText(mailAddress(f), "Address copied.") }, "Copy address") : null,
-    mail ? el("button", { class: "sheet-row danger", type: "button", onclick: () => removeMailBox(f) }, C.platform.canFetchPages ? "Delete the address" : "Remove the address")
-      : el("button", { class: "sheet-row danger", type: "button", onclick: () => unfollow(f) }, "Unfollow"),
-    el("p", { class: "footnote" }, !mail ? "Unfollowing keeps the posts you saved." : C.platform.canFetchPages
-      ? "Deleting it makes its emails bounce. The ones you saved stay." : "Removed here, it still takes emails. Delete it in Waypage on your phone to stop them."));
+    } }, t("Check now")),
+    mail ? el("button", { class: "sheet-row", type: "button", onclick: () => copyText(mailAddress(f), t("Address copied.")) }, t("Copy address")) : null,
+    mail ? el("button", { class: "sheet-row danger", type: "button", onclick: () => removeMailBox(f) }, C.platform.canFetchPages ? t("Delete the address") : t("Remove the address"))
+      : el("button", { class: "sheet-row danger", type: "button", onclick: () => unfollow(f) }, t("Unfollow")),
+    el("p", { class: "footnote" }, !mail ? t("Unfollowing keeps the posts you saved.") : C.platform.canFetchPages
+      ? t("Deleting it makes its emails bounce. The ones you saved stay.") : t("Removed here, it still takes emails. Delete it in Waypage on your phone to stop them.")));
 }
 
 async function unfollow(f) {
@@ -1675,5 +1672,5 @@ async function unfollow(f) {
   if (state.feed === f.url) state.feed = null;
   await back();
   paintFeeds();
-  toast("Unfollowed " + f.title + ". The posts you saved stay.");
+  toast(t("Unfollowed {title}. The posts you saved stay.", { title: f.title }));
 }

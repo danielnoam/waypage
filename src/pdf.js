@@ -449,7 +449,7 @@ post({ ready: true });
     const copy = bytes.slice(0);
     try {
       return await new Promise((resolve, reject) => {
-        const stop = setTimeout(() => done(null, new Error("This PDF took too long to read.")), 180000);
+        const stop = setTimeout(() => done(null, new Error(t("This PDF took too long to read."))), 180000);
         function done(res, err) {
           clearTimeout(stop);
           removeEventListener("message", onMessage);

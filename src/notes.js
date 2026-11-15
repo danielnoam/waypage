@@ -12,7 +12,7 @@
   // A4 in points, the size a PDF page is measured in.
   const W = 595, H = 842;
   const PAPERS = ["blank", "lines", "squares"];
-  const LABELS = { blank: "Blank note", lines: "Lines note", squares: "Squares note" };
+  const LABELS = { blank: t("Blank note"), lines: t("Lines note"), squares: t("Squares note") };
   const MAX_SHEETS = 500;
   // A PDF's copy is kept whole beside the note, so a very big one is refused.
   const MAX_BASE = 100 * 1024 * 1024;
@@ -186,9 +186,9 @@
     let base = null;
     if (data.sheets.some((s) => s.bg === "pdf")) {
       const bytes = await C.store.readNoteBase(meta.id);
-      if (!bytes) throw new C.files.FileError("This note's PDF is missing, so its pages can't be shown.");
+      if (!bytes) throw new C.files.FileError(t("This note's PDF is missing, so its pages can't be shown."));
       try { base = await C.pdf.open(bytes instanceof Blob ? bytes : new Blob([bytes], { type: "application/pdf" })); }
-      catch (e) { throw new C.files.FileError("Waypage can't read this note's PDF any more."); }
+      catch (e) { throw new C.files.FileError(t("Waypage can't read this note's PDF any more.")); }
     }
     return { data, handle: handle(meta, data, base) };
   }
@@ -228,16 +228,16 @@
   // never touched. The sheets it grows by are lined paper.
   async function pdfPages(blob) {
     try { const doc = await C.pdf.open(blob); const n = doc.count || doc.pages || 0; doc.close(); return n; }
-    catch (e) { throw new C.files.FileError("Waypage can't read this PDF."); }
+    catch (e) { throw new C.files.FileError(t("Waypage can't read this PDF.")); }
   }
   // `range` ({ from, to }, pages counted from 1) takes only those pages: the
   // copy is still the whole PDF, its sheets name the pages in the range.
   async function fromPdf(src, blob, range) {
-    if (blob.size > MAX_BASE) throw new C.files.FileError("This PDF is too big to make a note from (over 100 MB).");
+    if (blob.size > MAX_BASE) throw new C.files.FileError(t("This PDF is too big to make a note from (over 100 MB)."));
     const pages = await pdfPages(blob);
-    if (!pages) throw new C.files.FileError("There are no pages in this PDF.");
+    if (!pages) throw new C.files.FileError(t("There are no pages in this PDF."));
     const from = range ? Math.max(1, range.from) : 1, to = range ? Math.min(pages, range.to) : pages;
-    if (to - from + 1 > MAX_SHEETS) throw new C.files.FileError("This PDF has over " + MAX_SHEETS + " pages, too many for a note.");
+    if (to - from + 1 > MAX_SHEETS) throw new C.files.FileError(t("This PDF has over {MAX_SHEETS} pages, too many for a note.", { MAX_SHEETS: MAX_SHEETS }));
     const name = (src.title || "PDF").slice(0, 300).trim();
     const sheets = Array.from({ length: to - from + 1 }, (_, i) => ({ bg: "pdf", n: from + i }));
     return keepNew(entry(C.save.newId(), name, { paper: "lines", ...(src.id ? { from: src.id } : {}) }), sheets, blob);
@@ -288,7 +288,7 @@
     const pages = [];
     let count = 0;
     const done = async (c, w, h) => {
-      if (count >= MAX_SHEETS && !dry) throw new C.files.FileError("This is over " + MAX_SHEETS + " pages long, too long for a note.");
+      if (count >= MAX_SHEETS && !dry) throw new C.files.FileError(t("This is over {MAX_SHEETS} pages long, too long for a note.", { MAX_SHEETS: MAX_SHEETS }));
       count++;
       if (dry) return;
       pages.push({ jpeg: await jpeg(c, 0.8), iw: w, ih: h, texts: [], w: W, h: Math.round(W * h / w) });
@@ -319,7 +319,7 @@
         await done(c, w, h);
       }
       if (dry) return { starts, pages: count };
-      if (!pages.length) throw new C.files.FileError("There are no pictures to make a note from.");
+      if (!pages.length) throw new C.files.FileError(t("There are no pictures to make a note from."));
       return C.pptx.writePdf(pages);
     }
     let c = null, g = null, y = 0;
@@ -379,7 +379,7 @@
     }
     await flush();
     if (dry) return { starts, pages: count };
-    if (!pages.length) throw new C.files.FileError("There's nothing in it to make a note from.");
+    if (!pages.length) throw new C.files.FileError(t("There's nothing in it to make a note from."));
     return C.pptx.writePdf(pages);
   }
 

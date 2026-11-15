@@ -93,6 +93,12 @@ Use the least access (narrow tokens and scopes). Nothing leaves the device
 unless the user turned it on. Saved content stays sandboxed. Any
 trade-off is stated plainly and added to ARCHITECTURE.md's Trade-offs.
 
+**English and Hebrew.** Every word the app shows goes through `t()` or
+`tn()` with its Hebrew in `src/lang/he.js` in the same change (the test
+fails otherwise), as whole sentences with `{placeholders}`, never glued
+pieces. Layout uses logical CSS (`margin-inline-start`, `inset-inline-end`,
+`text-align: start`) so right to left works. ARCHITECTURE.md, "Languages".
+
 **Every platform.** Everything works on Android and on a computer (the web
 copy), and on iOS later. A feature that can't work somewhere gets that
 platform's nearest equivalent (keys on a computer for the volume buttons,

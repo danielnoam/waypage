@@ -26,13 +26,13 @@ function syncSoon(ms = runs.size ? 20000 : 4000) {
 let unsynced = false;
 const syncsPage = (p) => (p.note ? C.sync.what.notes && !C.sync.tooBig(p) : C.sync.what.clips);
 // Said on a note's card, in its ⋯ and in Sync (2026-11).
-const tooBigLine = (p) => (C.sync.on && C.sync.tooBig(p) ? "Over 50 MB, can't be synced" : "");
+const tooBigLine = (p) => (C.sync.on && C.sync.tooBig(p) ? t("Over 50 MB, can't be synced") : "");
 async function syncNow(quiet = true) {
   if (!C.sync.on || C.sync.paused) return null;
   // Not while a version is being put back (only its own syncs run).
   if (reverting && !reverting.syncing) return null;
   if (!navigator.onLine && quiet) return null;
-  if (waitsForWifi(DATA_SYNC_KEY)) { if (!quiet) toast("Sync waits for Wi-Fi. Change that below."); return null; }
+  if (waitsForWifi(DATA_SYNC_KEY)) { if (!quiet) toast(t("Sync waits for Wi-Fi. Change that below.")); return null; }
   C.sync.device = deviceName();
   clearTimeout(syncTimer);
   syncTimer = null;
@@ -92,15 +92,15 @@ async function syncNow(quiet = true) {
     });
   } catch (e) {
     if (!joined) unsynced = unsynced || sending;
-    if (!quiet) toast(C.sync.last.error || "Sync stopped. Try again.");
+    if (!quiet) toast(C.sync.last.error || t("Sync stopped. Try again."));
   }
   if (joined && unsynced) return syncNow(quiet);
   if (state.section === "sync") renderSection();
   paintDownloads();
   if (res && res.downloads.length) { syncQueue.push(...res.downloads.map((p) => p.id)); keepQueue(); fetchPictures(); }
   if (res && res.fromLinks.length) saveFromLinks(res.fromLinks);
-  if (res && res.light) { if (!quiet) toast("Places and reading time synced. Clips wait for Wi-Fi."); return res; }
-  if (res && !quiet && !C.sync.paused) toast(res.up + res.down + res.removed ? "Synced: " + [res.up ? res.up + " sent" : "", res.down ? res.down + " came in" : "", res.removed ? res.removed + " removed" : ""].filter(Boolean).join(", ") + "." : "Already in step.");
+  if (res && res.light) { if (!quiet) toast(t("Places and reading time synced. Clips wait for Wi-Fi.")); return res; }
+  if (res && !quiet && !C.sync.paused) toast(res.up + res.down + res.removed ? t("Synced: {join}.", { join: [res.up ? t("{n} sent", { n: res.up }) : "", res.down ? t("{n} came in", { n: res.down }) : "", res.removed ? t("{n} removed", { n: res.removed }) : ""].filter(Boolean).join(", ") }) : t("Already in step."));
   return res;
 }
 // Files read from outside (2026-11): the file stays here, and where you
@@ -209,7 +209,7 @@ async function saveFromLinks(list, label) {
     && !savedAs(m.url) && !(m.requested && savedAs(m.requested)) && !savingAs(m.url))
     .map((m) => ({ ...newJob(m.url, null), key: "sync:" + m.id, synced: m, mode: m.mode, kind: m.comic ? "comic" : "article", waiting: true }));
   if (!jobs.length) return;
-  const run = jobs.length > 1 ? Object.assign(startRun(null, jobs[0].site, jobs.length), { label: label || "From sync", sync: true, paused: !label && C.sync.paused }) : null;
+  const run = jobs.length > 1 ? Object.assign(startRun(null, jobs[0].site, jobs.length), { label: label || t("From sync"), sync: true, paused: !label && C.sync.paused }) : null;
   jobs.forEach((j) => { j.run = run; });
   state.saving = [...jobs, ...state.saving];
   renderLibrary();
@@ -273,12 +273,12 @@ function syncSections() {
   return C.sync.on ? [C.sync.oldToken ? syncNewToken() : null, syncState(), syncsList(), syncActivity(), syncWhat(), syncShare(), syncLeave()] : [syncSteps(), syncJoin()];
 }
 async function connectSync(text, btn) {
-  if (btn) { btn.disabled = true; btn.textContent = "Connecting…"; }
+  if (btn) { btn.disabled = true; btn.textContent = t("Connecting…"); }
   try {
     await C.sync.connect(text);
   } catch (e) {
-    if (btn) { btn.disabled = false; btn.textContent = "Connect"; }
-    return e instanceof C.sync.SyncError ? e.message : "Couldn't connect. Try again.";
+    if (btn) { btn.disabled = false; btn.textContent = t("Connect"); }
+    return e instanceof C.sync.SyncError ? e.message : t("Couldn't connect. Try again.");
   }
   if (state.section === "sync") renderSection();
   syncNow(false);
@@ -290,21 +290,21 @@ const outRow = (href, n, label, note) => el("a", { class: "row sync-step", href,
   el("span", { class: "row-value", "aria-hidden": "true" }, "↗"));
 function syncSteps() {
   const input = el("input", { class: "feed-input", type: "password", autocomplete: "off", spellcheck: "false",
-    placeholder: "github_pat_… or a setup link", "aria-label": "GitHub token or setup link" });
+    placeholder: t("github_pat_… or a setup link"), "aria-label": t("GitHub token or setup link") });
   const note = el("p", { class: "choice-note warn", role: "status" });
-  const go = el("button", { class: "btn-primary", type: "button" }, "Connect");
+  const go = el("button", { class: "btn-primary", type: "button" }, t("Connect"));
   const connect = async () => { note.textContent = (await connectSync(input.value, go)) || ""; };
   go.addEventListener("click", connect);
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); connect(); } });
-  return section("Sync with GitHub", "Keeps your clips, feeds and newsletters the same on every device, through a private repo on your GitHub. Files read from outside stay on their device; your place and highlights in them sync. The token stays on this device and goes only to GitHub; made for waypage-data only, it can't touch anything else on your account. Sync stops if that repo is ever made public.",
+  return section(t("Sync with GitHub"), t("Keeps your clips, feeds and newsletters the same on every device, through a private repo on your GitHub. Files read from outside stay on their device; your place and highlights in them sync. The token stays on this device and goes only to GitHub; made for waypage-data only, it can't touch anything else on your account. Sync stops if that repo is ever made public."),
     el("div", { class: "group" },
-      outRow("https://github.com/signup", "1", "Make a free GitHub account", "Skip this if you have one"),
-      outRow(C.sync.NEW_REPO_URL, "2", "Make a private repo for your library", "GitHub fills it in: keep it Private, then Create"),
-      outRow(C.sync.KEY_URL, "3", "Make a token for that repo only", "Only select repositories › waypage-data, then Generate and copy"),
+      outRow("https://github.com/signup", "1", t("Make a free GitHub account"), t("Skip this if you have one")),
+      outRow(C.sync.NEW_REPO_URL, "2", t("Make a private repo for your library"), t("GitHub fills it in: keep it Private, then Create")),
+      outRow(C.sync.KEY_URL, "3", t("Make a token for that repo only"), t("Only select repositories › waypage-data, then Generate and copy")),
       el("div", { class: "row sync-step sync-paste" },
         el("span", { class: "step-num", "aria-hidden": "true" }, "4"),
         el("div", { class: "choice-text" },
-          el("span", { class: "choice-label" }, "Paste it here"),
+          el("span", { class: "choice-label" }, t("Paste it here")),
           input, go, note))));
 }
 // A token made under the old steps reaches every repo on the account
@@ -313,37 +313,37 @@ function syncSteps() {
 // old one is deleted.
 function syncNewToken() {
   const input = el("input", { class: "feed-input", type: "password", autocomplete: "off", spellcheck: "false",
-    placeholder: "github_pat_…", "aria-label": "New GitHub token" });
+    placeholder: "github_pat_…", "aria-label": t("New GitHub token") });
   const note = el("p", { class: "choice-note warn", role: "status" });
-  const go = el("button", { class: "btn-primary", type: "button" }, "Connect");
+  const go = el("button", { class: "btn-primary", type: "button" }, t("Connect"));
   const connect = async () => {
-    if (C.sync.tokenIn(input.value)) { note.textContent = "Paste a new token, not a setup link."; return; }
+    if (C.sync.tokenIn(input.value)) { note.textContent = t("Paste a new token, not a setup link."); return; }
     note.textContent = (await connectSync(input.value, go)) || "";
   };
   go.addEventListener("click", connect);
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); connect(); } });
-  return section("Make a safer token", "This device's token can change every repo on your GitHub. If it ever got out, all of them would be open. A token for waypage-data alone can't touch anything else.",
+  return section(t("Make a safer token"), t("This device's token can change every repo on your GitHub. If it ever got out, all of them would be open. A token for waypage-data alone can't touch anything else."),
     el("div", { class: "group" },
-      outRow(C.sync.KEY_URL, "1", "Make a token for waypage-data only", "Only select repositories › waypage-data, then Generate and copy"),
+      outRow(C.sync.KEY_URL, "1", t("Make a token for waypage-data only"), t("Only select repositories › waypage-data, then Generate and copy")),
       el("div", { class: "row sync-step sync-paste" },
         el("span", { class: "step-num", "aria-hidden": "true" }, "2"),
         el("div", { class: "choice-text" },
-          el("span", { class: "choice-label" }, "Paste it here"),
+          el("span", { class: "choice-label" }, t("Paste it here")),
           input, go, note)),
-      outRow("https://github.com/settings/personal-access-tokens", "3", "Delete the old token", "In GitHub's Fine-grained tokens; other devices then ask for the new one")));
+      outRow("https://github.com/settings/personal-access-tokens", "3", t("Delete the old token"), t("In GitHub's Fine-grained tokens; other devices then ask for the new one"))));
 }
 function syncJoin() {
   const scan = C.platform.canScan ? el("button", { class: "row", type: "button", onclick: scanSync },
-    el("span", { class: "row-label accent" }, "Scan its setup code")) : null;
-  return section("Already syncing on another device?", "The setup code and link are on that device, in Settings › GitHub sync › Add another device. " + (scan ? "Scan the code here, or paste the link in step 4." : "Open its setup link here, or paste it in step 4."),
-    scan ? el("div", { class: "group" }, scan) : el("div", { class: "group" }, el("div", { class: "row" }, el("span", { class: "row-label muted" }, "Paste its setup link in step 4"))));
+    el("span", { class: "row-label accent" }, t("Scan its setup code"))) : null;
+  return section(t("Already syncing on another device?"), t("The setup code and link are on that device, in Settings › GitHub sync › Add another device. {x}", { x: scan ? t("Scan the code here, or paste the link in step 4.") : t("Open its setup link here, or paste it in step 4.") }),
+    scan ? el("div", { class: "group" }, scan) : el("div", { class: "group" }, el("div", { class: "row" }, el("span", { class: "row-label muted" }, t("Paste its setup link in step 4")))));
 }
 async function scanSync() {
   let text = null;
-  try { text = await C.platform.scanQr(() => toast("Getting the scanner ready…")); }
-  catch (e) { toast("Couldn't scan. Paste the setup link in step 4 instead."); return; }
+  try { text = await C.platform.scanQr(() => toast(t("Getting the scanner ready…"))); }
+  catch (e) { toast(t("Couldn't scan. Paste the setup link in step 4 instead.")); return; }
   if (!text) return;
-  if (!C.sync.tokenIn(text)) { toast("That isn't a Waypage setup code. Show the one in Settings, Sync on a synced device."); return; }
+  if (!C.sync.tokenIn(text)) { toast(t("That isn't a Waypage setup code. Show the one in Settings, Sync on a synced device.")); return; }
   const err = await connectSync(text);
   if (err) toast(err);
 }
@@ -351,19 +351,19 @@ async function scanSync() {
 // pages saved from their links, pictures fetched.
 function syncProgress() {
   const p = C.sync.progress;
-  if (!C.sync.running || !p) return { text: "Syncing…", part: null };
-  if (p.stage === "up") return { text: "Sending clips, " + p.done + " of " + p.total, part: p.total ? p.done / p.total : null };
-  if (p.stage === "down") return { text: "Bringing clips in, " + p.done + " of " + p.total, part: p.total ? p.done / p.total : null };
-  return { text: "Checking GitHub…", part: null };
+  if (!C.sync.running || !p) return { text: t("Syncing…"), part: null };
+  if (p.stage === "up") return { text: t("Sending clips, {done} of {total}", { done: p.done, total: p.total }), part: p.total ? p.done / p.total : null };
+  if (p.stage === "down") return { text: t("Bringing clips in, {done} of {total}", { done: p.done, total: p.total }), part: p.total ? p.done / p.total : null };
+  return { text: t("Checking GitHub…"), part: null };
 }
 function syncNote() {
   if (!C.sync.on || C.sync.paused) return null;
   if (C.sync.running) {
     const p = C.sync.progress, now = syncProgress();
-    return { title: "Syncing your library", text: now.text, done: p && p.total ? p.done : 0, total: p && p.total ? p.total : 0 };
+    return { title: t("Syncing your library"), text: now.text, done: p && p.total ? p.done : 0, total: p && p.total ? p.total : 0 };
   }
   const left = syncQueue.length + (fetchingPictures ? 1 : 0);
-  if (left) return { title: "Syncing your library", text: "Getting pictures for " + countLine(left), done: 0, total: 0 };
+  if (left) return { title: t("Syncing your library"), text: t("Getting pictures for {clips}", { clips: countLine(left) }), done: 0, total: 0 };
   return null;
 }
 // The bar's sync button (1.13.0): there while GitHub sync or Google
@@ -381,11 +381,11 @@ function paintSync() {
   const part = C.sync.running ? now.part : !running && backing ? driveRun.share : null;
   const held = on && !running && (C.sync.paused || waitsForWifi(DATA_SYNC_KEY));
   const failed = on && !running && !held && !!C.sync.last.error;
-  const label = running ? (C.sync.running ? "Sync: " + now.text : "Sync: " + syncNote().text)
-    : backing ? "Sync: backing up to Google Drive"
-    : !on ? "Sync"
-    : C.sync.paused ? "Sync: paused" : held ? "Sync: waiting for Wi-Fi"
-    : failed ? "Sync: " + C.sync.last.error : syncsPlacesOnly() ? "Sync: places only, clips wait for Wi-Fi" : C.sync.last.at ? "Sync: synced " + whenText(C.sync.last.at) : "Sync: not synced yet";
+  const label = running ? t("Sync: {what}", { what: C.sync.running ? now.text : syncNote().text })
+    : backing ? t("Sync: backing up to Google Drive")
+    : !on ? t("Sync")
+    : C.sync.paused ? t("Sync: paused") : held ? t("Sync: waiting for Wi-Fi")
+    : failed ? t("Sync: {what}", { what: C.sync.last.error }) : syncsPlacesOnly() ? t("Sync: places only, clips wait for Wi-Fi") : C.sync.last.at ? t("Sync: synced {when}", { when: whenText(C.sync.last.at) }) : t("Sync: not synced yet");
   const busy = running || backing;
   const said = [on, C.drive.on, busy, part, held, failed, label].join("|");
   if (said !== syncPainted) {
@@ -412,20 +412,27 @@ function syncAfter() {
   const saving = state.saving.filter((s) => s.synced && !s.error).length;
   const failed = state.saving.filter((s) => s.synced && s.error).length;
   const pictures = syncQueue.length + (fetchingPictures ? 1 : 0);
-  return [saving ? "Saving " + countLine(saving) + " from their links" : "",
-    failed ? failed + " couldn't be saved, see Downloads" : "",
-    pictures ? "Getting pictures for " + countLine(pictures) : ""].filter(Boolean).join(" · ");
+  return [saving ? t("Saving {clips} from their links", { clips: countLine(saving) }) : "",
+    failed ? t("{n} couldn't be saved, see Downloads", { n: failed }) : "",
+    pictures ? t("Getting pictures for {clips}", { clips: countLine(pictures) }) : ""].filter(Boolean).join(" · ");
+}
+// Sync's one line: what it's doing, or when it last ran.
+function syncLine(last, now, paused, running) {
+  const since = last.at ? ". " + t("Last synced {when}", { when: whenText(last.at) }) : "";
+  if (running) return now.text;
+  if (paused) return t("Paused") + since;
+  if (waitsForWifi(DATA_SYNC_KEY)) return t("Waiting for Wi-Fi") + since;
+  if (last.error) return last.error;
+  if (syncsPlacesOnly()) return (last.light ? t("Places synced {when}", { when: whenText(last.at) }) : t("On mobile data")) + ". " + t("Clips wait for Wi-Fi");
+  return last.at ? t("Synced {when}", { when: whenText(last.at) }) : t("Not synced yet");
 }
 function syncState() {
   const last = C.sync.last;
   const now = syncProgress();
   const paused = C.sync.paused;
-  const status = C.sync.running ? now.text : paused ? "Paused" + (last.at ? ". Last synced " + whenText(last.at) : "")
-    : waitsForWifi(DATA_SYNC_KEY) ? "Waiting for Wi-Fi" + (last.at ? ". Last synced " + whenText(last.at) : "")
-    : last.error ? last.error : syncsPlacesOnly() ? (last.light ? "Places synced " + whenText(last.at) : "On mobile data") + ". Clips wait for Wi-Fi"
-    : last.at ? "Synced " + whenText(last.at) : "Not synced yet";
+  const status = syncLine(last, now, paused, C.sync.running);
   const after = C.sync.running ? "" : syncAfter();
-  return section("Sync with GitHub", "Syncs when Waypage opens, after a change, and every few minutes while it's open. Pausing stops at the next clip and picks up where it left off; nothing syncs until you resume, and what synced before stays.",
+  return section(t("Sync with GitHub"), t("Syncs when Waypage opens, after a change, and every few minutes while it's open. Pausing stops at the next clip and picks up where it left off; nothing syncs until you resume, and what synced before stays."),
     el("div", { class: "group" },
       el("div", { class: "row sync-status" }, el("span", { class: "choice-text" },
         el("span", { class: "row-label" }, C.sync.account),
@@ -435,10 +442,10 @@ function syncState() {
           el("span", { class: "progress-fill", style: "transform: scaleX(" + (now.part == null ? 1 : now.part) + ")" })) : null)),
       syncSpace(),
       paused ? null : el("button", { class: "row", type: "button", ...(C.sync.running ? { disabled: "" } : {}), onclick: () => syncNow(false) },
-        el("span", { class: "row-label accent" }, "Sync now")),
+        el("span", { class: "row-label accent" }, t("Sync now"))),
       el("button", { class: "row", type: "button", onclick: () => pauseSync(!paused) },
-        el("span", { class: "row-label accent" }, paused ? "Resume syncing" : "Pause syncing")),
-      navRow("Sync history", "Earlier versions of your library, and putting one back", () => openSection("syncHistory", false, true))));
+        el("span", { class: "row-label accent" }, paused ? t("Resume syncing") : t("Pause syncing"))),
+      navRow(t("Sync history"), t("Earlier versions of your library, and putting one back"), () => openSection("syncHistory", false, true))));
 }
 // How much room the repo has left (2026-11), against GitHub's 5 GB.
 function syncSpace() {
@@ -448,9 +455,9 @@ function syncSpace() {
   const part = Math.min(1, used / C.sync.SPACE);
   const left = Math.max(0, C.sync.SPACE - used);
   return el("div", { class: "row sync-space" }, el("span", { class: "choice-text" },
-    el("span", { class: "choice-label" }, formatSize(left) + " left"),
-    el("span", { class: "choice-note" + (part > 0.9 ? " warn" : "") }, formatSize(Math.max(used, 1000)) + " of " + formatSize(C.sync.SPACE) + " used"),
-    el("span", { class: "progress thin", role: "progressbar", "aria-label": "Space used on GitHub", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.round(part * 100)) },
+    el("span", { class: "choice-label" }, t("{formatSize} left", { formatSize: formatSize(left) })),
+    el("span", { class: "choice-note" + (part > 0.9 ? " warn" : "") }, t("{formatSize} of {formatSize2} used", { formatSize: formatSize(Math.max(used, 1000)), formatSize2: formatSize(C.sync.SPACE) })),
+    el("span", { class: "progress thin", role: "progressbar", "aria-label": t("Space used on GitHub"), "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.round(part * 100)) },
       el("span", { class: "progress-fill", style: "transform: scaleX(" + part + ")" }))));
 }
 // Pause stops a sync at the next page and starts none until Resume;
@@ -463,19 +470,19 @@ function pauseSync(on) {
   if (!on) { syncNow(false); fetchPictures(); }
 }
 function disconnectSync() {
-  if (!confirm("Disconnect from GitHub? Your clips stay on this " + (C.platform.native ? "phone" : "browser") + " and on GitHub. To sync again you'll need a setup code or a token.")) return;
+  if (!confirm(t("Disconnect from GitHub? Your clips stay on this {x} and on GitHub. To sync again you'll need a setup code or a token.", { x: C.platform.native ? t("phone") : t("browser") }))) return;
   for (const r of runs) if (r.sync) stopRun(r);
   syncQueue = [];
   keepQueue();
   C.sync.disconnect();
   renderSection();
   paintDownloads();
-  toast("Disconnected. Your clips stay here and on GitHub.");
+  toast(t("Disconnected. Your clips stay here and on GitHub."));
 }
 function syncLeave() {
-  return section("Connection", "Disconnecting forgets the token on this device. Your clips stay here and on GitHub.",
+  return section(t("Connection"), t("Disconnecting forgets the token on this device. Your clips stay here and on GitHub."),
     el("div", { class: "group" },
-      el("button", { class: "row", type: "button", onclick: disconnectSync }, el("span", { class: "row-label warn" }, "Disconnect from GitHub"))));
+      el("button", { class: "row", type: "button", onclick: disconnectSync }, el("span", { class: "row-label warn" }, t("Disconnect from GitHub")))));
 }
 // ---- Sync history ----
 // Each library write is a commit on GitHub, so the repo holds every
@@ -498,18 +505,17 @@ function historyView() {
 }
 // What a put-back does, in words: "2 clips come back, 1 saved since is deleted".
 function historyParts(plan) {
-  const one = (n, x, y) => (n === 1 ? x : y);
   const isNote = (id) => { const p = state.pages.find((x) => x.id === id); return !!(p && p.note); };
   const said = (list, noteOf) => {
     const notes = list.filter(noteOf).length, clips = list.length - notes;
-    return { n: list.length, who: [clips ? countLine(clips) : "", notes ? notes + one(notes, " note", " notes") : ""].filter(Boolean).join(" and ") };
+    return { n: list.length, who: i18n.join([clips ? countLine(clips) : "", notes ? tn(notes, "1 note", "{n} notes") : ""].filter(Boolean)) };
   };
   const back = said(plan.back, (m) => m.note), drop = said(plan.drop, isNote), change = said(plan.change, (c) => c.note);
-  return [back.n ? back.who + one(back.n, " comes", " come") + " back" : "",
-    drop.n ? drop.who + " saved since " + one(drop.n, "is", "are") + " deleted" : "",
-    change.n ? change.who + one(change.n, " changes", " change") : "",
-    plan.followed ? plan.followed + one(plan.followed, " feed is", " feeds are") + " followed again" : "",
-    plan.unfollowed ? plan.unfollowed + one(plan.unfollowed, " feed is", " feeds are") + " unfollowed" : ""].filter(Boolean);
+  return [back.n ? tn(back.n, "{who} comes back", "{who} come back", { who: back.who }) : "",
+    drop.n ? tn(drop.n, "{who} saved since is deleted", "{who} saved since are deleted", { who: drop.who }) : "",
+    change.n ? tn(change.n, "{who} changes", "{who} change", { who: change.who }) : "",
+    plan.followed ? tn(plan.followed, "1 feed is followed again", "{n} feeds are followed again") : "",
+    plan.unfollowed ? tn(plan.unfollowed, "1 feed is unfollowed", "{n} feeds are unfollowed") : ""].filter(Boolean);
 }
 // For each changed note, what its sheets and strokes would do: read here and
 // from that version, the first few only. c.detail stays unset when a read fails.
@@ -526,7 +532,7 @@ async function historyNotes(plan, T, sha) {
     } catch (err) { /* the row says it as a whole */ }
   }
 }
-const strokesText = (here, then) => [here ? here + " new here" : "", then ? then + " erased since" : ""].filter(Boolean).join(", ");
+const strokesText = (here, then) => [here ? t("{n} new here", { n: here }) : "", then ? t("{n} erased since", { n: then }) : ""].filter(Boolean).join(", ");
 // A dry run of the put-back under a version's row: reads that version from
 // GitHub and works out the plan, and changes nothing here.
 async function historyLook(e) {
@@ -540,7 +546,7 @@ async function historyLook(e) {
     got = { plan: C.sync.revertPlan(view, T, opts), view };
     await historyNotes(got.plan, T, e.sha);
   } catch (err) {
-    got = { error: err instanceof C.sync.SyncError ? err.message : "Couldn't read that version." };
+    got = { error: err instanceof C.sync.SyncError ? err.message : t("Couldn't read that version.") };
     if (!(err instanceof C.sync.SyncError)) console.error(err);
   }
   if (historyDiff.get(e.sha) !== mine) return;
@@ -551,13 +557,13 @@ const HISTORY_SHOWN = 20;
 function historyDiffRows(e) {
   const d = historyDiff.get(e.sha);
   const plain = (t, cls) => el("div", { class: "row" }, el("span", { class: "row-label " + (cls || "muted") }, t));
-  if (!d || d.busy) return [plain("Looking on GitHub…")];
+  if (!d || d.busy) return [plain(t("Looking on GitHub…"))];
   if (d.error) return [el("button", { class: "row", type: "button", onclick: () => { historyDiff.delete(e.sha); historyDiffFill(e); historyLook(e); } },
-    el("span", { class: "row-label warn" }, d.error + " Try again"))];
+    el("span", { class: "row-label warn" }, t("{error} Try again", { error: d.error })))];
   const p = d.plan;
-  if (!historyParts(p).length) return [plain("Same as your library now")];
+  if (!historyParts(p).length) return [plain(t("Same as your library now"))];
   const item = (title, note) => el("div", { class: "row" }, el("span", { class: "choice-text" },
-    el("span", { class: "row-label", dir: "auto" }, title || "Untitled"), note ? el("span", { class: "choice-note", dir: "auto" }, note) : null));
+    el("span", { class: "row-label", dir: "auto" }, title || t("Untitled")), note ? el("span", { class: "choice-note", dir: "auto" }, note) : null));
   const out = [];
   const group = (label, items) => {
     if (!items.length) return;
@@ -566,35 +572,35 @@ function historyDiffRows(e) {
     if (items.length > HISTORY_SHOWN) out.push(plain("and " + (items.length - HISTORY_SHOWN) + " more"));
   };
   const hereBy = new Map(d.view.map((x) => [x.id, x]));
-  const none = (v) => v || "none";
+  const none = (v) => v || t("none");
   const says = (c) => {
     const h = hereBy.get(c.id) || {};
     const word = {
-      text: () => (c.note ? "" : "Text: the version from then"), title: (x) => "Title: " + x.was + " → " + x.now,
-      tags: (x) => "Tags: " + none(x.was.join(", ")) + " → " + none(x.now.join(", ")),
-      folder: (x) => "Collection: " + none(x.was) + " → " + none(x.now), fav: (x) => "Favourite: " + (x.now ? "on" : "off"),
-      marks: (x) => "Highlights: " + x.was + " → " + x.now, ink: (x) => "Drawings: " + strokesText(x.here, x.then), other: () => "Other details" };
+      text: () => (c.note ? "" : t("Text: the version from then")), title: (x) => t("Title: {was} → {now}", { was: x.was, now: x.now }),
+      tags: (x) => t("Tags: {was} → {now}", { was: none(x.was.join(", ")), now: none(x.now.join(", ")) }),
+      folder: (x) => t("Collection: {was} → {now}", { was: none(x.was), now: none(x.now) }), fav: (x) => (x.now ? t("Favourite: on") : t("Favourite: off")),
+      marks: (x) => t("Highlights: {was} → {now}", { was: x.was, now: x.now }), ink: (x) => t("Drawings: {what}", { what: strokesText(x.here, x.then) }), other: () => t("Other details") };
     const lines = C.sync.revertChanges(h, c.next, c.text).map((x) => word[x.field](x)).filter(Boolean);
     if (c.note && c.text) {
       const d = c.detail;
-      if (!d) lines.unshift("The note as it was then");
+      if (!d) lines.unshift(t("The note as it was then"));
       else {
-        if (d.sheets[0] !== d.sheets[1]) lines.unshift("Sheets: " + d.sheets[0] + " → " + d.sheets[1]);
-        if (d.ink.here || d.ink.then) lines.push("Drawings: " + strokesText(d.ink.here, d.ink.then));
-        if (!lines.length) lines.push("Typed text or pictures");
+        if (d.sheets[0] !== d.sheets[1]) lines.unshift(t("Sheets: {was} → {now}", { was: d.sheets[0], now: d.sheets[1] }));
+        if (d.ink.here || d.ink.then) lines.push(t("Drawings: {what}", { what: strokesText(d.ink.here, d.ink.then) }));
+        if (!lines.length) lines.push(t("Typed text or pictures"));
       }
     }
     return lines.join(" · ");
   };
-  group("Come back", p.back.map((m) => ({ title: m.title, note: m.note ? "Note" : "" })));
-  group("Deleted", p.drop.map((id) => { const x = state.pages.find((y) => y.id === id) || {}; return { title: x.title, note: x.note ? "Note" : "" }; }));
-  group("Change", p.change.map((c) => ({ title: c.next.title, note: (c.note ? "Note · " : "") + says(c) })));
+  group(t("Come back"), p.back.map((m) => ({ title: m.title, note: m.note ? t("Note") : "" })));
+  group(t("Deleted"), p.drop.map((id) => { const x = state.pages.find((y) => y.id === id) || {}; return { title: x.title, note: x.note ? t("Note") : "" }; }));
+  group(t("Change"), p.change.map((c) => ({ title: c.next.title, note: (c.note ? t("Note") + " · " : "") + says(c) })));
   if (p.feeds) {
     const mine = new Set(feeds.map((f) => f.url)), kept = new Set(p.feeds.map((f) => f.url));
-    group("Followed again", p.feeds.filter((f) => !mine.has(f.url)).map((f) => ({ title: f.title || f.url })));
-    group("Unfollowed", feeds.filter((f) => !kept.has(f.url)).map((f) => ({ title: f.title || f.url })));
+    group(t("Followed again"), p.feeds.filter((f) => !mine.has(f.url)).map((f) => ({ title: f.title || f.url })));
+    group(t("Unfollowed"), feeds.filter((f) => !kept.has(f.url)).map((f) => ({ title: f.title || f.url })));
   }
-  out.push(el("p", { class: "footnote history-note" }, "Compared with this device's library now. Where you are in each clip isn't compared."));
+  out.push(el("p", { class: "footnote history-note" }, t("Compared with this device's library now. Where you are in each clip isn't compared.")));
   return out;
 }
 // Fills a version's fold-out in place, where it is on screen.
@@ -604,10 +610,10 @@ function historyDiffFill(e) {
 }
 // Why history can't be used now, or "".
 function historyWhy() {
-  if (!C.sync.on) return "Turn on GitHub sync to see earlier versions of your library.";
-  if (C.sync.paused) return "Sync is paused. Resume it to see earlier versions.";
-  if (!C.sync.what.clips) return "This device doesn't sync Clips. Turn Clips on under What this device syncs to use history.";
-  if (C.sync.links) return "This device syncs Links only. History needs Clips too, since it brings clips' text back.";
+  if (!C.sync.on) return t("Turn on GitHub sync to see earlier versions of your library.");
+  if (C.sync.paused) return t("Sync is paused. Resume it to see earlier versions.");
+  if (!C.sync.what.clips) return t("This device doesn't sync Clips. Turn Clips on under What this device syncs to use history.");
+  if (C.sync.links) return t("This device syncs Links only. History needs Clips too, since it brings clips' text back.");
   return "";
 }
 // A page of the commits, and more until one shows a version that differs:
@@ -626,7 +632,7 @@ async function historyLoad(more) {
       historyPage++;
       const todo = got.list.filter((e) => !e.print);
       for (let i = 0; i < todo.length; i += 3) {
-        historyStatus = "Comparing versions, " + Math.min(i + 3, todo.length) + " of " + todo.length;
+        historyStatus = t("Comparing versions, {done} of {total}", { done: Math.min(i + 3, todo.length), total: todo.length });
         if (state.section === "syncHistory") renderSection();
         // One that can't be read keeps no print, and so keeps its row.
         await Promise.all(todo.slice(i, i + 3).map((e) => C.sync.printOf(e.sha).then((p) => { e.print = p; }, () => {})));
@@ -636,7 +642,7 @@ async function historyLoad(more) {
       if (!got.more || C.sync.distinct(historyList).length > before) break;
     }
   } catch (e) {
-    historyError = e instanceof C.sync.SyncError ? e.message : "Couldn't read the history. Try again.";
+    historyError = e instanceof C.sync.SyncError ? e.message : t("Couldn't read the history. Try again.");
     if (!(e instanceof C.sync.SyncError)) console.error(e);
   }
   historyStatus = "";
@@ -648,12 +654,12 @@ function historySections() {
   // Loaded when its screen is open, not when Settings' search reads it.
   if (!why && state.section === "syncHistory" && !historyList && !historyError && !historyBusy) historyLoad(false);
   const off = reverting || historyBusy ? { disabled: "" } : {};
-  const note = (e) => [e.kind === "feeds" ? "Feeds changed" : e.kind === "back" ? "Put back to " + e.back : e.clips != null ? countLine(e.clips) : "",
-    e.device ? "from " + e.device : ""].filter(Boolean).join(" · ");
+  const note = (e) => [e.kind === "feeds" ? t("Feeds changed") : e.kind === "back" ? t("Put back to {when}", { when: e.back }) : e.clips != null ? countLine(e.clips) : "",
+    e.device ? t("from {device}", { device: e.device }) : ""].filter(Boolean).join(" · ");
   // Tap the version to see what it would change; only Put back puts it back.
   const rows = C.sync.distinct(historyList || []).flatMap((e, i) => {
     const text = el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, driveWhen(e.at)), el("span", { class: "choice-note" }, note(e)));
-    if (i === 0) return [el("div", { class: "row" }, text, el("span", { class: "row-value" }, "Now"))];
+    if (i === 0) return [el("div", { class: "row" }, text, el("span", { class: "row-value" }, t("Now")))];
     const open = historyOpen.has(e.sha), id = "history-" + e.sha;
     const diff = el("div", { class: "history-diff", id });
     diff.hidden = !open;
@@ -668,28 +674,28 @@ function historySections() {
       } },
       text, el("span", { class: "row-chev", "aria-hidden": "true" }, "›"));
     return [el("div", { class: "row history-row" }, fold,
-      el("button", { class: "history-put", type: "button", ...off, onclick: () => syncRevert(e) }, "Put back")), diff];
+      el("button", { class: "history-put", type: "button", ...off, onclick: () => syncRevert(e) }, t("Put back"))), diff];
   });
   const status = reverting ? [el("div", { class: "row" }, el("span", { class: "choice-text" },
     el("span", { class: "choice-label" }, reverting.text),
     el("span", { class: "progress thin busy", "aria-hidden": "true" }, el("span", { class: "progress-fill", style: "transform: scaleX(1)" }))))] : [];
   const rest = why ? [el("div", { class: "row" }, el("span", { class: "row-label muted" }, why))]
-    : historyError ? [el("button", { class: "row", type: "button", onclick: () => historyLoad(!!historyList) }, el("span", { class: "row-label warn" }, historyError + " Try again"))]
-    : !historyList ? [el("div", { class: "row" }, el("span", { class: "row-label" }, historyStatus || "Looking on GitHub…"))]
-    : rows.length <= 1 && !historyMore ? [el("div", { class: "row" }, el("span", { class: "row-label" }, "No earlier versions with changes yet"))]
+    : historyError ? [el("button", { class: "row", type: "button", onclick: () => historyLoad(!!historyList) }, el("span", { class: "row-label warn" }, t("{historyError} Try again", { historyError: historyError })))]
+    : !historyList ? [el("div", { class: "row" }, el("span", { class: "row-label" }, historyStatus || t("Looking on GitHub…")))]
+    : rows.length <= 1 && !historyMore ? [el("div", { class: "row" }, el("span", { class: "row-label" }, t("No earlier versions with changes yet")))]
     : [];
-  return [section("Sync history", null,
+  return [section(t("Sync history"), null,
     el("div", { class: "group" }, ...status, ...rows, ...rest,
       !why && historyMore && !historyError ? el("button", { class: "row", type: "button", ...off, onclick: () => historyLoad(true) },
-        el("span", { class: "row-label accent" }, historyBusy ? historyStatus || "Looking…" : "Show older")) : null),
-    el("p", { class: "footnote" }, "Each time your library changed, GitHub kept a copy. Tap a version to see what it would change. Versions that changed nothing are left out. Putting one back makes your library as it was then, on every device: clips deleted since come back, clips saved since are deleted, and tags, collections, favourites, highlights and feeds go back too. Notes and drawings go back too. Where you are in each clip and your reading stats stay as they are. A clip deleted this way stays in history, so you can put a later version back from this list." + (C.sync.what.notes ? "" : " This device doesn't sync Notes, so it leaves them as they are.")))];
+        el("span", { class: "row-label accent" }, historyBusy ? historyStatus || t("Looking…") : t("Show older"))) : null),
+    el("p", { class: "footnote" }, t("Each time your library changed, GitHub kept a copy. Tap a version to see what it would change. Versions that changed nothing are left out. Putting one back makes your library as it was then, on every device: clips deleted since come back, clips saved since are deleted, and tags, collections, favourites, highlights and feeds go back too. Notes and drawings go back too. Where you are in each clip and your reading stats stay as they are. A clip deleted this way stays in history, so you can put a later version back from this list.{x}", { x: C.sync.what.notes ? "" : t(" This device doesn't sync Notes, so it leaves them as they are.") })))];
 }
 async function syncRevert(e) {
   if (reverting || historyWhy()) return;
-  if (state.open) { toast("Close the clip you're reading, then put the library back."); return; }
-  if (!navigator.onLine) { toast("You're offline. Connect to put the library back."); return; }
+  if (state.open) { toast(t("Close the clip you're reading, then put the library back.")); return; }
+  if (!navigator.onLine) { toast(t("You're offline. Connect to put the library back.")); return; }
   const when = driveWhen(e.at);
-  reverting = { text: "Checking GitHub…", syncing: true };
+  reverting = { text: t("Checking GitHub…"), syncing: true };
   renderSection();
   const say = (t) => { reverting.text = t; if (state.section === "syncHistory") renderSection(); };
   const fail = (msg) => { reverting = null; toast(msg); if (state.section === "syncHistory") renderSection(); };
@@ -703,11 +709,11 @@ async function syncRevert(e) {
     const { view, opts } = historyView();
     plan = C.sync.revertPlan(view, T, opts);
   } catch (err) {
-    return fail(err instanceof C.sync.SyncError ? err.message : "Couldn't read that version. Try again.");
+    return fail(err instanceof C.sync.SyncError ? err.message : t("Couldn't read that version. Try again."));
   }
   const parts = historyParts(plan);
-  if (!parts.length) { reverting = null; toast("Your library is already as it was then."); if (state.section === "syncHistory") renderSection(); return; }
-  if (!confirm("Put your library back as it was on " + when + "?\n\n" + parts.join(", ") + ".\n\nYour other devices follow when they sync. Where you are in each clip stays as it is.")) {
+  if (!parts.length) { reverting = null; toast(t("Your library is already as it was then.")); if (state.section === "syncHistory") renderSection(); return; }
+  if (!confirm(t("Put your library back as it was on {when}?\n\n{join}.\n\nYour other devices follow when they sync. Where you are in each clip stays as it is.", { when: when, join: parts.join(", ") }))) {
     reverting = null;
     if (state.section === "syncHistory") renderSection();
     return;
@@ -721,7 +727,7 @@ async function syncRevert(e) {
     // so it is the base: the old strokes then go up instead of merging with new ones.
     const head = want.some((w) => w.meta.note && w.have) ? await C.sync.target() : null;
     for (const [i, w] of want.entries()) {
-      say("Bringing clips back, " + (i + 1) + " of " + want.length);
+      say(t("Bringing clips back, {i} of {n}", { i: i + 1, n: want.length }));
       html.set(w.meta.id, await C.sync.readText("pages/" + w.meta.id + ".html", e.sha));
       if (!w.meta.note) continue;
       const id = w.meta.id, names = T.files[id] && T.files[id].note;
@@ -734,9 +740,9 @@ async function syncRevert(e) {
       }
     }
   } catch (err) {
-    return fail(err instanceof C.sync.SyncError ? err.message : "Couldn't bring the clips back. Nothing was changed.");
+    return fail(err instanceof C.sync.SyncError ? err.message : t("Couldn't bring the clips back. Nothing was changed."));
   }
-  say("Putting it back…");
+  say(t("Putting it back…"));
   const fromLinks = [], pictures = [], skipped = [];
   const written = new Map(), live = new Map(state.pages.map((p) => [p.id, p]));
   try {
@@ -788,14 +794,14 @@ async function syncRevert(e) {
     reverting = null;
     historyReset();
     if (state.section === "syncHistory") renderSection();
-    toast("Couldn't put the library back. Some clips may have changed; syncing will bring the rest.");
+    toast(t("Couldn't put the library back. Some clips may have changed; syncing will bring the rest."));
     syncNow(true);
     return;
   }
   if (pictures.length) { syncQueue.push(...pictures); keepQueue(); }
-  if (fromLinks.length) saveFromLinks(fromLinks, "From sync history");
+  if (fromLinks.length) saveFromLinks(fromLinks, t("From sync history"));
   // Sent like any change of this device's, with a commit that says so.
-  say("Syncing it…");
+  say(t("Syncing it…"));
   C.sync.note = when;
   unsynced = true;
   reverting.syncing = true;
@@ -805,8 +811,8 @@ async function syncRevert(e) {
   fetchPictures();
   if (state.section === "syncHistory") renderSection();
   else if (state.section === "sync") renderSection();
-  toast(C.sync.last.error ? "Put back here. It goes to your other devices with the next sync."
-    : "Library put back to " + when + (skipped.length ? ". " + countLine(skipped.length) + " kept as " + (skipped.length === 1 ? "it was" : "they were") + ", its old text isn't on GitHub" : "") + ".");
+  toast(C.sync.last.error ? t("Put back here. It goes to your other devices with the next sync.")
+    : t("Library put back to {when}.", { when }) + (skipped.length ? " " + tn(skipped.length, "1 clip kept as it was, its old text isn't on GitHub.", "{n} clips kept as they were, their old text isn't on GitHub.") : ""));
 }
 // Pages too, or links only: the library and its marks always sync.
 // What this device syncs (1.47.0): switches, like Google Drive's What
@@ -817,41 +823,40 @@ function syncsList() {
     el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, label), el("span", { class: "choice-note" }, note)),
     el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!what[key],
       onchange: (e) => { C.sync.setWhat(key, e.target.checked); renderSection(); syncSoon(500); } }));
-  return section("What this device syncs", "Clips go with their highlights, tags, collections, favourites and where you were. With Clips too, each clip's text goes up, so another device gets it as you saved it even if the site changes; pictures come from the clip's site, or from GitHub when it has none, up to 100 MB a clip. With Links only, clips new to a device are saved again from their links, so one that changed or went away comes back different or not at all. A part turned off here is left as it is on GitHub for your other devices. Notes go up whole, with the PDF one was made from (up to 50 MB); what two devices wrote on one note is kept from both. A file read from outside stays on its device, but your place, highlights, tags and reading time in it sync to the same file on your other devices. Watched folders and settings don't sync."
-      + (C.platform.knowsConnection ? " On mobile data, Places and reading time only moves where you are in each clip, what you finished and your reading time on any connection, while new clips, tags and collections wait for Wi-Fi." : ""),
+  return section(t("What this device syncs"), t("Clips go with their highlights, tags, collections, favourites and where you were. With Clips too, each clip's text goes up, so another device gets it as you saved it even if the site changes; pictures come from the clip's site, or from GitHub when it has none, up to 100 MB a clip. With Links only, clips new to a device are saved again from their links, so one that changed or went away comes back different or not at all. A part turned off here is left as it is on GitHub for your other devices. Notes go up whole, with the PDF one was made from (up to 50 MB); what two devices wrote on one note is kept from both. A file read from outside stays on its device, but your place, highlights, tags and reading time in it sync to the same file on your other devices. Watched folders and settings don't sync.{x}", { x: C.platform.knowsConnection ? t(" On mobile data, Places and reading time only moves where you are in each clip, what you finished and your reading time on any connection, while new clips, tags and collections wait for Wi-Fi.") : "" }),
     el("div", { class: "group" },
-      sw("clips", "Clips", C.sync.links ? "Links, highlights, tags, collections and places" : "Text, highlights, tags, collections and places"),
-      what.clips ? el("div", { class: "row" }, seg("sync-what", "What goes up of each clip", [{ value: "pages", label: "Clips too" }, { value: "links", label: "Links only" }],
+      sw("clips", t("Clips"), C.sync.links ? t("Links, highlights, tags, collections and places") : t("Text, highlights, tags, collections and places")),
+      what.clips ? el("div", { class: "row" }, seg("sync-what", t("What goes up of each clip"), [{ value: "pages", label: t("Clips too") }, { value: "links", label: t("Links only") }],
         C.sync.links ? "links" : "pages", (v) => { C.sync.links = v === "links"; renderSection(); syncSoon(500); })) : null,
-      sw("notes", "Notes", "Pages and highlights. Over 50 MB can't be synced"),
-      sw("feeds", "Feeds", "Which you follow and how"),
-      sw("newsletters", "Newsletters", "Your addresses and how they're set"),
-      sw("stats", "Reading stats", "Reading time from every device, added up"),
-      C.ext.on("anki") ? sw("anki", "Anki", "Decks, cards and reviews from every device") : null,
-      dataRow(DATA_SYNC_KEY, "Sync", "Everything, on any connection", "Changes wait until then",
-        { value: "places", label: "Places and reading time only", note: "Clips, tags and collections wait for Wi-Fi" })));
+      sw("notes", t("Notes"), t("Pages and highlights. Over 50 MB can't be synced")),
+      sw("feeds", t("Feeds"), t("Which you follow and how")),
+      sw("newsletters", t("Newsletters"), t("Your addresses and how they're set")),
+      sw("stats", t("Reading stats"), t("Reading time from every device, added up")),
+      C.ext.on("anki") ? sw("anki", t("Anki"), t("Decks, cards and reviews from every device")) : null,
+      dataRow(DATA_SYNC_KEY, t("Sync"), t("Everything, on any connection"), t("Changes wait until then"),
+        { value: "places", label: t("Places and reading time only"), note: t("Clips, tags and collections wait for Wi-Fi") })));
 }
 // Share reading activity (2026-11): activity/reading.json for other apps
 // that read this repo, with which kinds go in it.
-const SHARE_KINDS = [["book", "Books", "EPUB, PDF, MOBI, AZW3 and FB2 files"], ["audiobook", "Audiobooks", "Listening time apart from reading"],
-  ["comic", "Comics", "CBZ files and clips saved as comics"], ["serial", "Serials", "Collections that follow a story's new chapters"], ["article", "Articles", "Web clips"]];
+const SHARE_KINDS = [["book", t("Books"), "EPUB, PDF, MOBI, AZW3 and FB2 files"], ["audiobook", t("Audiobooks"), t("Listening time apart from reading")],
+  ["comic", t("Comics"), t("CBZ files and clips saved as comics")], ["serial", t("Serials"), t("Collections that follow a story's new chapters")], ["article", t("Articles"), t("Web clips")]];
 function syncActivity() {
   const on = C.sync.what.activity, kinds = C.sync.shareKinds;
   const sw = (label, note, checked, set) => switchRow(label, note, checked, (v) => { set(v); renderSection(); syncSoon(500); });
-  return section("Other apps", "Other apps you connect to your " + C.sync.account.split("/")[1] + " repo can read what you've read: titles, authors, how far you are, when you started and finished, and your minutes a day. It goes only to that repo, as activity/reading.json; no text, highlights or notes. A clip or collection's ⋯ can keep it out. Turned off, the file is removed at the next sync. Each device has its own switch.",
+  return section(t("Other apps"), t("Other apps you connect to your {x} repo can read what you've read: titles, authors, how far you are, when you started and finished, and your minutes a day. It goes only to that repo, as activity/reading.json; no text, highlights or notes. A clip or collection's ⋯ can keep it out. Turned off, the file is removed at the next sync. Each device has its own switch.", { x: C.sync.account.split("/")[1] }),
     el("div", { class: "group" },
-      sw("Share reading activity", "", on, (v) => C.sync.setWhat("activity", v)),
+      sw(t("Share reading activity"), "", on, (v) => C.sync.setWhat("activity", v)),
       ...(on ? SHARE_KINDS.map(([k, label, note]) => sw(label, note, !!kinds[k], (v) => C.sync.setShareKind(k, v))) : [])));
 }
 function syncWhat() {
-  return section("This device", null,
+  return section(t("This device"), null,
     el("div", { class: "group" },
       el("div", { class: "rc-list" },
-        el("div", { class: "rc-row stack" }, el("label", { class: "rc-label", for: "deviceName" }, "This device's name"),
+        el("div", { class: "rc-row stack" }, el("label", { class: "rc-label", for: "deviceName" }, t("This device's name")),
           el("input", { class: "feed-input", id: "deviceName", type: "text", maxlength: "40", autocomplete: "off",
             value: load(DEVICE_KEY, ""), placeholder: guessedName().replace(/^./, (c) => c.toUpperCase()),
             onchange: (e) => store(DEVICE_KEY, e.target.value.trim().slice(0, 40)) })))),
-    el("p", { class: "footnote" }, "Shows on your other devices when this one read a clip further."));
+    el("p", { class: "footnote" }, t("Shows on your other devices when this one read a clip further.")));
 }
 // The setup link points at the web copy: inside the app this page is at
 // https://localhost, which no other device can open. The app's scanner
@@ -860,17 +865,17 @@ function syncShare() {
   const link = C.sync.setupLink(C.platform.webUrl() || location.origin + location.pathname);
   const encoder = window.Keel && window.Keel.qr;
   const svg = encoder && encoder.fits(link) ? encoder.svg(link, { size: 200 }) : null;
-  const qr = svg ? el("div", { class: "sync-qr", role: "img", "aria-label": "Setup code" }) : null;
+  const qr = svg ? el("div", { class: "sync-qr", role: "img", "aria-label": t("Setup code") }) : null;
   if (qr) qr.innerHTML = svg;
   const copy = async () => {
-    try { await navigator.clipboard.writeText(link); toast("Setup link copied. Only send it to yourself."); }
-    catch (e) { toast("Couldn't copy the link."); }
+    try { await navigator.clipboard.writeText(link); toast(t("Setup link copied. Only send it to yourself.")); }
+    catch (e) { toast(t("Couldn't copy the link.")); }
   };
-  return section("Add another device", "In Waypage on the other device, go to Settings › GitHub sync and scan this code, or paste the link there. A phone's camera opens it in the web copy instead.",
+  return section(t("Add another device"), t("In Waypage on the other device, go to Settings › GitHub sync and scan this code, or paste the link there. A phone's camera opens it in the web copy instead."),
     el("div", { class: "group" },
       qr,
-      el("button", { class: "row", type: "button", onclick: copy }, el("span", { class: "row-label accent" }, "Copy setup link"))),
-    el("p", { class: "footnote warn" }, "The code and link hold your token. Only use them on your own devices."));
+      el("button", { class: "row", type: "button", onclick: copy }, el("span", { class: "row-label accent" }, t("Copy setup link")))),
+    el("p", { class: "footnote warn" }, t("The code and link hold your token. Only use them on your own devices.")));
 }
 
 // Opening the web copy from a setup link (a phone's camera on the code)
@@ -881,7 +886,7 @@ async function takeSetupLink() {
   history.replaceState(history.state, "", location.pathname + location.search);
   if (C.sync.on) return;
   const err = await connectSync(hash);
-  toast(err || "Sync is on. Your library is on its way.");
+  toast(err || t("Sync is on. Your library is on its way."));
 }
 
 // Send to Waypage (1.34.0): a bookmark in a computer's browser opens the
@@ -895,7 +900,7 @@ function takeSend() {
   if (C.platform.native || location.hash !== "#send") return;
   history.replaceState(history.state, "", location.pathname + location.search);
   const from = window.opener;
-  if (!from) { toast("Nothing came through: this site keeps other windows out. Save it on your phone instead."); return; }
+  if (!from) { toast(t("Nothing came through: this site keeps other windows out. Save it on your phone instead.")); return; }
   const hear = (e) => {
     const d = e.data;
     if (e.source !== from || !d || d.waypage !== "page" || typeof d.url !== "string" || typeof d.html !== "string") return;
@@ -903,8 +908,8 @@ function takeSend() {
     clearTimeout(late);
     let url = null;
     try { url = new URL(d.url); } catch (x) { /* not an address */ }
-    if (!url || !/^https?:$/.test(url.protocol) || url.origin !== e.origin) { toast("That page couldn't be sent."); return; }
-    if (d.html.length > SEND_MAX) { toast("That page is too big to send."); return; }
+    if (!url || !/^https?:$/.test(url.protocol) || url.origin !== e.origin) { toast(t("That page couldn't be sent.")); return; }
+    if (d.html.length > SEND_MAX) { toast(t("That page is too big to send.")); return; }
     sent = { url: url.href, html: d.html, title: String(d.title || "").replace(/\s+/g, " ").trim().slice(0, 300) };
     if (state.menu) back().then(() => openMenu("send")); else openMenu("send");
   };
@@ -926,10 +931,10 @@ function sendSheet() {
       el("p", { class: "meta" }, C.save.siteName(s.url) + " · " + formatSize(s.html.length))),
     el("div", { class: "group" },
       el("button", { class: "row", type: "button", onclick: () => answer(true) },
-        el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, "Save this page"),
-          el("span", { class: "choice-note" }, "As your browser shows it, signed in too. Its pictures stay links on this computer."))),
+        el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, t("Save this page")),
+          el("span", { class: "choice-note" }, t("As your browser shows it, signed in too. Its pictures stay links on this computer.")))),
       el("button", { class: "row", type: "button", onclick: () => answer(false) },
-        el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, "Don't save")))));
+        el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, t("Don't save"))))));
 }
 // The bookmark itself: it waits for this copy to say it's ready, and
 // sends only to this copy's own address.
@@ -945,12 +950,12 @@ function bookmarklet() {
 
 // How a page keeps its pictures, switched from its sheet (0.30.2), in
 // place of 0.17.0's "Save full images".
-const PICTURE_MODES = [{ value: "previews", label: "Previews" }, { value: "full", label: "Full size" }, { value: "links", label: "Links" }];
+const PICTURE_MODES = [{ value: "previews", label: t("Previews") }, { value: "full", label: t("Full size") }, { value: "links", label: t("Links") }];
 function picturesRow(p, redraw) {
   if (!C.platform.native || !p.images) return null;
   const note = el("p", { class: "footnote pictures-note", role: "status" }, savedNote(p));
-  return el("div", { class: "rc-row stack" }, el("span", { class: "rc-label" }, "Pictures"),
-    seg("pictures-" + p.id, "Pictures", PICTURE_MODES, p.mode || "previews", (v) => changePictures(p, v, note, redraw)),
+  return el("div", { class: "rc-row stack" }, el("span", { class: "rc-label" }, t("Pictures")),
+    seg("pictures-" + p.id, t("Pictures"), PICTURE_MODES, p.mode || "previews", (v) => changePictures(p, v, note, redraw)),
     note);
 }
 
@@ -958,18 +963,18 @@ let changingPictures = false;
 async function changePictures(p, mode, note, redraw) {
   if (changingPictures) return;
   if (mode !== "links" && !navigator.onLine && (mode === "full" || p.mode === "links")) {
-    toast("You're offline. Try again when you're back online.");
+    toast(t("You're offline. Try again when you're back online."));
     redraw();
     return;
   }
   changingPictures = true;
-  const word = { previews: "previews", full: "full images", links: "links" }[mode];
-  note.textContent = "Keeping " + word + "…";
+  const word = { previews: t("previews"), full: t("full images"), links: t("links") }[mode];
+  note.textContent = t("Keeping {word}…", { word: word });
   let res = null;
-  try { res = await C.save.setPictures(p, mode, (done, total) => { note.textContent = "Keeping " + word + ", " + done + " of " + total; }); }
+  try { res = await C.save.setPictures(p, mode, (done, total) => { note.textContent = t("Keeping {word}, {done} of {total}", { word: word, done: done, total: total }); }); }
   catch (e) { res = null; }
   changingPictures = false;
-  if (!res) { toast("Couldn't open this clip's file. Try again."); redraw(); return; }
+  if (!res) { toast(t("Couldn't open this clip's file. Try again.")); redraw(); return; }
   Object.assign(p, { mode, missing: res.missing, thumb: res.thumb, bytes: Math.max(0, (p.bytes || 0) + res.bytes) });
   if (p.imageBytes != null) p.imageBytes = Math.max(0, p.imageBytes + res.bytes);
   await C.store.writeIndex(state.pages);
@@ -977,7 +982,7 @@ async function changePictures(p, mode, note, redraw) {
   await loadThumbs();
   renderLibrary();
   if (state.folder) renderFolder();
-  toast(res.failed ? res.failed + (res.failed === 1 ? " picture" : " pictures") + " couldn't be fetched. They show online." : mode === "links" ? "Pictures are links now. They show when you're online." : "Pictures saved as " + word + ".");
+  toast(res.failed ? tn(res.failed, "1 picture couldn't be fetched. It shows online.", "{n} pictures couldn't be fetched. They show online.") : mode === "links" ? t("Pictures are links now. They show when you're online.") : t("Pictures saved as {word}.", { word: word }));
   redraw();
   if (state.open !== p) return;
   const html = await C.store.readPage(p.id).catch(() => null);
@@ -998,18 +1003,18 @@ function newField(cls, placeholder, label, then) {
   return input;
 }
 function folderRow(p, redraw) {
-  const input = newField("new-collection", "Name the new collection", "New collection", (v) => setFolder(p, v).then(redraw));
+  const input = newField("new-collection", t("Name the new collection"), t("New collection"), (v) => setFolder(p, v).then(redraw));
   const names = allFolders().sort((a, b) => a.localeCompare(b));
   const pick = dropdown({
-    label: "Collection", cls: "field-pick",
-    options: [{ value: "", label: "None" }, ...names.map((n) => ({ value: n, label: n })), { value: NEW_PICK, label: "New collection…" }],
+    label: t("Collection"), cls: "field-pick",
+    options: [{ value: "", label: t("None") }, ...names.map((n) => ({ value: n, label: n })), { value: NEW_PICK, label: t("New collection…") }],
     value: p.folder && names.find((n) => sameTag(n, p.folder)) || "",
     onpick: (v) => {
       if (v === NEW_PICK) { input.hidden = false; input.focus(); return; }
       setFolder(p, v || null).then(redraw);
     },
   });
-  return el("div", { class: "rc-row tall" }, el("span", { class: "rc-label" }, "Collection"),
+  return el("div", { class: "rc-row tall" }, el("span", { class: "rc-label" }, t("Collection")),
     el("div", { class: "tag-edit" }, pick, input));
 }
 
@@ -1018,11 +1023,11 @@ function neighbours(p) {
   if (!prev && !next) return null;
   const step = (q, label) => {
     const b = el("button", { class: "sheet-row step-row", type: "button", onclick: () => q && goTo(q) },
-      el("span", { class: "step-over" }, label), el("span", { class: "step-title", dir: "auto" }, q ? q.title : "None"));
+      el("span", { class: "step-over" }, label), el("span", { class: "step-title", dir: "auto" }, q ? q.title : t("None")));
     b.disabled = !q;
     return b;
   };
-  return el("div", { class: "step-rows" }, step(prev, "Previous"), step(next, "Next"));
+  return el("div", { class: "step-rows" }, step(prev, t("Previous")), step(next, t("Next")));
 }
 
 // ---- Saving several ----
@@ -1065,7 +1070,7 @@ function renderBatch(text, preset, from, siteTags) {
   if (kind === "comic") mode = "full";
   const tags = [];
   let drawTagNew = null;
-  const area = el("textarea", { class: "batch-links", rows: "6", "aria-label": "Links, one a line", spellcheck: "false",
+  const area = el("textarea", { class: "batch-links", rows: "6", "aria-label": t("Links, one a line"), spellcheck: "false",
     autocapitalize: "off", autocomplete: "off", dir: "ltr" });
   area.value = text;
   const count = el("p", { class: "meta batch-count" });
@@ -1074,17 +1079,17 @@ function renderBatch(text, preset, from, siteTags) {
   const skip = el("input", { class: "switch batch-skip", type: "checkbox", role: "switch", checked: true, onchange: () => sync() });
   const skipNote = el("span", { class: "choice-note" });
   const skipRow = el("div", { class: "group" }, el("label", { class: "row" },
-    el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, "Skip links already saved"), skipNote), skip));
+    el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, t("Skip links already saved")), skipNote), skip));
   const go = el("button", { class: "btn-primary batch-go", type: "submit" });
-  const input = el("input", { class: "tag-input", type: "text", placeholder: "New collection", "aria-label": "New collection",
+  const input = el("input", { class: "tag-input", type: "text", placeholder: t("New collection"), "aria-label": t("New collection"),
     maxlength: "32", enterkeyhint: "done", autocapitalize: "sentences" });
   // One link may be a contents page: its chapters replace it, and the
   // folder takes its name.
   const finder = el("button", { class: "btn-small batch-find", type: "button", onclick: async () => {
     const url = linksFrom(area.value)[0];
-    if (!navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
+    if (!navigator.onLine) { toast(t("You're offline. Try again when you're back online.")); return; }
     finder.disabled = true;
-    finder.textContent = "Finding chapters…";
+    finder.textContent = t("Finding chapters…");
     try {
       const found = await C.save.findChapters(url);
       if (found.links.length) {
@@ -1093,29 +1098,29 @@ function renderBatch(text, preset, from, siteTags) {
         if (found.siteTags) setSiteTags(found.siteTags);
         if (!folder) choose(folderName(found.title || C.save.siteName(url)));
         sync();
-      } else toast("Couldn't find a list of chapters on that page.");
-    } catch (e) { toast(e instanceof C.save.SaveError ? e.message : "Couldn't read that page. Try again."); }
+      } else toast(t("Couldn't find a list of chapters on that page."));
+    } catch (e) { toast(e instanceof C.save.SaveError ? e.message : t("Couldn't read that page. Try again.")); }
     finder.disabled = false;
-    finder.textContent = "Find chapters on this page";
-  } }, "Find chapters on this page");
+    finder.textContent = t("Find chapters on this page");
+  } }, t("Find chapters on this page"));
   const sync = () => {
     const links = linksFrom(area.value);
     const had = links.filter((u) => savedAs(u)).length;
     const n = skip.checked ? links.length - had : links.length;
     finder.hidden = links.length !== 1;
     skipRow.hidden = !had;
-    skipNote.textContent = had === links.length ? "All " + had + " are already saved"
-      : had + " already saved" + (skip.checked ? ", left where they are" : (folder ? ", moved into " + folder : ""));
-    count.textContent = links.length ? links.length + (links.length === 1 ? " link" : " links") : "No links yet. Paste them here, one a line.";
-    go.textContent = n ? "Save " + countLine(n) + (folder ? " into " + folder : "") : links.length ? "Nothing new to save" : "Save";
+    skipNote.textContent = had === links.length ? t("All {had} are already saved", { had: had })
+      : skip.checked ? t("{had} already saved, left where they are", { had }) : folder ? t("{had} already saved, moved into {folder}", { had, folder }) : t("{had} already saved", { had });
+    count.textContent = links.length ? tn(links.length, "1 link", "{n} links") : t("No links yet. Paste them here, one a line.");
+    go.textContent = n ? (folder ? t("Save {clips} into {folder}", { clips: countLine(n), folder }) : t("Save {clips}", { clips: countLine(n) })) : links.length ? t("Nothing new to save") : t("Save");
     go.disabled = !n;
     if (drawTagNew) drawTagNew();
   };
   const pick = (f, typed) => { folder = f; if (!typed) input.value = ""; sync(); };
   // The collection: None, one already there, or a new one typed in.
   const NEW = "\u0000new";
-  const folderPick = dropdown({ label: "Collection", cls: "field-pick batch-folder", value: "",
-    options: [{ value: "", label: "None" }, ...foldersByUse().map((f) => ({ value: f, label: f })), { value: NEW, label: "New collection…" }],
+  const folderPick = dropdown({ label: t("Collection"), cls: "field-pick batch-folder", value: "",
+    options: [{ value: "", label: t("None") }, ...foldersByUse().map((f) => ({ value: f, label: f })), { value: NEW, label: t("New collection…") }],
     onpick: (v) => {
       input.hidden = v !== NEW;
       if (v === NEW) { pick(cleanTag(input.value) ? folderName(input.value) : null, true); input.focus(); }
@@ -1135,7 +1140,7 @@ function renderBatch(text, preset, from, siteTags) {
   let typing = false;
   const drawTags = (focus) => {
     const others = allTags().filter((t) => !tags.some((x) => sameTag(x, t)));
-    const tagInput = el("input", { class: "tag-input", type: "text", placeholder: "New tag", "aria-label": "New tag",
+    const tagInput = el("input", { class: "tag-input", type: "text", placeholder: t("New tag"), "aria-label": t("New tag"),
       maxlength: "32", enterkeyhint: "done", autocapitalize: "off" });
     const add = (raw) => {
       const t = cleanTag(raw);
@@ -1147,12 +1152,12 @@ function renderBatch(text, preset, from, siteTags) {
     tagInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); add(tagInput.value); } });
     const showInput = typing || !allTags().length;
     tagInput.hidden = !showInput;
-    const tagPick = dropdown({ label: "Add a tag", placeholder: "Add a tag", cls: "field-pick batch-tag", value: null,
-      options: [...others.map((t) => ({ value: t, label: t })), { value: NEW, label: "New tag…" }],
+    const tagPick = dropdown({ label: t("Add a tag"), placeholder: t("Add a tag"), cls: "field-pick batch-tag", value: null,
+      options: [...others.map((t) => ({ value: t, label: t })), { value: NEW, label: t("New tag…") }],
       onpick: (v) => { if (v === NEW) { typing = true; drawTags("input"); } else add(v); } });
     fill(tagBox,
       tags.length ? el("div", { class: "chips" },
-        ...tags.map((t) => el("button", { class: "chip on", type: "button", "aria-label": "Remove tag " + t,
+        ...tags.map((t) => el("button", { class: "chip on", type: "button", "aria-label": i18n.t("Remove tag {t}", { t: t }),
           onclick: () => { tags.splice(tags.indexOf(t), 1); drawTags(); } }, t, el("span", { class: "chip-x", "aria-hidden": "true" }, "×")))) : null,
       allTags().length ? tagPick : null, tagInput);
     if (drawTagNew) drawTagNew();
@@ -1180,10 +1185,10 @@ function renderBatch(text, preset, from, siteTags) {
   const setSiteTags = (got) => {
     siteTags = got && got.tags && got.tags.length ? got : null;
     if (!siteTags) { useSite(false); siteBox.replaceChildren(); return; }
-    const shown = siteTags.tags.slice(0, 3).join(", ") + (siteTags.tags.length > 3 ? " and " + (siteTags.tags.length - 3) + " more" : "");
+    const shown = siteTags.tags.slice(0, 3).join(", ") + (siteTags.tags.length > 3 ? " " + t("and {n} more", { n: siteTags.tags.length - 3 }) : "");
     const on = load(SITE_TAGS_KEY, false);
     siteBox.replaceChildren(el("div", { class: "group" },
-      switchRow(siteTags.site + "'s tags", shown, on, (v) => { store(SITE_TAGS_KEY, v); useSite(v); }, { "aria-label": "Add " + siteTags.site + "'s tags" })));
+      switchRow(t("{site}'s tags", { site: siteTags.site }), shown, on, (v) => { store(SITE_TAGS_KEY, v); useSite(v); }, { "aria-label": t("Add {site}'s tags", { site: siteTags.site }) })));
     useSite(on);
   };
   setSiteTags(siteTags);
@@ -1193,39 +1198,39 @@ function renderBatch(text, preset, from, siteTags) {
   const tagNewBox = el("div", { class: "batch-tag-new" });
   drawTagNew = () => {
     tagNewBox.replaceChildren(folder && tags.length ? el("div", { class: "group" },
-      switchRow("Tag new clips too", "Chapters added later get these tags", tagNew, (v) => { tagNew = v; store(TAG_NEW_KEY, v); })) : "");
+      switchRow(t("Tag new clips too"), t("Chapters added later get these tags"), tagNew, (v) => { tagNew = v; store(TAG_NEW_KEY, v); })) : "");
   };
   drawTagNew();
   area.addEventListener("input", sync);
   input.addEventListener("input", () => pick(cleanTag(input.value) ? folderName(input.value) : null, true));
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
-  const KIND_NOTES = { article: "The text and its pictures, read as a page.", comic: "Only the page's pictures, in order, edge to edge. For comics and manga." };
+  const KIND_NOTES = { article: t("The text and its pictures, read as a page."), comic: t("Only the page's pictures, in order, edge to edge. For comics and manga.") };
   const kindNote = el("p", { class: "meta" }, KIND_NOTES[kind]);
-  const images = C.platform.native ? seg("batch-images", "Images", [
-    { value: "previews", label: "Previews" }, { value: "full", label: "Full" }, { value: "links", label: "Links" },
+  const images = C.platform.native ? seg("batch-images", t("Images"), [
+    { value: "previews", label: t("Previews") }, { value: "full", label: t("Full") }, { value: "links", label: t("Links") },
   ], mode, (v) => { mode = v; }) : null;
   const asPage = from ? el("section", { class: "settings-section batch-from" },
-    el("p", { class: "meta" }, "Waypage read this page as a list of chapters."),
+    el("p", { class: "meta" }, t("Waypage read this page as a list of chapters.")),
     el("button", { class: "btn-quiet batch-as-page", type: "button", onclick: () => { history.back(); savePage(from, null, { asPage: true }); } },
-      "Save it as one clip instead")) : null;
+      t("Save it as one clip instead"))) : null;
   // A file of your own comes in from here too (0.31.0).
   const newNoteRow = el("button", { class: "row", type: "button", onclick: () => openMenu("newNote") },
-    el("span", { class: "row-label accent" }, "New note"));
+    el("span", { class: "row-label accent" }, t("New note")));
   // Inside a collection only a new note is offered: it joins the collection.
-  const fromFile = from ? null : preset ? el("section", { class: "settings-section batch-file" }, el("h2", { class: "overline" }, "Note"),
-    el("div", { class: "group" }, newNoteRow)) : el("section", { class: "settings-section batch-file" }, el("h2", { class: "overline" }, "File"),
+  const fromFile = from ? null : preset ? el("section", { class: "settings-section batch-file" }, el("h2", { class: "overline" }, t("Note")),
+    el("div", { class: "group" }, newNoteRow)) : el("section", { class: "settings-section batch-file" }, el("h2", { class: "overline" }, t("File")),
     el("div", { class: "group" }, el("button", { class: "row", type: "button", onclick: () => pickFile(() => back()) },
-      el("span", { class: "row-label accent" }, "Add a file")),
+      el("span", { class: "row-label accent" }, t("Add a file"))),
       canAddFolder() ? el("button", { class: "row", type: "button", onclick: () => back().then(addFolder) },
-        el("span", { class: "row-label accent" }, "Add a folder")) : null,
+        el("span", { class: "row-label accent" }, t("Add a folder"))) : null,
       C.platform.files.canPickFolder ? el("button", { class: "row", type: "button", onclick: () => back().then(addAudiobookFolder) },
-        el("span", { class: "row-label accent" }, "Add an audiobook folder")) : null,
+        el("span", { class: "row-label accent" }, t("Add an audiobook folder"))) : null,
       newNoteRow),
-    el("p", { class: "meta" }, "An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3" + (C.platform.files.canPickFolder ? ", or a folder of them" : "") + "). A folder's files are each added on their own, in a collection named after their folder. It stays " + ON_HERE + "."));
+    el("p", { class: "meta" }, t("An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3{x}). A folder's files are each added on their own, in a collection named after their folder. It stays {ON_HERE}.", { x: C.platform.files.canPickFolder ? t(", or a folder of them") : "", ON_HERE: ON_HERE })));
   const form = el("form", { class: "batch-form" }, asPage, fromFile,
-    el("section", { class: "settings-section" }, el("h2", { class: "overline" }, "Links"), area, count, finder, skipRow),
-    el("section", { class: "settings-section" }, el("h2", { class: "overline" }, "Save as"),
-      seg("batch-kind", "Save as", [{ value: "article", label: "Article" }, { value: "comic", label: "Comic" }], kind, (v) => {
+    el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Links")), area, count, finder, skipRow),
+    el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Save as")),
+      seg("batch-kind", t("Save as"), [{ value: "article", label: t("Article") }, { value: "comic", label: t("Comic") }], kind, (v) => {
         kind = v;
         kindNote.textContent = KIND_NOTES[v];
         // Comics read best full size; still a choice below.
@@ -1233,12 +1238,12 @@ function renderBatch(text, preset, from, siteTags) {
         if (pick) { pick.checked = true; mode = pick.value; }
       }),
       kindNote),
-    images ? el("section", { class: "settings-section" }, el("h2", { class: "overline" }, "Images"), images,
-      el("p", { class: "meta" }, "Full images for comics, maps and diagrams. Settings picks the usual choice.")) : null,
-    el("section", { class: "settings-section" }, el("h2", { class: "overline" }, "Collection"),
+    images ? el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Images")), images,
+      el("p", { class: "meta" }, t("Full images for comics, maps and diagrams. Settings picks the usual choice."))) : null,
+    el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Collection")),
       el("div", { class: "tag-edit" }, folderPick, input),
-      el("p", { class: "meta" }, "Clips in a collection keep the order of the links.")),
-    el("section", { class: "settings-section" }, el("h2", { class: "overline" }, "Tags"), siteBox, tagBox, tagNewBox),
+      el("p", { class: "meta" }, t("Clips in a collection keep the order of the links."))),
+    el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Tags")), siteBox, tagBox, tagNewBox),
     go);
   form.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -1246,7 +1251,7 @@ function renderBatch(text, preset, from, siteTags) {
     const skipSaved = skip.checked && !skipRow.hidden;
     const urls = skipSaved ? all.filter((u) => !savedAs(u)) : all;
     if (!urls.length) return;
-    if (urls.length > LONG_LIST && !confirm("Save " + urls.length + " clips? They save one at a time, so a list this long takes a while. Pause and Stop are on its card.")) return;
+    if (urls.length > LONG_LIST && !confirm(t("Save {n} clips? They save one at a time, so a list this long takes a while. Pause and Stop are on its card.", { n: urls.length }))) return;
     history.back();
     saveAll(skipSaved ? all : urls, folder, tags, mode, skipSaved, kind, source, !!(folder && tags.length && tagNew));
   });
@@ -1272,11 +1277,11 @@ function seriesName(p) {
 // one saved (or already there), or null. Quiet when asked. A folder's
 // run stops early when its Stop is tapped and waits while paused.
 async function follow(from, n, quiet, back) {
-  const key = back ? "prev" : "next", word = back ? "previous" : "next";
+  const key = back ? "prev" : "next";
   if (from[key] === undefined) {
-    try { from[key] = await C.save.findNext(from.url, back); } catch (e) { toast("Couldn't reach " + from.site + " to find the " + word + " page."); return null; }
+    try { from[key] = await C.save.findNext(from.url, back); } catch (e) { toast(back ? t("Couldn't reach {site} to find the previous page.", { site: from.site }) : t("Couldn't reach {site} to find the next page.", { site: from.site })); return null; }
     await C.store.writeIndex(state.pages);
-    if (!from[key]) { toast("There's no " + word + " page."); return null; }
+    if (!from[key]) { toast(back ? t("There's no previous page.") : t("There's no next page.")); return null; }
   }
   if (!from.folder) { from.folder = folderName(seriesName(from)); from.folderAt = Date.now(); }
   const name = from.folder;
@@ -1319,9 +1324,9 @@ async function follow(from, n, quiet, back) {
   renderLibrary();
   if (state.folder) renderFolder();
   if (!quiet || failed) {
-    const end = back ? ". That's the first one." : ". That's the last one.";
-    toast(saved ? "Saved " + countLine(saved) + " into " + name + (failed ? ". The " + word + " one couldn't be saved." : stopped ? ". Stopped." : !url ? end : ".")
-      : failed ? "Couldn't save the " + word + " page." : first ? "The " + word + " page is already saved." : "There's no " + word + " page.");
+    const end = back ? t("That's the first one.") : t("That's the last one.");
+    toast(saved ? t("Saved {clips} into {name}.", { clips: countLine(saved), name }) + (failed ? " " + (back ? t("The previous one couldn't be saved.") : t("The next one couldn't be saved.")) : stopped ? " " + t("Stopped.") : !url ? " " + end : "")
+      : failed ? (back ? t("Couldn't save the previous page.") : t("Couldn't save the next page.")) : first ? (back ? t("The previous page is already saved.") : t("The next page is already saved.")) : (back ? t("There's no previous page.") : t("There's no next page.")));
   }
   return first;
 }
@@ -1351,8 +1356,8 @@ function sizeOk(p, n) {
   const each = last.length ? sizeOf(last) / last.length : 0;
   if (each < BIG_CHAPTER) return true;
   return confirm(n === Infinity
-    ? "The last chapters were about " + formatSize(each) + " each. Save all of them?"
-    : "The last chapters were about " + formatSize(each) + " each, so " + n + " more is about " + formatSize(each * n) + ". Save them?");
+    ? t("The last chapters were about {formatSize} each. Save all of them?", { formatSize: formatSize(each) })
+    : t("The last chapters were about {formatSize} each, so {n} more is about {formatSize2}. Save them?", { formatSize: formatSize(each), n: n, formatSize2: formatSize(each * n) }));
 }
 
 function followControls(p, back) {
@@ -1365,15 +1370,15 @@ function followControls(p, back) {
   const busy = () => !!runFor(p.folder) || state.saving.some((s) => !s.error && s.folder && p.folder && sameTag(s.folder, p.folder));
   const what = back ? "previous" : "next";
   const going = runFor(p.folder);
-  const stop = el("button", { class: "chip stop", type: "button", "aria-label": "Stop saving",
-    onclick: () => { stopRun(runFor(p.folder)); stop.disabled = true; } }, "Stop");
-  const pause = el("button", { class: "chip pause", type: "button", "aria-label": going && going.paused ? "Resume saving" : "Pause saving",
-    onclick: () => { const r = runFor(p.folder); if (r) pauseRun(r, !r.paused); } }, going && going.paused ? "Resume" : "Pause");
+  const stop = el("button", { class: "chip stop", type: "button", "aria-label": t("Stop saving"),
+    onclick: () => { stopRun(runFor(p.folder)); stop.disabled = true; } }, t("Stop"));
+  const pause = el("button", { class: "chip pause", type: "button", "aria-label": going && going.paused ? t("Resume saving") : t("Pause saving"),
+    onclick: () => { const r = runFor(p.folder); if (r) pauseRun(r, !r.paused); } }, going && going.paused ? t("Resume") : t("Pause"));
   stop.hidden = !busy();
   pause.hidden = !going;
   const run = (n) => (e) => {
     if (busy()) return;
-    if (!navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
+    if (!navigator.onLine) { toast(t("You're offline. Try again when you're back online.")); return; }
     if (!sizeOk(p, n)) return;
     e.currentTarget.closest(".follow").querySelectorAll("button:not(.stop):not(.pause)").forEach((b) => { b.disabled = true; });
     stop.hidden = false;
@@ -1382,12 +1387,12 @@ function followControls(p, back) {
   };
   const chip = (n) => {
     const b = el("button", { class: "chip", type: "button",
-      "aria-label": n === Infinity ? "Save all the " + what + " clips from " + p.site : "Save the " + what + " " + countLine(n) + " from " + p.site,
-      onclick: run(n) }, n === Infinity ? "All" : String(n));
+      "aria-label": n === Infinity ? t("Save all the {what} clips from {site}", { what: what, site: p.site }) : t("Save the {what} {countLine} from {site}", { what: what, countLine: countLine(n), site: p.site }),
+      onclick: run(n) }, n === Infinity ? t("All") : String(n));
     b.disabled = busy();
     return b;
   };
-  return el("div", { class: "rc-row follow" + (back ? " back" : "") }, el("span", { class: "rc-label" }, back ? "Save previous" : "Save next"),
+  return el("div", { class: "rc-row follow" + (back ? " back" : "") }, el("span", { class: "rc-label" }, back ? t("Save previous") : t("Save next")),
     el("div", { class: "chips" }, ...[1, 5, 10, Infinity].map(chip), pause, stop));
 }
 
@@ -1472,18 +1477,18 @@ async function checkNew(name, quiet) {
       setNewFor(name, { at: Date.now(), count });
     }
   } catch (e) {
-    if (!quiet) toast("Couldn't reach " + last.site + " to look for new chapters.");
+    if (!quiet) toast(t("Couldn't reach {site} to look for new chapters.", { site: last.site }));
     count = null;
   } finally {
     checking.delete(key);
   }
   if (state.folder && sameTag(state.folder, name)) renderFolder();
   renderLibrary();
-  if (!quiet && count === 0) toast("No new chapters yet.");
+  if (!quiet && count === 0) toast(t("No new chapters yet."));
   return count;
 }
 
-const newCountText = (n) => (n >= NEW_MAX ? NEW_MAX + "+" : String(n)) + " new";
+const newCountText = (n) => t("{n} new", { n: n >= NEW_MAX ? NEW_MAX + "+" : String(n) });
 
 // The new chapters still unsaved: those saved since the check no
 // longer count, and none are left once the last page's next is saved.
@@ -1504,22 +1509,21 @@ function checkRow(list) {
   const entry = newFor(name);
   const fresh = freshCount(name);
   const busy = checking.has(String(name).toLowerCase());
-  const note = busy ? "Looking…" : !entry ? "Not checked yet"
-    : fresh ? newCountText(fresh) + " · checked " + whenText(entry.at)
-    : "None yet · checked " + whenText(entry.at);
+  const note = busy ? t("Looking…") : !entry ? t("Not checked yet")
+    : (fresh ? newCountText(fresh) : t("None yet")) + " · " + t("checked {when}", { when: whenText(entry.at) });
   const btn = el("button", { class: "chip", type: "button", onclick: () => {
-    if (!navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
+    if (!navigator.onLine) { toast(t("You're offline. Try again when you're back online.")); return; }
     checkNew(name, false);
-  } }, "Check");
+  } }, t("Check"));
   btn.disabled = busy;
   // From a linked page, the new ones are saved straight from its list,
   // each at its place among those already saved.
   const take = entry && entry.all && fresh && !savingInto(name) ? el("button", { class: "chip on save-new", type: "button", onclick: () => {
-    if (!navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
+    if (!navigator.onLine) { toast(t("You're offline. Try again when you're back online.")); return; }
     saveAll(entry.all, name, [], undefined, true, undefined, folderSource(list));
-  } }, "Save " + fresh) : null;
+  } }, t("Save {fresh}", { fresh: fresh })) : null;
   return el("div", { class: "rc-row check-new" },
-    el("span", { class: "rc-label" }, "New chapters"),
+    el("span", { class: "rc-label" }, t("New chapters")),
     el("div", { class: "chips" },
       el("span", { class: "check-note" + (fresh ? " accent" : ""), role: "status" }, note), take, btn));
 }
@@ -1533,7 +1537,7 @@ function chaptersPanel(list) {
   const rows = [checkRow(list), followControls(list[0], true), followControls(list[list.length - 1])].filter(Boolean);
   return el("div", { class: "folder-actions chapters-panel" },
     rows.length ? el("div", { class: "chapter-tools" }, ...rows)
-      : el("p", { class: "meta" }, "These clips don't link to each other, so there's nothing to look for. Link the collection to its website below."),
+      : el("p", { class: "meta" }, t("These clips don't link to each other, so there's nothing to look for. Link the collection to its website below.")),
     sourceSection(list));
 }
 
@@ -1541,30 +1545,30 @@ function sourceSection(list) {
   const name = state.folder;
   const src = folderSource(list);
   const input = el("input", { class: "tag-input source-input", type: "url", inputmode: "url", value: src,
-    placeholder: "Its contents page, or any chapter", "aria-label": "Page to sync with", autocapitalize: "off", spellcheck: "false" });
+    placeholder: t("Its contents page, or any chapter"), "aria-label": t("Page to sync with"), autocapitalize: "off", spellcheck: "false" });
   const link = el("button", { class: "btn-quiet source-link", type: "button", onclick: async () => {
     const u = linkFrom(input.value);
-    if (!u) { toast("Paste the link to its contents page or a chapter."); return; }
-    if (!navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
+    if (!u) { toast(t("Paste the link to its contents page or a chapter.")); return; }
+    if (!navigator.onLine) { toast(t("You're offline. Try again when you're back online.")); return; }
     link.disabled = true;
-    link.textContent = "Reading…";
+    link.textContent = t("Reading…");
     try {
       const found = await C.save.findChapters(u);
-      if (!found.links.length) { toast("Couldn't find a list of chapters on that page."); return; }
+      if (!found.links.length) { toast(t("Couldn't find a list of chapters on that page.")); return; }
       setSource(name, found.page || u, found.cover || "");
-      toast("Linked to " + countLine(found.links.length).replace("clip", "chapter") + " on " + C.save.siteName(u));
+      toast(t("Linked to {replace} on {siteName}", { replace: countLine(found.links.length).replace("clip", "chapter"), siteName: C.save.siteName(u) }));
     } catch (e) {
-      toast(e instanceof C.save.SaveError ? e.message : "Couldn't read that page. Try again.");
+      toast(e instanceof C.save.SaveError ? e.message : t("Couldn't read that page. Try again."));
     } finally {
-      if (link.isConnected) { link.disabled = false; link.textContent = src ? "Change" : "Link"; }
+      if (link.isConnected) { link.disabled = false; link.textContent = src ? t("Change") : t("Link"); }
     }
-  } }, src ? "Change" : "Link");
-  const unlink = src ? el("button", { class: "btn-quiet source-unlink", type: "button", onclick: () => { setSource(name, ""); toast("Unlinked " + name); } }, "Unlink") : null;
+  } }, src ? t("Change") : t("Link"));
+  const unlink = src ? el("button", { class: "btn-quiet source-unlink", type: "button", onclick: () => { setSource(name, ""); toast(t("Unlinked {name}", { name: name })); } }, t("Unlink")) : null;
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); link.click(); } });
   return el("section", { class: "settings-section source-section" },
-    el("h2", { class: "overline" }, "Synced with"),
+    el("h2", { class: "overline" }, t("Synced with")),
     el("div", { class: "source-row" }, input, link, unlink),
-    el("p", { class: "footnote" }, "New chapters are read from its chapter list, which also finds chapters added in between."));
+    el("p", { class: "footnote" }, t("New chapters are read from its chapter list, which also finds chapters added in between.")));
 }
 
 async function setSource(name, url, cover) {
@@ -1605,13 +1609,13 @@ async function updateCover(name, url) {
 // own, so it shows in Downloads with Pause and Stop like any other.
 async function refreshFolder(name, mode, btn) {
   const list = folderPages(name).filter((p) => /^https?:/.test(p.url || ""));
-  if (!list.length || !navigator.onLine) { if (!navigator.onLine) toast("You're offline. Try again when you're back online."); return; }
+  if (!list.length || !navigator.onLine) { if (!navigator.onLine) toast(t("You're offline. Try again when you're back online.")); return; }
   btn.disabled = true;
   const run = startRun(folderName(name), list[0].site, list.length, true);
   const jobs = list.map((old) => ({ ...newJob(old.url, name), key: "again:" + old.id, again: old, mode, kind: old.comic ? "comic" : "article", waiting: true, run }));
   state.saving = [...jobs, ...state.saving];
   renderLibrary();
-  toast("Saving " + countLine(list.length) + " again. They're in Downloads.");
+  toast(t("Saving {countLine} again. They're in Downloads.", { countLine: countLine(list.length) }));
   let done = 0, failed = 0, stopped = 0;
   for (const job of jobs) {
     if (done + failed) await new Promise((ok) => setTimeout(ok, PACE_MS));
@@ -1626,17 +1630,17 @@ async function refreshFolder(name, mode, btn) {
   endRun(run);
   if (state.folder && sameTag(state.folder, name)) renderFolder();
   renderLibrary();
-  toast("Saved " + countLine(done) + " again" + (failed ? " · " + failed + " couldn't be saved" : "") + (stopped ? " · stopped before " + countLine(stopped) : "") + ".");
+  toast([t("Saved {clips} again", { clips: countLine(done) }), failed ? t("{n} couldn't be saved", { n: failed }) : "", stopped ? t("stopped before {clips}", { clips: countLine(stopped) }) : ""].filter(Boolean).join(" · ") + ".");
 }
 
 function whenText(at) {
   const mins = Math.round((Date.now() - at) / 6e4);
-  if (mins < 2) return "just now";
-  if (mins < 60) return mins + " min ago";
+  if (mins < 2) return t("just now");
+  if (mins < 60) return t("{n} min ago", { n: mins });
   const hours = Math.round(mins / 60);
-  if (hours < 24) return hours + " h ago";
+  if (hours < 24) return t("{n} h ago", { n: hours });
   const days = Math.round(hours / 24);
-  return days === 1 ? "yesterday" : days + " days ago";
+  return days === 1 ? t("yesterday") : tn(days, "1 day ago", "{n} days ago");
 }
 
 // Once a day per series folder, after the library is up and online,
@@ -1644,7 +1648,7 @@ function whenText(at) {
 let dailyRunning = false;
 async function dailyCheck(force) {
   if (dailyRunning || !navigator.onLine || (!force && !load(DAILY_KEY, true))) return 0;
-  if (waitsForWifi(DATA_SAVE_KEY)) { if (force) toast("Collections check for new chapters when you're on Wi-Fi."); return 0; }
+  if (waitsForWifi(DATA_SAVE_KEY)) { if (force) toast(t("Collections check for new chapters when you're on Wi-Fi.")); return 0; }
   dailyRunning = true;
   let found = 0;
   try {
@@ -1665,10 +1669,10 @@ async function dailyCheck(force) {
 async function renameFolder(raw) {
   const old = state.folder;
   const name = cleanTag(raw || "");
-  if (!name) { toast("Type a name for the collection."); return false; }
+  if (!name) { toast(t("Type a name for the collection.")); return false; }
   if (name === old) return true;
   const clash = allFolders().find((n) => sameTag(n, name) && !sameTag(n, old));
-  if (clash) { toast("There's already a collection called " + clash + "."); return false; }
+  if (clash) { toast(t("There's already a collection called {clash}.", { clash: clash })); return false; }
   for (const p of folderPages(old)) p.folder = name;
   renameReadingSet(old, name);
   renameFolderLook(old, name);
@@ -1697,7 +1701,7 @@ const FEEDS_SEEN_KEY = "waypage.feedsSeen";
 const FEEDS_ASKED_KEY = "waypage.feedsAsked";
 const FEED_EVERY = 3 * 36e5;
 const FEED_KEEP = 100;
-const FEED_DAYS = [{ value: "3", label: "3 days" }, { value: "7", label: "A week" }, { value: "30", label: "A month" }];
+const FEED_DAYS = [{ value: "3", label: t("3 days") }, { value: "7", label: t("A week") }, { value: "30", label: t("A month") }];
 const FEED_ICONS = {
   library: ICONS.book,
   feeds: '<path d="M5 11a8 8 0 0 1 8 8M5 5a14 14 0 0 1 14 14"/><circle cx="6" cy="18" r="1.5"/>',
@@ -1809,28 +1813,33 @@ function feedMark(f, small) {
 }
 
 // "About 2 posts a day · last one 2 h ago", from the posts' dates.
-function rateLine(items) {
+function rateLine(items, mail) {
   const ds = items.map((it) => it.date).filter(Boolean).sort((a, b) => b - a);
-  if (!ds.length) return items.length ? countLine(items.length).replace("clip", "post") : "No posts yet";
+  if (!ds.length) return items.length ? (mail ? tn(items.length, "1 email", "{n} emails") : tn(items.length, "1 post", "{n} posts")) : mail ? t("No emails yet") : t("No posts yet");
   const last = whenText(ds[0]);
-  if (ds.length < 2) return "Last post " + last;
+  if (ds.length < 2) return mail ? t("Last email {when}", { when: last }) : t("Last post {when}", { when: last });
   const perDay = (ds.length - 1) / Math.max((ds[0] - ds[ds.length - 1]) / DAY, 1 / 24);
   const perWeek = perDay * 7;
-  const rate = perDay >= 1.5 ? "About " + Math.round(perDay) + " posts a day"
-    : perDay >= 0.75 ? "About a post a day"
-    : perWeek >= 1.5 ? "About " + Math.round(perWeek) + " posts a week"
-    : perWeek >= 0.75 ? "About a post a week" : "A post now and then";
-  return rate + " · last one " + last;
+  const rate = mail
+    ? (perDay >= 1.5 ? t("About {n} emails a day", { n: Math.round(perDay) })
+      : perDay >= 0.75 ? t("About an email a day")
+      : perWeek >= 1.5 ? t("About {n} emails a week", { n: Math.round(perWeek) })
+      : perWeek >= 0.75 ? t("About an email a week") : t("An email now and then"))
+    : (perDay >= 1.5 ? t("About {n} posts a day", { n: Math.round(perDay) })
+      : perDay >= 0.75 ? t("About a post a day")
+      : perWeek >= 1.5 ? t("About {n} posts a week", { n: Math.round(perWeek) })
+      : perWeek >= 0.75 ? t("About a post a week") : t("A post now and then"));
+  return rate + " · " + t("last one {when}", { when: last });
 }
 
 // Today, Yesterday, a weekday this week, then the date.
 function dayName(t) {
   const start = new Date().setHours(0, 0, 0, 0);
-  if (t >= start) return "Today";
-  if (t >= start - DAY) return "Yesterday";
+  if (t >= start) return i18n.t("Today");
+  if (t >= start - DAY) return i18n.t("Yesterday");
   const d = new Date(t);
-  if (t >= start - 6 * DAY) return d.toLocaleDateString(undefined, { weekday: "long" });
-  return d.toLocaleDateString(undefined, { day: "numeric", month: "long" });
+  if (t >= start - 6 * DAY) return d.toLocaleDateString(i18n.lang, { weekday: "long" });
+  return d.toLocaleDateString(i18n.lang, { day: "numeric", month: "long" });
 }
 
 // A feed's posts after a check: what it lists now, with when each was
@@ -1869,10 +1878,10 @@ function followFeeds(list) {
       folder: cleanTag(o.folder) || title, days: 7, addedAt: Date.now(), checkedAt: 0, error: "", items: [] });
     added++;
   }
-  if (!added) { toast(list.length ? "You follow all of those feeds already." : "No feeds in that file."); return; }
+  if (!added) { toast(list.length ? t("You follow all of those feeds already.") : t("No feeds in that file.")); return; }
   saveFeeds();
   paintFeeds();
-  toast("Following " + added + (added === 1 ? " feed" : " feeds") + ". Their posts are in Feeds.");
+  toast(tn(added, "Following 1 feed. Its posts are in Feeds.", "Following {n} feeds. Their posts are in Feeds."));
   setTimeout(() => checkFeeds(true), 0);
 }
 
@@ -1922,11 +1931,11 @@ function updateWidgets(now) {
       .map(({ f, it }) => ({ title: it.title, site: f.title, url: it.url, feed: f.url }));
     C.platform.widgets.update({
       reading: p ? { id: p.id, title: p.title, at: p.at || 0,
-        meta: [siteOf(p), (p.at || 0) >= 0.995 ? "Finished" : clipLeft(p, p.at || 0) + " min left"].filter(Boolean).join(" · ") } : null,
+        meta: [siteOf(p), (p.at || 0) >= 0.995 ? t("Finished") : t("{n} min left", { n: clipLeft(p, p.at || 0) })].filter(Boolean).join(" · ") } : null,
       feeds: { following: siteFeeds().length > 0, fresh: freshPosts(), posts },
       favourites: [
         ...allFolders().filter(folderFav).map((name) => ({ name, at: Math.max(...folderPages(name).map((x) => x.folderFavAt || 0)) }))
-          .sort((a, b) => b.at - a.at).map(({ name }) => ({ kind: "collection", name, title: name, meta: "Collection · " + readCount(folderPages(name)) })),
+          .sort((a, b) => b.at - a.at).map(({ name }) => ({ kind: "collection", name, title: name, meta: t("Collection") + " · " + readCount(folderPages(name)) })),
         ...state.pages.filter((x) => x.fav).sort((a, b) => (b.favAt || 0) - (a.favAt || 0))
           .map((x) => ({ id: x.id, title: x.title, meta: clipMeta(x) })),
       ].slice(0, 4),
@@ -1944,7 +1953,7 @@ function updateWidgets(now) {
         // Continue while reading, Read again when all of it is read.
         const next = i < 0 ? list[0] : list[i];
         const started = list.some((x) => x.readAt || x.finished || (x.at || 0) > 0.02);
-        return { name, meta: readCount(list), next: next ? next.id : "", button: !next ? "" : i < 0 ? "Read again" : started ? "Continue" : "Start",
+        return { name, meta: readCount(list), next: next ? next.id : "", button: !next ? "" : i < 0 ? t("Read again") : started ? t("Continue") : t("Start"),
           clips: list.slice(from, from + 4).map((x) => ({ id: x.id, title: x.title, meta: readingLine(x) })) };
       }),
       stats: statsWidget(),
@@ -1953,7 +1962,7 @@ function updateWidgets(now) {
 }
 
 const clipMeta = (x) => [siteOf(x), readingLine(x)].filter(Boolean).join(" · ");
-const readCount = (list) => { const done = list.filter((x) => x.finished).length; return done === list.length ? "All read" : done + " of " + list.length + " read"; };
+const readCount = (list) => { const done = list.filter((x) => x.finished).length; return done === list.length ? t("All read") : t("{done} of {n} read", { done, n: list.length }); };
 
 // A widget's tap: the page to keep reading, a post, Feeds or a collection.
 // The app icon's shortcuts (1.14.0) come the same way: Continue reading,
@@ -2017,7 +2026,7 @@ async function saveCopied() {
   if (!linksFrom(text).length) { await new Promise((r) => setTimeout(r, 600)); text = await C.platform.widgets.copied(); }
   if (linksFrom(text).length) { saveTyped(text); return; }
   $("saveUrl").focus();
-  toast("No link copied. Paste one here.");
+  toast(t("No link copied. Paste one here."));
 }
 
 // Posts found with the app closed: those feeds are read again now, and
@@ -2049,7 +2058,7 @@ async function takeFeedNews() {
 async function checkFeed(f) {
   let got = null, error = "";
   try { got = await C.feeds.readFeed(f.url); }
-  catch (e) { error = e instanceof C.feeds.FeedError ? e.message : "Couldn't check this feed. Try again later."; }
+  catch (e) { error = e instanceof C.feeds.FeedError ? e.message : t("Couldn't check this feed. Try again later."); }
   if (!feeds.includes(f)) return;
   if (got && isMail(f)) keepMails(got);
   if (got) mergeFeed(f, got);
@@ -2063,7 +2072,7 @@ async function checkFeed(f) {
 // Every feed not checked in the last few hours, one at a time, quietly.
 async function checkFeeds(force) {
   if (feedsChecking || !navigator.onLine || !feeds.length) return;
-  if (waitsForWifi(DATA_SAVE_KEY)) { if (force) toast("Feeds check when you're on Wi-Fi."); return; }
+  if (waitsForWifi(DATA_SAVE_KEY)) { if (force) toast(t("Feeds check when you're on Wi-Fi.")); return; }
   feedsChecking = true;
   paintFeeds();
   try {
@@ -2094,7 +2103,7 @@ function autoSave(f) {
 // Into each post's feed's collection, oldest first so the collection
 // reads in order, with the feed's pictures setting.
 function saveFeedPosts(list) {
-  if (!navigator.onLine) { toast("You're offline. Save these when you're back online."); return feedSaves; }
+  if (!navigator.onLine) { toast(t("You're offline. Save these when you're back online.")); return feedSaves; }
   const by = new Map();
   for (const x of [...list].sort((a, b) => postAt(a.it) - postAt(b.it))) {
     if (savedAs(x.it.url) || savingUrl(x.it.url)) continue;
@@ -2128,7 +2137,7 @@ function paintPlace() {
   const readOn = state.place === "reading";
   const findOn = state.place === "discover";
   const ankiOn = state.place === "anki";
-  $("placeTitle").textContent = feedsOn ? "Feeds" : mailOn ? "Newsletters" : marksOn ? "Highlights" : readOn ? "Stats" : findOn ? "Discover" : ankiOn ? "Anki" : "Library";
+  $("placeTitle").textContent = feedsOn ? t("Feeds") : mailOn ? t("Newsletters") : marksOn ? t("Highlights") : readOn ? t("Stats") : findOn ? t("Discover") : ankiOn ? t("Anki") : t("Library");
   $("libraryView").dataset.place = state.place;
   $("library").hidden = feedsOn || mailOn || marksOn || readOn || findOn || ankiOn;
   $("feeds").hidden = !feedsOn;
@@ -2137,17 +2146,17 @@ function paintPlace() {
   $("reading").hidden = !readOn;
   $("discover").hidden = !findOn;
   $("anki").hidden = !ankiOn;
-  $("paneNote").textContent = marksOn ? "Pick a highlight to read it here" : readOn ? "Pick a clip to read it here" : mailOn ? "Pick an email to read it here" : "Pick a post to read it here";
+  $("paneNote").textContent = marksOn ? t("Pick a highlight to read it here") : readOn ? t("Pick a clip to read it here") : mailOn ? t("Pick an email to read it here") : t("Pick a post to read it here");
   // The bottom field follows a feed in Feeds, makes a newsletter address
   // in Newsletters (1.43.1), searches Royal Road or follows a site in
   // Discover, and saves a link elsewhere.
-  $("saveUrl").placeholder = feedsOn ? "Paste a site or feed to follow" : mailOn ? "Name a new address" : "Paste a link to save";
+  $("saveUrl").placeholder = feedsOn ? t("Paste a site or feed to follow") : mailOn ? t("Name a new address") : t("Paste a link to save");
   $("saveUrl").inputMode = mailOn ? "text" : "url";
   $("saveUrl").autocapitalize = mailOn ? "sentences" : "off";
   $("saveUrl").enterKeyHint = "go";
   if (mailOn) $("saveUrl").maxLength = 32; else $("saveUrl").removeAttribute("maxlength");
-  document.querySelector('label[for="saveUrl"]').textContent = feedsOn ? "Site or feed" : mailOn ? "New address's name" : "Page link";
-  $("saveForm").querySelector(".btn-primary").textContent = feedsOn ? "Follow" : mailOn ? "Make" : "Save";
+  document.querySelector('label[for="saveUrl"]').textContent = feedsOn ? t("Site or feed") : mailOn ? t("New address's name") : t("Page link");
+  $("saveForm").querySelector(".btn-primary").textContent = feedsOn ? t("Follow") : mailOn ? t("Make") : t("Save");
   $("severalBtn").hidden = feedsOn || mailOn || findOn || ankiOn;
   $("viewBtn").hidden = !findOn && !(state.place === "library" && state.pages.length);
   if (feedsOn || mailOn || marksOn || readOn || findOn || ankiOn) { if (state.query) clearSearch(); }
@@ -2197,11 +2206,11 @@ function renderFeeds() {
   if (!feeds.length) {
     leavePostSearch();
     nodes.push(el("div", { class: "empty" },
-      el("h2", { class: "empty-title" }, "Follow the sites you read"),
+      el("h2", { class: "empty-title" }, t("Follow the sites you read")),
       el("p", { class: "empty-text" }, C.platform.native
-        ? "Add a site and its new posts wait here for you to save, or save themselves."
-        : "Add a site and its new posts wait here. Most sites only let Waypage on your phone read their feed."),
-      el("button", { class: "btn-primary", type: "button", onclick: () => openMenu("addFeed") }, "Add a feed")));
+        ? t("Add a site and its new posts wait here for you to save, or save themselves.")
+        : t("Add a site and its new posts wait here. Most sites only let Waypage on your phone read their feed.")),
+      el("button", { class: "btn-primary", type: "button", onclick: () => openMenu("addFeed") }, t("Add a feed"))));
     root.replaceChildren(...nodes);
     return;
   }
@@ -2211,8 +2220,8 @@ function renderFeeds() {
     return b;
   };
   const all = feeds.reduce((n, f) => n + waitingIn(f), 0);
-  nodes.push(el("div", { class: "chips filters feed-chips", role: "group", "aria-label": "Feeds" },
-    chip("All", all, !picked, () => pickFeed(null), "chip:all"),
+  nodes.push(el("div", { class: "chips filters feed-chips", role: "group", "aria-label": t("Feeds") },
+    chip(t("All"), all, !picked, () => pickFeed(null), "chip:all"),
     ...feeds.map((f) => {
       const c = chip(f.title, waitingIn(f), picked === f, () => pickFeed(f.url), "chip:" + f.url);
       c.dataset.feed = f.url;
@@ -2223,14 +2232,14 @@ function renderFeeds() {
   const list = (picked ? [picked] : feeds).flatMap((f) => feedPosts(f).map((it) => ({ f, it })))
     .filter((x) => !ts.length || postMatch(x.f, x.it, ts))
     .sort((a, b) => postAt(b.it) - postAt(a.it));
-  const line = ts.length ? (list.length === 1 ? "1 post found" : list.length + " posts found")
-    : feedsChecking ? "Checking…" : picked && picked.error ? picked.error
-    : checked ? "Checked " + whenText(checked) : "Not checked yet";
+  const line = ts.length ? tn(list.length, "1 post found", "{n} posts found")
+    : feedsChecking ? t("Checking…") : picked && picked.error ? picked.error
+    : checked ? t("Checked {when}", { when: whenText(checked) }) : t("Not checked yet");
   nodes.push(el("div", { class: "feed-head" },
     el("p", { class: "meta" + (picked && picked.error && !feedsChecking && !ts.length ? " warn" : ""), role: ts.length ? "status" : null }, line),
     // Phones pull down to check; a pointer gets the button.
     el("span", { class: "feed-head-acts" },
-      el("button", { class: "btn-text feed-check", type: "button", "data-key": "check", onclick: () => checkNow(picked) }, "Check now"))));
+      el("button", { class: "btn-text feed-check", type: "button", "data-key": "check", onclick: () => checkNow(picked) }, t("Check now")))));
   let day = null, group = null;
   for (const x of list) {
     const d = dayName(postAt(x.it));
@@ -2238,18 +2247,18 @@ function renderFeeds() {
       day = d;
       const open = list.filter((y) => dayName(postAt(y.it)) === d && !savedAs(y.it.url) && !savingUrl(y.it.url));
       nodes.push(sectionHead(d, open.length > 1
-        ? el("button", { class: "btn-text", type: "button", "data-key": "all:" + d, onclick: () => saveFeedPosts(open) }, "Save all " + open.length) : null));
+        ? el("button", { class: "btn-text", type: "button", "data-key": "all:" + d, onclick: () => saveFeedPosts(open) }, t("Save all {n}", { n: open.length })) : null));
       group = el("div", { class: "group feed-group" });
       nodes.push(group);
     }
     group.append(postRow(x.f, x.it, !picked));
   }
-  if (!list.length && ts.length) nodes.push(el("p", { class: "empty-text hl-none" }, "No posts match that."));
+  if (!list.length && ts.length) nodes.push(el("p", { class: "empty-text hl-none" }, t("No posts match that.")));
   else if (!list.length) {
     const days = (picked || feeds[0]).days || 7;
     nodes.push(el("div", { class: "empty" },
-      el("p", { class: "empty-text" }, (picked && picked.error) || (!checked ? "Its posts show up after the first check."
-        : "Nothing posted in the last " + (FEED_DAYS.find((o) => o.value === String(days)) || FEED_DAYS[1]).label.replace(/^A /, "").toLowerCase() + "."))));
+      el("p", { class: "empty-text" }, (picked && picked.error) || (!checked ? t("Its posts show up after the first check.")
+        : ({ "3": t("Nothing posted in the last 3 days."), "30": t("Nothing posted in the last month.") }[String(days)] || t("Nothing posted in the last week."))))));
   }
   fillPosts(root, box, nodes);
   if (state.feedPick) paintPostPicks();
@@ -2275,7 +2284,7 @@ let driveFiles = null;    // the backups in Drive, once listed
 let driveListError = "";
 let driveDueSaid = false;
 
-const driveWhen = (at) => new Date(at).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
+const driveWhen = (at) => new Date(at).toLocaleString(i18n.lang, { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
 function driveSay(text, share) {
   if (!driveRun) return;
   driveRun.text = text;
@@ -2286,7 +2295,7 @@ function driveSay(text, share) {
 }
 function driveStatusText() {
   const r = driveRun;
-  return r.stopped ? "Stopping…" : r.paused ? "Paused · " + r.text : r.text;
+  return r.stopped ? t("Stopping…") : r.paused ? t("Paused") + " · " + r.text : r.text;
 }
 async function driveGate() {
   const r = driveRun;
@@ -2318,16 +2327,16 @@ function driveControls(cls) {
   const r = driveRun;
   if (!driveCanStop()) return null;
   return el("span", { class: cls },
-    r.restore ? null : el("button", { class: "btn-small", type: "button", ...(r.stopped ? { disabled: "" } : {}), onclick: () => drivePause(!r.paused) }, r.paused ? "Resume" : "Pause"),
-    el("button", { class: "btn-quiet danger", type: "button", ...(r.stopped ? { disabled: "" } : {}), onclick: driveStop }, "Stop"));
+    r.restore ? null : el("button", { class: "btn-small", type: "button", ...(r.stopped ? { disabled: "" } : {}), onclick: () => drivePause(!r.paused) }, r.paused ? t("Resume") : t("Pause")),
+    el("button", { class: "btn-quiet danger", type: "button", ...(r.stopped ? { disabled: "" } : {}), onclick: driveStop }, t("Stop")));
 }
 // The run as a card in Downloads, like the app's own update.
 function driveCard() {
   const r = driveRun;
-  return el("div", { class: "card saving drive-run wide", role: "group", "aria-label": r.restore ? "Restoring from Google Drive" : "Backing up to Google Drive" },
+  return el("div", { class: "card saving drive-run wide", role: "group", "aria-label": r.restore ? t("Restoring from Google Drive") : t("Backing up to Google Drive") },
     el("span", { class: "card-body" },
-      el("span", { class: "card-site" }, "Google Drive"),
-      el("span", { class: "card-title" }, r.restore ? "Restoring your library" : "Backing up your library"),
+      el("span", { class: "card-site" }, t("Google Drive")),
+      el("span", { class: "card-title" }, r.restore ? t("Restoring your library") : t("Backing up your library")),
       el("span", { class: "progress", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100" }, el("span", { class: "progress-fill" })),
       el("span", { class: "card-status" + (r.paused ? "" : " accent") },
         r.paused ? null : el("span", { class: "spinner", "aria-hidden": "true" }),
@@ -2365,32 +2374,29 @@ function renderSyncPage() {
   const r = driveRun;
   syncPageSaid = syncPageSig();
   root.replaceChildren(
-    sectionHead("GitHub sync"), githubCard(),
-    C.drive.available ? sectionHead("Google Drive") : null,
+    sectionHead(t("GitHub sync")), githubCard(),
+    C.drive.available ? sectionHead(t("Google Drive")) : null,
     C.drive.available ? (r && !r.restore ? driveCard() : driveRestCard()) : null);
   if (r && !r.restore) paintDriveCard();
 }
 const toSettings = (section) => toLibrary().then(() => openSettings(false, section));
 function githubCard() {
   if (!C.sync.on) {
-    return el("div", { class: "card wide", role: "group", "aria-label": "GitHub sync" },
+    return el("div", { class: "card wide", role: "group", "aria-label": t("GitHub sync") },
       el("span", { class: "card-body" },
-        el("span", { class: "card-site" }, "GitHub"),
-        el("span", { class: "card-title" }, "Not set up"),
-        el("span", { class: "card-status" }, "Keeps your library the same on your phone and computer."),
+        el("span", { class: "card-site" }, t("GitHub")),
+        el("span", { class: "card-title" }, t("Not set up")),
+        el("span", { class: "card-status" }, t("Keeps your library the same on your phone and computer.")),
         el("span", { class: "card-actions" },
-          el("button", { class: "btn-small", type: "button", onclick: () => toSettings("sync") }, "Set up"))));
+          el("button", { class: "btn-small", type: "button", onclick: () => toSettings("sync") }, t("Set up")))));
   }
   const last = C.sync.last, now = syncProgress(), paused = C.sync.paused, running = C.sync.running;
-  const status = running ? now.text : paused ? "Paused" + (last.at ? ". Last synced " + whenText(last.at) : "")
-    : waitsForWifi(DATA_SYNC_KEY) ? "Waiting for Wi-Fi" + (last.at ? ". Last synced " + whenText(last.at) : "")
-    : last.error ? last.error : syncsPlacesOnly() ? (last.light ? "Places synced " + whenText(last.at) : "On mobile data") + ". Clips wait for Wi-Fi"
-    : last.at ? "Synced " + whenText(last.at) : "Not synced yet";
+  const status = syncLine(last, now, paused, running);
   const after = running ? "" : syncAfter();
-  return el("div", { class: "card saving sync-run wide", role: "group", "aria-label": "GitHub sync" },
+  return el("div", { class: "card saving sync-run wide", role: "group", "aria-label": t("GitHub sync") },
     el("span", { class: "card-body" },
       el("span", { class: "card-site" }, C.sync.account),
-      el("span", { class: "card-title" }, running ? "Syncing your library" : "Your library"),
+      el("span", { class: "card-title" }, running ? t("Syncing your library") : t("Your library")),
       running ? el("span", { class: "progress" + (now.part == null ? " busy" : ""), "aria-hidden": "true" },
         el("span", { class: "progress-fill", style: "transform: scaleX(" + (now.part || 0) + ")" })) : null,
       el("span", { class: "card-status" + (running ? " accent" : last.error ? " warn" : ""), role: "status" },
@@ -2398,26 +2404,26 @@ function githubCard() {
         el("span", { class: "status-text" }, status)),
       after ? el("span", { class: "card-status accent" }, after) : null,
       el("span", { class: "card-actions" },
-        paused || running ? null : el("button", { class: "btn-small", type: "button", onclick: () => syncNow(false) }, "Sync now"),
-        el("button", { class: paused ? "btn-small" : "btn-quiet", type: "button", onclick: () => pauseSync(!paused) }, paused ? "Resume" : "Pause"),
-        el("button", { class: "btn-quiet", type: "button", onclick: () => toSettings("sync") }, "Settings"))));
+        paused || running ? null : el("button", { class: "btn-small", type: "button", onclick: () => syncNow(false) }, t("Sync now")),
+        el("button", { class: paused ? "btn-small" : "btn-quiet", type: "button", onclick: () => pauseSync(!paused) }, paused ? t("Resume") : t("Pause")),
+        el("button", { class: "btn-quiet", type: "button", onclick: () => toSettings("sync") }, t("Settings")))));
 }
 // Google Drive when no backup is going up: when the last one was, and
 // Back up now.
 function driveRestCard() {
   const on = C.drive.on, l = C.drive.last;
-  const status = !on ? "A copy of your library in your own Google Drive, made by itself as often as you pick and whenever you ask."
-    : driveRun ? "Restoring a backup, in Downloads"
+  const status = !on ? t("A copy of your library in your own Google Drive, made by itself as often as you pick and whenever you ask.")
+    : driveRun ? t("Restoring a backup, in Downloads")
     : l.error ? l.error
-    : l.at ? "Last backup " + whenText(l.at) + (l.size ? ", " + formatSize(l.size) : "") : "No backup yet";
-  return el("div", { class: "card wide", role: "group", "aria-label": "Google Drive" },
+    : l.at ? t("Last backup {when}", { when: whenText(l.at) }) + (l.size ? ", " + formatSize(l.size) : "") : t("No backup yet");
+  return el("div", { class: "card wide", role: "group", "aria-label": t("Google Drive") },
     el("span", { class: "card-body" },
-      el("span", { class: "card-site" }, "Google Drive"),
-      el("span", { class: "card-title" }, on ? "Backups" : "Not connected"),
+      el("span", { class: "card-site" }, t("Google Drive")),
+      el("span", { class: "card-title" }, on ? t("Backups") : t("Not connected")),
       el("span", { class: "card-status" + (on && l.error && !driveRun ? " warn" : "") }, status),
       el("span", { class: "card-actions" },
-        on ? el("button", { class: "btn-small", type: "button", ...driveBusy(), onclick: () => driveBackUp(false) }, "Back up now") : null,
-        el("button", { class: on ? "btn-quiet" : "btn-small", type: "button", onclick: () => toSettings("drive") }, on ? "Settings" : "Set up"))));
+        on ? el("button", { class: "btn-small", type: "button", ...driveBusy(), onclick: () => driveBackUp(false) }, t("Back up now")) : null,
+        el("button", { class: on ? "btn-quiet" : "btn-small", type: "button", onclick: () => toSettings("drive") }, on ? t("Settings") : t("Set up")))));
 }
 function openSyncPage(fromHistory) {
   if (state.syncPage) return;
@@ -2436,24 +2442,24 @@ function closeSyncPage() {
 }
 
 function driveValue() {
-  if (!C.drive.on) return "Off";
-  if (driveRun) return driveRun.paused ? "Paused" : driveRun.restore ? "Restoring" : "Backing up";
+  if (!C.drive.on) return t("Off");
+  if (driveRun) return driveRun.paused ? t("Paused") : driveRun.restore ? t("Restoring") : t("Backing up");
   const l = C.drive.last;
-  return l.error ? "Didn't back up" : l.at ? whenText(l.at).replace(/^./, (c) => c.toUpperCase()) : "On";
+  return l.error ? t("Didn't back up") : l.at ? whenText(l.at).replace(/^./, (c) => c.toUpperCase()) : "On";
 }
 
 function driveSections() {
   if (!C.drive.on) {
-    return [section("Back up to Google Drive", "A copy of your library in your own Google Drive, made by itself as often as you pick and whenever you ask, to bring back on a new phone or after a mistake. Waypage can only see the backups it makes, in a Waypage folder in your Drive; nothing else there is opened or read.",
+    return [section(t("Back up to Google Drive"), t("A copy of your library in your own Google Drive, made by itself as often as you pick and whenever you ask, to bring back on a new phone or after a mistake. Waypage can only see the backups it makes, in a Waypage folder in your Drive; nothing else there is opened or read."),
       el("div", { class: "group" },
         el("button", { class: "row", type: "button", onclick: (e) => driveConnect(e.currentTarget) },
-          el("span", { class: "row-label accent" }, "Connect Google Drive"))))];
+          el("span", { class: "row-label accent" }, t("Connect Google Drive")))))];
   }
   const l = C.drive.last;
   const status = driveRun ? driveStatusText()
     : l.error ? l.error
-    : l.at ? "Last backup " + whenText(l.at) + (l.size ? ", " + formatSize(l.size) : "")
-    : "No backup yet";
+    : l.at ? t("Last backup {when}", { when: whenText(l.at) }) + (l.size ? ", " + formatSize(l.size) : "")
+    : t("No backup yet");
   const what = C.drive.what;
   const sw = (key, label, note) => el("label", { class: "row" },
     el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, label), note ? el("span", { class: "choice-note" }, note) : null),
@@ -2466,58 +2472,56 @@ function driveSections() {
       el("span", { class: "choice-text" },
         el("span", { class: "choice-label" }, driveWhen(f.at)),
         el("span", { class: "choice-note" }, [formatSize(f.size), f.clips ? countLine(f.clips) : "", f.from ? "from " + f.from : ""].filter(Boolean).join(" · "))),
-      el("span", { class: "row-value accent" }, "Restore")),
-    el("button", { class: "row-x drive-delete", type: "button", ...driveBusy(), "aria-label": "Delete the backup of " + driveWhen(f.at), title: "Delete", onclick: () => driveDelete(f) },
-      el("span", { class: "visually-hidden" }, "Delete"),
+      el("span", { class: "row-value accent" }, t("Restore"))),
+    el("button", { class: "row-x drive-delete", type: "button", ...driveBusy(), "aria-label": t("Delete the backup of {driveWhen}", { driveWhen: driveWhen(f.at) }), title: t("Delete"), onclick: () => driveDelete(f) },
+      el("span", { class: "visually-hidden" }, t("Delete")),
       svgBin()))) : [];
   return [
-    section("Backups", "A copy of your library in a Waypage folder in your Drive, which is all Waypage can see there. "
-        + (C.platform.native ? (C.drive.background ? "Automatic backups run on Wi-Fi, even with Waypage closed, when Android finds a good moment. " : "Automatic backups run on Wi-Fi while Waypage is open. ") : "This browser signs in to Google for an hour at a time, so an automatic backup asks first. ")
-        + "Drive keeps the last " + C.drive.KEEP + " backups" + (C.drive.auto && C.drive.every < 7 ? ", and one from a week before them" : "") + "; an older one is deleted when a new one is made.",
+    section(t("Backups"), t("A copy of your library in a Waypage folder in your Drive, which is all Waypage can see there. {x}Drive keeps the last {KEEP} backups{x2}; an older one is deleted when a new one is made.", { x: C.platform.native ? (C.drive.background ? t("Automatic backups run on Wi-Fi, even with Waypage closed, when Android finds a good moment. ") : t("Automatic backups run on Wi-Fi while Waypage is open. ")) : t("This browser signs in to Google for an hour at a time, so an automatic backup asks first. "), KEEP: C.drive.KEEP, x2: C.drive.auto && C.drive.every < 7 ? t(", and one from a week before them") : "" }),
       el("div", { class: "group" },
         el("button", { class: "row", type: "button", ...driveBusy(), onclick: () => driveBackUp(false) },
           el("span", { class: "choice-text" },
-            el("span", { class: "choice-label accent" }, "Back up now"),
+            el("span", { class: "choice-label accent" }, t("Back up now")),
             el("span", { class: "choice-note" + (l.error && !driveRun ? " warn" : ""), id: "driveStatus", role: "status" }, status))),
         driveRun ? el("div", { class: "row" }, driveControls("drive-actions")) : null),
       // How often (1.46.0; it was a weekly switch), a pick row like the
       // other settings' (1.48.4; a drop-down under its name from 1.47.0).
       el("div", { class: "group" },
-        pickRow({ label: "Back up by itself", cls: "drive-every", get: () => (C.drive.auto ? String(C.drive.every) : "off"),
+        pickRow({ label: t("Back up by itself"), cls: "drive-every", get: () => (C.drive.auto ? String(C.drive.every) : "off"),
           set: (v) => { if (v === "off") C.drive.auto = false; else { C.drive.every = Number(v); C.drive.auto = true; } renderSection(); },
-          options: [...C.drive.EVERY.map((d) => ({ value: String(d), label: DRIVE_EVERY[d], note: "And whenever you ask" })),
-            { value: "off", label: "Only when I ask", note: "Back up now, above" }] }))),
-    section("What goes in", "Tags, collections, favourites and your reading stats go with the clips. Links only makes a backup much smaller, but a clip whose page changed or went away comes back different or not at all" + (C.platform.native ? "" : ", and this browser can only save Wikipedia pages again") + "; books you copied in and newsletter mails still go in whole. Files read from outside and watched folders stay where they are, and settings don't go in.",
+          options: [...C.drive.EVERY.map((d) => ({ value: String(d), label: DRIVE_EVERY[d], note: t("And whenever you ask") })),
+            { value: "off", label: t("Only when I ask"), note: t("Back up now, above") }] }))),
+    section(t("What goes in"), t("Tags, collections, favourites and your reading stats go with the clips. Links only makes a backup much smaller, but a clip whose page changed or went away comes back different or not at all{x}; books you copied in and newsletter mails still go in whole. Files read from outside and watched folders stay where they are, and settings don't go in.", { x: C.platform.native ? "" : t(", and this browser can only save Wikipedia pages again") }),
       el("div", { class: "group" },
-        sw("clips", "Clips", what.links ? "Links, highlights and places" : "Text, pictures, highlights and places"),
-        what.clips ? el("div", { class: "row" }, seg("drive-links", "What goes in of each clip", [{ value: "pages", label: "Clips too" }, { value: "links", label: "Links only" }],
+        sw("clips", t("Clips"), what.links ? t("Links, highlights and places") : t("Text, pictures, highlights and places")),
+        what.clips ? el("div", { class: "row" }, seg("drive-links", t("What goes in of each clip"), [{ value: "pages", label: t("Clips too") }, { value: "links", label: t("Links only") }],
           what.links ? "links" : "pages", (v) => { C.drive.setWhat("links", v === "links"); renderSection(); })) : null,
-        sw("notes", "Notes", "Every note, whole"),
-        sw("feeds", "Feeds", "Which you follow and how"),
-        sw("newsletters", "Newsletters", "Your addresses and how they're set"))),
-    section("Restore", "Restoring adds what isn't here and keeps whichever copy of a clip was saved last. Nothing here is deleted. A clip or feed you deleted since comes back, on your synced devices too. The bin deletes a backup from Drive for good.",
+        sw("notes", t("Notes"), t("Every note, whole")),
+        sw("feeds", t("Feeds"), t("Which you follow and how")),
+        sw("newsletters", t("Newsletters"), t("Your addresses and how they're set")))),
+    section(t("Restore"), t("Restoring adds what isn't here and keeps whichever copy of a clip was saved last. Nothing here is deleted. A clip or feed you deleted since comes back, on your synced devices too. The bin deletes a backup from Drive for good."),
       el("div", { class: "group" }, ...(list.length ? list
-        : driveListError === DRIVE_SIGN_IN ? [el("button", { class: "row", type: "button", onclick: driveSignIn }, el("span", { class: "row-label accent" }, "Sign in to Google to see them"))]
-        : [el("div", { class: "row" }, el("span", { class: "row-label" + (driveListError ? " warn" : "") }, driveListError || (driveFiles ? "No backups in Drive yet" : "Looking in Drive…")))]))),
-    section("Account", "Disconnecting forgets the sign-in on this device. The backups stay in your Drive.",
+        : driveListError === DRIVE_SIGN_IN ? [el("button", { class: "row", type: "button", onclick: driveSignIn }, el("span", { class: "row-label accent" }, t("Sign in to Google to see them")))]
+        : [el("div", { class: "row" }, el("span", { class: "row-label" + (driveListError ? " warn" : "") }, driveListError || (driveFiles ? t("No backups in Drive yet") : t("Looking in Drive…"))))]))),
+    section(t("Account"), t("Disconnecting forgets the sign-in on this device. The backups stay in your Drive."),
       el("div", { class: "group" },
         el("button", { class: "row", type: "button", ...driveBusy(), onclick: driveDisconnect },
-          el("span", { class: "choice-text" }, el("span", { class: "choice-label warn" }, "Disconnect Google Drive"), C.drive.email ? el("span", { class: "choice-note" }, "Connected as " + C.drive.email) : null)))),
+          el("span", { class: "choice-text" }, el("span", { class: "choice-label warn" }, t("Disconnect Google Drive")), C.drive.email ? el("span", { class: "choice-note" }, t("Connected as {email}", { email: C.drive.email })) : null)))),
   ];
 }
 
-const DRIVE_EVERY = { 1: "Every day", 3: "Every 3 days", 7: "Every week", 14: "Every 2 weeks", 30: "Every month" };
+const DRIVE_EVERY = { 1: t("Every day"), 3: t("Every 3 days"), 7: t("Every week"), 14: t("Every 2 weeks"), 30: t("Every month") };
 
 async function driveConnect(btn) {
-  if (btn) { btn.disabled = true; btn.querySelector(".row-label").textContent = "Connecting…"; }
+  if (btn) { btn.disabled = true; btn.querySelector(".row-label").textContent = t("Connecting…"); }
   try {
     await C.drive.connect();
     driveFiles = null;
     driveListError = "";
-    toast("Google Drive connected");
+    toast(t("Google Drive connected"));
   } catch (e) {
     if (!(e instanceof C.drive.DriveError)) console.error(e);
-    if (!e || e.code !== "again") toast(e instanceof C.drive.DriveError ? e.message : "Couldn't connect. Try again.");
+    if (!e || e.code !== "again") toast(e instanceof C.drive.DriveError ? e.message : t("Couldn't connect. Try again."));
   }
   drivePaint();
 }
@@ -2527,12 +2531,12 @@ async function driveDisconnect() {
   driveFiles = null;
   driveListError = "";
   drivePaint();
-  toast("Disconnected. Your backups stay in Google Drive.");
+  toast(t("Disconnected. Your backups stay in Google Drive."));
 }
 
 const DRIVE_SIGN_IN = "signin";
 async function driveSignIn() {
-  try { await C.drive.getToken(true); } catch (e) { if (!e || e.code !== "again") toast((e && e.message) || "Couldn't sign in. Try again."); return; }
+  try { await C.drive.getToken(true); } catch (e) { if (!e || e.code !== "again") toast((e && e.message) || t("Couldn't sign in. Try again.")); return; }
   driveFiles = null;
   driveListError = "";
   driveRefresh();
@@ -2542,7 +2546,7 @@ async function driveRefresh() {
     driveFiles = await C.drive.list();
     driveListError = "";
   } catch (e) {
-    driveListError = e instanceof C.drive.DriveError && e.code === "signin" ? DRIVE_SIGN_IN : (e && e.message) || "Couldn't look in Drive";
+    driveListError = e instanceof C.drive.DriveError && e.code === "signin" ? DRIVE_SIGN_IN : (e && e.message) || t("Couldn't look in Drive");
     if (!(e instanceof C.drive.DriveError)) console.error(e);
   }
   if (state.section === "drive") renderSection();
@@ -2598,8 +2602,8 @@ async function driveBackUp(auto) {
   if (driveRun || !C.drive.on) return;
   const { pages, bare, feeds: fs } = driveContents();
   const zip = pages.length > 0 || fs.length > 0;
-  if (!zip) { if (!auto) toast("There's nothing to back up with what's picked."); return; }
-  const run = driveRun = { restore: false, text: "Getting ready…", share: null, paused: false, stopped: false, ctl: {} };
+  if (!zip) { if (!auto) toast(t("There's nothing to back up with what's picked.")); return; }
+  const run = driveRun = { restore: false, text: t("Getting ready…"), share: null, paused: false, stopped: false, ctl: {} };
   drivePaint();
   let out = null;
   try {
@@ -2608,32 +2612,32 @@ async function driveBackUp(auto) {
     await C.drive.getToken(!auto, "backup");
     let made = null;
     if (zip) {
-      out = await C.backup.exportLibrary(pages, (done, total) => driveSay("Packing, " + done + " of " + total, (done / total) * 0.3), fs, driveGate, bare);
+      out = await C.backup.exportLibrary(pages, (done, total) => driveSay(t("Packing, {done} of {total}", { done: done, total: total }), (done / total) * 0.3), fs, driveGate, bare);
       if (!(await driveGate())) throw new C.drive.DriveError("Stopped.", "cancelled");
-      driveSay("Sending to Drive…", 0.3);
+      driveSay(t("Sending to Drive…"), 0.3);
       const info = { device: load(DEVICE_KEY, "") || guessedName(), clips: pages.length };
-      const sent = (done, total) => driveSay("Sending to Drive, " + (total ? Math.round((done / total) * 100) + "%" : formatSize(done)), total ? 0.3 + 0.7 * (done / total) : null);
+      const sent = (done, total) => driveSay(t("Sending to Drive, {x}", { x: total ? Math.round((done / total) * 100) + "%" : formatSize(done) }), total ? 0.3 + 0.7 * (done / total) : null);
       for (;;) {
         try { made = await C.drive.upload(out, info, sent, run.ctl); break; }
         catch (e) {
-          if (e && e.code === "cancelled" && run.paused && await driveGate()) { driveSay("Sending to Drive…"); continue; }
+          if (e && e.code === "cancelled" && run.paused && await driveGate()) { driveSay(t("Sending to Drive…")); continue; }
           throw e;
         }
       }
     }
     C.drive.last = { at: Date.now(), size: made ? made.size || (out.blob ? out.blob.size : 0) : 0 };
     driveFiles = null;
-    if (!auto) toast("Backed up to Google Drive");
+    if (!auto) toast(t("Backed up to Google Drive"));
   } catch (e) {
     if (e && e.code === "cancelled") {
-      toast("Backup stopped");
+      toast(t("Backup stopped"));
       if (out && out.uri) C.platform.plugin("Filesystem").deleteFile({ path: out.name, directory: "CACHE" }).catch(() => {});
       driveRun = null;
       drivePaint();
       return;
     }
     if (!(e instanceof C.drive.DriveError)) console.error(e);
-    const msg = e instanceof C.drive.DriveError ? e.message : "Couldn't make the backup. Free some space and try again.";
+    const msg = e instanceof C.drive.DriveError ? e.message : t("Couldn't make the backup. Free some space and try again.");
     C.drive.last = { ...C.drive.last, error: msg, tried: Date.now() };
     if (!auto && (!e || e.code !== "again")) toast(msg);
   }
@@ -2643,26 +2647,26 @@ async function driveBackUp(auto) {
 }
 
 async function driveDelete(f) {
-  if (driveRun || !confirm("Delete the backup of " + driveWhen(f.at) + " from Google Drive? It can't be brought back.")) return;
+  if (driveRun || !confirm(t("Delete the backup of {driveWhen} from Google Drive? It can't be brought back.", { driveWhen: driveWhen(f.at) }))) return;
   try {
     await C.drive.remove(f.id);
   } catch (e) {
     // Already gone counts as deleted.
-    if (!(e instanceof C.drive.DriveError && e.code === "gone")) { toast((e && e.message) || "Couldn't delete it. Try again."); return; }
+    if (!(e instanceof C.drive.DriveError && e.code === "gone")) { toast((e && e.message) || t("Couldn't delete it. Try again.")); return; }
   }
   if (driveFiles) driveFiles = driveFiles.filter((x) => x.id !== f.id);
   drivePaint();
-  toast("Backup deleted");
+  toast(t("Backup deleted"));
 }
 
 async function driveRestore(f) {
   if (driveRun) return;
   const asked = C.drive.getToken(true);
-  const run = driveRun = { restore: true, text: "Bringing the backup down…", share: null, paused: false, stopped: false, ctl: {} };
+  const run = driveRun = { restore: true, text: t("Bringing the backup down…"), share: null, paused: false, stopped: false, ctl: {} };
   drivePaint();
   try {
     await asked;
-    const file = await C.drive.download(f.id, (done, total) => driveSay("Bringing it down, " + (total > 0 ? Math.round((done / total) * 100) + "%" : formatSize(done)), total > 0 ? (done / total) * 0.5 : null), run.ctl);
+    const file = await C.drive.download(f.id, (done, total) => driveSay(t("Bringing it down, {x}", { x: total > 0 ? Math.round((done / total) * 100) + "%" : formatSize(done) }), total > 0 ? (done / total) * 0.5 : null), run.ctl);
     if (run.stopped) throw new C.drive.DriveError("Stopped.", "cancelled");
     // Merging can't stop halfway: the clips are written before the index.
     run.merging = true;
@@ -2670,10 +2674,10 @@ async function driveRestore(f) {
     await restoreBackup(file, (t) => { const m = /(\d+) of (\d+)/.exec(t); driveSay(t, m ? 0.5 + 0.5 * (m[1] / m[2]) : undefined); });
     renderLibrary();
   } catch (e) {
-    if (e && e.code === "cancelled") { toast("Restore stopped. Nothing was changed."); driveRun = null; drivePaint(); return; }
-    const told = e instanceof C.drive.DriveError || /Waypage/.test((e && e.message) || "");
+    if (e && e.code === "cancelled") { toast(t("Restore stopped. Nothing was changed.")); driveRun = null; drivePaint(); return; }
+    const told = e instanceof C.drive.DriveError || /Waypage|[\u0590-\u05FF]/.test((e && e.message) || "");
     if (!told) console.error(e);
-    toast(told ? e.message : "Couldn't restore that backup. Try again.");
+    toast(told ? e.message : t("Couldn't restore that backup. Try again."));
   }
   driveRun = null;
   drivePaint();
@@ -2691,5 +2695,5 @@ function driveDue() {
   if (C.drive.signedIn) { driveBackUp(true); return; }
   if (driveDueSaid) return;
   driveDueSaid = true;
-  toast("Your Google Drive backup is due", "Back up", () => driveBackUp(false));
+  toast(t("Your Google Drive backup is due"), t("Back up"), () => driveBackUp(false));
 }

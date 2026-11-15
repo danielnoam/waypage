@@ -11,7 +11,7 @@ const extensionsOn = () => C.ext.list().filter((x) => C.ext.on(x.id)).length;
 function extensionsSections() {
   const rows = C.ext.list().map((x) => el("button", { class: "row nav-row", type: "button", onclick: () => openSection(x.id, false, true) },
     el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, x.title), el("span", { class: "choice-note" }, x.note)),
-    el("span", { class: "row-value" }, C.ext.on(x.id) ? "On" : "Off"),
+    el("span", { class: "row-value" }, C.ext.on(x.id) ? t("On") : t("Off")),
     el("span", { class: "row-chev", "aria-hidden": "true" }, "›")));
   return [section(null, null, el("div", { class: "group" }, ...rows))];
 }
@@ -22,7 +22,7 @@ function extensionPage(x) {
     try {
       if (on) await C.ext.turnOn(x.id); else C.ext.turnOff(x.id);
     } catch (e) {
-      toast(x.title + " didn't load. Try again.");
+      toast(t("{title} didn't load. Try again.", { title: x.title }));
       renderSection();
     }
   });
@@ -33,7 +33,7 @@ function extensionPage(x) {
 
 // What the running download is up to, in the words Kokoro's rows use.
 function packStep(r, p) {
-  if (r.step === "downloading") return "Downloading " + p.title + " · " + (r.total ? Math.min(99, Math.floor(r.done / r.total * 100)) : 0) + "%";
+  if (r.step === "downloading") return t("Downloading {name}", { name: p.title }) + " · " + (r.total ? Math.min(99, Math.floor(r.done / r.total * 100)) : 0) + "%";
   return (r.step === "checking" ? "Checking " : "Unpacking ") + p.title + "…";
 }
 function packsSection(x) {
@@ -42,31 +42,31 @@ function packsSection(x) {
     const mine = run && run.ext === x.id && run.pack === p.id;
     const bad = err && err.ext === x.id && err.pack === p.id;
     const note = mine ? packStep(run, p)
-      : bad && err.kind === "bad" ? "The download wasn't the right file. Try again."
-      : bad ? "Couldn't download. Try again."
+      : bad && err.kind === "bad" ? t("The download wasn't the right file. Try again.")
+      : bad ? t("Couldn't download. Try again.")
       : (p.note ? p.note + " · " : "") + formatSize(p.bytes);
     const get = async () => {
       try { await C.ext.getPack(x.id, p.id); } catch (e) { /* its row says why */ }
     };
     const drop = async () => {
-      if (!confirm("Delete " + p.title + "? It takes " + formatSize(p.bytes) + "; you can download it again.")) return;
+      if (!confirm(t("Delete {title}? It takes {formatSize}; you can download it again.", { title: p.title, formatSize: formatSize(p.bytes) }))) return;
       await C.ext.dropPack(x.id, p.id);
     };
-    const control = mine && run.step === "downloading" ? el("button", { class: "btn-text", type: "button", onclick: () => C.ext.stopPack() }, "Stop")
+    const control = mine && run.step === "downloading" ? el("button", { class: "btn-text", type: "button", onclick: () => C.ext.stopPack() }, t("Stop"))
       : mine ? null
-      : p.have ? el("button", { class: "row-x kokoro-delete", type: "button", "aria-label": "Delete " + p.title, title: "Delete", disabled: run ? "" : null, onclick: drop },
-        el("span", { class: "visually-hidden" }, "Delete"), svgBin())
-      : el("button", { class: "btn-text", type: "button", disabled: run ? "" : null, onclick: get }, "Download");
+      : p.have ? el("button", { class: "row-x kokoro-delete", type: "button", "aria-label": t("Delete {title}", { title: p.title }), title: t("Delete"), disabled: run ? "" : null, onclick: drop },
+        el("span", { class: "visually-hidden" }, t("Delete")), svgBin())
+      : el("button", { class: "btn-text", type: "button", disabled: run ? "" : null, onclick: get }, t("Download"));
     return el("div", { class: "row kokoro-row" },
       el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, p.title), el("span", { class: "choice-note" }, note)), control);
   });
-  return section("Languages", null, el("div", { class: "group" }, ...rows));
+  return section(t("Languages"), null, el("div", { class: "group" }, ...rows));
 }
 
 for (const x of C.ext.list()) {
-  SECTIONS[x.id] = { title: x.title, build: () => extensionPage(C.ext.list().find((y) => y.id === x.id)), value: () => (C.ext.on(x.id) ? "On" : "Off"), parent: "extensions" };
+  SECTIONS[x.id] = { title: x.title, build: () => extensionPage(C.ext.list().find((y) => y.id === x.id)), value: () => (C.ext.on(x.id) ? "On" : t("Off")), parent: "extensions" };
 }
-SECTIONS.extensions = { title: "Extensions", build: extensionsSections, value: () => { const n = extensionsOn(); return n ? n + " on" : "Off"; } };
+SECTIONS.extensions = { title: t("Extensions"), build: extensionsSections, value: () => { const n = extensionsOn(); return n ? n + " on" : t("Off"); } };
 FIND_ALIASES.Extensions = "anki flashcards cards plugin add-on addon";
 FIND_ALIASES.Anki = "flashcards cards spaced repetition deck";
 FIND_ALIASES.Languages = "language pack dictionary german vocabulary";
@@ -96,12 +96,12 @@ async function renderAnki() {
   try {
     await C.ext.load("anki");
   } catch (e) {
-    fill(root, el("div", { class: "empty" }, el("h2", { class: "empty-title" }, "Anki didn't load"),
-      el("p", { class: "empty-text" }, "Check your connection, then open it again.")));
+    fill(root, el("div", { class: "empty" }, el("h2", { class: "empty-title" }, t("Anki didn't load")),
+      el("p", { class: "empty-text" }, t("Check your connection, then open it again."))));
     return;
   }
   try { await C.anki.load(); } catch (e) {
-    fill(root, el("div", { class: "empty" }, el("h2", { class: "empty-title" }, "Your decks didn't open"), el("p", { class: "empty-text" }, "Close the app and open it again.")));
+    fill(root, el("div", { class: "empty" }, el("h2", { class: "empty-title" }, t("Your decks didn't open")), el("p", { class: "empty-text" }, t("Close the app and open it again."))));
     return;
   }
   ankiDraw();

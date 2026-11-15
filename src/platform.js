@@ -237,7 +237,7 @@
     async translate(texts, from, to) {
       const T = plugin("Translate");
       if (T && phoneTranslates()) return (await T.clip({ from, to, texts })).texts || [];
-      if (!held.translator || held.pair !== from + ">" + to) throw new Error("Not ready to translate");
+      if (!held.translator || held.pair !== from + ">" + to) throw new Error(t("Not ready to translate"));
       const out = [];
       for (const t of texts) out.push(await held.translator.translate(t));
       return out;
@@ -682,7 +682,7 @@
     }
     return true;
   }
-  const shareFile = (uri, name) => share({ title: name, files: [uri], dialogTitle: "Save or send " + name });
+  const shareFile = (uri, name) => share({ title: name, files: [uri], dialogTitle: t("Save or send {name}", { name }) });
   const shareLink = (title, url) => share({ title, url, dialogTitle: "Share " + title });
   // Plain text to the share sheet (1.9.0), for Report a problem.
   async function shareText(title, text) {
@@ -802,7 +802,7 @@
           const done = (fn, arg) => { if (handle) handle.remove(); fn(arg); };
           Promise.resolve(S.addListener("googleBarcodeScannerModuleInstallProgress", (ev) => {
             if (ev.state === 4) done(resolve);
-            else if (ev.state === 3 || ev.state === 5) done(reject, new Error("The scanner couldn't be installed."));
+            else if (ev.state === 3 || ev.state === 5) done(reject, new Error(t("The scanner couldn't be installed.")));
           })).then((h) => { handle = h; return S.installGoogleBarcodeScannerModule(); }).catch(reject);
         });
       }
@@ -889,7 +889,7 @@
       let handle;
       try {
         [handle] = await window.showOpenFilePicker({ multiple: false,
-          types: [{ description: "Books, notes and comics", accept: { "*/*": FILE_EXTS } }] });
+          types: [{ description: t("Books, notes and comics"), accept: { "*/*": FILE_EXTS } }] });
       } catch (e) { return null; }
       return handle ? files.adopt(handle) : null;
     },
@@ -908,7 +908,7 @@
       const F = plugin("Files");
       if (!F) return null;
       const got = await F.pickFolder(initial ? { initial } : {});
-      return got && got.uri ? { ref: got.uri, name: got.name || "Folder" } : null;
+      return got && got.uri ? { ref: got.uri, name: got.name || t("Folder") } : null;
     },
     // Every file in a picked folder and its folders: { ok, files: [{ ref,
     // path, name, size }] }, ok false when the folder can't be read.

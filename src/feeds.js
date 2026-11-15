@@ -167,11 +167,11 @@
       res = await C.platform.fetchText(url, { headers: { Accept: ACCEPT } });
     } catch (e) {
       throw new FeedError(C.platform.canReadPages
-        ? "Couldn't reach " + siteOf(url) + ". Check the address, or try again when you're online."
-        : "This browser can't reach " + siteOf(url) + ". Follow the feed in Waypage on your phone.");
+        ? t("Couldn't reach {site}. Check the address, or try again when you're online.", { site: siteOf(url) })
+        : t("This browser can't reach {site}. Follow the feed in Waypage on your phone.", { site: siteOf(url) }));
     }
-    if (res.status === 429) throw new FeedError(siteOf(url) + " asked to slow down. Try again later.");
-    if (res.status >= 400) throw new FeedError(siteOf(url) + " answered with an error (" + res.status + ").");
+    if (res.status === 429) throw new FeedError(t("{site} asked to slow down. Try again later.", { site: siteOf(url) }));
+    if (res.status >= 400) throw new FeedError(t("{site} answered with an error ({status}).", { site: siteOf(url), status: res.status }));
     return res;
   }
 
@@ -179,7 +179,7 @@
   // own address, or throws a FeedError that says what to try.
   async function findFeed(input) {
     const start = http(/^https?:\/\//i.test(input) ? input : "https://" + String(input || "").trim());
-    if (!start) throw new FeedError("That doesn't look like an address. Paste the site's or its feed's.");
+    if (!start) throw new FeedError(t("That doesn't look like an address. Paste the site's or its feed's."));
     // A site that turns the app's visit away (Cloudflare's browser check,
     // 403) often still serves its feed: the usual paths are tried anyway.
     let res;
@@ -198,13 +198,13 @@
       } catch (e) { /* the next one */ }
     }
     if (res.refused) throw res.refused;
-    throw new FeedError("Couldn't find a feed on " + siteOf(at) + ". Paste the feed's own address if the site shows one.");
+    throw new FeedError(t("Couldn't find a feed on {x}. Paste the feed's own address if the site shows one.", { x: siteOf(at) }));
   }
 
   async function readFeed(url) {
     const res = await get(url);
     const feed = parseFeed(res.text, res.url || url);
-    if (!feed) throw new FeedError(siteOf(url) + "'s feed couldn't be read.");
+    if (!feed) throw new FeedError(t("{site}'s feed couldn't be read.", { site: siteOf(url) }));
     return feed;
   }
 

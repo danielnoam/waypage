@@ -105,7 +105,7 @@ async function setFolderTagNew(name, on) {
   for (const p of folderPages(name)) { if (on) p.folderTagNew = true; else delete p.folderTagNew; }
   await C.store.writeIndex(state.pages);
   syncSoon();
-  toast(on ? "New clips in " + name + " get its tags" : "New clips in " + name + " come untagged");
+  toast(on ? t("New clips in {name} get its tags", { name: name }) : t("New clips in {name} come untagged", { name: name }));
 }
 
 // A folder's name as already spelled, if one by that name exists.
@@ -171,7 +171,7 @@ async function setFolder(p, name) {
 // how much of it is read.
 // What a collection is made of, by the library's own parts: "8 clips,
 // 2 files". A copy made from a file is a clip, as in the library.
-const HOLDS = [["note", "note", "notes"], ["audio", "audiobook", "audiobooks"], ["file", "file", "files"], ["clip", "clip", "clips"]];
+const HOLDS = [["note", (n) => tn(n, "1 note", "{n} notes")], ["audio", (n) => tn(n, "1 audiobook", "{n} audiobooks")], ["file", (n) => tn(n, "1 file", "{n} files")], ["clip", (n) => tn(n, "1 clip", "{n} clips")]];
 const holdKind = (p) => (p.note ? "note" : isAudiobook(p) ? "audio" : p.link ? "file" : "clip");
 // ...and as marks along the bottom of its cover, one per kind it holds,
 // in the library's order: clips, files, audiobooks, notes.
@@ -179,7 +179,7 @@ const HOLD_ICONS = {
   clip: '<path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/>',
   file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
   audio: '<path d="M4 15v-3a8 8 0 0 1 16 0v3M4 15h3v5H5a1 1 0 0 1-1-1zM20 15h-3v5h2a1 1 0 0 0 1-1z"/>',
-  note: '<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+  note: "<path d=\"M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z\"/><path d=\"M13.5 6.5l4 4\"/>",
 };
 function holdsMarks(list) {
   const has = new Set(list.map(holdKind));
@@ -193,7 +193,7 @@ function holdsLine(list) {
   const n = new Map();
   for (const p of list) n.set(holdKind(p), (n.get(holdKind(p)) || 0) + 1);
   return HOLDS.filter(([k]) => n.get(k)).sort((a, b) => n.get(b[0]) - n.get(a[0]))
-    .map(([k, one, many]) => n.get(k) + " " + (n.get(k) === 1 ? one : many)).join(", ");
+    .map(([k, words]) => words(n.get(k))).join(", ");
 }
 
 function folderTile(name) {
@@ -205,13 +205,13 @@ function folderTile(name) {
   const fresh = freshCount(name);
   const fav = list.some((p) => p.folderFav);
   const tile = el("div", { class: "tile", role: "listitem", "data-ids": list.map((p) => p.id).join(","), "data-name": name },
-    el("button", { class: "card-open", type: "button", "aria-label": name + (fav ? ", favourite" : "") + ", collection, " + holdsLine(list) + ", " + done + " read" + (fresh ? ", " + newCountText(fresh) + " chapters" : ""),
+    el("button", { class: "card-open", type: "button", "aria-label": [name, fav ? t("favourite") : "", t("collection"), holdsLine(list), t("{n} read", { n: done }), fresh ? tn(fresh, "1 new chapter", "{n} new chapters") : ""].filter(Boolean).join(", "),
       onclick: () => tapPages(list.map((p) => p.id), () => openFolder(name)) }),
     pickMark(),
     el("span", { class: "tile-thumb" + (thumb ? "" : " blank") },
       thumb ? el("img", { src: thumb, alt: "", loading: "lazy" }) : null,
       // The badge saves them (1.7.2); while picking, it picks like the tile.
-      fresh ? el("button", { class: "tile-new" + (savingInto(name) ? " saving" : ""), type: "button", "aria-label": (savingInto(name) ? "Saving new chapters of " : "Save " + newCountText(fresh) + " " + chapterWord(list, fresh) + " of ") + name,
+      fresh ? el("button", { class: "tile-new" + (savingInto(name) ? " saving" : ""), type: "button", "aria-label": savingInto(name) ? t("Saving new chapters of {name}", { name }) : isSeries(list) ? tn(fresh, "Save 1 new chapter of {name}", "Save {n} new chapters of {name}", { name }) : tn(fresh, "Save 1 new clip of {name}", "Save {n} new clips of {name}", { name }),
         onclick: (e) => {
           e.stopPropagation();
           if (state.select) { tile.querySelector(".card-open").click(); return; }
@@ -221,7 +221,7 @@ function folderTile(name) {
           saveNewChapters(name, e.currentTarget);
         } }, "+" + (fresh >= NEW_MAX ? NEW_MAX : fresh)) : null),
     el("span", { class: "tile-name", dir: "auto" }, name),
-    el("span", { class: "tile-meta" }, el("span", { class: "tile-kind" }, "Collection · "), (done === list.length ? "All read" : done + " of " + list.length + " read"), el("span", { class: "tile-size" }, " · " + formatSize(sizeOf(list)))),
+    el("span", { class: "tile-meta" }, el("span", { class: "tile-kind" }, t("Collection · ")), (done === list.length ? t("All read") : t("{done} of {n} read", { done: done, n: list.length })), el("span", { class: "tile-size" }, " · " + formatSize(sizeOf(list)))),
     el("span", { class: "progress thin", "aria-hidden": "true" },
       el("span", { class: "progress-fill", style: "transform: scaleX(" + done / list.length + ")" })));
   // A cover whose file is gone (a restored backup) is read again.
@@ -255,7 +255,7 @@ function fillStrip(strip, names, folderSig) {
   // Moved only when the order changed, which a page landing doesn't do.
   want.forEach((t, i) => { if (strip.children[i] !== t) strip.insertBefore(t, strip.children[i] || null); });
 }
-const foldersStrip = (names) => el("div", { class: "folder-strip wide", role: "list", "aria-label": "Collections" }, ...names.map(folderTile));
+const foldersStrip = (names) => el("div", { class: "folder-strip wide", role: "list", "aria-label": t("Collections") }, ...names.map(folderTile));
 
 function openFolder(name, fromHistory) {
   if (state.folder && sameTag(state.folder, name)) return;
@@ -288,9 +288,9 @@ let folderMode = "";
 // The name typed in Edit, kept while a cover or move draws the screen again.
 let folderDraft = null;
 const FOLDER_BARS = {
-  edit: { title: "Edit", done: "Done" },
-  chapters: { title: "Website sync", done: "Done" },
-  export: { title: "Export", done: "Done" },
+  edit: { title: t("Edit"), done: t("Done") },
+  chapters: { title: t("Website sync"), done: t("Done") },
+  export: { title: t("Export"), done: t("Done") },
 };
 
 function setFolderMode(m) {
@@ -324,10 +324,9 @@ function paintFolderTitle() {
   $("folderView").querySelector(".screen-bar").classList.toggle("titled", !!folderMode || away);
 }
 
-const minutesText = (m) => (m >= 60 ? Math.floor(m / 60) + " h" + (m % 60 ? " " + (m % 60) + " min" : "") : m + " min");
+const minutesText = (m) => spanText(m * 60000);
 const minutesLeft = (list) => list.filter((p) => !p.finished)
   .reduce((sum, p) => sum + clipLeft(p, p.at > 0.02 ? p.at : 0), 0);
-const chapterWord = (list, n) => (isSeries(list) ? (n === 1 ? "chapter" : "chapters") : (n === 1 ? "clip" : "clips"));
 
 function bookCover(list) {
   const url = shownCover(list);
@@ -352,7 +351,7 @@ function bookHead(list, next, done) {
   const renaming = folderMode === "edit";
   let title;
   if (renaming) {
-    title = el("input", { class: "book-title-input", type: "text", value: folderDraft ?? name, "aria-label": "Collection name",
+    title = el("input", { class: "book-title-input", type: "text", value: folderDraft ?? name, "aria-label": t("Collection name"),
       maxlength: "32", enterkeyhint: "done", autocapitalize: "sentences", spellcheck: "false", dir: "auto" });
     title.addEventListener("input", () => { folderDraft = title.value; });
     title.addEventListener("keydown", (e) => {
@@ -361,19 +360,19 @@ function bookHead(list, next, done) {
     });
   } else title = el("h2", { class: "book-title", dir: "auto" }, name);
   const left = minutesLeft(list);
-  const meta = done === n ? "All " + n + " read" : done + " of " + n + " read · " + minutesText(left) + " left";
-  const bar = el("div", { class: "book-progress", role: "progressbar", "aria-label": "Read", "aria-valuemin": "0",
-    "aria-valuemax": String(n), "aria-valuenow": String(done), "aria-valuetext": done + " of " + n + " read" },
+  const meta = done === n ? t("All {n} read", { n }) : t("{done} of {n} read · {left} left", { done, n, left: minutesText(left) });
+  const bar = el("div", { class: "book-progress", role: "progressbar", "aria-label": t("Read"), "aria-valuemin": "0",
+    "aria-valuemax": String(n), "aria-valuenow": String(done), "aria-valuetext": t("{done} of {n} read", { done, n }) },
     el("span", { class: "book-progress-fill", style: "width: " + (done / n * 100).toFixed(1) + "%" }));
   const head = el("div", { class: "book-head" },
     bookCover(list),
     el("div", { class: "book-facts" },
-      el("p", { class: "book-site" }, [siteOf(list[0]), "Collection"].filter(Boolean).join(" · ")),
+      el("p", { class: "book-site" }, [siteOf(list[0]), t("Collection")].filter(Boolean).join(" · ")),
       title,
       el("p", { class: "meta folder-meta" }, meta),
       bar));
   if (renaming) return [head];
-  const go = done === n ? "Read again from the start" : (next.at > 0.02 || done ? "Continue: " : "Start: ") + next.title;
+  const go = done === n ? t("Read again from the start") : (next.at > 0.02 || done ? "Continue: " : "Start: ") + next.title;
   return [head,
     el("button", { class: "btn-primary folder-go", type: "button", dir: "auto", onclick: () => openPage(done === n ? list[0].id : next.id) }, go),
     saveNewButton(list),
@@ -384,7 +383,7 @@ function savedLine(list) {
   const what = web.length === list.length ? picturesAs(list) : savedKindsLine(list);
   return el("button", { class: "book-saved", type: "button", onclick: () => openMenu("saved") },
     el("span", null, formatSize(sizeOf(list)) + " · " + what + " · "),
-    el("span", { class: "accent" }, "What's saved"));
+    el("span", { class: "accent" }, t("What's saved")));
 }
 
 // New chapters found by the daily check, saved from here: straight from
@@ -400,8 +399,8 @@ function saveNewChapters(name, b) {
   const fresh = freshCount(name);
   const entry = newFor(name);
   if (!fresh || !list.length) return;
-  if (!navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
-  if (runFor(name)) { toast("Already saving into " + name + ". It's in Downloads."); return; }
+  if (!navigator.onLine) { toast(t("You're offline. Try again when you're back online.")); return; }
+  if (runFor(name)) { toast(t("Already saving into {name}. It's in Downloads.", { name: name })); return; }
   if (entry && entry.all) { saveAll(entry.all, name, [], undefined, true, undefined, folderSource(list)); return; }
   const last = list[list.length - 1];
   if (!sizeOk(last, fresh)) return;
@@ -413,12 +412,12 @@ function saveNewButton(list) {
   const saving = savingInto(name);
   if (saving) {
     return el("button", { class: "btn-quiet book-new", type: "button", onclick: () => openDownloads() },
-      "Saving " + saving + " " + chapterWord(list, saving) + " · ", el("span", { class: "accent" }, "See in Downloads"));
+      (isSeries(list) ? tn(saving, "Saving 1 chapter", "Saving {n} chapters") : tn(saving, "Saving 1 clip", "Saving {n} clips")) + " · ", el("span", { class: "accent" }, t("See in Downloads")));
   }
   const fresh = freshCount(name);
   if (!fresh) return null;
   const entry = newFor(name);
-  const b = el("button", { class: "btn-quiet book-new", type: "button", onclick: () => saveNewChapters(name, b) }, el("span", { class: "tile-icon", "aria-hidden": "true" }), "Save " + newCountText(fresh) + " " + chapterWord(list, fresh));
+  const b = el("button", { class: "btn-quiet book-new", type: "button", onclick: () => saveNewChapters(name, b) }, el("span", { class: "tile-icon", "aria-hidden": "true" }), isSeries(list) ? tn(fresh, "Save 1 new chapter", "Save {n} new chapters", { n: fresh >= NEW_MAX ? NEW_MAX + "+" : fresh }) : tn(fresh, "Save 1 new clip", "Save {n} new clips", { n: fresh >= NEW_MAX ? NEW_MAX + "+" : fresh }));
   b.firstChild.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS.add + "</svg>";
   return b;
 }
@@ -433,7 +432,7 @@ function renderFolder() {
   if (!list.length) {
     folderMode = "";
     paintFolderBar();
-    $("folderBody").replaceChildren(el("p", { class: "empty-text" }, "This collection is empty."));
+    $("folderBody").replaceChildren(el("p", { class: "empty-text" }, t("This collection is empty.")));
     return;
   }
   const picking = !!state.select;
@@ -450,12 +449,12 @@ function renderFolder() {
   // chapters with what they keep, to put in order.
   else if (editing) {
     top = [el("div", { class: "folder-edit" }, ...bookHead(list, next, done),
-      sectionHead("Cover"), coverPanel(list),
-      sectionHead((isSeries(list) ? "Chapters" : "Clips") + " · " + list.length),
+      sectionHead(t("Cover")), coverPanel(list),
+      sectionHead((isSeries(list) ? t("Chapters") : t("Clips")) + " · " + list.length),
       savedLine(list),
       ordering ? el("div", { class: "order-hint" },
-        el("div", { class: "chips sort-chips", role: "group", "aria-label": "Sort by" },
-          el("span", { class: "meta" }, "Sort by"),
+        el("div", { class: "chips sort-chips", role: "group", "aria-label": t("Sort by") },
+          el("span", { class: "meta" }, t("Sort by")),
           ...Object.entries(FOLDER_SORTS).map(([key, s]) =>
             el("button", { class: "chip", type: "button", "data-sort": key, onclick: () => sortFolder(list, key) }, el("span", { class: "chip-label" }, s.label))))) : null)];
   // On a big screen the book's cover and facts stand beside its list.
@@ -464,7 +463,7 @@ function renderFolder() {
   const covers = showList && !editing && folderLook(state.folder) === "covers";
   fill($("folderBody"),
     ...top,
-    showList && !editing ? sectionHead((isSeries(list) ? "Chapters" : "Clips") + " · " + list.length) : null,
+    showList && !editing ? sectionHead((isSeries(list) ? t("Chapters") : t("Clips")) + " · " + list.length) : null,
     covers ? el("ol", { class: "folder-covers" }, ...list.map((p) => coverItem(p, p === next && done < list.length))) : null,
     showList && !covers ? el("ol", { class: "group folder-list" + (ordering ? " ordering" : "") },
       ...list.map((p, i) => el("li", folderMode ? { "data-id": p.id } : { "data-id": p.id, "data-ids": p.id },
@@ -487,7 +486,7 @@ function renderFolder() {
 // A star on each clip in a collection (Daniel 2026-11-13), the same as
 // Favourite in its sheet.
 function itemFav(p) {
-  const b = el("button", { class: "icon-btn item-fav", type: "button", "aria-label": "Favourite " + p.title,
+  const b = el("button", { class: "icon-btn item-fav", type: "button", "aria-label": t("Favourite {title}", { title: p.title }),
     "aria-pressed": p.fav ? "true" : "false",
     onclick: () => setFavourite([p], !p.fav) });
   b.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS.star + "</svg>";
@@ -541,7 +540,7 @@ function chapterMark(p) {
 // arrow buttons beside it).
 function dragHandle(p, i, n) {
   const h = el("button", { class: "drag-handle", type: "button", "aria-keyshortcuts": "ArrowUp ArrowDown",
-    "aria-label": "Move " + p.title + ", " + (i + 1) + " of " + n + ". Use the up and down arrow keys." });
+    "aria-label": t("Move {title}, {i} of {n}. Use the up and down arrow keys.", { title: p.title, i: i + 1, n: n }) });
   h.addEventListener("keydown", (e) => {
     const step = { ArrowUp: -1, ArrowDown: 1 }[e.key];
     if (step) { e.preventDefault(); movePage(p, step); }
@@ -628,12 +627,12 @@ const royalRoadChapter = (url) => {
 // The ways a collection can be put in order, each a key per clip (null
 // when the clip has none: those keep their place, at the end).
 const FOLDER_SORTS = {
-  chapter: { label: "Chapter", none: "These clips don't have chapter numbers to sort by.",
+  chapter: { label: t("Chapter"), none: t("These clips don't have chapter numbers to sort by."),
     keys: (list) => list.map((p) => C.save.chapterNumber(p.title, p.url)) },
-  released: { label: "Release date", none: "These clips don't say when they came out. Saving one again picks up its date where the site gives one.",
+  released: { label: t("Release date"), none: t("These clips don't say when they came out. Saving one again picks up its date where the site gives one."),
     keys: (list) => (list.every((p) => royalRoadChapter(p.url) != null) ? list.map((p) => royalRoadChapter(p.url)) : list.map((p) => p.published || null)) },
-  added: { label: "Date added", keys: (list) => list.map((p) => p.savedAt || null) },
-  title: { label: "Title", keys: (list) => list.map((p) => p.title || "") },
+  added: { label: t("Date added"), keys: (list) => list.map((p) => p.savedAt || null) },
+  title: { label: t("Title"), keys: (list) => list.map((p) => p.title || "") },
 };
 
 // Puts the folder in one of FOLDER_SORTS' orders, oldest (or A) first;
@@ -659,10 +658,12 @@ async function sortFolder(list, how) {
   renderFolder();
   renderLibrary();
   const missing = keys.filter((k) => k == null).length;
-  const said = how === "title" ? (back ? "Sorted Z to A." : "Sorted A to Z.")
-    : how === "chapter" ? (back ? "Sorted by chapter, last first." : "Sorted by chapter.")
-    : (back ? "Sorted newest first." : "Sorted oldest first.");
-  toast(said + (missing ? " " + missing + (missing === 1 ? " clip has" : " clips have") + " no " + (how === "released" ? "date" : "number") + ", so " + (missing === 1 ? "it stays" : "they stay") + " at the end." : ""));
+  const said = how === "title" ? (back ? t("Sorted Z to A.") : t("Sorted A to Z."))
+    : how === "chapter" ? (back ? t("Sorted by chapter, last first.") : t("Sorted by chapter."))
+    : (back ? t("Sorted newest first.") : t("Sorted oldest first."));
+  toast(said + (!missing ? "" : " " + (how === "released"
+    ? tn(missing, "1 clip has no date, so it stays at the end.", "{n} clips have no date, so they stay at the end.")
+    : tn(missing, "1 clip has no number, so it stays at the end.", "{n} clips have no number, so they stay at the end."))));
 }
 
 // ---- The collection's ⋯ menu ----
@@ -683,25 +684,25 @@ function openFolderMenu() {
     return b;
   };
   const sep = () => el("div", { class: "pop-sep", role: "separator" });
-  const pop = el("div", { class: "pop-menu", id: "folderPop", role: "menu", "aria-label": "Collection" },
-    item("book", "Website sync", () => setFolderMode("chapters"), fresh ? { note: newCountText(fresh), accent: true } : {}),
-    item("add", "Add clips", () => openBatch("", false, state.folder)),
+  const pop = el("div", { class: "pop-menu", id: "folderPop", role: "menu", "aria-label": t("Collection") },
+    item("book", t("Website sync"), () => setFolderMode("chapters"), fresh ? { note: newCountText(fresh), accent: true } : {}),
+    item("add", t("Add clips"), () => openBatch("", false, state.folder)),
     sep(),
     folderLook(state.folder) === "covers"
-      ? item("chapters", "Show as a list", () => setFolderLook(state.folder, "list"))
-      : item("grid", "Show as covers", () => setFolderLook(state.folder, "covers")),
+      ? item("chapters", t("Show as a list"), () => setFolderLook(state.folder, "list"))
+      : item("grid", t("Show as covers"), () => setFolderLook(state.folder, "covers")),
     // Offered once its clips have tags to give.
-    ...(list.some((p) => p.folderTagNew || (p.tags || []).length) ? [item("tag", "Tag new clips", () => setFolderTagNew(state.folder, !list.some((p) => p.folderTagNew)),
-      { note: list.some((p) => p.folderTagNew) ? "On" : "Off" })] : []),
-    item("select", "Select", () => startSelect([])),
-    item("send", "Export", () => setFolderMode("export")),
+    ...(list.some((p) => p.folderTagNew || (p.tags || []).length) ? [item("tag", t("Tag new clips"), () => setFolderTagNew(state.folder, !list.some((p) => p.folderTagNew)),
+      { note: list.some((p) => p.folderTagNew) ? t("On") : t("Off") })] : []),
+    item("select", t("Select"), () => startSelect([])),
+    item("send", t("Export"), () => setFolderMode("export")),
     ...(sharing() ? [
       sep(),
-      item("share", "In other apps", () => setFolderShare(state.folder, !list.some((p) => p.folderNoShare)),
-        { note: list.some((p) => p.folderNoShare) ? "Kept out" : "Shown" }),
+      item("share", t("In other apps"), () => setFolderShare(state.folder, !list.some((p) => p.folderNoShare)),
+        { note: list.some((p) => p.folderNoShare) ? t("Kept out") : t("Shown") }),
     ] : []),
     sep(),
-    item("remove", "Remove", () => openMenu("remove"), { warn: true }));
+    item("remove", t("Remove"), () => openMenu("remove"), { warn: true }));
   const more = $("folderMore"), at = more.getBoundingClientRect();
   pop.style.top = at.bottom + 4 + "px";
   pop.style.right = Math.max(8, innerWidth - at.right) + "px";
@@ -763,11 +764,11 @@ function coverPanel(list) {
   const tiles = clips.slice(0, 4);
   return el("div", { class: "folder-actions cover-panel" }, input,
     el("div", { class: "cover-grid" },
-      choice("Automatic", !pick, autoUrl ? img(autoUrl) : collectionIcon(list, 28), () => setCoverPick(state.folder, ""), "Automatic"),
-      choice(own ? "Your picture, choose another" : "Choose a picture of your own", !!own, own ? img(own) : plus, () => input.click(), "Your picture"),
-      tiles.length > 1 ? choice("Mosaic of the first " + tiles.length + " pictures", mixed,
+      choice(t("Automatic"), !pick, autoUrl ? img(autoUrl) : collectionIcon(list, 28), () => setCoverPick(state.folder, ""), t("Automatic")),
+      choice(own ? t("Your picture, choose another") : t("Choose a picture of your own"), !!own, own ? img(own) : plus, () => input.click(), t("Your picture")),
+      tiles.length > 1 ? choice(t("Mosaic of the first {n} pictures", { n: tiles.length }), mixed,
         mixed ? img(C.store.coverUrl(pick)) : el("span", { class: "cover-mosaic n" + tiles.length }, ...tiles.map((p) => img(thumbUrl(p)))),
-        () => coverMosaic(state.folder), "Mosaic") : null,
+        () => coverMosaic(state.folder), t("Mosaic")) : null,
       ...clips.map((p) => choice(p.title, pick === "clip:" + p.id, img(thumbUrl(p)), () => setCoverPick(state.folder, "clip:" + p.id)))));
 }
 
@@ -795,7 +796,7 @@ async function coverMosaic(name) {
       return blob ? await createImageBitmap(blob) : null;
     } catch (e) { return null; }
   }))).filter(Boolean);
-  if (pics.length < 2) { toast("Couldn't read enough of its pictures for a mosaic."); return; }
+  if (pics.length < 2) { toast(t("Couldn't read enough of its pictures for a mosaic.")); return; }
   const W = 480, H = 720;
   // Two stack; three put one across the top; four make a two-by-two.
   const spots = { 2: [[0, 0, W, H / 2], [0, H / 2, W, H / 2]],
@@ -812,7 +813,7 @@ async function coverMosaic(name) {
     pic.close();
   });
   const blob = await new Promise((done) => canvas.toBlob(done, "image/jpeg", 0.85));
-  if (!blob) { toast("Couldn't make the mosaic. Try again."); return; }
+  if (!blob) { toast(t("Couldn't make the mosaic. Try again.")); return; }
   const kept = "ux" + C.save.newId() + ".jpg";
   await C.store.writeCover(kept, new Uint8Array(await blob.arrayBuffer()), "image/jpeg");
   await setCoverPick(name, kept);
@@ -821,7 +822,7 @@ async function coverMosaic(name) {
 // A picture of your own, drawn no bigger than a cover is shown (480 by
 // 720), as a JPEG, or a PNG when it has see-through parts.
 async function coverFromFile(name, file) {
-  if (!/^image\//.test(file.type || "image/")) { toast("That isn't a picture."); return; }
+  if (!/^image\//.test(file.type || "image/")) { toast(t("That isn't a picture.")); return; }
   const url = URL.createObjectURL(file);
   try {
     const pic = new Image();
@@ -843,7 +844,7 @@ async function coverFromFile(name, file) {
     await C.store.writeCover(kept, new Uint8Array(await blob.arrayBuffer()), type);
     await setCoverPick(name, kept);
   } catch (e) {
-    toast("Couldn't read that picture. Try another.");
+    toast(t("Couldn't read that picture. Try another."));
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -875,26 +876,26 @@ function picturesAs(list) {
   const modes = new Set(list.filter((p) => p.images).map((p) => p.mode || "previews"));
   if (!modes.size) return "no pictures";
   if (modes.size > 1) return "pictures mixed";
-  return { previews: "pictures as previews", full: "pictures full size", links: "pictures as links" }[[...modes][0]];
+  return { previews: t("pictures as previews"), full: t("pictures full size"), links: t("pictures as links") }[[...modes][0]];
 }
 
 // What one page keeps, for its row in Storage.
 function savedNote(p) {
   const s = savedParts([p]);
-  return [s.previews ? s.previews + (s.previews === 1 ? " preview" : " previews") : null,
-    s.full ? s.full + " full size" : null,
-    s.links ? s.links + (s.links === 1 ? " link" : " links") : null,
-    s.missing ? s.missing + " missing" : null].filter(Boolean).join(" · ") || "Text only";
+  return [s.previews ? tn(s.previews, "1 preview", "{n} previews") : null,
+    s.full ? t("{n} full size", { n: s.full }) : null,
+    s.links ? tn(s.links, "1 link", "{n} links") : null,
+    s.missing ? t("{n} missing", { n: s.missing }) : null].filter(Boolean).join(" · ") || t("Text only");
 }
 
 // What else a collection keeps besides clips saved from the web: their
 // pictures and text are split out, everything else is counted by kind
 // (Daniel 2026-11-13: a book's pictures aren't "pictures as previews").
 const SAVED_KINDS = [
-  ["copy", "Copied from files"],
-  ["linked", "Files read from their folder"],
-  ["audio", "Audiobooks"],
-  ["note", "Notes"],
+  ["copy", t("Copied from files")],
+  ["linked", t("Files read from their folder")],
+  ["audio", t("Audiobooks")],
+  ["note", t("Notes")],
 ];
 const savedKind = (p) => (p.note ? "note" : isAudiobook(p) ? "audio" : p.file ? (p.link ? "linked" : "copy") : "web");
 const webClips = (list) => list.filter((p) => savedKind(p) === "web");
@@ -917,7 +918,7 @@ function savedView(list) {
   const total = s.total + otherBytes;
   const mixed = others.length > 0;
   const kept = s.previews + s.full;
-  const what = s.previews && s.full ? "previews and full size" : s.full ? "full size" : "previews";
+  const what = s.previews && s.full ? t("previews and full size") : s.full ? "full size" : "previews";
   const share = (b) => (total ? Math.max(b ? 2 : 0, Math.round(b / total * 100)) : 0);
   const legend = (cls, label, value) => el("div", { class: "saved-row" },
     el("span", { class: "saved-key " + cls, "aria-hidden": "true" }),
@@ -926,21 +927,21 @@ function savedView(list) {
   const lean = s.known && kept && s.pictures > s.text * 2;
   return el("div", { class: "saved-view" },
     el("div", { class: "saved-head" },
-      el("span", { class: "saved-title" }, "What's saved"),
+      el("span", { class: "saved-title" }, t("What's saved")),
       el("span", { class: "saved-value" }, formatSize(total))),
     s.known && s.total ? el("div", { class: "saved-bar", "aria-hidden": "true" },
       el("span", { class: "pics", style: "width: " + share(s.pictures) + "%" }),
       el("span", { class: "text", style: "width: " + share(s.text) + "%" }),
       otherBytes ? el("span", { class: "other", style: "width: " + share(otherBytes) + "%" }) : null) : null,
-    kept ? legend("pics", (mixed ? "Clips' pictures, " : "Pictures, ") + what + " · " + kept, s.known ? formatSize(s.pictures) : "") : null,
-    web.length ? legend("text", mixed ? "Clips' text · " + web.length : "Text", s.known ? formatSize(s.text) : "") : null,
-    s.links ? legend("links", (mixed ? "Clips' pictures as links · " : "Pictures as links · ") + s.links + ", need a connection", "") : null,
-    s.missing ? legend("missing", s.missing + (s.missing === 1 ? " preview" : " previews") + " missing, shown online", "") : null,
+    kept ? legend("pics", (mixed ? t("Clips' pictures, {what}", { what }) : t("Pictures, {what}", { what })) + " · " + kept, s.known ? formatSize(s.pictures) : "") : null,
+    web.length ? legend("text", mixed ? t("Clips' text · {n}", { n: web.length }) : t("Text"), s.known ? formatSize(s.text) : "") : null,
+    s.links ? legend("links", mixed ? t("Clips' pictures as links · {n}, need a connection", { n: s.links }) : t("Pictures as links · {n}, need a connection", { n: s.links }), "") : null,
+    s.missing ? legend("missing", tn(s.missing, "1 preview missing, shown online", "{n} previews missing, shown online"), "") : null,
     ...others.map((o) => legend("other", o.label + " · " + o.n, formatSize(o.bytes))),
     others.some((o) => o.k === "linked" || o.k === "audio")
-      ? el("p", { class: "footnote" }, "Files read from their folder and audiobooks stay in that folder. Only their text, cover and your place are kept here.") : null,
-    !s.known ? el("p", { class: "footnote" }, C.platform.native ? "Measuring the pictures…" : "Picture sizes show for clips saved from 0.27.11 on.")
-      : lean ? el("p", { class: "footnote" }, (mixed ? "The clips are mostly pictures. Save them again" : "Most of it is pictures. Save again") + " with Links to keep only the text, about " + formatSize(s.text) + ".") : null);
+      ? el("p", { class: "footnote" }, t("Files read from their folder and audiobooks stay in that folder. Only their text, cover and your place are kept here.")) : null,
+    !s.known ? el("p", { class: "footnote" }, C.platform.native ? t("Measuring the pictures…") : t("Picture sizes show for clips saved from 0.27.11 on."))
+      : lean ? el("p", { class: "footnote" }, t("{x} with Links to keep only the text, about {formatSize}.", { x: mixed ? t("The clips are mostly pictures. Save them again") : t("Most of it is pictures. Save again"), formatSize: formatSize(s.text) })) : null);
 }
 
 // Pages saved before 0.27.11 have their pictures measured from their
@@ -976,11 +977,12 @@ function savedSheet() {
   const s = savedParts(list);
   const note = el("p", { class: "footnote" });
   const paintNote = () => {
-    note.textContent = (mode === "links" && s.known ? "Links keeps the text only, about " + formatSize(s.text) + ". " : "") + "Your place in each " + chapterWord(list, 1) + " stays.";
+    note.textContent = (mode === "links" && s.known ? t("Links keeps the text only, about {size}.", { size: formatSize(s.text) }) + " " : "")
+      + (isSeries(list) ? t("Your place in each chapter stays.") : t("Your place in each clip stays."));
   };
   paintNote();
   const go = el("button", { class: "btn-primary refresh-go", type: "button", onclick: () => back().then(() => refreshFolder(name, mode, go)) },
-    "Save " + n + " " + chapterWord(list, n) + " again");
+    isSeries(list) ? tn(n, "Save 1 chapter again", "Save {n} chapters again") : tn(n, "Save 1 clip again", "Save {n} clips again"));
   go.disabled = !!runFor(name);
   measureSizes(all, () => { if (state.menu && state.menu.kind === "saved") redrawMenu(); if (state.folder) renderFolder(); });
   // Saving again is for clips from the web; a collection of files only
@@ -988,9 +990,9 @@ function savedSheet() {
   if (!n) return el("div", { class: "page-controls saved-sheet" }, savedView(all));
   return el("div", { class: "page-controls saved-sheet" },
     savedView(all),
-    C.platform.native ? el("h2", { class: "overline" }, "Save again with pictures as") : el("h2", { class: "overline" }, "Save again"),
-    C.platform.native ? seg("refresh-images", "Pictures", [
-      { value: "previews", label: "Previews" }, { value: "full", label: "Full" }, { value: "links", label: "Links" },
+    C.platform.native ? el("h2", { class: "overline" }, t("Save again with pictures as")) : el("h2", { class: "overline" }, t("Save again")),
+    C.platform.native ? seg("refresh-images", t("Pictures"), [
+      { value: "previews", label: t("Previews") }, { value: "full", label: t("Full") }, { value: "links", label: t("Links") },
     ], mode, (v) => { mode = v; paintNote(); }) : null,
     note,
     go);
@@ -1001,11 +1003,11 @@ function removeSheet() {
   const n = list.length;
   return el("div", { class: "page-controls remove-sheet" },
     el("div", { class: "menu-head" },
-      el("p", { class: "menu-title", dir: "auto" }, "Remove “" + state.folder + "”?"),
+      el("p", { class: "menu-title", dir: "auto" }, t("Remove “{folder}”?", { folder: state.folder })),
       el("p", { class: "meta" }, countLine(n) + " · " + formatSize(sizeOf(list)))),
-    el("button", { class: "sheet-row", type: "button", onclick: () => removeFolder(false) }, "Remove the collection, keep its " + countLine(n)),
-    el("button", { class: "sheet-row danger", type: "button", onclick: () => removeFolder(true) }, "Delete the collection and its " + countLine(n)),
-    el("button", { class: "btn-text menu-cancel", type: "button", onclick: () => history.back() }, "Cancel"));
+    el("button", { class: "sheet-row", type: "button", onclick: () => removeFolder(false) }, t("Remove the collection, keep its {countLine}", { countLine: countLine(n) })),
+    el("button", { class: "sheet-row danger", type: "button", onclick: () => removeFolder(true) }, t("Delete the collection and its {countLine}", { countLine: countLine(n) })),
+    el("button", { class: "btn-text menu-cancel", type: "button", onclick: () => history.back() }, t("Cancel")));
 }
 
 // Takes the folder off its pages, or deletes them with it (asked once
@@ -1013,7 +1015,7 @@ function removeSheet() {
 async function removeFolder(withPages) {
   const name = state.folder;
   const list = folderPages(name);
-  if (withPages && !confirm("Delete “" + name + "” and its " + countLine(list.length) + " from " + HERE + "?" + alsoSynced() + filesNote(list))) return;
+  if (withPages && !confirm(t("Delete “{name}” and its {countLine} from {HERE}?{alsoSynced}{filesNote}", { name: name, countLine: countLine(list.length), HERE: HERE, alsoSynced: alsoSynced(), filesNote: filesNote(list) }))) return;
   if (withPages) forgetWatched(list);
   for (const p of list) {
     if (withPages) { if (p.link && !p.watched) C.platform.files.release(p.link); await C.store.removePage(p.id); }
@@ -1024,7 +1026,7 @@ async function removeFolder(withPages) {
   folderMode = "";
   await back(state.menu ? 2 : 1);
   renderLibrary();
-  toast(withPages ? "Deleted " + name + " and its " + countLine(list.length) : "Removed " + name + ". Its clips are in the library.");
+  toast(withPages ? t("Deleted {name} and its {countLine}", { name: name, countLine: countLine(list.length) }) : t("Removed {name}. Its clips are in the library.", { name: name }));
 }
 
 // The page before or after `p` in its folder, if any.
@@ -1071,7 +1073,7 @@ function tileButton(icon, label, onclick, cls) {
 // Favourite (0.29.2): a mark on the page, shown in the library's Show
 // menu and in the Favourites widget.
 function favTile(p, redraw) {
-  const b = tileButton("star", "Favourite", () => setFavourite([p], !p.fav).then(redraw), p.fav ? "on" : "");
+  const b = tileButton("star", t("Favourite"), () => setFavourite([p], !p.fav).then(redraw), p.fav ? "on" : "");
   b.setAttribute("aria-pressed", p.fav ? "true" : "false");
   return b;
 }
@@ -1081,7 +1083,7 @@ async function favFolder(name, on) {
   renderLibrary();
   if (state.folder) renderFolder();
   updateWidgets();
-  toast(on ? name + " is a favourite" : name + " is no longer a favourite");
+  toast(on ? t("{name} is a favourite", { name: name }) : t("{name} is no longer a favourite", { name: name }));
 }
 async function setFavourite(list, on) {
   for (const p of list) {
@@ -1134,58 +1136,58 @@ function pageSheet(p, where) {
         el("p", { class: "menu-title", dir: "auto" }, p.title),
         el("p", { class: "meta" }, [siteOf(p), p.folder, readingLine(p), formatSize(p.bytes || 0)].filter(Boolean).join(" · "))),
       el("div", { class: "tile-row" },
-        inReader ? null : tileButton("open", "Open", () => back().then(() => openPage(p.id))),
+        inReader ? null : tileButton("open", t("Open"), () => back().then(() => openPage(p.id))),
         // A clip made from a file has no address to share or go back to.
-        p.file ? null : tileButton("share", "Share", () => shareLink(p)),
-        p.link ? null : tileButton("send", "Export", () => { exporting = true; draw(); }),
-        p.file ? null : tileButton("original", "Original", () => C.platform.openOutside(p.url)),
-        p.link && C.platform.files.canReveal ? tileButton("folder", "Folder", () => showFolder(p)) : null,
+        p.file ? null : tileButton("share", t("Share"), () => shareLink(p)),
+        p.link ? null : tileButton("send", t("Export"), () => { exporting = true; draw(); }),
+        p.file ? null : tileButton("original", t("Original"), () => C.platform.openOutside(p.url)),
+        p.link && C.platform.files.canReveal ? tileButton("folder", t("Folder"), () => showFolder(p)) : null,
         favTile(p, draw)),
       ...(inReader && !p.preview && typeof listenAlongRows === "function" ? listenAlongRows(p) || [] : []),
-      el("h3", { class: "overline" }, p.link ? "This file" : "This clip"),
+      el("h3", { class: "overline" }, p.link ? t("This file") : t("This clip")),
       p.preview || inReader || !(p.marks || []).length ? null : el("div", { class: "group" },
         el("button", { class: "row", type: "button", onclick: () => { markFocus = null; marking = true; draw(); } },
-          el("span", { class: "row-label" }, "Highlights"),
+          el("span", { class: "row-label" }, t("Highlights")),
           el("span", { class: "row-value" }, String((p.marks || []).length)))),
       // Only the start of a paywalled article (1.8.0): sign in for the rest.
       p.cut && !p.file && !p.preview && C.platform.signIn.available ? el("div", { class: "group" },
         el("button", { class: "row", type: "button", onclick: () => back().then(() => signInFor(p)) },
-          el("span", { class: "row-label accent" }, (C.platform.signIn.for(p.url) ? "Sign in again to " : "Sign in to ") + C.platform.signIn.host(p.url)),
-          el("span", { class: "row-value" }, "Only the start"))) : null,
+          el("span", { class: "row-label accent" }, C.platform.signIn.for(p.url) ? t("Sign in again to {site}", { site: C.platform.signIn.host(p.url) }) : t("Sign in to {site}", { site: C.platform.signIn.host(p.url) })),
+          el("span", { class: "row-value" }, t("Only the start")))) : null,
       tooBigLine(p) ? el("p", { class: "meta warn" }, tooBigLine(p)) : null,
       tagsRow(p, draw),
       folderRow(p, draw),
       p.file ? null : picturesRow(p, draw),
-      series.length ? el("h3", { class: "overline" }, "Series") : null,
+      series.length ? el("h3", { class: "overline" }, t("Series")) : null,
       ...series,
-      el("h3", { class: "overline" }, "More"),
+      el("h3", { class: "overline" }, t("More")),
       el("div", { class: "group" },
         ...shareRows(p, draw),
-        inReader ? null : menuRow("Rename", () => { renaming = true; draw(); }),
+        inReader ? null : menuRow(t("Rename"), () => { renaming = true; draw(); }),
         p.link && p.file && p.file.kind === "pdf" && !p.comic
-          ? menuRow(p.view === "text" ? "Show as printed pages" : "Show as text", () => switchView(p, where)) : null,
-        inReader && p.note ? menuRow("Save as PDF", () => back().then(() => noteToPdf(p))) : null,
+          ? menuRow(p.view === "text" ? t("Show as printed pages") : t("Show as text"), () => switchView(p, where)) : null,
+        inReader && p.note ? menuRow(t("Save as PDF"), () => back().then(() => noteToPdf(p))) : null,
         // A PDF's drawings as ink annotations in a new file (2026-11).
         inReader && !p.note && p.file && (p.drawn || []).length && C.files.heldPdf() && C.files.heldPdf().ink
-          ? menuRow("Save a copy with drawings", () => back().then(() => inkCopy(p))) : null,
+          ? menuRow(t("Save a copy with drawings"), () => back().then(() => inkCopy(p))) : null,
         // Moved here from Highlights (Daniel's ask, 2026-11-13).
-        inReader && inkReady() ? menuRow("Try your pen", () => { history.back(); setTimeout(() => openSheet("ink"), 0); }) : null,
-        C.files.convertible(p) ? menuRow("Make a note from it", () => back().then(() => makeNoteFrom(p))) : null,
-        inReader && !p.note && !C.files.printed(p) ? menuRow("Find in this clip", () => back().then(openFind)) : null,
-        inReader && !p.note && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow("Save linked pages", () => back().then(() => openSheet("links"))) : null,
-        p.note ? null : menuRow(p.finished ? "Mark as unread" : "Mark as read", () => markRead([p], !p.finished).then(draw)),
+        inReader && inkReady() ? menuRow(t("Try your pen"), () => { history.back(); setTimeout(() => openSheet("ink"), 0); }) : null,
+        C.files.convertible(p) ? menuRow(t("Make a note from it"), () => back().then(() => makeNoteFrom(p))) : null,
+        inReader && !p.note && !C.files.printed(p) ? menuRow(t("Find in this clip"), () => back().then(openFind)) : null,
+        inReader && !p.note && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow(t("Save linked pages"), () => back().then(() => openSheet("links"))) : null,
+        p.note ? null : menuRow(p.finished ? t("Mark as unread") : t("Mark as read"), () => markRead([p], !p.finished).then(draw)),
         // The page changed since (1.38.0): fetched again in its place.
         p.file || p.preview || !/^https?:/.test(p.url || "") ? null
-          : menuRow("Update from the site", () => back().then(() => updateClip(p))),
+          : menuRow(t("Update from the site"), () => back().then(() => updateClip(p))),
         // Save as comic, and back as an article (Daniel's ask, after
         // 1.50.0's Article / Comic switch): a web clip saves again that way,
         // a file only changes how it's shown.
-        kindable(p) ? menuRow(p.comic ? "Save as article" : "Save as comic", () => back().then(() => setClipKind(p, p.comic ? "article" : "comic"))) : null,
+        kindable(p) ? menuRow(p.comic ? t("Save as article") : t("Save as comic"), () => back().then(() => setClipKind(p, p.comic ? "article" : "comic"))) : null,
         // The original gone or changed (1.15.0): the Wayback Machine's copy.
         p.file || p.preview || p.comic || !/^https?:/.test(p.url || "") ? null
-          : menuRow(p.archived ? "Find a newer archived copy" : "Use the archived copy", () => back().then(() => archiveClip(p))),
-        inReader ? null : menuRow("Select", () => back().then(() => startSelect([p.id]))),
-        menuRow(p.link ? "Remove from Waypage" : p.note ? "Delete this note" : "Delete this clip", () => deletePage(p, where), "warn")));
+          : menuRow(p.archived ? t("Find a newer archived copy") : t("Use the archived copy"), () => back().then(() => archiveClip(p))),
+        inReader ? null : menuRow(t("Select"), () => back().then(() => startSelect([p.id]))),
+        menuRow(p.link ? t("Remove from Waypage") : p.note ? t("Delete this note") : t("Delete this clip"), () => deletePage(p, where), "warn")));
   };
   draw();
   return box;
@@ -1195,7 +1197,7 @@ function pageSheet(p, where) {
 // the name changes: the heading in the saved text stays the page's own.
 const TITLE_MAX = 300;
 function renameControls(p, done) {
-  const input = el("input", { class: "tag-input rename-input", type: "text", value: p.title, "aria-label": "Name",
+  const input = el("input", { class: "tag-input rename-input", type: "text", value: p.title, "aria-label": t("Name"),
     maxlength: String(TITLE_MAX), enterkeyhint: "done", autocapitalize: "sentences", spellcheck: "false", dir: "auto" });
   const save = async () => {
     const t = input.value.replace(/\s+/g, " ").trim().slice(0, TITLE_MAX);
@@ -1203,16 +1205,16 @@ function renameControls(p, done) {
     const was = p.title;
     await setTitle(p, t);
     done(true);
-    toast("Renamed", "Undo", () => setTitle(p, was));
+    toast(i18n.t("Renamed"), i18n.t("Undo"), () => setTitle(p, was));
   };
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); save(); } });
   setTimeout(() => { if (!input.isConnected) return; input.focus({ preventScroll: true }); input.select(); }, 0);
   return el("div", { class: "rename" },
     el("div", { class: "export-top" },
-      el("button", { class: "btn-quiet export-back", type: "button", onclick: () => done(false) }, "Back"),
-      el("p", { class: "menu-title" }, "Rename")),
+      el("button", { class: "btn-quiet export-back", type: "button", onclick: () => done(false) }, t("Back")),
+      el("p", { class: "menu-title" }, t("Rename"))),
     input,
-    el("button", { class: "btn-primary menu-done", type: "button", onclick: save }, "Save"));
+    el("button", { class: "btn-primary menu-done", type: "button", onclick: save }, t("Save")));
 }
 async function setTitle(p, title) {
   p.title = title;
@@ -1230,7 +1232,7 @@ function shareRows(p, redraw) {
   const folderOff = p.folder && folderPages(p.folder).some((x) => x.folderNoShare);
   const row = (label, note, on, set, off) => switchRow(label, note, on, (v) => set(v).then(redraw), off ? { disabled: "" } : null);
   return [
-    row("In other apps", folderOff ? "Its collection is kept out" : "", !p.noShare && !folderOff, (v) => setShareMark(p, "noShare", !v), folderOff),
+    row(t("In other apps"), folderOff ? t("Its collection is kept out") : "", !p.noShare && !folderOff, (v) => setShareMark(p, "noShare", !v), folderOff),
   ];
 }
 async function setShareMark(p, key, on) {
@@ -1243,7 +1245,7 @@ async function setFolderShare(name, on) {
   for (const p of folderPages(name)) { if (on) p.folderNoShare = true; else delete p.folderNoShare; }
   await C.store.writeIndex(state.pages);
   syncSoon();
-  toast(on ? name + " is kept out of other apps" : name + " is in other apps");
+  toast(on ? t("{name} is kept out of other apps", { name: name }) : t("{name} is in other apps", { name: name }));
 }
 
 // A PDF read from outside stays as it is: its printed pages are pictures.
@@ -1264,7 +1266,7 @@ function tagsRow(p, redraw) {
     tagTyping = !!typed;
     setTags(p, [...tags, known || t]).then(redraw);
   };
-  const input = newField("new-tag", "Name the new tag", "New tag", (v) => add(v, true));
+  const input = newField("new-tag", t("Name the new tag"), t("New tag"), (v) => add(v, true));
   input.setAttribute("autocapitalize", "off");
   if (tagTyping) {
     tagTyping = false;
@@ -1272,18 +1274,18 @@ function tagsRow(p, redraw) {
     setTimeout(() => { const i = document.querySelector(".sheet:not([hidden]) .new-tag"); if (i) i.focus({ preventScroll: true }); }, 0);
   }
   const pick = dropdown({
-    label: "Add a tag", cls: "field-pick", placeholder: "Add a tag",
-    options: [...others.map((t) => ({ value: t, label: t })), { value: NEW_PICK, label: "New tag…" }],
+    label: t("Add a tag"), cls: "field-pick", placeholder: t("Add a tag"),
+    options: [...others.map((t) => ({ value: t, label: t })), { value: NEW_PICK, label: t("New tag…") }],
     value: null,
     onpick: (v) => {
       if (v === NEW_PICK) { input.hidden = false; input.focus(); return; }
       add(v);
     },
   });
-  return el("div", { class: "rc-row tall" }, el("span", { class: "rc-label" }, "Tags"),
+  return el("div", { class: "rc-row tall" }, el("span", { class: "rc-label" }, t("Tags")),
     el("div", { class: "tag-edit" },
       tags.length ? el("div", { class: "chips" },
-        ...tags.map((t) => el("button", { class: "chip on", type: "button", "aria-label": "Remove tag " + t,
+        ...tags.map((t) => el("button", { class: "chip on", type: "button", "aria-label": i18n.t("Remove tag {t}", { t: t }),
           onclick: () => setTags(p, tags.filter((x) => x !== t)).then(redraw) }, t, el("span", { class: "chip-x", "aria-hidden": "true" }, "×")))) : null,
       pick, input));
 }
@@ -1291,13 +1293,14 @@ function tagsRow(p, redraw) {
 // From the reader, back out of it; from the library's sheet, back to the
 // library (or out of a folder this emptied).
 // With sync on, a deletion reaches every device.
-const alsoSynced = () => (C.sync.on ? " With sync on, it goes from your other devices too." : "");
+const alsoSynced = () => (C.sync.on ? t(" With sync on, it goes from your other devices too.") : "");
 // A file read from where it is is only taken out of Waypage (1.1.3).
 function linkedStays(list) {
   const w = list.map(watchOf).find(Boolean);
-  return (list.length === 1 ? "The file itself stays" : "The files themselves stay") + (w ? " in " + w.name + ", and Waypage won't add " + (list.length === 1 ? "it" : "them") + " back." : " where " + (list.length === 1 ? "it is." : "they are."));
+  if (w) return tn(list.length, "The file itself stays in {folder}, and Waypage won't add it back.", "The files themselves stay in {folder}, and Waypage won't add them back.", { folder: w.name });
+  return tn(list.length, "The file itself stays where it is.", "The files themselves stay where they are.");
 }
-const filesNote = (list) => (list.some((p) => p.link) ? " Files read from where they are stay where they are." : "");
+const filesNote = (list) => (list.some((p) => p.link) ? t(" Files read from where they are stay where they are.") : "");
 // A PDF read from where it is: its printed pages, or its words (1.1.3).
 async function switchView(p, where) {
   if (p.view === "text") delete p.view; else p.view = "text";
@@ -1306,14 +1309,14 @@ async function switchView(p, where) {
   if (where !== "reader" || state.open !== p) return;
   let html = null;
   try { html = await openLinked(p); } catch (e) { html = null; }
-  if (!html) { toast("Couldn't open this clip's file. Try again."); return; }
+  if (!html) { toast(t("Couldn't open this clip's file. Try again.")); return; }
   await show(p, html);
   C.files.drawNear($("readerFrame"));
 }
 
 async function deletePage(p, where) {
-  if (!confirm(p.link ? "Remove “" + p.title + "” from Waypage? " + linkedStays([p])
-    : "Delete “" + p.title + "” from " + HERE + "?" + alsoSynced())) return;
+  if (!confirm(p.link ? t("Remove “{title}” from Waypage? {linkedStays}", { title: p.title, linkedStays: linkedStays([p]) })
+    : t("Delete “{title}” from {HERE}?{alsoSynced}", { title: p.title, HERE: HERE, alsoSynced: alsoSynced() }))) return;
   forgetWatched([p]);
   if (p.link && !p.watched) C.platform.files.release(p.link);
   await C.store.removePage(p.id);
@@ -1324,7 +1327,7 @@ async function deletePage(p, where) {
   else if (where !== "keys") await back(andFolder(1));
   renderLibrary();
   if (state.folder) renderFolder();
-  toast(p.link ? "Removed" : "Deleted");
+  toast(p.link ? t("Removed") : t("Deleted"));
 }
 
 // ---- Picking several ----
@@ -1402,10 +1405,10 @@ function paintPicks() {
   if (!on) return;
   const list = picked();
   const scope = state.folder ? folderPages(state.folder) : onScreen;
-  $("selectCount").textContent = list.length ? countLine(list.length) + " picked" : "Pick clips";
-  $("selectAll").textContent = scope.length && scope.every((p) => state.select.has(p.id)) ? "Pick none" : "Select all";
+  $("selectCount").textContent = list.length ? t("{countLine} picked", { countLine: countLine(list.length) }) : t("Pick clips");
+  $("selectAll").textContent = scope.length && scope.every((p) => state.select.has(p.id)) ? t("Pick none") : t("Select all");
   $("selectMore").hidden = !state.folder;
-  $("selReadLabel").textContent = list.length && list.every((p) => p.finished) ? "Mark unread" : "Mark read";
+  $("selReadLabel").textContent = list.length && list.every((p) => p.finished) ? t("Mark unread") : t("Mark read");
   for (const id of ["selTags", "selFolder", "selRead", "selEdit", "selDelete"]) $(id).disabled = !list.length;
 }
 
@@ -1446,10 +1449,10 @@ function openSelectMenu() {
     b.disabled = !!disabled;
     return b;
   };
-  const pop = el("div", { class: "pop-menu", id: "selectPop", role: "menu", "aria-label": "More picks" },
-    item("check", "Read", () => pickWhere((p) => p.finished), !scope.some((p) => p.finished)),
-    item("select", "Unread", () => pickWhere((p) => !p.finished), !scope.some((p) => !p.finished)),
-    item("up", "Previous", pickAbove, !picked().length));
+  const pop = el("div", { class: "pop-menu", id: "selectPop", role: "menu", "aria-label": t("More picks") },
+    item("check", t("Read"), () => pickWhere((p) => p.finished), !scope.some((p) => p.finished)),
+    item("select", t("Unread"), () => pickWhere((p) => !p.finished), !scope.some((p) => !p.finished)),
+    item("up", t("Previous"), pickAbove, !picked().length));
   const more = $("selectMore"), at = more.getBoundingClientRect();
   pop.style.top = at.bottom + 4 + "px";
   pop.style.right = Math.max(8, innerWidth - at.right) + "px";
@@ -1509,14 +1512,14 @@ async function readPicked() {
   const read = !list.every((p) => p.finished);
   await markRead(list, read);
   await back();
-  toast("Marked " + countLine(list.length) + (read ? " as read" : " as unread"));
+  toast(t("Marked {countLine}{x}", { countLine: countLine(list.length), x: read ? t(" as read") : t(" as unread") }));
 }
 
 async function deletePicked() {
   const list = picked();
   if (!list.length || !confirm(list.every((p) => p.link)
-    ? "Remove " + (list.length === 1 ? "1 file" : list.length + " files") + " from Waypage? " + linkedStays(list)
-    : "Delete " + countLine(list.length) + " from " + HERE + "?" + alsoSynced() + filesNote(list))) return;
+    ? tn(list.length, "Remove 1 file from Waypage? {stays}", "Remove {n} files from Waypage? {stays}", { stays: linkedStays(list) })
+    : t("Delete {countLine} from {HERE}?{alsoSynced}{filesNote}", { countLine: countLine(list.length), HERE: HERE, alsoSynced: alsoSynced(), filesNote: filesNote(list) }))) return;
   forgetWatched(list);
   for (const p of list) { if (p.link && !p.watched) C.platform.files.release(p.link); await C.store.removePage(p.id); }
   state.pages = state.pages.filter((p) => !list.includes(p));
@@ -1532,23 +1535,23 @@ async function deletePicked() {
 // its own history entry.
 
 const MENUS = {
-  page: { label: "Clip", build: () => pageSheet(state.menu.page, "library") },
-  tags: { label: "Tags", build: tagsSheet },
-  folder: { label: "Collection", build: folderSheet },
-  saved: { label: "What's saved", build: savedSheet },
-  file: { label: "Opening a file", build: fileSheet },
-  remove: { label: "Remove collection", build: removeSheet },
-  addFeed: { label: "Add a feed", build: () => addFeedSheet() },
-  feed: { label: "Feed", build: () => feedSheet() },
-  newMail: { label: "New newsletter address", build: () => newMailSheet() },
-  export: { label: "Export", build: () => exportControls(state.menu.page, () => history.back()) },
-  rename: { label: "Rename", build: () => renameControls(state.menu.page, () => history.back()) },
-  keys: { label: "Keyboard shortcuts", build: () => keysSheet() },
-  importList: { label: "Import", build: () => importSheet() },
-  send: { label: "Saving a page", build: () => sendSheet() },
-  newNote: { label: "New note", build: () => newNoteSheet() },
-  noteText: { label: "Text", build: () => noteTextSheet() },
-  noteParts: { label: "Make a note", build: () => notePartsSheet() },
+  page: { label: t("Clip"), build: () => pageSheet(state.menu.page, "library") },
+  tags: { label: t("Tags"), build: tagsSheet },
+  folder: { label: t("Collection"), build: folderSheet },
+  saved: { label: t("What's saved"), build: savedSheet },
+  file: { label: t("Opening a file"), build: fileSheet },
+  remove: { label: t("Remove collection"), build: removeSheet },
+  addFeed: { label: t("Add a feed"), build: () => addFeedSheet() },
+  feed: { label: t("Feed"), build: () => feedSheet() },
+  newMail: { label: t("New newsletter address"), build: () => newMailSheet() },
+  export: { label: t("Export"), build: () => exportControls(state.menu.page, () => history.back()) },
+  rename: { label: t("Rename"), build: () => renameControls(state.menu.page, () => history.back()) },
+  keys: { label: t("Keyboard shortcuts"), build: () => keysSheet() },
+  importList: { label: t("Import"), build: () => importSheet() },
+  send: { label: t("Saving a page"), build: () => sendSheet() },
+  newNote: { label: t("New note"), build: () => newNoteSheet() },
+  noteText: { label: t("Text"), build: () => noteTextSheet() },
+  noteParts: { label: t("Make a note"), build: () => notePartsSheet() },
 };
 let menuUnder = [];
 let menuFrom = null;
@@ -1623,21 +1626,21 @@ function tagsSheet() {
       const name = allTags().find((x) => sameTag(x, t)) || t;
       write((p) => { p.tags = withTags(p.tags, [name]); }).then(() => box.querySelector(".tag-input").focus({ preventScroll: true }));
     };
-    const input = el("input", { class: "tag-input", type: "text", placeholder: "New tag", "aria-label": "New tag",
+    const input = el("input", { class: "tag-input", type: "text", placeholder: t("New tag"), "aria-label": t("New tag"),
       maxlength: "32", enterkeyhint: "done", autocapitalize: "off" });
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); add(input.value); } });
     const tags = allTags();
     fill(box,
-      el("h2", { class: "menu-title" }, "Tags for " + countLine(n)),
+      el("h2", { class: "menu-title" }, t("Tags for {countLine}", { countLine: countLine(n) })),
       tags.length ? el("div", { class: "chips" }, ...tags.map((t) => {
         const k = on(t), all = k === n;
         return el("button", { class: "chip" + (all ? " on" : k ? " some" : ""), type: "button", "aria-pressed": all ? "true" : k ? "mixed" : "false",
-          "aria-label": t + (all ? ", on all, remove" : k ? ", on " + k + " of " + n + ", add to all" : ", add"),
+          "aria-label": all ? i18n.t("{tag}, on all, remove", { tag: t }) : k ? i18n.t("{tag}, on {k} of {n}, add to all", { tag: t, k, n }) : i18n.t("{tag}, add", { tag: t }),
           onclick: () => (all ? write((p) => { p.tags = (p.tags || []).filter((x) => !sameTag(x, t)); }) : add(t)) },
         t, k && !all ? el("span", { class: "chip-n" }, k + "/" + n) : null);
       })) : null,
       input,
-      el("button", { class: "btn-primary menu-done", type: "button", onclick: () => history.back() }, "Done"));
+      el("button", { class: "btn-primary menu-done", type: "button", onclick: () => history.back() }, t("Done")));
   };
   draw();
   return box;
@@ -1662,18 +1665,18 @@ function folderSheet() {
     await back(andFolder(2));
     renderLibrary();
     if (state.folder) renderFolder();
-    toast(target ? "Moved " + countLine(n) + " to " + target : "Took " + countLine(n) + " out of their collections");
+    toast(target ? t("Moved {countLine} to {target}", { countLine: countLine(n), target: target }) : t("Took {countLine} out of their collections", { countLine: countLine(n) }));
   };
-  const input = el("input", { class: "tag-input", type: "text", placeholder: "New collection", "aria-label": "New collection",
+  const input = el("input", { class: "tag-input", type: "text", placeholder: t("New collection"), "aria-label": t("New collection"),
     maxlength: "32", enterkeyhint: "done", autocapitalize: "sentences" });
   input.addEventListener("keydown", (e) => { if (e.key === "Enter" && cleanTag(input.value)) { e.preventDefault(); move(input.value); } });
   const folders = allFolders();
   return el("div", { class: "page-controls" },
-    el("h2", { class: "menu-title" }, "Move " + countLine(n) + " to"),
+    el("h2", { class: "menu-title" }, t("Move {countLine} to", { countLine: countLine(n) })),
     folders.length ? el("div", { class: "chips" }, ...folders.map((f) => el("button", { class: "chip", type: "button", onclick: () => move(f) }, f))) : null,
     input,
     list.some((p) => p.folder) ? el("div", { class: "group" },
-      el("button", { class: "row", type: "button", onclick: () => move(null) }, el("span", { class: "row-label" }, "Take out of their collections"))) : null);
+      el("button", { class: "row", type: "button", onclick: () => move(null) }, el("span", { class: "row-label" }, t("Take out of their collections")))) : null);
 }
 
 // A long press (or right-click) on a page opens its menu; on a folder it
@@ -1735,20 +1738,20 @@ function clipMenu(node, x, y) {
   };
   const sep = () => el("div", { class: "pop-sep", role: "separator" });
   const pop = el("div", { class: "pop-menu clip-pop", id: "clipPop", role: "menu", "aria-label": p.title },
-    item("open", "Open", () => openPage(p.id), { key: "Enter" }),
-    p.file ? null : item("original", "Open the original", () => C.platform.openOutside(p.url)),
-    p.link && C.platform.files.canReveal ? item("folder", "Show in folder", () => showFolder(p)) : null,
+    item("open", t("Open"), () => openPage(p.id), { key: "Enter" }),
+    p.file ? null : item("original", t("Open the original"), () => C.platform.openOutside(p.url)),
+    p.link && C.platform.files.canReveal ? item("folder", t("Show in folder"), () => showFolder(p)) : null,
     sep(),
-    item("star", p.fav ? "Unfavourite" : "Favourite", () => setFavourite([p], !p.fav), { key: "F" }),
-    item("rename", "Rename…", () => openMenu("rename", p), { key: "F2" }),
-    item("tag", "Tags and collection…", () => openMenu("page", p)),
-    item("check", p.finished ? "Mark as unread" : "Mark as read", () => markRead([p], !p.finished)),
+    item("star", p.fav ? t("Unfavourite") : t("Favourite"), () => setFavourite([p], !p.fav), { key: "F" }),
+    item("rename", t("Rename…"), () => openMenu("rename", p), { key: "F2" }),
+    item("tag", t("Tags and collection…"), () => openMenu("page", p)),
+    item("check", p.finished ? t("Mark as unread") : t("Mark as read"), () => markRead([p], !p.finished)),
     sep(),
-    p.file ? null : item("share", "Share…", () => shareLink(p)),
-    p.link ? null : item("send", "Export…", () => openMenu("export", p), { key: "E" }),
-    item("select", "Select", () => startSelect([p.id]), { key: "X" }),
+    p.file ? null : item("share", t("Share…"), () => shareLink(p)),
+    p.link ? null : item("send", t("Export…"), () => openMenu("export", p), { key: "E" }),
+    item("select", t("Select"), () => startSelect([p.id]), { key: "X" }),
     sep(),
-    item("remove", p.link ? "Remove from Waypage" : "Delete", () => deletePage(p, "keys"), { warn: true, key: "Del" }));
+    item("remove", p.link ? t("Remove from Waypage") : t("Delete"), () => deletePage(p, "keys"), { warn: true, key: "Del" }));
   document.body.append(pop);
   const w = pop.offsetWidth, h = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + "px";
@@ -1799,8 +1802,8 @@ async function shareLink(p) {
   try {
     if (await C.platform.shareLink(p.title, p.url)) return;
     await navigator.clipboard.writeText(p.url);
-    toast("Link copied");
-  } catch (e) { toast("Couldn't share the link. Try again."); }
+    toast(t("Link copied"));
+  } catch (e) { toast(t("Couldn't share the link. Try again.")); }
 }
 
 // ---- Export (0.25.2) ----
@@ -1809,12 +1812,12 @@ async function shareLink(p) {
 // Save as PDF is a printer; page source is the site's page fetched again,
 // for working out why a site saves badly.
 const EXPORTS = [
-  { value: "pdf", label: "PDF", note: "Opens the print screen, where Save as PDF is a printer." },
-  { value: "html", label: "HTML", note: "One file with its pictures. Opens in any browser, and back in Waypage.", mime: "text/html" },
-  { value: "epub", label: "EPUB", note: "For an e-reader, Apple Books or Send to Kindle.", mime: "application/epub+zip" },
-  { value: "md", label: "Markdown", note: "The text for a notes app. Pictures link to the site.", mime: "text/markdown" },
-  { value: "cbz", label: "CBZ", note: "The pictures in order, for any comic reader.", mime: "application/vnd.comicbook+zip" },
-  { value: "source", label: "Page source", note: "The site's own page, fetched again. Send it when a site saves badly.", mime: "text/html" },
+  { value: "pdf", label: "PDF", note: t("Opens the print screen, where Save as PDF is a printer.") },
+  { value: "html", label: "HTML", note: t("One file with its pictures. Opens in any browser, and back in Waypage."), mime: "text/html" },
+  { value: "epub", label: "EPUB", note: t("For an e-reader, Apple Books or Send to Kindle."), mime: "application/epub+zip" },
+  { value: "md", label: t("Markdown"), note: t("The text for a notes app. Pictures link to the site."), mime: "text/markdown" },
+  { value: "cbz", label: "CBZ", note: t("The pictures in order, for any comic reader."), mime: "application/vnd.comicbook+zip" },
+  { value: "source", label: t("Page source"), note: t("The site's own page, fetched again. Send it when a site saves badly."), mime: "text/html" },
 ];
 
 function focusFirst(box) {
@@ -1839,19 +1842,19 @@ function exportControls(what, done) {
   const x = folder ? exportEdits(what) : null;
   const opts = () => (folder ? { heads, ...x.opts() } : { heads: true });
   const save = el("button", { class: "btn-primary export-save", type: "button", onclick: () => exportAs(p, kind, "save", save, opts()) });
-  const send = el("button", { class: "btn-quiet export-send", type: "button", onclick: () => exportAs(p, kind, "send", send, opts()) }, "Send");
-  const headsRow = folder ? switchRow("Chapter headers", "Each chapter opens with its clip's name", heads, (on) => { heads = on; store(EXPORT_HEADS_KEY, on); }, { "data-pref": "exportHeads" }) : null;
+  const send = el("button", { class: "btn-quiet export-send", type: "button", onclick: () => exportAs(p, kind, "send", send, opts()) }, t("Send"));
+  const headsRow = folder ? switchRow(t("Chapter headers"), t("Each chapter opens with its clip's name"), heads, (on) => { heads = on; store(EXPORT_HEADS_KEY, on); }, { "data-pref": "exportHeads" }) : null;
   const sync = () => {
-    save.textContent = kind === "pdf" ? "Print or save as PDF" : C.platform.native ? "Save to device" : "Download";
+    save.textContent = kind === "pdf" ? t("Print or save as PDF") : C.platform.native ? t("Save to device") : t("Download");
     send.hidden = kind === "pdf" || !C.platform.native;
     if (headsRow) headsRow.hidden = kind === "cbz";
     if (x) x.kind(kind);
   };
-  const group = section("", null, el("div", { class: "group" }, pickRow({ key: "export-kind", label: "Export as", options: kinds, get: () => kind,
+  const group = section("", null, el("div", { class: "group" }, pickRow({ key: "export-kind", label: t("Export as"), options: kinds, get: () => kind,
     set: (v) => { kind = v; store(key, v); sync(); } }), headsRow, ...(x ? x.rangeRows : [])));
   const box = el("div", { class: "export" });
   const top = (title, back) => el("div", { class: "export-top" },
-    el("button", { class: "btn-quiet export-back", type: "button", onclick: back }, "Back"),
+    el("button", { class: "btn-quiet export-back", type: "button", onclick: back }, t("Back")),
     el("p", { class: "menu-title", dir: "auto" }, title));
   const main = [top(folder ? what.title : p.title, done), group, x ? x.mainRows : null, el("div", { class: "export-actions" }, save, send)].filter(Boolean);
   const show = (screen) => {
@@ -1901,9 +1904,9 @@ function exportEdits(what) {
 
   const names = pages.map((q, i) => ({ value: String(i), label: (i + 1) + ". " + q.title }));
   const rangeRows = pages.length > 1 ? [
-    pickRow({ key: "export-from", label: "First chapter", options: names, get: () => String(from), set: (v) => { from = +v; if (to < from) { to = from; toRow.set(String(to)); } } }),
+    pickRow({ key: "export-from", label: t("First chapter"), options: names, get: () => String(from), set: (v) => { from = +v; if (to < from) { to = from; toRow.set(String(to)); } } }),
   ] : [];
-  const toRow = pages.length > 1 ? pickRow({ key: "export-to", label: "Last chapter", options: names, get: () => String(to), set: (v) => { to = +v; if (from > to) { from = to; rangeRows[0].set(String(from)); } } }) : null;
+  const toRow = pages.length > 1 ? pickRow({ key: "export-to", label: t("Last chapter"), options: names, get: () => String(to), set: (v) => { to = +v; if (from > to) { from = to; rangeRows[0].set(String(from)); } } }) : null;
   if (toRow) rangeRows.push(toRow);
 
   const detailsNote = el("span", { class: "choice-note", dir: "auto" });
@@ -1911,16 +1914,16 @@ function exportEdits(what) {
   const nav = (label, note, onclick) => el("button", { class: "row nav-row", type: "button", onclick },
     el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, label), note),
     el("span", { class: "row-chev", "aria-hidden": "true" }, "›"));
-  const cleanRow = nav("Clean up the text", cleanNote, () => api.open(cleanScreen()));
-  const mainRows = section("Only in this export", null, el("div", { class: "group" },
-    nav("Book details", detailsNote, () => api.open(detailsScreen())), cleanRow),
-    el("p", { class: "footnote" }, "Your clips stay as they are."));
+  const cleanRow = nav(t("Clean up the text"), cleanNote, () => api.open(cleanScreen()));
+  const mainRows = section(t("Only in this export"), null, el("div", { class: "group" },
+    nav(t("Book details"), detailsNote, () => api.open(detailsScreen())), cleanRow),
+    el("p", { class: "footnote" }, t("Your clips stay as they are.")));
   const author0 = () => pages[0] ? pages[0].byline || pages[0].site || "" : "";
   const rules = () => ed.rules.filter((r) => exportPattern(r.find));
   api.refresh = () => {
     detailsNote.textContent = [ed.title || what.title, ed.author || author0()].filter(Boolean).join(" · ");
     const n = ed.lines.length, r = rules().length;
-    cleanNote.textContent = !n && !r ? "Nothing changed" : [n ? n + (n === 1 ? " repeated line" : " repeated lines") + " left out" : "", r ? r + (r === 1 ? " find and replace" : " finds and replaces") : ""].filter(Boolean).join(", ");
+    cleanNote.textContent = !n && !r ? t("Nothing changed") : [n ? tn(n, "1 repeated line left out", "{n} repeated lines left out") : "", r ? tn(r, "1 find and replace", "{n} finds and replaces") : ""].filter(Boolean).join(", ");
   };
   api.kind = (k) => { kind = k; cleanRow.hidden = k === "cbz"; };
 
@@ -1944,11 +1947,11 @@ function exportEdits(what) {
       el("input", { class: "feed-input", id, type: "text", autocomplete: "off", spellcheck: "false", dir: "auto", value, placeholder, oninput: (e) => { set(e.target.value); keep(); } }));
   }
   function detailsScreen() {
-    return { title: "Book details", nodes: [
+    return { title: t("Book details"), nodes: [
       section("", null, el("div", { class: "group" }, el("div", { class: "rc-list" },
-        field("Title", ed.title, what.title, (v) => { ed.title = v; }),
-        field("Author", ed.author, author0() || "Nobody named", (v) => { ed.author = v; }))),
-      el("p", { class: "footnote" }, "Empty takes what's shown in grey. The cover is the collection's own: pick one in the collection's Edit.")),
+        field(t("Title"), ed.title, what.title, (v) => { ed.title = v; }),
+        field(t("Author"), ed.author, author0() || t("Nobody named"), (v) => { ed.author = v; }))),
+      el("p", { class: "footnote" }, t("Empty takes what's shown in grey. The cover is the collection's own: pick one in the collection's Edit."))),
     ] };
   }
 
@@ -1964,7 +1967,7 @@ function exportEdits(what) {
           const doc = new DOMParser().parseFromString(html, "text/html");
           for (const t of new Set(exportLines(doc).map(lineText))) if (t && t.length <= 300) seen.set(t, (seen.get(t) || 0) + 1);
         }
-        if (i % 10 === 9) { redraw("Looking… " + (i + 1) + " of " + pages.length); await new Promise((go) => setTimeout(go, 0)); }
+        if (i % 10 === 9) { redraw(t("Looking… {done} of {total}", { done: i + 1, total: pages.length })); await new Promise((go) => setTimeout(go, 0)); }
       }
       const least = Math.max(2, Math.ceil(pages.length / 5));
       found = [...seen].filter(([, n]) => n >= least).sort((a, b) => b[1] - a[1]).slice(0, 12);
@@ -1978,25 +1981,25 @@ function exportEdits(what) {
   function cleanScreen() {
     const lines = el("div", { class: "group export-lines" });
     const drawLines = (busy) => {
-      if (!found) { lines.replaceChildren(el("div", { class: "row" }, el("span", { class: "choice-note", role: "status" }, busy || "Looking…"))); return; }
-      if (!found.length) { lines.replaceChildren(el("div", { class: "row" }, el("span", { class: "choice-note" }, pages.length < 2 ? "There's only one chapter." : "No paragraph repeats in many chapters."))); return; }
-      lines.replaceChildren(...found.map(([t, n]) => switchRow("“" + (t.length > 90 ? t.slice(0, 88) + "…" : t) + "”", n ? "In " + n + " of " + pages.length + " chapters" : "Not in these chapters now", ed.lines.includes(t),
-        (on) => { ed.lines = ed.lines.filter((l) => l !== t); if (on) ed.lines.push(t); keep(); }, { "aria-label": "Leave out " + t.slice(0, 60) })));
+      if (!found) { lines.replaceChildren(el("div", { class: "row" }, el("span", { class: "choice-note", role: "status" }, busy || t("Looking…")))); return; }
+      if (!found.length) { lines.replaceChildren(el("div", { class: "row" }, el("span", { class: "choice-note" }, pages.length < 2 ? t("There's only one chapter.") : t("No paragraph repeats in many chapters.")))); return; }
+      lines.replaceChildren(...found.map(([line, n]) => switchRow("“" + (line.length > 90 ? line.slice(0, 88) + "…" : line) + "”", n ? t("In {n} of {n2} chapters", { n: n, n2: pages.length }) : t("Not in these chapters now"), ed.lines.includes(line),
+        (on) => { ed.lines = ed.lines.filter((l) => l !== line); if (on) ed.lines.push(line); keep(); }, { "aria-label": t("Leave out {slice}", { slice: line.slice(0, 60) }) })));
     };
     drawLines();
     look(drawLines);
     if (!ed.rules.length) ed.rules.push({ find: "", put: "" });
     const list = el("div", {});
     const drawRules = () => list.replaceChildren(...ed.rules.map((r, i) => el("div", { class: "group" }, el("div", { class: "rc-list" },
-      field("Find", r.find, "Words, or A/N: *", (v) => { r.find = v; }),
-      field("Replace with", r.put, "Nothing: it's removed", (v) => { r.put = v; }),
-      ed.rules.length > 1 ? el("button", { class: "btn-quiet export-rule-del", type: "button", onclick: () => { ed.rules.splice(i, 1); keep(); drawRules(); } }, "Remove") : null))));
+      field(t("Find"), r.find, t("Words, or A/N: *"), (v) => { r.find = v; }),
+      field(t("Replace with"), r.put, t("Nothing: it's removed"), (v) => { r.put = v; }),
+      ed.rules.length > 1 ? el("button", { class: "btn-quiet export-rule-del", type: "button", onclick: () => { ed.rules.splice(i, 1); keep(); drawRules(); } }, t("Remove")) : null))));
     drawRules();
-    return { title: "Clean up the text", nodes: [
-      section("Lines in many chapters", null, lines, el("p", { class: "footnote" }, "Turn one on to leave it out of every chapter.")),
-      section("Find and replace", null, list,
-        el("div", { class: "group" }, el("button", { class: "row", type: "button", onclick: () => { ed.rules.push({ find: "", put: "" }); drawRules(); const f = list.querySelectorAll("input"); f[f.length - 2].focus(); } }, el("span", { class: "row-label accent" }, "Add another"))),
-        el("p", { class: "footnote" }, "* stands for any words in the same paragraph: A/N: * removes an author's note that starts with A/N:. Kept for the next export of this collection.")),
+    return { title: t("Clean up the text"), nodes: [
+      section(t("Lines in many chapters"), null, lines, el("p", { class: "footnote" }, t("Turn one on to leave it out of every chapter."))),
+      section(t("Find and replace"), null, list,
+        el("div", { class: "group" }, el("button", { class: "row", type: "button", onclick: () => { ed.rules.push({ find: "", put: "" }); drawRules(); const f = list.querySelectorAll("input"); f[f.length - 2].focus(); } }, el("span", { class: "row-label accent" }, t("Add another")))),
+        el("p", { class: "footnote" }, t("* stands for any words in the same paragraph: A/N: * removes an author's note that starts with A/N:. Kept for the next export of this collection."))),
     ] };
   }
   return Object.assign(api, { rangeRows, mainRows });
@@ -2006,10 +2009,10 @@ async function exportAs(p, kind, how, btn, opts = { heads: true }) {
   if (p.pages && (opts.from != null || opts.title)) p = { pages: p.pages.slice(opts.from || 0, opts.to == null ? undefined : opts.to + 1), title: opts.title || p.title };
   const pages = p.pages || null;
   if (kind === "pdf") { await (pages ? printPages(pages, p.title, btn, opts) : printPage(p, btn)); return; }
-  if (kind === "source" && !navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
+  if (kind === "source" && !navigator.onLine) { toast(t("You're offline. Try again when you're back online.")); return; }
   const mime = EXPORTS.find((e) => e.value === kind).mime;
   const book = kind === "epub";
-  const busy = exportBusy(btn, book ? "Making the book…" : kind === "cbz" ? "Making the comic…" : kind === "source" ? "Getting the page…" : "Making the file…", book);
+  const busy = exportBusy(btn, book ? t("Making the book…") : kind === "cbz" ? t("Making the comic…") : kind === "source" ? t("Getting the page…") : t("Making the file…"), book);
   try {
     let name, text = null, uri = null, blob = null;
     if (kind === "cbz") ({ name, uri = null, blob = null } = await C.files.exportComic(pages || [p], pages ? p.title : undefined, busy.count));
@@ -2023,12 +2026,12 @@ async function exportAs(p, kind, how, btn, opts = { heads: true }) {
     else if (how === "save") {
       const saved = await C.platform.saveFile(uri, name, mime);
       if (saved === null) await C.platform.shareFile(uri, name);
-      else if (saved) toast("Saved " + name);
+      else if (saved) toast(t("Saved {name}", { name: name }));
     } else await C.platform.shareFile(uri, name);
   } catch (e) {
     const told = e instanceof C.save.SaveError || e instanceof C.files.FileError;
     if (!told) console.error(e);
-    toast(told ? e.message : "Couldn't make the file. Try again.");
+    toast(told ? e.message : t("Couldn't make the file. Try again."));
   }
   busy.end();
 }
@@ -2055,8 +2058,8 @@ function exportBusy(btn, first, book) {
   return {
     // Chapters take most of a book's time; packing it takes the rest.
     count(done, total, packing) {
-      if (packing) show(0.8 + 0.2 * done / total, "Packing the book…");
-      else if (total > 1) show((book ? 0.8 : 1) * done / total, (book ? "Chapter " : "Adding ") + Math.min(done + 1, total) + " of " + total);
+      if (packing) show(0.8 + 0.2 * done / total, t("Packing the book…"));
+      else if (total > 1) show((book ? 0.8 : 1) * done / total, (book ? t("Chapter {done} of {total}", { done: Math.min(done + 1, total), total }) : t("Adding {done} of {total}", { done: Math.min(done + 1, total), total })));
     },
     made() { btn.classList.remove("busy"); btn.replaceChildren(...face); },
     end() {
@@ -2077,7 +2080,7 @@ async function sendBook(pages, btn, title) {
     else C.platform.download(out.name, out.blob);
   } catch (e) {
     console.error(e);
-    toast("Couldn't make the book. Try again.");
+    toast(t("Couldn't make the book. Try again."));
   }
   btn.disabled = false;
 }
@@ -2087,7 +2090,7 @@ async function sendBook(pages, btn, title) {
 const printPage = (p, btn) => printFile(() => C.backup.exportPage(p), btn);
 const printPages = (pages, title, btn, opts) => printFile((count) => C.backup.exportPages(pages, title, count, opts), btn);
 async function printFile(make, btn) {
-  const busy = exportBusy(btn, "Getting it ready…");
+  const busy = exportBusy(btn, t("Getting it ready…"));
   try {
     const { name, html } = await make(busy.count);
     busy.made();
@@ -2096,7 +2099,7 @@ async function printFile(make, btn) {
     await C.platform.printHtml(name.replace(/\.html$/, ""), html.replace(/<head>/i, "<head>" + head));
   } catch (e) {
     console.error(e);
-    toast("Couldn't open printing. Try again.");
+    toast(t("Couldn't open printing. Try again."));
   }
   busy.end();
 }
@@ -2107,23 +2110,23 @@ async function printFile(make, btn) {
 let backupRun = null;
 async function backUp() {
   if (backupRun) return;
-  if (!state.pages.length && !feeds.length) { toast("There's nothing to back up yet."); return; }
-  if (driveRun) { toast("Wait for the Google Drive backup to finish."); return; }
-  const r = backupRun = { text: "Getting ready…", paused: false, stopped: false, wake: null };
+  if (!state.pages.length && !feeds.length) { toast(t("There's nothing to back up yet.")); return; }
+  if (driveRun) { toast(t("Wait for the Google Drive backup to finish.")); return; }
+  const r = backupRun = { text: t("Getting ready…"), paused: false, stopped: false, wake: null };
   backupPaint(true);
   const gate = async () => {
     while (r.paused && !r.stopped) await new Promise((go) => { r.wake = go; });
     return !r.stopped;
   };
   try {
-    const out = await C.backup.exportLibrary(state.pages, (done, total) => { r.text = done + " of " + total; backupPaint(); }, feeds, gate);
+    const out = await C.backup.exportLibrary(state.pages, (done, total) => { r.text = t("{done} of {total}", { done, total }); backupPaint(); }, feeds, gate);
     backupRun = null;
     backupPaint(true);
     if (out.uri) await C.platform.shareFile(out.uri, out.name);
     else C.platform.download(out.name, out.blob);
   } catch (e) {
-    if (e && e.code === "cancelled") toast("Backup stopped.");
-    else { console.error(e); toast("Couldn't write the backup. Free some space and try again."); }
+    if (e && e.code === "cancelled") toast(t("Backup stopped."));
+    else { console.error(e); toast(t("Couldn't write the backup. Free some space and try again.")); }
   }
   backupRun = null;
   backupPaint(true);
@@ -2152,18 +2155,18 @@ function backupPaint(whole) {
   const line = $("backupStatus");
   if (line && backupRun) line.textContent = backupLine();
 }
-const backupLine = () => { const r = backupRun; return r.stopped ? "Stopping…" : r.paused ? "Paused · " + r.text : r.text; };
+const backupLine = () => { const r = backupRun; return r.stopped ? t("Stopping…") : r.paused ? t("Paused") + " · " + r.text : r.text; };
 function backupRow() {
   const r = backupRun;
   if (!r) return el("button", { class: "row", id: "backupRow", type: "button", onclick: backUp },
-    el("span", { class: "row-label accent" }, "Back up the library"));
+    el("span", { class: "row-label accent" }, t("Back up the library")));
   return el("div", { class: "row", id: "backupRow" },
     el("span", { class: "choice-text" },
-      el("span", { class: "choice-label" }, "Backing up"),
+      el("span", { class: "choice-label" }, t("Backing up")),
       el("span", { class: "choice-note", id: "backupStatus", "aria-live": "polite" }, backupLine())),
     el("span", { class: "backup-actions" },
-      el("button", { class: "btn-small", type: "button", ...(r.stopped ? { disabled: "" } : {}), onclick: () => backupPause(!r.paused) }, r.paused ? "Resume" : "Pause"),
-      el("button", { class: "btn-quiet danger", type: "button", ...(r.stopped ? { disabled: "" } : {}), onclick: backupStop }, "Stop")));
+      el("button", { class: "btn-small", type: "button", ...(r.stopped ? { disabled: "" } : {}), onclick: () => backupPause(!r.paused) }, r.paused ? t("Resume") : t("Pause")),
+      el("button", { class: "btn-quiet danger", type: "button", ...(r.stopped ? { disabled: "" } : {}), onclick: backupStop }, t("Stop"))));
 }
 
 // Every highlight as one Markdown file (1.14.0), clip by clip, the clip
@@ -2181,11 +2184,11 @@ async function saveOpml(btn) {
     else {
       const saved = await C.platform.saveFile(uri, name, "text/x-opml");
       if (saved === null) await C.platform.shareFile(uri, name);
-      else if (saved) toast("Saved " + name);
+      else if (saved) toast(t("Saved {name}", { name: name }));
     }
   } catch (e) {
     console.error(e);
-    toast("Couldn't make the file. Try again.");
+    toast(t("Couldn't make the file. Try again."));
   }
   btn.disabled = false;
 }
@@ -2193,8 +2196,8 @@ async function saveOpml(btn) {
 async function saveHighlights(btn) {
   const clips = state.pages.filter((p) => (p.marks || []).length)
     .map((p) => ({ p, last: Math.max(...p.marks.map((m) => m.at || 0)) })).sort((a, b) => b.last - a.last);
-  if (!clips.length) { toast("No highlights yet."); return; }
-  const name = "Waypage highlights " + new Date().toISOString().slice(0, 10) + ".md";
+  if (!clips.length) { toast(t("No highlights yet.")); return; }
+  const name = "Waypage " + t("highlights") + " " + new Date().toISOString().slice(0, 10) + ".md";
   const text = clips.map((c) => C.backup.marksMarkdown(c.p)).join("\n");
   btn.disabled = true;
   try {
@@ -2203,11 +2206,11 @@ async function saveHighlights(btn) {
     else {
       const saved = await C.platform.saveFile(uri, name, "text/markdown");
       if (saved === null) await C.platform.shareFile(uri, name);
-      else if (saved) toast("Saved " + name);
+      else if (saved) toast(t("Saved {name}", { name: name }));
     }
   } catch (e) {
     console.error(e);
-    toast("Couldn't make the file. Try again.");
+    toast(t("Couldn't make the file. Try again."));
   }
   btn.disabled = false;
 }
@@ -2229,7 +2232,7 @@ async function pickFile(first) {
     if (first) await first();
     let file;
     try { file = await C.platform.files.blob(got.ref, got.size); } catch (e) {
-      toast("Couldn't read that file. Try opening it again.");
+      toast(t("Couldn't read that file. Try opening it again."));
       return;
     }
     openFile(file, null, true, got.ref);
@@ -2265,8 +2268,8 @@ async function addFolder() {
   const name = scan.name || got.name;
   const books = (scan.files || []).filter((f) => WATCH_EXTS.test(f.name));
   if (!scan.ok || !books.length) {
-    toast(!scan.ok ? "Couldn't read " + name + "." : (scan.files || []).some((f) => C.listen.isAudioName(f.name))
-      ? "There are only sound files in " + name + ". Add it with Add an audiobook folder." : "There's nothing in " + name + " that Waypage opens.");
+    toast(!scan.ok ? t("Couldn't read {name}.", { name: name }) : (scan.files || []).some((f) => C.listen.isAudioName(f.name))
+      ? t("There are only sound files in {name}. Add it with Add an audiobook folder.", { name: name }) : t("There's nothing in {name} that Waypage opens.", { name: name }));
     C.platform.files.release(got.ref);
     return;
   }
@@ -2282,9 +2285,9 @@ function addFolderInBrowser() {
     input.remove();
     if (!picked.length) return;
     // "Books/Sci-fi/dune.epub": the folder picked, then the path in it.
-    const root = (picked[0].webkitRelativePath || "").split("/")[0] || "Folder";
+    const root = (picked[0].webkitRelativePath || "").split("/")[0] || t("Folder");
     const books = picked.filter((f) => WATCH_EXTS.test(f.name));
-    if (!books.length) { toast("There's nothing in " + root + " that Waypage opens."); return; }
+    if (!books.length) { toast(t("There's nothing in {root} that Waypage opens.", { root: root })); return; }
     await addFolderFiles(root, books.map((f) => ({ name: f.name, size: f.size, ref: null,
       path: (f.webkitRelativePath || f.name).split("/").slice(1).join("/") || f.name, read: async () => f })));
   });
@@ -2296,14 +2299,14 @@ async function addFolderFiles(name, list) {
   const known = new Set(state.pages.filter((p) => p.link).map((p) => p.link));
   const fresh = list.filter((f) => !f.ref || !known.has(f.ref))
     .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: "base" }));
-  if (!fresh.length) { toast("Everything in " + name + " is already in your library."); return 0; }
-  const run = Object.assign(startRun(null, "Adding a folder", fresh.length), { label: name, files: true });
+  if (!fresh.length) { toast(t("Everything in {name} is already in your library.", { name: name })); return 0; }
+  const run = Object.assign(startRun(null, t("Adding a folder"), fresh.length), { label: name, files: true });
   runChanged();
   let added = 0, had = 0;
   const failed = [];
   for (const f of fresh) {
     if (!(await gate(run))) break;
-    Object.assign(run, { now: "Opening " + f.name, part: null });
+    Object.assign(run, { now: t("Opening {name}", { name: f.name }), part: null });
     updateRunCard(run);
     try {
       const file = await f.read();
@@ -2324,7 +2327,7 @@ async function addFolderFiles(name, list) {
       run.saved++;
     } catch (e) {
       if (!(e instanceof C.files.FileError)) console.error(e);
-      failed.push(f.name + ": " + (e && e.message ? e.message : "couldn't read it"));
+      failed.push(f.name + ": " + (e && e.message ? e.message : t("couldn't read it")));
       run.failed++;
     }
   }
@@ -2335,10 +2338,10 @@ async function addFolderFiles(name, list) {
   updateWidgets();
   if (state.folder) renderFolder();
   if (state.section) renderSection();
-  const files = (n) => (n === 1 ? "1 file" : n + " files");
-  toast(failed.length ? "Added " + files(added) + " from " + name + ". Couldn't read " + files(failed.length) + ": " + failed[0]
-    : added ? "Added " + files(added) + " from " + name + (had ? ". " + files(had) + (had === 1 ? " was" : " were") + " already here." : "")
-    : "Everything in " + name + " is already in your library.");
+  const files = (n) => tn(n, "1 file", "{n} files");
+  toast(failed.length ? t("Added {files} from {name}. Couldn't read {files2}: {x}", { files: files(added), name: name, files2: files(failed.length), x: failed[0] })
+    : added ? (had ? t("Added {files} from {name}. {had}", { files: files(added), name, had: tn(had, "1 file was already here.", "{n} files were already here.") }) : t("Added {files} from {name}", { files: files(added), name }))
+    : t("Everything in {name} is already in your library.", { name: name }));
   return added;
 }
 
@@ -2358,9 +2361,9 @@ function importSheet() {
   const go = el("button", { class: "btn-primary import-go", type: "button" });
   const note = el("p", { class: "footnote" });
   const paint = () => {
-    go.textContent = n() ? "Save " + countLine(n()) : "Nothing new to save";
+    go.textContent = n() ? t("Save {countLine}", { countLine: countLine(n()) }) : t("Nothing new to save");
     go.disabled = !n();
-    note.textContent = n() ? "They save one after another, in Downloads, about " + Math.max(1, Math.round(n() * 3 / 60)) + " min" + (n() > 40 ? "; Waypage needs to stay open" : "") + ". Their tags come along" + (which === "all" && fresh.length > unread.length ? ", and the ones you read there are marked read" : "") + "." : "Everything in it is already in your library.";
+    note.textContent = n() ? t("They save one after another, in Downloads, about {x} min{x2}. Their tags come along{x3}.", { x: Math.max(1, Math.round(n() * 3 / 60)), x2: n() > 40 ? t("; Waypage needs to stay open") : "", x3: which === "all" && fresh.length > unread.length ? t(", and the ones you read there are marked read") : "" }) : t("Everything in it is already in your library.");
   };
   go.addEventListener("click", () => {
     const list = which === "unread" ? unread : fresh;
@@ -2369,14 +2372,14 @@ function importSheet() {
     back().then(() => saveAll(list.map((it) => it.url), null, (u) => ({ tags: (by.get(u) || {}).tags || [], finished: !!(by.get(u) || {}).read }), undefined, true));
   });
   paint();
-  const from = x.source === "a list" ? "a list of links" : x.source === "bookmarks" ? "your bookmarks" : x.source;
+  const from = x.source === "a list" ? t("a list of links") : x.source === "bookmarks" ? t("your bookmarks") : x.source;
   return el("div", { class: "page-controls import-sheet" },
     el("div", { class: "menu-head" },
-      el("p", { class: "menu-title" }, "Import from " + from),
-      el("p", { class: "meta" }, [x.items.length === 1 ? "1 link" : x.items.length + " links", x.items.length - fresh.length ? (x.items.length - fresh.length) + " already here" : ""].filter(Boolean).join(" · "))),
-    fresh.length > unread.length && unread.length ? seg("import-which", "Which", [
-      { value: "unread", label: "To read · " + unread.length },
-      { value: "all", label: "All · " + fresh.length },
+      el("p", { class: "menu-title" }, t("Import from {from}", { from: from })),
+      el("p", { class: "meta" }, [tn(x.items.length, "1 link", "{n} links"), x.items.length - fresh.length ? t("{n} already here", { n: x.items.length - fresh.length }) : ""].filter(Boolean).join(" · "))),
+    fresh.length > unread.length && unread.length ? seg("import-which", t("Which"), [
+      { value: "unread", label: t("To read · {n}", { n: unread.length }) },
+      { value: "all", label: t("All · {n}", { n: fresh.length }) },
     ], which, (v) => { which = v; paint(); }) : null,
     note,
     go);
@@ -2414,11 +2417,11 @@ function fileSheet() {
         el("p", { class: "meta" }, ["PowerPoint", big].filter(Boolean).join(" · "))),
       el("div", { class: "group" },
         el("button", { class: "row", type: "button", onclick: () => answer(true) },
-          el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, "Convert to PDF"),
-            el("span", { class: "choice-note" }, "Makes a PDF of the slides, which you save where you like, and opens it. The slides are redrawn, so some effects, charts and fonts may look different."))),
+          el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, t("Convert to PDF")),
+            el("span", { class: "choice-note" }, t("Makes a PDF of the slides, which you save where you like, and opens it. The slides are redrawn, so some effects, charts and fonts may look different.")))),
         el("button", { class: "row", type: "button", onclick: () => answer(null) },
-          el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, "Cancel"),
-            el("span", { class: "choice-note" }, "Nothing is opened or saved.")))));
+          el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, t("Cancel")),
+            el("span", { class: "choice-note" }, t("Nothing is opened or saved."))))));
   }
   return el("div", { class: "page-controls" },
     el("div", { class: "menu-head" },
@@ -2426,17 +2429,17 @@ function fileSheet() {
       el("p", { class: "meta" }, [C.files.KINDS[a.kind], big].filter(Boolean).join(" · "))),
     el("div", { class: "group" },
       el("button", { class: "row", type: "button", onclick: () => answer(false) },
-        el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, "Keep a copy"),
-          el("span", { class: "choice-note" }, "A clip like any other: it syncs, and it stays when the file goes. About " + big + " " + ON_HERE + "."))),
+        el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, t("Keep a copy")),
+          el("span", { class: "choice-note" }, t("A clip like any other: it syncs, and it stays when the file goes. About {big} {ON_HERE}.", { big: big, ON_HERE: ON_HERE })))),
       el("button", { class: "row", type: "button", ...(a.can ? {} : { disabled: "" }), onclick: () => answer(true) },
-        el("span", { class: "choice-text" }, el("span", { class: "choice-label" + (a.can ? " accent" : "") }, "Read from where it is"),
+        el("span", { class: "choice-text" }, el("span", { class: "choice-label" + (a.can ? " accent" : "") }, t("Read from where it is")),
           el("span", { class: "choice-note" }, a.can
-            ? "Lives in Files and costs almost nothing here. It needs the file to stay where it is, and doesn't sync."
-            : "Waypage wasn't given lasting access to this file. Add it with Add a file to read it from where it is."))),
+            ? t("Lives in Files and costs almost nothing here. It needs the file to stay where it is, and doesn't sync.")
+            : t("Waypage wasn't given lasting access to this file. Add it with Add a file to read it from where it is.")))),
       // A PDF can also be made into a note to draw on (2.0.0).
       a.kind === "pdf" ? el("button", { class: "row", type: "button", onclick: () => answer("note") },
-        el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, "Make a note"),
-          el("span", { class: "choice-note" }, "A copy of its pages you can draw on, in Notes. The PDF itself isn't changed."))) : null));
+        el("span", { class: "choice-text" }, el("span", { class: "choice-label accent" }, t("Make a note")),
+          el("span", { class: "choice-note" }, t("A copy of its pages you can draw on, in Notes. The PDF itself isn't changed.")))) : null));
 }
 // A file dropped on the window, on a computer.
 addEventListener("dragover", (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes("Files")) e.preventDefault(); });
@@ -2459,19 +2462,19 @@ addEventListener("drop", async (e) => {
 // other way this time (a copy of one read from where it is, or back).
 const hasFile = (name, size, link) => state.pages.some((p) => p.file && p.file.name === name && p.file.size === size && !p.link === !link);
 const fileLike = (name, size, link) => state.pages.find((p) => p.file && p.file.name === name && p.file.size === size && !p.link === !link);
-const FILE_KINDS_LINE = "EPUB, PDF, PowerPoint, Markdown, text, HTML, email (.eml) and CBZ comic files, and audiobooks (M4B, MP3)";
+const FILE_KINDS_LINE = t("EPUB, PDF, PowerPoint, Markdown, text, HTML, email (.eml) and CBZ comic files, and audiobooks (M4B, MP3)");
 async function openFile(file, btn, open, ref, forced) {
   if (!file) return;
   const label = btn ? btn.querySelector(".row-label") : null;
   const say = (t) => { if (label) label.textContent = t; };
   if (btn) btn.disabled = true;
-  say("Opening…");
+  say(t("Opening…"));
   try {
     // Feeds from another RSS reader, as OPML (1.32.0): followed here.
     const feedList = await C.imports.readOpml(file).catch(() => null);
     if (feedList) {
       if (ref) C.platform.files.release(ref);
-      if (btn) { btn.disabled = false; say("Restore"); }
+      if (btn) { btn.disabled = false; say(t("Restore")); }
       followFeeds(feedList);
       return;
     }
@@ -2479,20 +2482,20 @@ async function openFile(file, btn, open, ref, forced) {
     const exported = await C.imports.read(file).catch(() => null);
     if (exported) {
       if (ref) C.platform.files.release(ref);
-      if (btn) { btn.disabled = false; say("Restore"); }
+      if (btn) { btn.disabled = false; say(t("Restore")); }
       importing = exported;
       openMenu("importList");
       return;
     }
     const kind = await C.files.kindOf(file);
     if (kind === "pptx") {
-      if (btn) { btn.disabled = false; say("Restore or open a file"); }
+      if (btn) { btn.disabled = false; say(t("Restore or open a file")); }
       await convertDeck(file, ref, open);
       return;
     }
     // An audiobook (2026-11) is played from where it is (app-listen.js).
     if (kind === "audio") {
-      if (btn) { btn.disabled = false; say("Restore"); }
+      if (btn) { btn.disabled = false; say(t("Restore")); }
       await addAudiobook(file, ref);
       return;
     }
@@ -2500,9 +2503,9 @@ async function openFile(file, btn, open, ref, forced) {
     const inFolder = C.files.KINDS[kind] && state.pages.find((p) => p.watched && p.file && p.file.name === file.name && p.file.size === file.size);
     if (inFolder) {
       if (ref) C.platform.files.release(ref);
-      toast("Already in your library, from " + ((watchOf(inFolder) || {}).name || "your watched folder"));
+      toast(t("Already in your library, from {x}", { x: (watchOf(inFolder) || {}).name || t("your watched folder") }));
       if (open) openPage(inFolder.id);
-      if (btn) { btn.disabled = false; say("Restore"); }
+      if (btn) { btn.disabled = false; say(t("Restore")); }
       return;
     }
     let link = null;
@@ -2510,12 +2513,12 @@ async function openFile(file, btn, open, ref, forced) {
     if (forced) link = forced.ref || null;
     else if ((C.files.canLink(kind) && (ref || C.platform.files.canLink)) || kind === "pdf") {
       const asked = await askKeep(file, kind, !!ref);
-      if (asked == null) { if (btn) { btn.disabled = false; say("Restore"); } return; }
+      if (asked == null) { if (btn) { btn.disabled = false; say(t("Restore")); } return; }
       // A PDF made into a note (2.0.0): the file is read once and let go.
       if (asked === "note") {
         if (ref) C.platform.files.release(ref);
         await noteFromFile(file, open);
-        if (btn) { btn.disabled = false; say("Restore"); }
+        if (btn) { btn.disabled = false; say(t("Restore")); }
         return;
       }
       link = asked ? ref : null;
@@ -2524,27 +2527,27 @@ async function openFile(file, btn, open, ref, forced) {
     if (kind === "backup") {
       await restoreBackup(file, say);
     } else if (kind === "zip") {
-      toast("This zip isn't a Waypage backup, an EPUB or a comic, so it can't be opened here.");
+      toast(t("This zip isn't a Waypage backup, an EPUB or a comic, so it can't be opened here."));
     } else if (!kind) {
-      toast("Waypage opens " + FILE_KINDS_LINE + ", and its own backups.");
+      toast(t("Waypage opens {FILE_KINDS_LINE}, and its own backups.", { FILE_KINDS_LINE: FILE_KINDS_LINE }));
     } else {
       // A file being read is a card in the library and Downloads (1.1.3).
-      const run = kind === "clip" ? null : Object.assign(startRun(null, "Adding a file", 1), { label: file.name, files: true, now: "Opening" });
+      const run = kind === "clip" ? null : Object.assign(startRun(null, t("Adding a file"), 1), { label: file.name, files: true, now: t("Opening") });
       if (run) runChanged();
-      const shown = run && fileProgress(run, "Reading");
+      const shown = run && fileProgress(run, t("Reading"));
       let meta;
       try {
         meta = kind === "clip" ? await C.backup.importPage(await file.text(), (url) => !!savedAs(url))
           : await C.files.bring(file, kind, { has: (name, size) => hasFile(name, size, link), link,
             onProgress: (done, total, what) => {
               shown(done, total, what);
-              say(what === "words" ? "Reading, page " + done + " of " + total : "Pictures, " + done + " of " + total);
+              say(what === "words" ? t("Reading, page {done} of {total}", { done: done, total: total }) : t("Pictures, {done} of {total}", { done: done, total: total }));
             } });
       } finally {
         if (run) { run.now = null; runs.delete(run); runChanged(); }
       }
       if (meta.already) {
-        toast("Already in your library");
+        toast(t("Already in your library"));
         const had = open && kind !== "clip" && fileLike(file.name, file.size, link);
         if (had) openPage(had.id);
       } else {
@@ -2555,15 +2558,15 @@ async function openFile(file, btn, open, ref, forced) {
         await C.store.writeIndex(state.pages);
         await loadThumbs();
         C.store.keepStored();
-        toast("Added “" + meta.title + "”" + (meta.folder ? " to " + meta.folder : ""));
+        toast(meta.folder ? t("Added “{title}” to {folder}", { title: meta.title, folder: meta.folder }) : t("Added “{title}”", { title: meta.title }));
         if (open) openPage(meta.id);
       }
     }
     renderLibrary();
   } catch (e) {
-    const told = e instanceof C.files.FileError || /Waypage|empty/.test(e.message);
+    const told = e instanceof C.files.FileError || /Waypage|empty|[\u0590-\u05FF]/.test(e.message);
     if (!told) console.error(e);
-    toast(told ? e.message : "Couldn't open that file. Try again.");
+    toast(told ? e.message : t("Couldn't open that file. Try again."));
   }
   if (btn) btn.disabled = false;
   if (state.settings) renderSettings();
@@ -2574,38 +2577,38 @@ async function openFile(file, btn, open, ref, forced) {
 // opened from there, as a PDF picked from that place would be (1.49.0).
 async function convertDeck(file, ref, open) {
   if (!(await askConvert(file))) { if (ref) C.platform.files.release(ref); return; }
-  const run = Object.assign(startRun(null, "Converting a deck", 1), { label: file.name, files: true, now: "Converting" });
+  const run = Object.assign(startRun(null, t("Converting a deck"), 1), { label: file.name, files: true, now: t("Converting") });
   runChanged();
   let made, saved;
   try {
     made = await C.pptx.toPdf(file, (done, total) => {
-      run.now = "Slide " + Math.min(done + 1, total) + " of " + total;
+      run.now = t("Slide {done} of {total}", { done: Math.min(done + 1, total), total });
       run.part = total ? done / total : null;
       updateRunCard(run);
     });
-    run.now = "Saving";
+    run.now = t("Saving");
     updateRunCard(run);
     saved = await C.platform.saveLinked(made.blob, made.name, "application/pdf", ref);
   } catch (e) {
     const told = e instanceof C.files.FileError;
     if (!told) console.error(e);
-    toast(told ? e.message : "Couldn't turn that into a PDF. Try again.");
+    toast(told ? e.message : t("Couldn't turn that into a PDF. Try again."));
     return;
   } finally {
     run.now = null; runs.delete(run); runChanged();
     if (ref) C.platform.files.release(ref);
   }
-  if (saved.saved === false) { toast("Not converted: the PDF wasn't saved."); return; }
+  if (saved.saved === false) { toast(t("Not converted: the PDF wasn't saved.")); return; }
   // No place to keep it (a browser without the save picker): it downloads,
   // and a copy is what opens.
   if (saved.saved === null) C.platform.download(made.name, made.blob);
   await openFile(new File([made.blob], made.name, { type: "application/pdf" }), null, open, saved.ref, { ref: saved.ref });
-  if (made.skipped) toast(made.skipped === 1 ? "One chart or picture couldn't be drawn." : made.skipped + " charts or pictures couldn't be drawn.");
+  if (made.skipped) toast(made.skipped === 1 ? t("One chart or picture couldn't be drawn.") : t("{skipped} charts or pictures couldn't be drawn.", { skipped: made.skipped }));
 }
 
 // A backup merged in: a file opened here, or one from Google Drive.
 async function restoreBackup(file, say) {
-  const res = await C.backup.restoreLibrary(file, state.pages, sameUrl, (done, total) => say("Restoring, " + done + " of " + total));
+  const res = await C.backup.restoreLibrary(file, state.pages, sameUrl, (done, total) => say(t("Restoring, {done} of {total}", { done: done, total: total })));
   state.pages = res.pages;
   await C.store.writeIndex(state.pages);
   texts.clear();
@@ -2613,11 +2616,11 @@ async function restoreBackup(file, say) {
   if (res.added + res.replaced) C.store.keepStored();
   const followed = restoreFeeds(res.feeds);
   // A Links only backup's clips (1.47.0), saved again as sync's are.
-  if (res.links.length) saveFromLinks(res.links, "From the backup");
+  if (res.links.length) saveFromLinks(res.links, t("From the backup"));
   const n = res.added + res.replaced;
-  const what = [n ? countLine(n) : "", followed ? (followed === 1 ? "1 feed" : followed + " feeds") : "",
-    res.links.length ? res.links.length + " to save again from their links" : ""].filter(Boolean).join(" and ");
-  toast((what ? "Restored " + what : "Nothing new to restore") + (res.kept ? ". " + res.kept + " already here" + (res.kept === 1 ? " was" : " were") + " kept." : "."));
+  const what = i18n.join([n ? countLine(n) : "", followed ? tn(followed, "1 feed", "{n} feeds") : "",
+    res.links.length ? t("{n} to save again from their links", { n: res.links.length }) : ""].filter(Boolean));
+  toast((what ? t("Restored {what}", { what }) : t("Nothing new to restore")) + (res.kept ? ". " + tn(res.kept, "1 already here was kept.", "{n} already here were kept.") : "."));
 }
 
 // ---- A watched folder (1.1.0) ----
@@ -2649,7 +2652,7 @@ const saveWatch = (w) => store(WATCHES_KEY, watches().map((x) => (x.tree === w.t
 async function showFolder(p) {
   const w = watchOf(p);
   const got = await C.platform.files.reveal(p.link, w ? w.tree : null);
-  if (!got.opened) toast(got.where ? "It's in " + got.where : "Couldn't open its folder");
+  if (!got.opened) toast(got.where ? t("It's in {where}", { where: got.where }) : t("Couldn't open its folder"));
 }
 const watchOf = (p) => (p && p.watched ? watches().find((w) => w.tree === p.watched) || null : null);
 function watchSoon(ms = 1500) {
@@ -2673,12 +2676,12 @@ async function lookInFolder(said, only) {
     const added = got.reduce((n, g) => n + g.added, 0), gone = got.reduce((n, g) => n + g.gone, 0);
     const failed = got.flatMap((g) => g.failed);
     const lost = got.filter((g) => g.lost).map((g) => g.name);
-    const names = list.length === 1 ? list[0].name : "your watched folders";
+    const names = list.length === 1 ? list[0].name : t("your watched folders");
     // Said each time it looks, since they're tried again each time.
-    if (said && lost.length) toast("Waypage can't open " + lost.join(" or ") + " any more. Pick it again in Settings, Content.");
-    else if (failed.length && said !== false) toast(failed.length === 1 ? failed[0] : "Couldn't read " + failed.length + " files from " + names + ". " + failed[0]);
-    else if (added && said !== false) toast("Added " + (added === 1 ? "1 file" : added + " files") + " from " + (list.length === 1 ? names : got.filter((g) => g.added).map((g) => g.name).join(", ")));
-    else if (said && !gone) toast("Nothing new in " + names + ".");
+    if (said && lost.length) toast(t("Waypage can't open {join} any more. Pick it again in Settings, Content.", { join: i18n.join(lost, { type: "disjunction" }) }));
+    else if (failed.length && said !== false) toast(failed.length === 1 ? failed[0] : t("Couldn't read {n} files from {names}. {x}", { n: failed.length, names: names, x: failed[0] }));
+    else if (added && said !== false) toast(tn(added, "Added 1 file from {from}", "Added {n} files from {from}", { from: list.length === 1 ? names : got.filter((g) => g.added).map((g) => g.name).join(", ") }));
+    else if (said && !gone) toast(t("Nothing new in {names}.", { names: names }));
     if (added || gone || got.some((g) => g.joined)) { renderLibrary(); updateWidgets(); }
     return { added, gone };
   })();
@@ -2743,11 +2746,11 @@ async function lookInOne(w, said, scan) {
     const failed = [];
     // Each file is a step on one card in the library and Downloads,
     // with Pause and Stop, like a run of saves (1.1.3).
-    const run = fresh.length ? Object.assign(startRun(null, "Watched folder", fresh.length), { label: w.name, files: true }) : null;
+    const run = fresh.length ? Object.assign(startRun(null, t("Watched folder"), fresh.length), { label: w.name, files: true }) : null;
     if (run) runChanged();
     for (const f of fresh) {
       if (!(await gate(run))) break;
-      Object.assign(run, { now: "Opening " + f.name, part: null });
+      Object.assign(run, { now: t("Opening {name}", { name: f.name }), part: null });
       updateRunCard(run);
       try {
         const file = await C.platform.files.blob(f.ref, f.size);
@@ -2768,7 +2771,7 @@ async function lookInOne(w, said, scan) {
         run.saved++;
       } catch (e) {
         if (!(e instanceof C.files.FileError)) console.error(e);
-        failed.push(f.name + ": " + (e && e.message ? e.message : "couldn't read it"));
+        failed.push(f.name + ": " + (e && e.message ? e.message : t("couldn't read it")));
         run.failed++;
       }
     }
@@ -2780,7 +2783,7 @@ async function lookInOne(w, said, scan) {
 }
 // "Page 3 of 40" on a file's card as it's read.
 const fileProgress = (run, name) => (done, total, what) => {
-  run.now = name + " · " + (what === "words" ? "page " : "picture ") + done + " of " + total;
+  run.now = name + " · " + (what === "words" ? t("page {done} of {total}", { done, total }) : t("picture {done} of {total}", { done, total }));
   run.part = total ? done / total : null;
   updateRunCard(run);
 };
@@ -2794,29 +2797,29 @@ function signedGroup() {
   const list = C.platform.signIn.sites();
   const rows = list.map((s) => el("div", { class: "row watch-row" },
     el("span", { class: "row-label", dir: "auto" }, s.host),
-    el("span", { class: "row-value" }, "Signed in " + whenText(s.at)),
-    el("button", { class: "row-x", type: "button", "aria-label": "Sign out of " + s.host, title: "Sign out", onclick: async () => {
-      if (!confirm("Sign out of " + s.host + "? Waypage forgets its cookies on " + HERE + ".")) return;
+    el("span", { class: "row-value" }, t("Signed in {whenText}", { whenText: whenText(s.at) })),
+    el("button", { class: "row-x", type: "button", "aria-label": t("Sign out of {host}", { host: s.host }), title: t("Sign out"), onclick: async () => {
+      if (!confirm(t("Sign out of {host}? Waypage forgets its cookies on {HERE}.", { host: s.host, HERE: HERE }))) return;
       await C.platform.signIn.signOut(s.host);
-      toast("Signed out of " + s.host);
+      toast(t("Signed out of {host}", { host: s.host }));
       renderSection();
-    } }, el("span", { class: "visually-hidden" }, "Sign out"), svgX())));
-  const field = el("input", { class: "tag-input sign-in-field", type: "url", placeholder: "nytimes.com", "aria-label": "Site to sign in to",
+    } }, el("span", { class: "visually-hidden" }, t("Sign out")), svgX())));
+  const field = el("input", { class: "tag-input sign-in-field", type: "url", placeholder: "nytimes.com", "aria-label": t("Site to sign in to"),
     inputmode: "url", enterkeyhint: "go", autocapitalize: "off", autocomplete: "off", spellcheck: "false", hidden: "" });
   field.addEventListener("keydown", async (e) => {
     if (e.key !== "Enter") return;
     e.preventDefault();
     const typed = field.value.trim();
     const url = /^https?:\/\//i.test(typed) ? typed : "https://" + typed;
-    if (!C.platform.signIn.host(url) || !C.platform.signIn.host(url).includes(".")) { toast("That doesn't look like a site's address."); return; }
-    if (!navigator.onLine) { toast("You're offline. Sign in when you're back online."); return; }
+    if (!C.platform.signIn.host(url) || !C.platform.signIn.host(url).includes(".")) { toast(t("That doesn't look like a site's address.")); return; }
+    if (!navigator.onLine) { toast(t("You're offline. Sign in when you're back online.")); return; }
     field.value = "";
     await C.platform.signIn.open(url).catch(() => {});
     renderSection();
   });
   rows.push(el("button", { class: "row", type: "button", onclick: () => { field.hidden = false; field.focus(); } },
-    el("span", { class: "row-label accent" }, list.length ? "Sign in to another site" : "Sign in to a site")));
-  const sec = section("Signed in", "Subscribe to a site? Sign in to it here, and Waypage saves its articles as you, whole instead of only their start. Sign-ins stay on " + HERE + " and don't sync.",
+    el("span", { class: "row-label accent" }, list.length ? t("Sign in to another site") : t("Sign in to a site"))));
+  const sec = section(t("Signed in"), t("Subscribe to a site? Sign in to it here, and Waypage saves its articles as you, whole instead of only their start. Sign-ins stay on {HERE} and don't sync.", { HERE: HERE }),
     el("div", { class: "group" }, ...rows),
     field);
   sec.id = "signedSection";
@@ -2829,29 +2832,29 @@ function watchGroup() {
   const count = (w) => state.pages.filter((p) => p.watched === w.tree).length;
   const rows = list.map((w) => el("div", { class: "row watch-row" },
     el("span", { class: "row-label" }, w.name),
-    el("span", { class: "row-value" }, w.lost ? "Can't open it" : count(w) === 1 ? "1 file" : count(w) + " files"),
-    el("button", { class: "row-x row-refresh" + (watching ? " looking" : ""), type: "button", ...(watching ? { disabled: "" } : {}), "aria-label": "Look in " + w.name + " now", title: "Look now", onclick: () => lookInFolder(true, w) },
-      el("span", { class: "visually-hidden" }, "Look now"),
+    el("span", { class: "row-value" }, w.lost ? t("Can't open it") : count(w) === 1 ? t("1 file") : t("{w} files", { w: count(w) })),
+    el("button", { class: "row-x row-refresh" + (watching ? " looking" : ""), type: "button", ...(watching ? { disabled: "" } : {}), "aria-label": t("Look in {name} now", { name: w.name }), title: t("Look now"), onclick: () => lookInFolder(true, w) },
+      el("span", { class: "visually-hidden" }, t("Look now")),
       svgRefresh()),
-    el("button", { class: "row-x", type: "button", "aria-label": "Stop watching " + w.name, title: "Stop watching", onclick: () => stopWatching(w) },
-      el("span", { class: "visually-hidden" }, "Stop watching"),
+    el("button", { class: "row-x", type: "button", "aria-label": t("Stop watching {name}", { name: w.name }), title: t("Stop watching"), onclick: () => stopWatching(w) },
+      el("span", { class: "visually-hidden" }, t("Stop watching")),
       svgX())));
   // Under each folder, the collection its new files go into (1.28.0).
   for (const [i, w] of [...list.entries()].reverse()) rows.splice(i + 1, 0, el("div", { class: "row watch-into" },
-    el("span", { class: "row-label" }, "New files go into"), watchIntoPick(w)));
-  rows.push(el("button", { class: "row", type: "button", onclick: pickWatched }, el("span", { class: "row-label accent" }, list.length ? "Watch another folder" : "Watch a folder")));
+    el("span", { class: "row-label" }, t("New files go into")), watchIntoPick(w)));
+  rows.push(el("button", { class: "row", type: "button", onclick: pickWatched }, el("span", { class: "row-label accent" }, list.length ? t("Watch another folder") : t("Watch a folder"))));
   const lost = list.filter((w) => w.lost).map((w) => w.name);
-  const sec = section(list.length === 1 ? "Watched folder" : "Watched folders", "Pick a folder, like Books, and Waypage adds what's in it each time it opens, or when you tap the arrow. New files go into the collection picked under each folder, or one named after their folder, and a file you delete there leaves Waypage too. Each file is read from where it is, so it doesn't sync.",
+  const sec = section(list.length === 1 ? t("Watched folder") : t("Watched folders"), t("Pick a folder, like Books, and Waypage adds what's in it each time it opens, or when you tap the arrow. New files go into the collection picked under each folder, or one named after their folder, and a file you delete there leaves Waypage too. Each file is read from where it is, so it doesn't sync."),
     el("div", { class: "group" }, ...rows),
-    lost.length ? el("p", { class: "footnote warn" }, "Waypage can't open " + lost.join(" or ") + " any more. Pick it again to carry on.") : null);
+    lost.length ? el("p", { class: "footnote warn" }, t("Waypage can't open {join} any more. Pick it again to carry on.", { join: i18n.join(lost, { type: "disjunction" }) })) : null);
   sec.id = "watchSection";
   return sec;
 }
 const WATCH_NEW = "\u0000new";
 function watchIntoPick(w) {
   const names = allFolders();
-  const options = [{ value: "", label: "Its subfolders" }, ...[...new Set([...(w.into ? [w.into] : []), ...names])].map((f) => ({ value: f, label: f })),
-    { value: WATCH_NEW, label: "New collection…" }];
+  const options = [{ value: "", label: t("Its subfolders") }, ...[...new Set([...(w.into ? [w.into] : []), ...names])].map((f) => ({ value: f, label: f })),
+    { value: WATCH_NEW, label: t("New collection…") }];
   // The folder's files already here move too (1.28.1): a picked
   // collection is made by the files in it, so with none moved it didn't
   // show at all.
@@ -2873,13 +2876,13 @@ function watchIntoPick(w) {
     if (moved) { await C.store.writeIndex(state.pages); renderLibrary(); updateWidgets(); }
     renderSection();
     const files = moved === 1 ? "1 file" : moved + " files";
-    toast(into ? (moved ? "Moved " + files + " into " + into + ". New ones go there too." : "New files from " + w.name + " go into " + into)
-      : (moved ? "Moved " + files + " back into collections named after their folders" : "New files from " + w.name + " go into collections named after their folders"));
+    toast(into ? (moved ? t("Moved {files} into {into}. New ones go there too.", { files: files, into: into }) : t("New files from {name} go into {into}", { name: w.name, into: into }))
+      : (moved ? t("Moved {files} back into collections named after their folders", { files: files }) : t("New files from {name} go into collections named after their folders", { name: w.name })));
   };
-  return dropdown({ label: "New files from " + w.name + " go into", cls: "field-pick watch-pick", value: w.into || "", options,
+  return dropdown({ label: t("New files from {name} go into", { name: w.name }), cls: "field-pick watch-pick", value: w.into || "", options,
     onpick: (v) => {
       if (v !== WATCH_NEW) { set(v); return; }
-      const typed = prompt("Name the new collection");
+      const typed = prompt(t("Name the new collection"));
       if (typed && cleanTag(typed)) set(folderName(typed));
       else renderSection();
     } });
@@ -2895,7 +2898,7 @@ async function pickWatched() {
   const had = list.find((w) => w.tree === got.ref);
   if (had) {
     if (had.lost) { delete had.lost; saveWatch(had); }
-    else toast("Already watching " + got.name + ".");
+    else toast(t("Already watching {name}.", { name: got.name }));
   } else store(WATCHES_KEY, [...list, { tree: got.ref, name: got.name }]);
   if (state.section === "library") renderSection();
   await lookInFolder(true, { tree: got.ref });
@@ -2915,22 +2918,22 @@ async function stopWatching(w) {
   await C.store.writeIndex(state.pages);
   store(WATCHES_KEY, watches().filter((x) => x.tree !== w.tree));
   if (state.section === "library") renderSection();
-  toast("Stopped watching " + w.name + ". Its files stay in your library.");
+  toast(t("Stopped watching {name}. Its files stay in your library.", { name: w.name }));
 }
 
 // Storage's Actions (1.47.0, was Backup): backing up, then making room.
 function backupGroup(more = []) {
   const input = el("input", { type: "file", class: "visually-hidden", tabindex: "-1", "aria-hidden": "true" });
   const open = el("button", { class: "row", type: "button", onclick: () => (C.platform.files.canLink ? pickFile() : input.click()) },
-    el("span", { class: "row-label accent" }, "Restore"));
+    el("span", { class: "row-label accent" }, t("Restore")));
   input.addEventListener("change", () => { const f = input.files[0]; input.value = ""; openFile(f, open); });
-  const sec = section("Actions", "Back up the library makes one file with every clip, its pictures, tags, collections and where you were, and the feeds and newsletters you follow; files read from outside stay out. " + (C.platform.native ? "Keep it off the phone. " : "Keep it somewhere other than this browser. ") + "Restore brings a backup back, keeping whichever copy of a clip was saved last. Highlights save as one Markdown file with their notes and links. Keep only the text drops the saved pictures of clips you've finished; they show again when you're online. Make pictures smaller rewrites full pictures to a quarter of the size, still sharp on a phone.",
+  const sec = section(t("Actions"), t("Back up the library makes one file with every clip, its pictures, tags, collections and where you were, and the feeds and newsletters you follow; files read from outside stay out. {x}Restore brings a backup back, keeping whichever copy of a clip was saved last. Highlights save as one Markdown file with their notes and links. Keep only the text drops the saved pictures of clips you've finished; they show again when you're online. Make pictures smaller rewrites full pictures to a quarter of the size, still sharp on a phone.", { x: C.platform.native ? t("Keep it off the phone. ") : t("Keep it somewhere other than this browser. ") }),
     el("div", { class: "group" },
       backupRow(),
       state.pages.some((p) => (p.marks || []).length) ? el("button", { class: "row", type: "button", onclick: (e) => saveHighlights(e.currentTarget) },
-        el("span", { class: "row-label accent" }, "Save all highlights")) : null,
+        el("span", { class: "row-label accent" }, t("Save all highlights"))) : null,
       siteFeeds().length ? el("button", { class: "row", type: "button", onclick: (e) => saveOpml(e.currentTarget) },
-        el("span", { class: "row-label accent" }, "Save the feeds you follow (OPML)")) : null,
+        el("span", { class: "row-label accent" }, t("Save the feeds you follow (OPML)"))) : null,
       open, ...more, input));
   sec.id = "backupSection";
   return sec;
@@ -2941,8 +2944,8 @@ function importRow() {
   const input = el("input", { type: "file", class: "visually-hidden", tabindex: "-1", "aria-hidden": "true" });
   const open = el("button", { class: "row", type: "button", onclick: () => (C.platform.files.canLink ? pickFile() : input.click()) },
         el("span", { class: "choice-text" },
-          el("span", { class: "choice-label accent" }, "Import from another app"),
-          el("span", { class: "choice-note" }, "Pocket, Instapaper, Omnivore, Wallabag, Raindrop, OPML")));
+          el("span", { class: "choice-label accent" }, t("Import from another app")),
+          el("span", { class: "choice-note" }, t("Pocket, Instapaper, Omnivore, Wallabag, Raindrop, OPML"))));
   input.addEventListener("change", () => { const f = input.files[0]; input.value = ""; openFile(f, open); });
   return [open, input];
 }
@@ -2963,7 +2966,7 @@ function paperPic(kind) {
 // The choice of paper for a new note: a picture beside each.
 function newNoteSheet() {
   return el("div", { class: "page-controls" },
-    el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, "New note")),
+    el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, t("New note"))),
     el("div", { class: "group" }, ...C.notes.PAPERS.map((kind) =>
       el("button", { class: "row paper-row", type: "button", onclick: () => makeNote(kind) },
         paperPic(kind),
@@ -2972,7 +2975,7 @@ function newNoteSheet() {
 // Makes the note, puts it first in the library and opens it to write on.
 async function makeNote(kind) {
   let meta;
-  try { meta = await C.notes.create(kind); } catch (e) { console.error(e); toast("Couldn't make the note. Free some space and try again."); return; }
+  try { meta = await C.notes.create(kind); } catch (e) { console.error(e); toast(t("Couldn't make the note. Free some space and try again.")); return; }
   // Made inside a collection, it belongs to it; under a tag filter, it has the tag.
   if (state.folder) { meta.folder = folderName(state.folder); meta.folderAt = Date.now(); joinFav(meta, meta.folder); }
   if (state.filter.startsWith("#")) meta.tags = withTags([], [state.filter.slice(1)]);
@@ -2987,7 +2990,7 @@ async function makeNote(kind) {
 // A PDF picked to open can be made into a note straight away: a copy of its
 // pages, the file itself let go. `open` says to show it once it's made.
 async function noteFromFile(file, open) {
-  toast("Making the note…");
+  toast(t("Making the note…"));
   let meta;
   try {
     const title = file.name.replace(/\.pdf$/i, "");
@@ -2996,7 +2999,7 @@ async function noteFromFile(file, open) {
     meta = await C.notes.fromPdf({ title: part.name || title }, file, part.range);
   } catch (e) {
     console.error(e);
-    toast(e instanceof C.files.FileError ? e.message : "Couldn't make the note. Try again.");
+    toast(e instanceof C.files.FileError ? e.message : t("Couldn't make the note. Try again."));
     return;
   }
   state.pages.unshift(meta);
@@ -3012,7 +3015,7 @@ async function noteFromFile(file, open) {
 // runs of pages) first; the book is measured before anything is drawn.
 async function makeNoteFrom(p) {
   if (!C.files.convertible(p)) return;
-  const say = (n) => toast(n ? "Making the note… " + n + " pages" : "Making the note…");
+  const say = (n) => toast(n ? t("Making the note… {n} pages", { n: n }) : t("Making the note…"));
   say(0);
   let meta;
   try {
@@ -3025,7 +3028,7 @@ async function makeNoteFrom(p) {
     } else {
       const html = p.link ? await C.files.openLinked(p) : await C.store.readPage(p.id);
       const root = new DOMParser().parseFromString(html, "text/html").querySelector(".co-body");
-      if (!root) throw new C.files.FileError("Waypage can't read this one to make a note of it.");
+      if (!root) throw new C.files.FileError(t("Waypage can't read this one to make a note of it."));
       const title = p.comic ? "" : p.title;
       const plan = await C.notes.plan(root, !!p.comic, title);
       if (!plan.fits) {
@@ -3041,7 +3044,7 @@ async function makeNoteFrom(p) {
     }
   } catch (e) {
     console.error(e);
-    toast(e instanceof C.files.FileError ? e.message : "Couldn't make the note." + (p.link ? " Is the file still where it was?" : " Try again."));
+    toast(e instanceof C.files.FileError ? e.message : p.link ? t("Couldn't make the note. Is the file still where it was?") : t("Couldn't make the note. Try again."));
     return;
   }
   state.pages.unshift(meta);
@@ -3059,7 +3062,7 @@ async function pdfPart(p, blob) {
   const parts = [];
   for (let a = 1; a <= pages; a += 50) {
     const z = Math.min(pages, a + 49);
-    parts.push({ title: "Pages " + a + "–" + z, run: true, from: a, to: z + 1, first: a, pages: z - a + 1 });
+    parts.push({ title: t("Pages {a}–{z}", { a: a, z: z }), run: true, from: a, to: z + 1, first: a, pages: z - a + 1 });
   }
   const pick = await askParts(p, { pages, parts, max });
   return pick && { range: { from: pick.from, to: pick.to - 1 }, name: p.title + ", " + pick.name };
@@ -3088,24 +3091,24 @@ function notePartsSheet() {
     if (a.answered || pagesOf() > a.plan.max) return;
     a.answered = true;
     const f = parts[a.from], t = parts[a.to];
-    a.done({ from: f.from, to: t.to, name: f.run ? "pages " + f.first + "–" + (t.first + t.pages - 1) : a.from === a.to ? f.title : f.title + " to " + t.title });
+    a.done({ from: f.from, to: t.to, name: f.run ? i18n.t("pages {from}–{to}", { from: f.first, to: t.first + t.pages - 1 }) : a.from === a.to ? f.title : i18n.t("{from} to {to}", { from: f.title, to: t.title }) });
     history.back();
-  } }, el("span", { class: "row-label accent" }, "Make the note"));
+  } }, el("span", { class: "row-label accent" }, t("Make the note")));
   const update = () => {
     const n = pagesOf(), over = n > a.plan.max;
-    total.textContent = "About " + n + " pages" + (over ? ", over the " + a.plan.max + " a note holds" : "");
+    total.textContent = over ? t("About {n} pages, over the {max} a note holds", { n, max: a.plan.max }) : t("About {n} pages", { n });
     total.classList.toggle("warn", over);
     make.disabled = over;
   };
   const options = parts.map((x, i) => ({ value: String(i), label: x.title }));
   let toRow;
-  const fromRow = pickRow({ label: "From", options, get: () => String(a.from), set: (v) => { a.from = Number(v); if (a.to < a.from) { a.to = a.from; toRow.set(String(a.to)); } update(); } });
-  toRow = pickRow({ label: "To", options, get: () => String(a.to), set: (v) => { a.to = Number(v); if (a.from > a.to) { a.from = a.to; fromRow.set(String(a.from)); } update(); } });
+  const fromRow = pickRow({ label: t("From"), options, get: () => String(a.from), set: (v) => { a.from = Number(v); if (a.to < a.from) { a.to = a.from; toRow.set(String(a.to)); } update(); } });
+  toRow = pickRow({ label: t("To"), options, get: () => String(a.to), set: (v) => { a.to = Number(v); if (a.from > a.to) { a.from = a.to; fromRow.set(String(a.from)); } update(); } });
   update();
   return el("div", { class: "page-controls" },
     el("div", { class: "menu-head" },
       el("p", { class: "menu-title", dir: "auto" }, a.p.title),
-      el("p", { class: "meta" }, "About " + a.plan.pages + " pages. A note holds " + a.plan.max + ", so pick the part to make it from.")),
+      el("p", { class: "meta" }, t("About {pages} pages. A note holds {n}, so pick the part to make it from.", { pages: a.plan.pages, n: a.plan.max }))),
     el("div", { class: "group" }, fromRow, toRow),
     total,
     el("div", { class: "group" }, make));

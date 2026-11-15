@@ -9,10 +9,10 @@ function formatSize(bytes) {
 }
 const sizeOf = (pages) => pages.reduce((sum, p) => sum + (p.bytes || 0), 0);
 const totalBytes = () => sizeOf(state.pages);
-const countLine = (n) => n + (n === 1 ? " clip" : " clips");
+const countLine = (n) => tn(n, "1 clip", "{n} clips");
 // Where the pages are kept, for the words that say so.
-const HERE = C.platform.native ? "this phone" : "this browser";
-const ON_HERE = (C.platform.native ? "on " : "in ") + HERE;
+const HERE = C.platform.native ? t("this phone") : t("this browser");
+const ON_HERE = C.platform.native ? t("on this phone") : t("in this browser");
 const pagesLine = (n) => countLine(n) + " · " + formatSize(totalBytes());
 
 // A browser's card pictures, read once from IndexedDB (0.27.12).
@@ -91,12 +91,12 @@ function coverUrl(list) {
 // What a save is doing, with the seconds it has taken once that's long
 // enough to wonder, so a slow site doesn't look stuck.
 function savingStatus(s) {
-  if (s.waiting) return (s.offline ? "Saves when you're back online" : s.wifi ? "Waiting for Wi-Fi" : "Waiting") + (s.folder ? " · into " + s.folder : "");
+  if (s.waiting) return (s.offline ? t("Saves when you're back online") : s.wifi ? t("Waiting for Wi-Fi") : t("Waiting")) + (s.folder ? " · " + t("into {folder}", { folder: s.folder }) : "");
   const secs = s.started ? Math.floor((Date.now() - s.started) / 1000) : 0;
-  const took = secs >= 5 ? " · " + secs + " s" : "";
-  if (s.total == null) return (s.drawing ? "Letting the page draw itself" : "Getting the page") + took;
-  if (!s.total) return "Writing it to the phone" + took;
-  return "Saving " + s.done + " of " + s.total + (s.total === 1 ? " image" : " images") + took;
+  const took = secs >= 5 ? " · " + t("{secs} s", { secs }) : "";
+  if (s.total == null) return (s.drawing ? t("Letting the page draw itself") : t("Getting the page")) + took;
+  if (!s.total) return t("Writing it to the phone") + took;
+  return tn(s.total, "Saving {done} of 1 image", "Saving {done} of {n} images", { done: s.done }) + took;
 }
 
 // The bar: sweeping while the page itself downloads (no size known yet),
@@ -106,15 +106,15 @@ const savingShare = (s) => (s.total == null ? null : s.total ? 0.1 + 0.9 * (s.do
 // A save that failed stays in the list with the reason until it's retried
 // or removed: a toast alone is gone before anyone looks back at the phone.
 function failedCard(s) {
-  return el("div", { class: "card saving failed wide", role: "group", "aria-label": "Couldn't save " + s.site },
+  return el("div", { class: "card saving failed wide", role: "group", "aria-label": t("Couldn't save {site}", { site: s.site }) },
     el("span", { class: "card-body" },
       el("span", { class: "card-site" }, s.site),
       el("span", { class: "card-title", dir: "auto" }, s.url),
       el("span", { class: "card-status" }, el("span", { class: "warn" }, s.error)),
       el("span", { class: "card-actions" },
         archiveBtn(s),
-        s.gone ? null : el("button", { class: "btn-small", type: "button", onclick: () => retryJob(s) }, "Try again"),
-        el("button", { class: "btn-quiet", type: "button", onclick: () => dropFailed(s) }, "Remove"))));
+        s.gone ? null : el("button", { class: "btn-small", type: "button", onclick: () => retryJob(s) }, t("Try again")),
+        el("button", { class: "btn-quiet", type: "button", onclick: () => dropFailed(s) }, t("Remove")))));
 }
 
 // A run of saves into one folder (Save next 10, Save several, a
@@ -220,27 +220,27 @@ function finish(entry) {
 // A run's pages that couldn't be saved, waiting on Try again.
 const failedOf = (r) => state.saving.filter((s) => s.run === r && s.error);
 function runStatus(r) {
-  const done = r.total ? r.saved + " of " + r.total + " saved" : r.saved + " saved";
-  const failed = r.failed ? ", " + r.failed + " failed" : "";
-  if (r.stopped) return done + failed + " · Stopping";
-  if (r.paused) return (r.current || r.now ? "Pausing after this one · " : "Paused · ") + done + failed;
+  const done = r.total ? t("{saved} of {total} saved", { saved: r.saved, total: r.total }) : t("{saved} saved", { saved: r.saved });
+  const failed = r.failed ? ", " + t("{failed} failed", { failed: r.failed }) : "";
+  if (r.stopped) return done + failed + " · " + t("Stopping");
+  if (r.paused) return (r.current || r.now ? t("Pausing after this one") : t("Paused")) + " · " + done + failed;
   // Files (1.1.3): what the file in hand is up to.
-  if (r.files) return r.total === 1 ? r.now || "Opening" : done + failed + " · " + (r.now || "Next in a moment");
-  return done + failed + " · " + (r.current && !r.current.waiting ? savingStatus(r.current) : "Next in a moment");
+  if (r.files) return r.total === 1 ? r.now || t("Opening") : done + failed + " · " + (r.now || t("Next in a moment"));
+  return done + failed + " · " + (r.current && !r.current.waiting ? savingStatus(r.current) : t("Next in a moment"));
 }
 function runCard(r) {
-  return el("div", { class: "card saving run wide", role: "group", "aria-label": r.files ? "Adding " + r.label : (r.again ? "Saving again in " : "Saving into ") + (r.folder || "the library") },
+  return el("div", { class: "card saving run wide", role: "group", "aria-label": r.files ? t("Adding {label}", { label: r.label }) : r.folder ? (r.again ? t("Saving again in {folder}", { folder: r.folder }) : t("Saving into {folder}", { folder: r.folder })) : (r.again ? t("Saving again in the library") : t("Saving into the library")) },
     el("span", { class: "card-body" },
-      el("span", { class: "card-site" }, r.site, r.again ? " · Saving again" : null),
-      el("span", { class: "card-title", dir: "auto" }, r.folder || r.label || "Saving several"),
+      el("span", { class: "card-site" }, r.site, r.again ? t(" · Saving again") : null),
+      el("span", { class: "card-title", dir: "auto" }, r.folder || r.label || t("Saving several")),
       el("span", { class: "progress", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": "0" },
         el("span", { class: "progress-fill" })),
       el("span", { class: "card-status accent" },
         el("span", { class: "spinner", "aria-hidden": "true" }),
         el("span", { class: "status-text" }, runStatus(r))),
       r.files && r.total === 1 ? null : el("span", { class: "card-actions" },
-        el("button", { class: "btn-small run-pause", type: "button", onclick: () => pauseRun(r, !r.paused) }, r.paused ? "Resume" : "Pause"),
-        el("button", { class: "btn-quiet danger", type: "button", onclick: () => stopRun(r) }, "Stop")),
+        el("button", { class: "btn-small run-pause", type: "button", onclick: () => pauseRun(r, !r.paused) }, r.paused ? t("Resume") : t("Pause")),
+        el("button", { class: "btn-quiet danger", type: "button", onclick: () => stopRun(r) }, t("Stop"))),
       failedList(r)));
 }
 // A run's bar is the whole run when its length is known, else the page
@@ -276,17 +276,17 @@ function failedList(r) {
   if (!list.length) return null;
   return el("span", { class: "failed-list" },
     el("span", { class: "failed-head" },
-      el("span", { class: "warn" }, list.length === 1 ? "1 clip couldn't be saved" : list.length + " clips couldn't be saved"),
-      list.length > 1 ? el("button", { class: "btn-text", type: "button", onclick: () => retryAll(list) }, "Try all again") : null),
+      el("span", { class: "warn" }, list.length === 1 ? t("1 clip couldn't be saved") : t("{n} clips couldn't be saved", { n: list.length })),
+      list.length > 1 ? el("button", { class: "btn-text", type: "button", onclick: () => retryAll(list) }, t("Try all again")) : null),
     ...list.map((s) => el("span", { class: "failed-row" },
       el("span", { class: "failed-text" },
         el("span", { class: "failed-url", dir: "auto" }, s.again ? s.again.title : s.url),
         el("span", { class: "failed-why" }, s.error)),
-      archiveBtn(s) || el("button", { class: "btn-small", type: "button", onclick: () => retryJob(s) }, "Try again"),
+      archiveBtn(s) || el("button", { class: "btn-small", type: "button", onclick: () => retryJob(s) }, t("Try again")),
       dropBtn(s))));
 }
 function dropBtn(s) {
-  const b = el("button", { class: "icon-btn failed-drop", type: "button", "aria-label": "Remove", onclick: () => dropFailed(s) });
+  const b = el("button", { class: "icon-btn failed-drop", type: "button", "aria-label": t("Remove"), onclick: () => dropFailed(s) });
   b.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
   return b;
 }
@@ -295,18 +295,18 @@ function dropBtn(s) {
 // rest: in the app, signing in to the site (1.8.0).
 function savedToast(meta) {
   if (meta.cut && C.platform.signIn.available) {
-    toast(C.platform.signIn.for(meta.url) ? "Saved, but only the start, even signed in." : "Saved, but the site kept the rest for subscribers.",
-      "Sign in", () => signInFor(meta));
-  } else if (meta.cut) toast("Saved, but the site kept the rest for subscribers.", "Open it", () => C.platform.openOutside(meta.url));
-  else toast(meta.missing ? "Saved. Some previews are missing." : "Saved for offline reading");
+    toast(C.platform.signIn.for(meta.url) ? t("Saved, but only the start, even signed in.") : t("Saved, but the site kept the rest for subscribers."),
+      t("Sign in"), () => signInFor(meta));
+  } else if (meta.cut) toast(t("Saved, but the site kept the rest for subscribers."), t("Open it"), () => C.platform.openOutside(meta.url));
+  else toast(meta.missing ? t("Saved. Some previews are missing.") : t("Saved for offline reading"));
 }
 
 // Saving signed in (1.8.0): the site opens in a browser inside Waypage,
 // and once it's closed the clip saves again with the site's cookies,
 // taking the old copy's place, highlights and all.
 async function signInFor(p) {
-  if (!navigator.onLine) { toast("You're offline. Sign in when you're back online."); return; }
-  if (!(await C.platform.signIn.open(p.url).catch(() => false))) { toast("Couldn't open the site."); return; }
+  if (!navigator.onLine) { toast(t("You're offline. Sign in when you're back online.")); return; }
+  if (!(await C.platform.signIn.open(p.url).catch(() => false))) { toast(t("Couldn't open the site.")); return; }
   const now = state.pages.find((x) => x.id === p.id);
   if (now && /^https?:/.test(now.url || "")) saveClipAgain(now);
 }
@@ -315,12 +315,12 @@ async function saveClipAgain(p, archived) {
   const job = { ...newJob(p.url, p.folder), key: "again:" + p.id, again: p, mode: p.mode, kind: p.comic ? "comic" : "article", archived };
   state.saving.unshift(job);
   renderLibrary();
-  toast("Saving it again…");
+  toast(t("Saving it again…"));
   const meta = await runJob(job);
-  if (!meta) { toast("Couldn't save it again. It's in Downloads to try once more."); return; }
-  if (archived) toast("Saved the archived copy from " + C.save.formatDate(archived.at) + ".");
-  else if (meta.cut) toast("Still only the start. The site may want a subscription, or a different sign-in.", "Sign in", () => signInFor(meta));
-  else toast("Saved again, the whole article this time.");
+  if (!meta) { toast(t("Couldn't save it again. It's in Downloads to try once more.")); return; }
+  if (archived) toast(t("Saved the archived copy from {formatDate}.", { formatDate: C.save.formatDate(archived.at) }));
+  else if (meta.cut) toast(t("Still only the start. The site may want a subscription, or a different sign-in."), t("Sign in"), () => signInFor(meta));
+  else toast(t("Saved again, the whole article this time."));
   // Open in the reader, it shows the new copy in the old one's place.
   if (state.open === p) {
     const html = await C.store.readPage(meta.id).catch(() => null);
@@ -339,21 +339,21 @@ const pageWords = (html) => {
   return (d.body ? d.body.textContent : "").replace(/\s+/g, " ").trim();
 };
 async function updateClip(p) {
-  if (!navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
+  if (!navigator.onLine) { toast(t("You're offline. Try again when you're back online.")); return; }
   if (state.saving.some((s) => s.again === p)) return;
   const before = await C.store.readPage(p.id).catch(() => null);
   const keep = p.spot ? { spot: p.spot, spotWords: C.reader.spotWords(before, p.spot) } : null;
   const job = { ...newJob(p.url, p.folder), key: "again:" + p.id, again: p, mode: p.mode, kind: p.comic ? "comic" : "article", keep };
   state.saving.unshift(job);
   renderLibrary();
-  toast("Checking the site for changes…");
+  toast(t("Checking the site for changes…"));
   const meta = await runJob(job);
-  if (!meta) { toast("Couldn't update it. It's in Downloads to try once more."); return; }
+  if (!meta) { toast(t("Couldn't update it. It's in Downloads to try once more.")); return; }
   const after = await C.store.readPage(meta.id).catch(() => null);
   const was = pageWords(before), now = pageWords(after);
   const lost = (meta.marks || []).filter((m) => m.text && !now.includes(m.text)).length;
-  if (was && was === now) toast("Already up to date. Nothing on the page has changed.");
-  else toast("Updated from the site." + (lost ? " " + lost + (lost === 1 ? " highlight's words aren't" : " highlights' words aren't") + " in it any more; " + (lost === 1 ? "it stays" : "they stay") + " under Highlights." : ""));
+  if (was && was === now) toast(t("Already up to date. Nothing on the page has changed."));
+  else toast(lost ? tn(lost, "Updated from the site. 1 highlight's words aren't in it any more; it stays under Highlights.", "Updated from the site. {n} highlights' words aren't in it any more; they stay under Highlights.") : t("Updated from the site."));
   if (state.open === p && after) { history.replaceState(readerState(meta), ""); show(meta, after); }
 }
 
@@ -363,16 +363,16 @@ async function updateClip(p) {
 async function setClipKind(p, kind) {
   if (!!p.comic === (kind === "comic")) return;
   if (p.file) return setFileKind(p, kind);
-  if (!navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
+  if (!navigator.onLine) { toast(t("You're offline. Try again when you're back online.")); return; }
   if (state.saving.some((s) => s.again === p)) return;
   const comic = kind === "comic";
   const job = { ...newJob(p.url, p.folder), key: "again:" + p.id, again: p, mode: comic ? "full" : p.mode, kind };
   state.saving.unshift(job);
   renderLibrary();
-  toast(comic ? "Saving it as a comic…" : "Saving it as an article…");
+  toast(comic ? t("Saving it as a comic…") : t("Saving it as an article…"));
   const meta = await runJob(job);
-  if (!meta) { toast(comic ? "Couldn't find the pictures. It's in Downloads to try once more." : "Couldn't save it again. It's in Downloads to try once more."); return; }
-  toast(comic ? "Saved as a comic." : "Saved as an article.");
+  if (!meta) { toast(comic ? t("Couldn't find the pictures. It's in Downloads to try once more.") : t("Couldn't save it again. It's in Downloads to try once more.")); return; }
+  toast(comic ? t("Saved as a comic.") : t("Saved as an article."));
   if (state.open === p) {
     const html = await C.store.readPage(meta.id).catch(() => null);
     if (html && state.open === p) { history.replaceState(readerState(meta), ""); show(meta, html); }
@@ -383,7 +383,7 @@ async function setFileKind(p, kind) {
   const comic = kind === "comic";
   let html = null;
   try { html = await C.store.readPage(p.id); } catch (e) { html = null; }
-  if (!html) { toast("Couldn't open this file. Try again."); return; }
+  if (!html) { toast(t("Couldn't open this file. Try again.")); return; }
   const doc = new DOMParser().parseFromString(html, "text/html");
   const root = doc.querySelector(".co-body") || doc.body;
   root.classList.toggle("co-comic", comic);
@@ -392,7 +392,7 @@ async function setFileKind(p, kind) {
   await C.store.writeIndex(state.pages);
   renderLibrary();
   if (state.folder) renderFolder();
-  toast(comic ? "Shown as a comic." : "Shown as an article.");
+  toast(comic ? t("Shown as a comic.") : t("Shown as an article."));
   if (state.open !== p) return;
   const now = await (p.link || p.note ? openLinked(p) : C.store.readPage(p.id)).catch(() => null);
   if (now && state.open === p) show(p, now);
@@ -401,12 +401,12 @@ async function setFileKind(p, kind) {
 // The Wayback Machine (1.15.0): a page that's gone saved from the
 // Internet Archive's newest copy, with its own address kept.
 async function findArchive(url) {
-  if (!navigator.onLine) { toast("You're offline. Try again when you're back online."); return null; }
-  toast("Looking in the Internet Archive…");
+  if (!navigator.onLine) { toast(t("You're offline. Try again when you're back online.")); return null; }
+  toast(t("Looking in the Internet Archive…"));
   let found = null;
   try { found = await C.save.findArchived(url); }
-  catch (e) { toast(e instanceof C.save.SaveError ? e.message : "Couldn't reach the Internet Archive."); return null; }
-  if (!found) toast("The Internet Archive has no copy of this page.");
+  catch (e) { toast(e instanceof C.save.SaveError ? e.message : t("Couldn't reach the Internet Archive.")); return null; }
+  if (!found) toast(t("The Internet Archive has no copy of this page."));
   return found;
 }
 async function saveArchived(s) {
@@ -419,10 +419,10 @@ async function saveArchived(s) {
 async function archiveClip(p) {
   const found = await findArchive(p.url);
   if (!found) return;
-  if (p.archived && found.at <= p.archived) { toast("This is already the newest archived copy."); return; }
+  if (p.archived && found.at <= p.archived) { toast(t("This is already the newest archived copy.")); return; }
   saveClipAgain(p, found);
 }
-const archiveBtn = (s) => (s.gone ? el("button", { class: "btn-small", type: "button", onclick: () => saveArchived(s) }, "Archived copy") : null);
+const archiveBtn = (s) => (s.gone ? el("button", { class: "btn-small", type: "button", onclick: () => saveArchived(s) }, t("Archived copy")) : null);
 
 // Saves a failed page again where it was headed: its collection, its
 // place there, its tags, or the page it was replacing.
@@ -459,9 +459,9 @@ const clipLeft = (p, at) => Math.max(1, Math.ceil(clipMinutes(p) * (1 - at)));
 // "Finished" once read to the end, "6 min left" part way, else the length.
 function readingLine(p) {
   if (isAudiobook(p)) return listenLine(p);
-  if (p.finished) return "Finished";
-  if (p.at > 0.02) return clipLeft(p, p.at) + " min left";
-  return clipMinutes(p) + " min";
+  if (p.finished) return t("Finished");
+  if (p.at > 0.02) return t("{n} min left", { n: clipLeft(p, p.at) });
+  return t("{n} min", { n: clipMinutes(p) });
 }
 
 // Only what needs a look gets a word: missing previews, or images that
@@ -474,14 +474,14 @@ function pageCard(p, found, hero) {
   const done = isAudiobook(p) ? listenDone(p) : p.at;
   const started = isAudiobook(p) ? done > 0.02 && done < 0.995 : !p.finished && done > 0.02;
   const status = p.missing
-    ? el("span", { class: "warn" }, p.missing + (p.missing === 1 ? " preview" : " previews") + " missing")
-    : p.cut ? el("span", { class: "warn" }, "Only the start")
-    : p.mode === "links" ? el("span", null, "Images online")
-    : tooBigLine(p) ? el("span", { class: "warn" }, "Not synced, too big") : null;
+    ? el("span", { class: "warn" }, tn(p.missing, "1 preview missing", "{n} previews missing"))
+    : p.cut ? el("span", { class: "warn" }, t("Only the start"))
+    : p.mode === "links" ? el("span", null, t("Images online"))
+    : tooBigLine(p) ? el("span", { class: "warn" }, t("Not synced, too big")) : null;
   // The whole card opens the page (a button stretched under everything);
   // Retry sits above it, since a button can't hold another.
   const retry = p.missing && C.platform.native && navigator.onLine
-    ? el("button", { class: "card-retry", type: "button", onclick: (e) => retryPreviews(p, e.currentTarget) }, "Retry")
+    ? el("button", { class: "card-retry", type: "button", onclick: (e) => retryPreviews(p, e.currentTarget) }, t("Retry"))
     : null;
   return el("div", { class: "card page-card" + (hero ? " continue wide" : "") + (cover ? " has-cover" : ""), "data-ids": p.id },
     el("button", { class: "card-open", type: "button", "aria-label": p.title + (p.fav ? ", favourite" : ""), onclick: () => tapPages([p.id], () => openPage(p.id)) }),
@@ -493,7 +493,7 @@ function pageCard(p, found, hero) {
       el("span", { class: "card-title", dir: "auto" }, p.title),
       found ? el("span", { class: "card-found", dir: "auto" }, found) : null,
       el("span", { class: "card-status" }, facts, status ? " · " : null, status, retry ? " · " : null, retry),
-      started ? el("span", { class: "progress thin", role: "progressbar", "aria-label": "Read so far",
+      started ? el("span", { class: "progress thin", role: "progressbar", "aria-label": t("Read so far"),
         "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.round(done * 100)) },
         el("span", { class: "progress-fill", style: "transform: scaleX(" + done + ")" })) : null));
 }
@@ -533,24 +533,24 @@ const pickMark = () => el("span", { class: "pick", "aria-hidden": "true" });
 
 async function retryPreviews(p, btn) {
   btn.disabled = true;
-  btn.textContent = "Retrying…";
+  btn.textContent = t("Retrying…");
   let res;
   try {
-    res = await C.save.retryMissing(p, (done, total) => { btn.textContent = "Retrying " + done + " of " + total; });
+    res = await C.save.retryMissing(p, (done, total) => { btn.textContent = t("Retrying {done} of {total}", { done: done, total: total }); });
   } catch (e) {
     res = null;
   }
   // A card whose content didn't change isn't rebuilt, so its button is reset here.
   btn.disabled = false;
-  btn.textContent = "Retry";
-  if (!res) { toast("Couldn't open this clip's file. Try again."); return; }
+  btn.textContent = t("Retry");
+  if (!res) { toast(t("Couldn't open this clip's file. Try again.")); return; }
   if (res.got) {
     Object.assign(p, { missing: res.missing, thumb: res.thumb, bytes: (p.bytes || 0) + res.bytes });
     if (p.imageBytes != null) p.imageBytes += res.bytes;
     await C.store.writeIndex(state.pages);
   }
-  toast(!res.got ? "Still couldn't get them. The site may be down; the images load online."
-    : res.missing ? "Got " + res.got + ". " + res.missing + " still missing."
-    : "All previews saved. Offline ready.");
+  toast(!res.got ? t("Still couldn't get them. The site may be down; the images load online.")
+    : res.missing ? t("Got {got}. {missing} still missing.", { got: res.got, missing: res.missing })
+    : t("All previews saved. Offline ready."));
   renderLibrary();
 }

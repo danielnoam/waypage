@@ -3,6 +3,7 @@
 // fixes, matching heard words to a book's, Media Overlay clocks, and the
 // listening entry as sync and backups keep it.
 const assert = require("assert");
+require("./lang.js");
 
 global.window = { Waypage: { platform: {} } };
 require("../src/backup.js");

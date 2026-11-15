@@ -448,11 +448,11 @@
   // clips it holds as links only (1.47.0), not here yet, to be saved again.
   async function restoreLibrary(blob, current, same, onProgress) {
     let entries;
-    try { entries = await zipEntries(blob); } catch (e) { throw new Error("This file isn't a Waypage backup."); }
+    try { entries = await zipEntries(blob); } catch (e) { throw new Error(t("This file isn't a Waypage backup.")); }
     const indexEntry = entries.get("library.json");
     let list;
     try { list = JSON.parse(new TextDecoder().decode(await zipRead(blob, indexEntry))); } catch (e) { list = null; }
-    if (!indexEntry || !Array.isArray(list)) throw new Error("This file isn't a Waypage backup.");
+    if (!indexEntry || !Array.isArray(list)) throw new Error(t("This file isn't a Waypage backup."));
     const pages = [...current];
     const taken = new Set(pages.map((p) => p.id));
     let added = 0, replaced = 0, kept = 0, done = 0;
@@ -775,11 +775,11 @@
     try { raw = tag && JSON.parse(tag.getAttribute("content")); } catch (e) { raw = null; }
     const id = C.save.newId();
     const meta = cleanMeta(raw, id);
-    if (!meta) throw new Error("This file wasn't sent from Waypage, so it can't be opened here.");
+    if (!meta) throw new Error(t("This file wasn't sent from Waypage, so it can't be opened here."));
     if (has && has(meta.url)) return { already: meta.url };
     const out = document.implementation.createHTMLDocument("");
     const { root, images } = C.save.cleanSaved(doc.body, out);
-    if (!root.textContent.trim()) throw new Error("This clip file is empty.");
+    if (!root.textContent.trim()) throw new Error(t("This clip file is empty."));
     let bytes = 0, thumb = null;
     for (const [i, im] of images.entries()) {
       const [head, b64] = im.data.split(",");
