@@ -226,63 +226,116 @@
   // file picked to be one; `blob` its bytes):
   // a copy of the PDF is kept, one sheet to a page, and the PDF itself is
   // never touched. The sheets it grows by are lined paper.
-  async function fromPdf(src, blob) {
-    if (blob.size > MAX_BASE) throw new C.files.FileError("This PDF is too big to make a note from (over 100 MB).");
-    let pages = 0;
-    try { const doc = await C.pdf.open(blob); pages = doc.count || doc.pages || 0; doc.close(); }
+  async function pdfPages(blob) {
+    try { const doc = await C.pdf.open(blob); const n = doc.count || doc.pages || 0; doc.close(); return n; }
     catch (e) { throw new C.files.FileError("Waypage can't read this PDF."); }
+  }
+  // `range` ({ from, to }, pages counted from 1) takes only those pages: the
+  // copy is still the whole PDF, its sheets name the pages in the range.
+  async function fromPdf(src, blob, range) {
+    if (blob.size > MAX_BASE) throw new C.files.FileError("This PDF is too big to make a note from (over 100 MB).");
+    const pages = await pdfPages(blob);
     if (!pages) throw new C.files.FileError("There are no pages in this PDF.");
-    if (pages > MAX_SHEETS) throw new C.files.FileError("This PDF has over " + MAX_SHEETS + " pages, too many for a note.");
+    const from = range ? Math.max(1, range.from) : 1, to = range ? Math.min(pages, range.to) : pages;
+    if (to - from + 1 > MAX_SHEETS) throw new C.files.FileError("This PDF has over " + MAX_SHEETS + " pages, too many for a note.");
     const name = (src.title || "PDF").slice(0, 300).trim();
-    const sheets = Array.from({ length: pages }, (_, i) => ({ bg: "pdf", n: i + 1 }));
+    const sheets = Array.from({ length: to - from + 1 }, (_, i) => ({ bg: "pdf", n: from + i }));
     return keepNew(entry(C.save.newId(), name, { paper: "lines", ...(src.id ? { from: src.id } : {}) }), sheets, blob);
+  }
+
+  // What a note is set from, in order: a comic's pictures, or a book's
+  // innermost blocks; and where its chapters start (the contents' marks,
+  // files.js data-toc), as indexes in that list.
+  const BLOCK = "h1,h2,h3,h4,h5,h6,p,li,blockquote,pre,dt,dd,figcaption,img";
+  function units(root, comic) {
+    const list = [], toc = [], heads = [];
+    const named = (b, t) => (t || b.textContent || "").replace(/\s+/g, " ").trim().slice(0, 120);
+    for (const b of root.querySelectorAll("[data-toc]," + (comic ? "img" : BLOCK))) {
+      if (b.hasAttribute("data-toc")) toc.push({ title: named(b, b.getAttribute("data-toc-t")), depth: Number(b.getAttribute("data-toc")) || 1, at: list.length });
+      else if (/^H[1-3]$/.test(b.tagName)) heads.push({ title: named(b), depth: Number(b.tagName[1]), at: list.length });
+      if (!b.matches(comic ? "img" : BLOCK)) continue;
+      // Only the innermost block: a paragraph inside a quote is set once.
+      if (!comic && b.tagName !== "IMG" && b.querySelector(BLOCK.replace(",img", ""))) continue;
+      list.push(b);
+    }
+    // The top level of the contents (else of the headings, for a file that
+    // has no contents), and the next one down when it has too few.
+    const marks = toc.length >= 2 ? toc : heads;
+    let chapters = [];
+    for (const d of [1, 2, 3]) {
+      chapters = marks.filter((m) => m.depth <= d && m.title);
+      if (chapters.length >= 3) break;
+    }
+    // Two marks at the same block are one chapter: the outer one's name.
+    chapters = chapters.filter((m, i) => !i || m.at !== chapters[i - 1].at);
+    return { list, chapters };
   }
 
   // Any clip of a file as a PDF to make a note from (2026-11): a comic's
   // pictures one to a page; anything else set as a book's pages, its
   // headings, paragraphs and pictures in order on A4. `root` is the
   // clip's body, `picture(img)` resolves to an <img>'s bytes or null.
-  // Resolves to the PDF as a Blob.
+  // `range` ({ from, to } in units()' list) sets only that part. Resolves
+  // to the PDF as a Blob; with `dry`, nothing is drawn and it resolves to
+  // { starts, pages }: the page each unit starts on, and how many there are.
   const PX = 1100, PY = Math.round(PX * H / W), MARGIN = 110;
   const FONT = "Georgia, 'Times New Roman', serif";
   const SIZE = { H1: 50, H2: 42, H3: 36, H4: 32, H5: 30, H6: 30 };
-  async function layout(root, comic, picture, onProgress, title) {
+  async function layout(root, comic, picture, onProgress, title, range, dry) {
+    const all = units(root, comic).list;
+    const from = range ? Math.max(0, range.from) : 0, to = range ? Math.min(all.length, range.to) : all.length;
+    const list = all.slice(from, to), starts = [];
     const pages = [];
+    let count = 0;
     const done = async (c, w, h) => {
-      if (pages.length >= MAX_SHEETS) throw new C.files.FileError("This is over " + MAX_SHEETS + " pages long, too long for a note.");
+      if (count >= MAX_SHEETS && !dry) throw new C.files.FileError("This is over " + MAX_SHEETS + " pages long, too long for a note.");
+      count++;
+      if (dry) return;
       pages.push({ jpeg: await jpeg(c, 0.8), iw: w, ih: h, texts: [], w: W, h: Math.round(W * h / w) });
       if (onProgress) onProgress(pages.length);
       await new Promise((r) => setTimeout(r, 0));
     };
     const bitmap = async (img) => {
+      // A dry run reads no pictures: their shape from the page, else half a page.
+      if (dry) {
+        const w = Number(img.getAttribute("width")) || 0, h = Number(img.getAttribute("height")) || 0;
+        return w > 0 && h > 0 ? { width: w, height: h, close() {} } : { width: PX, height: comic ? PY : (PY - MARGIN * 2) / 2, close() {} };
+      }
       try { const b = await picture(img); return b ? await createImageBitmap(new Blob([b], { type: C.backup.imageType(b) || "image/jpeg" })) : null; } catch (e) { return null; }
     };
-    const imgs = [...root.querySelectorAll("img")];
     if (comic) {
-      for (const img of imgs) {
+      for (const img of list) {
+        starts.push(count);
         const bmp = await bitmap(img);
         if (!bmp) continue;
         const w = Math.min(PX, bmp.width), h = Math.max(1, Math.round(bmp.height * w / bmp.width));
-        const c = document.createElement("canvas");
-        c.width = w; c.height = h;
-        c.getContext("2d").drawImage(bmp, 0, 0, w, h);
+        let c = null;
+        if (!dry) {
+          c = document.createElement("canvas");
+          c.width = w; c.height = h;
+          c.getContext("2d").drawImage(bmp, 0, 0, w, h);
+        }
         bmp.close();
         await done(c, w, h);
       }
+      if (dry) return { starts, pages: count };
       if (!pages.length) throw new C.files.FileError("There are no pictures to make a note from.");
       return C.pptx.writePdf(pages);
     }
     let c = null, g = null, y = 0;
+    // A dry run measures on one small canvas and draws nothing.
+    const ruler = dry ? document.createElement("canvas").getContext("2d") : null;
     const fresh = () => {
+      y = MARGIN;
+      if (dry) { g = ruler; return; }
       c = document.createElement("canvas");
       c.width = PX; c.height = PY;
       g = c.getContext("2d");
       g.fillStyle = "#ffffff"; g.fillRect(0, 0, PX, PY);
       g.fillStyle = "#1c1b19"; g.textBaseline = "alphabetic";
-      y = MARGIN;
     };
-    const flush = async () => { if (c && y > MARGIN) await done(c, PX, PY); c = null; };
-    const room = async (h) => { if (!c) fresh(); if (y + h > PY - MARGIN && y > MARGIN) { await flush(); fresh(); } };
+    const flush = async () => { if (g && y > MARGIN) await done(c, PX, PY); c = null; g = null; };
+    const room = async (h) => { if (!g) fresh(); if (y + h > PY - MARGIN && y > MARGIN) { await flush(); fresh(); } };
     const width = PX - MARGIN * 2;
     const words = async (text, size, bold, gap, indent = 0) => {
       g || fresh();
@@ -298,25 +351,22 @@
       if (cur) lines.push(cur);
       for (const l of lines) {
         await room(line);
-        g.font = font; g.fillStyle = "#1c1b19";
-        g.fillText(l, MARGIN + indent, y + size);
+        if (!dry) { g.font = font; g.fillStyle = "#1c1b19"; g.fillText(l, MARGIN + indent, y + size); }
         y += line;
       }
       y += gap;
     };
     // The title first, as the reader shows it above the text.
-    if (title && !root.querySelector("h1")) await words(title, SIZE.H1, true, 28);
-    const BLOCK = "h1,h2,h3,h4,h5,h6,p,li,blockquote,pre,dt,dd,figcaption,img";
-    for (const b of root.querySelectorAll(BLOCK)) {
-      // Only the innermost block: a paragraph inside a quote is set once.
-      if (b.tagName !== "IMG" && b.querySelector(BLOCK.replace(",img", ""))) continue;
+    if (title && !from && !root.querySelector("h1")) await words(title, SIZE.H1, true, 28);
+    for (const b of list) {
+      starts.push(count);
       if (b.tagName === "IMG") {
         const bmp = await bitmap(b);
         if (!bmp) continue;
         const w = Math.min(width, bmp.width * 1.5), h = Math.min(PY - MARGIN * 2, Math.round(bmp.height * w / bmp.width));
         const ww = Math.round(bmp.width * h / bmp.height);
         await room(h);
-        g.drawImage(bmp, MARGIN + (width - ww) / 2, y, ww, h);
+        if (!dry) g.drawImage(bmp, MARGIN + (width - ww) / 2, y, ww, h);
         bmp.close();
         y += h + 24;
         continue;
@@ -328,9 +378,40 @@
       else await words((b.tagName === "LI" ? "• " : "") + text, 30, false, 22, b.tagName === "BLOCKQUOTE" || b.tagName === "DD" ? 40 : 0);
     }
     await flush();
+    if (dry) return { starts, pages: count };
     if (!pages.length) throw new C.files.FileError("There's nothing in it to make a note from.");
     return C.pptx.writePdf(pages);
   }
 
-  C.notes = { PAPERS, LABELS, paper, toPdf, cover, layout, pdfName, create, fromPdf, open, keep, W, H };
+  // How a long book can be made into notes (2026-11): about how many pages
+  // it sets to, and its parts to choose from: its chapters, or runs of 50
+  // pages when it has none. [{ title, from, to, pages }] with from/to in
+  // units()' list, and `fits` whether the whole fits in one note.
+  async function plan(root, comic, title) {
+    const { list, chapters } = units(root, comic);
+    const { starts, pages } = await layout(root, comic, null, null, title, null, true);
+    const pageAt = (i) => (i >= list.length ? pages : starts[i]);
+    let parts;
+    if (chapters.length >= 2) {
+      const marks = chapters[0].at > 0 ? [{ title: "Opening", at: 0 }, ...chapters] : chapters;
+      parts = marks.map((m, i) => ({ title: m.title, from: m.at, to: i + 1 < marks.length ? marks[i + 1].at : list.length }));
+    } else {
+      parts = [];
+      let at = 0;
+      while (at < list.length) {
+        let to = at + 1;
+        while (to < list.length && pageAt(to) - pageAt(at) < 50) to++;
+        parts.push({ title: "", run: true, from: at, to });
+        at = to;
+      }
+    }
+    for (const p of parts) {
+      p.first = pageAt(p.from) + 1;
+      p.pages = Math.max(1, pageAt(p.to) - pageAt(p.from));
+      if (!p.title) p.title = "Pages " + p.first + "–" + (p.first + p.pages - 1);
+    }
+    return { pages, fits: pages <= MAX_SHEETS, parts: parts.filter((p) => p.to > p.from), max: MAX_SHEETS };
+  }
+
+  C.notes = { PAPERS, LABELS, paper, toPdf, cover, layout, plan, units, pdfPages, pdfName, MAX_SHEETS, create, fromPdf, open, keep, W, H };
 })();

@@ -3624,6 +3624,104 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("drawings can go in the margins beside a clip's text and beside a note's sheet, and stay there on a narrower screen (2026-11)", async () => {
+      const q = await page(browser, 1280);
+      await q.evaluate(async () => {
+        const md = "# Margins\n\n" + Array.from({ length: 12 }, (_, i) => "Paragraph " + (i + 1) + " has words enough to wrap over a few lines on a phone, and then some more.").join("\n\n");
+        const meta = await Waypage.files.bring(new File([md], "margins.md"), "md", { has: () => false });
+        await Waypage.store.writeIndex([meta, ...await Waypage.store.readIndex()]);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => openPage(state.pages.find((x) => x.title === "Margins").id));
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open && Waypage.ink.blocks);
+      await q.evaluate(() => { inkSet(true); Waypage.ink.setting({ finger: true, tool: "pen" }); });
+      await q.waitForTimeout(400);
+      // Left of the third paragraph, in the margin.
+      const [x0, y0] = await q.evaluate(() => {
+        const f = document.getElementById("readerFrame").getBoundingClientRect(), b = document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-body p")[2].getBoundingClientRect();
+        return [f.left + b.left - 90, f.top + b.top + b.height / 2];
+      });
+      await q.mouse.move(x0, y0); await q.mouse.down();
+      for (let i = 1; i <= 8; i++) await q.mouse.move(x0 + i * 6, y0 + (i % 2 ? 8 : -8));
+      await q.mouse.up();
+      await until(q, () => !!state.open.ink && Object.keys(state.open.ink).length === 1);
+      const kept = await q.evaluate(() => ({ block: Object.keys(state.open.ink)[0], xs: Object.values(state.open.ink)[0][0].p.filter((_, i) => i % 3 === 0) }));
+      assert.strictEqual(kept.block, "4", "the stroke is beside the third paragraph");
+      assert.ok(Math.max(...kept.xs) < 0, "kept in the margin: " + kept.xs.join(","));
+      const shows = () => q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument, a = d.querySelector(".co-ink path").getBoundingClientRect(), p = d.querySelectorAll(".co-body p")[2].getBoundingClientRect();
+        return { left: a.right < p.left, beside: a.top >= p.top - 30 && a.bottom <= p.bottom + 30, wide: d.documentElement.scrollWidth > d.defaultView.innerWidth + 1 };
+      });
+      assert.deepStrictEqual(await shows(), { left: true, beside: true, wide: false });
+      // A phone's margin is narrow: the stroke stays where it was written, and the page doesn't scroll sideways.
+      await q.setViewportSize({ width: 390, height: 800 });
+      await q.waitForTimeout(800);
+      assert.strictEqual((await shows()).wide, false, "the page scrolls sideways");
+      assert.deepStrictEqual(await q.evaluate(() => Object.values(state.open.ink)[0][0].p.filter((_, i) => i % 3 === 0)), kept.xs, "the stroke was moved");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+      // A note: in the margin left of its sheet.
+      const n = await page(browser, 1280);
+      await n.click("#severalBtn");
+      await n.locator("#batchView .row", { hasText: "New note" }).click();
+      await n.locator(".paper-row", { hasText: "Blank note" }).click();
+      await until(n, () => !!state.open && state.open.note && C.ink.on && (C.reader.frameDoc || document).querySelectorAll("svg.co-ink").length === 1);
+      await n.waitForTimeout(800);
+      await n.evaluate(() => C.ink.setting({ ...inkPrefs(), finger: true }));
+      const sheet = await n.evaluate(() => { const r = C.reader.frameDoc.querySelector("svg.co-ink").getBoundingClientRect(); return [r.left, r.top]; });
+      assert.ok(sheet[0] > 50, "no margin to draw in: " + sheet[0]);
+      const fb = await n.locator("#readerFrame").boundingBox();
+      await n.mouse.move(fb.x + sheet[0] - 40, fb.y + sheet[1] + 100);
+      await n.mouse.down();
+      await n.mouse.move(fb.x + sheet[0] - 15, fb.y + sheet[1] + 160, { steps: 8 });
+      await n.mouse.up();
+      await until(n, () => C.ink.state().count === 1);
+      const gap = await n.evaluate(() => C.reader.frameDoc.querySelector('svg.co-ink[data-page="1"]').getBoundingClientRect().left - C.reader.frameDoc.querySelector('svg.co-ink[data-page="1"] path').getBoundingClientRect().right);
+      assert.ok(gap > 0, "the stroke was pulled onto the sheet: " + gap);
+      assert.deepStrictEqual(n.errors, [], n.errors.join(" | "));
+      await n.context().close();
+    });
+
+    await test("a book too long for one note is measured first, and the note is made from the chapters picked (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const para = "Words enough to fill a line or two of a printed page, and then some more of them so the book runs long. ".repeat(6);
+        const md = "# Long book\n\n" + Array.from({ length: 40 }, (_, i) => "## Chapter " + (i + 1) + "\n\n" + Array.from({ length: 40 }, () => para).join("\n\n")).join("\n\n");
+        const meta = await Waypage.files.bring(new File([md], "long.md"), "md", { has: () => false });
+        await Waypage.store.writeIndex([meta, ...await Waypage.store.readIndex()]);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const t0 = Date.now();
+      q.evaluate(() => makeNoteFrom(state.pages.find((x) => x.title === "Long book")));
+      await q.locator('#menuSheet[data-kind="noteParts"]:not([hidden]) .row', { hasText: "Make the note" }).waitFor();
+      assert.ok(Date.now() - t0 < 8000, "measuring took " + (Date.now() - t0) + " ms");
+      const head = await q.locator("#menuSheet .menu-head .meta").innerText();
+      const pages = Number(head.match(/About (\d+) pages/)[1]);
+      assert.ok(pages > 500, head);
+      const total = () => q.locator("#menuSheet p.meta:not(.menu-head *)").last().innerText();
+      assert.match(await total(), /^About \d+ pages$/, "the first chapters that fit are picked");
+      assert.strictEqual(await q.locator("#menuSheet .row", { hasText: "Make the note" }).isDisabled(), false);
+      // To the last chapter: too many.
+      const pick = async (label, name) => {
+        await q.locator("#menuSheet .pick-row", { hasText: label }).locator("button").first().click();
+        await q.locator('[role="option"]', { hasText: new RegExp("^" + name + "$") }).last().click();
+      };
+      await pick("To", "Chapter 40");
+      assert.match(await total(), /over the 500 a note holds/);
+      assert.strictEqual(await q.locator("#menuSheet .row", { hasText: "Make the note" }).isDisabled(), true);
+      await pick("From", "Chapter 3");
+      await pick("To", "Chapter 4");
+      await q.locator("#menuSheet .row", { hasText: "Make the note" }).click();
+      await until(q, () => !!state.pages.find((x) => x.note && x.title === "Long book, Chapter 3 to Chapter 4"), null, 60000);
+      const sheets = await q.evaluate(async () => (await Waypage.store.readNote(state.pages.find((x) => x.note).id)).sheets.length);
+      assert.ok(sheets > 10 && sheets < 60, "sheets " + sheets);
+      const errors = q.errors.filter((e) => !/serviceWorker/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a pinch deep in a linked PDF keeps the spot under the fingers, gaps and all", async () => {
       const maker = await browser.newPage();
       let html = "<style>@page{size:A4;margin:0} div{height:297mm;box-sizing:border-box;padding:40px;font:28px sans-serif;page-break-after:always}</style>";

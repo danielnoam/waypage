@@ -340,6 +340,18 @@ with no layer yet (not near the screen) get no copy, and in Pages layout
 (one page a screen) only a side-by-side spread has a neighbour to drop on.
 There's no scrolling while dragging near the screen's edge.
 
+Margins (2026-11): a layer reaches past its text column or page, to the
+screen's edge or halfway to a layer beside it (`fitPads`; Pages counts the
+screen the layer is on). A see-through `rect.pad` gives a stroke somewhere
+to start there, and the layer is cut at its margins by an inline
+`clip-path` instead of `overflow: hidden`. Strokes stay in the layer's own
+widths, so one in a margin has x below 0 or past 1 and keeps beside its
+paragraph or page; `placeOn` and `clampInto` take a page's reach (`l`, `r`
+in `pagesOf`), and `rescue` only brings back what is past any margin (x
+under -1 or over 2), so a margin narrower than the one it was written in
+cuts the stroke and never moves it. A copy of the PDF and a note's Save as
+PDF have only the page: what is in the margins is left out.
+
 A note (2.0.0, `notes.js`) is a library item with `note: { paper, from? }`
 and no file: a stack of sheets, in `note.json` (`store.readNote`,
 `writeNote`), `{ bg: "paper" }` or `{ bg: "pdf", n }`, with its strokes in
@@ -356,6 +368,15 @@ at most 100 MB), one sheet to a page, and moves the PDF's old drawings over.
 Opening a PDF asks Keep a copy, Read from where it is or Make a note too
 (`noteFromFile`, `fileSheet`), in a browser as well; the library's Show has
 All notes (`filter "notes"`) while a note exists.
+A note holds 500 sheets (`MAX_SHEETS`). For a longer book `notes.plan`
+first measures it without drawing (`layout(..., dry)`: the same setting of
+lines on a small canvas, pictures counted by their width and height
+attributes or as half a page) and gives its chapters (`units`: the contents'
+`data-toc` marks, else h1 to h3, else runs of about 50 pages) with the pages
+each comes to; `askParts` (`notePartsSheet`) picks From and To and the note
+is set from that part only (`range`). A longer PDF picks runs of 50 of its
+pages (`pdfPart`): the copy is still the whole PDF, its sheets name only
+the pages picked.
 Typed text is an item in `ink.json` like a picture, `{ id, t: "x", c, x, y,
 w, h, z, text }` (`z` the size in page widths, `ink.js addText`, `editText`),
 so Select, move, cut, paste, delete and undo take it with no more code. Save

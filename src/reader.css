@@ -175,8 +175,12 @@ mark.co-mark.co-pm.co-noted { box-shadow: inset 0 -2px var(--muted); }
    that show on the dark page. */
 .co-ink { position: absolute; z-index: 2; overflow: hidden; pointer-events: none; -webkit-user-select: none; user-select: none; }
 .co-ink[data-on="1"] { pointer-events: auto; cursor: crosshair; }
+/* Margins (2026-11): past its sides a layer is cut by its clip-path, which ink.js sets to its margins. */
+.co-ink[style*="clip-path"] { overflow: visible; }
+.co-ink .pad { fill: transparent; pointer-events: none; }
+.co-ink[data-on="1"] .pad { pointer-events: all; }
 /* A stroke being drawn or an item being dragged shows over the next page too. */
-.co-ink[data-lift] { overflow: visible; z-index: 3; }
+.co-ink[data-lift] { overflow: visible; clip-path: none !important; z-index: 3; }
 /* While a pen is near (ink.js near()), no pan under it: it draws. */
 html[data-co-pen-near] .co-ink[data-on="1"], html[data-co-inking][data-co-pen-near], html[data-co-inking][data-co-pen-near] body { touch-action: none; }
 .co-ink path.pen { stroke: none; }
