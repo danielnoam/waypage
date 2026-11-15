@@ -600,7 +600,7 @@ drive the app in Chromium with Playwright and skip when it isn't installed
 saved in `test/fixtures/sites/`, with nothing going out; `discover.test.js`
 reads the story sites' lists from hand-made pages and pages cut from WEBTOON, Tapas and Wattpad in `test/fixtures/discover/`); `build.test.js` checks the
 bundle, the three version places and CHANGELOG.md; `contrast.test.js`
-checks every theme for WCAG AA; `docs.test.js` checks this file names
+checks every theme for WCAG AA; `csp.test.js` checks the page's Content-Security-Policy through keel's check (ui.test.js fails on anything it blocks); `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
 `sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `syncanki.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR and on `main`, spread
@@ -669,6 +669,12 @@ is its share of the text, so it lands near, not on, the sentence.
 
 What the app gives up on purpose, said plainly. A change that adds one
 adds a line here.
+
+- The page's Content-Security-Policy (index.html) lets in inline styles
+  and a `<base>` of any web address, because a page being saved is parsed
+  under it: without them every `style=""` logs a violation and relative
+  links resolve against the app. Scripts stay the app's own files, plus
+  blob: and one hash for the PDF sandbox (`test/csp.test.js`).
 
 - Full pictures load from the web when a clip is opened online, so the
   picture host sees the visit (Settings › Saving › Load pictures only
@@ -772,6 +778,12 @@ adds a line here.
 
 Things that broke once and would again. Check here before touching the
 area.
+
+- Changing `BOOT` in src/pdf.js changes its hash in index.html's
+  Content-Security-Policy; without the new one no PDF opens.
+  `test/csp.test.js` fails and prints the hash to put there. The PDF
+  sandbox stays a srcdoc frame: a sandboxed frame from a file isn't
+  served by the service worker, so PDFs wouldn't open offline.
 
 - A `ui.test.js` test that needs what an earlier test left behind must
   use the first page `p`; that is how the slicing (`UI_SHARD`) keeps it
