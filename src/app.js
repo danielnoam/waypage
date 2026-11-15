@@ -71,6 +71,7 @@ const LAYOUTS = [
 const NEW_KEY = "waypage.newChapters";
 const DAILY_KEY = "waypage.checkDaily";
 const EXPORT_KEY = "waypage.exportKind";
+const EXPORT_HEADS_KEY = "waypage.exportHeads";
 const RATE_KEY = "waypage.aloudRate";
 const SCROLL_RATE_KEY = "waypage.scrollRate";
 const VOICE_KEY = "waypage.aloudVoice";
