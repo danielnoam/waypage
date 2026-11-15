@@ -211,8 +211,8 @@ test("a branch's build is published as a pre-release the updater never sees", ()
   assert.ok(/github\.ref != 'refs\/heads\/main'[\s\S]*test-build\.sh attach Waypage\.ipa/.test(ios));
   assert.ok(sh.includes("--prerelease") && sh.includes('gh pr list --head "$BRANCH" --state open'));
   assert.ok(/^TAG="test-/m.test(sh) && tidy.includes('"test-$NAME"') && tidy.includes("--cleanup-tag"));
-  const start = fs.readFileSync(path.join(ROOT, "src", "app-start.js"), "utf8");
-  assert.ok(start.includes('/releases?per_page=') && start.includes('r.prerelease && /^(test|preview)-/.test(r.tag_name)'));
+  const keel = fs.readFileSync(path.join(ROOT, "src", "keel", "releases.js"), "utf8");
+  assert.ok(keel.includes('/releases?per_page=') && keel.includes('r.prerelease && /^(test|preview)-/.test(r.tag_name)'));
 });
 
 // The iOS project (1.6.0): what tools/ios-project.js and ios-extensions.rb
