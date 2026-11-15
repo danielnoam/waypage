@@ -111,6 +111,7 @@ tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-bui
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
 tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
 tools/keel-sync.js  brings the files shared with LifeLog up to a keel release (below)
+tools/keel-checks.js  contrast and CSP checks the tests use (from keel, below)
 tools/sign-apk.sh   signs the APK with the release key in CI
 tools/sherpa-lib.sh   fetches sherpa-onnx's arm64 library (Kokoro voices) into the Android build, pinned and checked
 tools/test-build.sh        puts a labelled pull request's build on its test-<branch> pre-release
@@ -541,7 +542,7 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
 
 The files listed in `keel.lock.json` (`server.js`, `src/keel/qr.js`,
 `src/keel/github.js`, `src/keel/drive.js`, `src/keel/errlog.js`, `src/keel/releases.js`, `src/keel/sw-preview.js`,
-`tools/release.js`, `tools/android-version.js`, `tools/keel-sync.js`,
+`tools/release.js`, `tools/android-version.js`, `tools/keel-sync.js`, `tools/keel-checks.js`,
 `test/keel.test.js`, the github-pages skill) come from keel
 (danielnoam/keel), shared with LifeLog. Don't edit them here:
 `keel.test.js` fails. Change them in keel, tag a release there, then run
