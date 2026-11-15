@@ -96,6 +96,7 @@ src/motion.js       the springs from DESIGN.md, sampled into CSS linear()
 src/keel/qr.js      QR code for sync's setup link, made on the device so the token never leaves it (from keel, below)
 src/keel/github.js  the GitHub requests sync.js makes: reading, writing and committing files, errors with a kind (from keel, below)
 src/keel/errlog.js  the errors this device hit, for Report a problem; loaded first, set up by its tag in index.html (from keel, below)
+src/keel/platform.js  where it runs (phone, browser), app-build.json, links out to the phone's browser (from keel, below); src/platform.js builds on it
 src/keel/releases.js  the app's releases on GitHub: the update check, the Test builds list, opening one in the browser (from keel, below)
 src/keel/sw-preview.js  sw.js's half of a test build in the browser (from keel, below)
 src/keel/drive.js   Google Drive sign-in, folder, resumable sending and keeping the newest; drive.js says what a backup is (from keel, below)
@@ -541,7 +542,7 @@ offers any version higher than its own. A merge without a bump only
 refreshes the web copy. CONTRIBUTING.md has the steps.
 
 The files listed in `keel.lock.json` (`server.js`, `src/keel/qr.js`,
-`src/keel/github.js`, `src/keel/drive.js`, `src/keel/errlog.js`, `src/keel/releases.js`, `src/keel/sw-preview.js`,
+`src/keel/github.js`, `src/keel/drive.js`, `src/keel/errlog.js`, `src/keel/platform.js`, `src/keel/releases.js`, `src/keel/sw-preview.js`,
 `tools/release.js`, `tools/android-version.js`, `tools/keel-sync.js`, `tools/keel-checks.js`,
 `test/keel.test.js`, the github-pages skill) come from keel
 (danielnoam/keel), shared with LifeLog. Don't edit them here:
