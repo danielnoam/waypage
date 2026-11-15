@@ -797,7 +797,7 @@ const REPORT_REPO = "https://github.com/danielnoam/waypage";
 let reportDraft = "";
 const logTime = (at) => new Date(at).toISOString().replace("T", " ").slice(0, 16);
 async function reportText() {
-  const lines = C.platform.log.list().map((x) => logTime(x.at) + " " + x.kind + (x.n ? " ×" + x.n : "") + ": " + x.msg);
+  const lines = C.platform.log.list().map((x) => logTime(x.at) + " " + (x.kind || "error") + (x.n ? " ×" + x.n : "") + ": " + x.msg + (x.where ? "\n    " + x.where.split("\n").join("\n    ") : ""));
   return [
     reportDraft.trim() || "(Nothing written)",
     "",
@@ -835,7 +835,7 @@ function reportGroup() {
     startLine() ? el("p", { class: "footnote start-line" }, startLine()) : null,
     el("h2", { class: "overline" }, list.length ? "What went wrong lately" : "Nothing went wrong lately"),
     list.length ? el("ol", { class: "group report-log" }, ...list.slice().reverse().slice(0, 30).map((x) => el("li", { class: "report-line" },
-      el("span", { class: "meta" }, logTime(x.at) + " · " + x.kind + (x.n ? " ×" + x.n : "")),
+      el("span", { class: "meta" }, logTime(x.at) + " · " + (x.kind || "error") + (x.n ? " ×" + x.n : "")),
       el("span", { class: "report-msg", dir: "auto" }, x.msg)))) : null,
     list.length ? el("button", { class: "btn-text report-clear", type: "button", onclick: () => { C.platform.log.clear(); renderSection(); renderSettings(); } }, "Clear these") : null);
   sec.classList.add("report");
