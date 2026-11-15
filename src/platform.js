@@ -10,12 +10,10 @@
 // `build` is app-build.json, written into the bundle by tools/build-www.js.
 // It only exists inside the app; in a browser it is null.
 (function () {
-  const cap = window.Capacitor;
-  const native = !!(cap && typeof cap.isNativePlatform === "function" && cap.isNativePlatform());
-  const os = native ? String((cap.getPlatform && cap.getPlatform()) || "android") : "web";
-  const plugin = (name) => (native && cap.Plugins && cap.Plugins[name]) || null;
-
-  if (native) document.documentElement.classList.add("native");
+  // Where it runs, app-build.json, links out to the phone's browser and
+  // deadline() are keel's (src/keel/platform.js).
+  const K = window.Keel.platform;
+  const { cap, native, os, plugin, ready, openOutside, deadline } = K;
   // App lock (1.38.0): hidden from the first paint, before the library
   // draws, when a passcode is set (app-lock.js shows the keypad).
   try { if (localStorage.getItem("waypage.lock")) document.documentElement.classList.add("locked"); } catch (e) { /* no storage */ }
@@ -40,49 +38,6 @@
   // tokens cut. Nothing leaves the phone unless the person sends a report.
   const log = window.Keel.errlog;
 
-  let build = null;
-  const ready = native
-    ? fetch("app-build.json", { cache: "no-store" })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((b) => { build = b; return b; })
-        .catch(() => null)
-    : Promise.resolve(null);
-
-  // Links that leave the app (the original page, a store link) open in the
-  // phone's own browser, not inside the app's WebView, which has no address
-  // bar and where back would put the whole app away.
-  const isOutside = (url) => {
-    try {
-      const u = new URL(String(url), location.href);
-      return /^https?:$/.test(u.protocol) && u.origin !== location.origin;
-    } catch (e) { return false; }
-  };
-  const nativeOpen = window.open.bind(window);
-  // Only web and mail addresses leave the app (1.29.1): a clip's address
-  // can come from a backup or a synced library, and a javascript: one
-  // opened here would run with the app's plugins.
-  function openOutside(url) {
-    if (!/^(https?|mailto):/i.test(String(url || "").trim())) return false;
-    const L = plugin("AppLauncher");
-    if (L) {
-      Promise.resolve(L.openUrl({ url: String(url) }))
-        .then((r) => { if (r && r.completed === false) nativeOpen(url, "_blank"); })
-        .catch(() => nativeOpen(url, "_blank"));
-      return true;
-    }
-    nativeOpen(url, "_blank");
-    return true;
-  }
-  if (native) {
-    window.open = (url, target, features) => (isOutside(url) ? (openOutside(url), null) : nativeOpen(url, target, features));
-    document.addEventListener("click", (e) => {
-      const a = e.target && e.target.closest && e.target.closest("a[href]");
-      if (!a || a.hasAttribute("download") || !isOutside(a.href)) return;
-      e.preventDefault();
-      openOutside(a.href);
-    }, true);
-  }
-
   // The WebView's own browser string with the app named after it: some news
   // sites (ynet among them) never answer a request that doesn't look like a
   // browser, and Wikipedia's rule is only that the app is named.
@@ -90,16 +45,9 @@
     "Waypage (offline reader; https://github.com/danielnoam/waypage)";
 
   // Native requests have no deadline of their own, so a site that holds the
-  // connection open would leave "Saving" up for good.
+  // connection open would leave "Saving" up for good (keel's deadline()).
   const PAGE_TIMEOUT = 30000;
   const FILE_TIMEOUT = 20000;
-  function deadline(promise, ms) {
-    let timer;
-    return Promise.race([
-      promise,
-      new Promise((_, reject) => { timer = setTimeout(() => reject(new TypeError("Timed out")), ms); }),
-    ]).finally(() => clearTimeout(timer));
-  }
 
   // The web copy's fetch proxy (worker/, a Cloudflare Worker): a browser
   // can't read most sites itself (CORS), so its page fetches go through it.
@@ -777,7 +725,7 @@
   // file's uri so a dismissed installer can be reopened without downloading
   // again; null where there's no in-app installer (iOS, a browser).
   const APK_MIME = "application/vnd.android.package-archive";
-  const repo = () => (build && build.repo) || null;
+  const repo = () => (K.build && K.build.repo) || null;
   // `file` is the release's APK: Waypage.apk once Waypage is Waypage (0.36.0).
   // Since 1.23.0 it comes through Downloads' own fetch, which goes on
   // with the app put away and can pause and pick up where it stopped: a
@@ -824,7 +772,7 @@
   async function clearOldUpdates(currentVersion, isNewer) {
     const FS = plugin("Filesystem");
     if (!FS) return;
-    const here = build && build.sha ? String(build.sha).slice(0, 7) : null;
+    const here = K.build && K.build.sha ? String(K.build.sha).slice(0, 7) : null;
     try {
       const { files } = await FS.readdir({ path: "", directory: "CACHE" });
       for (const f of files || []) {
@@ -1229,7 +1177,7 @@
     ready,
     named,
     get deviceName() { return deviceName; },
-    get build() { return build; },
+    get build() { return K.build; },
     plugin,
     // Whether this copy can fetch any page itself (the app) or is limited by
     // CORS (a browser).
@@ -1338,11 +1286,11 @@
     releasesUrl() { return repo() ? "https://github.com/" + repo() + "/releases/latest" : null; },
     releaseUrl(tag) { return repo() ? "https://github.com/" + repo() + "/releases/tag/" + tag : null; },
     // The branch this build came from, when it isn't a release (1.48.0).
-    get previewBranch() { return build && build.branch && build.branch !== "main" ? build.branch : null; },
+    get previewBranch() { return K.build && K.build.branch && K.build.branch !== "main" ? K.build.branch : null; },
     apkUrl(file = "Waypage.apk") { return repo() ? "https://github.com/" + repo() + "/releases/latest/download/" + file : null; },
     // The web copy the app was built from: inside the app this page is at
     // https://localhost, which another device can't open.
-    webUrl() { return (build && build.webUrl) || null; },
+    webUrl() { return (K.build && K.build.webUrl) || null; },
     files,
     audio,
     car,
