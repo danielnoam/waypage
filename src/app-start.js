@@ -420,13 +420,10 @@ async function checkForNewerApp(byHand) {
   if (C.platform.previewBranch && !byHand) { setUpd({ phase: "preview" }); return; }
   setUpd({ phase: "checking" });
   try {
-    const res = await C.platform.fetchText("https://api.github.com/repos/" + build.repo + "/releases/latest",
-      { headers: { Accept: "application/vnd.github+json" } });
-    if (res.status !== 200) throw new Error("HTTP " + res.status);
-    const release = JSON.parse(res.text);
-    const latest = String(release.tag_name || "").replace(/^app-v/, "");
-    if (/^\d+\.\d+\.\d+$/.test(latest) && isNewerVersion(latest, APP_VERSION)) {
-      setUpd({ phase: upd.latest === latest && upd.apk ? "ready" : "available", latest, notes: String(release.body || "") });
+    const got = await appReleases.latest();
+    const latest = got && got.version;
+    if (latest && isNewerVersion(latest, APP_VERSION)) {
+      setUpd({ phase: upd.latest === latest && upd.apk ? "ready" : "available", latest, notes: got.notes });
     } else setUpd({ phase: "current" });
   } catch (e) {
     setUpd({ phase: "failed", error: "Couldn't check. Try again when you're online." });
@@ -607,59 +604,28 @@ function comingEntries() {
 // lower one: a branch that raised APP_VERSION needs an uninstall first,
 // and the row says so.
 const pv = { phase: "idle", list: [], stable: null, error: "", web: null };
-// In the browser (1.49.0) a preview is opened, not installed: sw.js serves
-// the picked commit's files while the cache "waypage-preview" holds it.
-// The repo comes from the GitHub Pages address (owner.github.io/repo/).
-const PREVIEW_CACHE = "waypage-preview";
-function webRepo() {
-  const host = /^([^.]+)\.github\.io$/i.exec(location.hostname);
-  const name = location.pathname.split("/")[1];
-  return host && name ? host[1] + "/" + name : null;
-}
-const previewRepo = () => (C.platform.native ? (C.platform.build && C.platform.build.repo) || null : webRepo());
-const webPreviews = () => !C.platform.native && !!webRepo() && "caches" in window && !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+// In the browser (1.49.0) a preview is opened, not installed: sw.js
+// serves the picked commit's files while the cache "waypage-preview"
+// holds it. The release lookups are keel's (src/keel/releases.js).
+const appReleases = window.Keel.releases.create({ name: "Waypage", fetchText: C.platform.fetchText,
+  repo: () => (C.platform.native ? (C.platform.build && C.platform.build.repo) || null : null) });
+const webPreviews = () => !C.platform.native && appReleases.webReady;
 const previewName = (p) => p.title || (p.pr ? "#" + p.pr : p.branch || "preview");
-if (!C.platform.native && "caches" in window) {
-  caches.open(PREVIEW_CACHE).then((c) => c.match("./preview.json")).then((r) => (r ? r.json() : null))
-    .then((p) => { pv.web = p; }).catch(() => {});
-}
+appReleases.running.then((p) => { pv.web = p; });
 const builtLine = (b) => (b && b.builtAt ? ", built " + whenText(new Date(b.builtAt).getTime()) : "");
-// The pre-release's notes start with "version: x.y.z", "branch:", "commit:", "pr:".
-function previewNotes(body) {
-  const out = {};
-  for (const line of String(body || "").split("\n")) {
-    const m = /^(version|branch|commit|pr):\s*(\S+)/.exec(line);
-    if (m) out[m[1]] = m[2];
-    else if (!line.trim()) break;
-  }
-  return out;
-}
 function openPreviews() {
   openSection("previews", false, true);
   loadPreviews();
 }
 async function loadPreviews() {
   await C.platform.ready;
-  const repo = previewRepo();
-  if (!repo || pv.phase === "loading") return;
+  if (!appReleases.repo() || pv.phase === "loading") return;
   pv.phase = "loading";
   pv.error = "";
   paintPreviews();
   const started = Date.now();
   try {
-    const res = await C.platform.fetchText("https://api.github.com/repos/" + repo + "/releases?per_page=100&t=" + Date.now(),
-      { headers: { Accept: "application/vnd.github+json" } });
-    if (res.status !== 200) throw new Error("HTTP " + res.status);
-    const all = JSON.parse(res.text).filter((r) => r && !r.draft);
-    const stable = all.find((r) => !r.prerelease && /^app-v\d+\.\d+\.\d+$/.test(r.tag_name));
-    pv.stable = stable ? stable.tag_name.replace(/^app-v/, "") : null;
-    pv.list = all.filter((r) => r.prerelease && /^(test|preview)-/.test(r.tag_name)).map((r) => {
-      const n = previewNotes(r.body);
-      const assets = (r.assets || []).map((a) => a.name);
-      return { tag: r.tag_name, title: String(r.name || "").replace(/^(Test|Preview): /, "") || n.branch || r.tag_name, branch: n.branch || r.tag_name.replace(/^(test|preview)-/, ""),
-        version: n.version || "", sha: n.commit || "", pr: n.pr || "", at: Date.parse(r.published_at || r.created_at) || 0,
-        apk: assets.includes("Waypage.apk"), ipa: assets.includes("Waypage.ipa") };
-    }).sort((a, b) => b.at - a.at);
+    Object.assign(pv, await appReleases.list());
     pv.phase = "loaded";
     pv.checkedAt = Date.now();
   } catch (e) {
@@ -682,14 +648,7 @@ const fetchBtn = () => (upd.phase === "downloading" ? upd.pct + "%" : upd.phase 
 // The same download and installer as an update, under the preview's own
 // name; on iPhone the pre-release's page opens, as the updater's does.
 async function openWebPreview(p) {
-  try {
-    const keys = await caches.keys();
-    await Promise.all(keys.filter((k) => k.startsWith(PREVIEW_CACHE)).map((k) => caches.delete(k)));
-    const c = await caches.open(PREVIEW_CACHE);
-    await c.put("./preview.json", new Response(JSON.stringify({ repo: webRepo(), sha: p.sha, title: p.title, pr: p.pr, branch: p.branch, tag: p.tag }),
-      { headers: { "Content-Type": "application/json" } }));
-  } catch (e) { toast("Couldn't open that build"); return; }
-  location.replace(new URL("./", location.href).href);
+  if (!(await appReleases.open(p))) toast("Couldn't open that build");
 }
 function installPreview(p) {
   if (!C.platform.native) { if (p.sha) openWebPreview(p); return; }
@@ -698,7 +657,7 @@ function installPreview(p) {
   startUpdate();
 }
 function backToRelease() {
-  if (!C.platform.native) { location.replace(new URL("./?release", location.href).href); return; }
+  if (!C.platform.native) { appReleases.back(); return; }
   if (!pv.stable) return;
   Object.assign(upd, { phase: "available", latest: pv.stable, tag: null, key: null, notes: "", apk: null, error: "" });
   startUpdate();
