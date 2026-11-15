@@ -1104,7 +1104,9 @@ let heading = "";
 async function goTo(p, turn, swiped = null) {
   heading = p.id;
   let html;
-  try { html = p.note ? await openLinked(p) : await C.store.readPage(p.id); } catch (e) { html = null; }
+  // A file read from where it is opens its own file for its pictures and
+  // pages: read as a saved page, the one before's were looked up instead.
+  try { html = p.note || p.link ? await openLinked(p) : await C.store.readPage(p.id); } catch (e) { html = null; }
   const frame = $("readerFrame");
   if (swiped != null && !html) { frame.style.transform = ""; if (!M.reduced()) M.pageBack(frame, swiped); }
   if (!html) {

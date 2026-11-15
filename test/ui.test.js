@@ -149,8 +149,8 @@ function jpxPdfBytes() {
 function epubBytes() { return zipOf(EPUB_FILES); }
 // A long linked book for the lazy reader (1.29.0): 200 chapters of 1600
 // characters and a picture each, over the LONG line in reader.js.
-function longEpubBytes() {
-  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+// `png`: the picture every chapter shows (1×1 unless another is given).
+function longEpubBytes(png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64")) {
   const files = [EPUB_FILES[0], EPUB_FILES[1]];
   const items = [], spine = [];
   for (let i = 0; i < 200; i++) {
@@ -4652,6 +4652,38 @@ c("bk1", { at: 0.01 })]);
       assert.ok(named.real && named.section === named.real, named.section + " vs " + named.real);
       // The scroll back to the place has the pictures there read.
       await until(q, () => { const d = document.getElementById("readerFrame").contentDocument; return [...d.querySelectorAll("img[data-at]")].some((i) => { const r = i.getBoundingClientRect(); return r.bottom > -innerHeight && r.top < innerHeight * 2; }); });
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("going on to the next book in a collection opens that book's own file for its pictures (Unreleased)", async () => {
+      const q = await page(browser, 390);
+      // The same picture names, a 1×1 picture in the first and a 2×2 in the second.
+      const books = { "one.epub": [...longEpubBytes()], "two.epub": [...longEpubBytes(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEUlEQVR4nGP4z8DwnwGMgRQAH+4D/dJQfRoAAAAASUVORK5CYII=", "base64"))] };
+      const ids = await q.evaluate(async (books) => {
+        const out = [];
+        for (const name of Object.keys(books)) {
+          const book = new File([new Uint8Array(books[name])], name, { type: "application/epub+zip" });
+          window.Waypage.platform.files.blob = async () => book;
+          const meta = await window.Waypage.files.bring(book, "epub", { has: () => false, link: "content://books/" + name });
+          meta.folder = "Saga"; meta.folderAt = out.length + 1;
+          await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
+          out.push(meta.id);
+        }
+        return out;
+      }, books);
+      await q.reload();
+      await q.evaluate((books) => { window.Waypage.platform.files.blob = async (link) => new File([new Uint8Array(books[link.split("/").pop()])], "x.epub"); }, books);
+      const shown = () => until(q, () => { const img = document.getElementById("readerFrame").contentDocument.querySelector(".co-body img"); return img && img.hasAttribute("data-at") && img.complete && img.naturalWidth > 0; });
+      const width = () => q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelector(".co-body img").naturalWidth);
+      await q.evaluate((id) => openPage(id), ids[0]);
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      await shown();
+      assert.strictEqual(await width(), 1);
+      await q.evaluate((id) => goTo(state.pages.find((x) => x.id === id), 1), ids[1]);
+      assert.strictEqual(await q.evaluate(() => state.open.id), ids[1]);
+      await shown();
+      assert.strictEqual(await width(), 2, "the first book's picture was shown");
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

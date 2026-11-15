@@ -8,6 +8,7 @@
 - Taps in a big book no longer freeze the phone for seconds: the chapters far from the screen are kept out of what the phone reads from the page.
 
 ### Fixed
+- A book opened from its collection in the reader (or by swiping to it) showed the book before's pictures, or blanks, until it was reopened from the library.
 - A book's first pictures (its cover) could stay blank when it was opened right after another book.
 - A very long book couldn't be scrolled or jumped past a point (chapter 600 of 840 in one), and a jump could slide a few screens once there.
 - Leaving a book while Narrate was going could forget your place and reopen it near the start.
