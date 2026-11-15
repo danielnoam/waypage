@@ -1832,14 +1832,21 @@ function exportControls(what, done) {
   let kind = load(key, first);
   if (!kinds.some((e) => e.value === kind)) kind = first;
   const p = what;
-  const save = el("button", { class: "btn-primary export-save", type: "button", onclick: () => exportAs(p, kind, "save", save) });
-  const send = el("button", { class: "btn-quiet export-send", type: "button", onclick: () => exportAs(p, kind, "send", send) }, "Send");
+  // A collection's chapters open with their clip's header (its name, site
+  // and author) unless turned off, for a story whose chapters already
+  // start with their own titles.
+  let heads = load(EXPORT_HEADS_KEY, true);
+  const opts = () => ({ heads: !folder || heads });
+  const save = el("button", { class: "btn-primary export-save", type: "button", onclick: () => exportAs(p, kind, "save", save, opts()) });
+  const send = el("button", { class: "btn-quiet export-send", type: "button", onclick: () => exportAs(p, kind, "send", send, opts()) }, "Send");
+  const headsRow = folder ? switchRow("Chapter headers", "Each chapter opens with its clip's name", heads, (on) => { heads = on; store(EXPORT_HEADS_KEY, on); }, { "data-pref": "exportHeads" }) : null;
   const sync = () => {
     save.textContent = kind === "pdf" ? "Print or save as PDF" : C.platform.native ? "Save to device" : "Download";
     send.hidden = kind === "pdf" || !C.platform.native;
+    if (headsRow) headsRow.hidden = kind === "cbz";
   };
-  const group = choiceGroup({ key: "export-kind", label: "Export as", options: kinds, get: () => kind,
-    set: (v) => { kind = v; store(key, v); sync(); } });
+  const group = section("", null, el("div", { class: "group" }, pickRow({ key: "export-kind", label: "Export as", options: kinds, get: () => kind,
+    set: (v) => { kind = v; store(key, v); sync(); } }), headsRow));
   sync();
   return el("div", { class: "export" },
     el("div", { class: "export-top" },
@@ -1849,9 +1856,9 @@ function exportControls(what, done) {
     el("div", { class: "export-actions" }, save, send));
 }
 
-async function exportAs(p, kind, how, btn) {
+async function exportAs(p, kind, how, btn, opts = { heads: true }) {
   const pages = p.pages || null;
-  if (kind === "pdf") { await (pages ? printPages(pages, p.title, btn) : printPage(p, btn)); return; }
+  if (kind === "pdf") { await (pages ? printPages(pages, p.title, btn, opts) : printPage(p, btn)); return; }
   if (kind === "source" && !navigator.onLine) { toast("You're offline. Try again when you're back online."); return; }
   const mime = EXPORTS.find((e) => e.value === kind).mime;
   const book = kind === "epub";
@@ -1859,9 +1866,9 @@ async function exportAs(p, kind, how, btn) {
   try {
     let name, text = null, uri = null, blob = null;
     if (kind === "cbz") ({ name, uri = null, blob = null } = await C.files.exportComic(pages || [p], pages ? p.title : undefined, busy.count));
-    else if (kind === "epub") ({ name, uri = null, blob = null } = await C.epub.exportBook(pages || [p], pages ? p.title : undefined, pages ? await coverBytes(pages) : null, busy.count));
-    else if (kind === "md") ({ name, text } = await (pages ? C.backup.exportMarkdownAll(pages, p.title, busy.count) : C.backup.exportMarkdown(p)));
-    else if (kind === "html") ({ name, html: text } = await (pages ? C.backup.exportPages(pages, p.title, busy.count) : C.backup.exportPage(p)));
+    else if (kind === "epub") ({ name, uri = null, blob = null } = await C.epub.exportBook(pages || [p], pages ? p.title : undefined, pages ? await coverBytes(pages) : null, busy.count, opts));
+    else if (kind === "md") ({ name, text } = await (pages ? C.backup.exportMarkdownAll(pages, p.title, busy.count, opts) : C.backup.exportMarkdown(p)));
+    else if (kind === "html") ({ name, html: text } = await (pages ? C.backup.exportPages(pages, p.title, busy.count, opts) : C.backup.exportPage(p)));
     else ({ name, html: text } = await C.save.pageSource(p.url));
     if (!uri && text != null) uri = await C.platform.writeCache(name, text);
     busy.made();
@@ -1931,7 +1938,7 @@ async function sendBook(pages, btn, title) {
 // The page file with a plain print style, on the phone's print screen;
 // it runs no scripts and loads nothing, its pictures are inside it.
 const printPage = (p, btn) => printFile(() => C.backup.exportPage(p), btn);
-const printPages = (pages, title, btn) => printFile((count) => C.backup.exportPages(pages, title, count), btn);
+const printPages = (pages, title, btn, opts) => printFile((count) => C.backup.exportPages(pages, title, count, opts), btn);
 async function printFile(make, btn) {
   const busy = exportBusy(btn, "Getting it ready…");
   try {

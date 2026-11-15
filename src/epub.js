@@ -59,8 +59,9 @@
 
   // One saved page as an XHTML chapter. `addImage(bytes, type)` stores a
   // picture in the book and returns its path from the chapter.
-  async function chapter(p, n, addImage) {
+  async function chapter(p, n, addImage, withHead) {
     const src = new DOMParser().parseFromString(await S().readPage(p.id), "text/html");
+    if (!withHead) src.querySelectorAll(".co-head").forEach((x) => x.remove());
     const lang = src.documentElement.getAttribute("lang") || p.lang || "";
     const dir = src.documentElement.getAttribute("dir") || p.dir || "";
     const doc = document.implementation.createDocument(XHTML, "html", null);
@@ -270,7 +271,8 @@
   // { uri, name } in the app, { blob, name } in a browser.
   // `onProgress(done, total, packing)`: the chapters as they're made,
   // then the files as they're packed.
-  async function exportBook(pages, title, cover, onProgress) {
+  async function exportBook(pages, title, cover, onProgress, opts) {
+    const withHeads = !opts || opts.heads !== false;
     const say = onProgress || (() => {});
     title = clean(title || pages[0].title);
     const native = C.platform.native;
@@ -282,7 +284,7 @@
       return "../" + file;
     };
     const chapters = [];
-    for (const [i, p] of pages.entries()) { chapters.push(await chapter(p, i + 1, addImage)); say(i + 1, pages.length, false); }
+    for (const [i, p] of pages.entries()) { chapters.push(await chapter(p, i + 1, addImage, withHeads)); say(i + 1, pages.length, false); }
     const lang = chapters[0].lang || "en";
     const rtl = chapters[0].dir === "rtl";
     const uid = "urn:uuid:" + uuid();
