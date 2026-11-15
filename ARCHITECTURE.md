@@ -674,7 +674,8 @@ adds a line here.
   and a `<base>` of any web address, because a page being saved is parsed
   under it: without them every `style=""` logs a violation and relative
   links resolve against the app. Scripts stay the app's own files, plus
-  blob: and one hash for the PDF sandbox (`test/csp.test.js`).
+  blob:, one hash for the PDF sandbox and `'wasm-unsafe-eval'` for its
+  JPEG 2000 decoder (`test/csp.test.js`).
 
 - Full pictures load from the web when a clip is opened online, so the
   picture host sees the visit (Settings › Saving › Load pictures only
@@ -784,6 +785,10 @@ area.
   `test/csp.test.js` fails and prints the hash to put there. The PDF
   sandbox stays a srcdoc frame: a sandboxed frame from a file isn't
   served by the service worker, so PDFs wouldn't open offline.
+- pdf.js decodes JPEG 2000 pictures (common in scanned books) with
+  WebAssembly, in the sandbox's worker. Both policies, the sandbox's and
+  index.html's (a srcdoc frame takes both), need `'wasm-unsafe-eval'`;
+  without it in either one those pages draw blank, with no error.
 
 - A `ui.test.js` test that needs what an earlier test left behind must
   use the first page `p`; that is how the slicing (`UI_SHARD`) keeps it

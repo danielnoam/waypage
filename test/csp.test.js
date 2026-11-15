@@ -18,7 +18,7 @@ const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const policy = csp.policyOf(html) || "";
 const directive = (name) => ((policy.split(";").map((d) => d.trim().split(/\s+/)).find((d) => d[0] === name)) || []).slice(1);
 
-// Three places the policy is looser than keel's check, on purpose:
+// Four places the policy is looser than keel's check, on purpose:
 // - The PDF sandbox (src/pdf.js) is a srcdoc frame, which takes this page's
 // policy as well as its own: its one inline script is let in by its hash,
 // and pdf.js comes into it as blob: URLs. Only that script's hash, so no
@@ -26,6 +26,10 @@ const directive = (name) => ((policy.split(";").map((d) => d.trim().split(/\s+/)
 // sandbox's own policy too, so its eval check isn't this page's. (A frame
 // from a file would have its own policy, but a sandboxed one isn't served
 // by the service worker, so PDFs wouldn't open offline.)
+// - script-src allows 'wasm-unsafe-eval': pdf.js decodes JPEG 2000
+//   pictures with WebAssembly in the sandbox, whose worker takes this
+//   page's policy too, so without it those pages draw blank. It lets
+//   WebAssembly compile, never JavaScript from a string (no unsafe-eval).
 // - style-src allows inline styles: a page being saved is parsed in this
 //   document's policy, so every style="" in it would be a violation
 //   logged (a MOBI book has thousands). Styles can't run code.
@@ -38,22 +42,22 @@ const SANDBOX_ONLY = new Set(["pdf.min.mjs", "pdf.worker.min.mjs"]);
 
 const LOOSER = new Set(["script-src should be 'self' and nothing else", "the policy allows unsafe-inline or unsafe-eval", "base-uri should be 'self'"]);
 
-test("the policy and the code under it pass keel's check, but for the three above", () => {
+test("the policy and the code under it pass keel's check, but for the four above", () => {
   const files = ["src", "src/vendor", "src/keel"].flatMap((d) => fs.readdirSync(path.join(ROOT, d))
     .filter((f) => /\.m?js$/.test(f) && !SANDBOX_ONLY.has(f)).map((f) => path.join(ROOT, d, f)));
   const problems = csp.check(html, files).filter((p) => !LOOSER.has(p));
   assert.deepStrictEqual(problems, []);
 });
 
-test("script-src is the app's files, blob: and the PDF sandbox's script by its hash", () => {
+test("script-src is the app's files, WebAssembly, blob: and the PDF sandbox's script by its hash", () => {
   assert.ok(!/\$\{/.test(BOOT), "the sandbox's script has to be fixed text for its hash");
-  assert.deepStrictEqual(directive("script-src"), ["'self'", "blob:", BOOT_HASH], "src/pdf.js's BOOT changed: its hash is now " + BOOT_HASH);
+  assert.deepStrictEqual(directive("script-src"), ["'self'", "'wasm-unsafe-eval'", "blob:", BOOT_HASH], "src/pdf.js's BOOT changed: its hash is now " + BOOT_HASH);
 });
 
-test("the looser three are only as loose as said, and nothing loads a plugin or a form post", () => {
+test("the looser four are only as loose as said, and nothing loads a plugin or a form post", () => {
   assert.deepStrictEqual(directive("style-src"), ["'self'", "'unsafe-inline'"]);
   assert.deepStrictEqual(directive("base-uri"), ["'self'", "https:", "http:"]);
-  assert.ok(!/unsafe-eval/.test(policy));
+  assert.ok(!/(^|[\s'])unsafe-eval/.test(policy), "unsafe-eval");
   assert.deepStrictEqual(directive("form-action"), ["'none'"]);
   assert.deepStrictEqual(directive("default-src"), ["'self'"]);
 });

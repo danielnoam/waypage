@@ -15,7 +15,7 @@
   const C = window.Waypage;
   const LIB = "src/vendor/pdf.min.mjs";
   const WORKER = "src/vendor/pdf.worker.min.mjs";
-  const CSP = "default-src 'none'; script-src 'unsafe-inline' blob:; worker-src blob:; " +
+  const CSP = "default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval' blob:; worker-src blob:; " +
     "connect-src blob: data:; img-src blob: data:; style-src 'unsafe-inline'";
 
   // Everything below runs inside the sandbox, as text, so it can't be

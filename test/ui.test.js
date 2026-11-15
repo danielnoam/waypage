@@ -117,6 +117,33 @@ function pdfBytes() {
   return Buffer.from(out, "latin1");
 }
 
+// A one-page PDF whose only picture is JPEG 2000 (JPXDecode), red all over:
+// pdf.js decodes it with WebAssembly, which both policies have to allow.
+const JP2_RED = "AAAADGpQICANCocKAAAAFGZ0eXBqcDIgAAAAAGpwMiAAAAAtanAyaAAAABZpaGRyAAAAEAAAABAAAwcHAAAAAAAPY29scgEAAAAAABAAAACtanAyY/9P/1EALwAAAAAAEAAAABAAAAAAAAAAAAAAABAAAAAQAAAAAAAAAAAAAwcBAQcBAQcBAf9SAAwAAAABAAQEBAAB/1wAEEBASEhQSEhQSEhQSEhQ/2QAJQABQ3JlYXRlZCBieSBPcGVuSlBFRyB2ZXJzaW9uIDIuNS40/5AACgAAAAAAKQAB/5PPtAgDM8+0CAifz7QICJ+AgICAgICAgICAgID/2Q==";
+function jpxPdfBytes() {
+  const img = Buffer.from(JP2_RED, "base64");
+  const draw = "q 200 0 0 200 0 0 cm /Im0 Do Q";
+  const objs = [null,
+    Buffer.from("<< /Type /Catalog /Pages 2 0 R >>"),
+    Buffer.from("<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
+    Buffer.from("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>"),
+    Buffer.concat([Buffer.from("<< /Type /XObject /Subtype /Image /Width 16 /Height 16 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /JPXDecode /Length " + img.length + " >>\nstream\n"), img, Buffer.from("\nendstream")]),
+    Buffer.from("<< /Length " + draw.length + " >>\nstream\n" + draw + "\nendstream")];
+  const parts = [Buffer.from("%PDF-1.5\n")];
+  let size = parts[0].length;
+  const at = [];
+  for (let i = 1; i < objs.length; i++) {
+    at[i] = size;
+    const b = Buffer.concat([Buffer.from(i + " 0 obj\n"), objs[i], Buffer.from("\nendobj\n")]);
+    parts.push(b); size += b.length;
+  }
+  let tail = "xref\n0 " + objs.length + "\n0000000000 65535 f \n";
+  for (let i = 1; i < objs.length; i++) tail += String(at[i]).padStart(10, "0") + " 00000 n \n";
+  tail += "trailer\n<< /Size " + objs.length + " /Root 1 0 R >>\nstartxref\n" + size + "\n%%EOF\n";
+  parts.push(Buffer.from(tail));
+  return Buffer.concat(parts);
+}
+
 // A small EPUB, stored (not deflated): chapter titles are plain styled
 // paragraphs, as many books have them, and the book's nav lists them.
 function epubBytes() { return zipOf(EPUB_FILES); }
@@ -2752,6 +2779,22 @@ c("bk1", { at: 0.01 })]);
       // pdf.js's sandboxed frame asks for a service worker it can't have.
       const errors = q.errors.filter((e) => !/serviceWorker/.test(e));
       assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a PDF page whose picture is JPEG 2000 draws it, not a blank page", async () => {
+      const q = await page(browser, 390);
+      const px = await q.evaluate(async (b) => {
+        const pdf = await window.Waypage.pdf.open(new Uint8Array(b));
+        const bytes = await pdf.draw(1, 200);
+        pdf.close();
+        const bmp = await createImageBitmap(new Blob([bytes]));
+        const c = new OffscreenCanvas(bmp.width, bmp.height);
+        const x = c.getContext("2d");
+        x.drawImage(bmp, 0, 0);
+        return [...x.getImageData(bmp.width >> 1, bmp.height >> 1, 1, 1).data];
+      }, [...jpxPdfBytes()]);
+      assert.ok(px[0] > 180 && px[1] < 80 && px[2] < 80, "the middle of the page is " + px.join(","));
       await q.context().close();
     });
 
