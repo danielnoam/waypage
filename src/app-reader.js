@@ -305,6 +305,7 @@ async function openPage(id, fromHistory) {
     requestAnimationFrame(() => { if (state.open === p && m) jumpToMark(p, m); });
   }
   furtherRead(p);
+  liveOnOpen(p);
 }
 
 // The furthest-read check (1.3.0): a look at the library on GitHub as a

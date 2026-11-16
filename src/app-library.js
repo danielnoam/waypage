@@ -1095,6 +1095,7 @@ async function setFavourite(list, on) {
   if (state.folder) renderFolder();
   updateWidgets();
 }
+const webCopy = (p) => !p.file && !p.preview && /^https?:/.test(p.url || "");
 const menuRow = (label, onclick, cls) => el("button", { class: "row", type: "button", onclick }, el("span", { class: "row-label" + (cls ? " " + cls : "") }, label));
 
 // A page's actions in the order they're used: where it goes (open,
@@ -1156,6 +1157,8 @@ function pageSheet(p, where) {
           el("span", { class: "row-label accent" }, C.platform.signIn.for(p.url) ? t("Sign in again to {site}", { site: C.platform.signIn.host(p.url) }) : t("Sign in to {site}", { site: C.platform.signIn.host(p.url) })),
           el("span", { class: "row-value" }, t("Only the start")))) : null,
       tooBigLine(p) ? el("p", { class: "meta warn" }, tooBigLine(p)) : null,
+      // Live (2026-11-16): updated from the site as it opens.
+      webCopy(p) ? el("div", { class: "group" }, switchRow(t("Live"), t("Updates from the site when you open it, at most once an hour"), !!p.live, (v) => setLive(p, v).then(draw))) : null,
       tagsRow(p, draw),
       folderRow(p, draw),
       p.file ? null : picturesRow(p, draw),
@@ -1178,8 +1181,13 @@ function pageSheet(p, where) {
         inReader && !p.note && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow(t("Save linked pages"), () => back().then(() => openSheet("links"))) : null,
         p.note ? null : menuRow(p.finished ? t("Mark as unread") : t("Mark as read"), () => markRead([p], !p.finished).then(draw)),
         // The page changed since (1.38.0): fetched again in its place.
-        p.file || p.preview || !/^https?:/.test(p.url || "") ? null
-          : menuRow(t("Update from the site"), () => back().then(() => updateClip(p))),
+        webCopy(p) ? el("button", { class: "row", type: "button", onclick: () => back().then(() => updateClip(p)) },
+          el("span", { class: "row-label" }, t("Update from the site")),
+          p.live ? el("span", { class: "row-value" }, whenText(Math.max(p.savedAt || 0, p.liveAt || 0))) : null) : null,
+        // The copy an update replaced, or a newer one that looked broken.
+        webCopy(p) && p.earlier ? el("button", { class: "row", type: "button", onclick: () => back().then(() => goBackCopy(p.id)) },
+          el("span", { class: "row-label" }, (p.earlier.savedAt || 0) > (p.savedAt || 0) ? t("Use the newer copy") : t("Go back to the earlier copy")),
+          el("span", { class: "row-value" }, whenText(p.earlier.savedAt || 0))) : null,
         // Save as comic, and back as an article (Daniel's ask, after
         // 1.50.0's Article / Comic switch): a web clip saves again that way,
         // a file only changes how it's shown.

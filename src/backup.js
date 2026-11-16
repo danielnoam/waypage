@@ -311,7 +311,8 @@
     const covers = await coversOf(listed);
     return [
       { name: "waypage.json", text: JSON.stringify({ format: 1, app: C.version, made: Date.now(), pages: listed.length, feeds: (feeds || []).length }) },
-      { name: "library.json", text: JSON.stringify(listed) },
+      // An earlier copy of a live clip stays on its device.
+      { name: "library.json", text: JSON.stringify(listed.map(({ earlier, liveAt, ...p }) => p)) },
       ...(feeds && feeds.length ? [{ name: "feeds.json", text: JSON.stringify(feeds) }] : []),
       // Reading stats (1.39.0): this device's and the others it knows.
       ...(C.stats ? [{ name: "stats.json", text: JSON.stringify(C.stats.backup()) }] : []),
