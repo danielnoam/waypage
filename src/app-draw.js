@@ -345,5 +345,6 @@ function renderLibrary() {
   if (state.place === "highlights") renderHighlights();
   if (state.place === "reading") renderReading();
   if (state.place === "anki") renderAnki();
+  if (state.place === "calibre") renderCalibre();
   if (sideShown()) renderSide();
 }

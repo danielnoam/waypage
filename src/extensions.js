@@ -35,6 +35,7 @@
         sha256: "09f7325a69a742aec48e6cd360fa81222abf452201e451ae42fa9ba8482b1a6b",
         url: PACKS + "2b0eebb87575cddf948bac62051aa1b0fa9a0163/de-en.tar.gz" },
     ] },
+    { id: "calibre", title: "Calibre", note: "Your Calibre library folder, in the sidebar", scripts: ["src/sqlite.js", "src/calibre.js", "src/app-calibre.js"], packs: [] },
     { id: "catalogs", title: "Catalogs", note: "Book catalogs (OPDS) you add, in Discover", scripts: ["src/opds.js", "src/app-catalogs.js"], packs: [] },
   ];
 

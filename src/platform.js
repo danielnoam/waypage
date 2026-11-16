@@ -922,6 +922,18 @@
         return { ok: !!got.ok, name: got.name || "", files: (got.files || []).map((f) => ({ ref: f.uri, path: f.path || f.name, name: f.name, size: f.size || 0 })) };
       } catch (e) { return { ok: false, files: [] }; }
     },
+    // A file at `path` in a picked folder, as a ref for info, blob and
+    // linking (the Calibre extension); null when it isn't there. iOS's refs
+    // are the folder's plus the path, as scan makes them.
+    async child(tree, path) {
+      const F = plugin("Files");
+      if (!F) return null;
+      if (os === "ios") return tree + "/" + String(path).split("/").map(encodeURIComponent).join("/");
+      try {
+        const got = await F.folderStat({ tree, path });
+        return got && got.exists && got.uri ? got.uri : null;
+      } catch (e) { return null; }
+    },
     // The folder a file sits in, opened in the phone's Files app (1.27.2,
     // Android). { opened, where }, where its path ("Download/Books").
     get canReveal() { return os === "android" && !!plugin("Files"); },
