@@ -292,8 +292,10 @@ function renderReading() {
   const on = el("button", { class: "icon-btn", type: "button", "aria-label": t("After"), onclick: step(-1) });
   on.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
   on.disabled = readBack === 0;
-  const tops = C.stats.top(range.from, range.to, 12).map((t) => ({ ...t, p: state.pages.find((p) => p.id === t.id) }))
-    .filter((t) => t.p && t.ms >= 60000).slice(0, 5);
+  statsNames();
+  const tops = C.stats.top(range.from, range.to, 20).map((t) => ({ ...t, p: state.pages.find((p) => p.id === t.id) }))
+    .map((t) => ({ ...t, gone: t.p ? null : goneName(t.id) }))
+    .filter((t) => (t.p || t.gone) && t.ms >= 60000).slice(0, 5);
   const opened = days.reduce((n, d) => n + d.opened, 0), saved = days.reduce((n, d) => n + d.saved, 0);
   const words = days.reduce((n, d) => n + d.words, 0);
   fill(root,
@@ -311,7 +313,7 @@ function renderReading() {
       readFigure(saved, "clips saved")),
     readStreak(),
     tops.length ? el("h2", { class: "overline rs-over" }, range.all ? t("Most time overall") : range.now ? t("Most time {x}", { x: range.now.toLowerCase() }) : t("Most time then")) : null,
-    tops.length ? el("ul", { class: "rs-top-list" }, ...tops.map((t) => el("li", null,
+    tops.length ? el("ul", { class: "rs-top-list" }, ...tops.map((t) => t.gone ? goneRow(t) : el("li", null,
       el("button", { class: "rs-clip", type: "button", onclick: () => openPage(t.p.id) },
         clipCover(t.p),
         el("span", { class: "rs-clip-text" },
@@ -322,6 +324,67 @@ function renderReading() {
       ? t("Each of your devices counts its own, and GitHub sync adds them up. ")
       : t("Counted on this device; with GitHub sync on, your other devices' time adds in here. "), x2: C.stats.paceKnown() ? t("Your pace is about {n} words a minute, from the last 30 days; clips' minutes go by it.", { n: C.stats.pace() })
         : t("Clips' minutes go by 230 words a minute until Waypage has seen enough of your reading to know your pace.") })));
+}
+
+// ---- Clips gone from the library, kept in Stats (2026-11) ----
+// Stats keeps a name for each clip read (stats.js). A deleted one stays
+// in "Most time" greyed, until it's removed from Stats or saved again:
+// the same address, or the same file, picks its numbers back up.
+function statsKey(p) {
+  if (!p || p.note || p.preview) return "";
+  if (p.file) return p.file.fp ? "f:" + p.file.fp : p.file.name ? "n:" + p.file.name + ":" + (p.file.size || 0) : "";
+  return /^https?:/.test(p.url || "") ? "u:" + C.sync.urlKey(p.url) : "";
+}
+function statsNames() {
+  // A library that didn't read isn't a library emptied.
+  if (!loaded || C.store.problem) return;
+  const S = C.stats, read = S.totals().clips, have = new Set();
+  for (const p of state.pages) {
+    have.add(p.id);
+    if (read[p.id] && !p.preview) S.name(p.id, { t: p.title, s: p.link ? "" : siteOf(p), k: statsKey(p), u: p.file ? "" : p.url });
+  }
+  S.left(have);
+  const waiting = new Map();
+  for (const g of S.gone(have)) if (g.k) waiting.set(g.k, g.id);
+  if (!waiting.size) return;
+  for (const p of state.pages) {
+    const k = [statsKey(p), p.requested && !p.file ? "u:" + C.sync.urlKey(p.requested) : ""].find((x) => x && waiting.has(x));
+    if (k) { S.moved(waiting.get(k), p.id); waiting.delete(k); }
+  }
+}
+let statsNamesTimer = null;
+const statsNamesSoon = () => { clearTimeout(statsNamesTimer); statsNamesTimer = setTimeout(statsNames, 1500); };
+function goneName(id) {
+  const n = C.stats.named(id);
+  return n && n.g && !C.stats.hidden(id) ? { id, ...n } : null;
+}
+function goneMark() {
+  const box = el("span", { class: "side-cover rs-gone-mark", "aria-hidden": "true" });
+  box.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>';
+  return box;
+}
+function goneRow(r) {
+  return el("li", { class: "rs-gone" },
+    el("button", { class: "rs-clip", type: "button", onclick: () => openMenu("statsGone", r.gone) },
+      goneMark(),
+      el("span", { class: "rs-clip-text" },
+        el("span", { class: "rs-clip-title", dir: "auto" }, r.gone.t),
+        el("span", { class: "meta" }, [t("Deleted"), r.gone.s].filter(Boolean).join(" · "))),
+      el("span", { class: "rs-clip-time" }, spanText(r.ms))));
+}
+function statsGoneSheet(g) {
+  const c = C.stats.clip(g.id);
+  const time = c && c.readMs + c.aloudMs >= 60000 ? spanText(c.readMs + c.aloudMs) : "";
+  return el("div", { class: "page-controls" },
+    el("div", { class: "menu-head" },
+      el("p", { class: "menu-title", dir: "auto" }, g.t),
+      el("p", { class: "meta" }, [t("Deleted"), time, g.s].filter(Boolean).join(" · "))),
+    el("p", { class: "meta" }, g.u ? t("Its time stays in your totals. Save it again and it picks up where it left off.")
+      : t("Its time stays in your totals. Bring the same file back and it picks up where it left off.")),
+    el("div", { class: "group" },
+      g.u ? menuRow(t("Save again"), () => back().then(() => savePage(g.u))) : null,
+      g.u ? menuRow(t("Open the original"), () => C.platform.openOutside(g.u)) : null,
+      menuRow(t("Remove from Stats"), () => back().then(() => { C.stats.hide(g.id); renderReading(); }), "warn")));
 }
 
 async function checkNow(f) {

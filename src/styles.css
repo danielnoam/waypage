@@ -2429,6 +2429,9 @@ span.update-text { cursor: default; }
 .rs-clip-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .rs-clip-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 var(--fs-label)/var(--lh-label) var(--serif); }
 .rs-clip-time { flex-shrink: 0; font: 600 var(--fs-meta)/var(--lh-meta) var(--sans); font-variant-numeric: tabular-nums; }
+.rs-gone .rs-clip-title, .rs-gone .rs-clip-time { color: var(--muted); }
+.rs-gone .rs-clip-title { font-weight: 500; }
+.rs-clip .rs-gone-mark { display: flex; justify-content: center; align-items: center; border-radius: var(--r-sm); background: var(--preview); color: var(--muted); }
 .rs-note { margin-top: var(--s-5); }
 
 /* The river: chips per feed, then the posts by day. */

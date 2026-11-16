@@ -1,6 +1,9 @@
 // Hebrew. Keys are the English text; a missing key shows in English.
 // Plurals: one, two (optional), other. Keep {placeholders} and edge spaces.
 Keel.i18n.strings("he", {
+  "Remove from Stats": "הסרה מהסטטיסטיקה",
+  "Its time stays in your totals. Save it again and it picks up where it left off.": "הזמן שלו נשאר בסיכומים. שומרים אותו מחדש והוא ממשיך מאיפה שהפסיק.",
+  "Its time stays in your totals. Bring the same file back and it picks up where it left off.": "הזמן שלו נשאר בסיכומים. מחזירים את אותו קובץ והוא ממשיך מאיפה שהפסיק.",
   "Opening the rest of the book…": "פותח את שאר הספר…",
   "Timings": "מדידת זמנים",
   "Record timings": "תיעוד זמנים",

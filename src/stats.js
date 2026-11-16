@@ -20,7 +20,9 @@
 // words), finished(id), saved(), moved(from, to), aloud(playing, id),
 // all(), flush(); device, mine(), take(device, data), backup(), restore(b);
 // and the totals: day(key), days(from, to), clip(id), top(from, to, n),
-// streak(), since(), dayKey(t), onChange(fn); totals() for Share reading activity.
+// streak(), since(), dayKey(t), onChange(fn); totals() for Share reading activity;
+// and clips gone from the library: name(id, n), left(have), named(id),
+// hidden(id), hide(id), gone(have).
 (function () {
   "use strict";
   const KEY = "waypage.stats";
@@ -250,6 +252,17 @@
       out.clips[id] = o;
     }
     for (const [a, b] of Object.entries(raw.moved || {})) if (ID.test(a) && typeof b === "string" && ID.test(b)) out.moved[a] = b;
+    const str = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
+    for (const [id, n] of Object.entries(raw.names || {})) {
+      if (!ID.test(id) || !n || typeof n !== "object" || !str(n.t, 1)) continue;
+      const o = { t: str(n.t, NAME_LEN) };
+      if (str(n.s, 1)) o.s = str(n.s, 100);
+      if (str(n.k, 1)) o.k = str(n.k, KEY_LEN);
+      if (/^https?:\/\//.test(str(n.u, 2000))) o.u = str(n.u, 2000);
+      if (num(n.g)) o.g = num(n.g);
+      (out.names || (out.names = {}))[id] = o;
+    }
+    for (const [id, at] of Object.entries(raw.hidden || {})) if (ID.test(id) && num(at)) (out.hidden || (out.hidden = {}))[id] = num(at);
     return out;
   }
   const mine = () => { all(); return data; };
@@ -287,6 +300,48 @@
     tell();
   }
 
+  // ---- Clips gone from the library (2026-11) ----
+  // The numbers keep only ids, so each device keeps a name for every clip
+  // it has read: its title, where it's from, and what makes a clip saved
+  // again the same one (`k`: its address, or its file's fingerprint). A
+  // name is marked `g` when its clip leaves this device's library; Stats
+  // lists it greyed, and the same page or file saved again takes its
+  // numbers back. Removed from Stats (`hidden`), its time stays in the
+  // totals but it leaves the lists, on every device.
+  const NAME_LEN = 200, KEY_LEN = 600;
+  function name(id, n) {
+    if (!ID.test(id || "") || !n || !n.t) return;
+    const o = { t: String(n.t).slice(0, NAME_LEN) };
+    if (n.s) o.s = String(n.s).slice(0, 100);
+    if (n.k) o.k = String(n.k).slice(0, KEY_LEN);
+    if (/^https?:\/\//.test(n.u || "")) o.u = String(n.u).slice(0, 2000);
+    const names = all().names || (all().names = {});
+    if (JSON.stringify(names[id]) === JSON.stringify(o)) return;
+    names[id] = o;
+    changed();
+  }
+  // `have`: the ids in this device's library now.
+  function left(have) {
+    let any = false;
+    for (const [id, n] of Object.entries(all().names || {})) {
+      if (!have.has(id) && !n.g) { n.g = Date.now(); any = true; }
+      else if (have.has(id) && n.g) { delete n.g; any = true; }
+    }
+    if (any) { changed(); tell(); }
+  }
+  function hide(id) {
+    if (!ID.test(id || "")) return;
+    const h = all().hidden || (all().hidden = {});
+    h[id] = Date.now();
+    changed();
+    flush();
+    tell();
+  }
+  const named = (id) => sum().names[id] || null;
+  const hidden = (id) => sum().hidden.has(id);
+  // Every name gone from the library and not removed from Stats.
+  const gone = (have) => Object.entries(sum().names).filter(([id, n]) => n.g && !have.has(id) && !sum().hidden.has(id)).map(([id, n]) => ({ id, ...n }));
+
   // ---- The totals: every device added up ----
   function sum() {
     if (combined) return combined;
@@ -294,10 +349,16 @@
     const moves = { ...sameNow() };
     for (const d of all_) Object.assign(moves, d.moved || {});
     const to = (id) => { for (let n = 0; moves[id] && n < 20; n++) id = moves[id]; return id; };
-    const days = {}, clips = {};
+    const days = {}, clips = {}, names = {}, hide = new Set();
     let since = Infinity;
     for (const d of all_) {
       if (d.since) since = Math.min(since, d.since);
+      for (const [id0, n] of Object.entries(d.names || {})) {
+        const id = to(id0), o = names[id];
+        if (!o) names[id] = { ...n };
+        else if (n.g) o.g = Math.max(o.g || 0, n.g);
+      }
+      for (const id of Object.keys(d.hidden || {})) hide.add(to(id));
       for (const [k, x] of Object.entries(d.days || {})) {
         const o = days[k] || (days[k] = { readMs: 0, words: 0, aloudMs: 0, opened: 0, finished: 0, saved: 0, paceWords: 0, paceMs: 0, clips: {} });
         for (const f of ["readMs", "words", "aloudMs", "opened", "finished", "saved", "paceWords", "paceMs"]) o[f] += x[f] || 0;
@@ -312,7 +373,7 @@
         if (x.finished && (!o.finished || x.finished < o.finished)) o.finished = x.finished;
       }
     }
-    return (combined = { days, clips, since: since === Infinity ? Date.now() : since });
+    return (combined = { days, clips, names, hidden: hide, since: since === Infinity ? Date.now() : since });
   }
   const EMPTY = { readMs: 0, words: 0, aloudMs: 0, opened: 0, finished: 0, saved: 0, clips: {} };
   // Counted up to the minute: what's on screen now is in it.
@@ -387,5 +448,6 @@
 
   window.Waypage.stats = { opened, closed, active, position, screen, pace, paceKnown, finished, saved, moved, same, aloud, all, flush,
     get device() { return device(); }, mine, take, backup, restore, clean,
-    day: dayOf, days, clip: clipOf, totals: fresh, top, finishedIn, streak, since: () => sum().since, dayKey, onChange, READ_DAY };
+    day: dayOf, days, clip: clipOf, totals: fresh, top, finishedIn, streak, since: () => sum().since, dayKey, onChange, READ_DAY,
+    name, left, named, hidden, hide, gone };
 })();

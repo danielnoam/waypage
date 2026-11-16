@@ -2472,6 +2472,43 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("a deleted clip stays in Stats greyed, saved again takes its time back, and can be removed from Stats (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ARTICLE);
+      await q.press("#saveUrl", "Enter");
+      await until(q, () => state.pages.length === 1 && !state.saving.length, null, 15000);
+      const id = await q.evaluate(() => {
+        const S = window.Waypage.stats, id = state.pages[0].id, now = Date.now(), days = {};
+        for (let i = 0; i < 3; i++) days[S.dayKey(now - i * 864e5)] = { readMs: 20 * 60000, words: 3000, opened: 1, clips: { [id]: 20 * 60000 } };
+        S.take("otherdevice5", { since: now - 30 * 864e5, days, clips: { [id]: { readMs: 60 * 60000, opened: 3, far: 0.6 } } });
+        statsNames();
+        return id;
+      });
+      assert.ok(await q.evaluate((id) => window.Waypage.stats.mine().names[id].t === state.pages[0].title, id), "a clip read gets a name");
+      await q.evaluate(() => { window.confirm = () => true; return deletePage(state.pages[0], "keys"); });
+      await q.evaluate(() => { statsNames(); goPlace("reading"); });
+      await q.waitForSelector(".rs-gone");
+      const total = await q.textContent(".rs-total");
+      assert.ok(/^Deleted/.test(await q.textContent(".rs-gone .meta")));
+      await q.click(".rs-gone .rs-clip");
+      await q.locator("#menuSheet:not([hidden]) button", { hasText: "Save again" }).click();
+      await until(q, () => state.pages.length === 1 && !state.saving.length, null, 15000);
+      const back = await q.evaluate(() => { statsNames(); renderReading(); const c = window.Waypage.stats.clip(state.pages[0].id); return { readMs: c && c.readMs, far: c && c.far, grey: document.querySelectorAll(".rs-gone").length, rows: document.querySelectorAll(".rs-clip").length }; });
+      assert.ok(back.readMs >= 60 * 60000 && back.far === 0.6, "the copy saved again has the old time: " + JSON.stringify(back));
+      assert.deepStrictEqual([back.grey, back.rows], [0, 1]);
+      await q.evaluate(() => deletePage(state.pages[0], "keys"));
+      await q.evaluate(() => { statsNames(); goPlace("reading"); renderReading(); });
+      await q.waitForSelector(".rs-gone");
+      await q.click(".rs-gone .rs-clip");
+      await q.locator("#menuSheet:not([hidden]) button", { hasText: "Remove from Stats" }).click();
+      await until(q, () => !document.querySelector(".rs-gone"));
+      assert.strictEqual(await q.textContent(".rs-total"), total, "the totals stay");
+      const kept = await q.evaluate(() => { const S = window.Waypage.stats, c = S.clean(JSON.parse(JSON.stringify(S.mine()))); return { names: Object.keys(c.names || {}).length, hidden: Object.keys(c.hidden || {}).length }; });
+      assert.ok(kept.names >= 1 && kept.hidden === 1, "names and removals go to the other devices: " + JSON.stringify(kept));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("the collection widget's read aloud, Keep reading when you leave, and the small window (1.25.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

@@ -332,7 +332,8 @@ Promise.all([C.platform.ready, firstIndex]).then(([, [pages]]) => {
   C.platform.widgets.onOpen(takeWidget);
   updateWidgets();
   noteCoversSoon();
-  C.store.onIndex = () => { unsynced = true; syncSoon(); };
+  C.store.onIndex = () => { unsynced = true; syncSoon(); statsNamesSoon(); };
+  setTimeout(statsNames, 2500);
   takeSetupLink();
   takeSend();
   setTimeout(healPictures, 4000);
