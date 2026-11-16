@@ -1222,6 +1222,7 @@ const CREDITS = {
     { name: "Readability", by: "Mozilla", licence: "Apache 2.0", url: "https://github.com/mozilla/readability", note: t("Picks the article out of a page") },
     { name: "pdf.js", by: "Mozilla", licence: "Apache 2.0", url: "https://mozilla.github.io/pdf.js/", note: t("Shows PDFs") },
     { name: "foliate-js", by: "John Factotum", licence: "MIT", url: "https://github.com/johnfactotum/foliate-js", note: t("Reads Kindle books") },
+    { name: "fzstd", by: "Arjun Barrett", licence: "MIT", url: "https://github.com/101arrowz/fzstd", note: t("Unpacks Kiwix packs") },
     { name: "Capacitor", by: "Ionic", licence: "MIT", url: "https://capacitorjs.com", note: t("Wraps the app for Android and iOS") },
     { name: "Capacitor File Opener", by: "Capawesome", licence: "MIT", url: "https://github.com/capawesome-team/capacitor-plugins", note: t("Opens the downloaded update") },
     { name: "Capacitor ML Kit Barcode Scanning", by: "Capawesome", licence: "Apache 2.0", url: "https://github.com/capawesome-team/capacitor-mlkit", note: t("Scans the sync setup code") },

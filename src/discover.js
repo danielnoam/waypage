@@ -722,6 +722,68 @@
     return got;
   }
 
+  // ---- Kiwix: whole sites for reading offline (2026-11) ----
+  // Kiwix's own catalog (OPDS, Atom) of packs: Wikipedia, Wiktionary,
+  // Stack Exchange and the rest, one .zim file each, by topic and
+  // language. + downloads the file into Files (app-kiwix.js); it is read
+  // from where it's saved, never synced or backed up.
+  const KIWIX = "https://library.kiwix.org";
+  const KX_TOPICS = ["wikipedia", "wiktionary", "wikivoyage", "wikibooks", "wikiquote", "wikisource", "wikiversity", "wikinews", "gutenberg", "stack_exchange", "ted", "other"]
+    .map((k) => ({ key: k, label: k === "stack_exchange" ? "Stack Exchange" : k === "ted" ? "TED" : k[0].toUpperCase() + k.slice(1) }));
+  const KX_LANGS = [["eng", "English"], ["heb", "עברית"], ["ara", "العربية"], ["deu", "Deutsch"], ["spa", "Español"], ["fra", "Français"], ["ita", "Italiano"], ["por", "Português"], ["rus", "Русский"], ["pol", "Polski"], ["nld", "Nederlands"], ["tur", "Türkçe"], ["ukr", "Українська"], ["zho", "中文"], ["jpn", "日本語"], ["kor", "한국어"], ["hin", "हिन्दी"]]
+    .map(([key, label]) => ({ key, label }));
+  const KX_PAGE = 40;
+  const langLabel = (code) => (KX_LANGS.find((l) => l.key === code) || {}).label || code;
+  const kxSize = (n) => (n >= 1e9 ? (n / 1e9).toFixed(n >= 1e10 ? 0 : 1) + " GB" : n >= 1e6 ? Math.round(n / 1e6) + " MB" : Math.max(1, Math.round(n / 1e3)) + " KB");
+  // One entry per pack; the newest of a name only (the catalog lists the
+  // latest already). The file is the .meta4 link without it.
+  function parseKiwix(xml, base) {
+    const doc = new DOMParser().parseFromString(String(xml || ""), "application/xml");
+    if (doc.querySelector("parsererror")) return [];
+    const kid = (e, name) => [...e.children].find((c) => c.localName === name);
+    const val = (e, name) => { const c = kid(e, name); return c ? c.textContent.replace(/\s+/g, " ").trim() : ""; };
+    const out = [];
+    for (const e of doc.getElementsByTagNameNS("*", "entry")) {
+      const links = [...e.children].filter((c) => c.localName === "link");
+      const get = links.find((l) => /acquisition/.test(l.getAttribute("rel") || "") && /zim/.test(l.getAttribute("type") || ""));
+      if (!get) continue;
+      let file;
+      try { file = new URL(get.getAttribute("href"), base || KIWIX).href.replace(/\.meta4$/, ""); } catch (x) { continue; }
+      if (!/^https:\/\//.test(file) || !/\.zim$/i.test(file)) continue;
+      const pic = links.find((l) => /image|thumbnail/.test(l.getAttribute("rel") || ""));
+      const size = Number(get.getAttribute("length")) || 0;
+      const tags = val(e, "tags").split(";");
+      const flavour = val(e, "flavour");
+      const count = Number(val(e, "articleCount")) || 0;
+      const lang = val(e, "language").split(",")[0];
+      const author = kid(e, "author");
+      out.push({
+        id: "kx:" + (val(e, "name") || file) + ":" + flavour, url: file, file, zim: true, site: "Kiwix", size,
+        title: val(e, "title").slice(0, 120) || file.split("/").pop(), about: val(e, "summary").slice(0, 300),
+        by: langLabel(lang), lang, flavour, pictures: !tags.includes("_pictures:no"), articles: count,
+        maker: author ? val(author, "name") : "", cover: pic ? httpUrl(new URL(pic.getAttribute("href"), base || KIWIX).href) : "",
+        date: (val(e, "issued") || val(e, "updated")).slice(0, 10), stat: [count ? short(count) + " articles" : "", size ? kxSize(size) : ""].filter(Boolean).join(" · "),
+        tags: [], chapters: 0, followers: 0, rating: 0,
+      });
+    }
+    return out;
+  }
+  const kxUrl = (topic, lang, page, words) => {
+    const u = new URL(KIWIX + "/catalog/v2/entries");
+    if (topic && topic !== "other") u.searchParams.set("category", topic);
+    if (lang) u.searchParams.set("lang", lang);
+    if (words) u.searchParams.set("q", words);
+    u.searchParams.set("start", String(Math.max(0, (page || 1) - 1) * KX_PAGE));
+    u.searchParams.set("count", String(KX_PAGE));
+    return u.href;
+  };
+  async function kxRead(url) {
+    const res = await C.platform.fetchText(url);
+    if (res.status !== 200) throw new Error("HTTP " + res.status);
+    return parseKiwix(res.text, res.url || url);
+  }
+  const kxBrowse = (k, g, p) => kxRead(kxUrl(k, g, p));
+  const kxSearch = (words) => kxRead(kxUrl("", "", 1, String(words || "").trim()));
   // ---- Audiobooks: LibriVox ----
   // Public-domain books read aloud by volunteers. Its lists come from
   // archive.org, which keeps every recording (its scrape API gives titles
@@ -907,9 +969,11 @@
       browse: (k, g, p) => lvBrowse(k, g, p), search: lvSearch },
     { key: "ws", label: "Wikisource", texts: true, web: true, lists: WS_LISTS, genres: [], anyGenre: true,
       browse: (k, g, p) => wsBrowse(k, p), search: (w) => wsSearch(w) },
+    { key: "kx", label: "Kiwix", packs: true, web: true, lists: KX_TOPICS, genres: KX_LANGS, anyGenre: true, genreLabel: "Language",
+      browse: kxBrowse, search: kxSearch },
   ];
 
   C.discover = { list, refresh, fromSource, clean, isStory, storyId, parseList, rrLists: RR_LISTS, rrGenres: RR_GENRES, rrSaved, rrRead, rrSearch, rrBrowse, rrBrowseUrl, parseFP, parseFFN, parseAO3, parseSH, parseWattpad, parseWebtoon, parseTapas, fpBrowseUrl, ffnBrowseUrl, ao3BrowseUrl, wpBrowseUrl, firstSaved, firstRead, fpSaved, fpRead, serialLinks, serialChapters, sources: SOURCES,
     parseGutendex, parseSE, parseWsList, parseXf, parseXfSearch, parseWikiToday, pgBrowseUrl, seBrowseUrl, xfBrowseUrl, seEpub, wikiSaved, wikiToday,
-    parseLibriVox, parseIaScrape, iaParts, lvDetails, pgNumber, pgBook };
+    parseLibriVox, parseIaScrape, iaParts, lvDetails, pgNumber, pgBook, parseKiwix, kxUrl, kxSize };
 })();

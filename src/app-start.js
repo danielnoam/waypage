@@ -48,6 +48,8 @@ function route(s) {
     else { history.back(); return; }
   }
   if (view === "reader" && (!state.open || state.open.id !== s.page)) openPage(s.page, true);
+  // Back and forward between a Kiwix pack's articles (app-kiwix.js).
+  else if (view === "reader" && s.pack && state.open.zim && s.pack !== state.open.zim.at) packGo(state.open, s.pack, "", true);
   if (state.image && !(view === "reader" && s.image)) closeImage();
   if (view === "reader" && s.image && !state.image) history.back();
   if (state.finding && !(view === "reader" && s.find)) closeFind(true);

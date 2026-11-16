@@ -1018,7 +1018,7 @@ async function removeFolder(withPages) {
   if (withPages && !confirm(t("Delete “{name}” and its {countLine} from {HERE}?{alsoSynced}{filesNote}", { name: name, countLine: countLine(list.length), HERE: HERE, alsoSynced: alsoSynced(), filesNote: filesNote(list) }))) return;
   if (withPages) forgetWatched(list);
   for (const p of list) {
-    if (withPages) { if (p.link && !p.watched) C.platform.files.release(p.link); await C.store.removePage(p.id); }
+    if (withPages) { if (p.link && !p.watched) C.platform.files.release(p.link); dropPackFile(p); await C.store.removePage(p.id); }
     else { delete p.folder; delete p.folderAt; delete p.folderFav; delete p.folderFavAt; delete p.coverPick; delete p.folderNoShare; delete p.folderTagNew; }
   }
   if (withPages) state.pages = state.pages.filter((p) => !list.includes(p));
@@ -1144,6 +1144,7 @@ function pageSheet(p, where) {
         p.link && !p.remote && !(p.audio && p.audio.from) && C.platform.files.canReveal ? tileButton("folder", t("Folder"), () => showFolder(p)) : null,
         favTile(p, draw)),
       ...(inReader && !p.preview && typeof listenAlongRows === "function" ? listenAlongRows(p) || [] : []),
+      ...(inReader && p.zim ? packRows(p) : []),
       el("h3", { class: "overline" }, p.link ? t("This file") : t("This clip")),
       p.preview || inReader || !(p.marks || []).length ? null : el("div", { class: "group" },
         el("button", { class: "row", type: "button", onclick: () => { markFocus = null; marking = true; draw(); } },
@@ -1318,7 +1319,7 @@ async function deletePage(p, where) {
   if (!confirm(p.link ? t("Remove “{title}” from Waypage? {linkedStays}", { title: p.title, linkedStays: linkedStays([p]) })
     : t("Delete “{title}” from {HERE}?{alsoSynced}", { title: p.title, HERE: HERE, alsoSynced: alsoSynced() }))) return;
   forgetWatched([p]);
-  if (p.link && !p.watched) C.platform.files.release(p.link);
+  if (p.link && !p.watched) C.platform.files.release(p.link); dropPackFile(p);
   await C.store.removePage(p.id);
   state.pages = state.pages.filter((x) => x.id !== p.id);
   await C.store.writeIndex(state.pages);
@@ -1521,7 +1522,7 @@ async function deletePicked() {
     ? tn(list.length, "Remove 1 file from Waypage? {stays}", "Remove {n} files from Waypage? {stays}", { stays: linkedStays(list) })
     : t("Delete {countLine} from {HERE}?{alsoSynced}{filesNote}", { countLine: countLine(list.length), HERE: HERE, alsoSynced: alsoSynced(), filesNote: filesNote(list) }))) return;
   forgetWatched(list);
-  for (const p of list) { if (p.link && !p.watched) C.platform.files.release(p.link); await C.store.removePage(p.id); }
+  for (const p of list) { if (p.link && !p.watched) C.platform.files.release(p.link); dropPackFile(p); await C.store.removePage(p.id); }
   state.pages = state.pages.filter((p) => !list.includes(p));
   await C.store.writeIndex(state.pages);
   await back(andFolder(1));
@@ -2221,7 +2222,7 @@ async function saveHighlights(btn) {
 // (0.31.0): a backup is restored, a clip sent as a file comes back, and
 // a book, a note, a page or a comic becomes a clip of its own. `open`
 // opens it once it's in.
-const FILE_ACCEPT = ".m4b,.m4a,.mp3,.aa,.aax,.aaxc,.m4p,.aac,.ogg,.opus,.flac,.wav,audio/*,.epub,.mobi,.azw,.azw3,.prc,.fb2,.md,.markdown,.txt,.html,.htm,.eml,.cbz,.pdf,.pptx,.csv,.json,.zip,.opml,.xml,application/epub+zip,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,text/html,message/rfc822,text/csv,application/json,application/zip";
+const FILE_ACCEPT = ".m4b,.m4a,.mp3,.aa,.aax,.aaxc,.m4p,.aac,.ogg,.opus,.flac,.wav,audio/*,.epub,.mobi,.azw,.azw3,.prc,.fb2,.md,.markdown,.txt,.html,.htm,.eml,.cbz,.zim,.pdf,.pptx,.csv,.json,.zip,.opml,.xml,application/epub+zip,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,text/html,message/rfc822,text/csv,application/json,application/zip,application/x-zim";
 // The system's picker where there is one (it also grants a lasting
 // permission, for a clip that reads from the file); the browser's own
 // otherwise.
@@ -2521,7 +2522,7 @@ addEventListener("drop", async (e) => {
 // other way this time (a copy of one read from where it is, or back).
 const hasFile = (name, size, link) => state.pages.some((p) => p.file && p.file.name === name && p.file.size === size && !p.link === !link);
 const fileLike = (name, size, link) => state.pages.find((p) => p.file && p.file.name === name && p.file.size === size && !p.link === !link);
-const FILE_KINDS_LINE = t("EPUB, PDF, PowerPoint, Markdown, text, HTML, email (.eml) and CBZ comic files, and audiobooks (M4B, MP3)");
+const FILE_KINDS_LINE = t("EPUB, PDF, PowerPoint, Markdown, text, HTML, email (.eml) and CBZ comic files, Kiwix packs (.zim), and audiobooks (M4B, MP3)");
 async function openFile(file, btn, open, ref, forced) {
   if (!file) return;
   const label = btn ? btn.querySelector(".row-label") : null;
@@ -2575,6 +2576,11 @@ async function openFile(file, btn, open, ref, forced) {
       if (open) openPage(inFolder.id);
       if (btn) { btn.disabled = false; say(t("Restore")); }
       return;
+    }
+    // A Kiwix pack (2026-11) is only ever read from where it is.
+    if (kind === "zim" && !forced) {
+      if (!ref) { if (btn) { btn.disabled = false; say(t("Restore")); } toast(t("Waypage reads a Kiwix pack from where it is, so it needs lasting access. Add it with Add a file.")); return; }
+      forced = { ref };
     }
     let link = null;
     // A PDF made from a deck was saved just now, so it isn't asked about.

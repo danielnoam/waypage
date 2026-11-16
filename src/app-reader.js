@@ -378,7 +378,7 @@ function warmPdf() {
 }
 
 // The history entry for a page in the reader (and the sheet over it).
-const readerState = (p, sheet, image) => ({ view: "reader", page: p.id, folder: state.folder || undefined, sheet: sheet || undefined, image: image || undefined });
+const readerState = (p, sheet, image) => ({ view: "reader", page: p.id, folder: state.folder || undefined, sheet: sheet || undefined, image: image || undefined, pack: (p.zim && p.zim.at) || undefined });
 
 function show(p, html) {
   // Another clip opened by hand, not by reading aloud going on, stops it
@@ -1265,7 +1265,9 @@ function narrateOrScroll(p) {
   $("readerAloud").hidden = !speech.available || pics;
   // A comic or scan has no words to highlight (1.56.0), but can be drawn
   // on, from Highlights (2026-11).
-  const noMarks = pics && !C.files.printed(p) && !C.files.drawable(p);
+  // A Kiwix pack shows one article after another: its highlights would
+  // land on whichever is open, so they're made on a saved article.
+  const noMarks = !!p.zim || (pics && !C.files.printed(p) && !C.files.drawable(p));
   $("readerMarks").hidden = noMarks;
   if (noMarks && state.sheet === "marks") closeSheet(true);
   // A comic in Pages turns rather than scrolls.
@@ -2873,6 +2875,7 @@ function lookupSheet(l) {
 }
 const hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch (e) { return url; } };
 function openLink(href, text) {
+  if (packLink(href)) return;
   linkNow = { href, text };
   if (state.sheet === "link") { $("readingBody").replaceChildren(SHEETS.link.build()); return; }
   openSheet("link");
@@ -3434,6 +3437,7 @@ function paintTicks() {
 let findTimer = 0, findCount = 0, findAt = -1;
 function openFind() {
   if (!state.open) return;
+  if (state.open.zim) { if (state.sheet) back().then(() => openSheet("packSearch")); else openSheet("packSearch"); return; }
   if (findsTranscript(state.open)) { if (state.sheet) back().then(() => openSheet("listenSearch")); else openSheet("listenSearch"); return; }
   if (state.finding) { $("findInput").focus(); return; }
   if (state.sheet) { back().then(openFind); return; }

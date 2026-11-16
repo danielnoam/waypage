@@ -703,7 +703,7 @@
     }
     if (!native && typeof window.showSaveFilePicker === "function") {
       let handle;
-      try { handle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: "PDF", accept: { [mime]: [".pdf"] } }] }); } catch (e) { return { saved: false, ref: null }; }
+      try { handle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: (name.split(".").pop() || "PDF").toUpperCase(), accept: { [mime]: ["." + (name.split(".").pop() || "pdf").toLowerCase()] } }] }); } catch (e) { return { saved: false, ref: null }; }
       const w = await handle.createWritable();
       await w.write(blob);
       await w.close();
@@ -812,6 +812,69 @@
     }
     return (await FS.getUri({ path, directory: "CACHE" })).uri;
   }
+  // A file kept where the person picked (2026-11: a Kiwix pack, a book
+  // kept as a file): downloaded into the cache natively, resumable (the
+  // part already there is kept if it stops), then moved to "app" (the
+  // app's own files), "documents" (Documents/Waypage), "downloads" (the
+  // phone's Download folder) or "folder" (`tree`, a folder picked with
+  // files.pickFolder). Resolves to the file's lasting ref for files.blob
+  // and files.info; null in a browser, which can't keep one.
+  let keeping = Promise.resolve();
+  function keepFile(url, name, where, onProgress, tree) {
+    const run = keeping.then(() => keepOne(url, name, where, onProgress, tree));
+    keeping = run.catch(() => {});
+    return run;
+  }
+  async function keepOne(url, name, where, onProgress, tree) {
+    const FS = plugin("Filesystem");
+    if (!FS || !native) return null;
+    const safe = String(name || "file").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) || "file";
+    const temp = "keep-" + safe.replace(/[^\w.-]+/g, "_");
+    const D = plugin("Downloads");
+    let from = null;
+    if (D && typeof D.fetch === "function") {
+      const heard = await D.addListener("fetched", (p) => { if (onProgress && p && p.path === temp) onProgress(p.bytes, p.total); });
+      try { from = (await D.fetch({ url, path: temp })).uri; }
+      catch (e) { if (!(e && e.code === "UNIMPLEMENTED") && !/not implemented/i.test(String((e && e.message) || e))) throw e; }
+      finally { if (heard && heard.remove) heard.remove(); }
+    }
+    if (!from) {
+      const listener = await FS.addListener("progress", (p) => { if (onProgress && p) onProgress(p.bytes, p.contentLength); });
+      try { await FS.downloadFile({ url, path: temp, directory: "CACHE", progress: true, headers: { "User-Agent": USER_AGENT } }); }
+      finally { if (listener && listener.remove) listener.remove(); }
+      from = (await FS.getUri({ path: temp, directory: "CACHE" })).uri;
+    }
+    if (where === "folder" && tree) {
+      const F = plugin("Files");
+      await F.folderMoveIn({ tree, path: safe, from });
+      const got = await F.folderStat({ tree, path: safe });
+      if (!got || !got.uri) throw new Error("not in the folder");
+      return got.uri;
+    }
+    const to = where === "documents" ? { directory: "DOCUMENTS", dir: "Waypage/" }
+      : where === "downloads" ? (os === "android" ? { directory: "EXTERNAL_STORAGE", dir: "Download/" } : { directory: "DOCUMENTS", dir: "Downloads/" })
+        : { directory: "DATA", dir: "Files/" };
+    // A file of that name already there is kept: this one gets a number.
+    let path = to.dir + safe;
+    for (let n = 2; n < 50; n++) {
+      try { await FS.stat({ path, directory: to.directory }); } catch (e) { break; }
+      path = to.dir + safe.replace(/(\.[a-z0-9]+)?$/i, (ext) => " (" + n + ")" + ext);
+    }
+    await folderFor(FS, path, to.directory);
+    try { await FS.rename({ from: temp, directory: "CACHE", to: path, toDirectory: to.directory }); }
+    catch (e) {
+      await FS.copy({ from: temp, directory: "CACHE", to: path, toDirectory: to.directory });
+      await FS.deleteFile({ path: temp, directory: "CACHE" }).catch(() => {});
+    }
+    return (await FS.getUri({ path, directory: to.directory })).uri;
+  }
+  // A file keepFile kept in one of the app's places, deleted (a pack
+  // removed from the library). A picked folder's file is left alone.
+  async function dropKept(ref) {
+    const FS = plugin("Filesystem");
+    if (!FS || !/^file:/.test(String(ref || ""))) return false;
+    try { await FS.deleteFile({ path: ref }); return true; } catch (e) { return false; }
+  }
   function pauseUpdate() {
     const D = plugin("Downloads");
     return D && typeof D.pauseFetch === "function" ? D.pauseFetch().then(() => true, () => false) : Promise.resolve(false);
@@ -883,8 +946,10 @@
     "application/x-mobipocket-ebook", "application/vnd.amazon.ebook", "application/x-mobi8-ebook", "application/x-fictionbook+xml",
     "application/x-fictionbook", "text/xml", "application/xml", "application/octet-stream",
     // Audiobooks (2026-11).
-    "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/x-m4b", "audio/m4b", "audio/aac", "audio/ogg", "audio/opus", "audio/flac", "audio/x-flac", "audio/wav", "audio/x-wav", "audio/x-m4p", "audio/vnd.audible.aax", "audio/audible"];
-  const FILE_EXTS = [".epub", ".mobi", ".azw", ".azw3", ".prc", ".fb2", ".md", ".markdown", ".txt", ".html", ".htm", ".eml", ".pdf", ".pptx", ".cbz", ".csv", ".json", ".zip",
+    "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/x-m4b", "audio/m4b", "audio/aac", "audio/ogg", "audio/opus", "audio/flac", "audio/x-flac", "audio/wav", "audio/x-wav", "audio/x-m4p", "audio/vnd.audible.aax", "audio/audible",
+    // Kiwix packs (2026-11).
+    "application/x-zim"];
+  const FILE_EXTS = [".zim", ".epub", ".mobi", ".azw", ".azw3", ".prc", ".fb2", ".md", ".markdown", ".txt", ".html", ".htm", ".eml", ".pdf", ".pptx", ".cbz", ".csv", ".json", ".zip",
     ".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".oga", ".opus", ".flac", ".wav", ".aa", ".aax", ".aaxc", ".m4p"];
   const PIECE = 4 << 20;
   const KEEP = 64 << 20;
@@ -1345,7 +1410,7 @@
     onBack,
     exitApp,
     download,
-    downloadUpdate,
+    downloadUpdate, keepFile, dropKept, pauseKeep: () => pauseUpdate(),
     pauseUpdate,
     openInstaller,
     clearOldUpdates,

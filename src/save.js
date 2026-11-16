@@ -3096,7 +3096,7 @@
 
   C.save = {
     get compress() { return compress; }, set compress(v) { compress = v !== false; }, compressPictures,
-    pageSource, preview,
+    pageSource, preview, rebuild,
     save, findArchived, unWayback, formatDate, publishedAt, SaveError, ContentsPage, cutShort, findChapters, pageImage, siteIcon, keepCover, siteRule, removeHidden, scriptJson, chapterNumber, pickChapters, comicGroup, isPanel, retryMissing, saveFullImages, setPictures, findNext, creditLine, cleanSaved, savedPageHtml, newId, textDir, isNextText, isPrevText, plainText, replaceText,
     wikipediaPage, wikimediaThumb, parseSrcset, pickWidth, youtubeId, vimeoId, extOf, isTrackingPixel, readingMinutes, WORDS_PER_MINUTE, siteName,
   };

@@ -17,6 +17,7 @@ line is the way it is lives in its commit and PR (`git log -S`,
 - [Where clips live](#where-clips-live)
 - [Reading](#reading)
 - [Files: EPUB, PDF, comics](#files-epub-pdf-comics)
+- [Kiwix packs](#kiwix-packs)
 - [Browser versus app](#browser-versus-app)
 - [Sync and backups](#sync-and-backups)
 - [Versions, cache and updates](#versions-cache-and-updates)
@@ -61,6 +62,7 @@ src/app-pentest.js  the pen test in Try your pen: asks for ten things in turn, r
 src/app-library.js  tags, collections, a clip's sheet, multi-select, export, import, watched folders
 src/app-saving.js   sync screen, saving several, next links and new chapters, feeds, home-screen widgets
 src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestures, a feed's sheets
+src/app-kiwix.js    Kiwix packs and books kept as files: the + sheet's downloads (where they're kept, Wi-Fi wait), a pack's articles in the reader (links, Back, Search this pack, Save this article), a book as a collection of clips
 src/app-discover.js the Discover place: Wikipedia today, the list, its search, the Sites grid (stories, books, texts), the story and sign-up sheets
 src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
 src/app-listen.js   audiobooks: bringing one in, the player and its bar, reading along, transcripts written ahead, fixes, Find the book in Discover, Settings › Audiobooks
@@ -74,6 +76,7 @@ src/store.js        one directory per clip and library.json; IndexedDB in a brow
 src/platform.js     browser vs app: native fetch, plugins, downloads, speech, opening links
 src/files.js        EPUB, Kindle (MOBI/AZW3), FB2, CBZ, Markdown, text and HTML files
 src/listen.js       audiobooks' pure parts: chapters from M4B and MP3 tags, transcripts as paragraphs, fixes, heard words matched to a book's, EPUB Media Overlays
+src/zim.js          Kiwix packs (.zim): the header, entries by path, the title index, clusters stored, xz (its own LZMA2 decoder) or Zstandard (src/vendor/fzstd.mjs); loaded by files.js the first time a pack is opened
 src/pdf.js          PDFs through pdf.js in a locked-down frame
 src/ink.js          drawing over a clip's blocks or a PDF's pages: strokes, layers, undo, what a copy of the PDF is given
 src/notes.js        notes: sheets of paper you draw on, opened through the PDF pages pipeline with a stand-in document; any clip laid out as a PDF to make one
@@ -116,7 +119,7 @@ src/keel/drive.js   Google Drive sign-in, folder, resumable sending and keeping 
 src/styles.css      tokens, themes, layout (DESIGN.md)
 src/reader.css      the saved page inside the reader's frame
 src/fonts.css       the bundled fonts (src/fonts/)
-src/vendor/         Readability, pdf.js, foliate-js's MOBI reader, each with its licence
+src/vendor/         Readability, pdf.js, foliate-js's MOBI reader, fzstd (Zstandard, for Kiwix packs), each with its licence
 assets/             icon and splash sources for the apps
 icons/, icon.svg    app icons
 worker/             the web copy's fetch proxy, a Cloudflare Worker (worker.js, wrangler.toml, README.md has the setup)
@@ -417,6 +420,34 @@ and a clip's `turn` overrides the ComicInfo `manga` flag. A file naming its
 series gets `series` and `volume`, and `fileSeries` (app-library.js) puts it
 into that collection in volume order.
 
+## Kiwix packs
+
+A Kiwix pack (2026-11) is a whole site in one `.zim` file: Wikipedia,
+Wiktionary, Stack Exchange. Discover › Sites › Kiwix lists Kiwix's own
+catalog (library.kiwix.org, OPDS), by topic and language with sizes
+(`discover.js parseKiwix`). Its + opens the same sheet as a book's
+(`app-discover.js dzAddSheet`): where to keep the file (inside Waypage,
+Downloads, Documents/Waypage or a picked folder) and, for a big one, Wait
+for Wi-Fi. `platform.keepFile` downloads it natively into the cache with
+the Downloads plugin (resumable, one at a time) and moves it there; its
+`file://` address (or the folder's document) is the lasting ref, read
+with `files.blob` like any outside file. A browser can't keep one: the
+browser downloads it and Add a file brings it in.
+
+A pack is a clip read from where it is (`file.kind` "zim", `zim: { at,
+main, wiki, ours }`), never copied, synced or backed up. `files.js
+openZim` reads `zim.at` through `zim.js` and gives the reader the article
+rebuilt by save.js's allowlist (`rebuild`), its links as addresses under
+`zim.ORIGIN` and its pictures as `data-in="zim:<path>"` slots, filled as
+they come near like an EPUB's. A tap on such a link (`app-kiwix.js
+packGo`) shows that article and pushes a history entry with `pack`, so
+Back goes back through the articles; `route` turns a `pack` it lands on
+into that article. Find becomes Search this pack (titles, from the title
+index), and Save this article makes an ordinary clip of it with its
+pictures and, for Wikipedia, its address and licence line. Highlights are
+off on a pack: they'd land on whichever article is open. Removing a pack
+Waypage downloaded into its own places deletes the file.
+
 ## Browser versus app
 
 `platform.js` is the only file that asks where it runs. It exposes the
@@ -627,7 +658,7 @@ The files listed in `keel.lock.json` (`server.js`, `src/keel/qr.js`,
 ## Tests and screenshots
 
 `node test/run-all.js` runs every `test/*.test.js` in its own process.
-`ui.test.js`, `drive.test.js`, `sites.test.js`, `discover.test.js`, `catalogs.test.js`, `calibre.test.js`, `abs.test.js` and `webdav.test.js`
+`ui.test.js`, `drive.test.js`, `sites.test.js`, `discover.test.js`, `kiwix.test.js`, `catalogs.test.js`, `calibre.test.js`, `abs.test.js` and `webdav.test.js`
 drive the app in Chromium with Playwright and skip when it isn't installed
 (`sites.test.js` saves the discussion and code sites from their answers
 saved in `test/fixtures/sites/`, with nothing going out; `discover.test.js`
@@ -636,7 +667,7 @@ bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `csp.test.js` checks the page's Content-Security-Policy through keel's check (ui.test.js fails on anything it blocks); `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `syncanki.test.js`, `synccatalogs.test.js`, `syncwebdav.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR and on `main`, spread
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `syncanki.test.js`, `synccatalogs.test.js`, `syncwebdav.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) and `zim.test.js` (Kiwix packs, old and new layout, xz and Zstandard, against `test/fixtures/zim/`, which `make.py` builds) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR and on `main`, spread
 over four machines: `TEST_SHARD=2/4 node test/run-all.js` runs one
 slice. `ui.test.js` is most of the time, so it is split too
 (`UI_SHARD`): the tests on its first page `p` build on each other and
@@ -749,6 +780,7 @@ for back, forward, previous and next flip.
 What the app gives up on purpose, said plainly. A change that adds one
 adds a line here.
 
+- Kiwix packs (2026-11) are read over the bridge a stretch at a time (`files.blob`, 4 MB pieces, small reads through zim.js's 64 KB blocks): a title search on a big pack makes a few hundred small reads. A native ZIM reader would be faster but is Android and iOS code twice; this is plain JS everywhere. Downloads go one at a time through the Downloads plugin, which resumes but never runs two.
 - The page's Content-Security-Policy (index.html) lets in inline styles
   and a `<base>` of any web address, because a page being saved is parsed
   under it: without them every `style=""` logs a violation and relative

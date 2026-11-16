@@ -508,6 +508,8 @@ async function phone(browser) {
         P.fetchBytes = async (url) => { window.fetched.push(url); return { status: 200, url, type: "application/epub+zip", blob: new Blob([new Uint8Array([0x50, 0x4b, 3, 4, 0, 0])]) }; };
         window.opened = [];
         window.openFile = async (file, btn, open, ref, forced) => { window.opened.push({ name: file.name, size: file.size, forced: !!forced }); };
+        // No save picker in the test: the book is copied in.
+        P.saveLinked = async () => ({ saved: null, ref: null });
         goPlace("discover");
       }, [fixture("wiki-featured.json"), fixture("gutendex.json"), fixture("rr-list.html")]);
       await p.locator('#discover .section-head:has-text("Wikipedia today")').waitFor();
@@ -525,12 +527,59 @@ async function phone(browser) {
       assert.match(sheet, /Jane Austen/);
       assert.match(sheet, /78K downloads/);
       await p.locator('#menuSheet .btn-primary:has-text("Add the book")').click();
+      // The + always asks: an EPUB file (the default) or clips.
+      await p.locator('#menuSheet[data-kind="addBook"]:not([hidden])').waitFor();
+      assert.match(await p.locator("#menuSheet").textContent(), /Add as[\s\S]*EPUB file/);
+      await p.locator('#menuSheet[data-kind="addBook"] .btn-primary').click();
       await p.waitForFunction(() => window.opened.length === 1);
       const got = await p.evaluate(() => ({ fetched: window.fetched, opened: window.opened, asked: window.asked }));
       await ctx.close();
       assert.deepStrictEqual(got.fetched, ["https://www.gutenberg.org/ebooks/1342.epub3.images"]);
       assert.deepStrictEqual(got.opened, [{ name: "Pride and Prejudice - Jane Austen.epub", size: 6, forced: true }]);
       assert.ok(got.asked.some((u) => u.startsWith("https://gutendex.com/books/?sort=popular")), got.asked.join(" "));
+    });
+
+    await test("Kiwix's catalog: packs with their size and language; + asks where, then downloads", async () => {
+      const { ctx, p } = await phone(browser);
+      const parsed = await p.evaluate((xml) => Waypage.discover.parseKiwix(xml, "https://library.kiwix.org/catalog/v2/entries"), fixture("kiwix.xml"));
+      assert.strictEqual(parsed.length, 2, "an entry with no file is left out");
+      assert.strictEqual(parsed[0].file, "https://download.kiwix.org/zim/wikipedia/wikipedia_en_100_maxi_2026-10.zim");
+      assert.strictEqual(parsed[0].size, 331350016);
+      assert.strictEqual(parsed[0].by, "English");
+      assert.strictEqual(parsed[0].cover, "https://library.kiwix.org/catalog/v2/illustration/11111111-2222-3333-4444-555555555555/?size=48");
+      assert.strictEqual(parsed[1].pictures, false);
+      assert.match(await p.evaluate(() => Waypage.discover.kxUrl("wikipedia", "heb", 2)), /category=wikipedia&lang=heb&start=40&count=40$/);
+      await p.evaluate((xml) => {
+        const P = Waypage.platform;
+        P.fetchText = async (url) => { window.asked.push(url); return { status: 200, url, text: /kiwix/.test(url) ? xml : "" }; };
+        window.kept = [];
+        P.keepFile = async (url, name, where) => { window.kept.push({ url, name, where }); return "file:///kept/" + name; };
+        window.opened = [];
+        window.openFile = async (file, btn, open, ref, forced) => { window.opened.push({ ref, forced: forced && forced.ref }); };
+        P.files.blob = async () => new Blob([new Uint8Array(8)]);
+        Object.defineProperty(P, "native", { value: true, configurable: true });
+        dzSource = "kx";
+        dz.grid = dzGrid0();
+        goPlace("discover");
+      }, fixture("kiwix.xml"));
+      await p.locator('#discover .chip:has-text("Sites")').click();
+      await p.locator("#discover .dz-packs .dz-row").first().waitFor();
+      const rows = await p.locator("#discover .dz-packs .dz-row").allTextContents();
+      assert.match(rows[0], /Wikipedia 100[\s\S]*English · with pictures · 331 MB/);
+      assert.match(rows[1], /49 GB/);
+      assert.ok((await p.evaluate(() => window.asked)).some((u) => /lang=eng/.test(u)), "English first, the app's language");
+      await p.locator("#discover .dz-packs .dz-row").first().locator(".post-save").click();
+      await p.locator('#menuSheet[data-kind="addBook"]:not([hidden])').waitFor();
+      const sheet = await p.locator("#menuSheet").textContent();
+      assert.match(sheet, /Save in/);
+      assert.match(sheet, /Wait for Wi-Fi/);
+      assert.doesNotMatch(sheet, /Add as/, "a pack is always a file");
+      await p.locator('#menuSheet[data-kind="addBook"] .btn-primary').click();
+      await p.waitForFunction(() => window.opened.length === 1);
+      const got = await p.evaluate(() => ({ kept: window.kept, opened: window.opened }));
+      await ctx.close();
+      assert.deepStrictEqual(got.kept, [{ url: "https://download.kiwix.org/zim/wikipedia/wikipedia_en_100_maxi_2026-10.zim", name: "wikipedia_en_100_maxi_2026-10.zim", where: "app" }]);
+      assert.deepStrictEqual(got.opened, [{ ref: "file:///kept/wikipedia_en_100_maxi_2026-10.zim", forced: "file:///kept/wikipedia_en_100_maxi_2026-10.zim" }]);
     });
 
     await test("tapping a Wikipedia today row reads it without saving; its + saves it", async () => {
@@ -708,7 +757,7 @@ async function phone(browser) {
       // The books and texts are read here too, through the fetch proxy.
       await p.locator("#discover .dz-tools .dropdown").first().locator(".dropdown-btn").click();
       const sites = await p.locator('[role="option"]').allTextContents();
-      assert.deepStrictEqual(sites.map((t) => t.trim()), ["Project Gutenberg", "Standard Ebooks", "LibriVox", "Wikisource", "Web serials"]);
+      assert.deepStrictEqual(sites.map((t) => t.trim()), ["Project Gutenberg", "Standard Ebooks", "LibriVox", "Wikisource", "Kiwix", "Web serials"]);
       await ctx.close();
     });
   } finally {
