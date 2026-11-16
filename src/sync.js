@@ -25,6 +25,7 @@
   const ANKI_KEY = "waypage.syncAnki"; // { decks, cards: sha as last seen; log: { device: sha }; sent: hash of what GitHub has of decks, cards, log }
   const ABS_KEY = "waypage.syncAbs"; // { sha: audiobookshelf.json as last seen, sent: hash of what GitHub has }
   const CAT_KEY = "waypage.syncCatalogs"; // { sha: catalogs.json as last seen, sent: hash of what GitHub has }
+  const DAV_KEY = "waypage.syncWebdav"; // the same for webdav.json
   const ACT_KEY = "waypage.syncActivity"; // { sig } of the reading activity this device last wrote
   const ACT_PATH = "activity/reading.json";
   const DAY = 24 * 3600 * 1000;
@@ -659,6 +660,7 @@
     keep(STATS_KEY, null);
     keep(ACT_KEY, null);
     keep(CAT_KEY, null);
+    keep(DAV_KEY, null);
     keep(ABS_KEY, null);
   }
 
@@ -1400,6 +1402,7 @@
       if (what.stats) try { await syncStats(); } catch (e) { if (e instanceof Paused) throw e; }
       if (what.anki) try { await syncAnki(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
       try { await syncCatalogs(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
+      try { await syncWebdav(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
       try { await syncAbs(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
       try { await syncActivity(getPages()); } catch (e) { if (e instanceof Paused) throw e; }
     };
@@ -1700,6 +1703,24 @@
       if (r ? hashOf(JSON.stringify(r.data)) === h : !C.opds.list().length) { known.sent = h; keep(CAT_KEY, known); return; }
       halt();
       try { known.sha = await write("catalogs.json", out, r && r.sha, "Catalogs"); known.sent = h; keep(CAT_KEY, known); return; }
+      catch (e) { if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e; }
+    }
+  }
+
+  // WebDAV (2026-11, an extension): webdav.json, the servers without
+  // passwords (src/webdav.js shared), the same way as catalogs.json.
+  async function syncWebdav() {
+    if (!C.ext || !C.ext.on("webdav")) return;
+    await C.ext.load("webdav");
+    const known = load(DAV_KEY, {}) || {};
+    for (let tries = 0; ; tries++) {
+      halt();
+      const r = await readJson("webdav.json").catch((e) => { if (e instanceof Paused || !(e instanceof SyntaxError)) throw e; return null; });
+      if (r && r.sha !== known.sha) { C.webdav.mergeIn(r.data); known.sha = r.sha; }
+      const out = JSON.stringify(C.webdav.shared()), h = hashOf(out);
+      if (r ? hashOf(JSON.stringify(r.data)) === h : !C.webdav.list().length) { known.sent = h; keep(DAV_KEY, known); return; }
+      halt();
+      try { known.sha = await write("webdav.json", out, r && r.sha, "WebDAV servers"); known.sent = h; keep(DAV_KEY, known); return; }
       catch (e) { if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e; }
     }
   }

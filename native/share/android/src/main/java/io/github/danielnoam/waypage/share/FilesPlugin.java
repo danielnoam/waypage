@@ -75,6 +75,9 @@ import java.util.concurrent.ConcurrentHashMap;
  *                           folder itself can't be read (gone, or the
  *                           permission was taken back)
  *
+ *   davList({ url, auth, depth })   a WebDAV folder's PROPFIND (Dav.java):
+ *                           { status, url, text }; rejects when it can't reach it
+ *
  *   reveal({ uri, tree })   opens the folder a file sits in, in the phone's
  *                           Files app (1.27.2); tree is its watched folder.
  *                           { opened, where }, where the folder's path
@@ -671,6 +674,26 @@ public class FilesPlugin extends Plugin {
                 call.resolve(out);
             } catch (Exception e) {
                 call.reject("Couldn't read the file", e);
+            }
+        }).start();
+    }
+
+    @PluginMethod
+    public void davList(PluginCall call) {
+        String url = call.getString("url");
+        if (url == null || !url.matches("(?i)^https?://.+")) { call.reject("Not a web address"); return; }
+        String auth = call.getString("auth", "");
+        String depth = call.getString("depth", "1");
+        new Thread(() -> {
+            try {
+                Dav.Result r = Dav.propfind(url, auth, depth);
+                JSObject out = new JSObject();
+                out.put("status", r.status);
+                out.put("url", r.url);
+                out.put("text", r.text);
+                call.resolve(out);
+            } catch (Exception e) {
+                call.reject("Couldn't reach it", e);
             }
         }).start();
     }
