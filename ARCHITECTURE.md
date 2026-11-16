@@ -94,6 +94,8 @@ src/fsrs.js         the Anki extension's scheduler: FSRS-5 in plain JS; loaded o
 src/sqlite.js       a read-only SQLite reader (table b-trees and overflow pages, UTF-8), loaded with the Anki extension, for opening an Anki deck
 src/anki-import.js  reads an Anki deck (.apkg: a zip with a SQLite collection) into cards and reviews, and Anki's text export's counterpart lives in anki.js; loaded with the Anki extension
 src/anki.js         the Anki extension's engine: decks, cards and a review log (anki/ beside the library, per-device log), each card's schedule replayed from the log
+src/calibre.js      the Calibre extension's library folder: picked once (the Files plugin, or a browser's folder picker kept in IndexedDB), metadata.db read with sqlite.js into books, a book's best file and its cover read from the folder by path
+src/app-calibre.js  the Calibre extension's place: the books as covers with search, sort and tag, a book's sheet (Read it from the folder, or Copy into your Library), Settings › Extensions › Calibre
 src/opds.js         the Catalogs extension's catalogs: the list on this device, OPDS 1 (Atom) and 2 (JSON) feeds read into folders and books, search, a book's file with the catalog's login
 src/app-catalogs.js the Catalogs extension's screens: catalogs in Discover › Sites (folders, books, search), the Add a catalog sheet, Settings › Extensions › Catalogs
 src/app-anki.js     the Anki extension's screens: the selection bar's button and card sheet, the place (decks, study, browse, edit, options)
@@ -602,7 +604,7 @@ The files listed in `keel.lock.json` (`server.js`, `src/keel/qr.js`,
 ## Tests and screenshots
 
 `node test/run-all.js` runs every `test/*.test.js` in its own process.
-`ui.test.js`, `drive.test.js`, `sites.test.js`, `discover.test.js` and `catalogs.test.js`
+`ui.test.js`, `drive.test.js`, `sites.test.js`, `discover.test.js`, `catalogs.test.js` and `calibre.test.js`
 drive the app in Chromium with Playwright and skip when it isn't installed
 (`sites.test.js` saves the discussion and code sites from their answers
 saved in `test/fixtures/sites/`, with nothing going out; `discover.test.js`
@@ -768,6 +770,18 @@ adds a line here.
   never turns one on.
 - Anki import reads only the older collection layout (Anki's "Support older Anki versions" export, `collection.anki21`), since the newer `collection.anki21b` is zstd-compressed and a decompressor would be one more thing to vendor; a deck in the newer layout is told to be exported again. Pictures and sounds aren't brought in, a card keeps its Anki id (so a deck read twice, or on two devices, is the same cards), and its schedule is replayed from its review log through FSRS, so a card with no log starts as new. The fixture was built from Anki's documented tables, not exported by Anki itself.
 - A card goes to AnkiDroid through the share sheet (it takes shared text as a new note and asks which deck), not through its content provider: that would be a native plugin and a permission to ask for, and it can't be built or tried without the Android toolchain.
+- The Calibre extension reads a Calibre library folder in place, with no
+  server: metadata.db through sqlite.js (read-only, tables only), and each
+  book's file and cover.jpg by its path (`files.child`: on Android the
+  Files plugin's folderStat now gives the file's uri; on iOS the ref is
+  the folder's plus the path, as scan makes them). It never writes to the
+  folder, so Calibre stays the owner of it. Read it adds the book as a
+  file read from where it is (not synced or backed up, like any outside
+  file); Copy brings it in. A database Calibre has open in WAL mode may
+  miss its latest changes until Calibre closes. In a browser the folder
+  works in Chrome and Edge only (showDirectoryPicker), and the browser
+  asks again after a restart. Books are matched to clips by Calibre's
+  uuid (`calibre` on the clip, this device's only).
 - Catalogs (OPDS) are the person's own: Waypage ships none. Each is kept in
   this device's localStorage (`waypage.catalogs`), login included, and is
   never synced or backed up. The app sends a login only to the catalog's
