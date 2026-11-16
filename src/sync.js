@@ -1721,6 +1721,10 @@
       if (r ? hashOf(JSON.stringify(r.data)) === h : !C.webdav.list().length) { known.sent = h; keep(DAV_KEY, known); return; }
       halt();
       try { known.sha = await write("webdav.json", out, r && r.sha, "WebDAV servers"); known.sent = h; keep(DAV_KEY, known); return; }
+      catch (e) { if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e; }
+    }
+  }
+
   // Audiobookshelf (2026-11, an extension): audiobookshelf.json, the
   // servers without their tokens (src/abs.js shared), the same way as
   // catalogs. Where you are in a book goes to the server itself, not here.
