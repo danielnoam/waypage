@@ -2,6 +2,21 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.65.0] - 2026-11-16
+
+### Added
+- Audiobookshelf, an extension (Settings › Extensions): your own Audiobookshelf server in the sidebar, with what you're listening to, every audiobook and its search. Play streams a book in Waypage's audiobook player, with read-along, and where you are goes back to the server. The password isn't kept, and sync takes the server to your other devices without the sign-in.
+- Kindle highlights: import a Kindle's My Clippings.txt from Settings, Library, Import from another app. Each book's highlights and notes join the same book in your library, matched by title; books that aren't here are listed.
+- Kiwix packs in Discover › Sites › Kiwix: whole sites in one file for reading with no connection (Wikipedia, Wiktionary, Wikivoyage, Stack Exchange, Gutenberg and more), by topic and language, with each pack's size. + downloads a pack where you pick (inside Waypage, Downloads, Documents or a folder you pick), and a big one can wait for Wi-Fi. A stopped download goes on from where it stopped.
+- A pack opens in the reader at its main page, then at the article you were last on. Links between articles stay in the pack and Back goes back through them; Find searches the pack's titles; Save this article makes a normal clip, with its pictures and, for Wikipedia, its link and licence. A pack lives in Files, read from where it's saved: never synced or backed up. A .zim file from anywhere opens with Add a file too.
+- Discover has LibriVox: free public-domain audiobooks, browsed by most listened, newest or genre, or searched. On Android, its + asks where to save it (inside Waypage, Downloads, Documents or a folder you pick), like Kiwix packs and books, then downloads its parts into a folder named for the book and adds them to Files as one audiobook, its chapters named, to listen offline. A long book can wait for Wi-Fi; the download shows in Downloads and can be stopped there.
+- When LibriVox knows the book it was read from on Project Gutenberg, its EPUB downloads too and the audiobook reads along with it (Read along with the book, on by default).
+- In a browser, a LibriVox book offers its zip of MP3s instead.
+- WebDAV, a new extension: a folder of books on Nextcloud, ownCloud, a NAS or any WebDAV server gets its own place in the sidebar. Walk its folders, find a book by name, and add it to your Library to read offline; a picture beside a book with the same name is its cover. Sync takes the server list to your other devices, but a password stays on the device it was typed on.
+
+### Changed
+- The + on a Project Gutenberg or Standard Ebooks book always asks how to add it: as an EPUB file kept where you pick, read from there in Files, or as a collection with a clip for each chapter, which syncs.
+
 ## [1.64.0] - 2026-11-16
 
 ### Added
