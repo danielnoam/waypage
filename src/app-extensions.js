@@ -72,6 +72,7 @@ for (const x of C.ext.list()) {
 SECTIONS.extensions = { title: t("Extensions"), build: extensionsSections, value: () => { const n = extensionsOn(); return n ? n + " on" : t("Off"); } };
 FIND_ALIASES.Extensions = "anki flashcards cards plugin add-on addon";
 FIND_ALIASES.Catalogs = "opds calibre kavita komga library server books catalog";
+FIND_ALIASES.WebDAV = "webdav nextcloud owncloud nas koofr server folder books";
 FIND_ALIASES.Calibre = "calibre library folder metadata ebooks";
 FIND_ALIASES.Anki = "flashcards cards spaced repetition deck";
 FIND_ALIASES.Languages = "language pack dictionary german vocabulary";
@@ -82,6 +83,7 @@ C.ext.changed(() => {
   if (state.place === "anki" && !C.ext.on("anki")) goPlace("library");
   if (state.place === "calibre" && !C.ext.on("calibre")) goPlace("library");
   if (state.place === "catalogs" && !C.ext.on("catalogs")) goPlace("library");
+  if (state.place === "webdav" && !C.ext.on("webdav")) goPlace("library");
   if (sideShown()) renderSide();
   if (state.section) renderSection();
   if (state.settings) renderSettings();
@@ -132,4 +134,14 @@ async function renderCatalogs() {
     return;
   }
   catalogDraw();
+}
+
+// The WebDAV place: its code is loaded first, then the folder is read.
+async function renderWebdav() {
+  try { await C.ext.load("webdav"); } catch (e) {
+    fill($("webdav"), el("div", { class: "empty" }, el("h2", { class: "empty-title" }, t("WebDAV didn't load")),
+      el("p", { class: "empty-text" }, t("Check your connection, then open it again."))));
+    return;
+  }
+  webdavDraw();
 }

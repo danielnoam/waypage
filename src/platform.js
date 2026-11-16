@@ -121,6 +121,35 @@
     return { status: res.status, url: res.headers.get("X-Final-Url") || res.url || url, type: res.headers.get("Content-Type") || "", blob: await res.blob() };
   }
 
+  // A WebDAV folder's listing (the WebDAV extension, 2026-11) as
+  // { status, url, text }: a PROPFIND, which Android's own http refuses, so
+  // there it goes through the Files plugin's davList (Dav.java); iOS's
+  // CapacitorHttp sends any method; a browser asks the server straight, so
+  // the server has to allow the web copy. Never through the fetch proxy:
+  // it carries a login. `auth` is the Authorization header, or "".
+  async function dav(url, auth, depth = "1") {
+    const F = plugin("Files");
+    if (os === "android" && F) {
+      let r;
+      try { r = await deadline(F.davList({ url, auth: auth || "", depth }), PAGE_TIMEOUT + 15000); }
+      catch (e) { throw new TypeError("Failed to fetch (" + ((e && e.message) || e) + ")"); }
+      return { status: r.status, url: r.url || url, text: r.text || "" };
+    }
+    const headers = { Depth: depth, ...(auth ? { Authorization: auth } : {}) };
+    const http = plugin("CapacitorHttp");
+    if (http) {
+      let res;
+      try {
+        res = await deadline(http.request({ url, method: "PROPFIND", headers: { ...headers, "User-Agent": USER_AGENT }, responseType: "text",
+          connectTimeout: PAGE_TIMEOUT / 2, readTimeout: PAGE_TIMEOUT }), PAGE_TIMEOUT + 5000);
+      } catch (e) { throw new TypeError("Failed to fetch (" + ((e && e.message) || e) + ")"); }
+      return { status: res.status, url: res.url || url, text: typeof res.data === "string" ? res.data : "" };
+    }
+    const res = await deadline(fetch(url, { method: "PROPFIND", headers: { ...headers, "Content-Type": "application/xml; charset=utf-8" }, credentials: "omit",
+      body: '<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:allprop/></d:propfind>' }), PAGE_TIMEOUT);
+    return { status: res.status, url: res.url || url, text: await res.text() };
+  }
+
   // A form sent to a site (1.43.0, making or deleting a newsletter
   // address), as { status, text }. The app only: a browser's CORS keeps
   // it from reading the answer.
@@ -1268,6 +1297,7 @@
     },
     fetchText,
     fetchBytes,
+    dav,
     postForm,
     signIn,
     translateText,
