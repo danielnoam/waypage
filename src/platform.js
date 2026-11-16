@@ -139,6 +139,25 @@
     return { status: res.status, text: typeof res.data === "string" ? res.data : JSON.stringify(res.data) };
   }
 
+  // A call to a server's own API (Audiobookshelf), as { status, text }.
+  // The app asks natively; a browser asks the server straight, never
+  // through the proxy, since `headers` carry a login.
+  async function request(url, { method = "GET", headers = {}, body } = {}) {
+    const http = plugin("CapacitorHttp");
+    if (http) {
+      let res;
+      try {
+        res = await deadline(http.request({ url, method, headers: { "User-Agent": USER_AGENT, ...headers }, ...(body != null ? { data: body } : {}), responseType: "text",
+          connectTimeout: PAGE_TIMEOUT / 2, readTimeout: PAGE_TIMEOUT }), PAGE_TIMEOUT + 5000);
+      } catch (e) {
+        throw new TypeError("Failed to fetch (" + ((e && e.message) || e) + ")");
+      }
+      return { status: res.status, text: typeof res.data === "string" ? res.data : res.data == null ? "" : JSON.stringify(res.data) };
+    }
+    const res = await deadline(fetch(url, { method, headers, body: body == null ? undefined : body, credentials: "omit" }), PAGE_TIMEOUT);
+    return { status: res.status, text: await res.text() };
+  }
+
   // Saving signed in (1.8.0): native/share's SignIn plugin opens a site in a
   // browser inside the app, and its cookies go with Waypage's own requests
   // to that site afterwards, so a subscriber's article saves whole. Only
@@ -1269,6 +1288,7 @@
     fetchText,
     fetchBytes,
     postForm,
+    request,
     signIn,
     translateText,
     translator,
