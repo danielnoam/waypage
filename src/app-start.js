@@ -96,6 +96,7 @@ $("readKeys").addEventListener("click", () => openMenu("keys"));
 // The notification's Stop (Android) stops every run.
 C.platform.downloads.onStop(() => {
   for (const r of [...runs]) stopRun(r);
+  for (const g of audioGets) g.stopped = true;
   pauseUpdate();
   if (C.sync.on && (C.sync.running || syncQueue.length || fetchingPictures)) pauseSync(true);
 });
