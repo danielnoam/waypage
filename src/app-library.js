@@ -372,7 +372,7 @@ function bookHead(list, next, done) {
       el("p", { class: "meta folder-meta" }, meta),
       bar));
   if (renaming) return [head];
-  const go = done === n ? t("Read again from the start") : (next.at > 0.02 || done ? "Continue: " : "Start: ") + next.title;
+  const go = done === n ? t("Read again from the start") : (next.at > 0.02 || done ? t("Continue: {title}", { title: next.title }) : t("Start: {title}", { title: next.title }));
   return [head,
     el("button", { class: "btn-primary folder-go", type: "button", dir: "auto", onclick: () => openPage(done === n ? list[0].id : next.id) }, go),
     saveNewButton(list),
@@ -2875,7 +2875,7 @@ function watchIntoPick(w) {
     }
     if (moved) { await C.store.writeIndex(state.pages); renderLibrary(); updateWidgets(); }
     renderSection();
-    const files = moved === 1 ? "1 file" : moved + " files";
+    const files = tn(moved, "1 file", "{n} files");
     toast(into ? (moved ? t("Moved {files} into {into}. New ones go there too.", { files: files, into: into }) : t("New files from {name} go into {into}", { name: w.name, into: into }))
       : (moved ? t("Moved {files} back into collections named after their folders", { files: files }) : t("New files from {name} go into collections named after their folders", { name: w.name })));
   };

@@ -1108,7 +1108,7 @@ function onKeys(e) {
   if (k === "Escape" && inkPop) { inkPopClose(); e.preventDefault(); return; }
   if (k === "Escape" && (state.sheet || state.image || state.menu || state.select || state.side)) { history.back(); return; }
   if (state.image && !e.altKey && !e.ctrlKey && !e.metaKey) {
-    const act = { ArrowLeft: () => stepImage(-1), ArrowRight: () => stepImage(1), "+": () => zoomStep(1), "=": () => zoomStep(1), "-": () => zoomStep(-1) }[k];
+    const act = { ArrowLeft: () => stepImage(M.x(-1)), ArrowRight: () => stepImage(M.x(1)), "+": () => zoomStep(1), "=": () => zoomStep(1), "-": () => zoomStep(-1) }[k];
     if (act) { e.preventDefault(); act(); }
     return;
   }
@@ -1198,7 +1198,7 @@ function onKeys(e) {
 // The line between a list and the post beside it, from 1280 px (1.49.0):
 // drag it, or focus it and use the arrow keys; a double-click puts it
 // back in the middle. The share of the room is kept, so it holds when
-// the window is resized.
+// the window is resized. Right to left the panes run from the right.
 {
   const grip = $("paneGrip"), KEY = "waypage.listShare", MIN = 320, PANE_MIN = 400;
   const sideW = () => $("sidebar").offsetWidth || 272;
@@ -1220,7 +1220,7 @@ function onKeys(e) {
     grip.classList.add("dragging");
     document.body.classList.add("resizing");
   });
-  grip.addEventListener("pointermove", (e) => { if (grip.classList.contains("dragging")) share = place((e.clientX - sideW()) / room()); });
+  grip.addEventListener("pointermove", (e) => { if (grip.classList.contains("dragging")) share = place(((M.rtl() ? innerWidth - e.clientX : e.clientX) - sideW()) / room()); });
   const end = () => {
     if (!grip.classList.contains("dragging")) return;
     grip.classList.remove("dragging");
@@ -1232,7 +1232,7 @@ function onKeys(e) {
   grip.addEventListener("dblclick", () => keep(0.5));
   grip.addEventListener("keydown", (e) => {
     const d = { ArrowLeft: -0.02, ArrowRight: 0.02 }[e.key];
-    if (d) { e.preventDefault(); keep(share + d); }
+    if (d) { e.preventDefault(); keep(share + M.x(d)); }
     else if (e.key === "Home" || e.key === "End") { e.preventDefault(); keep(e.key === "Home" ? 0 : 1); }
   });
 }
@@ -1343,9 +1343,11 @@ const backOpens = C.platform.onBack(({ canGoBack }) => {
   C.platform.exitApp();
 });
 
-// The sidebar follows a finger dragging it to the left (0.30.5): let go
-// past a third of its width, or with a flick, and it closes from there;
-// short of that it springs back. Its rows still scroll up and down.
+// The sidebar follows a finger dragging it toward its edge (0.30.5; the
+// left, or the right in Hebrew): let go past a third of its width, or
+// with a flick, and it closes from there; short of that it springs back.
+// Its rows still scroll up and down. dx is kept as the screen's px; M.x()
+// turns it toward the sidebar's edge and back.
 let sideDragged = 0, sideDragEnd = 0;
 function dragSide() {
   const side = $("sidebar"), catcher = $("sideCatch");
@@ -1356,7 +1358,7 @@ function dragSide() {
   };
   const move = (e) => {
     if (!drag || !e.isPrimary) return;
-    const dx = Math.min(0, e.clientX - drag.x), dy = e.clientY - drag.y;
+    const dx = Math.min(0, M.x(e.clientX - drag.x)), dy = e.clientY - drag.y;
     if (!drag.on) {
       if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(e.clientX - drag.x)) { drag = null; return; }
       if (dx > -10) return;
@@ -1367,9 +1369,9 @@ function dragSide() {
     drag.v = (dx - drag.dx) / dt;
     drag.t = e.timeStamp;
     drag.dx = dx;
-    side.style.transform = "translateX(" + dx + "px)";
+    side.style.transform = "translateX(" + M.x(dx) + "px)";
     catcher.style.opacity = String(Math.max(0, 1 + dx / drag.w));
-    if (!M.reduced()) drift("translateX(" + Math.round(drag.w * 0.2 * (1 + dx / drag.w)) + "px)");
+    if (!M.reduced()) drift("translateX(" + M.x(Math.round(drag.w * 0.2 * (1 + dx / drag.w))) + "px)");
   };
   const up = () => {
     const d = drag;
@@ -1378,10 +1380,10 @@ function dragSide() {
     sideDragEnd = performance.now();
     side.style.transform = "";
     const lib = libParts();
-    if (d.dx < -d.w / 3 || d.v < -0.5) { sideDragged = d.dx; history.back(); }
+    if (d.dx < -d.w / 3 || d.v < -0.5) { sideDragged = M.x(d.dx); history.back(); }
     else {
       M.dim(catcher, true);
-      M.slideBack(side, d.dx, M.reduced() ? null : lib);
+      M.slideBack(side, M.x(d.dx), M.reduced() ? null : lib);
       if (!M.reduced()) drift(M.sideDrift(side));
     }
   };
@@ -1395,20 +1397,21 @@ function dragSide() {
   catcher.addEventListener("click", (e) => { if (performance.now() - sideDragEnd < 400) e.stopImmediatePropagation(); }, true);
 }
 
-// Where there's no Back to use (iOS, a browser), a swipe to the right
-// from the left edge opens it. Rows that scroll sideways keep theirs.
+// Where there's no Back to use (iOS, a browser), a swipe in from the
+// sidebar's edge (the left, or the right in Hebrew) opens it. Rows that
+// scroll sideways keep theirs.
 const EDGE = 24;
 function swipeToSide(root) {
   if (backOpens) return;
   let start = null;
   root.addEventListener("touchstart", (e) => {
     const t = e.touches[0];
-    start = e.touches.length === 1 && t.clientX <= EDGE && !state.select && !state.menu && !state.side
+    start = e.touches.length === 1 && (M.rtl() ? innerWidth - t.clientX : t.clientX) <= EDGE && !state.select && !state.menu && !state.side
       && !e.target.closest(".filters, .folder-strip, input, textarea, .drag-handle") ? { x: t.clientX, y: t.clientY } : null;
   }, { passive: true });
   root.addEventListener("touchmove", (e) => {
     if (!start) return;
-    const t = e.touches[0], dx = t.clientX - start.x, dy = Math.abs(t.clientY - start.y);
+    const t = e.touches[0], dx = M.x(t.clientX - start.x), dy = Math.abs(t.clientY - start.y);
     if (dy > 24 || dx < -24) { start = null; return; }
     if (dx > 64 && dy < dx / 2) { start = null; openSide(); }
   }, { passive: true });
@@ -1418,7 +1421,8 @@ function swipeToSide(root) {
 // In Feeds and Newsletters a swipe sideways goes to the feed or address
 // next to this one, in the chips' order, All first (1.45.5). The list
 // follows the finger, then the next one comes in from that side. Not from
-// the left edge (the sidebar's) or on the chips, which scroll sideways.
+// the sidebar's edge or on the chips, which scroll sideways. Right to
+// left the chips run from the right, so a swipe to the right goes on.
 function swipeFeeds(root) {
   let go = null;
   const chips = () => [...root.querySelectorAll(".feed-chips .chip")];
@@ -1434,7 +1438,7 @@ function swipeFeeds(root) {
   };
   root.addEventListener("touchstart", (e) => {
     const t = e.touches[0];
-    go = e.touches.length === 1 && t.clientX > EDGE && !state.feedPick && !state.side && !state.menu && chips().length > 1
+    go = e.touches.length === 1 && (M.rtl() ? innerWidth - t.clientX : t.clientX) > EDGE && !state.feedPick && !state.side && !state.menu && chips().length > 1
       // Discover's row of covers scrolls sideways on its own; its grid doesn't.
       && !e.target.closest(".filters, input, textarea, .dz-covers:not(.dz-grid)") ? { x: t.clientX, y: t.clientY, on: false, dx: 0, t: e.timeStamp } : null;
   }, { passive: true });
@@ -1448,14 +1452,14 @@ function swipeFeeds(root) {
     }
     go.dx = dx;
     // Past the first or last, it gives a little and no more.
-    const to = neighbour(dx < 0 ? 1 : -1);
+    const to = neighbour(M.x(dx < 0 ? 1 : -1));
     if (!M.reduced()) move("translateX(" + (to ? dx : dx / 4) + "px)");
   }, { passive: true });
   const end = (e) => {
     const g = go;
     go = null;
     if (!g || !g.on) return;
-    const d = g.dx < 0 ? 1 : -1, to = neighbour(d);
+    const d = g.dx < 0 ? 1 : -1, to = neighbour(M.x(d));
     const fast = Math.abs(g.dx) / Math.max(1, e.timeStamp - g.t) > 0.5;
     const w = root.offsetWidth || innerWidth;
     if (!to || (Math.abs(g.dx) < w / 4 && !fast)) {

@@ -2434,4 +2434,10 @@ Keel.i18n.strings("he", {
   "Zoom": "זום",
   "Zoom in": "הגדלה",
   "Zoom out": "הקטנה",
+  "Continue: {title}": "המשך: {title}",
+  "Start: {title}": "התחלה: {title}",
+  "{n} episodes": { one: "פרק אחד", two: "שני פרקים", other: "{n} פרקים" },
+  "{n} following": { one: "עוקב אחד", other: "{n} עוקבים" },
+  "{n} pixels": { one: "פיקסל אחד", two: "שני פיקסלים", other: "{n} פיקסלים" },
+  "{time} left": "נשארו {time}",
 });

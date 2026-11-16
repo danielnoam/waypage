@@ -1122,7 +1122,11 @@ async function goTo(p, turn, swiped = null) {
   if (positionTimer) savePositions();
   history.replaceState(readerState(p), "");
   const side = swiped != null || C.reader.paged;
-  const dir = swiped ? (swiped < 0 ? 1 : -1) : turn === -1 ? -1 : 1;
+  // dir for keel's pageOut/pageIn, which mirror sideways moves in a Hebrew
+  // UI: a swipe goes the finger's way; a turn goes the clip's reading way,
+  // whatever the UI's language.
+  const back = turn === -1 ? -1 : 1, rtlClip = p.dir === "rtl";
+  const dir = swiped ? M.x(swiped < 0 ? 1 : -1) : side ? M.x(rtlClip ? -back : back) : back;
   try {
     if (turn) {
       const out = M.pageOut(frame, side, dir, swiped || 0);
@@ -1892,7 +1896,7 @@ function marksView(p, back) {
     }
     rows.sort((a, b) => a.at - b.at);
     const drawings = groups.reduce((a, g) => a + inkGroupCount(g), 0);
-    const title = [list.length || !drawings ? (list.length === 1 ? "1 highlight" : list.length + " highlights") : null, drawings ? inkWord(drawings) : null].filter(Boolean).join(" · ");
+    const title = [list.length || !drawings ? tn(list.length, "1 highlight", "{n} highlights") : null, drawings ? inkWord(drawings) : null].filter(Boolean).join(" · ");
     const canDraw = inReader && inkReady();
     return el("div", { class: "marks-list" },
       el("div", { class: "export-top" },
@@ -2672,7 +2676,7 @@ function syncReadingControls(box) {
   for (const [k, text] of Object.entries(shown)) {
     const range = box.querySelector('.range[data-pref="' + k + '"]');
     range.value = r[k];
-    range.setAttribute("aria-valuetext", k === "size" ? r.size + " pixels" : text);
+    range.setAttribute("aria-valuetext", k === "size" ? tn(r.size, "1 pixel", "{n} pixels") : text);
     box.querySelector('[data-value="' + k + '"]').textContent = text;
   }
   box.querySelector('[data-step="-1"]').disabled = r.size <= SIZE_MIN;
@@ -3578,7 +3582,7 @@ function stepImage(d) {
   if (to < 0 || to >= V.list.length) return;
   V.at = to;
   viewImage(C.reader.imageInfo(V.list[to]));
-  M.edgeIn($("viewerImg"), d > 0 ? "right" : "left");
+  M.edgeIn($("viewerImg"), d > 0 ? "end" : "start");
 }
 function zoomStep(d) {
   const r = $("viewerStage").getBoundingClientRect();
