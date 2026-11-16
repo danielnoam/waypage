@@ -2,6 +2,16 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.64.0] - 2026-11-16
+
+### Added
+- Calibre, a new extension (Settings › Extensions): pick your Calibre library folder and its books show in the sidebar, with no server. Search them by title, author, series or tag, then read one straight from the folder or copy it into your Library. Its series becomes a collection in order and its Calibre tags become tags.
+- Catalogs, a new extension (Settings › Extensions): add book catalogs (OPDS) such as Calibre, Calibre-Web, COPS, Kavita or Komga, with a login if they need one. They get their own place in the sidebar, Catalogs: open their folders, search them, and add a book's EPUB, PDF or CBZ to the Library. Sync carries your catalogs to your other devices but never their passwords: each device asks for one once.
+
+### Changed
+- Searching Project Gutenberg, Standard Ebooks and Wikisource from Discover › Sites works in the browser too, as browsing them already did.
+- The app can reach plain http addresses, for book servers at home.
+
 ## [1.63.1] - 2026-11-16
 
 ### Fixed
