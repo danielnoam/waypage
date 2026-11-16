@@ -1326,6 +1326,37 @@ function zipOf(files) {
       fs.rmSync(dir, { recursive: true, force: true });
     });
 
+    await test("Kindle's My Clippings.txt adds highlights to the book in the library, placed when it opens (2026-11)", async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "waypage-"));
+      const file = path.join(dir, "My Clippings.txt");
+      const entry = (book, kind, loc, words) => [book, "- Your " + kind + " on Location " + loc + " | Added on Monday, March 4, 2024 10:15:32 AM", "", words, "=========="].join("\r\n");
+      fs.writeFileSync(file, "﻿" + [
+        entry("Plain Chapters (Ada Writer)", "Highlight", "10-12", "A later scene begins. A later scene begins."),
+        entry("Plain Chapters (Ada Writer)", "Note", "12", "Where it turns"),
+        entry("Another Book (Someone)", "Highlight", "5-6", "Not here."),
+      ].join("\r\n") + "\r\n");
+      const q = await page(browser, 390);
+      const bytes = [...epubBytes()];
+      await q.evaluate(async (b) => { askKeep = async () => false; await openFile(new File([new Uint8Array(b)], "plain.epub", { type: "application/epub+zip" }), null, false); }, bytes);
+      await until(q, () => state.pages.length === 1);
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Storage" }).click();
+      await q.locator("#backupSection input[type=file]").setInputFiles(file);
+      await q.locator(".import-sheet").waitFor();
+      assert.ok(/Not in your library/.test(await q.locator(".import-sheet").textContent()));
+      await q.locator(".import-go", { hasText: "Add 1 highlight" }).click();
+      await until(q, async () => ((await window.Waypage.store.readIndex())[0].marks || []).length === 1);
+      const kept = await q.evaluate(async () => (await window.Waypage.store.readIndex())[0].marks[0]);
+      assert.deepStrictEqual([kept.text, kept.note, kept.end], ["A later scene begins. A later scene begins.", "Where it turns", 0]);
+      await q.evaluate(() => { history.back(); history.back(); });
+      await q.evaluate(() => openPage(state.pages[0].id));
+      await until(q, () => state.pages[0].marks[0].end > 0, null, 15000);
+      assert.strictEqual(await q.frameLocator("#readerFrame").locator("mark.co-mark").count() > 0, true);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
     await test("an OPML file follows its feeds, shown not saved, and saves back out (1.32.0)", async () => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), "waypage-"));
       const file = path.join(dir, "subscriptions.opml");

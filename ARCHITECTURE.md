@@ -85,7 +85,7 @@ src/discover-list.js  the hand-picked list itself (strict JSON between markers, 
 src/sync.js         GitHub sync; src/sync-worker.js runs the merge off the main thread
 src/drive.js        Google Drive backups
 src/backup.js       one-file backups and exports
-src/imports.js      Pocket, Instapaper, Omnivore, Raindrop, Wallabag exports
+src/imports.js      Pocket, Instapaper, Omnivore, Raindrop, Wallabag exports, Kindle highlights
 src/stats.js        reading stats and the reading pace
 src/activity.js     Share reading activity: builds activity/reading.json (docs/reading-activity.md)
 src/dict.js         StarDict dictionaries in IndexedDB
@@ -540,7 +540,9 @@ web copy stay links, as before.
 - **Backups and exports** (`backup.js`, `epub.js`): one zip of the whole
   library, one HTML file per clip, an EPUB of chosen clips.
 - **Imports** (`imports.js`): other read-later apps' exports become
-  saving jobs.
+  saving jobs. A Kindle's My Clippings.txt becomes highlights on books
+  already here, matched by title; they come with words only (block 0,
+  start and end 0) and take a place when the reader first finds them.
 
 Nothing leaves the device unless the person turned it on (CONTRIBUTING.md).
 
