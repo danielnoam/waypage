@@ -84,6 +84,13 @@ function catalogSearchHead() {
   return el("div", { class: "dz-head" }, box);
 }
 
+// Which catalog, or Add a catalog…
+function catalogPick(cat, input) {
+  return dropdown({ label: t("Catalog"), cls: "field-pick dz-pick", value: cat.id,
+    options: [...C.opds.list().map((c) => ({ value: c.id, label: c.title })), { value: "+", label: t("Add a catalog…") }],
+    onpick: (v) => { if (v === "+") { openMenu("addCatalog"); catalogDraw(); return; } catPick = v; store("waypage.catalogs.pick", v); if (input) input.value = ""; catalogDraw(); } });
+}
+
 // The Catalogs place: which catalog (or Add a catalog…), where you are in
 // it, its folders, its books; Enter in the field asks its own search.
 function catalogDraw() {
@@ -94,8 +101,19 @@ function catalogDraw() {
     catHead = null;
     fill(root, el("div", { class: "empty" },
       el("h2", { class: "empty-title" }, t("No catalogs yet")),
-      el("p", { class: "empty-text" }, t("Calibre, Calibre-Web, Kavita, Komga and many libraries share one. A login stays on this device.")),
+      el("p", { class: "empty-text" }, t("Calibre, Calibre-Web, Kavita, Komga and many libraries share one. A password stays on this device.")),
       el("button", { class: "btn-primary", type: "button", onclick: () => openMenu("addCatalog") }, t("Add a catalog"))));
+    return;
+  }
+  // One that came by sync has its username but not the password, which
+  // never leaves the device it was typed on.
+  if (cat.user && !cat.pass) {
+    catHead = null;
+    fill(root, el("div", { class: "dz-body" }, el("div", { class: "dz-tools" }, catalogPick(cat, null)),
+      el("div", { class: "empty" },
+        el("h2", { class: "empty-title" }, t("Type the password for {title}", { title: cat.title })),
+        el("p", { class: "empty-text" }, t("Catalogs sync without their passwords, so each device asks once.")),
+        el("button", { class: "btn-primary", type: "button", onclick: () => openMenu("addCatalog", cat) }, t("Type the password")))));
     return;
   }
   if (cg.key !== cat.id) {
@@ -105,9 +123,7 @@ function catalogDraw() {
   if (!catHead) catHead = catalogSearchHead();
   const input = catHead.querySelector("input");
   input.placeholder = t("Search {label}", { label: cat.title });
-  const pick = dropdown({ label: t("Catalog"), cls: "field-pick dz-pick", value: cat.id,
-    options: [...C.opds.list().map((c) => ({ value: c.id, label: c.title })), { value: "+", label: t("Add a catalog…") }],
-    onpick: (v) => { if (v === "+") { openMenu("addCatalog"); catalogDraw(); return; } catPick = v; store("waypage.catalogs.pick", v); input.value = ""; catalogDraw(); } });
+  const pick = catalogPick(cat, input);
   const q = input.value.trim().toLowerCase();
   let body;
   if (cg.found) {
@@ -147,7 +163,7 @@ function catalogSheet() {
   const user = field({ type: "text", placeholder: t("Username, if it asks"), "aria-label": t("Username") });
   const pass = field({ type: "password", placeholder: t("Password"), "aria-label": t("Password"), autocomplete: "new-password" });
   if (had) { addr.value = had.url; user.value = had.user; pass.value = had.pass; }
-  const help = el("p", { class: "footnote" }, t("Calibre, Calibre-Web, Kavita, Komga and many libraries share one. A login stays on this device."));
+  const help = el("p", { class: "footnote" }, t("Calibre, Calibre-Web, Kavita, Komga and many libraries share one. A password stays on this device."));
   const label = had ? t("Save") : t("Add the catalog");
   const go = el("button", { class: "btn-primary", type: "button" }, label);
   const add = async () => {
@@ -181,6 +197,7 @@ function catalogSheet() {
   go.addEventListener("click", add);
   for (const i of [addr, user, pass]) i.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); add(); } });
   if (!had) setTimeout(() => addr.focus({ preventScroll: true }), 50);
+  else if (had.user && !had.pass) setTimeout(() => pass.focus({ preventScroll: true }), 50);
   const drop = had ? el("button", { class: "btn-quiet", type: "button", onclick: async () => {
     if (!confirm(t("Remove {title}? Books you added from it stay in your Library.", { title: had.title }))) return;
     await back();
@@ -198,7 +215,7 @@ EXT_PAGES.catalogs = () => {
   const cats = C.opds.list();
   return [
     cats.length ? section(t("Your catalogs"), null, el("div", { class: "group" },
-      ...cats.map((cat) => navRow(cat.title, C.opds.host(cat.url) + (cat.user ? " · " + t("Signed in") : ""), () => openMenu("addCatalog", cat))))) : null,
+      ...cats.map((cat) => navRow(cat.title, C.opds.host(cat.url) + (cat.user ? " · " + (cat.pass ? t("Signed in") : t("Needs its password")) : ""), () => openMenu("addCatalog", cat))))) : null,
     section(t("Actions"), null, el("div", { class: "group" }, navRow(t("Add a catalog"), null, () => openMenu("addCatalog")))),
   ].filter(Boolean);
 };

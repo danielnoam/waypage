@@ -511,6 +511,14 @@ web copy stay links, as before.
   A device that has reviewed nothing sends no log. Changes made here
   start a sync 30 seconds after the last one (`anki.edited`).
   `test/syncanki.test.js` plays two devices on one made-up repo.
+- **Catalogs** (2026-11, while the extension is on): `catalogs.json`, the
+  list with each catalog's address, name and username but never its
+  password (`opds.shared()`), and the ones removed with when, so a removal
+  sticks. Merged by id, the newer change winning (`opds.mergeIn`); a
+  password typed on this device stays, unless the username changed. One
+  that arrives with a username and no password asks for it in its place.
+  Sent only when it differs from GitHub's; no sync of its own, it goes
+  with the next. `test/synccatalogs.test.js`.
 - **Share reading activity** (2026-11, `activity.js`, off by default, a
   switch per device in `what.activity`): after the stats, sync writes
   `activity/reading.json`, what you're reading and minutes a day, for
@@ -611,7 +619,7 @@ bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `csp.test.js` checks the page's Content-Security-Policy through keel's check (ui.test.js fails on anything it blocks); `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `syncanki.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR and on `main`, spread
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `syncanki.test.js`, `synccatalogs.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR and on `main`, spread
 over four machines: `TEST_SHARD=2/4 node test/run-all.js` runs one
 slice. `ui.test.js` is most of the time, so it is split too
 (`UI_SHARD`): the tests on its first page `p` build on each other and
@@ -769,8 +777,10 @@ adds a line here.
 - Anki import reads only the older collection layout (Anki's "Support older Anki versions" export, `collection.anki21`), since the newer `collection.anki21b` is zstd-compressed and a decompressor would be one more thing to vendor; a deck in the newer layout is told to be exported again. Pictures and sounds aren't brought in, a card keeps its Anki id (so a deck read twice, or on two devices, is the same cards), and its schedule is replayed from its review log through FSRS, so a card with no log starts as new. The fixture was built from Anki's documented tables, not exported by Anki itself.
 - A card goes to AnkiDroid through the share sheet (it takes shared text as a new note and asks which deck), not through its content provider: that would be a native plugin and a permission to ask for, and it can't be built or tried without the Android toolchain.
 - Catalogs (OPDS) are the person's own: Waypage ships none. Each is kept in
-  this device's localStorage (`waypage.catalogs`), login included, and is
-  never synced or backed up. The app sends a login only to the catalog's
+  this device's localStorage (`waypage.catalogs`), password included. Sync
+  carries the list but never a password (Daniel, 2026-11-16: a leaked sync
+  token shouldn't leak a library login too), and backups leave catalogs
+  out. The app sends a login only to the catalog's
   own address. A browser reads an open catalog through the fetch proxy but
   one with a login, or on the home network, straight from the page: a
   password never goes through the proxy (which can't reach a home server

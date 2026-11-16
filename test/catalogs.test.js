@@ -182,6 +182,22 @@ async function phone(browser) {
       await p.waitForFunction(() => !window.Waypage.opds.list().length);
       await ctx.close();
     });
+    await test("a catalog that came by sync with a username asks for its password before reading it", async () => {
+      const { ctx, p } = await phone(browser);
+      await p.evaluate(() => {
+        window.Waypage.opds.mergeIn({ v: 1, list: [{ id: "c1", title: "Home Library", url: "https://books.example.test/opds", user: "daniel", at: 1 }], gone: {} });
+        goPlace("catalogs");
+      });
+      await p.locator('#catalogs .empty-title:has-text("Type the password for Home Library")').waitFor();
+      assert.strictEqual(await p.evaluate(() => window.asked.length), 0, "nothing asked of the catalog without its password");
+      await p.locator('#catalogs .btn-primary:has-text("Type the password")').click();
+      await p.locator('#menuSheet[data-kind="addCatalog"]:not([hidden])').waitFor();
+      await p.locator('#menuSheet input[type="password"]').fill("s3cret");
+      await p.locator('#menuSheet .btn-primary').click();
+      await p.locator('#catalogs .cat-folders .row:has-text("Newest")').waitFor();
+      assert.strictEqual(await p.evaluate(() => window.Waypage.opds.list()[0].pass), "s3cret");
+      await ctx.close();
+    });
   } finally {
     await browser.close();
     server.kill();
