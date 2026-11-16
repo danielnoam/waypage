@@ -194,83 +194,103 @@ async function arrived(meta) {
 }
 
 // ---- From Discover: LibriVox (2026-11) ----
-// A recording's MP3 parts downloaded one by one into the app's own storage
-// (audiobooks/<id>/, removed with the clip), played from there like a
-// folder of files. Never in a backup or sync, like any audiobook; its
-// place syncs by a fingerprint made from the recording, so another phone
-// that downloads it too picks up where you are. The app only: a browser
-// can't keep files, and Android's player is the one that plays them.
-function audioStore() { return C.platform.plugin("Filesystem"); }
-const canGetAudiobooks = () => A.native && !!audioStore();
-async function getAudiobook(s, withBook) {
-  const FS = audioStore();
+// A recording's MP3 parts downloaded one by one where the person picked
+// (the Save in row: inside Waypage, Downloads, Documents or a folder),
+// into a folder named for the book, through keepFile like a Kiwix pack,
+// and played from there like a folder of files. Never in a backup or
+// sync, like any audiobook; its place syncs by a fingerprint made from
+// the recording, so another phone that downloads it too picks up where
+// you are. Parts Waypage kept in its own places go with the clip
+// (dropAudioFiles); a picked folder's stay. The app only: a browser can't
+// keep files, and Android's player is the one that plays them.
+const audioComing = new Set();
+function canGetAudiobooks() { return A.native && C.platform.native; }
+// how: { where, wifi, book } from Discover's sheet.
+async function getAudiobook(s, how) {
   if (!canGetAudiobooks()) return;
   if (state.pages.some((p) => p.audio && p.audio.from === s.id)) { toast(t("It's in your library already.")); return; }
-  if (audioGets.some((g) => g.from === s.id)) { toast(t("It's downloading. It joins your Library when it's done.")); return; }
+  if (audioComing.has(s.id)) { toast(t("It's downloading. It's in Downloads.")); return; }
   if (!navigator.onLine) { toast(t("You're offline. Add it when you're back online.")); return; }
-  const id = C.save.newId(), dir = "audiobooks/" + id;
-  const g = { id, from: s.id, title: s.title, done: 0, total: 0, stopped: false };
-  audioGets.push(g);
-  renderDownloads();
+  const tree = await pickedTree(how);
+  if (tree === false) return;
+  audioComing.add(s.id);
+  const k = keepRun(t("Downloading an audiobook"), s.title);
+  const kept = [];
+  const folder = String(s.title || "Audiobook").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "Audiobook";
   toast(t("Downloading “{replace}”. It's in Downloads.", { replace: s.title }));
   try {
     const d = await C.discover.lvDetails(s);
     const list = d.parts || [];
     if (!list.length) throw new Error("no parts");
-    g.total = list.length;
+    while (how.wifi && C.platform.metered && !k.run.stopped) {
+      k.run.now = t("Waiting for Wi-Fi");
+      updateRunCard(k.run);
+      await new Promise((go) => wifiWaiters.push(go));
+    }
     const parts = [], chapters = [];
     let at = 0, size = 0;
     for (let i = 0; i < list.length; i++) {
-      if (g.stopped) throw new Error("stopped");
-      g.done = i;
-      paintDownloads();
-      paintAudioGets();
-      const path = dir + "/" + String(i + 1).padStart(3, "0") + ".mp3";
-      // A part that breaks off is tried once more.
-      for (let tries = 0; ; tries++) {
-        try { await C.platform.downloadTo(list[i].url, path, null, "DATA", undefined, 15 * 60000); break; }
-        catch (e) { if (tries || g.stopped) throw e; }
-      }
-      const { uri } = await FS.getUri({ path, directory: "DATA" });
-      const bytes = (await FS.stat({ path, directory: "DATA" })).size || 0;
-      const part = { ref: uri, name: (list[i].title || path.split("/").pop()).slice(0, 200), size: bytes, dur: list[i].dur || 0 };
-      if (!part.dur) part.dur = (await partLength(part, null)).dur;
-      if (!part.dur) continue;
+      if (k.run.stopped) throw new Error("stopped");
+      const part = t("Part {n} of {all}", { n: i + 1, all: list.length });
+      k.run.part = i / list.length;
+      k.run.now = part;
+      updateRunCard(k.run);
+      const name = String(i + 1).padStart(3, "0") + " " + (list[i].title || "").replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 60);
+      // Each part's share of the bar; Stop pauses the part coming.
+      const ref = await C.platform.keepFile(list[i].url, folder + "/" + name.trim() + ".mp3", how.where, (bytes, total) => {
+        if (k.run.stopped) { C.platform.pauseKeep(); return; }
+        k.run.part = (i + (total > 0 ? Math.min(1, bytes / total) : 0)) / list.length;
+        k.run.now = part + (bytes ? " · " + formatSize(bytes) : "");
+        updateRunCard(k.run);
+      }, tree);
+      if (!ref) throw new Error("not kept");
+      kept.push(ref);
+      const info = await C.platform.files.info(ref);
+      const p = { ref, name: (list[i].title || name).slice(0, 200), size: info.size || 0, dur: list[i].dur || 0 };
+      if (!p.dur) p.dur = (await partLength(p, null)).dur;
+      if (!p.dur) continue;
       chapters.push({ t: at, title: list[i].title || t("Part {n}", { n: i + 1 }) });
-      parts.push(part);
-      at += part.dur;
-      size += bytes;
+      parts.push(p);
+      at += p.dur;
+      size += p.size;
     }
     if (!parts.length) throw new Error("no parts");
-    g.done = g.total;
-    paintDownloads();
+    k.run.now = t("Opening");
+    updateRunCard(k.run);
     let cover = null;
     if (d.cover) {
       try { const got = await C.platform.fetchBytes(d.cover, "cover.jpg"); if (got.status === 200) cover = new Uint8Array(await got.blob.arrayBuffer()); } catch (e) { /* no cover */ }
     }
-    const { uri: folder } = await FS.getUri({ path: dir, directory: "DATA" });
     const meta = await newAudiobook({
-      id, title: d.title, byline: d.by,
-      file: { name: d.title.slice(0, 200), kind: "audio", ext: "mp3", size, fp: await sha("librivox:" + s.id) }, link: folder,
-      audio: { parts, chapters, dur: at, folder: true, from: s.id },
+      title: d.title, byline: d.by,
+      file: { name: d.title.slice(0, 200), kind: "audio", ext: "mp3", size, fp: await sha("librivox:" + s.id) }, link: parts[0].ref,
+      audio: { parts, chapters, dur: at, folder: true, from: s.id, ...(how.where !== "folder" ? { ours: true } : {}) },
     }, cover);
     meta.url = d.url;
     meta.site = "LibriVox";
-    dropAudioGet(g);
+    k.done();
     await arrived(meta);
-    if (withBook) await audiobookBook(meta, d);
+    if (how.book) await audiobookBook(meta, d);
   } catch (e) {
-    FS.rmdir({ path: dir, directory: "DATA", recursive: true }).catch(() => {});
-    toast(g.stopped ? t("Stopped. Nothing was kept.") : t("Couldn't download it just now. Try again later, or open it on the site."));
+    k.done();
+    // What came is let go: Waypage's own places, deleted.
+    if (how.where !== "folder") for (const ref of kept) C.platform.dropKept(ref);
+    toast(k.run.stopped ? (how.where === "folder" ? t("Stopped. The parts that came stay in the folder you picked.") : t("Stopped. Nothing was kept.")) : t("Couldn't download it just now. Try again later, or open it on the site."));
   } finally {
-    dropAudioGet(g);
+    audioComing.delete(s.id);
   }
 }
-function dropAudioGet(g) {
-  const i = audioGets.indexOf(g);
-  if (i < 0) return;
-  audioGets.splice(i, 1);
-  renderDownloads();
+// A downloaded audiobook's parts, when its clip is removed: only those
+// Waypage put in its own places, never a picked folder's.
+function dropAudioFiles(p) {
+  if (!p.audio || !p.audio.ours) return;
+  const parts = p.audio.parts || [];
+  Promise.all(parts.map((part) => C.platform.dropKept(part.ref))).then(() => {
+    // Then its folder, now empty.
+    const dir = parts.length ? String(parts[0].ref).replace(/\/[^/]*$/, "") : "";
+    const FS = C.platform.plugin("Filesystem");
+    if (FS && /^file:/.test(dir)) FS.rmdir({ path: dir }).catch(() => {});
+  });
 }
 // The Project Gutenberg book the recording was read from, downloaded and
 // read along with (Find the book in Discover does the same by hand).

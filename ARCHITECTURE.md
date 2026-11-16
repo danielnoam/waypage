@@ -705,15 +705,16 @@ with the CSS Custom Highlight API. A transcript clip is aligned to its
 own text the same way, so both read along through one path. An EPUB's
 Media Overlays (SMIL) give the times themselves (`overlaySync`).
 
-An audiobook from Discover (LibriVox, `getAudiobook`) is the one kind
-that is downloaded: its MP3 parts go one at a time into the app's own
-storage, `audiobooks/<clip id>/` under DATA wherever the library lives,
-and its parts' refs are those files' `file://` addresses, which the
-player and the Files plugin read like any other. `audio.from` is the
+An audiobook from Discover (LibriVox, `getAudiobook`) is downloaded:
+its MP3 parts go one at a time through `platform.keepFile` to the place
+the + sheet's Save in picked (inside Waypage, Downloads, Documents or a
+picked folder), in a folder named for the book (`"Book/001 Title.mp3"`),
+and each part's ref is that file's lasting address. `audio.from` is the
 Discover id ("lv:<archive.org item>"), the fingerprint is made from it,
 so another phone that downloads the same recording picks up the place.
-`store.removePage` removes the folder with the clip. Its Gutenberg book
-(the recording's `url_text_source`) downloads after it and is paired
+`audio.ours` marks parts in Waypage's own places, which `dropAudioFiles`
+deletes with the clip; a picked folder's stay. Its Gutenberg book (the
+recording's `url_text_source`) downloads after it and is paired
 through `pairPending`, as Find the book in Discover does.
 
 A streamed audiobook (the Audiobookshelf extension) is an entry with
@@ -824,9 +825,8 @@ adds a line here.
 - LibriVox's lists (most listened, newest) and search come from
   archive.org's scrape API, a genre and a book's parts from LibriVox's
   own API (by title, then archive.org's file list). Neither was reached
-  from a test machine; their answers were read once by hand. A
-  downloaded audiobook sits in the app's own storage, so it goes with
-  an uninstall, and it's in no backup (a book is hundreds of megabytes).
+  from a test machine; their answers were read once by hand.  A
+  downloaded audiobook is in no backup (a book is hundreds of megabytes).
 - A path rule (Lemmy's /post/123, Substack's /p/slug) tries the API of
   any site whose address has that shape before reading the page, so one
   of those that isn't Lemmy or Substack costs a request that fails.

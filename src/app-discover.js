@@ -502,14 +502,21 @@ function dzAudioSheet(s) {
   const facts = el("p", { class: "meta" });
   const blurb = el("p", { class: "dz-blurb", dir: "auto" });
   const along = el("div");
+  // Where the parts go, as for any download; a long book (64 kbps: about
+  // 29 MB an hour) can wait for Wi-Fi.
+  let where = dzWhere(), wifi = null;
+  const size = () => Math.round((s.secs || 0) * 8000);
   const paint = () => {
     const n = s.parts ? s.parts.length : 0;
-    facts.textContent = [s.secs ? C.listen.lengthText(s.secs) : "", n ? tn(n, "1 part", "{n} parts") : "", s.stat && !/parts$/.test(s.stat) && !s.secs ? s.stat : ""].filter(Boolean).join(" · ");
+    facts.textContent = [s.secs ? C.listen.lengthText(s.secs) : "", n ? tn(n, "1 part", "{n} parts") : "", size() ? formatSize(size()) : "", s.stat && !/parts$/.test(s.stat) && !s.secs ? s.stat : ""].filter(Boolean).join(" · ");
     blurb.textContent = s.about || "";
     blurb.hidden = !s.about;
     const pg = C.discover.pgNumber(s.text);
-    fill(along, ...(can && !saved && pg ? [el("div", { class: "group" }, switchRow(t("Read along with the book"), t("Its text from Project Gutenberg downloads too"),
-      load("waypage.discover.lvBook", true) !== false, (on) => store("waypage.discover.lvBook", on)))] : []));
+    if (wifi == null && size()) wifi = size() > 200e6;
+    fill(along, ...(can && !saved ? [el("div", { class: "group" }, dzWhereRow(() => where, (v) => { where = v; }),
+      size() > 50e6 ? switchRow(t("Wait for Wi-Fi"), t("Starts on Wi-Fi, not on mobile data"), !!wifi, (on) => { wifi = on; }) : null,
+      pg ? switchRow(t("Read along with the book"), t("Its text from Project Gutenberg downloads too"),
+        load("waypage.discover.lvBook", true) !== false, (on) => store("waypage.discover.lvBook", on)) : null)] : []));
   };
   paint();
   if (!s.parts && !s.asked && navigator.onLine && C.platform.canReadPages) {
@@ -517,7 +524,7 @@ function dzAudioSheet(s) {
     C.discover.lvDetails(s).then((d) => { Object.assign(s, d, { id: s.id }); if (facts.isConnected) paint(); }).catch(() => {});
   }
   const add = can
-    ? el("button", { class: "btn-primary", type: "button", ...(saved ? { disabled: "" } : {}), onclick: async () => { await back(); getAudiobook(s, !!C.discover.pgNumber(s.text) && load("waypage.discover.lvBook", true) !== false); } },
+    ? el("button", { class: "btn-primary", type: "button", ...(saved ? { disabled: "" } : {}), onclick: async () => { await back(); getAudiobook(s, { where, wifi: !!wifi, book: !!C.discover.pgNumber(s.text) && load("waypage.discover.lvBook", true) !== false }); } },
       saved ? t("In your library") : t("Add the audiobook"))
     : s.zip ? el("button", { class: "btn-primary", type: "button", onclick: () => C.platform.openOutside(s.zip) }, t("Download the zip")) : null;
   return el("div", { class: "page-controls dz-story" },
@@ -530,7 +537,7 @@ function dzAudioSheet(s) {
     saved ? el("p", { class: "footnote dz-ok" }, t("It's in your library already.")) : null,
     along,
     add,
-    el("p", { class: "footnote" }, can ? t("Its parts download to this phone and join your Library as an audiobook, to listen offline. It's in the public domain.")
+    el("p", { class: "footnote" }, can ? t("Its parts download where you pick, in a folder of its own, and join Files as one audiobook, to listen offline. It's in the public domain.")
       : t("Audiobooks download into Waypage on Android. Here you can take the whole book as a zip of MP3s.")),
     el("button", { class: "btn-quiet", type: "button", onclick: () => C.platform.openOutside(s.url) }, dzIcon("out", 16), t("Open on {site}", { site: s.lv ? "LibriVox" : "archive.org" })));
 }
@@ -603,19 +610,22 @@ function dzBookName(s) {
 const DZ_WHERE_KEY = "waypage.discover.saveIn";
 const DZ_AS_KEY = "waypage.discover.bookAs";
 const dzWhere = () => load(DZ_WHERE_KEY, "app");
+// The Save in row, shared by every + that downloads a file.
+function dzWhereRow(get, set) {
+  return pickRow({ label: t("Save in"), options: [
+    { value: "app", label: t("Inside Waypage"), note: t("Private to the app. Goes when Waypage is uninstalled.") },
+    { value: "downloads", label: t("Downloads"), note: t("The phone's Downloads folder. Stays after an uninstall.") },
+    { value: "documents", label: t("Documents"), note: t("Documents/Waypage, seen in the Files app. Stays after an uninstall.") },
+    { value: "folder", label: t("A folder you pick"), note: t("Anywhere on the phone, a memory card too. Asked each time.") },
+  ], get, set: (v) => { store(DZ_WHERE_KEY, v); set(v); } });
+}
 function dzAddSheet() {
   const s = state.menu.page;
   const pack = !!s.zim;
   let as = pack ? "file" : load(DZ_AS_KEY, "file"), where = dzWhere();
   const big = s.size || 0;
   let wifi = big > 200e6;
-  const where0 = [
-    { value: "app", label: t("Inside Waypage"), note: t("Private to the app. Goes when Waypage is uninstalled.") },
-    { value: "downloads", label: t("Downloads"), note: t("The phone's Downloads folder. Stays after an uninstall.") },
-    { value: "documents", label: t("Documents"), note: t("Documents/Waypage, seen in the Files app. Stays after an uninstall.") },
-    { value: "folder", label: t("A folder you pick"), note: t("Anywhere on the phone, a memory card too. Asked each time.") },
-  ];
-  const whereRow = pickRow({ label: t("Save in"), options: where0, get: () => where, set: (v) => { where = v; store(DZ_WHERE_KEY, v); } });
+  const whereRow = dzWhereRow(() => where, (v) => { where = v; });
   const note = el("p", { class: "footnote dz-add-note" });
   const paint = () => {
     whereRow.hidden = as !== "file" || !C.platform.native;

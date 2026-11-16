@@ -458,34 +458,48 @@ async function phone(browser) {
       assert.match(web.text, /on Android/);
       await p.evaluate(() => history.back());
       await p.waitForTimeout(400);
+      // The app: Save in, as for any download, then Add.
+      await p.evaluate(() => { canGetAudiobooks = () => true; openMenu("story", window.book); });
+      await p.locator("#menuSheet .dz-story").waitFor();
+      const app = await p.evaluate(() => document.querySelector("#menuSheet .dz-story").textContent);
+      assert.match(app, /Save in/);
+      assert.match(app, /Read along with the book/);
+      assert.match(app, /Wait for Wi-Fi/, "a 13-hour book (about 380 MB) can wait for Wi-Fi");
+      await p.evaluate(() => history.back());
+      await p.waitForTimeout(400);
       const made = await p.evaluate(async ([pg]) => {
         const P = Waypage.platform;
-        const files = {};
-        Object.defineProperty(P.audio, "native", { get: () => true, configurable: true });
         P.audio.probe = async () => null;
-        audioStore = () => ({
-          getUri: async ({ path }) => ({ uri: "file:///data/" + path }),
-          stat: async ({ path }) => ({ size: files[path] || 0 }),
-          rmdir: async () => { window.removed = true; },
-        });
-        P.downloadTo = async (url, path, page, dir, extra, wait) => { files[path] = 5000; window.dl = (window.dl || []).concat([[url, path, dir, wait]]); return "http://localhost/_capacitor_file_/" + path; };
+        P.keepFile = async (url, name, where, progress, tree) => {
+          window.kept = (window.kept || []).concat([[url, name, where]]);
+          progress(5000, 10000);
+          return "file:///phone/Download/" + name;
+        };
+        P.files.info = async () => ({ ok: true, name: "x.mp3", size: 5000 });
+        P.dropKept = async (ref) => { window.dropped = (window.dropped || []).concat([ref]); return true; };
         P.fetchBytes = async () => { throw new Error("no cover here"); };
         P.fetchText = async (url) => ({ status: 200, url, text: pg });
         window.saved = [];
         saveFileLink = async (url, name) => { window.saved.push([url, name]); };
-        await getAudiobook(window.book, true);
+        await getAudiobook(window.book, { where: "downloads", wifi: false, book: true });
         const a = state.pages.find((x) => x.audio && x.audio.from === window.book.id);
-        return { dl: window.dl, a: a && { title: a.title, by: a.byline, site: a.site, url: a.url, link: a.link, fp: a.file.fp, parts: a.audio.parts.map((x) => [x.ref, x.name, x.dur, x.size]), chapters: a.audio.chapters, dur: a.audio.dur },
-          saved: window.saved, have: dzSavedStory(window.book), removed: !!window.removed };
+        const out = { kept: window.kept, a: a && { title: a.title, by: a.byline, site: a.site, url: a.url, link: a.link, fp: a.file.fp, ours: a.audio.ours, parts: a.audio.parts.map((x) => [x.ref, x.name, x.dur, x.size]), chapters: a.audio.chapters, dur: a.audio.dur },
+          saved: window.saved, have: dzSavedStory(window.book), runs: runs.size };
+        dropAudioFiles(a);
+        await new Promise((r) => setTimeout(r, 50));
+        out.dropped = window.dropped;
+        return out;
       }, [fixture("gutendex.json")]);
       await ctx.close();
-      assert.ok(!made.removed);
-      assert.deepStrictEqual(made.dl.map((x) => [x[1], x[2], x[3]]), [["audiobooks/" + made.a.link.split("/").pop() + "/001.mp3", "DATA", 900000], ["audiobooks/" + made.a.link.split("/").pop() + "/002.mp3", "DATA", 900000]]);
+      assert.deepStrictEqual(made.kept.map((x) => x.slice(1)), [["Pride and Prejudice/001 Chapters 1-3.mp3", "downloads"], ["Pride and Prejudice/002 Chapters 4-6.mp3", "downloads"]], "parts in a folder named for the book, where picked");
+      assert.strictEqual(made.runs, 0, "its Downloads card is gone once it's in");
+      assert.strictEqual(made.a.link, made.a.parts[0][0]);
+      assert.ok(made.a.ours);
+      assert.deepStrictEqual(made.dropped, made.a.parts.map((x) => x[0]), "removing it deletes the parts Waypage kept");
       assert.strictEqual(made.a.title, "Pride and Prejudice");
       assert.strictEqual(made.a.by, "Jane Austen");
       assert.strictEqual(made.a.site, "LibriVox");
       assert.deepStrictEqual(made.a.parts.map((x) => x.slice(1)), [["Chapters 1-3", 1133, 5000], ["Chapters 4-6", 1250, 5000]]);
-      assert.match(made.a.parts[0][0], /^file:\/\/\/data\/audiobooks\/.+\/001\.mp3$/);
       assert.deepStrictEqual(made.a.chapters, [{ t: 0, title: "Chapters 1-3" }, { t: 1133, title: "Chapters 4-6" }]);
       assert.strictEqual(made.a.dur, 2383);
       assert.ok(made.a.fp, "a fingerprint from the recording, so its place syncs");
