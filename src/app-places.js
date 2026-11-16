@@ -882,7 +882,7 @@ function renderSide() {
   const inMarks = state.place === "highlights";
   const latest = (f) => Math.max(0, ...f.items.map(postAt));
   const big = wide.matches;
-  const inLib = !inFeeds && !inMarks && !["reading", "newsletters", "discover", "anki", "calibre", "catalogs", "audiobookshelf"].includes(state.place);
+  const inLib = !inFeeds && !inMarks && !["reading", "newsletters", "discover", "anki", "calibre", "catalogs", "audiobookshelf", "webdav"].includes(state.place);
   const inLibrary = inLib && !state.part && !state.folder && state.filter !== "favourites" && state.filter !== "notes";
   const favs = sideFavourites();
   const hasFolders = allFolders().length > 0;
@@ -928,6 +928,8 @@ function renderSide() {
     C.ext.on("audiobookshelf") ? item(sideSvg("abs"), t("Audiobookshelf"), state.place === "audiobookshelf", null, () => goPlace("audiobookshelf")) : null,
     // Catalogs, once its extension is on: the book catalogs you added.
     C.ext.on("catalogs") ? item(sideSvg("catalogs"), t("Catalogs"), state.place === "catalogs", null, () => goPlace("catalogs")) : null,
+    // WebDAV, once its extension is on: the folders on your servers.
+    C.ext.on("webdav") ? item(sideSvg("webdav"), t("WebDAV"), state.place === "webdav", null, () => goPlace("webdav")) : null,
     item(sideSvg("reading"), t("Stats"), state.place === "reading", null, () => goPlace("reading")),
     // On a big screen the sidebar carries the rest (1.5.0): the tags,
     // and Settings at its foot. Feeds are added from the Feeds place.
@@ -962,6 +964,7 @@ const SIDE_SVG = {
   abs: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><path d="M4 15h3v5H5a1 1 0 0 1-1-1zM20 15h-3v5h2a1 1 0 0 0 1-1z"/>',
   calibre: '<path d="M4 20V5M8 20V4M12 20l3-15 4 1-3 14"/><path d="M3 20h18"/>',
   catalogs: '<path d="M3 5h6a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H3z"/><path d="M21 5h-6a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h7z"/>',
+  webdav: '<path d="M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 8a4 4 0 0 1-.5 10z"/><path d="M12 11v6M9.5 14.5 12 17l2.5-2.5"/>',
 };
 function sideSvg(name) {
   const box = el("span", { class: "side-icon", "aria-hidden": "true" });
@@ -1083,7 +1086,7 @@ function keysSheet() {
 
 const typingIn = (t) => !!(t && t.closest && t.closest("input, textarea, select, [contenteditable]"));
 // The card or collection with focus, in the list on screen.
-const listNow = () => (state.folder ? $("folderBody") : state.place === "feeds" ? $("feeds") : state.place === "newsletters" ? $("newsletters") : state.place === "highlights" ? $("highlights") : state.place === "reading" ? $("reading") : state.place === "discover" ? $("discover") : state.place === "anki" ? $("anki") : state.place === "calibre" ? $("calibre") : state.place === "audiobookshelf" ? $("audiobookshelf") : state.place === "catalogs" ? $("catalogs") : $("library"));
+const listNow = () => (state.folder ? $("folderBody") : state.place === "feeds" ? $("feeds") : state.place === "newsletters" ? $("newsletters") : state.place === "highlights" ? $("highlights") : state.place === "reading" ? $("reading") : state.place === "discover" ? $("discover") : state.place === "anki" ? $("anki") : state.place === "calibre" ? $("calibre") : state.place === "audiobookshelf" ? $("audiobookshelf") : state.place === "catalogs" ? $("catalogs") : state.place === "webdav" ? $("webdav") : $("library"));
 const focusedNode = () => { const a = document.activeElement; return a && a.closest && listNow().contains(a) ? a.closest("[data-ids]") : null; };
 const focusedPage = () => {
   const n = focusedNode();
@@ -1187,7 +1190,7 @@ function onKeys(e) {
       if (state.place === "highlights") { $("highlights").querySelector(".hl-search input").focus(); return; }
       if (state.place === "discover") { openDzSearch(); return; }
       if (postPlace() && (state.place === "feeds" ? siteFeeds() : mailBoxes()).length) { openPostSearch(); return; }
-      return (["feeds", "newsletters", "reading", "anki", "calibre", "catalogs", "audiobookshelf"].includes(state.place) ? goPlace("library") : Promise.resolve()).then(openSearch);
+      return (["feeds", "newsletters", "reading", "anki", "calibre", "catalogs", "audiobookshelf", "webdav"].includes(state.place) ? goPlace("library") : Promise.resolve()).then(openSearch);
     }),
     d: () => openDownloads(),
     ",": () => openSettings(),

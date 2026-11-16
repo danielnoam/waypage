@@ -38,6 +38,7 @@
     { id: "calibre", title: "Calibre", note: "Your Calibre library folder, in the sidebar", scripts: ["src/sqlite.js", "src/calibre.js", "src/app-calibre.js"], packs: [] },
     { id: "audiobookshelf", title: "Audiobookshelf", note: "Your Audiobookshelf server's audiobooks, streamed, in the sidebar", scripts: ["src/abs.js", "src/app-abs.js"], packs: [] },
     { id: "catalogs", title: "Catalogs", note: "Book catalogs (OPDS) you add, in the sidebar", scripts: ["src/opds.js", "src/app-catalogs.js"], packs: [] },
+    { id: "webdav", title: "WebDAV", note: "A folder of books on your server (Nextcloud, a NAS), in the sidebar", scripts: ["src/webdav.js", "src/app-webdav.js"], packs: [] },
   ];
 
   const read = () => { try { const v = JSON.parse(localStorage.getItem(KEY) || "{}"); return v && typeof v === "object" ? v : {}; } catch (e) { return {}; } };

@@ -101,6 +101,8 @@ src/calibre.js      the Calibre extension's library folder: picked once (the Fil
 src/app-calibre.js  the Calibre extension's place: the books as covers with search, sort and tag, a book's sheet (Read it from the folder, or Copy into your Library), Settings › Extensions › Calibre
 src/opds.js         the Catalogs extension's catalogs: the list on this device, OPDS 1 (Atom) and 2 (JSON) feeds read into folders and books, search, a book's file with the catalog's login
 src/app-catalogs.js the Catalogs extension's screens: the Catalogs place in the sidebar (folders, books, search), the Add a catalog sheet, Settings › Extensions › Catalogs
+src/webdav.js       the WebDAV extension's servers: the list on this device, a PROPFIND answer read into folders and books, a book's picture found beside it, a file with the server's login
+src/app-webdav.js   the WebDAV extension's screens: the WebDAV place in the sidebar (folders, books as covers, find in folder), a book's sheet (Add to your Library), the Add a server sheet, Settings › Extensions › WebDAV
 src/abs.js          the Audiobookshelf extension's servers: the list on this device with its tokens, signing in and renewing, libraries, books, search, play sessions and your place on the server
 src/app-abs.js      the Audiobookshelf extension's screens: its place in the sidebar (continue listening, books, search), a book's sheet (Play adds a streaming audiobook), the sign-in sheet, Settings › Extensions › Audiobookshelf; streams for app-listen.js through REMOTE_AUDIO
 src/app-anki.js     the Anki extension's screens: the selection bar's button and card sheet, the place (decks, study, browse, edit, options)
@@ -121,7 +123,7 @@ src/vendor/         Readability, pdf.js, foliate-js's MOBI reader, fzstd (Zstand
 assets/             icon and splash sources for the apps
 icons/, icon.svg    app icons
 worker/             the web copy's fetch proxy, a Cloudflare Worker (worker.js, wrangler.toml, README.md has the setup)
-native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Pen, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes), Audiobook (AudiobookService plays with the screen off; Listen writes transcripts with sherpa-onnx's offline recognizer), Car (Android Auto: CarService, Car's one shared media session), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
+native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Pen, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes), Audiobook (AudiobookService plays with the screen off; Listen writes transcripts with sherpa-onnx's offline recognizer), Car (Android Auto: CarService, Car's one shared media session), Dav (a WebDAV PROPFIND written over a socket, for Files' davList), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
 tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-build.json
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
 tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
@@ -554,6 +556,9 @@ web copy stay links, as before.
   that arrives with a username and no password asks for it in its place.
   Sent only when it differs from GitHub's; no sync of its own, it goes
   with the next. `test/synccatalogs.test.js`.
+- **WebDAV** (2026-11, while the extension is on): `webdav.json`, the
+  servers the same way as `catalogs.json` (address, name, username, the
+  ones removed; never a password). `test/syncwebdav.test.js`.
 - **Audiobookshelf** (2026-11, while the extension is on):
   `audiobookshelf.json`, the servers (address, name, username) without
   their tokens (`abs.shared()`), merged like catalogs (`abs.mergeIn`). A
@@ -653,7 +658,7 @@ The files listed in `keel.lock.json` (`server.js`, `src/keel/qr.js`,
 ## Tests and screenshots
 
 `node test/run-all.js` runs every `test/*.test.js` in its own process.
-`ui.test.js`, `drive.test.js`, `sites.test.js`, `discover.test.js`, `kiwix.test.js`, `catalogs.test.js`, `calibre.test.js` and `abs.test.js`
+`ui.test.js`, `drive.test.js`, `sites.test.js`, `discover.test.js`, `kiwix.test.js`, `catalogs.test.js`, `calibre.test.js`, `abs.test.js` and `webdav.test.js`
 drive the app in Chromium with Playwright and skip when it isn't installed
 (`sites.test.js` saves the discussion and code sites from their answers
 saved in `test/fixtures/sites/`, with nothing going out; `discover.test.js`
@@ -662,7 +667,7 @@ bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `csp.test.js` checks the page's Content-Security-Policy through keel's check (ui.test.js fails on anything it blocks); `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `syncanki.test.js`, `synccatalogs.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) and `zim.test.js` (Kiwix packs, old and new layout, xz and Zstandard, against `test/fixtures/zim/`, which `make.py` builds) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR and on `main`, spread
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `syncanki.test.js`, `synccatalogs.test.js`, `syncwebdav.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) and `zim.test.js` (Kiwix packs, old and new layout, xz and Zstandard, against `test/fixtures/zim/`, which `make.py` builds) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR and on `main`, spread
 over four machines: `TEST_SHARD=2/4 node test/run-all.js` runs one
 slice. `ui.test.js` is most of the time, so it is split too
 (`UI_SHARD`): the tests on its first page `p` build on each other and
@@ -876,6 +881,19 @@ adds a line here.
   only: so `tools/android-manifest.js` allows plain http everywhere (iOS
   allows it for the local network only). Covers that a page can't load
   (http, or behind the login) are downloaded once into the cache instead.
+- WebDAV servers are kept and synced like catalogs (`waypage.webdav`, the
+  password on this device only, never through the fetch proxy). A listing
+  is a PROPFIND, which Android's HttpURLConnection (and so CapacitorHttp)
+  refuses outright, so on Android `Dav.java` writes that one request by
+  hand over a socket, checking TLS against the phone's certificates and
+  the host's name, and following a redirect only on the same server.
+  It ignores a proxy set on the phone. iOS's CapacitorHttp sends it as is;
+  a browser asks straight, so only a server that allows the web copy
+  (CORS) works there, and Nextcloud doesn't. A book is downloaded into
+  the Library (no reading from the server: it wouldn't be offline), and
+  the clip keeps its address (`webdav`) to show it's there. Covers are a
+  picture beside the book with its name, or a folder's cover.jpg when the
+  book is alone in it; no file is opened to find one.
 - Audiobookshelf: the password is sent once to the server's `/login` and
   never kept; this device keeps the access token (an hour) and the
   refresh token (30 days, renewed with each use) in localStorage, never
