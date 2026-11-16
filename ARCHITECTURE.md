@@ -781,6 +781,7 @@ for back, forward, previous and next flip.
 What the app gives up on purpose, said plainly. A change that adds one
 adds a line here.
 
+- Deleted clips in Stats (2026-11): stats.js keeps only ids, so each device keeps a name (title, site, address or file key) for every clip it has read, in its synced stats file, and marks it gone when the clip leaves its library. No cover is kept for a deleted clip. Clips deleted before this have no name and stay out of the list. Removing one from Stats hides it on every device but leaves its time in the totals.
 - Kiwix packs (2026-11) are read over the bridge a stretch at a time (`files.blob`, 4 MB pieces, small reads through zim.js's 64 KB blocks): a title search on a big pack makes a few hundred small reads. A native ZIM reader would be faster but is Android and iOS code twice; this is plain JS everywhere. Downloads go one at a time through the Downloads plugin, which resumes but never runs two.
 - The page's Content-Security-Policy (index.html) lets in inline styles
   and a `<base>` of any web address, because a page being saved is parsed

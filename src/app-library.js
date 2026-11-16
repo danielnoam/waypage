@@ -1554,6 +1554,7 @@ const MENUS = {
   newNote: { label: t("New note"), build: () => newNoteSheet() },
   noteText: { label: t("Text"), build: () => noteTextSheet() },
   noteParts: { label: t("Make a note"), build: () => notePartsSheet() },
+  statsGone: { label: t("Deleted"), build: () => statsGoneSheet(state.menu.page) },
 };
 let menuUnder = [];
 let menuFrom = null;
