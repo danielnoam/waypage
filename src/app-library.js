@@ -1018,7 +1018,7 @@ async function removeFolder(withPages) {
   if (withPages && !confirm(t("Delete “{name}” and its {countLine} from {HERE}?{alsoSynced}{filesNote}", { name: name, countLine: countLine(list.length), HERE: HERE, alsoSynced: alsoSynced(), filesNote: filesNote(list) }))) return;
   if (withPages) forgetWatched(list);
   for (const p of list) {
-    if (withPages) { if (p.link && !p.watched) C.platform.files.release(p.link); dropPackFile(p); await C.store.removePage(p.id); }
+    if (withPages) { if (p.link && !p.watched) C.platform.files.release(p.link); dropPackFile(p); dropAudioFiles(p); await C.store.removePage(p.id); }
     else { delete p.folder; delete p.folderAt; delete p.folderFav; delete p.folderFavAt; delete p.coverPick; delete p.folderNoShare; delete p.folderTagNew; }
   }
   if (withPages) state.pages = state.pages.filter((p) => !list.includes(p));
@@ -1319,7 +1319,7 @@ async function deletePage(p, where) {
   if (!confirm(p.link ? t("Remove “{title}” from Waypage? {linkedStays}", { title: p.title, linkedStays: linkedStays([p]) })
     : t("Delete “{title}” from {HERE}?{alsoSynced}", { title: p.title, HERE: HERE, alsoSynced: alsoSynced() }))) return;
   forgetWatched([p]);
-  if (p.link && !p.watched) C.platform.files.release(p.link); dropPackFile(p);
+  if (p.link && !p.watched) C.platform.files.release(p.link); dropPackFile(p); dropAudioFiles(p);
   await C.store.removePage(p.id);
   state.pages = state.pages.filter((x) => x.id !== p.id);
   await C.store.writeIndex(state.pages);
@@ -1522,7 +1522,7 @@ async function deletePicked() {
     ? tn(list.length, "Remove 1 file from Waypage? {stays}", "Remove {n} files from Waypage? {stays}", { stays: linkedStays(list) })
     : t("Delete {countLine} from {HERE}?{alsoSynced}{filesNote}", { countLine: countLine(list.length), HERE: HERE, alsoSynced: alsoSynced(), filesNote: filesNote(list) }))) return;
   forgetWatched(list);
-  for (const p of list) { if (p.link && !p.watched) C.platform.files.release(p.link); dropPackFile(p); await C.store.removePage(p.id); }
+  for (const p of list) { if (p.link && !p.watched) C.platform.files.release(p.link); dropPackFile(p); dropAudioFiles(p); await C.store.removePage(p.id); }
   state.pages = state.pages.filter((p) => !list.includes(p));
   await C.store.writeIndex(state.pages);
   await back(andFolder(1));

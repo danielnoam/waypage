@@ -2561,8 +2561,6 @@ Keel.i18n.strings("he", {
   "Couldn't download it just now. Try again later, or open it on the site.": "לא הצלחנו להוריד את זה כרגע. אפשר לנסות שוב מאוחר יותר, או לפתוח באתר.",
   "Download the zip": "הורדת ה-zip",
   "Downloading “{replace}”. It's in Downloads.": "מוריד את “{replace}”. זה בהורדות.",
-  "It's downloading. It joins your Library when it's done.": "זה יורד עכשיו. הוא יצטרף לספרייה כשיסתיים.",
-  "Its parts download to this phone and join your Library as an audiobook, to listen offline. It's in the public domain.": "החלקים שלו יורדים לטלפון ומצטרפים לספרייה כספר שמע, להאזנה בלי חיבור. הוא נחלת הכלל.",
   "Its text from Project Gutenberg downloads too": "גם הטקסט שלו מפרויקט גוטנברג יורד",
   "Part {n}": "חלק {n}",
   "Part {n} of {all}": "חלק {n} מתוך {all}",
@@ -2630,4 +2628,7 @@ Keel.i18n.strings("he", {
   "Your own Audiobookshelf server. Its audiobooks stream here, and where you are goes back to it. The password isn't kept.": "שרת ה-Audiobookshelf שלך. ספרי השמע שלו מוזרמים לכאן, והמקום שהגעת אליו חוזר אליו. הסיסמה לא נשמרת.",
   "{n} audiobooks on {name}": { one: "ספר שמע אחד ב-{name}", two: "שני ספרי שמע ב-{name}", other: "{n} ספרי שמע ב-{name}" },
   "{n}% heard": "{n}% הושמעו",
+  "Downloading an audiobook": "מוריד ספר שמע",
+  "Its parts download where you pick, in a folder of its own, and join Files as one audiobook, to listen offline. It's in the public domain.": "החלקים שלו יורדים למקום שבוחרים, לתיקייה משלו, ומצטרפים לקבצים כספר שמע אחד, להאזנה בלי חיבור. הוא נחלת הכלל.",
+  "Stopped. The parts that came stay in the folder you picked.": "נעצר. החלקים שכבר ירדו נשארים בתיקייה שבחרת.",
 });

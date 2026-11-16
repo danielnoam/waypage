@@ -817,7 +817,8 @@
   // part already there is kept if it stops), then moved to "app" (the
   // app's own files), "documents" (Documents/Waypage), "downloads" (the
   // phone's Download folder) or "folder" (`tree`, a folder picked with
-  // files.pickFolder). Resolves to the file's lasting ref for files.blob
+  // files.pickFolder); a `name` of "Folder/file" puts it in that folder.
+  // Resolves to the file's lasting ref for files.blob
   // and files.info; null in a browser, which can't keep one.
   let keeping = Promise.resolve();
   function keepFile(url, name, where, onProgress, tree) {
@@ -828,7 +829,9 @@
   async function keepOne(url, name, where, onProgress, tree) {
     const FS = plugin("Filesystem");
     if (!FS || !native) return null;
-    const safe = String(name || "file").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) || "file";
+    // "Folder/file.mp3" keeps a file in a folder of its own (an audiobook's parts).
+    const clean = (x) => String(x || "").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
+    const safe = String(name || "file").split("/").map(clean).filter(Boolean).slice(-2).join("/") || "file";
     const temp = "keep-" + safe.replace(/[^\w.-]+/g, "_");
     const D = plugin("Downloads");
     let from = null;

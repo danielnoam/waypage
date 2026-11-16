@@ -299,9 +299,6 @@
   async function removePage(id) {
     if (FS()) {
       try { await (await B()).rmdir("pages/" + id); } catch (e) { /* already gone */ }
-      // An audiobook downloaded from Discover keeps its parts in the app's
-      // own storage, wherever the library is (app-listen.js).
-      try { await FS().rmdir({ path: "audiobooks/" + id, directory: "DATA", recursive: true }); } catch (e) { /* none */ }
       return;
     }
     try {
