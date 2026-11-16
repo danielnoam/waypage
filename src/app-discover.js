@@ -31,6 +31,7 @@ function dzFollowing(e) {
 // A story saved already: a collection read from its page.
 function dzSavedStory(s) {
   if (s.book) return state.pages.some((p) => p.file && p.file.name === dzBookName(s));
+  if (s.audiobook) return state.pages.some((p) => p.audio && p.audio.from === s.id);
   return allFolders().some((n) => { const src = folderSource(folderPages(n)); return src && (s.serial ? sameUrl(src, s.url) : C.discover.storyId(src) === s.id); });
 }
 
@@ -272,7 +273,7 @@ function dzGrid() {
     dzAsk(src),
     shown.length ? dzCovers(shown, true) : null,
     line ? el("p", { class: "footnote dz-src" + (g.error && !g.busy ? " warn" : "") }, line) : null,
-    g.items.length && !g.done && !g.busy ? el("button", { class: "btn-quiet dz-more", type: "button", onclick: () => dzMore() }, src.books ? t("More books") : src.texts ? t("More texts") : t("More stories")) : null,
+    g.items.length && !g.done && !g.busy ? el("button", { class: "btn-quiet dz-more", type: "button", onclick: () => dzMore() }, src.books ? t("More books") : src.audiobooks ? t("More audiobooks") : src.texts ? t("More texts") : t("More stories")) : null,
     g.done && g.items.length ? el("p", { class: "footnote dz-src" }, t("That's all of them.")) : null,
     phoneOnly,
   ];
@@ -342,7 +343,7 @@ function dzCovers(items, grid, sites) {
       img.addEventListener("error", () => dzCoverAgain(img, s));
       art.prepend(img);
     }
-    const meta = [sites ? s.site || "Royal Road" : s.book ? s.by : s.tags[0], s.chapters ? s.chapters + " ch." : ""].filter(Boolean).join(" · ");
+    const meta = [sites ? s.site || "Royal Road" : s.book || s.audiobook ? s.by : s.tags[0], s.chapters ? s.chapters + " ch." : ""].filter(Boolean).join(" · ");
     return el("button", { class: "dz-book", type: "button", role: "listitem", "data-key": "rr:" + s.id,
       "aria-label": saved ? t("{title}, in your library", { title: s.title }) : s.title, onclick: () => openMenu("story", s) },
       el("span", { class: "dz-art" }, art, el("span", { class: "dz-mark" + (saved ? " on" : "") }, dzIcon(saved ? "check" : "plus", 16))),
@@ -421,6 +422,7 @@ function openDiscover() {
 
 function storySheet() {
   const s = state.menu.page;
+  if (s.audiobook) return dzAudioSheet(s);
   const saved = dzSavedStory(s);
   const cover = el("span", { class: "dz-cover dz-sheet-cover", "aria-hidden": "true" }, el("span", { class: "dz-cover-t", dir: "auto" }, s.title));
   if (s.cover) {
@@ -453,6 +455,56 @@ function storySheet() {
       : s.texts ? t("A text in parts saves as a collection, its parts checked first; a short one saves as one clip.")
         : t("Its chapter list opens to check, then every chapter saves for reading offline. New chapters join the collection when they're out.")),
     s.catalog && s.url === s.epub ? null : el("button", { class: "btn-quiet", type: "button", onclick: () => C.platform.openOutside(s.url) }, dzIcon("out", 16), t("Open on {site}", { site: site })));
+}
+
+// A LibriVox recording: + downloads its parts into the app as one
+// audiobook (app-listen.js), with its book from Project Gutenberg to read
+// along with when there is one. Its parts and book are asked for as the
+// sheet opens, when the list didn't give them.
+function dzAudioSheet(s) {
+  const saved = dzSavedStory(s);
+  const can = canGetAudiobooks();
+  const cover = el("span", { class: "dz-cover dz-sheet-cover", "aria-hidden": "true" }, el("span", { class: "dz-cover-t", dir: "auto" }, s.title));
+  if (s.cover) {
+    const img = el("img", { src: s.cover, alt: "", referrerpolicy: "no-referrer" });
+    img.addEventListener("load", () => cover.classList.add("has-img"));
+    img.addEventListener("error", () => img.remove());
+    cover.prepend(img);
+  }
+  const facts = el("p", { class: "meta" });
+  const blurb = el("p", { class: "dz-blurb", dir: "auto" });
+  const along = el("div");
+  const paint = () => {
+    const n = s.parts ? s.parts.length : 0;
+    facts.textContent = [s.secs ? C.listen.lengthText(s.secs) : "", n ? tn(n, "1 part", "{n} parts") : "", s.stat && !/parts$/.test(s.stat) && !s.secs ? s.stat : ""].filter(Boolean).join(" · ");
+    blurb.textContent = s.about || "";
+    blurb.hidden = !s.about;
+    const pg = C.discover.pgNumber(s.text);
+    fill(along, ...(can && !saved && pg ? [el("div", { class: "group" }, switchRow(t("Read along with the book"), t("Its text from Project Gutenberg downloads too"),
+      load("waypage.discover.lvBook", true) !== false, (on) => store("waypage.discover.lvBook", on)))] : []));
+  };
+  paint();
+  if (!s.parts && !s.asked && navigator.onLine && C.platform.canReadPages) {
+    s.asked = true;
+    C.discover.lvDetails(s).then((d) => { Object.assign(s, d, { id: s.id }); if (facts.isConnected) paint(); }).catch(() => {});
+  }
+  const add = can
+    ? el("button", { class: "btn-primary", type: "button", ...(saved ? { disabled: "" } : {}), onclick: async () => { await back(); getAudiobook(s, !!C.discover.pgNumber(s.text) && load("waypage.discover.lvBook", true) !== false); } },
+      saved ? t("In your library") : t("Add the audiobook"))
+    : s.zip ? el("button", { class: "btn-primary", type: "button", onclick: () => C.platform.openOutside(s.zip) }, t("Download the zip")) : null;
+  return el("div", { class: "page-controls dz-story" },
+    el("div", { class: "dz-sheethead" }, cover,
+      el("div", { class: "dz-sheet-text" },
+        el("h2", { class: "menu-title dz-sheet-title", dir: "auto" }, s.title),
+        el("p", { class: "meta" }, "LibriVox" + (s.by ? " · " + s.by : "")),
+        facts)),
+    blurb,
+    saved ? el("p", { class: "footnote dz-ok" }, t("It's in your library already.")) : null,
+    along,
+    add,
+    el("p", { class: "footnote" }, can ? t("Its parts download to this phone and join your Library as an audiobook, to listen offline. It's in the public domain.")
+      : t("Audiobooks download into Waypage on Android. Here you can take the whole book as a zip of MP3s.")),
+    el("button", { class: "btn-quiet", type: "button", onclick: () => C.platform.openOutside(s.url) }, dzIcon("out", 16), t("Open on {site}", { site: s.lv ? "LibriVox" : "archive.org" })));
 }
 
 function signupSheet() {

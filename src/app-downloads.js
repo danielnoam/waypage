@@ -19,8 +19,9 @@ function renderDownloads() {
   const going = state.saving.filter((s) => !s.error && !(s.run && !s.run.done));
   const app = updShown();
   const restoring = !!driveRun && driveRun.restore;
-  if (runs.size || going.length || app || restoring) keep("h:going", () => sectionHead(t("Downloading")));
+  if (runs.size || going.length || app || restoring || audioGets.length) keep("h:going", () => sectionHead(t("Downloading")));
   if (app) keep("u:" + upd.latest, updateCard, upd.phase + upd.error);
+  for (const g of audioGets) keep("a:" + g.id, () => audioGetCard(g), String(g.stopped));
   if (restoring) keep("d:drive", driveCard, [driveRun.restore, driveRun.paused, driveRun.stopped, !!driveRun.merging].join());
   for (const r of runs) keep("r:" + r.id, () => runCard(r), [r.paused, r.stopped, failedOf(r).length].join());
   for (const s of going) keep("s:" + s.key, () => savingCard(s));
@@ -47,6 +48,7 @@ function renderDownloads() {
   if (app) paintUpdateCard();
   for (const s of going) updateSavingCard(s);
   for (const r of runs) updateRunCard(r);
+  paintAudioGets();
   if (state.downloads) fresh.forEach((node) => M.appear(node));
   paintDownloads();
 }
@@ -144,6 +146,8 @@ function paintDownloads() {
   for (const s of singles) { units += 1; got += s.waiting ? 0 : savingShare(s) || 0; }
   const app = upd.phase === "downloading";
   if (app) { units += 1; got += upd.pct / 100; }
+  for (const g of audioGets) { units += 1; got += g.total ? g.done / g.total : 0; }
+  const audioOne = audioGets.length === 1 && units === 1 ? audioGets[0] : null;
   // A backup going up is on the Sync screen; only a restore downloads.
   const drive = !!driveRun && driveRun.restore;
   if (drive) { units += 1; got += driveRun.share || 0; }
@@ -170,15 +174,38 @@ function paintDownloads() {
     return;
   }
   const one = active.length === 1 && !singles.length ? active[0] : null;
-  const title = drive && units === 1 ? (driveRun.restore ? t("Restoring from Google Drive") : t("Backing up to Google Drive")) : app && units === 1 ? t("Downloading Waypage {version}", { version: upd.latest }) : one ? (one.files ? t("Adding {label}", { label: one.label }) : one.folder ? (one.again ? t("Saving again in {folder}", { folder: one.folder }) : t("Saving into {folder}", { folder: one.folder })) : (one.again ? t("Saving again in your library") : t("Saving into your library")))
+  const title = audioOne ? t("Downloading “{replace}”…", { replace: audioOne.title }) : drive && units === 1 ? (driveRun.restore ? t("Restoring from Google Drive") : t("Backing up to Google Drive")) : app && units === 1 ? t("Downloading Waypage {version}", { version: upd.latest }) : one ? (one.files ? t("Adding {label}", { label: one.label }) : one.folder ? (one.again ? t("Saving again in {folder}", { folder: one.folder }) : t("Saving into {folder}", { folder: one.folder })) : (one.again ? t("Saving again in your library") : t("Saving into your library")))
     : !active.length && singles.length === 1 ? t("Saving a clip from {site}", { site: singles[0].site }) : tn(Math.round(units), "Saving 1 clip", "Saving {n} clips");
-  const text = drive && units === 1 ? driveStatusText() : app && units === 1 ? t("{pct}% done", { pct: upd.pct }) : one ? (one.total ? t("{done} of {total} done", { done: one.saved + one.failed, total: one.total }) : t("{clips} saved", { clips: countLine(one.saved) })) + (one.paused ? " · " + t("Paused") : "")
+  const text = audioOne ? t("Part {n} of {all}", { n: Math.min(audioOne.done + 1, audioOne.total), all: audioOne.total }) : drive && units === 1 ? driveStatusText() : app && units === 1 ? t("{pct}% done", { pct: upd.pct }) : one ? (one.total ? t("{done} of {total} done", { done: one.saved + one.failed, total: one.total }) : t("{clips} saved", { clips: countLine(one.saved) })) + (one.paused ? " · " + t("Paused") : "")
     : t("{pct}% done", { pct: Math.round(share * 100) });
   const o = { title, text, done: Math.round(share * 1000), total: 1000 };
   const said = JSON.stringify(o);
   if (said === toldNative) return;
   toldNative = said;
   C.platform.downloads.update(o);
+}
+
+// An audiobook downloading from Discover (app-listen.js, getAudiobook):
+// { id, title, done, total, stopped }, its parts so far.
+const audioGets = [];
+function audioGetCard(g) {
+  return el("div", { class: "card saving audio-get wide", role: "group", "aria-label": g.title, "data-get": g.id },
+    el("span", { class: "card-body" },
+      el("span", { class: "card-site" }, "LibriVox"),
+      el("span", { class: "card-title", dir: "auto" }, g.title),
+      el("span", { class: "progress", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100" }, el("span", { class: "progress-fill" })),
+      el("span", { class: "card-status accent" }, el("span", { class: "spinner", "aria-hidden": "true" }), el("span", { class: "status-text" })),
+      g.stopped ? null : el("span", { class: "card-actions" }, el("button", { class: "btn-text", type: "button", onclick: () => { g.stopped = true; renderDownloads(); } }, t("Stop")))));
+}
+function paintAudioGets() {
+  for (const g of audioGets) {
+    const card = document.querySelector('.audio-get[data-get="' + g.id + '"]');
+    if (!card) continue;
+    const share = g.total ? g.done / g.total : 0;
+    card.querySelector(".progress").setAttribute("aria-valuenow", String(Math.round(share * 100)));
+    card.querySelector(".progress-fill").style.transform = "scaleX(" + share + ")";
+    card.querySelector(".status-text").textContent = g.stopped ? t("Stopping…") : t("Part {n} of {all}", { n: Math.min(g.done + 1, g.total), all: g.total || 1 });
+  }
 }
 
 function openDownloads(fromHistory) {
