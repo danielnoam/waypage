@@ -2525,6 +2525,9 @@ span.update-text { cursor: default; }
 .found-name { font-weight: 600; }
 .feed-mode .overline { margin-top: 0; }
 .add-feed .btn-primary { width: 100%; }
+/* Add a catalog: its three fields apart, its note under them. */
+.add-catalog .feed-field { gap: var(--s-2); }
+.add-catalog .feed-field .footnote { margin: var(--s-1) 0 0; padding-inline: var(--s-1); }
 .feed-sheet .footnote { margin-top: calc(-1 * var(--s-2)); }
 .feed-sheet .footnote + .sheet-row { margin-top: 0; }
 
