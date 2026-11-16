@@ -392,6 +392,107 @@ async function phone(browser) {
       assert.strictEqual(got.urls[2], "https://forums.sufficientvelocity.com/forums/user-fiction.2/page-3?order=post_date&direction=desc");
     });
 
+    await test("LibriVox reads its books, archive.org's lists and an item's MP3 parts", async () => {
+      const { ctx, p } = await phone(browser);
+      const got = await p.evaluate(async ([lv, scrape, files]) => {
+        const D = window.Waypage.discover;
+        const asked = [];
+        Waypage.platform.fetchText = async (url) => {
+          asked.push(url);
+          if (/librivox\.org\/api/.test(url)) return { status: 404, url, text: '{"error":"Audiobooks could not be found"}' };
+          if (/\/metadata\//.test(url)) return { status: 200, url, text: files };
+          return { status: 200, url, text: scrape };
+        };
+        const src = D.sources.find((x) => x.key === "lv");
+        const page1 = await src.browse("popular", "", 1);
+        const page2 = await src.browse("popular", "", 2);
+        const found = await src.search('pride "and" (prejudice)');
+        const full = await D.lvDetails(page1[0]);
+        return { lv: D.parseLibriVox(lv), ia: D.parseIaScrape(scrape), parts: D.iaParts(files, "pride_and_prejudice_librivox"), page1: page1.length, page2: page2.length, found: found.length,
+          full: { parts: full.parts.length, secs: full.secs }, asked, pg: [D.pgNumber("https://www.gutenberg.org/etext/1342"), D.pgNumber("http://www.gutenberg.org/ebooks/84"), D.pgNumber("https://en.wikisource.org/")],
+          books: D.sources.filter((x) => x.books).map((x) => x.key) };
+      }, [fixture("librivox.json"), fixture("ia-scrape.json"), fixture("ia-files.json")]);
+      await ctx.close();
+      const [pp, mc] = got.lv;
+      assert.strictEqual(pp.title, "Pride and Prejudice");
+      assert.strictEqual(pp.by, "Jane Austen");
+      assert.strictEqual(pp.id, "lv:pride_and_prejudice_librivox", "a book is known by its archive.org item, as archive.org's lists know it");
+      assert.ok(pp.audiobook && !pp.book, "an audiobook isn't a book to read along with");
+      assert.strictEqual(pp.about, "A novel of manners about Elizabeth Bennet & Mr Darcy.");
+      assert.deepStrictEqual(pp.parts.map((x) => [x.title, x.dur]), [["Chapters 1-3", 1133], ["Chapters 4-6", 1250]], "parts in section order");
+      assert.strictEqual(pp.secs, 47204);
+      assert.strictEqual(pp.text, "https://www.gutenberg.org/etext/1342");
+      assert.strictEqual(pp.cover, "https://archive.org/download/pride_and_prejudice_librivox/Pride_Prejudice_1104_thumb.jpg");
+      assert.match(pp.zip, /formats=64KBPS%20MP3&file=/);
+      assert.deepStrictEqual(pp.tags, ["Romance"]);
+      assert.strictEqual(mc.id, "lv:lv47", "no item: its LibriVox number");
+      assert.strictEqual(mc.parts, null);
+      assert.strictEqual(mc.stat, "49 h 43 min · 128 parts");
+      assert.deepStrictEqual(got.ia.map((x) => [x.title, x.by]), [["Alice's Adventures in Wonderland", "Lewis Carroll"], ["Aesop's Fables", "Aesop"], ["Short Poetry Collection 1", ""]]);
+      assert.strictEqual(got.ia[0].cover, "https://archive.org/services/img/alice_in_wonderland_librivox");
+      assert.strictEqual(got.ia[0].stat, "24M downloads");
+      assert.deepStrictEqual(got.parts.map((x) => [x.title, x.dur]), [["Chapters 1-3", 1132], ["Chapters 4-6", 1250]], "the 64 kbps copies only, by track");
+      assert.strictEqual(got.parts[0].url, "https://archive.org/download/pride_and_prejudice_librivox/prideandprejudice_01-03_austen_64kb.mp3");
+      assert.strictEqual(got.page1, 3);
+      assert.strictEqual(got.page2, 3, "page 2 follows archive.org's cursor");
+      assert.match(got.asked[0], /scrape\?fields=identifier%2Ctitle%2Ccreator%2Cdownloads&q=collection%3Alibrivoxaudio&sorts=downloads\+desc&count=100$/);
+      assert.match(got.asked[1], /&cursor=W3siaWQiOjF9XQ%3D%3D$/);
+      assert.match(decodeURIComponent(got.asked[2].replace(/\+/g, " ")), /collection:librivoxaudio AND \(title:\(pride and prejudice\) OR creator:\(pride and prejudice\)\)/, "search words lose archive.org's own signs");
+      assert.ok(got.asked.some((u) => /librivox\.org\/api\/feed\/audiobooks\?.*title=%5EAlice/.test(u)), "details asked of LibriVox by title first");
+      assert.deepStrictEqual(got.full, { parts: 2, secs: 2382 }, "then archive.org's file list");
+      assert.deepStrictEqual(got.pg, ["1342", "84", ""]);
+      assert.ok(!got.books.includes("lv"));
+    });
+
+    await test("A LibriVox book's sheet: the zip in a browser; on Android its parts download as one audiobook with its Gutenberg book", async () => {
+      const { ctx, p } = await phone(browser);
+      await p.evaluate(([lv]) => {
+        const s = Waypage.discover.parseLibriVox(lv)[0];
+        window.book = s;
+        openMenu("story", s);
+      }, [fixture("librivox.json")]);
+      await p.locator("#menuSheet .dz-story").waitFor();
+      const web = await p.evaluate(() => ({ text: document.querySelector("#menuSheet .dz-story").textContent, zip: !![...document.querySelectorAll("#menuSheet .dz-story .btn-primary")].find((b) => b.textContent === "Download the zip") }));
+      assert.ok(web.zip, "a browser offers the zip");
+      assert.match(web.text, /13 h 7 min · 2 parts/);
+      assert.match(web.text, /on Android/);
+      await p.evaluate(() => history.back());
+      await p.waitForTimeout(400);
+      const made = await p.evaluate(async ([pg]) => {
+        const P = Waypage.platform;
+        const files = {};
+        Object.defineProperty(P.audio, "native", { get: () => true, configurable: true });
+        P.audio.probe = async () => null;
+        audioStore = () => ({
+          getUri: async ({ path }) => ({ uri: "file:///data/" + path }),
+          stat: async ({ path }) => ({ size: files[path] || 0 }),
+          rmdir: async () => { window.removed = true; },
+        });
+        P.downloadTo = async (url, path, page, dir, extra, wait) => { files[path] = 5000; window.dl = (window.dl || []).concat([[url, path, dir, wait]]); return "http://localhost/_capacitor_file_/" + path; };
+        P.fetchBytes = async () => { throw new Error("no cover here"); };
+        P.fetchText = async (url) => ({ status: 200, url, text: pg });
+        window.saved = [];
+        saveFileLink = async (url, name) => { window.saved.push([url, name]); };
+        await getAudiobook(window.book, true);
+        const a = state.pages.find((x) => x.audio && x.audio.from === window.book.id);
+        return { dl: window.dl, a: a && { title: a.title, by: a.byline, site: a.site, url: a.url, link: a.link, fp: a.file.fp, parts: a.audio.parts.map((x) => [x.ref, x.name, x.dur, x.size]), chapters: a.audio.chapters, dur: a.audio.dur },
+          saved: window.saved, have: dzSavedStory(window.book), removed: !!window.removed };
+      }, [fixture("gutendex.json")]);
+      await ctx.close();
+      assert.ok(!made.removed);
+      assert.deepStrictEqual(made.dl.map((x) => [x[1], x[2], x[3]]), [["audiobooks/" + made.a.link.split("/").pop() + "/001.mp3", "DATA", 900000], ["audiobooks/" + made.a.link.split("/").pop() + "/002.mp3", "DATA", 900000]]);
+      assert.strictEqual(made.a.title, "Pride and Prejudice");
+      assert.strictEqual(made.a.by, "Jane Austen");
+      assert.strictEqual(made.a.site, "LibriVox");
+      assert.deepStrictEqual(made.a.parts.map((x) => x.slice(1)), [["Chapters 1-3", 1133, 5000], ["Chapters 4-6", 1250, 5000]]);
+      assert.match(made.a.parts[0][0], /^file:\/\/\/data\/audiobooks\/.+\/001\.mp3$/);
+      assert.deepStrictEqual(made.a.chapters, [{ t: 0, title: "Chapters 1-3" }, { t: 1133, title: "Chapters 4-6" }]);
+      assert.strictEqual(made.a.dur, 2383);
+      assert.ok(made.a.fp, "a fingerprint from the recording, so its place syncs");
+      assert.ok(made.have, "Discover marks it as in the library");
+      assert.deepStrictEqual(made.saved, [["https://www.gutenberg.org/ebooks/1342.epub3.images", "Pride and Prejudice - Jane Austen.epub"]], "its Gutenberg book downloads to read along with");
+    });
+
     await test("Wikipedia today sits at the top of All; a book's + downloads its EPUB into the Library", async () => {
       const { ctx, p } = await phone(browser);
       await p.evaluate(([wiki, pg, list]) => {
@@ -607,7 +708,7 @@ async function phone(browser) {
       // The books and texts are read here too, through the fetch proxy.
       await p.locator("#discover .dz-tools .dropdown").first().locator(".dropdown-btn").click();
       const sites = await p.locator('[role="option"]').allTextContents();
-      assert.deepStrictEqual(sites.map((t) => t.trim()), ["Project Gutenberg", "Standard Ebooks", "Wikisource", "Web serials"]);
+      assert.deepStrictEqual(sites.map((t) => t.trim()), ["Project Gutenberg", "Standard Ebooks", "LibriVox", "Wikisource", "Web serials"]);
       await ctx.close();
     });
   } finally {

@@ -169,7 +169,7 @@ async function addAudiobookFolder() {
 
 // The library entry and its page: the chapters until there are words.
 async function newAudiobook(o, cover) {
-  const id = C.save.newId();
+  const id = o.id || C.save.newId();
   const meta = {
     id, url: "", title: String(o.title).replace(/\s+/g, " ").trim().slice(0, 300) || t("Audiobook"), site: t("Audiobook"), byline: String(o.byline || "").slice(0, 200), licence: null,
     savedAt: Date.now(), minutes: Math.max(1, Math.round(o.audio.dur / 60)), lang: "", dir: "", mode: "full", next: "", prev: "", at: 0, finished: false,
@@ -191,6 +191,99 @@ async function arrived(meta) {
   toast(t("Added “{title}”", { title: meta.title }));
   await openPage(meta.id);
   if (state.open === meta) openSheet("page");
+}
+
+// ---- From Discover: LibriVox (2026-11) ----
+// A recording's MP3 parts downloaded one by one into the app's own storage
+// (audiobooks/<id>/, removed with the clip), played from there like a
+// folder of files. Never in a backup or sync, like any audiobook; its
+// place syncs by a fingerprint made from the recording, so another phone
+// that downloads it too picks up where you are. The app only: a browser
+// can't keep files, and Android's player is the one that plays them.
+function audioStore() { return C.platform.plugin("Filesystem"); }
+const canGetAudiobooks = () => A.native && !!audioStore();
+async function getAudiobook(s, withBook) {
+  const FS = audioStore();
+  if (!canGetAudiobooks()) return;
+  if (state.pages.some((p) => p.audio && p.audio.from === s.id)) { toast(t("It's in your library already.")); return; }
+  if (audioGets.some((g) => g.from === s.id)) { toast(t("It's downloading. It joins your Library when it's done.")); return; }
+  if (!navigator.onLine) { toast(t("You're offline. Add it when you're back online.")); return; }
+  const id = C.save.newId(), dir = "audiobooks/" + id;
+  const g = { id, from: s.id, title: s.title, done: 0, total: 0, stopped: false };
+  audioGets.push(g);
+  renderDownloads();
+  toast(t("Downloading “{replace}”. It's in Downloads.", { replace: s.title }));
+  try {
+    const d = await C.discover.lvDetails(s);
+    const list = d.parts || [];
+    if (!list.length) throw new Error("no parts");
+    g.total = list.length;
+    const parts = [], chapters = [];
+    let at = 0, size = 0;
+    for (let i = 0; i < list.length; i++) {
+      if (g.stopped) throw new Error("stopped");
+      g.done = i;
+      paintDownloads();
+      paintAudioGets();
+      const path = dir + "/" + String(i + 1).padStart(3, "0") + ".mp3";
+      // A part that breaks off is tried once more.
+      for (let tries = 0; ; tries++) {
+        try { await C.platform.downloadTo(list[i].url, path, null, "DATA", undefined, 15 * 60000); break; }
+        catch (e) { if (tries || g.stopped) throw e; }
+      }
+      const { uri } = await FS.getUri({ path, directory: "DATA" });
+      const bytes = (await FS.stat({ path, directory: "DATA" })).size || 0;
+      const part = { ref: uri, name: (list[i].title || path.split("/").pop()).slice(0, 200), size: bytes, dur: list[i].dur || 0 };
+      if (!part.dur) part.dur = (await partLength(part, null)).dur;
+      if (!part.dur) continue;
+      chapters.push({ t: at, title: list[i].title || t("Part {n}", { n: i + 1 }) });
+      parts.push(part);
+      at += part.dur;
+      size += bytes;
+    }
+    if (!parts.length) throw new Error("no parts");
+    g.done = g.total;
+    paintDownloads();
+    let cover = null;
+    if (d.cover) {
+      try { const got = await C.platform.fetchBytes(d.cover, "cover.jpg"); if (got.status === 200) cover = new Uint8Array(await got.blob.arrayBuffer()); } catch (e) { /* no cover */ }
+    }
+    const { uri: folder } = await FS.getUri({ path: dir, directory: "DATA" });
+    const meta = await newAudiobook({
+      id, title: d.title, byline: d.by,
+      file: { name: d.title.slice(0, 200), kind: "audio", ext: "mp3", size, fp: await sha("librivox:" + s.id) }, link: folder,
+      audio: { parts, chapters, dur: at, folder: true, from: s.id },
+    }, cover);
+    meta.url = d.url;
+    meta.site = "LibriVox";
+    dropAudioGet(g);
+    await arrived(meta);
+    if (withBook) await audiobookBook(meta, d);
+  } catch (e) {
+    FS.rmdir({ path: dir, directory: "DATA", recursive: true }).catch(() => {});
+    toast(g.stopped ? t("Stopped. Nothing was kept.") : t("Couldn't download it just now. Try again later, or open it on the site."));
+  } finally {
+    dropAudioGet(g);
+  }
+}
+function dropAudioGet(g) {
+  const i = audioGets.indexOf(g);
+  if (i < 0) return;
+  audioGets.splice(i, 1);
+  renderDownloads();
+}
+// The Project Gutenberg book the recording was read from, downloaded and
+// read along with (Find the book in Discover does the same by hand).
+async function audiobookBook(a, d) {
+  try {
+    const book = await C.discover.pgBook(C.discover.pgNumber(d.text));
+    if (!book) return;
+    const name = dzBookName(book);
+    const have = state.pages.find((p) => p.file && p.file.name === name);
+    if (have) { listenMode(a, "book", have); return; }
+    pairPending = { audio: a.id, name, at: Date.now() };
+    await saveFileLink(book.epub, name, book.url);
+  } catch (e) { /* the audiobook is there; the book can be found by hand */ }
 }
 
 // ---- The audiobook's own page ----

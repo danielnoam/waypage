@@ -651,7 +651,9 @@
     try { await FS.mkdir({ path: dir, directory, recursive: true }); }
     catch (e) { /* there already */ }
   }
-  async function downloadTo(url, path, page, directory = "DATA", extra) {
+  // `wait`: how long the whole download may take (an audiobook's part is
+  // tens of megabytes), FILE_TIMEOUT's few seconds otherwise.
+  async function downloadTo(url, path, page, directory = "DATA", extra, wait) {
     const FS = plugin("Filesystem");
     if (!FS) return null;
     // The page's own site as Referer, as a browser sends it (its origin,
@@ -660,7 +662,7 @@
     try { if (page) headers.Referer = new URL(page).origin + "/"; } catch (e) { /* no referer */ }
     await folderFor(FS, path, directory);
     await deadline(FS.downloadFile({ url, path, directory, recursive: true, headers,
-      connectTimeout: FILE_TIMEOUT / 2, readTimeout: FILE_TIMEOUT }), FILE_TIMEOUT + 5000);
+      connectTimeout: FILE_TIMEOUT / 2, readTimeout: FILE_TIMEOUT }), wait || FILE_TIMEOUT + 5000);
     const { uri } = await FS.getUri({ path, directory });
     return cap.convertFileSrc ? cap.convertFileSrc(uri) : uri;
   }
