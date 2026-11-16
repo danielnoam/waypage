@@ -141,6 +141,7 @@ function runChanged() {
 }
 function pauseRun(r, on) {
   r.paused = on;
+  if (on && typeof keepHalt === "function") keepHalt(r);
   if (!on && r.wake) { r.wake(); r.wake = null; }
   // A pause is a quiet moment: what landed is written now (1.2.1).
   if (on) flushIndex();
@@ -158,6 +159,7 @@ function stopRun(r) {
   if (r.files) watchStopped = true;
   r.stopped = true;
   r.paused = false;
+  if (typeof keepHalt === "function") keepHalt(r);
   if (r.wake) { r.wake(); r.wake = null; }
   state.saving = state.saving.filter((x) => !(x.run === r && x.waiting && !x.error));
   runChanged();
@@ -238,7 +240,7 @@ function runCard(r) {
       el("span", { class: "card-status accent" },
         el("span", { class: "spinner", "aria-hidden": "true" }),
         el("span", { class: "status-text" }, runStatus(r))),
-      r.files && r.total === 1 ? null : el("span", { class: "card-actions" },
+      r.files && r.total === 1 && !r.keep ? null : el("span", { class: "card-actions" },
         el("button", { class: "btn-small run-pause", type: "button", onclick: () => pauseRun(r, !r.paused) }, r.paused ? t("Resume") : t("Pause")),
         el("button", { class: "btn-quiet danger", type: "button", onclick: () => stopRun(r) }, t("Stop"))),
       failedList(r)));

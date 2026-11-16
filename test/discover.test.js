@@ -499,7 +499,7 @@ async function phone(browser) {
       assert.strictEqual(made.a.title, "Pride and Prejudice");
       assert.strictEqual(made.a.by, "Jane Austen");
       assert.strictEqual(made.a.site, "LibriVox");
-      assert.deepStrictEqual(made.a.parts.map((x) => x.slice(1)), [["Chapters 1-3", 1133, 5000], ["Chapters 4-6", 1250, 5000]]);
+      assert.deepStrictEqual(made.a.parts.map((x) => x.slice(1)), [["Chapters 1-3", 1133, 10000], ["Chapters 4-6", 1250, 10000]]);
       assert.deepStrictEqual(made.a.chapters, [{ t: 0, title: "Chapters 1-3" }, { t: 1133, title: "Chapters 4-6" }]);
       assert.strictEqual(made.a.dur, 2383);
       assert.ok(made.a.fp, "a fingerprint from the recording, so its place syncs");
