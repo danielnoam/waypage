@@ -119,27 +119,26 @@ async function phone(browser) {
       assert.strictEqual(bad, "not a catalog");
     });
 
-    await test("a catalog is added from Sites, browsed folder by folder, and a book's + downloads it with the login", async () => {
+    await test("a catalog is added from its sidebar place, browsed folder by folder, and a book's + downloads it with the login", async () => {
       const { ctx, p } = await phone(browser);
-      await p.evaluate(() => goPlace("discover"));
-      await p.locator('#discover .chip:has-text("Sites")').click();
-      await p.locator("#discover .dz-tools .dropdown").first().locator(".dropdown-btn").click();
-      await p.locator('[role="option"]:has-text("Add a catalog")').click();
+      await p.evaluate(() => goPlace("catalogs"));
+      assert.ok(await p.evaluate(() => { renderSide(); return [...document.querySelectorAll(".side-item .side-label")].some((x) => x.textContent === "Catalogs"); }), "Catalogs is in the sidebar");
+      await p.locator('#catalogs .empty .btn-primary:has-text("Add a catalog")').click();
       await p.locator('#menuSheet[data-kind="addCatalog"]:not([hidden])').waitFor();
       await p.locator('#menuSheet input[type="url"]').fill("books.example.test/opds");
       await p.locator('#menuSheet input[type="text"]').fill("daniel");
       await p.locator('#menuSheet input[type="password"]').fill("s3cret");
       await p.locator('#menuSheet .btn-primary').click();
-      await p.locator('#discover .cat-folders .row:has-text("Newest")').waitFor();
+      await p.locator('#catalogs .cat-folders .row:has-text("Newest")').waitFor();
       const kept = await p.evaluate(() => JSON.parse(localStorage.getItem("waypage.catalogs")));
       assert.strictEqual(kept.length, 1);
       assert.strictEqual(kept[0].title, "Home Library", "named by the feed");
       assert.strictEqual(kept[0].url, BASE + "/opds");
-      await p.locator('#discover .cat-folders .row:has-text("Newest")').click();
-      await p.locator('#discover .dz-grid .dz-book:has-text("Left Hand")').waitFor();
-      assert.match(await p.locator("#discover .cat-where").textContent(), /‹ Home Library[\s\S]*Newest/);
-      assert.strictEqual(await p.locator("#discover .dz-grid .dz-book").count(), 2);
-      await p.locator('#discover .dz-grid .dz-book:has-text("Left Hand")').click();
+      await p.locator('#catalogs .cat-folders .row:has-text("Newest")').click();
+      await p.locator('#catalogs .dz-grid .dz-book:has-text("Left Hand")').waitFor();
+      assert.match(await p.locator("#catalogs .cat-where").textContent(), /‹ Home Library[\s\S]*Newest/);
+      assert.strictEqual(await p.locator("#catalogs .dz-grid .dz-book").count(), 2);
+      await p.locator('#catalogs .dz-grid .dz-book:has-text("Left Hand")').click();
       await p.locator('#menuSheet[data-kind="story"]:not([hidden])').waitFor();
       const sheet = await p.locator("#menuSheet").textContent();
       assert.match(sheet, /Home Library · Ursula K. Le Guin/);
@@ -148,10 +147,10 @@ async function phone(browser) {
       await p.locator('#menuSheet .btn-primary:has-text("Add the book")').click();
       await p.waitForFunction(() => window.opened.length === 1);
       // More books, then back up a folder.
-      await p.locator('#discover .dz-more:has-text("More books")').click();
-      await p.waitForFunction(() => !document.querySelector("#discover .dz-more"));
-      await p.locator("#discover .cat-up").click();
-      await p.locator('#discover .cat-folders .row:has-text("By author")').waitFor();
+      await p.locator('#catalogs .dz-more:has-text("More books")').click();
+      await p.waitForFunction(() => !document.querySelector("#catalogs .dz-more"));
+      await p.locator("#catalogs .cat-up").click();
+      await p.locator('#catalogs .cat-folders .row:has-text("By author")').waitFor();
       const got = await p.evaluate(() => ({ fetched: window.fetched, opened: window.opened, asked: window.asked }));
       await ctx.close();
       const auth = "Basic " + Buffer.from("daniel:s3cret").toString("base64");
@@ -164,16 +163,13 @@ async function phone(browser) {
     await test("a catalog's own search runs from the top field; Settings lists the catalog and removes it", async () => {
       const { ctx, p } = await phone(browser);
       await p.evaluate(() => {
-        localStorage.setItem("waypage.discover.source", JSON.stringify("cat:c1"));
         window.Waypage.opds.add({ id: "c1", title: "Home Library", url: "https://books.example.test/opds" });
-        dzSource = "cat:c1";
-        goPlace("discover");
+        goPlace("catalogs");
       });
-      await p.locator('#discover .chip:has-text("Sites")').click();
-      await p.locator('#discover .cat-folders .row:has-text("Newest")').waitFor();
-      await p.locator("#discover .dz-search input").fill("darkness");
-      await p.locator("#discover .dz-search input").press("Enter");
-      await p.locator('#discover .dz-grid .dz-book:has-text("Left Hand")').waitFor();
+      await p.locator('#catalogs .cat-folders .row:has-text("Newest")').waitFor();
+      await p.locator("#catalogs .dz-search input").fill("darkness");
+      await p.locator("#catalogs .dz-search input").press("Enter");
+      await p.locator('#catalogs .dz-grid .dz-book:has-text("Left Hand")').waitFor();
       const asked = await p.evaluate(() => window.asked.map((a) => a.url));
       assert.ok(asked.includes(BASE + "/opds/search?q=darkness&start="), asked.join(" "));
       await p.evaluate(() => { openSettings(); openSection("catalogs", false, true); });

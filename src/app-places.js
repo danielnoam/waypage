@@ -882,7 +882,7 @@ function renderSide() {
   const inMarks = state.place === "highlights";
   const latest = (f) => Math.max(0, ...f.items.map(postAt));
   const big = wide.matches;
-  const inLib = !inFeeds && !inMarks && !["reading", "newsletters", "discover", "anki"].includes(state.place);
+  const inLib = !inFeeds && !inMarks && !["reading", "newsletters", "discover", "anki", "catalogs"].includes(state.place);
   const inLibrary = inLib && !state.part && !state.folder && state.filter !== "favourites" && state.filter !== "notes";
   const favs = sideFavourites();
   const hasFolders = allFolders().length > 0;
@@ -922,6 +922,8 @@ function renderSide() {
     item(sideSvg("marks"), t("Highlights"), inMarks, null, () => goPlace("highlights")),
     // Anki, once its extension is on (Settings › Extensions): practise the decks.
     C.ext.on("anki") ? item(sideSvg("anki"), t("Anki"), state.place === "anki", null, () => goPlace("anki")) : null,
+    // Catalogs, once its extension is on: the book catalogs you added.
+    C.ext.on("catalogs") ? item(sideSvg("catalogs"), t("Catalogs"), state.place === "catalogs", null, () => goPlace("catalogs")) : null,
     item(sideSvg("reading"), t("Stats"), state.place === "reading", null, () => goPlace("reading")),
     // On a big screen the sidebar carries the rest (1.5.0): the tags,
     // and Settings at its foot. Feeds are added from the Feeds place.
@@ -953,6 +955,7 @@ const SIDE_SVG = {
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
   discover: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
   anki: '<rect x="8" y="3" width="13" height="15" rx="2"/><path d="M4 7v12a2 2 0 0 0 2 2h11"/>',
+  catalogs: '<path d="M3 5h6a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H3z"/><path d="M21 5h-6a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h7z"/>',
 };
 function sideSvg(name) {
   const box = el("span", { class: "side-icon", "aria-hidden": "true" });
@@ -1074,7 +1077,7 @@ function keysSheet() {
 
 const typingIn = (t) => !!(t && t.closest && t.closest("input, textarea, select, [contenteditable]"));
 // The card or collection with focus, in the list on screen.
-const listNow = () => (state.folder ? $("folderBody") : state.place === "feeds" ? $("feeds") : state.place === "newsletters" ? $("newsletters") : state.place === "highlights" ? $("highlights") : state.place === "reading" ? $("reading") : state.place === "discover" ? $("discover") : state.place === "anki" ? $("anki") : $("library"));
+const listNow = () => (state.folder ? $("folderBody") : state.place === "feeds" ? $("feeds") : state.place === "newsletters" ? $("newsletters") : state.place === "highlights" ? $("highlights") : state.place === "reading" ? $("reading") : state.place === "discover" ? $("discover") : state.place === "anki" ? $("anki") : state.place === "catalogs" ? $("catalogs") : $("library"));
 const focusedNode = () => { const a = document.activeElement; return a && a.closest && listNow().contains(a) ? a.closest("[data-ids]") : null; };
 const focusedPage = () => {
   const n = focusedNode();
@@ -1178,7 +1181,7 @@ function onKeys(e) {
       if (state.place === "highlights") { $("highlights").querySelector(".hl-search input").focus(); return; }
       if (state.place === "discover") { openDzSearch(); return; }
       if (postPlace() && (state.place === "feeds" ? siteFeeds() : mailBoxes()).length) { openPostSearch(); return; }
-      return (["feeds", "newsletters", "reading", "anki"].includes(state.place) ? goPlace("library") : Promise.resolve()).then(openSearch);
+      return (["feeds", "newsletters", "reading", "anki", "catalogs"].includes(state.place) ? goPlace("library") : Promise.resolve()).then(openSearch);
     }),
     d: () => openDownloads(),
     ",": () => openSettings(),

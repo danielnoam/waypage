@@ -79,8 +79,8 @@ FIND_ALIASES.Languages = "language pack dictionary german vocabulary";
 // someone in the Anki place when it goes is taken back to the library.
 C.ext.changed(() => {
   if (state.place === "anki" && !C.ext.on("anki")) goPlace("library");
+  if (state.place === "catalogs" && !C.ext.on("catalogs")) goPlace("library");
   if (sideShown()) renderSide();
-  if (state.place === "discover") renderDiscover();
   if (state.section) renderSection();
   if (state.settings) renderSettings();
 });
@@ -110,4 +110,14 @@ async function renderAnki() {
     return;
   }
   ankiDraw();
+}
+
+// The Catalogs place: its code is loaded first, then the catalog is read.
+async function renderCatalogs() {
+  try { await C.ext.load("catalogs"); } catch (e) {
+    fill($("catalogs"), el("div", { class: "empty" }, el("h2", { class: "empty-title" }, t("Catalogs didn't load")),
+      el("p", { class: "empty-text" }, t("Check your connection, then open it again."))));
+    return;
+  }
+  catalogDraw();
 }

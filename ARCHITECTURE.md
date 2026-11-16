@@ -95,7 +95,7 @@ src/sqlite.js       a read-only SQLite reader (table b-trees and overflow pages,
 src/anki-import.js  reads an Anki deck (.apkg: a zip with a SQLite collection) into cards and reviews, and Anki's text export's counterpart lives in anki.js; loaded with the Anki extension
 src/anki.js         the Anki extension's engine: decks, cards and a review log (anki/ beside the library, per-device log), each card's schedule replayed from the log
 src/opds.js         the Catalogs extension's catalogs: the list on this device, OPDS 1 (Atom) and 2 (JSON) feeds read into folders and books, search, a book's file with the catalog's login
-src/app-catalogs.js the Catalogs extension's screens: catalogs in Discover › Sites (folders, books, search), the Add a catalog sheet, Settings › Extensions › Catalogs
+src/app-catalogs.js the Catalogs extension's screens: the Catalogs place in the sidebar (folders, books, search), the Add a catalog sheet, Settings › Extensions › Catalogs
 src/app-anki.js     the Anki extension's screens: the selection bar's button and card sheet, the place (decks, study, browse, edit, options)
 src/motion.js       Waypage's springs from DESIGN.md, given to keel's motion engine (src/keel/motion.js)
 src/keel/qr.js      QR code for sync's setup link, made on the device so the token never leaves it (from keel, below)
