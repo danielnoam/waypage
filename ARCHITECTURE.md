@@ -80,7 +80,7 @@ src/notes.js        notes: sheets of paper you draw on, opened through the PDF p
 src/pptx.js         PowerPoint decks redrawn on a canvas and written as a PDF (1.49.0)
 src/epub.js         clips as an EPUB 3 book, for e-readers and Send to Kindle
 src/feeds.js        RSS, Atom and JSON Feed, read into one shape
-src/discover.js     Discover's sources: the hand-picked list, Wikipedia today, and the sites' lists and search (Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON, Tapas, SpaceBattles, Sufficient Velocity; books from Project Gutenberg via Gutendex and Standard Ebooks; Wikisource)
+src/discover.js     Discover's sources: the hand-picked list, Wikipedia today, and the sites' lists and search (Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON, Tapas, SpaceBattles, Sufficient Velocity; books from Project Gutenberg via Gutendex and Standard Ebooks; Wikisource; LibriVox's audiobooks via archive.org and LibriVox's API)
 src/discover-list.js  the hand-picked list itself (strict JSON between markers, refreshed from GitHub)
 src/sync.js         GitHub sync; src/sync-worker.js runs the merge off the main thread
 src/drive.js        Google Drive backups
@@ -659,6 +659,17 @@ with the CSS Custom Highlight API. A transcript clip is aligned to its
 own text the same way, so both read along through one path. An EPUB's
 Media Overlays (SMIL) give the times themselves (`overlaySync`).
 
+An audiobook from Discover (LibriVox, `getAudiobook`) is the one kind
+that is downloaded: its MP3 parts go one at a time into the app's own
+storage, `audiobooks/<clip id>/` under DATA wherever the library lives,
+and its parts' refs are those files' `file://` addresses, which the
+player and the Files plugin read like any other. `audio.from` is the
+Discover id ("lv:<archive.org item>"), the fingerprint is made from it,
+so another phone that downloads the same recording picks up the place.
+`store.removePage` removes the folder with the clip. Its Gutenberg book
+(the recording's `url_text_source`) downloads after it and is paired
+through `pairPending`, as Find the book in Discover does.
+
 ## Android Auto
 
 Android Auto lists Waypage through `CarService` (a framework
@@ -752,6 +763,12 @@ adds a line here.
   Gutendex is a volunteer-run index of Gutenberg and has been slow or down
   at times, and Standard Ebooks' list markup is scraped. A book's EPUB is
   downloaded once, on the tap, never in bulk (Gutenberg bans crawlers).
+- LibriVox's lists (most listened, newest) and search come from
+  archive.org's scrape API, a genre and a book's parts from LibriVox's
+  own API (by title, then archive.org's file list). Neither was reached
+  from a test machine; their answers were read once by hand. A
+  downloaded audiobook sits in the app's own storage, so it goes with
+  an uninstall, and it's in no backup (a book is hundreds of megabytes).
 - A path rule (Lemmy's /post/123, Substack's /p/slug) tries the API of
   any site whose address has that shape before reading the page, so one
   of those that isn't Lemmy or Substack costs a request that fails.

@@ -192,6 +192,7 @@ Each section below shows the computer (left) and the phone (right).
 - A feed goes to Feeds, a story saves as a collection that gets its new chapters, and a newsletter (by email) copies your Newsletters address and opens its sign-up page.
 - On the phone, Sites browses Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON, Tapas, SpaceBattles and Sufficient Velocity as a grid by list and genre, page after page, plus hand-picked web serials.
 - Books: Project Gutenberg and Standard Ebooks by list and subject, and Wikisource's texts; a book's EPUB downloads into the Library. These work in the browser too.
+- Audiobooks: LibriVox's free recordings by most listened, newest or genre. On Android one downloads into the Library as an audiobook, with its Project Gutenberg book to read along with.
 - The list is checked every week, so a feed that dies gets fixed or dropped.
 - The search at the top searches what's shown: the lists as you type, a story site when you press search.
 
