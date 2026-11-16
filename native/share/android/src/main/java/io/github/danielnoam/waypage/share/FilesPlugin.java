@@ -58,7 +58,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *                                   /_waypage_folder_/<path>; tree null stops
  *   folderWrite({ tree, path, data, encoding })   utf8, or base64 bytes
  *   folderRead({ tree, path })      { data } as utf8
- *   folderStat({ tree, path })      { exists, size }
+ *   folderStat({ tree, path })      { exists, size, uri }, uri for info/read
  *   folderList({ tree, path })      { files: [{ name, type, size }] }
  *   folderDelete({ tree, path })    a file, or a folder and all in it
  *   folderMoveIn({ tree, path, from })  a file:// in the app moved in
@@ -269,6 +269,7 @@ public class FilesPlugin extends Plugin {
         Uri doc = find(tree, path, false);
         out.put("exists", doc != null);
         out.put("size", doc == null ? 0 : sizeOf(doc));
+        if (doc != null) out.put("uri", doc.toString());
         call.resolve(out);
     }
 

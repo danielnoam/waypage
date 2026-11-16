@@ -72,6 +72,7 @@ for (const x of C.ext.list()) {
 SECTIONS.extensions = { title: t("Extensions"), build: extensionsSections, value: () => { const n = extensionsOn(); return n ? n + " on" : t("Off"); } };
 FIND_ALIASES.Extensions = "anki flashcards cards plugin add-on addon";
 FIND_ALIASES.Catalogs = "opds calibre kavita komga library server books catalog";
+FIND_ALIASES.Calibre = "calibre library folder metadata ebooks";
 FIND_ALIASES.Anki = "flashcards cards spaced repetition deck";
 FIND_ALIASES.Languages = "language pack dictionary german vocabulary";
 
@@ -79,6 +80,7 @@ FIND_ALIASES.Languages = "language pack dictionary german vocabulary";
 // someone in the Anki place when it goes is taken back to the library.
 C.ext.changed(() => {
   if (state.place === "anki" && !C.ext.on("anki")) goPlace("library");
+  if (state.place === "calibre" && !C.ext.on("calibre")) goPlace("library");
   if (state.place === "catalogs" && !C.ext.on("catalogs")) goPlace("library");
   if (sideShown()) renderSide();
   if (state.section) renderSection();
@@ -110,6 +112,16 @@ async function renderAnki() {
     return;
   }
   ankiDraw();
+}
+
+// The Calibre place: its code is loaded first, then the folder is read.
+async function renderCalibre() {
+  try { await C.ext.load("calibre"); } catch (e) {
+    fill($("calibre"), el("div", { class: "empty" }, el("h2", { class: "empty-title" }, t("Calibre didn't load")),
+      el("p", { class: "empty-text" }, t("Check your connection, then open it again."))));
+    return;
+  }
+  calibreOpen();
 }
 
 // The Catalogs place: its code is loaded first, then the catalog is read.

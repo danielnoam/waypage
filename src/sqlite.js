@@ -6,6 +6,7 @@
 //   open(bytes)       a handle for a database held in a Uint8Array; throws an
 //                     Error saying what is wrong when it isn't one it can read
 //   db.tables()       the names of its tables
+//   db.columns(name)  a table's column names, in the order `values` has them
 //   db.rows(name, fn) fn(rowid, values) for every row, in rowid order. A
 //                     column declared INTEGER PRIMARY KEY is the rowid and
 //                     is NULL in `values`, as SQLite stores it.
@@ -109,11 +110,28 @@
     }
 
     // sqlite_master lives at page 1: type, name, tbl_name, rootpage, sql.
-    const master = new Map();
-    walk(1, (id, v) => { if (v[0] === "table") master.set(v[1], v[3]); });
+    const master = new Map(), sqls = new Map();
+    walk(1, (id, v) => { if (v[0] === "table") { master.set(v[1], v[3]); sqls.set(v[1], String(v[4] || "")); } });
+
+    // A table's column names, in order, from its CREATE TABLE (ALTER TABLE
+    // ADD COLUMN rewrites it, so it stays whole).
+    function columns(name) {
+      const sql = sqls.get(name) || "";
+      const body = sql.slice(sql.indexOf("(") + 1, sql.lastIndexOf(")"));
+      const out = [];
+      let depth = 0, part = "";
+      for (const ch of body + ",") {
+        if (ch === "(") depth++;
+        if (ch === ")") depth--;
+        if (ch === "," && !depth) { out.push(part.trim()); part = ""; } else part += ch;
+      }
+      return out.filter((x) => x && !/^(constraint|primary|unique|check|foreign)\b/i.test(x))
+        .map((x) => x.match(/^("[^"]+"|`[^`]+`|\[[^\]]+\]|\S+)/)[1].replace(/^["`\[]|["`\]]$/g, ""));
+    }
 
     return {
       tables: () => [...master.keys()],
+      columns,
       rows(name, fn) {
         if (!master.has(name)) throw new Error(t("That database has no {name} table.", { name: name }));
         walk(master.get(name), fn);
