@@ -949,6 +949,10 @@ adds a line here.
 Things that broke once and would again. Check here before touching the
 area.
 
+- On Android, `FileInputStream.skip` past the end still returns what was
+  asked, so a skip-to-count loop never ends. FilesPlugin.info and
+  describe read a file:// size from `File.length()` instead (1.65.0 hung
+  every kept download after its first file).
 - Changing `BOOT` in src/pdf.js changes its hash in index.html's
   Content-Security-Policy; without the new one no PDF opens.
   `test/csp.test.js` fails and prints the hash to put there. The PDF

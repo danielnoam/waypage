@@ -616,6 +616,17 @@ public class FilesPlugin extends Plugin {
         if (uri == null) return;
         new Thread(() -> {
             JSObject out = describe(uri);
+            // A file the app kept itself (keepFile, 1.65.0) is a file://
+            // address: no provider answers for it, so its size comes from
+            // the file. Counting it below hung: FileInputStream.skip goes
+            // past the end and says it did (1.65.1).
+            if ("file".equals(uri.getScheme()) && uri.getPath() != null) {
+                File f = new File(uri.getPath());
+                out.put("ok", f.isFile() && f.canRead());
+                out.put("size", f.length());
+                call.resolve(out);
+                return;
+            }
             try (InputStream in = getContext().getContentResolver().openInputStream(uri)) {
                 out.put("ok", in != null);
                 // Some providers (cloud drives, some file managers) don't
@@ -624,8 +635,10 @@ public class FilesPlugin extends Plugin {
                 if (in != null && out.optLong("size", 0) <= 0) {
                     long n = 0;
                     byte[] buf = new byte[1 << 16];
+                    // Skipped only while a stream says how much is left; reading
+                    // is the only count that can't run past the end.
                     for (;;) {
-                        long went = in.skip(1L << 30);
+                        long went = in.available() > 0 ? in.skip(Math.min(in.available(), 1L << 30)) : 0;
                         if (went > 0) { n += went; continue; }
                         int got = in.read(buf);
                         if (got < 0) break;
@@ -736,6 +749,7 @@ public class FilesPlugin extends Plugin {
             name = null;
         }
         if (name == null || name.trim().isEmpty()) name = uri.getLastPathSegment();
+        if (size <= 0 && "file".equals(uri.getScheme()) && uri.getPath() != null) size = new File(uri.getPath()).length();
         out.put("name", name == null ? "file" : name);
         out.put("size", size);
         return out;

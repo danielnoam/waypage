@@ -26,16 +26,43 @@ async function pickedTree(how) {
 }
 
 // A card in the library and Downloads while a file comes, with how far.
+// Its Pause and Stop (1.65.0 had neither) pause Downloads' fetch, which
+// keeps what came; `keep` downloads through it and, after a pause, goes
+// on from there once Resume is pressed. Stopped, it throws "stopped".
+let keepingRun = null;
 function keepRun(title, label) {
-  const run = Object.assign(startRun(null, title, 1), { label, files: true, now: t("Starting") });
+  const run = Object.assign(startRun(null, title, 1), { label, files: true, keep: true, now: t("Starting") });
   runChanged();
   const progress = (bytes, total) => {
     run.part = total > 0 ? Math.min(1, bytes / total) : null;
     run.now = total > 0 ? t("{done} of {total}", { done: formatSize(bytes), total: formatSize(total) }) : formatSize(bytes);
     updateRunCard(run);
   };
-  const done = () => { run.now = null; runs.delete(run); runChanged(); };
-  return { run, progress, done };
+  const done = () => { run.now = null; if (keepingRun === run) keepingRun = null; runs.delete(run); runChanged(); };
+  const keep = async (url, name, where, tree, onProgress) => {
+    for (;;) {
+      if (!(await gate(run))) throw new Error("stopped");
+      try {
+        return await C.platform.keepFile(url, name, where, (bytes, total) => {
+          keepingRun = run;
+          if (run.paused || run.stopped) { C.platform.pauseKeep(); return; }
+          (onProgress || progress)(bytes, total);
+        }, tree);
+      } catch (e) {
+        if (!(e && e.code === "PAUSED") && !run.paused && !run.stopped) throw e;
+        if (run.stopped) throw new Error("stopped");
+        run.now = t("Paused");
+        updateRunCard(run);
+      } finally {
+        if (keepingRun === run) keepingRun = null;
+      }
+    }
+  };
+  return { run, progress, done, keep };
+}
+// Pause and Stop on a file's card: the download in progress stops now.
+function keepHalt(r) {
+  if (r && r.keep && keepingRun === r) C.platform.pauseKeep();
 }
 
 // ---- Packs ----
@@ -68,7 +95,7 @@ async function packDownload(s, how) {
       updateRunCard(k.run);
       await new Promise((go) => wifiWaiters.push(go));
     }
-    const ref = await C.platform.keepFile(s.file, packFileName(s), how.where, k.progress, tree);
+    const ref = await k.keep(s.file, packFileName(s), how.where, tree);
     k.run.now = t("Opening");
     updateRunCard(k.run);
     const file = await C.platform.files.blob(ref, s.size);
@@ -234,7 +261,7 @@ async function bookAsFile(s, how) {
     if (tree === false) return;
     const k = keepRun(t("Downloading a book"), s.title);
     try {
-      const ref = await C.platform.keepFile(s.epub, name, how.where, k.progress, tree);
+      const ref = await k.keep(s.epub, name, how.where, tree);
       const file = await C.platform.files.blob(ref, 0);
       k.done();
       await openFile(file, null, false, ref, { ref });

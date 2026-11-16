@@ -230,23 +230,24 @@ async function getAudiobook(s, how) {
     const parts = [], chapters = [];
     let at = 0, size = 0;
     for (let i = 0; i < list.length; i++) {
-      if (k.run.stopped) throw new Error("stopped");
+      if (!(await gate(k.run))) throw new Error("stopped");
       const part = t("Part {n} of {all}", { n: i + 1, all: list.length });
       k.run.part = i / list.length;
       k.run.now = part;
       updateRunCard(k.run);
       const name = String(i + 1).padStart(3, "0") + " " + (list[i].title || "").replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 60);
       // Each part's share of the bar; Stop pauses the part coming.
-      const ref = await C.platform.keepFile(list[i].url, folder + "/" + name.trim() + ".mp3", how.where, (bytes, total) => {
-        if (k.run.stopped) { C.platform.pauseKeep(); return; }
+      let came = 0;
+      const ref = await k.keep(list[i].url, folder + "/" + name.trim() + ".mp3", how.where, tree, (bytes, total) => {
+        came = Math.max(bytes || 0, total || 0);
         k.run.part = (i + (total > 0 ? Math.min(1, bytes / total) : 0)) / list.length;
         k.run.now = part + (bytes ? " · " + formatSize(bytes) : "");
         updateRunCard(k.run);
-      }, tree);
+      });
       if (!ref) throw new Error("not kept");
       kept.push(ref);
-      const info = await C.platform.files.info(ref);
-      const p = { ref, name: (list[i].title || name).slice(0, 200), size: info.size || 0, dur: list[i].dur || 0 };
+      // Its size as it came; the file asked only when the download didn't say.
+      const p = { ref, name: (list[i].title || name).slice(0, 200), size: came || (await C.platform.files.info(ref)).size || 0, dur: list[i].dur || 0 };
       if (!p.dur) p.dur = (await partLength(p, null)).dur;
       if (!p.dur) continue;
       chapters.push({ t: at, title: list[i].title || t("Part {n}", { n: i + 1 }) });
