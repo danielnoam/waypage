@@ -81,7 +81,7 @@ The kind comes from Waypage's own marks, never a guess:
   HTML, email, PowerPoint) are never listed.
 - Something is listed once about 10 minutes went into it or 5% of it is
   read, or it's finished.
-- In other apps (off) in a clip's or collection's ⋯ keeps it out. It
+- In other apps (off) in a clip's ⋯ or a collection's Edit keeps it out. It
   syncs, so it holds on every device.
 - No text, highlights, notes, drawings or links are in the file.
 
