@@ -19,9 +19,7 @@ const dz = { busy: false, error: "", found: null };
 const dzCanRead = () => C.platform.canFetchPages;
 // The sites this copy can browse: all of them in the app; in a browser,
 // the books and texts, whose sites answer the fetch proxy.
-// The Catalogs extension's catalogs come after them (src/app-catalogs.js).
-const dzSources = () => [...C.discover.sources, ...(C.ext.on("catalogs") && typeof catalogSources === "function" ? catalogSources() : [])]
-  .filter((x) => C.platform.canFetchPages || (x.web && C.platform.canReadPages));
+const dzSources = () => C.discover.sources.filter((x) => C.platform.canFetchPages || (x.web && C.platform.canReadPages));
 const DZ_KINDS = [["all", t("All")], ["stories", t("Sites")], ["feeds", t("Feeds")], ["newsletters", t("Newsletters")]];
 const dzHost = (u) => { try { return new URL(u).hostname.toLowerCase().replace(/^www\./, ""); } catch (e) { return ""; } };
 
@@ -211,7 +209,7 @@ const dzSrc = () => (dzSource === "serials" ? null : dzSources().find((x) => x.k
 const dzGrid0 = () => {
   const src = dzSrc();
   const pref = load("waypage.discover.pick." + (src ? src.key : dzSource), {});
-  const key = src && src.lists.some((l) => l.key === pref.key) ? pref.key : src ? (src.key === "rr" ? dzList : src.lists[0] ? src.lists[0].key : "") : "";
+  const key = src && src.lists.some((l) => l.key === pref.key) ? pref.key : src ? (src.key === "rr" ? dzList : src.lists[0].key) : "";
   const genre = src && (src.genres.some((x) => x.key === pref.genre) ? pref.genre : src.anyGenre ? "" : src.genres[0].key);
   return { source: src ? src.key : dzSource, key, genre: genre || "", page: 0, items: [], busy: false, error: "", done: false };
 };
@@ -223,9 +221,8 @@ function dzGrid() {
   // The copy's reach can change after load (the app's plugins arrive).
   if (dz.grid.source !== (here ? here.key : "serials")) dz.grid = dzGrid0();
   const sources = dropdown({ label: t("Site"), cls: "field-pick dz-pick", value: here ? here.key : "serials",
-    options: [...dzSources().map((x) => ({ value: x.key, label: x.label })), { value: "serials", label: t("Web serials") },
-      ...(C.ext.on("catalogs") ? [{ value: "+catalog", label: t("Add a catalog…") }] : [])],
-    onpick: (v) => { if (v === "+catalog") { openMenu("addCatalog"); renderDiscover(); return; } dzSource = v; store("waypage.discover.source", v); dz.found = null; dz.grid = dzGrid0(); renderDiscover(); } });
+    options: [...dzSources().map((x) => ({ value: x.key, label: x.label })), { value: "serials", label: t("Web serials") }],
+    onpick: (v) => { dzSource = v; store("waypage.discover.source", v); dz.found = null; dz.grid = dzGrid0(); renderDiscover(); } });
   const src = dzSrc();
   if (!src) {
     const serials = C.discover.list().entries.filter((e) => e.kind === "serial" && dzMatch(e, dzQ()));
@@ -240,7 +237,6 @@ function dzGrid() {
       f.busy ? el("p", { class: "footnote dz-src" }, t("Searching {label}…", { label: src.label }))
         : f.items.length ? dzCovers(f.items, true) : el("p", { class: "footnote" + (f.error ? " warn" : "") }, f.error || t("No stories with that in their title."))];
   }
-  if (src.catalog) return catalogGrid(src, sources);
   const g = dz.grid;
   const phoneOnly = dzCanRead() ? null : el("p", { class: "footnote" }, t("The story sites (Royal Road, AO3 and the rest) show in Waypage on your phone."));
   if (src.searchOnly) {
@@ -403,7 +399,7 @@ async function dzSearch(words, src) {
   const f = dz.found = { words, label: src.label, items: [], error: "", busy: true };
   renderDiscover();
   try { f.items = await src.search(words); }
-  catch (e) { f.error = src.catalog ? catalogWhy(e) : t("Couldn't reach {site}. Try again in a while. ({why})", { site: src.label, why: dzWhy(e) }); }
+  catch (e) { f.error = t("Couldn't reach {site}. Try again in a while. ({why})", { site: src.label, why: dzWhy(e) }); }
   f.busy = false;
   if (dz.found === f && state.place === "discover") renderDiscover();
 }

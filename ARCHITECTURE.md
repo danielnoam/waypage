@@ -97,7 +97,7 @@ src/anki.js         the Anki extension's engine: decks, cards and a review log (
 src/calibre.js      the Calibre extension's library folder: picked once (the Files plugin, or a browser's folder picker kept in IndexedDB), metadata.db read with sqlite.js into books, a book's best file and its cover read from the folder by path
 src/app-calibre.js  the Calibre extension's place: the books as covers with search, sort and tag, a book's sheet (Read it from the folder, or Copy into your Library), Settings › Extensions › Calibre
 src/opds.js         the Catalogs extension's catalogs: the list on this device, OPDS 1 (Atom) and 2 (JSON) feeds read into folders and books, search, a book's file with the catalog's login
-src/app-catalogs.js the Catalogs extension's screens: catalogs in Discover › Sites (folders, books, search), the Add a catalog sheet, Settings › Extensions › Catalogs
+src/app-catalogs.js the Catalogs extension's screens: the Catalogs place in the sidebar (folders, books, search), the Add a catalog sheet, Settings › Extensions › Catalogs
 src/app-anki.js     the Anki extension's screens: the selection bar's button and card sheet, the place (decks, study, browse, edit, options)
 src/motion.js       Waypage's springs from DESIGN.md, given to keel's motion engine (src/keel/motion.js)
 src/keel/qr.js      QR code for sync's setup link, made on the device so the token never leaves it (from keel, below)
@@ -513,6 +513,14 @@ web copy stay links, as before.
   A device that has reviewed nothing sends no log. Changes made here
   start a sync 30 seconds after the last one (`anki.edited`).
   `test/syncanki.test.js` plays two devices on one made-up repo.
+- **Catalogs** (2026-11, while the extension is on): `catalogs.json`, the
+  list with each catalog's address, name and username but never its
+  password (`opds.shared()`), and the ones removed with when, so a removal
+  sticks. Merged by id, the newer change winning (`opds.mergeIn`); a
+  password typed on this device stays, unless the username changed. One
+  that arrives with a username and no password asks for it in its place.
+  Sent only when it differs from GitHub's; no sync of its own, it goes
+  with the next. `test/synccatalogs.test.js`.
 - **Share reading activity** (2026-11, `activity.js`, off by default, a
   switch per device in `what.activity`): after the stats, sync writes
   `activity/reading.json`, what you're reading and minutes a day, for
@@ -613,7 +621,7 @@ bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `csp.test.js` checks the page's Content-Security-Policy through keel's check (ui.test.js fails on anything it blocks); `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `syncanki.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR and on `main`, spread
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `syncanki.test.js`, `synccatalogs.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR and on `main`, spread
 over four machines: `TEST_SHARD=2/4 node test/run-all.js` runs one
 slice. `ui.test.js` is most of the time, so it is split too
 (`UI_SHARD`): the tests on its first page `p` build on each other and
@@ -783,8 +791,10 @@ adds a line here.
   asks again after a restart. Books are matched to clips by Calibre's
   uuid (`calibre` on the clip, this device's only).
 - Catalogs (OPDS) are the person's own: Waypage ships none. Each is kept in
-  this device's localStorage (`waypage.catalogs`), login included, and is
-  never synced or backed up. The app sends a login only to the catalog's
+  this device's localStorage (`waypage.catalogs`), password included. Sync
+  carries the list but never a password (Daniel, 2026-11-16: a leaked sync
+  token shouldn't leak a library login too), and backups leave catalogs
+  out. The app sends a login only to the catalog's
   own address. A browser reads an open catalog through the fetch proxy but
   one with a login, or on the home network, straight from the page: a
   password never goes through the proxy (which can't reach a home server

@@ -23,6 +23,7 @@
   const COVERS_KEY = "waypage.syncCovers"; // picked covers this device knows are on GitHub
   const STATS_KEY = "waypage.syncStats"; // { device: sha of its stats file as last read, _sent: what this device last wrote }
   const ANKI_KEY = "waypage.syncAnki"; // { decks, cards: sha as last seen; log: { device: sha }; sent: hash of what GitHub has of decks, cards, log }
+  const CAT_KEY = "waypage.syncCatalogs"; // { sha: catalogs.json as last seen, sent: hash of what GitHub has }
   const ACT_KEY = "waypage.syncActivity"; // { sig } of the reading activity this device last wrote
   const ACT_PATH = "activity/reading.json";
   const DAY = 24 * 3600 * 1000;
@@ -656,6 +657,7 @@
     keep(SENT_KEY, null);
     keep(STATS_KEY, null);
     keep(ACT_KEY, null);
+    keep(CAT_KEY, null);
   }
 
   // ---- A page's text going up and coming down ----
@@ -1395,6 +1397,7 @@
     const stats = async () => {
       if (what.stats) try { await syncStats(); } catch (e) { if (e instanceof Paused) throw e; }
       if (what.anki) try { await syncAnki(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
+      try { await syncCatalogs(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
       try { await syncActivity(getPages()); } catch (e) { if (e instanceof Paused) throw e; }
     };
     // Feeds the same way as clips: one changed here while this ran keeps
@@ -1675,6 +1678,26 @@
       }
       keep(ANKI_KEY, known);
       return;
+    }
+  }
+
+  // Catalogs (2026-11, an extension): catalogs.json, the list without
+  // passwords (src/opds.js shared), merged with what's here and sent back
+  // only when it changed. Only while the extension is on.
+  async function syncCatalogs() {
+    if (!C.ext || !C.ext.on("catalogs")) return;
+    await C.ext.load("catalogs");
+    const known = load(CAT_KEY, {}) || {};
+    for (let tries = 0; ; tries++) {
+      halt();
+      const r = await readJson("catalogs.json").catch((e) => { if (e instanceof Paused || !(e instanceof SyntaxError)) throw e; return null; });
+      if (r && r.sha !== known.sha) { C.opds.mergeIn(r.data); known.sha = r.sha; }
+      const out = JSON.stringify(C.opds.shared()), h = hashOf(out);
+      // Nothing to say, or GitHub says it already.
+      if (r ? hashOf(JSON.stringify(r.data)) === h : !C.opds.list().length) { known.sent = h; keep(CAT_KEY, known); return; }
+      halt();
+      try { known.sha = await write("catalogs.json", out, r && r.sha, "Catalogs"); known.sent = h; keep(CAT_KEY, known); return; }
+      catch (e) { if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e; }
     }
   }
 
