@@ -5,6 +5,8 @@
 // (Anki's language packs) is listed on the same page. Shell file: shares
 // the one scope of app.js and the files after it; loads after app-settings.js.
 
+// An extension's own sections on its page, added by its code once loaded.
+const EXT_PAGES = {};
 const extensionsOn = () => C.ext.list().filter((x) => C.ext.on(x.id)).length;
 
 // Settings › Extensions: one row each, saying whether it is on.
@@ -28,6 +30,7 @@ function extensionPage(x) {
   });
   const out = [section(null, null, el("div", { class: "group" }, sw))];
   if (C.ext.on(x.id) && x.packs.length) out.push(packsSection(x));
+  if (C.ext.on(x.id) && EXT_PAGES[x.id]) out.push(...EXT_PAGES[x.id]());
   return out;
 }
 
@@ -68,6 +71,7 @@ for (const x of C.ext.list()) {
 }
 SECTIONS.extensions = { title: t("Extensions"), build: extensionsSections, value: () => { const n = extensionsOn(); return n ? n + " on" : t("Off"); } };
 FIND_ALIASES.Extensions = "anki flashcards cards plugin add-on addon";
+FIND_ALIASES.Catalogs = "opds calibre kavita komga library server books catalog";
 FIND_ALIASES.Anki = "flashcards cards spaced repetition deck";
 FIND_ALIASES.Languages = "language pack dictionary german vocabulary";
 
@@ -76,6 +80,7 @@ FIND_ALIASES.Languages = "language pack dictionary german vocabulary";
 C.ext.changed(() => {
   if (state.place === "anki" && !C.ext.on("anki")) goPlace("library");
   if (sideShown()) renderSide();
+  if (state.place === "discover") renderDiscover();
   if (state.section) renderSection();
   if (state.settings) renderSettings();
 });

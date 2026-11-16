@@ -102,17 +102,19 @@
   // link), with its final address and type. The app downloads it into the
   // cache and reads it back from there; a browser fetches it, through the
   // proxy unless the site allows any origin.
-  async function fetchBytes(url, name) {
+  // `headers` (a catalog's login) go only to the site itself, never through
+  // the proxy.
+  async function fetchBytes(url, name, headers) {
     if (plugin("Filesystem") && plugin("CapacitorHttp")) {
       const path = "fetched/" + String(name || "file").replace(/[^\w.-]+/g, "_").slice(0, 80);
-      const src = await downloadTo(url, path, null, "CACHE");
+      const src = await downloadTo(url, path, null, "CACHE", headers);
       if (!src) throw new TypeError("Failed to fetch (no file)");
       const blob = await (await fetch(src)).blob();
       plugin("Filesystem").deleteFile({ path, directory: "CACHE" }).catch(() => {});
       return { status: 200, url, type: blob.type, blob };
     }
-    const res = !PROXY || direct(url)
-      ? await deadline(fetch(url), PAGE_TIMEOUT * 2)
+    const res = !PROXY || direct(url) || (headers && Object.keys(headers).length)
+      ? await deadline(fetch(url, { headers: headers || {}, credentials: "omit" }), PAGE_TIMEOUT * 2)
       : await deadline(fetch(PROXY + "?" + new URLSearchParams({ url, accept: "*/*" }), { credentials: "omit" }), PAGE_TIMEOUT * 2);
     const refused = res.headers.get("X-Proxy-Error");
     if (refused && res.status !== 429) throw new TypeError("Failed to fetch (" + refused + ")");
@@ -601,12 +603,12 @@
     try { await FS.mkdir({ path: dir, directory, recursive: true }); }
     catch (e) { /* there already */ }
   }
-  async function downloadTo(url, path, page, directory = "DATA") {
+  async function downloadTo(url, path, page, directory = "DATA", extra) {
     const FS = plugin("Filesystem");
     if (!FS) return null;
     // The page's own site as Referer, as a browser sends it (its origin,
     // not the whole address).
-    const headers = { "User-Agent": USER_AGENT };
+    const headers = { "User-Agent": USER_AGENT, ...(extra || {}) };
     try { if (page) headers.Referer = new URL(page).origin + "/"; } catch (e) { /* no referer */ }
     await folderFor(FS, path, directory);
     await deadline(FS.downloadFile({ url, path, directory, recursive: true, headers,

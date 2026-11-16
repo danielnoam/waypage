@@ -92,13 +92,15 @@ async function isFileBlob(blob) {
   const head = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
   return FILE_HEADS.some((h) => h.every((b, i) => head[i] === b));
 }
-async function saveFileLink(url, name, page) {
+// `fetchBytes` stands in for the platform's (a catalog's, with its login).
+async function saveFileLink(url, name, page, fetchBytes) {
+  const getBytes = fetchBytes || ((u, n) => C.platform.fetchBytes(u, n));
   if (!navigator.onLine) { toast(t("You're offline. Add it when you're back online.")); return; }
   if (!C.platform.canReadPages) { toast(t("This browser can't download from that site. Add it in Waypage on your phone.")); return; }
   name = name || fileLinkName(url) || "file";
   toast(t("Downloading “{replace}”…", { replace: name.replace(/\.[a-z0-9]+$/i, "") }));
   try {
-    let got = await C.platform.fetchBytes(url, name);
+    let got = await getBytes(url, name);
     // Some sites answer the first download with a page that links the file
     // (a thank-you page); its link to the same kind of file is followed.
     if (got.status === 200 && !(await isFileBlob(got.blob)) && got.blob.size < 2e6) {
@@ -107,7 +109,7 @@ async function saveFileLink(url, name, page) {
       const refresh = doc.querySelector('meta[http-equiv="refresh" i]');
       const a = [...doc.querySelectorAll("a[href]")].map((x) => x.getAttribute("href")).find((h) => new RegExp("\\." + ext + "(\\?|$)", "i").test(h) && !/kepub|advanced/i.test(h));
       const next = (refresh && (/url=(.+)$/i.exec(refresh.getAttribute("content") || "") || [])[1]) || a;
-      if (next) got = await C.platform.fetchBytes(new URL(next.replace(/^['"]|['"]$/g, ""), got.url || url).href, name);
+      if (next) got = await getBytes(new URL(next.replace(/^['"]|['"]$/g, ""), got.url || url).href, name);
     }
     if (got.status >= 400) throw new Error("HTTP " + got.status);
     if (!(await isFileBlob(got.blob))) throw new Error("not a file");

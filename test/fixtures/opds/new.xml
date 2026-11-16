@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/terms/">
+  <id>urn:test:new</id>
+  <title>Newest</title>
+  <link rel="next" href="/opds/new?page=2" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <entry>
+    <title>The Left Hand of Darkness</title>
+    <id>urn:uuid:1111</id>
+    <author><name>Ursula K. Le Guin</name></author>
+    <category term="sf" label="Science Fiction"/>
+    <summary type="html">&lt;p&gt;A planet of &lt;b&gt;winter&lt;/b&gt;.&lt;/p&gt;</summary>
+    <link rel="http://opds-spec.org/image" href="/get/cover/1.jpg" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/image/thumbnail" href="/get/thumb/1.jpg" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/acquisition" href="/get/mobi/1" type="application/x-mobipocket-ebook"/>
+    <link rel="http://opds-spec.org/acquisition" href="/get/pdf/1" type="application/pdf"/>
+    <link rel="http://opds-spec.org/acquisition" href="/get/epub/1" type="application/epub+zip"/>
+  </entry>
+  <entry>
+    <title>Saga, Volume 1</title>
+    <id>urn:uuid:2222</id>
+    <author><name>Brian K. Vaughan</name></author>
+    <author><name>Fiona Staples</name></author>
+    <link rel="http://opds-spec.org/acquisition/open-access" href="https://files.example.test/saga-1.cbz" type="application/vnd.comicbook+zip"/>
+  </entry>
+  <entry>
+    <title>Only on paper</title>
+    <id>urn:uuid:3333</id>
+    <link rel="http://opds-spec.org/acquisition/buy" href="/shop/3" type="text/html"/>
+  </entry>
+</feed>

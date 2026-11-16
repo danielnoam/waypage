@@ -88,6 +88,9 @@ const PLIST = [
   ["NSCameraUsageDescription", "<string>Waypage uses the camera to read the sync setup code from your other device.</string>"],
   ["NSFaceIDUsageDescription", "<string>Waypage uses Face ID to unlock when you turn it on in App lock.</string>"],
   ["UIFileSharingEnabled", "<true/>"],
+  // A book server at home over plain http (the Catalogs extension).
+  ["NSAppTransportSecurity", "<dict>\n\t\t<key>NSAllowsLocalNetworking</key>\n\t\t<true/>\n\t</dict>"],
+  ["NSLocalNetworkUsageDescription", "<string>Waypage reads the book catalogs you add, such as a Calibre or Kavita server at home.</string>"],
   ["LSSupportsOpeningDocumentsInPlace", "<true/>"],
   ["CFBundleDocumentTypes", arr(DOCS.map(docType))],
   ["UTImportedTypeDeclarations", arr([
