@@ -92,4 +92,71 @@ test("a file that isn't OPML isn't read as feeds", () => {
   assert.strictEqual(I.opml(""), null);
 });
 
+// Kindle's My Clippings.txt (2026-11).
+const CLIPS = [
+  "﻿The Name of the Wind (Kingkiller Chronicle, Book 1) (Rothfuss, Patrick)",
+  "- Your Highlight on page 12 | Location 180-182 | Added on Monday, March 4, 2024 10:15:32 AM",
+  "",
+  "It was night again.",
+  "==========",
+  "The Name of the Wind (Kingkiller Chronicle, Book 1) (Rothfuss, Patrick)",
+  "- Your Note on page 12 | Location 182 | Added on Monday, March 4, 2024 10:16:00 AM",
+  "",
+  "Nice opening",
+  "==========",
+  "The Name of the Wind (Kingkiller Chronicle, Book 1) (Rothfuss, Patrick)",
+  "- Your Bookmark on page 13 | Location 190 | Added on Monday, March 4, 2024 10:16:00 AM",
+  "",
+  "",
+  "==========",
+  "Dune (Frank Herbert)",
+  "- Your Highlight on Location 1234-36 | Added on Tuesday, March 5, 2024 9:00:00 PM",
+  "",
+  "Fear is the mind-killer.",
+  "==========",
+  "Dune (Frank Herbert)",
+  "- Your Highlight on Location 1230-38 | Added on Tuesday, March 5, 2024 9:01:00 PM",
+  "",
+  "I must not fear. Fear is the mind-killer.",
+  "==========",
+  "Dune (Frank Herbert)",
+  "- Your Note on Location 900 | Added on Tuesday, March 5, 2024 9:02:00 PM",
+  "",
+  "A note on nothing",
+  "==========",
+  "Dune (Frank Herbert)",
+  "- Your Highlight on Location 50-51 | Added on Tuesday, March 5, 2024 9:03:00 PM",
+  "",
+  "<You have reached the clipping limit for this item>",
+  "==========",
+  "",
+].join("\r\n");
+
+test("Kindle: books by title and author, notes join their highlight, bookmarks left out", () => {
+  const b = I.kindle(CLIPS);
+  assert.deepStrictEqual(b.map((x) => [x.title, x.author, x.loose]), [["The Name of the Wind (Kingkiller Chronicle, Book 1)", "Rothfuss, Patrick", 0], ["Dune", "Frank Herbert", 1]]);
+  assert.deepStrictEqual(b[0].marks.map((m) => [m.text, m.note, m.loc]), [["It was night again.", "Nice opening", 180]]);
+  assert.strictEqual(b[0].marks[0].at, Date.parse("March 4, 2024 10:15:32 AM"));
+});
+
+test("Kindle: a highlight changed later keeps only the newer, longer one", () => {
+  const dune = I.kindle(CLIPS)[1];
+  assert.deepStrictEqual(dune.marks.map((m) => m.text), ["I must not fear. Fear is the mind-killer."]);
+});
+
+test("Kindle: other text files aren't clippings", () => {
+  assert.strictEqual(I.kindle("Just a note\nwith lines"), null);
+  assert.strictEqual(I.kindle("==========\n"), null);
+});
+
+test("Kindle: books matched by title, a file before a web clip, or by file name", () => {
+  const b = I.kindle(CLIPS);
+  assert.deepStrictEqual(I.kindleMatch(b, [
+    { id: "web", title: "The Name of the Wind", file: null },
+    { id: "epub", title: "The name of the wind: a novel", file: {} },
+    { id: "dune", title: "Untitled", name: "Dune.epub", file: {} },
+  ]), ["epub", "dune"]);
+  assert.deepStrictEqual(I.kindleMatch(b, [{ id: "x", title: "Something else", file: {} }]), [null, null]);
+});
+
 console.log("\n" + passed + " passed");

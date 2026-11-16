@@ -46,6 +46,7 @@ Each section below shows the computer (left) and the phone (right).
 - Pick several clips to tag, move, mark read, export or delete together; hold or right-click for a clip's menu.
 - Edit clips: find and remove or replace words across many clips.
 - Import from Pocket, Instapaper, Omnivore, Raindrop and Wallabag.
+- Import a Kindle's highlights and notes (My Clippings.txt) onto the same books in your library.
 
 ## Sidebar
 
@@ -213,6 +214,7 @@ Features you turn on in Settings › Extensions, above About. Their code ships w
 - Study with Again, Hard, Good and Easy, each showing its wait, scheduled by FSRS; Undo, Edit, Bury and Suspend; keys 1 to 4, Space and Z. Browse and edit cards, and set each deck's new cards a day, reviews a day, steps and retention.
 - **Languages** (Settings › Extensions › Anki): download a language pack, German → English to begin with (4 MB, words from Wiktionary). Fill writes a card's back from it and finds the headword from the form you picked (Häusern gives Haus). A pack is a dictionary on the device, so Look up uses it too.
 - **Calibre** adds your Calibre library folder to the sidebar, with no server: pick the folder once (synced to the phone with Drive, Syncthing or the like) and its books show as covers, found by title, author, series or tag. **Read it** opens the book from the folder, nothing copied; **Copy into your Library** brings it in to sync and back up. Either way its series becomes a collection in order and its Calibre tags become tags. On a computer it works in Chrome and Edge.
+- **Audiobookshelf** adds your own Audiobookshelf server to the sidebar: what you're listening to, then every audiobook as covers, with its search. **Play** streams the book in Waypage's own audiobook player (chapters, speed, sleep timer, read-along) and sends where you are back to the server, so its app and Waypage agree. Sign in once per device; the password isn't kept, and sync takes the server to your other devices without the sign-in.
 - **Catalogs** adds a Catalogs place to the sidebar for book catalogs (OPDS) you add: Calibre, Calibre-Web, COPS, Kavita, Komga and any library that shares one. Open its folders, search it, and + downloads a book's EPUB, PDF or CBZ into the Library. Sync takes the list to your other devices, but a password stays on the device it was typed on. Home servers over plain http work in the app; in a browser, only catalogs that allow it.
 - **Export** a deck, or all of them, as a text file Anki imports (its HTML, deck and a guid, so importing again updates instead of copying). **Import** a deck from Anki (.apkg, exported with "Support older Anki versions" ticked): its decks, cards and review history come in, as text; pictures and sounds don't.
 - On Android, **Send to AnkiDroid** on the card sheet opens the share sheet; AnkiDroid takes it as a new note.

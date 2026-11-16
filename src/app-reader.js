@@ -922,7 +922,7 @@ function fitRail() {
 }
 function paintRail() {
   const p = state.open;
-  $("railBackLabel").textContent = state.folder || (state.place === "feeds" ? t("Feeds") : state.place === "newsletters" ? t("Newsletters") : state.place === "highlights" ? t("Highlights") : state.place === "reading" ? t("Stats") : state.place === "anki" ? t("Anki") : state.place === "calibre" ? t("Calibre") : state.place === "catalogs" ? t("Catalogs") : t("Library"));
+  $("railBackLabel").textContent = state.folder || (state.place === "feeds" ? t("Feeds") : state.place === "newsletters" ? t("Newsletters") : state.place === "highlights" ? t("Highlights") : state.place === "reading" ? t("Stats") : state.place === "anki" ? t("Anki") : state.place === "calibre" ? t("Calibre") : state.place === "audiobookshelf" ? t("Audiobookshelf") : state.place === "catalogs" ? t("Catalogs") : t("Library"));
   const pages = railPages();
   $("readerRail").classList.toggle("paged", pages.length > 0);
   $("readerRail").setAttribute("aria-label", pages.length ? t("Pages") : t("Contents"));
@@ -1782,6 +1782,16 @@ function paintMarks(p) {
   if (state.open !== p) return;
   const found = new Set(C.reader.paintMarks(p.marks || []));
   lostMarks = new Set((p.marks || []).map((m) => m.id).filter((id) => !found.has(id)));
+  // One brought in by its words alone (Kindle, 2026-11) keeps the place it
+  // was found at, so it sorts and jumps like the rest.
+  if (C.files.printed(p)) return;
+  let placed = false;
+  for (const m of p.marks || []) {
+    if (m.page || m.end || !found.has(m.id)) continue;
+    const at = C.reader.locate(m);
+    if (at) { Object.assign(m, at); placed = true; }
+  }
+  if (placed) { p.marks.sort(byPlace); C.store.writeIndex(state.pages); }
 }
 async function saveMarks(p) {
   if (p.marks && !p.marks.length) delete p.marks;
