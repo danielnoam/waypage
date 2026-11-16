@@ -234,9 +234,30 @@ async function writeListenPage(a, data) {
   return html;
 }
 
+// ---- Streamed audiobooks ----
+// An audiobook that streams from a server (`remote` on the entry, the
+// Audiobookshelf extension) plays like any other. Its extension fills in
+// REMOTE_AUDIO[kind] once it loads: open(a, adopt) starts the stream and
+// gives each part's address (adopt: take the server's place when it's
+// newer), uri(a, part) the address while open, heard(a, now) hears where
+// you are, done(a) that it stopped.
+const REMOTE_AUDIO = {};
+async function remoteFor(a) {
+  const kind = a.remote.kind;
+  if (!REMOTE_AUDIO[kind]) { try { await C.ext.load(kind); } catch (e) { /* said below */ } }
+  if (REMOTE_AUDIO[kind]) return REMOTE_AUDIO[kind];
+  const x = C.ext.list().find((e) => e.id === kind);
+  throw new Error(t("Turn on {name} in Settings › Extensions to play this.", { name: x ? x.title : kind }));
+}
+const remoteSaid = (a, how) => { const r = a && a.remote && REMOTE_AUDIO[a.remote.kind]; if (r) r[how === "done" ? "done" : "heard"](a, how); };
+
 // ---- Playing ----
 
 async function partsToPlay(a) {
+  if (a.remote) {
+    const urls = await (await remoteFor(a)).open(a, false);
+    return urls.map((u) => (A.native ? { uri: u } : { src: async () => u }));
+  }
   if (A.native) {
     return a.audio.parts.map((p) => (a.audio.overlay ? { uri: a.link, offset: p.offset, length: p.length } : { uri: p.ref }));
   }
@@ -259,6 +280,17 @@ async function listenPlay(a, at) {
   if (!a) return;
   if (aloudOn()) stopAloud();
   if (a.audio.overlay && a.audio.parts.some((p) => !p.stored)) { toast(i18n.t("This book's narration is packed in a way Waypage can't play yet.")); return; }
+  if (a.remote) {
+    if (lis.key && lis.key !== a.id) saveListenPlace(true);
+    Object.assign(lis, { key: a.id, state: "loading", said: -1 });
+    paintListen();
+    try { await (await remoteFor(a)).open(a, at == null); } catch (e) {
+      Object.assign(lis, { key: "", state: "stopped" });
+      paintListen();
+      toast(e.message || i18n.t("Couldn't play it. Try again."));
+      return;
+    }
+  }
   const t = Math.max(0, Math.min(at != null ? at : placeOf(a) >= durOf(a) - 2 ? 0 : placeOf(a), Math.max(0, durOf(a) - 1)));
   const { part, pos } = L.partAt(a.audio.parts, t);
   if (lis.key && lis.key !== a.id) saveListenPlace(true);
@@ -271,7 +303,7 @@ async function listenPlay(a, at) {
   } catch (e) {
     lis.state = "stopped";
     paintListen();
-    toast(i18n.t("Couldn't play it. If the file moved, add it again."));
+    toast(a.remote ? (e && e.message) || i18n.t("Couldn't play it. Try again.") : i18n.t("Couldn't play it. If the file moved, add it again."));
     return;
   }
   loadListenData(a).then(() => { readAlong(true); writeAhead(); });
@@ -289,6 +321,7 @@ function listenToggle() {
 function listenStop() {
   if (!lis.key) return;
   saveListenPlace(true);
+  remoteSaid(listenPage(), "done");
   A.stop();
   C.stats.aloud(false, lis.key);
   Object.assign(lis, { key: "", state: "stopped", said: -1 });
@@ -332,6 +365,7 @@ A.on((s) => {
   if (part && s.dur > 0 && Math.abs((part.dur || 0) - s.dur / 1000) > 1) { part.dur = s.dur / 1000; a.audio.dur = a.audio.parts.reduce((x, p) => x + (p.dur || 0), 0); }
   if (s.state !== "loading") lis.t = L.startOf(a.audio.parts, lis.part) + (s.pos || 0) / 1000;
   if (s.state === "ended") { lis.t = durOf(a); a.finished = true; }
+  if (a.remote && (s.state === "ended" || s.state === "stopped" || s.state === "error")) { saveListenPlace(true); remoteSaid(a, "done"); }
   C.stats.aloud(lis.state === "playing", a.id);
   if (s.state === "stopped") { Object.assign(lis, { key: "", state: "stopped" }); C.reader.say(-1); }
   if (was !== lis.state) {
@@ -369,6 +403,7 @@ function saveListenPlace(now) {
   const a = listenPage();
   if (!a || lis.state === "loading") return;
   a.listen = { ...(a.listen || {}), t: Math.round(lis.t * 10) / 10, tAt: Date.now(), dur: Math.round(durOf(a)) };
+  if (a.remote) remoteSaid(a, now);
   if (!now && Date.now() - lis.savedAt < 8000) return;
   lis.savedAt = Date.now();
   C.store.writeIndexOnly(state.pages);
@@ -712,7 +747,9 @@ async function writeAhead() {
     const ch = chaptersOf(a), ci = L.chapterAt(ch, from);
     const cFrom = ci >= 0 ? ch[ci].t : 0, cTo = ci >= 0 && ch[ci + 1] ? ch[ci + 1].t : durOf(a);
     const part01 = (t) => (cTo > cFrom ? Math.min(1, Math.max(0, (t - cFrom) / (cTo - cFrom))) : -1);
-    const res = await A.transcribe({ uri: a.audio.overlay ? a.link : p.ref, from: Math.round(pos * 1000), to: Math.round((pos + (to - from)) * 1000), pack: pack.id, lang: (a.lang || "").split("-")[0],
+    const uri = a.remote ? REMOTE_AUDIO[a.remote.kind] && REMOTE_AUDIO[a.remote.kind].uri(a, part) : a.audio.overlay ? a.link : p.ref;
+    if (!uri) throw new Error("stopped");
+    const res = await A.transcribe({ uri, from: Math.round(pos * 1000), to: Math.round((pos + (to - from)) * 1000), pack: pack.id, lang: (a.lang || "").split("-")[0],
       title: a.title, text: ci >= 0 ? (ch[ci].title || t("Chapter {n}", { n: ci + 1 })) + (ch.length > 1 ? " · " + t("{done} of {total}", { done: ci + 1, total: ch.length }) : "") : "", done: part01(from), end: part01(to) });
     const pieces = L.onBookClock(res.pieces || [], partStart);
     data.pieces = (data.pieces || []).filter((x) => x.t1 <= from + 0.05 || x.t0 >= to - 0.05).concat(pieces).sort((x, y) => x.t0 - y.t0);

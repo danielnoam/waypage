@@ -229,6 +229,99 @@
       + list.map(line).join("\n") + "\n  </body>\n</opml>\n";
   }
 
+  // A Kindle's highlights (2026-11): its documents/My Clippings.txt, every
+  // highlight, note and bookmark made on it, each ended by a line of ten
+  // =. An entry is the book's line, "Title (Author)", then a line like
+  // "- Your Highlight on page 12 | Location 180-182 | Added on Monday,
+  // March 4, 2024 10:15:32 AM", a blank line and the words. The Kindle's
+  // own language changes those words, so the parts are found by place: the
+  // last is when, the one before it the location. Bookmarks have no words
+  // and are left out; a note joins the highlight it was written on.
+  //   kindle(text)   null when it isn't one, else
+  //                  [{ title, author, marks: [{ text, note, loc, at }], loose }]
+  //                  where loose counts notes with no highlight to join
+  //   readKindle(file)   the same from a file
+  //   kindleMatch(books, pages)   for each book, the page it is, or null
+  const NOTE_WORD = /(^|[^\p{L}])(note|notiz|nota|заметка|メモ|笔记)([^\p{L}]|$)/iu;
+  const BOOKMARK_WORD = /bookmark|lesezeichen|marcador|signet|segnalibro|bladwijzer|закладка|ブックマーク|书签/i;
+  function kindleRange(s) {
+    const m = /(\d+)(?:\s*[-–]\s*(\d+))?/.exec(s || "");
+    if (!m) return null;
+    const a = Number(m[1]);
+    let b = m[2] ? Number(m[2]) : a;
+    // An older Kindle shortens the end: 1234-36.
+    if (b < a && m[2]) b = Number(m[1].slice(0, m[1].length - m[2].length) + m[2]);
+    return [a, Math.max(a, b)];
+  }
+  function kindleWhen(s) {
+    const t = String(s || "").replace(/^[^,]*,\s*/, "");
+    const v = Date.parse(t);
+    return Number.isFinite(v) ? v : 0;
+  }
+  function kindle(text) {
+    const all = String(text || "").replace(/﻿/g, "").replace(/\r\n?/g, "\n");
+    if (!/^={10}[ \t]*$/m.test(all)) return null;
+    const books = new Map();
+    for (const chunk of all.split(/^={10}[ \t]*$/m)) {
+      const lines = chunk.replace(/^\s*\n/, "").split("\n");
+      if (lines.length < 2 || !/^\s*-\s/.test(lines[1])) continue;
+      const info = lines[1].replace(/^\s*-\s*/, "");
+      if (BOOKMARK_WORD.test(info)) continue;
+      const words = lines.slice(2).join(" ").replace(/\s+/g, " ").trim();
+      // "<You have reached the clipping limit for this item>" in its place.
+      if (!words || /^<[^<>]*>$/.test(words)) continue;
+      const parts = info.split("|").map((x) => x.trim());
+      const head = parts.length > 1 ? parts[0] : "";
+      const loc = kindleRange(parts.length > 1 ? parts[parts.length - 2] : info) || [0, 0];
+      const line = lines[0].trim();
+      const by = /^(.*?)\s*\(([^()]*)\)\s*$/.exec(line);
+      const title = (by && by[1] ? by[1] : line).trim(), author = by && by[1] ? by[2].trim() : "";
+      if (!title) continue;
+      const key = title + "\n" + author;
+      if (!books.has(key)) books.set(key, { title, author, marks: [], notes: [] });
+      const b = books.get(key);
+      const one = { loc: loc[0], end: loc[1], at: kindleWhen(parts[parts.length - 1]) };
+      if (NOTE_WORD.test(head || info)) b.notes.push({ ...one, text: words });
+      else b.marks.push({ ...one, text: words });
+    }
+    const out = [];
+    for (const b of books.values()) {
+      // Changing a highlight on the Kindle adds it again: the older one goes
+      // when a later one holds its words at the same place.
+      const marks = b.marks.filter((m, i) => !b.marks.some((x, j) => j !== i && x.text.includes(m.text)
+        && (x.text.length > m.text.length || j > i) && x.loc <= m.end && m.loc <= x.end));
+      let loose = 0;
+      for (const n of b.notes) {
+        const on = marks.filter((m) => n.loc >= m.loc && n.loc <= m.end).pop();
+        if (on) on.note = on.note ? on.note + "\n\n" + n.text : n.text;
+        else loose++;
+      }
+      marks.sort((x, y) => x.loc - y.loc || x.end - y.end);
+      if (marks.length) out.push({ title: b.title, author: b.author, marks: marks.map(({ end, ...m }) => m), loose });
+    }
+    return out.length ? out : null;
+  }
+  async function readKindle(file) {
+    if (!file || file.size > MAX_BYTES || !/\.txt$/i.test(String(file.name || ""))) return null;
+    try { return kindle(await file.text()); } catch (e) { return null; }
+  }
+  // A title as compared: no accents, case, series or subtitle.
+  const titleKey = (s) => String(s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase()
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, " ").split(/:|\s[-–—]\s/)[0].replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  // pages: [{ id, title, name, file }], name the file's name; a file wins
+  // over a web clip of the same title.
+  function kindleMatch(books, pages) {
+    const keyed = pages.map((p) => ({ p, k: titleKey(p.title), n: titleKey(String(p.name || "").replace(/\.[^.]+$/, "")) }));
+    const find = (k, list) => list.find((x) => x.k === k || x.n === k)
+      || (k.length >= 8 ? list.find((x) => (x.k.length >= 8 && (x.k.startsWith(k) || k.startsWith(x.k))) || (x.n.length >= 8 && (x.n.startsWith(k) || k.startsWith(x.n)))) : null);
+    return books.map((b) => {
+      const k = titleKey(b.title);
+      if (!k) return null;
+      const got = find(k, keyed.filter((x) => x.p.file)) || find(k, keyed.filter((x) => !x.p.file));
+      return got ? got.p.id : null;
+    });
+  }
+
   window.Waypage = window.Waypage || {};
-  window.Waypage.imports = { read, parse, csvRows, opml, readOpml, writeOpml };
+  window.Waypage.imports = { read, parse, csvRows, opml, readOpml, writeOpml, kindle, readKindle, kindleMatch };
 })();

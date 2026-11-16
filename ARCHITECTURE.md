@@ -85,7 +85,7 @@ src/discover-list.js  the hand-picked list itself (strict JSON between markers, 
 src/sync.js         GitHub sync; src/sync-worker.js runs the merge off the main thread
 src/drive.js        Google Drive backups
 src/backup.js       one-file backups and exports
-src/imports.js      Pocket, Instapaper, Omnivore, Raindrop, Wallabag exports
+src/imports.js      Pocket, Instapaper, Omnivore, Raindrop, Wallabag exports, Kindle highlights
 src/stats.js        reading stats and the reading pace
 src/activity.js     Share reading activity: builds activity/reading.json (docs/reading-activity.md)
 src/dict.js         StarDict dictionaries in IndexedDB
@@ -100,6 +100,8 @@ src/opds.js         the Catalogs extension's catalogs: the list on this device, 
 src/app-catalogs.js the Catalogs extension's screens: the Catalogs place in the sidebar (folders, books, search), the Add a catalog sheet, Settings › Extensions › Catalogs
 src/webdav.js       the WebDAV extension's servers: the list on this device, a PROPFIND answer read into folders and books, a book's picture found beside it, a file with the server's login
 src/app-webdav.js   the WebDAV extension's screens: the WebDAV place in the sidebar (folders, books as covers, find in folder), a book's sheet (Add to your Library), the Add a server sheet, Settings › Extensions › WebDAV
+src/abs.js          the Audiobookshelf extension's servers: the list on this device with its tokens, signing in and renewing, libraries, books, search, play sessions and your place on the server
+src/app-abs.js      the Audiobookshelf extension's screens: its place in the sidebar (continue listening, books, search), a book's sheet (Play adds a streaming audiobook), the sign-in sheet, Settings › Extensions › Audiobookshelf; streams for app-listen.js through REMOTE_AUDIO
 src/app-anki.js     the Anki extension's screens: the selection bar's button and card sheet, the place (decks, study, browse, edit, options)
 src/motion.js       Waypage's springs from DESIGN.md, given to keel's motion engine (src/keel/motion.js)
 src/keel/qr.js      QR code for sync's setup link, made on the device so the token never leaves it (from keel, below)
@@ -526,6 +528,12 @@ web copy stay links, as before.
 - **WebDAV** (2026-11, while the extension is on): `webdav.json`, the
   servers the same way as `catalogs.json` (address, name, username, the
   ones removed; never a password). `test/syncwebdav.test.js`.
+- **Audiobookshelf** (2026-11, while the extension is on):
+  `audiobookshelf.json`, the servers (address, name, username) without
+  their tokens (`abs.shared()`), merged like catalogs (`abs.mergeIn`). A
+  server that arrives with no tokens asks to sign in in its place. Where
+  you are in a streamed book goes to the server itself (its play session),
+  and through OUTSIDE like any audiobook's place. `test/abs.test.js`.
 - **Share reading activity** (2026-11, `activity.js`, off by default, a
   switch per device in `what.activity`): after the stats, sync writes
   `activity/reading.json`, what you're reading and minutes a day, for
@@ -545,7 +553,9 @@ web copy stay links, as before.
 - **Backups and exports** (`backup.js`, `epub.js`): one zip of the whole
   library, one HTML file per clip, an EPUB of chosen clips.
 - **Imports** (`imports.js`): other read-later apps' exports become
-  saving jobs.
+  saving jobs. A Kindle's My Clippings.txt becomes highlights on books
+  already here, matched by title; they come with words only (block 0,
+  start and end 0) and take a place when the reader first finds them.
 
 Nothing leaves the device unless the person turned it on (CONTRIBUTING.md).
 
@@ -617,7 +627,7 @@ The files listed in `keel.lock.json` (`server.js`, `src/keel/qr.js`,
 ## Tests and screenshots
 
 `node test/run-all.js` runs every `test/*.test.js` in its own process.
-`ui.test.js`, `drive.test.js`, `sites.test.js`, `discover.test.js`, `catalogs.test.js`, `calibre.test.js` and `webdav.test.js`
+`ui.test.js`, `drive.test.js`, `sites.test.js`, `discover.test.js`, `catalogs.test.js`, `calibre.test.js`, `abs.test.js` and `webdav.test.js`
 drive the app in Chromium with Playwright and skip when it isn't installed
 (`sites.test.js` saves the discussion and code sites from their answers
 saved in `test/fixtures/sites/`, with nothing going out; `discover.test.js`
@@ -663,6 +673,17 @@ footnotes and headers in); `reader.say` lights the block and the word
 with the CSS Custom Highlight API. A transcript clip is aligned to its
 own text the same way, so both read along through one path. An EPUB's
 Media Overlays (SMIL) give the times themselves (`overlaySync`).
+
+A streamed audiobook (the Audiobookshelf extension) is an entry with
+`remote` (`{ kind, server, item }`) and a `link` of `abs:<server>:<item>`
+that no file has, so it is treated as read from outside: not uploaded
+by sync, not backed up. Its extension fills `REMOTE_AUDIO[kind]` in
+app-listen.js: `open` starts a play session on the server (its tracks
+become the parts, its chapters the chapters, and a newer place there is
+taken), the parts play from the session's own addresses, `heard` sends
+where you are every half minute and on a pause, `done` closes the
+session. Transcripts are written from the same addresses while the
+session is open.
 
 ## Android Auto
 
@@ -824,6 +845,16 @@ adds a line here.
   the clip keeps its address (`webdav`) to show it's there. Covers are a
   picture beside the book with its name, or a folder's cover.jpg when the
   book is alone in it; no file is opened to find one.
+- Audiobookshelf: the password is sent once to the server's `/login` and
+  never kept; this device keeps the access token (an hour) and the
+  refresh token (30 days, renewed with each use) in localStorage, never
+  synced, never backed up, never through the fetch proxy. Streams use
+  the play session's `/public/session/<id>/track/<n>` address, which the
+  server serves without a login while the session is open, so no token is
+  ever in a URL; anyone who saw that address could play that book until
+  the session closes. In a browser it works only when the server lists the
+  web copy under Allowed origins (CORS) and is https (the web copy is).
+  Book libraries only; podcasts aren't shown.
 - Language packs live on the repository's orphan `packs` branch (files and a README, no code, no workflows), fetched from `raw.githubusercontent.com` at one commit so a file can't change under its pinned hash. A new or changed pack is built with `tools/packs/build-lang.js`, committed to `packs`, and its commit, SHA-256 and size go in `src/extensions.js`'s catalogue (`test/extensions.test.js` checks the pins have that shape). A language pack is a hash-pinned download of Wiktionary's words as a StarDict dictionary; hashed and size-checked before `dict.js` reads it, and never run as code. It is the same dictionary as one you add yourself, so Settings › Reading › Dictionaries lists and removes it too. It isn't synced or backed up.
 - The web copy reads pages through the fetch proxy (`worker/`), so
   Cloudflare sees which addresses a browser user saves (not the app's).

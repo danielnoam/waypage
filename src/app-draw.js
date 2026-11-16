@@ -346,6 +346,7 @@ function renderLibrary() {
   if (state.place === "reading") renderReading();
   if (state.place === "anki") renderAnki();
   if (state.place === "calibre") renderCalibre();
+  if (state.place === "audiobookshelf") renderAudiobookshelf();
   if (state.place === "catalogs") renderCatalogs();
   if (state.place === "webdav") renderWebdav();
   if (sideShown()) renderSide();

@@ -23,6 +23,7 @@
   const COVERS_KEY = "waypage.syncCovers"; // picked covers this device knows are on GitHub
   const STATS_KEY = "waypage.syncStats"; // { device: sha of its stats file as last read, _sent: what this device last wrote }
   const ANKI_KEY = "waypage.syncAnki"; // { decks, cards: sha as last seen; log: { device: sha }; sent: hash of what GitHub has of decks, cards, log }
+  const ABS_KEY = "waypage.syncAbs"; // { sha: audiobookshelf.json as last seen, sent: hash of what GitHub has }
   const CAT_KEY = "waypage.syncCatalogs"; // { sha: catalogs.json as last seen, sent: hash of what GitHub has }
   const DAV_KEY = "waypage.syncWebdav"; // the same for webdav.json
   const ACT_KEY = "waypage.syncActivity"; // { sig } of the reading activity this device last wrote
@@ -660,6 +661,7 @@
     keep(ACT_KEY, null);
     keep(CAT_KEY, null);
     keep(DAV_KEY, null);
+    keep(ABS_KEY, null);
   }
 
   // ---- A page's text going up and coming down ----
@@ -1401,6 +1403,7 @@
       if (what.anki) try { await syncAnki(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
       try { await syncCatalogs(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
       try { await syncWebdav(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
+      try { await syncAbs(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
       try { await syncActivity(getPages()); } catch (e) { if (e instanceof Paused) throw e; }
     };
     // Feeds the same way as clips: one changed here while this ran keeps
@@ -1718,6 +1721,21 @@
       if (r ? hashOf(JSON.stringify(r.data)) === h : !C.webdav.list().length) { known.sent = h; keep(DAV_KEY, known); return; }
       halt();
       try { known.sha = await write("webdav.json", out, r && r.sha, "WebDAV servers"); known.sent = h; keep(DAV_KEY, known); return; }
+  // Audiobookshelf (2026-11, an extension): audiobookshelf.json, the
+  // servers without their tokens (src/abs.js shared), the same way as
+  // catalogs. Where you are in a book goes to the server itself, not here.
+  async function syncAbs() {
+    if (!C.ext || !C.ext.on("audiobookshelf")) return;
+    await C.ext.load("audiobookshelf");
+    const known = load(ABS_KEY, {}) || {};
+    for (let tries = 0; ; tries++) {
+      halt();
+      const r = await readJson("audiobookshelf.json").catch((e) => { if (e instanceof Paused || !(e instanceof SyntaxError)) throw e; return null; });
+      if (r && r.sha !== known.sha) { C.abs.mergeIn(r.data); known.sha = r.sha; }
+      const out = JSON.stringify(C.abs.shared()), h = hashOf(out);
+      if (r ? hashOf(JSON.stringify(r.data)) === h : !C.abs.list().length) { known.sent = h; keep(ABS_KEY, known); return; }
+      halt();
+      try { known.sha = await write("audiobookshelf.json", out, r && r.sha, "Audiobookshelf"); known.sent = h; keep(ABS_KEY, known); return; }
       catch (e) { if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e; }
     }
   }
