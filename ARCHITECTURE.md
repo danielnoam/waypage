@@ -94,6 +94,8 @@ src/fsrs.js         the Anki extension's scheduler: FSRS-5 in plain JS; loaded o
 src/sqlite.js       a read-only SQLite reader (table b-trees and overflow pages, UTF-8), loaded with the Anki extension, for opening an Anki deck
 src/anki-import.js  reads an Anki deck (.apkg: a zip with a SQLite collection) into cards and reviews, and Anki's text export's counterpart lives in anki.js; loaded with the Anki extension
 src/anki.js         the Anki extension's engine: decks, cards and a review log (anki/ beside the library, per-device log), each card's schedule replayed from the log
+src/opds.js         the Catalogs extension's catalogs: the list on this device, OPDS 1 (Atom) and 2 (JSON) feeds read into folders and books, search, a book's file with the catalog's login
+src/app-catalogs.js the Catalogs extension's screens: the Catalogs place in the sidebar (folders, books, search), the Add a catalog sheet, Settings › Extensions › Catalogs
 src/app-anki.js     the Anki extension's screens: the selection bar's button and card sheet, the place (decks, study, browse, edit, options)
 src/motion.js       Waypage's springs from DESIGN.md, given to keel's motion engine (src/keel/motion.js)
 src/keel/qr.js      QR code for sync's setup link, made on the device so the token never leaves it (from keel, below)
@@ -509,6 +511,14 @@ web copy stay links, as before.
   A device that has reviewed nothing sends no log. Changes made here
   start a sync 30 seconds after the last one (`anki.edited`).
   `test/syncanki.test.js` plays two devices on one made-up repo.
+- **Catalogs** (2026-11, while the extension is on): `catalogs.json`, the
+  list with each catalog's address, name and username but never its
+  password (`opds.shared()`), and the ones removed with when, so a removal
+  sticks. Merged by id, the newer change winning (`opds.mergeIn`); a
+  password typed on this device stays, unless the username changed. One
+  that arrives with a username and no password asks for it in its place.
+  Sent only when it differs from GitHub's; no sync of its own, it goes
+  with the next. `test/synccatalogs.test.js`.
 - **Share reading activity** (2026-11, `activity.js`, off by default, a
   switch per device in `what.activity`): after the stats, sync writes
   `activity/reading.json`, what you're reading and minutes a day, for
@@ -600,7 +610,7 @@ The files listed in `keel.lock.json` (`server.js`, `src/keel/qr.js`,
 ## Tests and screenshots
 
 `node test/run-all.js` runs every `test/*.test.js` in its own process.
-`ui.test.js`, `drive.test.js`, `sites.test.js` and `discover.test.js`
+`ui.test.js`, `drive.test.js`, `sites.test.js`, `discover.test.js` and `catalogs.test.js`
 drive the app in Chromium with Playwright and skip when it isn't installed
 (`sites.test.js` saves the discussion and code sites from their answers
 saved in `test/fixtures/sites/`, with nothing going out; `discover.test.js`
@@ -609,7 +619,7 @@ bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `csp.test.js` checks the page's Content-Security-Policy through keel's check (ui.test.js fails on anything it blocks); `docs.test.js` checks this file names
 every source file (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `syncanki.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR and on `main`, spread
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `syncanki.test.js`, `synccatalogs.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR and on `main`, spread
 over four machines: `TEST_SHARD=2/4 node test/run-all.js` runs one
 slice. `ui.test.js` is most of the time, so it is split too
 (`UI_SHARD`): the tests on its first page `p` build on each other and
@@ -766,6 +776,22 @@ adds a line here.
   never turns one on.
 - Anki import reads only the older collection layout (Anki's "Support older Anki versions" export, `collection.anki21`), since the newer `collection.anki21b` is zstd-compressed and a decompressor would be one more thing to vendor; a deck in the newer layout is told to be exported again. Pictures and sounds aren't brought in, a card keeps its Anki id (so a deck read twice, or on two devices, is the same cards), and its schedule is replayed from its review log through FSRS, so a card with no log starts as new. The fixture was built from Anki's documented tables, not exported by Anki itself.
 - A card goes to AnkiDroid through the share sheet (it takes shared text as a new note and asks which deck), not through its content provider: that would be a native plugin and a permission to ask for, and it can't be built or tried without the Android toolchain.
+- Catalogs (OPDS) are the person's own: Waypage ships none. Each is kept in
+  this device's localStorage (`waypage.catalogs`), password included. Sync
+  carries the list but never a password (Daniel, 2026-11-16: a leaked sync
+  token shouldn't leak a library login too), and backups leave catalogs
+  out. The app sends a login only to the catalog's
+  own address. A browser reads an open catalog through the fetch proxy but
+  one with a login, or on the home network, straight from the page: a
+  password never goes through the proxy (which can't reach a home server
+  anyway), so those work in a browser only when the server allows the web
+  copy (CORS). Only Basic logins and keys in the address (Kavita) work;
+  Calibre's server asks for Digest over plain http unless it's set to
+  Basic. Book servers at home are mostly plain http, which Android refuses
+  unless the app allows cleartext, and it can't allow it for home addresses
+  only: so `tools/android-manifest.js` allows plain http everywhere (iOS
+  allows it for the local network only). Covers that a page can't load
+  (http, or behind the login) are downloaded once into the cache instead.
 - Language packs live on the repository's orphan `packs` branch (files and a README, no code, no workflows), fetched from `raw.githubusercontent.com` at one commit so a file can't change under its pinned hash. A new or changed pack is built with `tools/packs/build-lang.js`, committed to `packs`, and its commit, SHA-256 and size go in `src/extensions.js`'s catalogue (`test/extensions.test.js` checks the pins have that shape). A language pack is a hash-pinned download of Wiktionary's words as a StarDict dictionary; hashed and size-checked before `dict.js` reads it, and never run as code. It is the same dictionary as one you add yourself, so Settings › Reading › Dictionaries lists and removes it too. It isn't synced or backed up.
 - The web copy reads pages through the fetch proxy (`worker/`), so
   Cloudflare sees which addresses a browser user saves (not the app's).

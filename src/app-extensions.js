@@ -5,6 +5,8 @@
 // (Anki's language packs) is listed on the same page. Shell file: shares
 // the one scope of app.js and the files after it; loads after app-settings.js.
 
+// An extension's own sections on its page, added by its code once loaded.
+const EXT_PAGES = {};
 const extensionsOn = () => C.ext.list().filter((x) => C.ext.on(x.id)).length;
 
 // Settings › Extensions: one row each, saying whether it is on.
@@ -28,6 +30,7 @@ function extensionPage(x) {
   });
   const out = [section(null, null, el("div", { class: "group" }, sw))];
   if (C.ext.on(x.id) && x.packs.length) out.push(packsSection(x));
+  if (C.ext.on(x.id) && EXT_PAGES[x.id]) out.push(...EXT_PAGES[x.id]());
   return out;
 }
 
@@ -68,6 +71,7 @@ for (const x of C.ext.list()) {
 }
 SECTIONS.extensions = { title: t("Extensions"), build: extensionsSections, value: () => { const n = extensionsOn(); return n ? n + " on" : t("Off"); } };
 FIND_ALIASES.Extensions = "anki flashcards cards plugin add-on addon";
+FIND_ALIASES.Catalogs = "opds calibre kavita komga library server books catalog";
 FIND_ALIASES.Anki = "flashcards cards spaced repetition deck";
 FIND_ALIASES.Languages = "language pack dictionary german vocabulary";
 
@@ -75,6 +79,7 @@ FIND_ALIASES.Languages = "language pack dictionary german vocabulary";
 // someone in the Anki place when it goes is taken back to the library.
 C.ext.changed(() => {
   if (state.place === "anki" && !C.ext.on("anki")) goPlace("library");
+  if (state.place === "catalogs" && !C.ext.on("catalogs")) goPlace("library");
   if (sideShown()) renderSide();
   if (state.section) renderSection();
   if (state.settings) renderSettings();
@@ -105,4 +110,14 @@ async function renderAnki() {
     return;
   }
   ankiDraw();
+}
+
+// The Catalogs place: its code is loaded first, then the catalog is read.
+async function renderCatalogs() {
+  try { await C.ext.load("catalogs"); } catch (e) {
+    fill($("catalogs"), el("div", { class: "empty" }, el("h2", { class: "empty-title" }, t("Catalogs didn't load")),
+      el("p", { class: "empty-text" }, t("Check your connection, then open it again."))));
+    return;
+  }
+  catalogDraw();
 }

@@ -1,0 +1,20 @@
+{
+  "metadata": { "title": "Open Shelf" },
+  "links": [
+    { "rel": "self", "href": "/catalog.json", "type": "application/opds+json" },
+    { "rel": "search", "href": "/search{?query}", "type": "application/opds+json", "templated": true },
+    { "rel": "next", "href": "/catalog.json?page=2", "type": "application/opds+json" }
+  ],
+  "navigation": [ { "href": "/genres.json", "title": "Genres", "type": "application/opds+json" } ],
+  "publications": [
+    {
+      "metadata": { "title": "Moby-Dick", "identifier": "urn:isbn:1", "author": [{ "name": "Herman Melville" }], "subject": ["Whales", { "name": "Sea stories" }], "description": "<p>Call me Ishmael.</p>" },
+      "links": [
+        { "rel": "http://opds-spec.org/acquisition/open-access", "href": "/books/moby.epub", "type": "application/epub+zip" },
+        { "rel": "alternate", "href": "/books/moby.html", "type": "text/html" }
+      ],
+      "images": [ { "href": "/covers/moby.jpg", "type": "image/jpeg" } ]
+    },
+    { "metadata": { "title": "Audio only" }, "links": [ { "rel": "http://opds-spec.org/acquisition", "href": "/a.mp3", "type": "audio/mpeg" } ] }
+  ]
+}

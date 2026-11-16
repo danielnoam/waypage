@@ -358,8 +358,9 @@ async function dzCoverAgain(img, s) {
   if (img.dataset.again || !C.platform.downloadTo || !s.cover) { img.remove(); return; }
   img.dataset.again = "1";
   try {
-    const name = "discover-covers/" + String(s.id || "").replace(/[^a-z0-9_-]/gi, "_") + ".jpg";
-    const src = await C.platform.downloadTo(s.cover, name, s.url, "CACHE");
+    const name = "discover-covers/" + String(s.id || "").replace(/[^a-z0-9_-]/gi, "_").slice(-80) + ".jpg";
+    // A catalog's covers may want its login, or be plain http (blocked in the app's page).
+    const src = await C.platform.downloadTo(s.cover, name, s.url, "CACHE", s.catalog ? C.opds.login(s.catalog) : undefined);
     if (src) img.src = src; else img.remove();
   } catch (e) { img.remove(); }
 }
@@ -393,7 +394,7 @@ function dzWhy(e) {
 }
 
 async function dzSearch(words, src) {
-  if (!src || !dzCanRead()) return;
+  if (!src || !(dzCanRead() || (src.web && C.platform.canReadPages))) return;
   if (!navigator.onLine) { toast(t("You're offline. Search when you're back online.")); return; }
   const f = dz.found = { words, label: src.label, items: [], error: "", busy: true };
   renderDiscover();
@@ -432,6 +433,7 @@ function storySheet() {
   const facts = [s.chapters ? (comics ? tn(s.chapters, "1 episode", "{n} episodes") : tn(s.chapters, "1 chapter", "{n} chapters")) : "", s.followers ? tn(s.followers, "1 following", "{n} following") : "", s.stat || ""].filter(Boolean).join(" · ");
   const rated = [s.rating ? "★ " + s.rating.toFixed(1) : "", s.tags.join(", ")].filter(Boolean).join(" · ");
   const site = s.serial ? dzHost(s.url) : s.site || "Royal Road";
+  const kind = (s.kind || "epub").toUpperCase();
   const save = s.book
     ? el("button", { class: "btn-primary", type: "button", ...(saved ? { disabled: "" } : {}), onclick: async () => { await back(); dzSaveBook(s); } }, saved ? t("In your library") : t("Add the book"))
     : el("button", { class: "btn-primary", type: "button", onclick: async () => { await back(); dzSaveStory(s); } },
@@ -446,10 +448,11 @@ function storySheet() {
     s.about ? el("p", { class: "dz-blurb", dir: "auto" }, s.about) : null,
     saved ? el("p", { class: "footnote dz-ok" }, t("It's in your library already.")) : null,
     save,
-    el("p", { class: "footnote" }, s.book ? t("Its EPUB downloads and joins your Library, to read offline. It's in the public domain.")
+    el("p", { class: "footnote" }, s.catalog ? t("Its {kind} downloads and joins your Library, to read offline.", { kind })
+      : s.book ? t("Its EPUB downloads and joins your Library, to read offline. It's in the public domain.")
       : s.texts ? t("A text in parts saves as a collection, its parts checked first; a short one saves as one clip.")
         : t("Its chapter list opens to check, then every chapter saves for reading offline. New chapters join the collection when they're out.")),
-    el("button", { class: "btn-quiet", type: "button", onclick: () => C.platform.openOutside(s.url) }, dzIcon("out", 16), t("Open on {site}", { site: site })));
+    s.catalog && s.url === s.epub ? null : el("button", { class: "btn-quiet", type: "button", onclick: () => C.platform.openOutside(s.url) }, dzIcon("out", 16), t("Open on {site}", { site: site })));
 }
 
 function signupSheet() {
@@ -512,12 +515,12 @@ MENUS.signup = { label: t("Sign up"), build: () => signupSheet() };
 
 // A book's EPUB, named by its title and author, as the Library shows it.
 function dzBookName(s) {
-  return ((s.title || t("Book")) + (s.by ? " - " + s.by : "")).replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 100) + ".epub";
+  return ((s.title || t("Book")) + (s.by ? " - " + s.by : "")).replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 100) + "." + (s.kind || "epub");
 }
 // Downloads the book's EPUB and adds it like a file brought in.
 function dzSaveBook(s) {
   if (dzSavedStory(s)) { toast(t("It's in your library already.")); return; }
-  saveFileLink(s.epub, dzBookName(s), s.url);
+  saveFileLink(s.epub, dzBookName(s), s.url, s.catalog ? (u, n) => C.opds.bytes(s.catalog, u, n) : undefined);
 }
 
 // ---- Wikipedia today ----
