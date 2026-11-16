@@ -170,16 +170,21 @@ function javaCheck() {
       await p.locator("#menuSheet .btn-primary").click();
       await p.locator('#webdav .cat-folders .row:has-text("Sci-Fi")').waitFor();
       const kept = await p.evaluate(() => JSON.parse(localStorage.getItem("waypage.webdav")));
-      assert.strictEqual(kept.length, 1);
+      assert.strictEqual(kept.length, 1, "one server kept: " + JSON.stringify(kept.map((k) => k.title)));
       assert.strictEqual(kept[0].title, "Books", "named by its folder");
       assert.strictEqual(kept[0].url, BASE, "https, and a folder's address ends in /");
+      await p.waitForFunction(() => !wd.busy);
       assert.strictEqual(await p.locator("#webdav .dz-grid .dz-book").count(), 2, "books only: no picture, no .docx, no hidden folder");
       assert.strictEqual(await p.locator('#webdav .cat-folders .row:has-text(".Trash")').count(), 0);
       await p.waitForFunction(() => window.covers.length === 1);
-      // The find field narrows what's here.
+      // The find field narrows what's here, once the sheet has gone (the
+      // page behind it is inert until then).
+      await p.locator("#menuSheet").waitFor({ state: "hidden" });
       await p.locator("#webdav .dz-search input").fill("saga");
-      assert.strictEqual(await p.locator("#webdav .dz-grid .dz-book").count(), 1);
+      await p.waitForFunction(() => document.querySelectorAll("#webdav .dz-grid .dz-book").length === 1, null, { timeout: 3000 })
+        .catch(async () => assert.fail("the find field didn't narrow to Saga: " + await p.locator("#webdav .dz-grid").textContent()));
       await p.locator("#webdav .dz-search input").fill("");
+      await p.locator('#webdav .dz-grid .dz-book:has-text("Dune")').waitFor();
       await p.locator('#webdav .dz-grid .dz-book:has-text("Dune")').click();
       await p.locator('#menuSheet[data-kind="webdavBook"]:not([hidden])').waitFor();
       assert.match(await p.locator("#menuSheet").textContent(), /EPUB · 812 KB/);
