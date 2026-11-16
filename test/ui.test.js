@@ -4972,10 +4972,56 @@ c("bk1", { at: 0.01 })]);
       const id = await q.evaluate(() => { const p = state.pages[0]; p.tags = ["kept"]; p.at = 0.4; return p.id; });
       await q.evaluate(() => updateClip(state.pages[0]));
       await until(q, () => state.pages.length === 1 && !state.saving.length && /up to date/.test(document.getElementById("toast").textContent), null, 15000);
-      const now = await q.evaluate(() => ({ id: state.pages[0].id, tags: state.pages[0].tags, at: state.pages[0].at }));
-      assert.notStrictEqual(now.id, id, "the new copy took the old one's place");
+      const now = await q.evaluate(() => ({ id: state.pages[0].id, tags: state.pages[0].tags, at: state.pages[0].at, earlier: state.pages[0].earlier }));
+      assert.strictEqual(now.id, id, "nothing changed, so the copy here stays and nothing new goes to sync");
+      assert.strictEqual(now.earlier, undefined);
       assert.deepStrictEqual(now.tags, ["kept"]);
       assert.strictEqual(now.at, 0.4);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("live clips update as they open, keep the earlier copy, and keep theirs when the new one looks broken (2026-11-16)", async () => {
+      const q = await page(browser, 390);
+      const words = (n) => Array.from({ length: n }, (_, i) => "word" + i).join(" ");
+      await q.evaluate(async ([url, short, long]) => {
+        const S = window.Waypage.store;
+        const a = { id: "live1", url, title: "Live", site: "localhost", savedAt: 1, minutes: 1, mode: "links", at: 0.3, tags: ["kept"], live: true };
+        const b = { id: "live2", url: url + "?long", title: "Long", site: "localhost", savedAt: 1, minutes: 1, mode: "links", at: 0 };
+        await S.writeIndex([a, b]);
+        await S.writePage("live1", "<!doctype html><html><body><p>" + short + "</p></body></html>", a);
+        await S.writePage("live2", "<!doctype html><html><body><p>" + long + "</p></body></html>", b);
+      }, [ARTICLE, "Old words.", words(5000)]);
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => openPage("live1"));
+      await until(q, () => !state.saving.length && state.pages[0].id !== "live1", null, 15000);
+      const now = await q.evaluate(() => ({ ...state.pages[0] }));
+      assert.strictEqual(now.earlier.id, "live1", "the copy it replaced is kept as the earlier one");
+      assert.deepStrictEqual(now.tags, ["kept"]);
+      assert.strictEqual(now.live, true);
+      assert.strictEqual(now.at, 0.3);
+      assert.ok(await q.evaluate(() => window.Waypage.store.readPage("live1")), "the earlier copy is still stored");
+      assert.strictEqual(await q.evaluate(() => state.open.id), now.id, "the reader shows the new copy");
+      await q.locator("#toast", { hasText: "Updated from the site" }).waitFor();
+      // Opened again within the hour: no fetch.
+      await q.evaluate(() => { history.back(); });
+      await q.waitForTimeout(400);
+      await q.evaluate((id) => openPage(id), now.id);
+      await q.waitForTimeout(800);
+      assert.strictEqual(await q.evaluate(() => state.saving.length + ":" + state.pages[0].id), "0:" + now.id);
+      // Going back swaps the two.
+      await q.evaluate((id) => goBackCopy(id), now.id);
+      await until(q, () => state.pages[0].id === "live1");
+      assert.strictEqual(await q.evaluate(() => state.pages[0].earlier.id), now.id);
+      assert.deepStrictEqual(await q.evaluate(() => state.pages[0].tags), ["kept"]);
+      // A much shorter copy isn't put in place.
+      await q.evaluate(() => updateClip(state.pages.find((p) => p.id === "live2")));
+      await q.locator("#toast", { hasText: "Kept your copy" }).waitFor({ timeout: 15000 });
+      const long = await q.evaluate(() => state.pages.find((p) => p.title === "Long"));
+      assert.strictEqual(long.id, "live2");
+      assert.ok(long.earlier && long.earlier.id !== "live2", "the short copy waits as the other one");
+      assert.ok((long.earlier.savedAt || 0) > (long.savedAt || 0));
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });

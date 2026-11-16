@@ -471,6 +471,8 @@ a.btn-small { text-decoration: none; white-space: nowrap; display: inline-flex; 
 .card-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
 .card-site, .card-status { font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--muted); }
 .card-site { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-live { color: var(--accent); font-weight: 600; }
+.card-live::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin-inline-end: 4px; vertical-align: 0.1em; }
 .card-title {
   font: 600 var(--fs-card)/var(--lh-card) var(--serif);
   overflow-wrap: anywhere;

@@ -340,23 +340,156 @@ const pageWords = (html) => {
   d.querySelectorAll(".co-meta, .co-licence, .co-next, script, style").forEach((n) => n.remove());
   return (d.body ? d.body.textContent : "").replace(/\s+/g, " ").trim();
 };
-async function updateClip(p) {
-  if (!navigator.onLine) { toast(t("You're offline. Try again when you're back online.")); return; }
+// Update from the site keeps the copy it replaces as the earlier one,
+// on this device only (not synced or backed up), so a page that came
+// back broken can be undone; a copy that looks broken (much shorter,
+// or only the start where it was whole) isn't put in place at all.
+// Live clips (Daniel's ask, 2026-11-16) update themselves as they open,
+// at most once an hour, online and where saving is allowed.
+const LIVE_EVERY = 36e5;
+const LIVE_SHORT = 100;
+const EARLIER_KEY = "waypage.earlierCopies";
+const countWords = (s) => (s ? s.split(" ").length : 0);
+const contentOf = (p) => {
+  const o = { ...p };
+  for (const k of [...AGAIN_KEEP, "earlier", "liveAt", "spot", "spotWords"]) delete o[k];
+  return o;
+};
+const brokenCopy = (was, now, old, meta) => (meta.cut && !old.cut)
+  || (now < LIVE_SHORT && was >= LIVE_SHORT) || now < was / 2;
+
+function rememberEarlier(id) {
+  const list = load(EARLIER_KEY, []);
+  const ids = Array.isArray(list) ? list : [];
+  if (!ids.includes(id)) store(EARLIER_KEY, [...ids, id]);
+}
+// An earlier copy whose clip was deleted, or replaced through sync,
+// is removed with the next update.
+async function sweepEarlier() {
+  const list = load(EARLIER_KEY, []);
+  if (!Array.isArray(list) || !list.length || !state.pages.length) return;
+  const used = new Set();
+  for (const p of state.pages) { used.add(p.id); if (p.earlier) used.add(p.earlier.id); }
+  for (const id of list) if (!used.has(id)) await C.store.removePage(id).catch(() => {});
+  store(EARLIER_KEY, list.filter((id) => used.has(id)));
+}
+async function dropEarlier(p) {
+  if (!p.earlier) return;
+  await C.store.removePage(p.earlier.id).catch(() => {});
+  delete p.earlier;
+}
+
+// `next` (a copy's own meta) in `cur`'s place, with `cur`'s copy kept as
+// the earlier one; reading place, highlights and the rest go with it.
+async function putCopy(cur, next, curHtml, nextHtml) {
+  const p = contentOf(next);
+  for (const k of AGAIN_KEEP) if (cur[k] !== undefined) p[k] = cur[k];
+  if (cur.liveAt) p.liveAt = cur.liveAt;
+  if (cur.spot) {
+    p.spot = cur.spot;
+    const words = C.reader.spotWords(curHtml, cur.spot);
+    if (words) p.spotWords = words;
+  }
+  p.earlier = contentOf(cur);
+  rememberEarlier(cur.id);
+  const i = state.pages.indexOf(cur);
+  if (i < 0) return null;
+  state.pages[i] = p;
+  C.stats.moved(cur.id, p.id);
+  await C.store.writeIndex(state.pages);
+  renderLibraryLater();
+  if (state.open === cur && nextHtml) { history.replaceState(readerState(p), ""); show(p, nextHtml); }
+  return p;
+}
+
+// Swaps a clip with its other copy (going back, or on to a newer one
+// that looked broken).
+async function swapCopy(id) {
+  const cur = state.pages.find((x) => x.id === id);
+  if (!cur || !cur.earlier) return null;
+  const there = await C.store.readPage(cur.earlier.id).catch(() => null);
+  if (!there) {
+    delete cur.earlier;
+    await C.store.writeIndex(state.pages);
+    toast(t("The other copy isn't on this device any more."));
+    return null;
+  }
+  const here = await C.store.readPage(cur.id).catch(() => null);
+  return putCopy(cur, cur.earlier, here, there);
+}
+async function goBackCopy(id) {
+  const p = state.pages.find((x) => x.id === id);
+  if (!p || !p.earlier) return;
+  const newer = (p.earlier.savedAt || 0) > (p.savedAt || 0);
+  const now = await swapCopy(p.id);
+  if (!now) return;
+  toast(newer ? t("Showing the newer copy.") : t("Back to the copy from {when}.", { when: whenText(now.savedAt || 0) }), t("Undo"), () => goBackCopy(now.id));
+}
+
+// Fetches the clip again and decides what to keep. `live`: started by
+// opening a live clip, so it says nothing unless something changed.
+async function updateClip(p, live) {
+  if (!navigator.onLine) { if (!live) toast(t("You're offline. Try again when you're back online.")); return; }
   if (state.saving.some((s) => s.again === p)) return;
-  const before = await C.store.readPage(p.id).catch(() => null);
-  const keep = p.spot ? { spot: p.spot, spotWords: C.reader.spotWords(before, p.spot) } : null;
-  const job = { ...newJob(p.url, p.folder), key: "again:" + p.id, again: p, mode: p.mode, kind: p.comic ? "comic" : "article", keep };
+  p.liveAt = Date.now();
+  const job = { ...newJob(p.url, p.folder), key: "again:" + p.id, again: p, mode: p.mode, kind: p.comic ? "comic" : "article", hold: true, quiet: live };
   state.saving.unshift(job);
-  renderLibrary();
-  toast(t("Checking the site for changes…"));
+  renderLibraryLater();
+  if (!live) toast(t("Checking the site for changes…"));
   const meta = await runJob(job);
-  if (!meta) { toast(t("Couldn't update it. It's in Downloads to try once more.")); return; }
+  if (!meta) {
+    if (live) { state.saving = state.saving.filter((s) => s !== job); renderLibraryLater(); }
+    else toast(t("Couldn't update it. It's in Downloads to try once more."));
+    return;
+  }
+  const cur = state.pages.find((x) => x.id === p.id);
+  const before = cur ? await C.store.readPage(cur.id).catch(() => null) : null;
   const after = await C.store.readPage(meta.id).catch(() => null);
+  if (!cur || !before || !after) { await C.store.removePage(meta.id).catch(() => {}); return; }
   const was = pageWords(before), now = pageWords(after);
-  const lost = (meta.marks || []).filter((m) => m.text && !now.includes(m.text)).length;
-  if (was && was === now) toast(t("Already up to date. Nothing on the page has changed."));
-  else toast(lost ? tn(lost, "Updated from the site. 1 highlight's words aren't in it any more; it stays under Highlights.", "Updated from the site. {n} highlights' words aren't in it any more; they stay under Highlights.") : t("Updated from the site."));
-  if (state.open === p && after) { history.replaceState(readerState(meta), ""); show(meta, after); }
+  if (was === now) {
+    // Nothing changed: the copy here stays, and nothing new goes to sync.
+    await C.store.removePage(meta.id).catch(() => {});
+    await C.store.writeIndex(state.pages);
+    if (!live) toast(t("Already up to date. Nothing on the page has changed."));
+    return;
+  }
+  sweepEarlier();
+  const wasN = countWords(was), nowN = countWords(now);
+  if (brokenCopy(wasN, nowN, cur, meta)) {
+    // Kept as the other copy, to take anyway.
+    await dropEarlier(cur);
+    cur.earlier = contentOf(meta);
+    rememberEarlier(meta.id);
+    await C.store.writeIndex(state.pages);
+    toast(meta.cut && !cur.cut ? t("The site sent back only the start. Kept your copy.")
+      : t("The site sent back {now} words, not {was}. Kept your copy.", { now: nowN.toLocaleString(), was: wasN.toLocaleString() }),
+    t("Use it anyway"), () => goBackCopy(cur.id));
+    return;
+  }
+  await dropEarlier(cur);
+  const fresh = await putCopy(cur, meta, before, after);
+  if (!fresh) { await C.store.removePage(meta.id).catch(() => {}); return; }
+  const lost = (fresh.marks || []).filter((m) => m.text && !now.includes(m.text)).length;
+  const more = nowN - wasN;
+  const said = lost ? tn(lost, "Updated from the site. 1 highlight's words aren't in it any more; it stays under Highlights.", "Updated from the site. {n} highlights' words aren't in it any more; they stay under Highlights.")
+    : more > 0 ? tn(more, "Updated from the site, 1 word more.", "Updated from the site, {n} words more.")
+    : t("Updated from the site.");
+  toast(said, t("Undo"), () => goBackCopy(fresh.id));
+}
+
+// A live clip as it opens: updated when the copy here is over an hour
+// old, and never on mobile data when saving waits for Wi-Fi.
+function liveOnOpen(p) {
+  if (!p.live || p.file || p.preview || !/^https?:/.test(p.url || "") || !navigator.onLine || waitsForWifi(DATA_SAVE_KEY)) return;
+  if (Date.now() - Math.max(p.savedAt || 0, p.liveAt || 0) < LIVE_EVERY) return;
+  updateClip(p, true);
+}
+async function setLive(p, on) {
+  if (on) p.live = true; else delete p.live;
+  await C.store.writeIndex(state.pages);
+  renderLibraryLater();
+  if (on && state.open === p) liveOnOpen(p);
 }
 
 // Read as Article or Comic (1.50.0, in place of 1.49.0's Save as comic):
@@ -491,7 +624,7 @@ function pageCard(p, found, hero) {
     favThumb(p.fav, listenBadge(p, cover ? el("img", { class: "card-thumb cover", src: cover, alt: "", loading: "lazy" })
       : thumb ? el("img", { class: "card-thumb", src: thumb, alt: "", loading: "lazy" }) : siteMark(p))),
     el("span", { class: "card-body" },
-      el("span", { class: "card-site", dir: "auto" }, ...dotted(siteOf(p), p.folder, ...(p.tags || []).map((t) => el("span", { class: "card-tag" }, "#" + t)))),
+      el("span", { class: "card-site", dir: "auto" }, ...dotted(p.live ? el("span", { class: "card-live" }, t("Live")) : null, siteOf(p), p.folder, ...(p.tags || []).map((t) => el("span", { class: "card-tag" }, "#" + t)))),
       el("span", { class: "card-title", dir: "auto" }, p.title),
       found ? el("span", { class: "card-found", dir: "auto" }, found) : null,
       el("span", { class: "card-status" }, facts, status ? " · " : null, status, retry ? " · " : null, retry),

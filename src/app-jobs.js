@@ -309,6 +309,10 @@ async function saveOnce(job, opts) {
   }
 }
 
+// What a clip saved again keeps from the copy it replaces: where it is,
+// how it's marked and read. The rest comes from the new copy.
+const AGAIN_KEEP = ["requested", "folder", "folderAt", "folderFav", "folderFavAt", "coverPick", "source", "tags", "at", "finished", "readAt", "readOn", "placeAt", "fav", "favAt", "marks", "noShare", "folderNoShare", "folderTagNew", "movedAt", "live"];
+
 async function runJob(job) {
   job.started = Date.now();
   job.triedAgain = false;
@@ -327,10 +331,14 @@ async function runJob(job) {
       },
     });
     const old = job.again;
-    if (old) {
+    if (old && job.hold) {
+      // Fetched again and held (live clips): the caller decides whether
+      // it takes the old copy's place.
+      for (const k of AGAIN_KEEP) if (old[k] !== undefined) meta[k] = old[k];
+    } else if (old) {
       // Saved again: the new copy takes the old one's place, keeping its
       // collection, tags and read position.
-      for (const k of ["requested", "folder", "folderAt", "folderFav", "folderFavAt", "coverPick", "source", "tags", "at", "finished", "readAt", "readOn", "placeAt", "fav", "favAt", "marks", "noShare", "folderNoShare", "folderTagNew", "movedAt"]) if (old[k] !== undefined) meta[k] = old[k];
+      for (const k of AGAIN_KEEP) if (old[k] !== undefined) meta[k] = old[k];
       if (job.keep) Object.assign(meta, job.keep);
       C.stats.moved(old.id, meta.id);
       const i = state.pages.indexOf(old);
@@ -358,7 +366,7 @@ async function runJob(job) {
       await indexSoon();
     }
     state.saving = state.saving.filter((s) => s !== job);
-    if (!job.run) finish({ key: "p:" + meta.id, page: meta.id });
+    if (!job.run && !job.quiet) finish({ key: "p:" + meta.id, page: meta.id });
     renderLibraryLater();
     return meta;
   } catch (e) {
