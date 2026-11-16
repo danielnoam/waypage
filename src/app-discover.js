@@ -30,7 +30,8 @@ function dzFollowing(e) {
 }
 // A story saved already: a collection read from its page.
 function dzSavedStory(s) {
-  if (s.book) return state.pages.some((p) => p.file && p.file.name === dzBookName(s));
+  if (s.zim) return !!packHere(s);
+  if (s.book) return state.pages.some((p) => p.file && p.file.name === dzBookName(s)) || (!s.catalog && folderPages(folderName(s.title)).length > 0);
   return allFolders().some((n) => { const src = folderSource(folderPages(n)); return src && (s.serial ? sameUrl(src, s.url) : C.discover.storyId(src) === s.id); });
 }
 
@@ -210,7 +211,8 @@ const dzGrid0 = () => {
   const src = dzSrc();
   const pref = load("waypage.discover.pick." + (src ? src.key : dzSource), {});
   const key = src && src.lists.some((l) => l.key === pref.key) ? pref.key : src ? (src.key === "rr" ? dzList : src.lists[0].key) : "";
-  const genre = src && (src.genres.some((x) => x.key === pref.genre) ? pref.genre : src.anyGenre ? "" : src.genres[0].key);
+  const own = src && src.packs && pref.genre === undefined ? (i18n.lang === "he" ? "heb" : "eng") : pref.genre;
+  const genre = src && (src.genres.some((x) => x.key === own) ? own : src.anyGenre ? "" : src.genres[0].key);
   return { source: src ? src.key : dzSource, key, genre: genre || "", page: 0, items: [], busy: false, error: "", done: false };
 };
 dz.grid = dzGrid0();
@@ -235,7 +237,7 @@ function dzGrid() {
     return [el("div", { class: "dz-tools" }, sources),
       sectionHead(t("Results for “{words}”", { words: f.words }), el("button", { class: "btn-text", type: "button", onclick: dzClearSearch }, t("Clear"))),
       f.busy ? el("p", { class: "footnote dz-src" }, t("Searching {label}…", { label: src.label }))
-        : f.items.length ? dzCovers(f.items, true) : el("p", { class: "footnote" + (f.error ? " warn" : "") }, f.error || t("No stories with that in their title."))];
+        : f.items.length ? (src.packs ? dzPacks(f.items) : dzCovers(f.items, true)) : el("p", { class: "footnote" + (f.error ? " warn" : "") }, f.error || (src.packs ? t("No packs with that in their name.") : t("No stories with that in their title.")))];
   }
   const g = dz.grid;
   const phoneOnly = dzCanRead() ? null : el("p", { class: "footnote" }, t("The story sites (Royal Road, AO3 and the rest) show in Waypage on your phone."));
@@ -261,8 +263,8 @@ function dzGrid() {
   };
   const lists = dropdown({ label: t("{label} list", { label: src.label }), cls: "field-pick dz-pick", value: g.key,
     options: src.lists.map((l) => ({ value: l.key, label: l.label })), onpick: (v) => keep({ key: v }) });
-  const genres = src.genres.length ? dropdown({ label: { Tag: t("Tag"), Subject: t("Subject"), Fandom: t("Fandom") }[src.genreLabel] || t("Genre"), cls: "field-pick dz-pick", value: g.genre,
-    options: [...(src.anyGenre ? [{ value: "", label: ({ Tag: t("Every tag"), Subject: t("Every subject"), Fandom: t("Every fandom") }[src.genreLabel] || t("Every genre")) }] : []), ...src.genres.map((x) => ({ value: x.key, label: x.label }))],
+  const genres = src.genres.length ? dropdown({ label: { Tag: t("Tag"), Subject: t("Subject"), Fandom: t("Fandom"), Language: t("Language") }[src.genreLabel] || t("Genre"), cls: "field-pick dz-pick", value: g.genre,
+    options: [...(src.anyGenre ? [{ value: "", label: ({ Tag: t("Every tag"), Subject: t("Every subject"), Fandom: t("Every fandom"), Language: t("Every language") }[src.genreLabel] || t("Every genre")) }] : []), ...src.genres.map((x) => ({ value: x.key, label: x.label }))],
     onpick: (v) => keep({ genre: v }) }) : null;
   const line = g.busy ? (g.page ? t("Reading more…") : t("Reading {site}…", { site: src.label })) : g.error;
   const q = dzQ().toLowerCase();
@@ -270,9 +272,10 @@ function dzGrid() {
   return [
     el("div", { class: "dz-tools" }, sources, src.lists.length > 1 ? lists : null, genres),
     dzAsk(src),
-    shown.length ? dzCovers(shown, true) : null,
+    shown.length ? (src.packs ? dzPacks(shown) : dzCovers(shown, true)) : null,
+    src.packs && !g.busy && !g.error ? el("p", { class: "footnote" }, t("A pack is a whole site in one file, to read with no connection. It's read from where you save it, in Files.")) : null,
     line ? el("p", { class: "footnote dz-src" + (g.error && !g.busy ? " warn" : "") }, line) : null,
-    g.items.length && !g.done && !g.busy ? el("button", { class: "btn-quiet dz-more", type: "button", onclick: () => dzMore() }, src.books ? t("More books") : src.texts ? t("More texts") : t("More stories")) : null,
+    g.items.length && !g.done && !g.busy ? el("button", { class: "btn-quiet dz-more", type: "button", onclick: () => dzMore() }, src.books ? t("More books") : src.texts ? t("More texts") : src.packs ? t("More packs") : t("More stories")) : null,
     g.done && g.items.length ? el("p", { class: "footnote dz-src" }, t("That's all of them.")) : null,
     phoneOnly,
   ];
@@ -348,6 +351,31 @@ function dzCovers(items, grid, sites) {
       el("span", { class: "dz-art" }, art, el("span", { class: "dz-mark" + (saved ? " on" : "") }, dzIcon(saved ? "check" : "plus", 16))),
       el("span", { class: "dz-bt", dir: "auto" }, s.title),
       meta ? el("span", { class: "dz-bm" }, meta) : null);
+  }));
+}
+
+// Kiwix packs as rows: the pack's picture, name, what it is, its
+// language and size; + asks where to download it (the + sheet).
+function dzPacks(items) {
+  return el("div", { class: "group feed-group dz-packs" }, ...items.map((s) => {
+    const here = packHere(s), coming = packsComing.has(s.file);
+    const add = () => (here ? openPage(here.id) : openMenu("addBook", s));
+    const mark = el("span", { class: "site-mark feed-mark dz-pack-mark", "aria-hidden": "true" });
+    if (s.cover) {
+      const img = el("img", { src: s.cover, alt: "", loading: "lazy", referrerpolicy: "no-referrer", width: "48", height: "48" });
+      img.addEventListener("error", () => img.remove());
+      mark.append(img);
+    } else mark.textContent = (s.title || "?").slice(0, 1);
+    return el("div", { class: "post dz-row", "data-key": s.id },
+      el("button", { class: "post-open", type: "button", "aria-label": s.title + (here ? ", " + t("in your library") : ""), onclick: add }),
+      mark,
+      el("span", { class: "post-body" },
+        el("span", { class: "post-title", dir: "auto" }, s.title),
+        s.about ? el("span", { class: "dz-about", dir: "auto" }, s.about) : null,
+        el("span", { class: "post-meta" }, [s.by, s.flavour === "maxi" ? t("with pictures") : s.flavour === "nopic" ? t("no pictures") : s.flavour === "mini" ? t("introductions only") : "", s.size ? C.discover.kxSize(s.size) : ""].filter(Boolean).join(" · "))),
+      here ? el("span", { class: "post-saved dz-on" }, dzIcon("check"), t("Saved"))
+        : coming ? el("span", { class: "post-saved" }, t("Downloading"))
+          : el("button", { class: "post-act post-save", type: "button", "aria-label": t("Download {name}", { name: s.title }), onclick: add }, dzIcon("plus")));
   }));
 }
 
@@ -435,7 +463,7 @@ function storySheet() {
   const site = s.serial ? dzHost(s.url) : s.site || "Royal Road";
   const kind = (s.kind || "epub").toUpperCase();
   const save = s.book
-    ? el("button", { class: "btn-primary", type: "button", ...(saved ? { disabled: "" } : {}), onclick: async () => { await back(); dzSaveBook(s); } }, saved ? t("In your library") : t("Add the book"))
+    ? el("button", { class: "btn-primary", type: "button", ...(saved ? { disabled: "" } : {}), onclick: async () => { await back(); if (s.catalog) dzSaveBook(s); else openMenu("addBook", s); } }, saved ? t("In your library") : t("Add the book"))
     : el("button", { class: "btn-primary", type: "button", onclick: async () => { await back(); dzSaveStory(s); } },
       saved ? t("Save it again") : s.texts ? t("Save it") : t("Save as a collection"));
   return el("div", { class: "page-controls dz-story" },
@@ -517,6 +545,49 @@ MENUS.signup = { label: t("Sign up"), build: () => signupSheet() };
 function dzBookName(s) {
   return ((s.title || t("Book")) + (s.by ? " - " + s.by : "")).replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 100) + "." + (s.kind || "epub");
 }
+// Where a downloaded file goes (2026-11, Daniel: "+ should always just ask"):
+// a book as an EPUB file read from where it's saved, or as a collection
+// of clips; a Kiwix pack always as a file. The place is remembered.
+const DZ_WHERE_KEY = "waypage.discover.saveIn";
+const DZ_AS_KEY = "waypage.discover.bookAs";
+const dzWhere = () => load(DZ_WHERE_KEY, "app");
+function dzAddSheet() {
+  const s = state.menu.page;
+  const pack = !!s.zim;
+  let as = pack ? "file" : load(DZ_AS_KEY, "file"), where = dzWhere();
+  const big = s.size || 0;
+  let wifi = big > 200e6;
+  const where0 = [
+    { value: "app", label: t("Inside Waypage"), note: t("Private to the app. Goes when Waypage is uninstalled.") },
+    { value: "downloads", label: t("Downloads"), note: t("The phone's Downloads folder. Stays after an uninstall.") },
+    { value: "documents", label: t("Documents"), note: t("Documents/Waypage, seen in the Files app. Stays after an uninstall.") },
+    { value: "folder", label: t("A folder you pick"), note: t("Anywhere on the phone, a memory card too. Asked each time.") },
+  ];
+  const whereRow = pickRow({ label: t("Save in"), options: where0, get: () => where, set: (v) => { where = v; store(DZ_WHERE_KEY, v); } });
+  const note = el("p", { class: "footnote dz-add-note" });
+  const paint = () => {
+    whereRow.hidden = as !== "file" || !C.platform.native;
+    note.textContent = pack ? t("Read from where it's saved, in Files. Never synced or backed up.")
+      : as === "file" ? t("In Files, read from where it's saved. Doesn't sync.")
+        : t("A collection with a clip for each chapter. Syncs like any clip.");
+  };
+  const asRow = pack ? null : pickRow({ label: t("Add as"),
+    options: [{ value: "file", label: t("EPUB file") }, { value: "clips", label: t("Clips") }],
+    get: () => as, set: (v) => { as = v; store(DZ_AS_KEY, v); paint(); } });
+  paint();
+  const facts = [s.site || (pack ? "Kiwix" : ""), s.by, big ? formatSize(big) : ""].filter(Boolean).join(" · ");
+  return el("div", { class: "page-controls dz-add" },
+    el("div", { class: "menu-head" },
+      el("p", { class: "menu-title", dir: "auto" }, s.title),
+      facts ? el("p", { class: "meta" }, facts) : null),
+    el("div", { class: "group" }, asRow, whereRow,
+      pack && big > 50e6 ? switchRow(t("Wait for Wi-Fi"), t("Starts on Wi-Fi, not on mobile data"), wifi, (on) => { wifi = on; }) : null),
+    note,
+    el("button", { class: "btn-primary", type: "button", onclick: async () => { await back(); dzAddGo(s, { as, where, wifi }); } },
+      pack ? t("Download") : t("Add the book")));
+}
+MENUS.addBook = { label: t("Add"), build: () => dzAddSheet() };
+
 // Downloads the book's EPUB and adds it like a file brought in.
 function dzSaveBook(s) {
   if (dzSavedStory(s)) { toast(t("It's in your library already.")); return; }

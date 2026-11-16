@@ -100,6 +100,17 @@ async function saveFileLink(url, name, page, fetchBytes) {
   name = name || fileLinkName(url) || "file";
   toast(t("Downloading “{replace}”…", { replace: name.replace(/\.[a-z0-9]+$/i, "") }));
   try {
+    const file = await fetchFileLink(url, name, getBytes);
+    await openFile(file, null, true, null, {});
+  } catch (e) {
+    toast(t("Couldn't download it just now. Try again later{x}", { x: page ? t(", or open it on the site.") : "." }));
+  }
+}
+// A linked file's bytes as a File named `name`; a thank-you page in the
+// way is followed to the file it links. Throws when no file came.
+async function fetchFileLink(url, name, getBytes) {
+  getBytes = getBytes || ((u, n) => C.platform.fetchBytes(u, n));
+  {
     let got = await getBytes(url, name);
     // Some sites answer the first download with a page that links the file
     // (a thank-you page); its link to the same kind of file is followed.
@@ -113,9 +124,7 @@ async function saveFileLink(url, name, page, fetchBytes) {
     }
     if (got.status >= 400) throw new Error("HTTP " + got.status);
     if (!(await isFileBlob(got.blob))) throw new Error("not a file");
-    await openFile(new File([got.blob], name, { type: got.blob.type || got.type || "" }), null, true, null, {});
-  } catch (e) {
-    toast(t("Couldn't download it just now. Try again later{x}", { x: page ? t(", or open it on the site.") : "." }));
+    return new File([got.blob], name, { type: got.blob.type || got.type || "" });
   }
 }
 

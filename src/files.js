@@ -18,12 +18,12 @@
   const S = () => C.store;
   const B = () => C.backup;
 
-  const KINDS = { epub: "EPUB", mobi: "MOBI", azw3: "AZW3", fb2: "FB2", md: "Markdown", txt: "Text", html: "HTML", cbz: "Comic", pdf: "PDF", eml: "Email" };
+  const KINDS = { epub: "EPUB", mobi: "MOBI", azw3: "AZW3", fb2: "FB2", md: "Markdown", txt: "Text", html: "HTML", cbz: "Comic", pdf: "PDF", eml: "Email", zim: "Kiwix" };
   // Kinds whose pictures can be left in the file and read as they're needed.
-  const LINKABLE = new Set(["epub", "cbz", "pdf"]);
+  const LINKABLE = new Set(["epub", "cbz", "pdf", "zim"]);
   // Kinds that can be a clip reading from its file: all of them.
   const canLink = (kind) => !!KINDS[kind];
-  const EXTS = { epub: "epub", mobi: "mobi", azw: "mobi", prc: "mobi", azw3: "azw3", fb2: "fb2", md: "md", markdown: "md", txt: "txt", text: "txt", html: "html", htm: "html", xhtml: "html", cbz: "cbz", eml: "eml" };
+  const EXTS = { epub: "epub", mobi: "mobi", azw: "mobi", prc: "mobi", azw3: "azw3", fb2: "fb2", md: "md", markdown: "md", txt: "txt", text: "txt", html: "html", htm: "html", xhtml: "html", cbz: "cbz", eml: "eml", zim: "zim" };
   const PICTURE = /\.(jpe?g|png|gif|webp)$/i;
   const MIME_EXT = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp" };
 
@@ -62,6 +62,8 @@
     const head = new Uint8Array(await file.slice(0, 1024).arrayBuffer());
     const ext = EXTS[extOf(file.name)] || extOf(file.name);
     if (head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46) return "pdf";
+    // A Kiwix pack (2026-11): ZIM's magic number, 72173914.
+    if (head[0] === 0x5a && head[1] === 0x49 && head[2] === 0x4d && head[3] === 0x04) return "zim";
     if (String.fromCharCode(...head.subarray(60, 68)) === "BOOKMOBI") return ext === "azw3" ? "azw3" : "mobi";
     // An audiobook, or one of its parts (2026-11): app-listen.js.
     if (C.listen && C.listen.locked(head, file.name)) return "audio";
@@ -889,6 +891,7 @@
   const drawable = (meta) => !!(meta && !meta.preview);
   const convertible = (meta) => !!(meta && !meta.note && !meta.preview && meta.file && KINDS[meta.file.kind]);
   async function openLinked(meta) {
+    if (meta.file.kind === "zim") return openZim(meta);
     closeHeld();
     const html = await S().readPage(meta.id);
     const isPdf = meta.file.kind === "pdf";
@@ -962,7 +965,7 @@
   async function fillNear(frame, onFirst) {
     const h = held;
     const win = frame && frame.contentWindow;
-    if (!h || !h.zip || !win || !win.document) { if (onFirst) onFirst(); return; }
+    if (!h || !(h.zip || h.zim) || !win || !win.document) { if (onFirst) onFirst(); return; }
     h.frame = frame;
     // A call while it's busy (the book's own first one, as the page before
     // it was still scrolling) runs it again once it's done, not never: the
@@ -999,10 +1002,13 @@
         }
         if (!next) return;
         const at = next.getAttribute("data-in");
-        const e = h.zip.entries.get(at);
+        const e = h.zim ? null : h.zip.entries.get(at);
         let url = null;
         try {
-          if (e) {
+          if (h.zim) {
+            const got = await h.zim.get(at.slice(4));
+            if (got && /^image\//.test(got.mime)) url = URL.createObjectURL(new Blob([got.bytes], { type: got.mime }));
+          } else if (e) {
             const bytes = await B().zipRead(h.zip.blob, e);
             url = URL.createObjectURL(new Blob([bytes], { type: B().imageType(bytes) || "image/jpeg" }));
           }
@@ -1164,7 +1170,7 @@
   // that, not for the screen and a half.
   async function drawNear(frame, onFirst) {
     const h = held;
-    if (h && h.zip) return fillNear(frame, onFirst);
+    if (h && (h.zip || h.zim)) return fillNear(frame, onFirst);
     const win = frame && frame.contentWindow;
     if (!h || !win || !win.document) { if (onFirst) onFirst(); return; }
     // The frame may still show the page that was open before (it slides away
@@ -1232,6 +1238,219 @@
       })());
     }
     return h.thumbs.get(n);
+  }
+
+  // ---- Kiwix packs (2026-11) ----
+  // A .zim file is a whole site (Wikipedia, Wiktionary...) in one file,
+  // read from where it is (zim.js, loaded the first time one is needed).
+  // The clip is the pack; the reader shows one of its articles at a time
+  // (meta.zim.at), its pictures read from the pack as they come near, and
+  // its links to other articles stay in the pack (app-reader.js).
+  let zimLib = null;
+  function loadZim() {
+    if (C.zim) return Promise.resolve();
+    return zimLib || (zimLib = new Promise((ok, no) => {
+      const s = document.createElement("script");
+      s.src = "src/zim.js" + (C.version ? "?v=" + C.version : "");
+      s.onload = () => ok();
+      s.onerror = () => { zimLib = null; s.remove(); no(new FileError(t("Couldn't load Waypage's Kiwix reader. Try again."))); };
+      document.head.append(s);
+    }));
+  }
+  const packs = new Map();
+  function zimPack(meta) {
+    let p = packs.get(meta.link);
+    if (!p) {
+      p = (async () => {
+        await loadZim();
+        const blob = await C.platform.files.blob(meta.link, meta.file.size);
+        return C.zim.open(blob);
+      })();
+      p.catch(() => packs.delete(meta.link));
+      packs.set(meta.link, p);
+    }
+    return p;
+  }
+  const forgetPack = (link) => packs.delete(link);
+  // What the pack says about itself, for its clip.
+  async function zimFacts(z) {
+    const [title, lang, creator, about] = await Promise.all(["Title", "Language", "Creator", "Description"].map((k) => z.meta(k)));
+    return { title, lang, creator, about };
+  }
+  const WIKI = /wikipedia/i;
+  // One article as the reader's page: the allowlist cleaner of a saved
+  // page, links inside the pack kept as the pack's own addresses and
+  // pictures as slots (data-in="zim:<path>"), or written into a clip
+  // when `pics` is given (Save this article).
+  async function zimArticle(z, path, out, pics) {
+    const got = await z.get(path);
+    if (!got || !/html/.test(got.mime)) return null;
+    const doc = new DOMParser().parseFromString(decode(got.bytes), "text/html");
+    const base = C.zim.urlOf(got.path);
+    const title = ((doc.querySelector("title") || {}).textContent || got.title || "").replace(/\s+/g, " ").trim();
+    const { root, media } = C.save.rebuild(doc.body, base, base, out);
+    const norm = (x) => x.replace(/\s+/g, " ").trim().toLowerCase();
+    const first = root.querySelector("h2, h3");
+    if (first && norm(first.textContent) === norm(title) && norm(root.textContent).startsWith(norm(first.textContent))) first.remove();
+    for (const m of media) {
+      if (m.video) { m.el.remove(); continue; }
+      const at = C.zim.pathOf(m.preview);
+      if (!at) { m.el.setAttribute("data-full", m.preview); m.el.className = "co-missing"; continue; }
+      if (!pics) { m.el.setAttribute("data-in", "zim:" + at); continue; }
+      let b = null;
+      try { const img = await z.get(at); b = img && img.bytes; } catch (e) { b = null; }
+      const type = b && B().imageType(b);
+      if (MIME_EXT[type]) await pics.put(m.el, b, type, false, null);
+      else m.el.remove();
+    }
+    return { root, title: title || got.title, path: got.path, lang: doc.documentElement.getAttribute("lang") || "", dir: doc.documentElement.getAttribute("dir") || "" };
+  }
+  // A pack brought in: its main page is the clip's page, its picture the card's.
+  async function fromZim(file, out, pics) {
+    await loadZim();
+    let z;
+    try { z = await C.zim.open(file); } catch (e) { throw new FileError(t("Waypage can't read this Kiwix file. It may be damaged.")); }
+    const facts = await zimFacts(z);
+    const main = await z.main();
+    const art = main ? await zimArticle(z, main, out, null) : null;
+    if (!art) throw new FileError(t("This Kiwix file has no pages Waypage can show."));
+    const icon = await z.icon().catch(() => null);
+    const type = icon && B().imageType(icon);
+    if (MIME_EXT[type]) await pics.cover(icon, type);
+    return { root: art.root, title: facts.title || baseName(file.name), byline: facts.about || "", lang: facts.lang.slice(0, 3),
+      zim: { at: art.path, main: art.path, wiki: WIKI.test(facts.creator + " " + facts.title) } };
+  }
+  // The article the reader is on, in the reader's frame.
+  async function openZim(meta, path) {
+    let z;
+    try { z = await zimPack(meta); } catch (e) {
+      forgetPack(meta.link);
+      throw new FileError(t("Waypage can't find {name} any more. It may have been moved or deleted.", { name: meta.file.name }));
+    }
+    const out = document.implementation.createHTMLDocument("");
+    const want = path || (meta.zim && meta.zim.at) || await z.main();
+    let art = want ? await zimArticle(z, want, out, null).catch(() => null) : null;
+    if (!art && !path) art = await zimArticle(z, await z.main(), out, null).catch(() => null);
+    if (!art) return null;
+    meta.zim = { ...(meta.zim || {}), at: art.path };
+    closeHeld();
+    held = { zim: z, urls: new Map(), busy: false, frame: null };
+    if (meta.zim.wiki) {
+      const credit = out.createElement("p");
+      credit.className = "co-credit";
+      credit.textContent = "Text from Wikipedia, CC BY-SA 4.0, by Wikipedia contributors.";
+      art.root.append(credit);
+    }
+    return C.save.savedPageHtml({ ...meta, title: art.title, byline: "", site: meta.title, savedAt: 0, lang: art.lang || meta.lang, dir: art.dir || meta.dir }, art.root, out);
+  }
+  // Where a link in the article shown goes: { path, hash } in the pack,
+  // or null for one out of it.
+  function zimLink(meta, href) {
+    return C.zim && meta.zim ? (C.zim.pathOf(href) ? { path: C.zim.pathOf(href), hash: (String(href).split("#")[1] || "") } : null) : null;
+  }
+  async function zimSearch(meta, words, most) {
+    const z = await zimPack(meta);
+    return z.search(words, most);
+  }
+  // Save this article: a clip of its own, its pictures copied out of the
+  // pack, with the article's address on Wikipedia when the pack is one.
+  async function zimSave(meta) {
+    const z = await zimPack(meta);
+    const id = C.save.newId();
+    const out = document.implementation.createHTMLDocument("");
+    const pics = picturesOut(id, false);
+    const art = await zimArticle(z, meta.zim.at, out, pics);
+    if (!art) throw new FileError(t("Couldn't read this article from the pack."));
+    const lang = (await z.meta("Source")).match(/^([a-z-]+)\.wikipedia\.org/) || null;
+    const wiki = meta.zim.wiki && lang;
+    const name = art.path.replace(/^[AC]\//, "").replace(/\.html?$/, "");
+    const words = art.root.textContent;
+    const clip = {
+      id, url: wiki ? "https://" + lang[1] + ".wikipedia.org/wiki/" + encodeURIComponent(name).replace(/%2F/g, "/") : "", title: art.title.slice(0, 300),
+      site: wiki ? "Wikipedia" : meta.title, byline: "", licence: wiki ? "wikipedia" : null, savedAt: Date.now(), minutes: C.save.readingMinutes(words),
+      lang: art.lang || meta.lang || "", dir: art.dir || C.save.textDir(out, words), mode: "full", next: "", prev: "", at: 0, finished: false,
+      images: art.root.querySelectorAll("img").length, missing: 0, imageBytes: pics.bytes,
+    };
+    if (pics.thumb) clip.thumb = pics.thumb;
+    try {
+      const html = C.save.savedPageHtml(clip, art.root, out);
+      const text = C.save.plainText(art.root);
+      clip.bytes = pics.bytes + await S().writePage(id, html, clip) + S().bytesOf(text);
+      await S().writeText(id, text);
+    } catch (e) {
+      await S().removePage(id);
+      throw new FileError(C.platform.native ? t("Couldn't write the clip to the phone. Free some space and try again.") : t("Couldn't keep this file on this browser. Free some space and try again."));
+    }
+    return clip;
+  }
+
+  // ---- A book as a collection of clips (2026-11) ----
+  // Discover's + on a book can add it as clips: one for each of the
+  // EPUB's own files in reading order (its chapters, as most books are
+  // made), a short one (a title page, a dedication) joined to the next.
+  // Each is a clip like any saved page, so it syncs; the collection is
+  // the book's title, in reading order. Resolves to the clips' entries.
+  async function bookClips(file, onProgress) {
+    const out = document.implementation.createHTMLDocument("");
+    let got;
+    try { got = await fromEpub(file, out); } catch (e) { throw new FileError(t("Waypage couldn't read this {kind} file. It may be damaged.", { kind: "EPUB" }) + why(e)); }
+    const { root, images } = C.save.cleanSaved(got.body, out);
+    const bytesOf = new Map();
+    for (const { el: img, data: src } of images) {
+      const kept = got.pics && got.pics.get(src);
+      if (kept) bytesOf.set(img, kept);
+      else img.remove();
+    }
+    const parts = [];
+    let run = [];
+    for (const sec of [...root.children]) {
+      run.push(sec);
+      const text = run.map((n) => n.textContent).join(" ").replace(/\s+/g, " ").trim();
+      if (text.length < 400 && sec !== root.lastElementChild) continue;
+      parts.push(run);
+      run = [];
+    }
+    if (run.length) parts.push(run);
+    if (!parts.length) throw new FileError(t("There's nothing to read in this file."));
+    const title = (got.title || baseName(file.name)).replace(/\s+/g, " ").trim().slice(0, 200);
+    const made = [];
+    for (const [i, nodes] of parts.entries()) {
+      const id = C.save.newId();
+      const body = out.createElement("div");
+      body.className = "co-body";
+      for (const n of nodes) body.append(...n.childNodes);
+      const mark = body.querySelector("[data-toc]");
+      const head = body.querySelector("h2, h3, h4");
+      const name = ((mark && mark.getAttribute("data-toc-t")) || (head && head.textContent) || "").replace(/\s+/g, " ").trim().slice(0, 200)
+        || t("Part {n}", { n: i + 1 });
+      // The clip's own heading says the chapter's name already.
+      if (head && head.textContent.replace(/\s+/g, " ").trim() === name && body.textContent.trim().startsWith(head.textContent.trim())) head.remove();
+      const pics = picturesOut(id, false);
+      for (const img of body.querySelectorAll("img")) {
+        const b = bytesOf.get(img);
+        if (b) await pics.put(img, b.bytes, b.type, false, null); else img.remove();
+      }
+      const words = body.textContent;
+      const meta = {
+        id, url: "", title: name, site: "", byline: got.byline || "", licence: null, savedAt: Date.now(), minutes: C.save.readingMinutes(words),
+        lang: (got.lang || "").slice(0, 20), dir: got.dir || C.save.textDir(out, words), mode: "full", next: "", prev: "", at: 0, finished: false,
+        images: body.querySelectorAll("img").length, missing: 0, imageBytes: pics.bytes, folder: title, folderAt: Date.now() + i,
+      };
+      if (pics.thumb) meta.thumb = pics.thumb;
+      try {
+        const html = C.save.savedPageHtml(meta, body, out);
+        const text = C.save.plainText(body);
+        meta.bytes = pics.bytes + await S().writePage(id, html, meta) + S().bytesOf(text);
+        await S().writeText(id, text);
+      } catch (e) {
+        for (const m of made) await S().removePage(m.id);
+        await S().removePage(id);
+        throw new FileError(C.platform.native ? t("Couldn't keep this file on the phone. Free some space and try again.") : t("Couldn't keep this file on this browser. Free some space and try again."));
+      }
+      made.push(meta);
+      if (onProgress) onProgress(i + 1, parts.length);
+    }
+    return made;
   }
 
   // ---- Bringing one in ----
@@ -1339,6 +1558,7 @@
     }
     let got;
     if (kind === "pdf") return fromPdf(file, out, onProgress, pics);
+    if (kind === "zim") return fromZim(file, out, pics);
     if (kind === "epub") got = await fromEpub(file, out);
     else if (kind === "mobi" || kind === "azw3") got = await fromMobi(file, out);
     else if (kind === "fb2") got = fromFb2(await fb2Bytes(file), out);
@@ -1460,6 +1680,7 @@
       file: { name: file.name.slice(0, 200), kind, ext, size: file.size },
     };
     if (kind === "cbz" || got.scan) meta.comic = true;
+    if (got.zim) Object.assign(meta, { zim: got.zim, site: "Kiwix" });
     if (got.manga) meta.manga = true;
     if (got.series && got.series.name) {
       meta.series = got.series.name.replace(/\s+/g, " ").trim().slice(0, 200);
@@ -1535,5 +1756,5 @@
     return native ? { uri: await file.uri(), name } : { blob: new Blob(parts, { type: CBZ_MIME }), name };
   }
 
-  C.files = { KINDS, LINKABLE, canLink, kindOf, bring, openLinked, openNoteItem, noteSheets, addSheet, printed, drawable, convertible, fingerprint, fingerprintOf, thumbnail, pictureSource, comicExportable, exportComic, CBZ_MIME, drawNear, findPage, heldPdf: () => (held && held.pdf) || null, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
+  C.files = { bookClips, openZim, zimLink, zimSearch, zimSave, forgetPack, KINDS, LINKABLE, canLink, kindOf, bring, openLinked, openNoteItem, noteSheets, addSheet, printed, drawable, convertible, fingerprint, fingerprintOf, thumbnail, pictureSource, comicExportable, exportComic, CBZ_MIME, drawNear, findPage, heldPdf: () => (held && held.pdf) || null, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
 })();

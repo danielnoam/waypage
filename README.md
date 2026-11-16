@@ -191,7 +191,8 @@ Each section below shows the computer (left) and the phone (right).
 - Browse feeds, newsletters and Royal Road stories to follow, by kind (Sites, Feeds, Newsletters), and add one with a tap; swipe to move between the chips.
 - A feed goes to Feeds, a story saves as a collection that gets its new chapters, and a newsletter (by email) copies your Newsletters address and opens its sign-up page.
 - On the phone, Sites browses Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON, Tapas, SpaceBattles and Sufficient Velocity as a grid by list and genre, page after page, plus hand-picked web serials.
-- Books: Project Gutenberg and Standard Ebooks by list and subject, and Wikisource's texts; a book's EPUB downloads into the Library. These work in the browser too.
+- Books: Project Gutenberg and Standard Ebooks by list and subject, and Wikisource's texts. A book's + asks how to add it: as an EPUB file kept where you pick (inside Waypage, Downloads, Documents or a folder), or as a collection with a clip for each chapter. These work in the browser too.
+- Kiwix packs: whole sites in one file to read with no connection (Wikipedia, Wiktionary, Stack Exchange and more), by topic and language with their sizes. A pack downloads where you pick, waits for Wi-Fi if it's big, and opens in the reader: links between articles stay in the pack, Back goes back through them, Find searches its titles, and Save this article makes a clip. A .zim from anywhere opens with Add a file.
 - The list is checked every week, so a feed that dies gets fixed or dropped.
 - The search at the top searches what's shown: the lists as you type, a story site when you press search.
 
