@@ -72,6 +72,7 @@ for (const x of C.ext.list()) {
 SECTIONS.extensions = { title: t("Extensions"), build: extensionsSections, value: () => { const n = extensionsOn(); return n ? n + " on" : t("Off"); } };
 FIND_ALIASES.Extensions = "anki flashcards cards plugin add-on addon";
 FIND_ALIASES.Catalogs = "opds calibre kavita komga library server books catalog";
+FIND_ALIASES.Audiobookshelf = "audiobookshelf abs audiobooks server stream listening podcasts";
 FIND_ALIASES.Calibre = "calibre library folder metadata ebooks";
 FIND_ALIASES.Anki = "flashcards cards spaced repetition deck";
 FIND_ALIASES.Languages = "language pack dictionary german vocabulary";
@@ -82,6 +83,7 @@ C.ext.changed(() => {
   if (state.place === "anki" && !C.ext.on("anki")) goPlace("library");
   if (state.place === "calibre" && !C.ext.on("calibre")) goPlace("library");
   if (state.place === "catalogs" && !C.ext.on("catalogs")) goPlace("library");
+  if (state.place === "audiobookshelf" && !C.ext.on("audiobookshelf")) goPlace("library");
   if (sideShown()) renderSide();
   if (state.section) renderSection();
   if (state.settings) renderSettings();
@@ -122,6 +124,16 @@ async function renderCalibre() {
     return;
   }
   calibreOpen();
+}
+
+// The Audiobookshelf place: its code is loaded first, then the server is asked.
+async function renderAudiobookshelf() {
+  try { await C.ext.load("audiobookshelf"); } catch (e) {
+    fill($("audiobookshelf"), el("div", { class: "empty" }, el("h2", { class: "empty-title" }, t("Audiobookshelf didn't load")),
+      el("p", { class: "empty-text" }, t("Check your connection, then open it again."))));
+    return;
+  }
+  absDraw();
 }
 
 // The Catalogs place: its code is loaded first, then the catalog is read.

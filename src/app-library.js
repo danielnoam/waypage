@@ -1141,7 +1141,7 @@ function pageSheet(p, where) {
         p.file ? null : tileButton("share", t("Share"), () => shareLink(p)),
         p.link ? null : tileButton("send", t("Export"), () => { exporting = true; draw(); }),
         p.file ? null : tileButton("original", t("Original"), () => C.platform.openOutside(p.url)),
-        p.link && !(p.audio && p.audio.from) && C.platform.files.canReveal ? tileButton("folder", t("Folder"), () => showFolder(p)) : null,
+        p.link && !p.remote && !(p.audio && p.audio.from) && C.platform.files.canReveal ? tileButton("folder", t("Folder"), () => showFolder(p)) : null,
         favTile(p, draw)),
       ...(inReader && !p.preview && typeof listenAlongRows === "function" ? listenAlongRows(p) || [] : []),
       el("h3", { class: "overline" }, p.link ? t("This file") : t("This clip")),
@@ -1548,6 +1548,7 @@ const MENUS = {
   rename: { label: t("Rename"), build: () => renameControls(state.menu.page, () => history.back()) },
   keys: { label: t("Keyboard shortcuts"), build: () => keysSheet() },
   importList: { label: t("Import"), build: () => importSheet() },
+  kindle: { label: t("Import"), build: () => kindleSheet() },
   send: { label: t("Saving a page"), build: () => sendSheet() },
   newNote: { label: t("New note"), build: () => newNoteSheet() },
   noteText: { label: t("Text"), build: () => noteTextSheet() },
@@ -1740,7 +1741,7 @@ function clipMenu(node, x, y) {
   const pop = el("div", { class: "pop-menu clip-pop", id: "clipPop", role: "menu", "aria-label": p.title },
     item("open", t("Open"), () => openPage(p.id), { key: "Enter" }),
     p.file ? null : item("original", t("Open the original"), () => C.platform.openOutside(p.url)),
-    p.link && !(p.audio && p.audio.from) && C.platform.files.canReveal ? item("folder", t("Show in folder"), () => showFolder(p)) : null,
+    p.link && !p.remote && !(p.audio && p.audio.from) && C.platform.files.canReveal ? item("folder", t("Show in folder"), () => showFolder(p)) : null,
     sep(),
     item("star", p.fav ? t("Unfavourite") : t("Favourite"), () => setFavourite([p], !p.fav), { key: "F" }),
     item("rename", t("Rename…"), () => openMenu("rename", p), { key: "F2" }),
@@ -2385,6 +2386,64 @@ function importSheet() {
     go);
 }
 
+// Kindle highlights (2026-11): each book in My Clippings.txt is matched to
+// one in the library by title, and its highlights join that book's. The
+// Kindle gives only the words, so they're kept with no place (block 0,
+// start and end 0); the reader finds them by their words when the book
+// opens and keeps where (paintMarks in app-reader.js). One whose words
+// run over two paragraphs isn't found, and stays under Highlights.
+let kindling = null;
+function kindleSheet() {
+  const books = kindling;
+  if (!books) return el("div");
+  const pages = state.pages.filter((p) => !p.note && !isAudiobook(p) && !p.preview);
+  const ids = C.imports.kindleMatch(books, pages.map((p) => ({ id: p.id, title: p.title, name: p.file && p.file.name, file: p.file })));
+  const found = [], missing = [];
+  books.forEach((b, i) => {
+    const p = ids[i] && pages.find((x) => x.id === ids[i]);
+    if (!p) { missing.push(b); return; }
+    const had = new Set((p.marks || []).map((m) => m.text));
+    found.push({ b, p, fresh: b.marks.filter((m) => !had.has(m.text.slice(0, 4000))) });
+  });
+  const n = found.reduce((a, f) => a + f.fresh.length, 0);
+  const all = books.reduce((a, b) => a + b.marks.length, 0);
+  const hl = (k) => tn(k, "1 highlight", "{n} highlights");
+  const go = el("button", { class: "btn-primary import-go", type: "button", ...(n ? {} : { disabled: "" }), onclick: async () => {
+    kindling = null;
+    const into = found.filter((f) => f.fresh.length);
+    for (const { p, fresh } of into) {
+      const add = fresh.map((m) => {
+        const o = { id: C.save.newId(), block: 0, start: 0, endBlock: 0, end: 0, text: m.text.slice(0, 4000), at: m.at || Date.now() };
+        if (m.note) o.note = m.note.slice(0, 4000);
+        return o;
+      });
+      p.marks = [...(p.marks || []), ...add];
+    }
+    await C.store.writeIndex(state.pages);
+    await back();
+    renderLibrary();
+    updateWidgets();
+    toast(t("Added {highlights} to {books}", { highlights: hl(n), books: tn(into.length, "1 book", "{n} books") }));
+  } }, n ? t("Add {highlights}", { highlights: hl(n) }) : t("Nothing new to add"));
+  const line = (title, note) => el("div", { class: "row" },
+    el("span", { class: "choice-text" }, el("span", { class: "choice-label", dir: "auto" }, title), el("span", { class: "choice-note" }, note)));
+  const loose = books.reduce((a, b) => a + b.loose, 0);
+  return el("div", { class: "page-controls import-sheet" },
+    el("div", { class: "menu-head" },
+      el("p", { class: "menu-title" }, t("Highlights from Kindle")),
+      el("p", { class: "meta" }, [hl(all), tn(books.length, "1 book", "{n} books")].join(" · "))),
+    found.length ? el("div", { class: "group" }, ...found.map((f) => line(f.p.title,
+      f.fresh.length ? hl(f.fresh.length) : t("Already here")))) : null,
+    missing.length ? el("div", { class: "kindle-missing" },
+      el("h2", { class: "overline" }, t("Not in your library")),
+      el("p", { class: "footnote" }, t("Add these books to your library as files, then import My Clippings.txt again. Highlights already added aren't added twice.")),
+      el("div", { class: "group" }, ...missing.slice(0, 12).map((b) => line(b.title, [b.author, hl(b.marks.length)].filter(Boolean).join(" · "))),
+        missing.length > 12 ? line(t("{n} more", { n: missing.length - 12 }), "") : null)) : null,
+    n ? el("p", { class: "footnote" }, t("Each is found by its words when you open the book. One that runs over two paragraphs may not be found, and stays under Highlights.")
+      + (loose ? " " + tn(loose, "1 note had no highlight to go with and is left out.", "{n} notes had no highlight to go with and are left out.") : "")) : null,
+    go);
+}
+
 // Keep a copy, or read from the file where it is? Asked for every file
 // of your own (0.32.2). `can` is false when the file came without a
 // lasting permission (shared from another app that doesn't give one):
@@ -2476,6 +2535,15 @@ async function openFile(file, btn, open, ref, forced) {
       if (ref) C.platform.files.release(ref);
       if (btn) { btn.disabled = false; say(t("Restore")); }
       followFeeds(feedList);
+      return;
+    }
+    // A Kindle's My Clippings.txt (2026-11): its highlights, onto books here.
+    const clippings = await C.imports.readKindle(file).catch(() => null);
+    if (clippings) {
+      if (ref) C.platform.files.release(ref);
+      if (btn) { btn.disabled = false; say(t("Restore")); }
+      kindling = clippings;
+      openMenu("kindle");
       return;
     }
     // Another read-later app's export (1.9.0): its links, to save.
@@ -2945,7 +3013,7 @@ function importRow() {
   const open = el("button", { class: "row", type: "button", onclick: () => (C.platform.files.canLink ? pickFile() : input.click()) },
         el("span", { class: "choice-text" },
           el("span", { class: "choice-label accent" }, t("Import from another app")),
-          el("span", { class: "choice-note" }, t("Pocket, Instapaper, Omnivore, Wallabag, Raindrop, OPML"))));
+          el("span", { class: "choice-note" }, t("Pocket, Instapaper, Omnivore, Wallabag, Raindrop, OPML, and Kindle highlights (My Clippings.txt)"))));
   input.addEventListener("change", () => { const f = input.files[0]; input.value = ""; openFile(f, open); });
   return [open, input];
 }
