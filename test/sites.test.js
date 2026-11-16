@@ -457,6 +457,48 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       await ctx.close();
     });
 
+    // A newsletter's email (Kill the Newsletter), saved the way the
+    // Newsletters screen saves one: given whole, with its sender.
+    const saveMail = (html, from, title, site) => inPage(browser, [], async (a) => {
+      const url = "https://kill-the-newsletter.com/feeds/abc/entries/def.html";
+      const meta = await window.Waypage.save.save(url, { given: { url, html: a.html, title: a.title, site: a.site, mail: true, from: a.from } });
+      return { meta, html: await window.Waypage.store.readPage(meta.id) };
+    }, { html, from, title, site });
+
+    await test("James Clear's 3-2-1: no logo, greeting, banners, blank lines or empty section", async () => {
+      const { got } = await saveMail(fixture("mail-jamesclear-321.html"), "james@send.jamesclear.com", "3-2-1: On following your dreams", "Jamesclear");
+      const { meta, html } = got;
+      if (process.env.DUMP) fs.writeFileSync(process.env.DUMP + "/jc.html", html);
+      assert.strictEqual(meta.site, "James Clear");
+      assert.strictEqual(meta.byline, "James Clear");
+      const text = plain(html);
+      assert.ok(!/wisdom per word|Happy 3-2-1 Thursday|Here are 3 ideas|What else am I working on/.test(text), text.slice(0, 300));
+      assert.ok(!/\u200b/.test(html));
+      assert.strictEqual(count(html, /<table/g), 0);
+      assert.strictEqual(count(html, /<img/g), 0);
+      assert.ok(/<h2>3 Ideas From Me<\/h2>/.test(html) && /<h2>2 Quotes From Others<\/h2>/.test(html) && /<h2>1 Question For You<\/h2>/.test(html));
+      assert.ok(/<p>II\.<\/p>/.test(html));
+      assert.ok(text.includes("Talent is a gift") && text.includes("What is the first right thing I can do?"));
+    });
+
+    await test("James Clear's 3-2-1 from a mailer's address is known by its subject and links", async () => {
+      const { got } = await saveMail(fixture("mail-jamesclear-321.html"), "bounce-123@ckespa.com", "3-2-1: On following your dreams", "James Clear");
+      assert.strictEqual(got.meta.site, "James Clear");
+      assert.ok(!/Happy 3-2-1 Thursday/.test(plain(got.html)));
+    });
+
+    await test("any newsletter: layout tables open up, a data table stays", async () => {
+      const html = '<!doctype html><html><body><table><tr><td></td><td><div><h2>News</h2><p>\u200b</p><p>Lead story here, long enough to read as the article body of this email, and then some more words.</p>'
+        + '<table><tr><th>Team</th><th>Score</th></tr><tr><td>A</td><td>3</td></tr><tr><td>B</td><td>1</td></tr></table>'
+        + '<p>More text follows the table so it reads as one article, with plenty of words in it. Another sentence, and another, so the reader takes this as the story of the email and keeps all of it together, the way a real one reads.</p><p>One more paragraph of plain words about the news of the week, how it went, and what comes next for everyone reading this letter.</p><h3>Elsewhere</h3></div></td><td></td></tr></table></body></html>';
+      const { got } = await saveMail(html, "news@example.com", "News", "Example");
+      assert.strictEqual(got.meta.site, "Example");
+      assert.strictEqual(count(got.html, /<table/g), 1);
+      assert.ok(/<th>Team<\/th>/.test(got.html));
+      assert.ok(!/Elsewhere/.test(got.html));
+      assert.ok(!/<p>\s*<\/p>/.test(got.html));
+    });
+
   } finally {
     await browser.close();
     server.kill();
