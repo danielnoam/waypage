@@ -428,8 +428,8 @@ function storySheet() {
     img.addEventListener("error", () => dzCoverAgain(img, s));
     cover.prepend(img);
   }
-  const parts = C.discover.sources.some((x) => x.comics && x.label === s.site) ? ["episode", "episodes"] : ["chapter", "chapters"];
-  const facts = [s.chapters ? s.chapters + " " + parts[s.chapters === 1 ? 0 : 1] : "", s.followers ? s.followers.toLocaleString(i18n.lang) + " following" : "", s.stat || ""].filter(Boolean).join(" · ");
+  const comics = C.discover.sources.some((x) => x.comics && x.label === s.site);
+  const facts = [s.chapters ? (comics ? tn(s.chapters, "1 episode", "{n} episodes") : tn(s.chapters, "1 chapter", "{n} chapters")) : "", s.followers ? tn(s.followers, "1 following", "{n} following") : "", s.stat || ""].filter(Boolean).join(" · ");
   const rated = [s.rating ? "★ " + s.rating.toFixed(1) : "", s.tags.join(", ")].filter(Boolean).join(" · ");
   const site = s.serial ? dzHost(s.url) : s.site || "Royal Road";
   const save = s.book

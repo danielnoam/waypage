@@ -569,7 +569,7 @@ function historyDiffRows(e) {
     if (!items.length) return;
     out.push(el("div", { class: "history-head" }, label));
     for (const it of items.slice(0, HISTORY_SHOWN)) out.push(item(it.title, it.note));
-    if (items.length > HISTORY_SHOWN) out.push(plain("and " + (items.length - HISTORY_SHOWN) + " more"));
+    if (items.length > HISTORY_SHOWN) out.push(plain(t("and {n} more", { n: items.length - HISTORY_SHOWN })));
   };
   const hereBy = new Map(d.view.map((x) => [x.id, x]));
   const none = (v) => v || t("none");

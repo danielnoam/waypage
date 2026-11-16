@@ -1428,7 +1428,7 @@
     const layer = doc.createElement("div");
     layer.className = "co-tl";
     layer.dataset.page = String(n);
-    layer.setAttribute("aria-label", "Page " + n);
+    layer.setAttribute("aria-label", i18n.t("Page {n}", { n }));
     const pct = (v) => (Math.round(v * 100000) / 1000) + "%";
     for (const [i, it] of items.entries()) {
       const span = doc.createElement("span");

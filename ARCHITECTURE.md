@@ -687,8 +687,12 @@ fails on a word with no Hebrew, Hebrew for a word that's gone, or a
 `{placeholder}` that doesn't match. Not translated on purpose: the problem
 report and pen test (they're read by whoever fixes it), Discover's genres
 and lists (they come from the sites), font and service names, and what's
-saved into a clip. In right to left the sidebar and desktop panes keep
-their places, since keel's motion engine slides them from the left; arrows
+saved into a clip. Right to left everything mirrors: the sidebar, the
+desktop panes and the reader's rail sit on the right and slide from there,
+a screen is pushed in from the left (keel's motion follows `<html dir>`,
+keel 0.10.0), and swipes, the pane line, the picture viewer's arrows and
+their keys turn with it (`M.x()`, `M.rtl()`). Inside the reader the clip
+keeps its own direction: a page turn goes the clip's reading way. Arrows
 for back, forward, previous and next flip.
 
 ## Trade-offs

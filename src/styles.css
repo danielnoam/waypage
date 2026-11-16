@@ -959,7 +959,7 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 }
 .viewer-caption[hidden] { display: none; }
 .viewer-close {
-  position: absolute; top: calc(var(--s-2) + env(safe-area-inset-top)); right: var(--s-2);
+  position: absolute; top: calc(var(--s-2) + env(safe-area-inset-top)); inset-inline-end: var(--s-2);
   color: var(--on-video); background: var(--scrim); border-radius: var(--r-full);
 }
 
@@ -2029,7 +2029,7 @@ span.update-text { cursor: default; }
 }
 .dl-btn.busy .dl-ring { opacity: 1; }
 .dl-dot {
-  position: absolute; top: var(--s-1); right: var(--s-1);
+  position: absolute; top: var(--s-1); inset-inline-end: var(--s-1);
   width: var(--s-2); height: var(--s-2); border-radius: var(--r-full);
   background: var(--warn); box-shadow: 0 0 0 2px var(--bg);
   transform: scale(0); transition: transform var(--spring-control-ms, 300ms) var(--spring-control, ease-out);
@@ -2253,11 +2253,11 @@ span.update-text { cursor: default; }
 
 .side-catch { z-index: 17; }
 .sidebar {
-  position: fixed; z-index: 18; top: 0; bottom: 0; left: 0;
+  position: fixed; z-index: 18; top: 0; bottom: 0; inset-inline-start: 0;
   width: min(300px, 85vw); overflow-y: auto; overscroll-behavior: contain;
   display: flex; flex-direction: column; gap: 2px;
   padding: calc(var(--s-8) + env(safe-area-inset-top)) 0 calc(var(--s-5) + env(safe-area-inset-bottom));
-  background: var(--bg); border-right: 1px solid var(--line);
+  background: var(--bg); border-inline-end: 1px solid var(--line);
   box-shadow: 8px 0 24px var(--shadow);
 }
 .sidebar[hidden] { display: none; }
@@ -2631,13 +2631,13 @@ span.update-text { cursor: default; }
   /* Picking several: one bar at the top, the actions at its end. Only where
      it all fits on one line (1.53.0): a tablet keeps the phone's two bars. */
   .select-head {
-    top: calc(var(--s-4) + env(safe-area-inset-top)); left: calc(var(--lib-left) + var(--lib-pad)); right: var(--lib-pad);
+    top: calc(var(--s-4) + env(safe-area-inset-top)); inset-inline: calc(var(--lib-left) + var(--lib-pad)) var(--lib-pad);
     height: 52px; padding: 0 var(--s-2); justify-content: flex-start; gap: var(--s-2);
     background: var(--bar); border: 0; border-radius: var(--r-md);
   }
   .select-count { flex: none; }
   .select-bar {
-    top: calc(var(--s-4) + 4px + env(safe-area-inset-top)); bottom: auto; left: auto; right: calc(var(--lib-pad) + 4px);
+    top: calc(var(--s-4) + 4px + env(safe-area-inset-top)); bottom: auto; inset-inline: auto calc(var(--lib-pad) + 4px);
     height: 44px; padding: 0; gap: var(--s-2); background: transparent; border: 0; justify-content: flex-end;
   }
   .select-act {
@@ -2663,7 +2663,7 @@ span.update-text { cursor: default; }
   body.pinned .side-catch { display: none; }
   /* A collection opens beside the sidebar; the reader and Settings cover
      everything. */
-  body.pinned #folderView { left: var(--side-w); box-shadow: none; }
+  body.pinned #folderView { inset-inline-start: var(--side-w); box-shadow: none; }
   :is([data-layout="shelf"], [data-layout="grid"]) .folder-strip .tile { flex-basis: calc((100% - 5 * var(--s-5)) / 6); }
   .folder-strip { gap: var(--s-5); }
   [data-layout="grid"] .library { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -2788,7 +2788,7 @@ kbd {
   .screen[data-dialog] { z-index: 13; box-shadow: 0 24px 64px var(--shadow); border: 1px solid var(--line); border-radius: var(--r-lg); }
   .screen[data-dialog="dialog"] { inset: 0; margin: auto; width: min(40rem, calc(100vw - 2 * var(--s-5))); height: min(46rem, calc(100dvh - 2 * var(--s-7))); }
   .screen[data-dialog="panel"] {
-    inset: auto; top: calc(var(--s-4) + 48px + var(--s-2)); right: var(--lib-pad);
+    inset: auto; top: calc(var(--s-4) + 48px + var(--s-2)); inset-inline-end: var(--lib-pad);
     width: min(26rem, calc(100vw - 2 * var(--s-5))); height: auto; max-height: min(36rem, calc(100dvh - 120px));
   }
   .screen[data-dialog] .back-icon { display: none; }
@@ -2855,13 +2855,13 @@ kbd {
 @media (min-width: 1024px) {
   /* The reader: the contents rail beside the text. */
   .reader.railed .reader-rail {
-    position: absolute; top: 0; bottom: 0; left: 0; z-index: 4; width: var(--rail-w);
+    position: absolute; top: 0; bottom: 0; inset-inline-start: 0; z-index: 4; width: var(--rail-w);
     display: flex; flex-direction: column; gap: var(--s-1);
     padding: var(--s-4) var(--s-4) var(--s-4); padding-top: calc(var(--s-4) + env(safe-area-inset-top));
     background: var(--bg); border-inline-end: 1px solid var(--line);
   }
   .reader.railed .reader-rail[hidden] { display: none; }
-  .reader.railed :is(.reader-bar, .read-foot) { left: var(--rail-w); }
+  .reader.railed :is(.reader-bar, .read-foot) { inset-inline-start: var(--rail-w); }
   .reader.railed .reader-frame { margin-inline-start: var(--rail-w); width: calc(100% - var(--rail-w)); }
   .reader.railed .sheet[data-pop="start"] { margin-inline-start: 0; }
   .reader.railed #readerBack, .reader.railed #readerContents { display: none; }
@@ -2925,20 +2925,20 @@ kbd {
   :root { --list-w: calc((100vw - var(--side-w)) / 2); }
   body.pinned #libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"]) { width: var(--list-w); border-inline-end: 1px solid var(--line); }
   body.pinned:has(#libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"])):not(:has(#readerView:not([hidden]):not([data-pane]))) .pane-grip {
-    display: block; position: fixed; top: 0; bottom: 0; left: calc(var(--side-w) + var(--list-w) - 5px); z-index: 11; width: 10px;
+    display: block; position: fixed; top: 0; bottom: 0; inset-inline-start: calc(var(--side-w) + var(--list-w) - 5px); z-index: 11; width: 10px;
     cursor: col-resize; touch-action: none;
   }
-  .pane-grip::after { content: ""; position: absolute; top: 0; bottom: 0; left: 4px; width: 2px; background: transparent; transition: background-color 120ms linear; }
+  .pane-grip::after { content: ""; position: absolute; top: 0; bottom: 0; inset-inline-start: 4px; width: 2px; background: transparent; transition: background-color 120ms linear; }
   .pane-grip:hover::after, .pane-grip.dragging::after, .pane-grip:focus-visible::after { background: var(--accent); }
   .pane-grip:focus-visible { outline: none; }
   body.resizing { cursor: col-resize; user-select: none; }
   body.resizing iframe { pointer-events: none; }
   body.pinned #libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"]) > * { padding-inline: var(--s-5); }
   body.pinned:has(#libraryView:is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"])):has(#readerView[hidden]) .pane-note {
-    display: flex; position: fixed; inset: 0 0 0 calc(var(--side-w) + var(--list-w)); align-items: center; justify-content: center; margin: 0;
+    display: flex; position: fixed; inset: 0; inset-inline-start: calc(var(--side-w) + var(--list-w)); align-items: center; justify-content: center; margin: 0;
     color: var(--muted);
   }
-  #readerView[data-pane] { left: calc(var(--side-w) + var(--list-w)); box-shadow: none; }
+  #readerView[data-pane] { inset-inline-start: calc(var(--side-w) + var(--list-w)); box-shadow: none; }
 }
 @media (min-width: 1024px) and (pointer: fine) {
   .read-left .read-time { margin-inline-start: auto; }
@@ -2966,10 +2966,10 @@ kbd {
     color: var(--on-video); background: var(--scrim); border-radius: var(--r-full);
   }
   .viewer-step:disabled { opacity: 0.35; cursor: default; }
-  .viewer-prev { left: var(--s-4); }
-  .viewer-next { right: var(--s-4); }
+  .viewer-prev { inset-inline-start: var(--s-4); }
+  .viewer-next { inset-inline-end: var(--s-4); }
   .viewer-zoom {
-    display: flex; position: absolute; top: calc(var(--s-2) + env(safe-area-inset-top)); right: calc(var(--s-2) + var(--tap) + var(--s-2));
+    display: flex; position: absolute; top: calc(var(--s-2) + env(safe-area-inset-top)); inset-inline-end: calc(var(--s-2) + var(--tap) + var(--s-2));
     background: var(--scrim); border-radius: var(--r-full);
   }
   .viewer-zoom .icon-btn { color: var(--on-video); border-radius: var(--r-full); }
@@ -3255,9 +3255,17 @@ body.listen-bar-up .library, body.listen-bar-up .screen-body { padding-bottom: c
 .anki-found { margin: 0; }
 
 /* Right to left (2026-11): Hebrew turns the page's direction; arrows that
-   mean back, forward, previous or next turn with it. The sidebar and the
-   desktop panes keep their places, since the motion engine slides them
-   from the left. */
+   mean back, forward, previous or next turn with it. The sidebar, the
+   desktop panes and the reader's rail sit on the right, and keel's motion
+   engine slides them from there (keel 0.10.0); a pushed screen comes in
+   from the left. Shadows fall the other way. Inside the reader the
+   saved page keeps its own direction. */
+:root[dir="rtl"] .screen { box-shadow: 8px 0 24px var(--shadow); }
+:root[dir="rtl"] .sidebar { box-shadow: -8px 0 24px var(--shadow); }
+:root[dir="rtl"] body.pinned .sidebar { box-shadow: none; }
+@keyframes sweep-rtl { from { transform: translateX(100%); } to { transform: translateX(-340%); } }
+:root[dir="rtl"] .progress-fill { transform-origin: right; }
+:root[dir="rtl"] .progress.busy .progress-fill, :root[dir="rtl"] .listen-ch-tr.now .listen-ch-bar::after { animation-name: sweep-rtl; }
 :root[dir="rtl"] svg:has(> path:is([d="M15 5l-7 7 7 7"], [d="M9 5l7 7-7 7"], [d="M6 5v14M18 5l-8 7 8 7"], [d="M6 5h2v14H6zM20 5v14L9.5 12z"])) { transform: scaleX(-1); }
 /* Hebrew has no capitals, and spaced letters read as separate words. */
 :root:lang(he) .overline { letter-spacing: 0; }

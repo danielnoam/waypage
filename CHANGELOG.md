@@ -2,6 +2,13 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.63.1] - 2026-11-16
+
+### Fixed
+- In Hebrew, the sidebar, the desktop panes and the reader's contents rail sit on the right and slide in from there; a screen comes in from the left. Swipes between feeds, the swipe that opens the sidebar, dragging the line between panes, and the picture viewer's arrows and keys all go the right way.
+- Turning to the next clip in a collection slides the way the clip reads, whatever the app's language.
+- A few words that stayed in English in Hebrew are translated: Continue and Start on a collection, chapters and followers in Discover, time left in Listen, highlights, and the text size.
+
 ## [1.63.0] - 2026-11-15
 
 ### Added

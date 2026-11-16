@@ -428,7 +428,7 @@ function paintListen() {
   document.body.classList.toggle("listen-bar-up", away);
   if (away) {
     $("listenBarTitle").textContent = a.title;
-    $("listenBarNote").textContent = [chapterName(a, lis.t), L.timeText(Math.max(0, durOf(a) - lis.t)) + " left"].filter(Boolean).join(" · ");
+    $("listenBarNote").textContent = [chapterName(a, lis.t), i18n.t("{time} left", { time: L.timeText(Math.max(0, durOf(a) - lis.t)) })].filter(Boolean).join(" · ");
     $("listenBarPlay").classList.toggle("paused", lis.state !== "playing");
     $("listenBarPlay").setAttribute("aria-label", lis.state === "playing" ? t("Pause") : t("Play"));
     placeAloudBar(bar);
@@ -1258,7 +1258,7 @@ async function lookForNarration(p) {
 function listenLine(p) {
   const t = placeOf(p), d = durOf(p);
   if (d && t >= d - 5) return i18n.t("Finished");
-  const left = t > 30 && d ? L.lengthText(d - t) + " left" : L.lengthText(d);
+  const left = t > 30 && d ? i18n.t("{time} left", { time: L.lengthText(d - t) }) : L.lengthText(d);
   const how = modeOf(p) === "book" && bookOf(p) ? i18n.t("Read along") : modeOf(p) === "transcript" ? i18n.t("Transcript") : "";
   return [left, how].filter(Boolean).join(" · ");
 }
