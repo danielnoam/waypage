@@ -2040,6 +2040,91 @@
     };
   }
 
+  // ---- Newsletters ----
+
+  // Every newsletter's email, once read: hidden text goes, the tables
+  // mails lay themselves out with are opened up (a table is layout when no
+  // row has more than one cell with something in it), zero-width spaces
+  // and the blank lines they leave go, so do divider lines drawn as
+  // pictures, and a heading left with nothing under it at the end. A
+  // newsletter with a rule of its own (`rule`) is tidied before it's read
+  // too, so the reader takes all of it as one column.
+  const ZERO_WIDTH = /[\u200b-\u200d\u2060\ufeff]/g;
+  const MEDIA = "img, picture, video, iframe, svg, math, hr";
+  const hasStuff = (n) => !!(n.textContent.trim() || (n.nodeType === 1 && (n.matches(MEDIA) || n.querySelector(MEDIA))));
+  function tidyMail(body, rule) {
+    const doc = body.ownerDocument;
+    for (const table of [...body.querySelectorAll("table")].reverse()) {
+      if (table.querySelector("th, caption")) continue;
+      const rows = [...table.querySelectorAll(":scope > tbody > tr, :scope > thead > tr, :scope > tr")];
+      const full = rows.map((tr) => [...tr.children].filter(hasStuff));
+      if (full.some((cells) => cells.length > 1)) continue;
+      const frag = doc.createDocumentFragment();
+      for (const cell of full.flat()) frag.append(...cell.childNodes);
+      table.replaceWith(frag);
+    }
+    // Text a mail hides (its preview line) goes, and what the tables held
+    // then sits in one column, so the reader keeps every part together.
+    for (const el of [...body.querySelectorAll("[hidden], [style]")]) if (el.hasAttribute("hidden") || /display:\s*none|visibility:\s*hidden|max-height:\s*0|mso-hide:\s*all/i.test(el.getAttribute("style"))) el.remove();
+    for (const div of [...body.querySelectorAll("div, center")].reverse()) div.replaceWith(...div.childNodes);
+    const walk = doc.createTreeWalker(body, 4);
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) { const d = n.data.replace(ZERO_WIDTH, ""); if (d !== n.data) n.data = d; }
+    for (const img of [...body.querySelectorAll("img")]) {
+      const w = parseInt(img.getAttribute("width"), 10), h = parseInt(img.getAttribute("height"), 10);
+      if ((h && h <= 8) || (w && h && h / w < 0.02)) img.remove();
+    }
+    if (rule) rule.tidy(body);
+    for (const el of [...body.querySelectorAll("p, div, span, figure, em, strong, b, i, a, center, font, section")].reverse()) {
+      if (el.isConnected && !hasStuff(el)) el.remove();
+    }
+    for (;;) {
+      const heads = body.querySelectorAll("h1, h2, h3, h4, h5, h6");
+      const last = heads[heads.length - 1];
+      if (!last) break;
+      let after = false;
+      for (let n = last; n && n !== body && !after; n = n.parentNode) {
+        for (let s = n.nextSibling; s && !after; s = s.nextSibling) if (hasStuff(s) && !(s.nodeType === 1 && s.localName === "hr")) after = true;
+      }
+      if (after) break;
+      last.remove();
+    }
+  }
+
+  // Newsletters with a rule of their own, known by the address they're
+  // sent from, or failing that by their subject and their links home.
+  const NEWSLETTERS = [
+    {
+      name: "James Clear", byline: "James Clear",
+      from: /(^|\.)jamesclear\.com$/i,
+      subject: /^3-2-1\b/i,
+      home: /^https?:\/\/(www\.)?jamesclear\.com\//i,
+      // 3-2-1: the logo and its tagline up top, the weekly greeting, and
+      // the banner over each of the 3 ideas, 2 quotes and 1 question go.
+      tidy(body) {
+        const text = (n) => n.textContent.replace(/\s+/g, " ").trim();
+        for (const p of body.querySelectorAll("p, div, em")) {
+          const words = text(p);
+          if ((/most wisdom per word/i.test(words) && words.length < 80)
+            || /^happy 3-2-1 thursday!?$/i.test(words)
+            || /^here are 3 ideas, 2 quotes,? and 1 question to consider this week\W*$/i.test(words)) p.remove();
+        }
+        const order = [...body.querySelectorAll("p, h1, h2, h3, h4, h5, h6, li, blockquote, img")];
+        const firstText = order.findIndex((n) => n.localName !== "img" && text(n));
+        order.forEach((img, i) => {
+          if (img.localName !== "img") return;
+          const next = order.slice(i + 1).find((n) => n.localName !== "img" && text(n));
+          if (i < firstText || (next && /^h\d$/.test(next.localName))) img.remove();
+        });
+      },
+    },
+  ];
+  function mailRule(from, title, body) {
+    const host = String(from || "").split("@").pop().trim();
+    return NEWSLETTERS.find((n) => host && n.from.test(host))
+      || NEWSLETTERS.find((n) => n.subject.test(title || "") && body && [...body.querySelectorAll("a[href]")].some((a) => n.home.test(a.getAttribute("href"))))
+      || null;
+  }
+
   // A rule with `path` instead of `host` is for software that runs on many
   // sites (Mastodon), told by the shape of the address.
   function siteRule(url) {
@@ -2867,10 +2952,21 @@
     if (kind !== "comic" && rule && rule.comic && rule.comic(url)) { kind = "comic"; mode = "full"; }
     const wiki = kind !== "comic" && !archived && wikipediaPage(url);
     if (onProgress) onProgress({ stage: "text" });
+    let letter = null;
+    if (given && given.mail) {
+      const d = new DOMParser().parseFromString(given.html, "text/html");
+      letter = mailRule(given.from, given.title, d.body);
+      if (letter) {
+        tidyMail(d.body, letter);
+        given = { ...given, html: "<!doctype html>\n" + d.documentElement.outerHTML };
+      }
+    }
     const got = wiki ? await fromWikipedia(wiki) : await fromAnyPage(archived ? archived.url : url, () => onProgress && onProgress({ stage: "drawing" }), kind === "comic", asPage, archived ? null : given);
     // A newsletter's email (1.43.0) is named by its subject and sender.
     if (given && given.title) got.title = given.title;
     if (given && given.site) got.site = given.site;
+    if (given && given.mail) tidyMail(got.body, letter);
+    if (letter) Object.assign(got, { site: letter.name, byline: letter.byline });
     if (archived) {
       if (!got.site || got.site === "web.archive.org") got.site = siteName(url);
       got.url = url;
@@ -3097,7 +3193,7 @@
   C.save = {
     get compress() { return compress; }, set compress(v) { compress = v !== false; }, compressPictures,
     pageSource, preview, rebuild,
-    save, findArchived, unWayback, formatDate, publishedAt, SaveError, ContentsPage, cutShort, findChapters, pageImage, siteIcon, keepCover, siteRule, removeHidden, scriptJson, chapterNumber, pickChapters, comicGroup, isPanel, retryMissing, saveFullImages, setPictures, findNext, creditLine, cleanSaved, savedPageHtml, newId, textDir, isNextText, isPrevText, plainText, replaceText,
+    save, findArchived, unWayback, tidyMail, mailRule, formatDate, publishedAt, SaveError, ContentsPage, cutShort, findChapters, pageImage, siteIcon, keepCover, siteRule, removeHidden, scriptJson, chapterNumber, pickChapters, comicGroup, isPanel, retryMissing, saveFullImages, setPictures, findNext, creditLine, cleanSaved, savedPageHtml, newId, textDir, isNextText, isPrevText, plainText, replaceText,
     wikipediaPage, wikimediaThumb, parseSrcset, pickWidth, youtubeId, vimeoId, extOf, isTrackingPixel, readingMinutes, WORDS_PER_MINUTE, siteName,
   };
 })();

@@ -526,7 +526,8 @@ function senderOf(f, it) {
   return name ? name.charAt(0).toUpperCase() + name.slice(1) : f.title;
 }
 // The email as a page to save: titled by its subject, named by its
-// sender, without Kill the Newsletter's settings link at its foot.
+// sender, without Kill the Newsletter's settings link at its foot;
+// save tidies it as an email (C.save.tidyMail).
 function mailPage(f, it, html) {
   const doc = new DOMParser().parseFromString(html, "text/html");
   for (const a of doc.querySelectorAll('a[href*="' + KTN + '/feeds/"]')) {
@@ -536,7 +537,7 @@ function mailPage(f, it, html) {
     if (hr && hr.localName === "hr") hr.remove();
     p.remove();
   }
-  return { url: it.url, html: "<!doctype html>\n" + doc.documentElement.outerHTML, title: it.title, site: senderOf(f, it) };
+  return { url: it.url, html: "<!doctype html>\n" + doc.documentElement.outerHTML, title: it.title, site: senderOf(f, it), mail: true, from: it.from };
 }
 async function saveMail(f, it) {
   const full = f.items.find((x) => sameUrl(x.url, it.url)) || it;
