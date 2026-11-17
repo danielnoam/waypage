@@ -731,7 +731,7 @@ function closeFolderMenu(away) {
   pop.removeAttribute("id");
   pop.style.pointerEvents = "none";
   $("folderMore").setAttribute("aria-expanded", "false");
-  M.popInto(pop, $("folderMore").getBoundingClientRect()).then(() => pop.remove());
+  M.popOut(pop, $("folderMore").getBoundingClientRect()).then(() => pop.remove());
   if (!away) $("folderMore").focus();
 }
 
@@ -1490,7 +1490,7 @@ function closeSelectMenu(away) {
   pop.removeAttribute("id");
   pop.style.pointerEvents = "none";
   $("selectMore").setAttribute("aria-expanded", "false");
-  M.popInto(pop, $("selectMore").getBoundingClientRect()).then(() => pop.remove());
+  M.popOut(pop, $("selectMore").getBoundingClientRect()).then(() => pop.remove());
   if (!away) $("selectMore").focus();
 }
 
@@ -1607,7 +1607,7 @@ function closeMenu() {
   menuUnder = [];
   const sheet = $("menuSheet"), catcher = $("menuCatch");
   M.dim(catcher, false).then(() => { if (!state.menu) catcher.hidden = true; });
-  (wide.matches ? M.popInto(sheet, menuFrom) : M.sink(sheet, sheetDrop(sheet))).then(() => { if (!state.menu) sheet.hidden = true; delete sheet.dataset.drop; });
+  (wide.matches ? M.popOut(sheet, menuFrom) : M.sink(sheet, sheetDrop(sheet))).then(() => { if (!state.menu) sheet.hidden = true; delete sheet.dataset.drop; });
   afterSettle(() => was.forEach((n) => cover(n, false)));
 }
 
@@ -1801,7 +1801,7 @@ function closeClipMenu(away) {
   if (!pop) return;
   pop.removeAttribute("id");
   pop.style.pointerEvents = "none";
-  M.popInto(pop, pop.from).then(() => pop.remove());
+  M.popOut(pop, pop.from).then(() => pop.remove());
   if (!away && node) { const b = node.querySelector("button"); if (b) b.focus({ preventScroll: true }); }
 }
 

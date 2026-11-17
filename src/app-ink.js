@@ -190,13 +190,13 @@ function inkSet(on) {
     if (!inkBar) inkBuild();
     inkPaint();
     inkBar.hidden = false;
-    M.appear(inkBar);
+    M.edgeIn(inkBar, "bottom");
     hideReadHere();
   } else if (inkBar && !inkBar.hidden) {
     inkPopClose(true);
     if (inkColor) inkColor.close();
     const bar = inkBar;
-    M.vanish(bar).finally(() => { if (!C.ink.on) bar.hidden = true; });
+    M.edgeOut(bar, "bottom").finally(() => { if (!C.ink.on) bar.hidden = true; });
   }
 }
 
@@ -342,9 +342,8 @@ function inkPopOpen(kind, btn) {
   const left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2));
   menu.style.left = left + "px";
   menu.style.bottom = (innerHeight - top + 8) + "px";
-  menu.style.transformOrigin = (r.left + r.width / 2 - left) + "px 100%";
-  M.appear(menu);
-  inkPop = { kind, el: menu };
+  M.popFrom(menu, r);
+  inkPop = { kind, el: menu, btn };
   inkPopMark();
   const first = menu.querySelector('[aria-checked="true"]') || menu.querySelector("button");
   if (first && document.body.classList.contains("keys")) first.focus();
@@ -354,7 +353,7 @@ function inkPopClose(now) {
   if (!p) return;
   inkPop = null;
   if (now) p.el.remove();
-  else M.vanish(p.el).finally(() => p.el.remove());
+  else M.popOut(p.el, p.btn.getBoundingClientRect()).then(() => p.el.remove());
   inkPopMark();
 }
 // Which button has its menu open, said in place: the bar's buttons stay as they are, so a tap on
@@ -536,6 +535,7 @@ function inkColorOpen(at) {
   const sheet = el("div", { class: "ink-color", role: "dialog", "aria-label": t("Colour") });
   k.el = sheet;
   inkColor = k;
+  const slotRect = () => { const b = inkBar && inkBar.querySelector('[data-slot="' + at + '"]'); return b ? b.getBoundingClientRect() : null; };
   const canvas = el("canvas", { class: "ic-spectrum", width: 320, height: 200, "aria-label": t("Colour spectrum") });
   const ring = el("span", { class: "ic-ring" });
   const slider = el("input", { type: "range", class: "ic-slider", min: 0, max: 100, step: 1, "aria-label": t("Lightness") });
@@ -615,7 +615,7 @@ function inkColorOpen(at) {
       if (c) set(C.ink.hexRgb(c)); else toast(t("Couldn't read a colour there."));
     });
   });
-  const close = () => { C.ink.pick(null); inkColor = null; M.vanish(sheet).finally(() => sheet.remove()); };
+  const close = () => { C.ink.pick(null); inkColor = null; M.dialogOut(sheet, slotRect()).then(() => sheet.remove()); };
   k.close = close;
   cancel.addEventListener("click", close);
   done.addEventListener("click", () => {
@@ -635,7 +635,7 @@ function inkColorOpen(at) {
     el("div", { class: "ic-actions" }, cancel, done));
   inkInit(k, oldSw, set);
   $("readerView").append(sheet);
-  M.appear(sheet);
+  M.dialogIn(sheet, slotRect());
   hexI.blur();
 }
 function inkInit(k, oldSw, set) {

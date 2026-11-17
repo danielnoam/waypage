@@ -392,6 +392,8 @@ a.btn-small { text-decoration: none; white-space: nowrap; display: inline-flex; 
   font-size: 16px;
 }
 .save-form input::placeholder { color: var(--muted); }
+/* A placeholder too long for a narrow phone ends in …, not mid-letter. */
+.save-form input:placeholder-shown { text-overflow: ellipsis; }
 /* Save and its options button are one pair: same height and fill, split
    by a hairline. */
 .save-form .btn-primary { border-start-end-radius: 0; border-end-end-radius: 0; }
@@ -1115,7 +1117,7 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 .sheet-body { max-height: min(76dvh, 40rem); overflow-y: auto; overscroll-behavior: contain; margin: 0 calc(-1 * var(--s-4)); padding: 0 var(--s-4) var(--s-1); }
 .rc-row { display: flex; align-items: center; gap: var(--s-3); }
 .rc-label { width: 84px; flex-shrink: 0; color: var(--muted); font-size: var(--fs-meta); line-height: var(--lh-meta); }
-.stepper { flex: 1; display: flex; align-items: center; gap: var(--s-2); }
+.stepper { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--s-2); }
 .step-btn {
   width: var(--tap); height: var(--tap); flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
@@ -1211,6 +1213,12 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
   border-radius: var(--r-md); background: var(--bg); border: 1px solid var(--line);
 }
 .seg-item { flex: 1; position: relative; display: flex; }
+/* Three words and a name still fit one row on the narrowest phones
+   (320 px), where Narrow / Normal / Wide ran past the card's edge. */
+@media (max-width: 359px) {
+  .rc-label { width: 64px; }
+  .rc-row .seg-face { padding: 0 var(--s-1); }
+}
 .seg-face {
   flex: 1; min-height: 38px; padding: 0 var(--s-2);
   display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -1435,6 +1443,11 @@ html { -webkit-tap-highlight-color: transparent; }
 :root[data-motion="off"] :is(.dropdown-face.changed, .lock-dots.shake) { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 1ms !important; animation-duration: 1ms !important; }
+  /* Except the slow breathing that stands in for a spinner: at 1 ms a
+     turn it flickered on every frame. */
+  :is(.spinner, .progress.busy .progress-fill, .sync-btn.looking .dl-ring) { animation-duration: 1.6s !important; }
+  .listen-ch-tr.now .listen-ch-bar::after { animation-duration: 2.4s !important; }
+  .aloud-play.thinking::after { animation-duration: 2.4s, 0.2s !important; }
 }
 
 /* A folder's screen: its tools, carry on, then its pages in order. */
@@ -2115,6 +2128,10 @@ span.update-text { cursor: default; }
 .book-title {
   margin: var(--s-1) 0 var(--s-2); font: 700 var(--fs-screen)/var(--lh-screen) var(--serif);
   overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+/* On the narrowest phones (320 px) a long word broke in two mid-letter. */
+@media (max-width: 359px) {
+  .book-title { font-size: var(--fs-heading); line-height: var(--lh-heading); -webkit-hyphens: auto; hyphens: auto; }
 }
 .book-title-input {
   display: block; width: 100%; margin: var(--s-1) 0 var(--s-2); padding: 0 var(--s-2); min-height: var(--tap);
