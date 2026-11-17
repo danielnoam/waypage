@@ -1488,11 +1488,11 @@ function zipOf(files) {
       await q.reload();
       await q.click("#settingsBtn");
       await q.locator(".nav-row", { hasText: "Library" }).click();
-      await q.locator("#sectionBody .nav-row", { hasText: "Edit clips" }).click();
-      await q.locator("#sectionTitle", { hasText: "Edit clips" }).waitFor();
+      await q.locator("#sectionBody .nav-row", { hasText: "Find and replace" }).click();
+      await q.locator("#sectionTitle", { hasText: "Find and replace" }).waitFor();
       await q.click("#sectionBack");
       await q.locator("#sectionTitle", { hasText: "Library" }).waitFor();
-      await q.locator("#sectionBody .nav-row", { hasText: "Edit clips" }).click();
+      await q.locator("#sectionBody .nav-row", { hasText: "Find and replace" }).click();
       await q.fill("#editFind", "~~*~~");
       await q.locator("#editResult .row", { hasText: "Find" }).click();
       await q.locator("#editResult .section-lead", { hasText: "Found" }).waitFor();
@@ -1531,7 +1531,7 @@ function zipOf(files) {
       await q.reload();
       await q.click("#settingsBtn");
       await q.locator(".nav-row", { hasText: "Library" }).click();
-      await q.locator("#sectionBody .nav-row", { hasText: "Edit clips" }).click();
+      await q.locator("#sectionBody .nav-row", { hasText: "Find and replace" }).click();
       await q.fill("#editFind", "oceanofpdf.com");
       await q.locator("#editResult .row", { hasText: "Find" }).click();
       await q.locator("#editResult .section-lead", { hasText: "Found" }).waitFor();
@@ -1606,6 +1606,41 @@ function zipOf(files) {
       assert.strictEqual(await q.evaluate(() => folderPages("Saga").length), 3);
       // Opening a collection looks for a cover on the web, which is offline here.
       const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Edit clips edits the words of files read from where they are, not PDFs or comics", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const f = (id, kind, folder) => ({ id, url: "", title: "File " + id, site: kind.toUpperCase(), savedAt: 1000, minutes: 1, mode: "previews", at: 0, finished: false, link: "handle:" + id, file: { name: id + "." + kind, kind, ext: kind, size: 9 }, ...(folder ? { folder } : {}) });
+        const list = [f("fe1", "epub", "Shelf"), f("fe2", "txt"), f("fe3", "pdf", "Shelf"), f("fe4", "cbz"), { id: "fc1", url: "https://example.com/c", title: "Clip", site: "example.com", savedAt: 1000, minutes: 1, mode: "links", at: 0, finished: false, folder: "Shelf" }];
+        await S.writeIndex(list);
+        for (const m of list) await S.writePage(m.id, "<!doctype html><html><body><p>A [ad] here</p></body></html>", m);
+      });
+      await q.reload();
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Library" }).click();
+      await q.locator("#sectionBody .nav-row", { hasText: "Find and replace" }).click();
+      await q.locator(".pick-row .dropdown-btn").click();
+      await q.locator(".dropdown-item", { hasText: "All files" }).click();
+      await q.fill("#editFind", "[ad]");
+      await q.locator("#editResult .row", { hasText: "Find" }).click();
+      await q.locator("#editResult .section-lead", { hasText: "Found" }).waitFor();
+      assert.strictEqual(await q.textContent("#editResult .section-lead"), "Found 2 times in 2 files.");
+      assert.ok(await q.locator("#editResult .footnote", { hasText: "stays as it is" }).count() === 1);
+      await q.locator("#editResult .row", { hasText: "Remove from 2 files" }).click();
+      await until(q, () => !!document.querySelector("#editResult") && /Undo/.test(document.querySelector("#editResult").textContent));
+      const got = await q.evaluate(async () => Object.fromEntries(await Promise.all(["fe1", "fe2", "fe3", "fe4", "fc1"].map(async (id) => [id, /\[ad\]/.test(await window.Waypage.store.readPage(id))]))));
+      assert.deepStrictEqual(got, { fe1: false, fe2: false, fe3: true, fe4: true, fc1: true });
+      // A collection holding both: its clips and its files that have words.
+      await q.locator(".pick-row .dropdown-btn").click();
+      await q.locator(".dropdown-item", { hasText: "Collections" }).click();
+      await q.locator(".edit-folders label.row", { hasText: "Shelf" }).locator("input").click();
+      assert.ok(/1 clip, 1 file|1 file, 1 clip/.test(await q.textContent(".edit-folders label.row")));
+      // A PDF's library card reads it in pdf.js's sandboxed frame.
+      const errors = q.errors.filter((e) => !/serviceWorker/.test(e));
       assert.deepStrictEqual(errors, [], errors.join(" | "));
       await q.context().close();
     });
