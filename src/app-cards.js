@@ -160,6 +160,9 @@ function stopRun(r) {
   r.stopped = true;
   r.paused = false;
   if (typeof keepHalt === "function") keepHalt(r);
+  // A file download waiting for Wi-Fi stops now, not once Wi-Fi comes;
+  // every other waiter looks again and waits on.
+  if (r.keep) while (wifiWaiters.length) wifiWaiters.shift()();
   if (r.wake) { r.wake(); r.wake = null; }
   state.saving = state.saving.filter((x) => !(x.run === r && x.waiting && !x.error));
   runChanged();
