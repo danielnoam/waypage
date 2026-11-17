@@ -2,6 +2,31 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.66.0] - 2026-11-17
+
+### Changed
+- In a clip's sheet, Live now sits under More, right above In other apps.
+- In other apps (on a clip and in a collection's Edit) now says what it does.
+- Tapping the version at the foot of the sidebar opens Settings › About.
+- Pulling down the library now updates live clips too, like it checks Website sync collections. It says how many changed.
+- Every menu now leaves the same quick way the drop-downs do: the ⋯ menus, a clip's menu, the reader's panels on a big screen and the drawing menus no longer shrink all the way back into their button.
+- Find in a clip slides down over the reader's bar and back up when it closes, instead of cutting in and out.
+- The drawing bar rises from the bottom and sinks back, and its menus grow out of their button; the colour picker fades in by the colour it was opened from.
+- On a big screen, a link, note or look-up in the middle of the reader fades in like the other dialogs instead of rising from the bottom.
+- In a collection, a clip that's removed, added or moved now shrinks away, grows in or slides to its place, as it does in the library, instead of the list jumping.
+- The + on Discover and Feeds rows and the reader's Contents button dip under a finger like every other button.
+
+### Fixed
+- A catalog's username and password now go only to that catalog's own server. Before, they went along to any other site its feed linked a folder, book or cover to.
+- Stop on a Kiwix pack, book or LibriVox audiobook that's waiting for Wi-Fi now stops it at once. Before, its card stayed in Downloads until Wi-Fi came.
+- A pack or book you stop now says "Stopped." instead of "Couldn't download it".
+- James Clear's 3-2-1 now saves without its footer: the book and calendar ads, "Follow me on social", the unsubscribe and postal-address lines, the site-and-date line and the "What else am I working on?" heading are gone. Every newsletter also loses its inbox-only footer (Kit's) and its open-tracking picture.
+- Update from the site that failed and was tried again from Downloads now puts the new copy in place. Before, the retry downloaded it but left it out of the library.
+- Update from the site works again on a clip whose last update failed. Before, the tap did nothing until the failed one was cleared from Downloads.
+- Going back to a live clip's earlier copy no longer splits its reading time in Stats between the two copies.
+- With reduced motion on, spinners flickered on every frame instead of breathing slowly.
+- On the narrowest phones (320 px): a collection's long title broke mid-word, the reader's Text size row ran off the edge, and Margins (Narrow / Normal / Wide) ran past its card.
+
 ## [1.65.1] - 2026-11-17
 
 ### Added
