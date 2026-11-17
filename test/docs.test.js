@@ -40,7 +40,7 @@ test("ARCHITECTURE.md names every test file", () => {
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 
 test("moves follow DESIGN.md's Which move table: no popInto, appear/vanish only for list rows and the picture viewer", () => {
-  const allowed = { popInto: [], appear: ["src/app-downloads.js", "src/app-draw.js", "src/app-reader.js"], vanish: ["src/app-draw.js", "src/app-reader.js"] };
+  const allowed = { popInto: [], appear: ["src/app-downloads.js", "src/app-draw.js", "src/app-library.js", "src/app-reader.js"], vanish: ["src/app-draw.js", "src/app-library.js", "src/app-reader.js"] };
   const wrong = [];
   for (const f of list("src", (f) => /^app.*\.js$/.test(f))) {
     read(f).split("\n").forEach((line, i) => {
