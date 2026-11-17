@@ -202,8 +202,8 @@ listed here adds its line in the same pull request.
 
 **UI**
 
-- **Every move is the one DESIGN.md §4's "Which move" table gives for that kind of thing;** a new kind gets a row there first. (#348: four kinds had drifted)
-- **A looping animation gets its own duration in the reduced-motion block and an Animations off rule,** in the same change. (#348: spinners flickered)
+- **Every move is the one DESIGN.md §4's "Which move" table gives for that kind of thing;** a new kind gets a row there first. `docs.test.js` checks `popInto`, `appear` and `vanish`. (#348: four kinds had drifted)
+- **A looping animation gets its own duration in the reduced-motion block and an Animations off rule,** in the same change. `docs.test.js` checks it. (#348: spinners flickered)
 - **A flex child that holds text or a control gets `min-width: 0`; a title that can hold one long word gets `hyphens: auto` or `overflow-wrap: anywhere`.** (#348)
 - **Every changed screen is checked at 320 px, 390 px and ~1280 px.** 390 px alone hid three breaks. (#348)
 
