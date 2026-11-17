@@ -235,7 +235,8 @@ function libViewSheet() {
         renderLibrary();
       }), note)),
     el("div", { class: "group" },
-      switchRow(t("Continue reading"), t("Your last clip at the top of the library"), load(CONTINUE_KEY, true), (on) => { store(CONTINUE_KEY, on); renderLibrary(); })));
+      switchRow(t("Continue reading"), t("Your last clip at the top of the library"), load(CONTINUE_KEY, true), (on) => { store(CONTINUE_KEY, on); renderLibrary(); }),
+      allFolders().some(isSeriesFolder) ? switchRow(t("Series apart"), t("Their own section, under Collections"), load(SERIES_APART_KEY, true), (on) => { store(SERIES_APART_KEY, on); renderLibrary(); if (pinned.matches) renderSide(); }) : null));
 }
 
 // Our own dropdown (0.26.0), in place of the system's <select>: a

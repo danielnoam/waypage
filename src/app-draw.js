@@ -260,7 +260,7 @@ function renderLibrary() {
     const mine = apart ? loose.filter((p) => p.link && !p.note) : [];
     const clips = apart ? loose.filter((p) => !p.link && !p.note) : loose;
     // Series (2026-11) have their own section under Collections.
-    const series = folders.filter(isSeriesFolder);
+    const series = load(SERIES_APART_KEY, true) ? folders.filter(isSeriesFolder) : [];
     const plain = series.length ? folders.filter((f) => !isSeriesFolder(f)) : folders;
     if (plain.length && (!part || part === "collections")) {
       const names = sorted(plain.map(asItem)).map((x) => x.folder);

@@ -1276,7 +1276,9 @@ const SECTIONS = {
   library: { title: t("Library"), build: () => [
     section(t("Layout"), null,
       el("div", { class: "group" }, el("div", { class: "rc-list" },
-        seg(LAYOUT_KEY, t("Layout"), LAYOUTS.map((l) => ({ value: l.value, label: l.label })), layout(), (v) => { store(LAYOUT_KEY, v); renderLibrary(); })))),
+        seg(LAYOUT_KEY, t("Layout"), LAYOUTS.map((l) => ({ value: l.value, label: l.label })), layout(), (v) => { store(LAYOUT_KEY, v); renderLibrary(); }))),
+      el("div", { class: "group" },
+        switchRow(t("Series apart"), t("Their own section, under Collections"), load(SERIES_APART_KEY, true), (on) => { store(SERIES_APART_KEY, on); renderLibrary(); if (pinned.matches) renderSide(); }))),
     libraryGroup(), watchGroup(), libraryActions()],
     value: () => (LAYOUTS.find((l) => l.value === layout()) || LAYOUTS[0]).label },
   saving: { title: t("Saving"), build: () => [savingGroup(), readyGroup(), signedGroup(), sendGroup()],

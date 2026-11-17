@@ -1561,6 +1561,14 @@ function zipOf(files) {
       // The clip that lost the mark takes it back.
       await until(q, () => state.pages.find((p) => p.id === "m3").folderSeries && state.pages.find((p) => p.id === "m3").folderIn === "Shelf");
       assert.deepStrictEqual(await q.locator('[data-key="folders"] .tile').evaluateAll((t) => t.map((x) => x.dataset.name).sort()), ["Shelf", "Weekend"]);
+      // View options can show them mixed in with the collections.
+      await q.click("#viewBtn");
+      await q.locator(".lib-view .row", { hasText: "Series apart" }).locator("input").click();
+      await until(q, () => !document.querySelector('[data-key="series"]') && !!document.querySelector('[data-key="folders"] .tile[data-name="Saga"]'));
+      await q.locator(".lib-view .row", { hasText: "Series apart" }).locator("input").click();
+      await until(q, () => !!document.querySelector('[data-key="series"] .tile[data-name="Saga"]'));
+      await q.evaluate(() => history.back());
+      await until(q, () => !state.menu);
       // Its clips show only inside it; the collection shows it above its own.
       assert.strictEqual(await q.locator('#library .page-card[data-ids="m1"]').count(), 0);
       await q.evaluate(() => openFolder("Shelf"));

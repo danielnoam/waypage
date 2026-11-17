@@ -949,7 +949,7 @@ function renderSide() {
   const inLib = !inFeeds && !inMarks && !["reading", "newsletters", "discover", "anki", "calibre", "catalogs", "audiobookshelf", "webdav"].includes(state.place);
   const inLibrary = inLib && !state.part && !state.folder && state.filter !== "favourites" && state.filter !== "notes";
   const favs = sideFavourites();
-  const hasFolders = plainFolders().length > 0;
+  const hasFolders = (load(SERIES_APART_KEY, true) ? plainFolders() : allFolders()).length > 0;
   fill($("sidebar"),
     el("div", { class: "side-head" },
       el("p", { class: "side-title" }, t("Waypage"))),
@@ -968,7 +968,7 @@ function renderSide() {
       () => toLibrary().then(() => goPlace("library")).then(() => setFilter("favourites")), "side-sub"),
     // The library's parts (1.14.0), each opening alone.
     hasFolders ? item(sideMark("folder"), t("Collections"), inLib && state.part === "collections", null, () => partFromSide("collections"), "side-sub") : null,
-    allFolders().some(isSeriesFolder) ? item(sideMark("folder"), t("Series"), inLib && state.part === "series", null, () => partFromSide("series"), "side-sub") : null,
+    load(SERIES_APART_KEY, true) && allFolders().some(isSeriesFolder) ? item(sideMark("folder"), t("Series"), inLib && state.part === "series", null, () => partFromSide("series"), "side-sub") : null,
     item(sideMark("open"), t("Clips"), inLib && state.part === "pages", null, () => partFromSide("pages"), "side-sub"),
     // Notes (2.0.0), above Files (2026-11) as in the library.
     state.pages.some((p) => p.note) ? item(sideMark("open"), t("Notes"), inLib && !state.part && !state.folder && state.filter === "notes", null, notesFromSide, "side-sub") : null,
