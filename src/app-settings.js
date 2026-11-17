@@ -554,7 +554,7 @@ function dictsGroup() {
 function libraryActions() {
   const sec = section(t("Actions"), null,
     el("div", { class: "group" }, ...importRow(),
-      navRow(t("Edit clips"), t("Find and replace across many clips"), () => openSection("edit", false, true))));
+      navRow(t("Find and replace"), t("In many clips and files at once"), () => openSection("edit", false, true))));
   sec.id = "importSection";
   return sec;
 }
@@ -977,19 +977,27 @@ function browserStorageGroup() {
   return box;
 }
 
-// ---- Edit clips (1.22.0) ----
+// ---- Find and replace (1.22.0, was Edit clips) ----
 // Find and replace across many clips at once: in their text (a match
 // replaced, or removed with nothing to put instead) or their titles.
 // * stands for any words, so ~~*~~ finds everything between two pairs
 // of tildes. Find shows how many and a few examples first; the change
 // can be undone until the app closes.
 const edit = { scope: "all", folders: new Set(), picked: [], what: "text", find: "", put: "", matchCase: false, regex: false, found: null, busy: "", undo: null };
+// A file read from where it is has its words kept in Waypage too, and
+// those are what change; the file itself is never written. A PDF shows
+// its printed pages and a comic has no words, so neither is offered.
+const editableFile = (p) => !!(p.link && p.file && !p.note && !p.comic && !hasSound(p) && !["pdf", "cbz", "zim"].includes(p.file.kind));
+const editClip = (p) => !p.preview && !p.link;
+const editAny = (p) => editClip(p) || editableFile(p);
 const editClips = () => {
-  const ok = (p) => !p.link && !p.preview;
-  if (edit.scope === "picked") return state.pages.filter((p) => ok(p) && edit.picked.includes(p.id));
-  if (edit.scope === "folders") return state.pages.filter((p) => ok(p) && p.folder && [...edit.folders].some((f) => sameTag(f, p.folder)));
-  return state.pages.filter(ok);
+  if (edit.scope === "picked") return state.pages.filter((p) => editAny(p) && edit.picked.includes(p.id));
+  if (edit.scope === "folders") return state.pages.filter((p) => editAny(p) && p.folder && [...edit.folders].some((f) => sameTag(f, p.folder)));
+  if (edit.scope === "files") return state.pages.filter(editableFile);
+  return state.pages.filter(editClip);
 };
+// "8 clips, 2 files", as the library counts them.
+const editCount = (ids) => holdsLine(ids.map((id) => state.pages.find((p) => p.id === id)).filter(Boolean)) || countLine(0);
 function editPattern() {
   if (!edit.find) return null;
   // A space typed in Find matches any run of white space, a no-break
@@ -1010,16 +1018,18 @@ const editChanged = () => { edit.found = null; editRedraw(); };
 function editGroup() {
   const clips = editClips();
   const folders = allFolders();
+  const files = state.pages.filter(editableFile).length;
   const scope = el("section", { class: "settings-section edit-sec" },
-    el("div", { class: "group" }, pickRow({ key: "edit-scope", label: t("Which clips"), get: () => edit.scope, set: (v) => { edit.scope = v; editChanged(); }, options: [
-      { value: "all", label: t("All clips"), note: countLine(state.pages.filter((p) => !p.link && !p.preview).length) },
+    el("div", { class: "group" }, pickRow({ key: "edit-scope", label: t("Which ones"), get: () => edit.scope, set: (v) => { edit.scope = v; editChanged(); }, options: [
+      { value: "all", label: t("All clips"), note: countLine(state.pages.filter(editClip).length) },
+      files ? { value: "files", label: t("All files"), note: t("{files}, read from where they are", { files: tn(files, "1 file", "{n} files") }) } : null,
       folders.length ? { value: "folders", label: t("Collections"), note: t("The ones you tick below") } : null,
-      { value: "picked", label: t("Clips you pick"), note: edit.picked.length ? t("{countLine} picked in the library", { countLine: countLine(edit.picked.length) }) : t("Pick them in the library, then tap Edit") },
+      { value: "picked", label: t("The ones you pick"), note: edit.picked.length ? t("{countLine} picked in the library", { countLine: editCount(edit.picked) }) : t("Pick them in the library, then tap Edit") },
     ].filter(Boolean) })),
     edit.scope === "folders" ? el("div", { class: "group edit-folders" }, ...folders.map((f) => el("label", { class: "row" },
       el("span", { class: "choice-text" },
         el("span", { class: "choice-label", dir: "auto" }, f),
-        el("span", { class: "choice-note" }, countLine(folderPages(f).length))),
+        el("span", { class: "choice-note" }, holdsLine(folderPages(f).filter(editAny)) || countLine(0))),
       el("input", { class: "switch", type: "checkbox", role: "switch", checked: edit.folders.has(f),
         onchange: (e) => { e.target.checked ? edit.folders.add(f) : edit.folders.delete(f); editChanged(); } })))) : null,
     edit.scope === "picked" ? el("div", { class: "group" },
@@ -1061,22 +1071,33 @@ function editResultNodes(clips) {
     el("button", { class: "row", type: "button", ...(re && clips.length && !busy ? {} : { disabled: "" }), onclick: findEdits },
       el("span", { class: "choice-text" },
         el("span", { class: "choice-label accent" }, edit.busy || (f ? t("Find again") : t("Find"))),
-        el("span", { class: "choice-note" }, !edit.find ? t("Type what to find") : !re ? t("That isn't a pattern Find can use") : t("In {countLine}", { countLine: countLine(clips.length) }))))));
+        el("span", { class: "choice-note" }, !edit.find ? t("Type what to find") : !re ? t("That isn't a pattern Find can use") : t("In {countLine}", { countLine: editCount(clips.map((p) => p.id)) }))))));
   if (f) {
     nodes.push(el("p", { class: "section-lead", role: "status" }, f.times
-      ? tn(f.times, "Found 1 time in {clips}.", "Found {n} times in {clips}.", { clips: countLine(f.ids.length) })
-      : tn(clips.length, "Not found in this clip.", "Not found in these {n} clips.")));
+      ? tn(f.times, "Found 1 time in {clips}.", "Found {n} times in {clips}.", { clips: editCount(f.ids) })
+      : clips.length === 1 ? t("Not found.") : t("Not found in any of these {countLine}.", { countLine: editCount(clips.map((p) => p.id)) })));
     if (f.samples.length) nodes.push(el("ol", { class: "group edit-samples" }, ...f.samples.map((x) => el("li", { class: "edit-sample", dir: "auto" },
       x.title ? el("span", { class: "choice-note" }, x.title) : null,
       el("span", { class: "edit-text" }, x.before, el("del", {}, x.found), x.put ? el("ins", {}, x.put) : null, x.after)))));
     if (f.times) nodes.push(el("div", { class: "group" },
       el("button", { class: "row", type: "button", ...(busy ? { disabled: "" } : {}), onclick: applyEdits },
-        el("span", { class: "row-label accent" }, edit.put ? t("Replace in {countLine}", { countLine: countLine(f.ids.length) }) : t("Remove from {countLine}", { countLine: countLine(f.ids.length) })))),
-      el("p", { class: "footnote" }, edit.what === "text" ? t("Your other devices get the changed text when they sync. A highlight on changed words may not be found again.") : t("Your other devices get the new titles when they sync.")));
+        el("span", { class: "row-label accent" }, edit.put ? t("Replace in {countLine}", { countLine: editCount(f.ids) }) : t("Remove from {countLine}", { countLine: editCount(f.ids) })))),
+      ...editNotes(f.ids));
   }
   if (edit.undo && !busy) nodes.push(el("div", { class: "group" },
     el("button", { class: "row", type: "button", onclick: undoEdits }, el("span", { class: "row-label" }, t("Undo the last change ({countLine})", { countLine: countLine(edit.undo.length) })))));
   return nodes;
+}
+// What happens after the change. A file read from where it is doesn't
+// sync, so only Waypage's copy of its words changes, here.
+function editNotes(ids) {
+  const list = ids.map((id) => state.pages.find((p) => p.id === id)).filter(Boolean);
+  const clips = list.some((p) => !p.link), files = list.some((p) => p.link);
+  if (edit.what !== "text") return clips ? [el("p", { class: "footnote" }, t("Your other devices get the new titles when they sync."))] : [];
+  return [
+    el("p", { class: "footnote" }, clips ? t("Your other devices get the changed text when they sync. A highlight on changed words may not be found again.") : t("A highlight on changed words may not be found again.")),
+    files ? el("p", { class: "footnote" }, t("A file read from where it is stays as it is: only Waypage's copy of its words changes, on this device.")) : null,
+  ].filter(Boolean);
 }
 // A list of radio rows like choiceGroup's, without its section.
 function choiceList(name, label, options, current, set) {
@@ -1093,7 +1114,7 @@ function choiceList(name, label, options, current, set) {
 }
 
 function pickToEdit() {
-  toLibrary().then(() => { startSelect([]); toast(t("Pick the clips to edit, then tap Edit.")); });
+  toLibrary().then(() => { startSelect([]); toast(t("Pick the clips and files to change, then tap Edit.")); });
 }
 // From the library's Edit: the picked clips, here.
 async function editPicked() {
@@ -1178,7 +1199,7 @@ async function applyEdits() {
     renderLibrary();
     editRedraw();
   }
-  toast(changed ? t("Changed {countLine}.", { countLine: countLine(changed) }) : t("Nothing changed."));
+  toast(changed ? t("Changed {countLine}.", { countLine: editCount(undo.map((u) => u.id)) }) : t("Nothing changed."));
 }
 // A clip's text written again, and its search text and size with it;
 // the edit time sends it to the other devices.
@@ -1211,7 +1232,7 @@ async function undoEdits() {
     renderLibrary();
     editRedraw();
   }
-  toast(t("Undone: {countLine} back as they were.", { countLine: countLine(list.length) }));
+  toast(t("Undone: {countLine} back as they were.", { countLine: editCount(list.map((u) => u.id)) }));
 }
 
 // ---- Credits (1.48.0) ----
@@ -1285,7 +1306,7 @@ const SECTIONS = {
   syncHistory: { title: t("Sync history"), build: historySections, value: () => "", parent: "sync" },
   drive: { title: t("Google Drive"), build: driveSections, value: driveValue },
   notifications: { title: t("Notifications"), build: notesSections, value: notesValue },
-  edit: { title: t("Edit clips"), build: editGroup, value: () => "", parent: "library" },
+  edit: { title: t("Find and replace"), build: editGroup, value: () => "", parent: "library" },
   kokoro: { title: t("More speech engines"), build: kokoroSections, value: () => "", parent: "reading" },
   storage: { title: t("Storage"), build: () => [placeGroup(), storageGroup(), browserStorageGroup(), backupGroup(roomRows())], value: () => formatSize(totalBytes()) },
   updates: { title: t("About"), build: () => [updatesGroup(), aboutGroup()], value: () => (updateOut() ? t("{version} is out", { version: upd.latest }) : APP_VERSION) },
