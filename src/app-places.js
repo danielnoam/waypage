@@ -420,7 +420,7 @@ function postRow(f, it, withFeed) {
     el("span", { class: "post-body" },
       withFeed ? el("span", { class: "post-feed", dir: "auto" }, f.title) : null,
       el("span", { class: "post-title", dir: "auto" }, it.title),
-      el("span", { class: "post-meta" }, saved ? readingLine(saved) + " · " + when : when)),
+      el("span", { class: "post-meta" }, saved ? readingLine(saved) + " · " + when : f.releases ? releaseMeta(it, withFeed) + " · " + when : when)),
     outside, right);
 }
 
@@ -1675,7 +1675,7 @@ function addFeedSheet() {
       fill(card, feedMark({ url: got.url, link: got.feed.link, icon: got.feed.icon, title: got.feed.title }),
         el("span", { class: "found-text" },
           el("span", { class: "found-name", dir: "auto" }, got.feed.title),
-          el("span", { class: "meta" }, rateLine(got.feed.items))));
+          el("span", { class: "meta" }, got.feed.releases ? releasesLine(got.feed.items) : rateLine(got.feed.items))));
       card.hidden = false;
       modeBox.hidden = false;
       help.className = "footnote";
@@ -1693,8 +1693,10 @@ function addFeedSheet() {
   const follow = async () => {
     const got = found;
     const f = { url: got.url, title: cleanTag(got.feed.title) || C.feeds.siteOf(got.url), link: got.feed.link, icon: got.feed.icon,
-      mode, images: feedImages(), folder: cleanTag(got.feed.title) || C.feeds.siteOf(got.url), days: 7,
+      mode, images: feedImages(), folder: cleanTag(got.feed.title) || C.feeds.siteOf(got.url), days: got.feed.releases ? 30 : 7,
       addedAt: Date.now(), checkedAt: Date.now(), error: "", items: [] };
+    // A GitHub repo's releases (2026-11) come a few a month, not a day.
+    if (got.feed.releases) f.releases = true;
     // A newsletter address pasted here (1.43.0) goes to Newsletters.
     const mail = isMail(f);
     if (mail) Object.assign(f, { folder: f.title, days: MAIL_DAYS });

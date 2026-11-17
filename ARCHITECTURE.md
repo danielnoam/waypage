@@ -82,7 +82,7 @@ src/ink.js          drawing over a clip's blocks or a PDF's pages: strokes, laye
 src/notes.js        notes: sheets of paper you draw on, opened through the PDF pages pipeline with a stand-in document; any clip laid out as a PDF to make one
 src/pptx.js         PowerPoint decks redrawn on a canvas and written as a PDF (1.49.0)
 src/epub.js         clips as an EPUB 3 book, for e-readers and Send to Kindle
-src/feeds.js        RSS, Atom and JSON Feed, read into one shape
+src/feeds.js        RSS, Atom and JSON Feed, read into one shape; a GitHub repo link follows its releases
 src/discover.js     Discover's sources: the hand-picked list, Wikipedia today, and the sites' lists and search (Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON, Tapas, SpaceBattles, Sufficient Velocity; books from Project Gutenberg via Gutendex and Standard Ebooks; Wikisource; LibriVox's audiobooks via archive.org and LibriVox's API)
 src/discover-list.js  the hand-picked list itself (strict JSON between markers, refreshed from GitHub)
 src/sync.js         GitHub sync; src/sync-worker.js runs the merge off the main thread

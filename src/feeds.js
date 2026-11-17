@@ -180,12 +180,14 @@
   async function findFeed(input) {
     const start = http(/^https?:\/\//i.test(input) ? input : "https://" + String(input || "").trim());
     if (!start) throw new FeedError(t("That doesn't look like an address. Paste the site's or its feed's."));
+    const gh = githubRepo(start);
+    if (gh && !/\.atom$/i.test(new URL(start).pathname)) return githubReleases(gh);
     // A site that turns the app's visit away (Cloudflare's browser check,
     // 403) often still serves its feed: the usual paths are tried anyway.
     let res;
     try { res = await get(start); } catch (e) { if (!/\((403|503)\)/.test(e.message)) throw e; res = { url: start, text: "", refused: e }; }
     const at = res.url || start;
-    const direct = parseFeed(res.text, at);
+    const direct = tidyReleases(at, parseFeed(res.text, at));
     if (direct) return { url: at, feed: direct };
     const tries = feedLinks(res.text, at).map((x) => x.url);
     for (const g of GUESSES) { const u = absolute(g, at); if (u && !tries.includes(u)) tries.push(u); }
@@ -203,10 +205,73 @@
 
   async function readFeed(url) {
     const res = await get(url);
-    const feed = parseFeed(res.text, res.url || url);
+    const feed = tidyReleases(res.url || url, parseFeed(res.text, res.url || url));
     if (!feed) throw new FeedError(t("{site}'s feed couldn't be read.", { site: siteOf(url) }));
     return feed;
   }
 
-  C.feeds = { FeedError, parseFeed, feedLinks, findFeed, readFeed, siteOf };
+  // ---- GitHub (2026-11) ----
+  // A repo's own page names no feed, but GitHub keeps one of its releases
+  // (and of its tags). Any link into a repo follows its releases, or its
+  // tags when it has never made a release; a commits feed is only followed
+  // when its own address is pasted, since it's mostly noise.
+  const NOT_OWNERS = /^(about|apps|collections|contact|customer-stories|enterprise|events|explore|features|login|marketplace|new|notifications|orgs|organizations|pricing|pulls|issues|search|security|settings|signup|site|sponsors|team|topics|trending|users)$/i;
+  function githubRepo(url) {
+    let u;
+    try { u = new URL(url); } catch (e) { return null; }
+    if (!/^(www\.)?github\.com$/i.test(u.hostname)) return null;
+    const [owner, repo] = u.pathname.split("/").filter(Boolean);
+    if (!owner || !repo || NOT_OWNERS.test(owner) || !/^[\w.-]+$/.test(owner + repo)) return null;
+    return { owner, repo: repo.replace(/\.git$/i, "") };
+  }
+  const releasesKind = (url) => {
+    const gh = githubRepo(url);
+    const m = gh && new URL(url).pathname.match(/^\/[^/]+\/[^/]+\/(releases|tags)\.atom$/i);
+    return m ? { ...gh, kind: m[1].toLowerCase() } : null;
+  };
+
+  // "Release notes from waypage" becomes the repo's name, with its owner's
+  // picture, and each release counts its Added, Changed and Fixed lines.
+  function tidyReleases(url, feed) {
+    const gh = releasesKind(url);
+    if (!gh || !feed) return feed;
+    feed.title = gh.repo;
+    feed.icon = "https://github.com/" + gh.owner + ".png?size=64";
+    feed.releases = true;
+    for (const it of feed.items) {
+      const n = noteCounts(it.body);
+      if (n) it.notes = n;
+      delete it.image;
+    }
+    return feed;
+  }
+  const NOTE_HEADS = ["added", "changed", "fixed", "removed"];
+  function noteCounts(html) {
+    if (!/<h[1-6]/i.test(String(html || ""))) return null;
+    const doc = new DOMParser().parseFromString("<body>" + html, "text/html");
+    const out = {};
+    for (const h of doc.querySelectorAll("h1, h2, h3, h4, h5, h6")) {
+      const k = h.textContent.trim().toLowerCase().replace(/[^a-z]/g, "");
+      const list = h.nextElementSibling;
+      if (NOTE_HEADS.includes(k) && list && /^(UL|OL)$/.test(list.tagName)) out[k] = (out[k] || 0) + list.querySelectorAll(":scope > li").length;
+    }
+    return Object.keys(out).length ? out : null;
+  }
+
+  async function githubReleases(gh) {
+    const base = "https://github.com/" + gh.owner + "/" + gh.repo;
+    let first = null;
+    for (const kind of ["releases", "tags"]) {
+      const url = base + "/" + kind + ".atom";
+      const res = await get(url);
+      const feed = tidyReleases(url, parseFeed(res.text, url));
+      if (!feed) break;
+      if (feed.items.length) return { url, feed };
+      first = first || { url, feed };
+    }
+    if (first) return first;
+    throw new FeedError(t("Couldn't read {repo}'s releases on GitHub.", { repo: gh.repo }));
+  }
+
+  C.feeds = { FeedError, parseFeed, feedLinks, findFeed, readFeed, siteOf, githubRepo, noteCounts };
 })();
