@@ -458,10 +458,12 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
     });
 
     // A newsletter's email (Kill the Newsletter), saved the way the
-    // Newsletters screen saves one: given whole, with its sender.
+    // Newsletters screen saves one (mailPage): given whole, with its sender.
     const saveMail = (html, from, title, site) => inPage(browser, [], async (a) => {
       const url = "https://kill-the-newsletter.com/feeds/abc/entries/def.html";
-      const meta = await window.Waypage.save.save(url, { given: { url, html: a.html, title: a.title, site: a.site, mail: true, from: a.from } });
+      const given = mailPage({ title: "James Clear" }, { url, title: a.title, from: a.from }, a.html);
+      if (a.site) given.site = a.site;
+      const meta = await window.Waypage.save.save(url, { given });
       return { meta, html: await window.Waypage.store.readPage(meta.id) };
     }, { html, from, title, site });
 
@@ -485,6 +487,20 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       const { got } = await saveMail(fixture("mail-jamesclear-321.html"), "bounce-123@ckespa.com", "3-2-1: On following your dreams", "James Clear");
       assert.strictEqual(got.meta.site, "James Clear");
       assert.ok(!/Happy 3-2-1 Thursday/.test(plain(got.html)));
+    });
+
+    await test("James Clear's 3-2-1 as Kill the Newsletter serves it: a Kit email inside its page", async () => {
+      const { got } = await saveMail(fixture("mail-jamesclear-321-raw.html"), "bounces+e5ur7ex443@ckespa.jamesclear.com", "3-2-1: On following your dreams, making the first right choice, and how to\thandle a storm", "Jamesclear");
+      const { meta, html } = got;
+      if (process.env.DUMP) fs.writeFileSync(process.env.DUMP + "/jc-raw.html", html);
+      assert.strictEqual(meta.site, "James Clear");
+      const text = plain(html);
+      assert.ok(text.includes("Talent is a gift") && text.includes("Endeavor to live") && text.includes("What is the first right thing I can do?"), text.slice(0, 400));
+      assert.ok(!/wisdom per word|Happy 3-2-1 Thursday|Here are 3 ideas|What else am I working on|JAMESCLEAR\.COM|NOVEMBER 12|Get my book|habit calendar|Follow me on social|About this newsletter|unsubscribe|Example Street|feed settings/i.test(text), text);
+      assert.strictEqual(count(html, /<table/g), 0);
+      assert.strictEqual(count(html, /<img/g), 0);
+      assert.ok(/<h2>3 Ideas From Me<\/h2>/.test(html) && /<h2>2 Quotes From Others<\/h2>/.test(html) && /<h2>1 Question For You<\/h2>/.test(html));
+      assert.ok(!/\u200b/.test(html));
     });
 
     await test("any newsletter: layout tables open up, a data table stays", async () => {
