@@ -84,7 +84,8 @@ window.Waypage.discoverList =
     { "kind": "newsletter", "name": "1440", "about": "The day's news in five minutes, without a side.", "url": "https://join1440.com/", "signup": "https://join1440.com/" },
     { "kind": "newsletter", "name": "Benedict Evans", "about": "A weekly read on what matters in tech.", "url": "https://www.ben-evans.com/", "signup": "https://www.ben-evans.com/newsletter" },
     { "kind": "newsletter", "name": "NextDraft", "about": "The day's most fascinating news, picked and written up.", "url": "https://nextdraft.com/", "signup": "https://nextdraft.com/" },
-    { "kind": "newsletter", "name": "Dense Discovery", "about": "Design, tech and thoughtful living, weekly.", "url": "https://www.densediscovery.com/", "signup": "https://www.densediscovery.com/" }
+    { "kind": "newsletter", "name": "Dense Discovery", "about": "Design, tech and thoughtful living, weekly.", "url": "https://www.densediscovery.com/", "signup": "https://www.densediscovery.com/" },
+    { "kind": "newsletter", "name": "3-2-1 by James Clear", "about": "Three ideas, two quotes and one question, every Thursday.", "url": "https://jamesclear.com/3-2-1", "signup": "https://jamesclear.com/3-2-1" }
   ]
 }
 // LIST END
