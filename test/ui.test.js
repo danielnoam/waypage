@@ -2376,6 +2376,32 @@ c("bk1", { at: 0.01 })]);
       assert.deepStrictEqual(errs, [], errs.join(" | "));
       await q.context().close();
     });
+
+    await test("a clip's Live sits right above In other apps, which says what it does; the sidebar's version opens About (Daniel's ask)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t", what: { activity: true }, shareKinds: { article: true } }));
+        const c = { id: "lv1", url: "https://example.com/lv1", title: "Clip lv1", site: "example.com", savedAt: 100, minutes: 1, mode: "links", at: 0 };
+        await window.Waypage.store.writeIndex([c]);
+        await window.Waypage.store.writePage("lv1", "<!doctype html><html><body><p>lv1</p></body></html>", c);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => openMenu("page", state.pages[0]));
+      const rows = await q.locator(".group label.row .choice-label").allTextContents();
+      const i = rows.indexOf("Live");
+      assert.ok(i >= 0 && rows[i + 1] === "In other apps", rows.join(", "));
+      assert.ok(/reading activity/.test(await q.locator("label.row", { hasText: "In other apps" }).locator(".choice-note").textContent()));
+      await q.evaluate(() => history.back());
+      await until(q, () => !state.menu);
+      await q.click("#sideBtn");
+      await q.click("#sidebar .side-version");
+      await until(q, () => state.settings && !state.side);
+      await until(q, () => document.getElementById("sectionTitle").textContent === "About");
+      const errs = q.errors.filter((e) => !/workers\.dev|api\.github/.test(e));
+      assert.deepStrictEqual(errs, [], errs.join(" | "));
+      await q.context().close();
+    });
     await test("reading on while a sync runs keeps the new place, not the one the sync started with (1.36.1)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
