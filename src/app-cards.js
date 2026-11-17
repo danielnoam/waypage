@@ -370,8 +370,11 @@ async function sweepEarlier() {
   if (!Array.isArray(list) || !list.length || !state.pages.length) return;
   const used = new Set();
   for (const p of state.pages) { used.add(p.id); if (p.earlier) used.add(p.earlier.id); }
-  for (const id of list) if (!used.has(id)) await C.store.removePage(id).catch(() => {});
-  store(EARLIER_KEY, list.filter((id) => used.has(id)));
+  const dropped = new Set(list.filter((id) => !used.has(id)));
+  for (const id of dropped) await C.store.removePage(id).catch(() => {});
+  // Read again: an update running alongside may have added one meanwhile.
+  const now = load(EARLIER_KEY, []);
+  store(EARLIER_KEY, (Array.isArray(now) ? now : []).filter((id) => !dropped.has(id)));
 }
 async function dropEarlier(p) {
   if (!p.earlier) return;
@@ -431,8 +434,9 @@ async function goBackCopy(id) {
 // "pull" (a pull on the library) says nothing at all, and the pull sums
 // up what came back: "updated", "kept" (looked broken) or "same".
 async function updateClip(p, live) {
-  const pull = live === "pull";
   if (!navigator.onLine) { if (!live) toast(t("You're offline. Try again when you're back online.")); return; }
+  // One that failed before waits in Downloads; asked again, this one takes its place.
+  state.saving = state.saving.filter((s) => !(s.again === p && s.error));
   if (state.saving.some((s) => s.again === p)) return;
   p.liveAt = Date.now();
   const job = { ...newJob(p.url, p.folder), key: "again:" + p.id, again: p, mode: p.mode, kind: p.comic ? "comic" : "article", hold: true, quiet: live };
@@ -445,6 +449,12 @@ async function updateClip(p, live) {
     else toast(t("Couldn't update it. It's in Downloads to try once more."));
     return;
   }
+  return takeUpdate(p, meta, live);
+}
+// What came back from the site, put in place or kept aside (also for
+// Try again in Downloads, which fetches the held copy again).
+async function takeUpdate(p, meta, live) {
+  const pull = live === "pull";
   const cur = state.pages.find((x) => x.id === p.id);
   const before = cur ? await C.store.readPage(cur.id).catch(() => null) : null;
   const after = await C.store.readPage(meta.id).catch(() => null);
@@ -582,6 +592,9 @@ async function retryJob(s) {
   Object.assign(s, { error: null, contents: null, done: 0, total: null, drawing: false, waiting: false });
   renderLibrary();
   const meta = await runJob(s);
+  // Update from the site: the copy came back held, and is weighed like
+  // the first try's would have been.
+  if (meta && s.hold) { await takeUpdate(s.again, meta, false); renderDownloads(); return meta; }
   if (meta) {
     if (s.run) { s.run.saved++; s.run.failed = Math.max(0, s.run.failed - 1); }
     savedToast(meta);

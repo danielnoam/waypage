@@ -163,6 +163,8 @@
     // Other devices still count it under the old id: they follow this.
     const m = all().moved || (all().moved = {});
     m[from] = to;
+    // Going back (a live clip's earlier copy) undoes the move, not a loop.
+    if (m[to] === from) delete m[to];
     for (const d of Object.values(all().days)) if (d.clips && d.clips[from]) { add(d.clips, to, d.clips[from]); delete d.clips[from]; }
     changed();
     const c = all().clips;
