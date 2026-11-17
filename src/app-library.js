@@ -1163,7 +1163,7 @@ function pageSheet(p, where) {
       el("div", { class: "group" },
         // Live (2026-11-16): updated from the site as it opens. Above In
         // other apps (Daniel's ask, 2026-11-17).
-        webCopy(p) ? switchRow(t("Live"), t("Updates from the site when you open it, at most once an hour"), !!p.live, (v) => setLive(p, v).then(draw)) : null,
+        webCopy(p) ? switchRow(t("Live"), t("Updates from the site when you open it, at most once an hour, and when you pull down the library"), !!p.live, (v) => setLive(p, v).then(draw)) : null,
         ...shareRows(p, draw),
         inReader ? null : menuRow(t("Rename"), () => { renaming = true; draw(); }),
         p.link && p.file && p.file.kind === "pdf" && !p.comic

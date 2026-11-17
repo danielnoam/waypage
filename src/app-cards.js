@@ -427,8 +427,11 @@ async function goBackCopy(id) {
 }
 
 // Fetches the clip again and decides what to keep. `live`: started by
-// opening a live clip, so it says nothing unless something changed.
+// opening a live clip, so it says nothing unless something changed;
+// "pull" (a pull on the library) says nothing at all, and the pull sums
+// up what came back: "updated", "kept" (looked broken) or "same".
 async function updateClip(p, live) {
+  const pull = live === "pull";
   if (!navigator.onLine) { if (!live) toast(t("You're offline. Try again when you're back online.")); return; }
   if (state.saving.some((s) => s.again === p)) return;
   p.liveAt = Date.now();
@@ -452,7 +455,7 @@ async function updateClip(p, live) {
     await C.store.removePage(meta.id).catch(() => {});
     await C.store.writeIndex(state.pages);
     if (!live) toast(t("Already up to date. Nothing on the page has changed."));
-    return;
+    return "same";
   }
   sweepEarlier();
   const wasN = countWords(was), nowN = countWords(now);
@@ -462,28 +465,42 @@ async function updateClip(p, live) {
     cur.earlier = contentOf(meta);
     rememberEarlier(meta.id);
     await C.store.writeIndex(state.pages);
+    if (pull) return "kept";
     toast(meta.cut && !cur.cut ? t("The site sent back only the start. Kept your copy.")
       : t("The site sent back {now} words, not {was}. Kept your copy.", { now: nowN.toLocaleString(), was: wasN.toLocaleString() }),
     t("Use it anyway"), () => goBackCopy(cur.id));
-    return;
+    return "kept";
   }
   await dropEarlier(cur);
   const fresh = await putCopy(cur, meta, before, after);
   if (!fresh) { await C.store.removePage(meta.id).catch(() => {}); return; }
+  if (pull) return "updated";
   const lost = (fresh.marks || []).filter((m) => m.text && !now.includes(m.text)).length;
   const more = nowN - wasN;
   const said = lost ? tn(lost, "Updated from the site. 1 highlight's words aren't in it any more; it stays under Highlights.", "Updated from the site. {n} highlights' words aren't in it any more; they stay under Highlights.")
     : more > 0 ? tn(more, "Updated from the site, 1 word more.", "Updated from the site, {n} words more.")
     : t("Updated from the site.");
   toast(said, t("Undo"), () => goBackCopy(fresh.id));
+  return "updated";
 }
 
 // A live clip as it opens: updated when the copy here is over an hour
 // old, and never on mobile data when saving waits for Wi-Fi.
+const liveNow = (p) => p.live && !p.file && !p.preview && /^https?:/.test(p.url || "") && navigator.onLine && !waitsForWifi(DATA_SAVE_KEY);
 function liveOnOpen(p) {
-  if (!p.live || p.file || p.preview || !/^https?:/.test(p.url || "") || !navigator.onLine || waitsForWifi(DATA_SAVE_KEY)) return;
+  if (!liveNow(p)) return;
   if (Date.now() - Math.max(p.savedAt || 0, p.liveAt || 0) < LIVE_EVERY) return;
   updateClip(p, true);
+}
+// A pull on the library (Daniel's ask, 2026-11-17) updates every live
+// clip, as it checks Website sync collections; asked for, so not held to
+// once an hour. Three at a time. Gives how many came back changed.
+async function updateLiveClips() {
+  const list = state.pages.filter(liveNow);
+  let n = 0;
+  const go = async () => { for (let p; (p = list.shift());) if ((await updateClip(p, "pull").catch(() => null)) === "updated") n++; };
+  await Promise.all([go(), go(), go()]);
+  return n;
 }
 async function setLive(p, on) {
   if (on) p.live = true; else delete p.live;
