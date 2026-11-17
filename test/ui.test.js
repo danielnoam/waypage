@@ -1584,7 +1584,7 @@ function zipOf(files) {
       await q.click("#folderMore");
       await q.locator("#folderPop .pop-item", { hasText: "Make it a series" }).click();
       await q.locator(".sheet-row", { hasText: "Make it a series, move 1 series out" }).click();
-      await until(q, () => isSeriesFolder("Shelf") && !seriesHost("Saga") && state.pages.every((p) => p.folder !== "Saga" || !p.folderIn));
+      await until(q, () => isSeriesFolder("Shelf") && !seriesHost("Saga") && state.pages.every((p) => p.folder !== "Saga" || !p.folderIn && !state.menu);
       // And back, from its ⋯ menu; then Saga goes into Weekend.
       await q.click("#folderMore");
       await q.locator("#folderPop .pop-item", { hasText: "Make it a collection" }).click();
@@ -1594,12 +1594,14 @@ function zipOf(files) {
       await q.click("#folderMore");
       await q.locator("#folderPop .pop-item", { hasText: "Put in a collection" }).click();
       await q.locator(".sheet-row", { hasText: "Weekend" }).click();
-      await until(q, () => seriesHost("Saga") === "Weekend");
+      await until(q, () => seriesHost("Saga") === "Weekend" && !state.menu && state.folder === "Saga");
       // Renaming the collection keeps the series in it; removing it lets go.
-      await q.evaluate(async () => { openFolder("Weekend"); await renameFolder("Weekends"); });
+      await q.evaluate(() => openFolder("Weekend"));
+      await until(q, () => state.folder === "Weekend");
+      await q.evaluate(() => renameFolder("Weekends"));
       assert.strictEqual(await q.evaluate(() => seriesHost("Saga")), "Weekends");
       await q.evaluate(() => removeFolder(false));
-      await until(q, () => !seriesHost("Saga") && isSeriesFolder("Saga"));
+      await until(q, () => !seriesHost("Saga") && isSeriesFolder("Saga") && !allFolders().includes("Weekends"));
       // Without the marks, nothing moves: it's a collection again.
       await q.evaluate(async () => { for (const p of state.pages) { delete p.folderSeries; delete p.folderIn; } renderLibrary(); });
       await until(q, () => !document.querySelector('[data-key="series"]') && !!document.querySelector('[data-key="folders"] .tile[data-name="Saga"]'));
