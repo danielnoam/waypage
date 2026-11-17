@@ -103,6 +103,23 @@ and the page shows above it.
 
 ## 4. Motion (Now, 1.11.0, `src/motion.js`)
 
+**Which move (2026-11).** Pick by what the thing is, never by what a
+neighbour does. The moves are in `src/keel/motion.js`.
+
+| What it is | In | Out |
+|---|---|---|
+| Menu, popover, drop-down, the reader's Aa and ⋯ panels on a big screen | `popFrom` its button | `popOut` (never `popInto`) |
+| Dialog: Downloads, Sync, Save with options, Settings and centred reader sheets on a big screen, the colour picker | `dialogIn` toward its button | `dialogOut` |
+| Sheet on a phone | `rise` | `sink`, or the drag |
+| Bar or toast: Find, select bars, the drawing bar, toasts, the Narrate bar | `edgeIn` from its nearest edge | `edgeOut` to the same edge |
+| Screen with no card behind it (Settings, a pane on a phone) | `push` | `pop` |
+| Clip or collection opened from its card | `grow` from the card | `shrink` back to it |
+| Sidebar | `slideIn` | `slideOut` |
+| Row added to or taken from a list | `appear`, or `flip` | `vanish`, or `ghostOut` |
+
+`appear` and `vanish` (scale from a point) are for list rows and the
+picture viewer's fallback only, never for a menu, bar or dialog.
+
 - Springs, not durations, sampled into CSS `linear()`. Two tiers:
   - Touch (phone and tablet): stiffness 400, damping 32 for sheets,
     screens and cards; stiffness 600, damping 40 for small controls.
