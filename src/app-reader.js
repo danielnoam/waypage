@@ -1686,7 +1686,7 @@ function openSelColors() {
   if (top + h > frame.bottom - 8) top = bar.top - h - 8;
   selColors.style.top = top + "px";
   selColors.style.left = Math.max(8, Math.min(from.left, innerWidth - 8 - w)) + "px";
-  M.appear(selColors);
+  M.popFrom(selColors, from);
 }
 function closeSelColors() {
   if (!selColors || selColors.hidden) return;
@@ -2795,7 +2795,7 @@ function openSheet(kind, fromHistory) {
     // A link, note or look-up has no button to hang under: the middle (1.53.0).
     sheet.dataset.pop = "center";
     sheet.style.top = sheet.style.left = sheet.style.right = "";
-    M.rise(sheet);
+    M.dialogIn(sheet);
   } else {
     delete sheet.dataset.pop;
     sheet.style.top = sheet.style.left = sheet.style.right = "";
@@ -2814,7 +2814,7 @@ function closeSheet(now) {
   $("sheetCatch").hidden = true;
   const sheet = $("readingSheet");
   if (now) { sheet.hidden = true; return; }
-  (sheet.dataset.pop && button ? M.popInto(sheet, button.getBoundingClientRect()) : M.sink(sheet, sheetDrop(sheet))).then(() => { if (!state.sheet) sheet.hidden = true; delete sheet.dataset.drop; });
+  (sheet.dataset.pop === "center" ? M.dialogOut(sheet) : sheet.dataset.pop && button ? M.popOut(sheet, button.getBoundingClientRect()) : M.sink(sheet, sheetDrop(sheet))).then(() => { if (!state.sheet) sheet.hidden = true; delete sheet.dataset.drop; });
   if (button) afterStart(() => button.focus({ preventScroll: true }));
 }
 
@@ -3446,20 +3446,24 @@ function openFind() {
   closeSkim();
   history.pushState({ ...readerState(state.open), find: true }, "");
   $("findBar").hidden = false;
+  M.edgeIn($("findBar"), "top");
   $("readerView").classList.remove("bar-away");
   $("findInput").value = "";
   paintFind();
   $("findInput").focus();
 }
-function closeFind(now) {
+// fromHistory: Back closed it, so it slides away without going back again.
+function closeFind(now, fromHistory) {
   clearTimeout(findTimer);
   if (state.open || now) C.reader.clearFind();
   findCount = 0;
   findAt = -1;
-  $("findBar").hidden = true;
+  const bar = $("findBar");
+  if (now || !state.finding) bar.hidden = true;
+  else M.edgeOut(bar, "top").then(() => { if (!state.finding) bar.hidden = true; });
   if (!state.finding) return;
   state.finding = false;
-  if (!now) history.back();
+  if (!now && !fromHistory) history.back();
 }
 function paintFind() {
   const q = $("findInput").value.trim();

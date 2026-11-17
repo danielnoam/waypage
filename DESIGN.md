@@ -145,7 +145,10 @@ picture viewer's fallback only, never for a menu, bar or dialog.
   right; on touch the screen under them drifts 25% left. Downloads and
   dialogs fade in as they settle from 96%, leaning toward their
   button, and fade out a little quicker (1.49.0, `dialogIn` and
-  `dialogOut`, the one planned fade). On a big screen (700 px and up)
+  `dialogOut`, the one planned fade). So do the other dialogs: a
+  link, note or look-up in the middle of a big screen (it rose from the
+  bottom edge into the middle), and the drawing colour picker, toward
+  the colour it was held on. On a big screen (700 px and up)
   Settings is such a window, opened from the gear (1.49.0): there,
   nothing crosses the window to land on the far side; a screen comes
   from its button or from the side it ends up on. Menus and popovers grow from their
@@ -159,16 +162,24 @@ picture viewer's fallback only, never for a menu, bar or dialog.
   and in Pages the page follows the finger and springs to the next or
   back.
 - Toasts and bars come in from their nearest edge and leave the same
-  way. The brightness slider slides past the left edge. Checkmarks grow.
+  way: Find over the reader's bar from the top, the drawing bar from the
+  bottom (since 2026-11; Find cut in and out, the drawing bar popped out
+  of a point). The brightness slider slides past the left edge.
+  Checkmarks grow.
 - The picture viewer grows from the picture and shrinks back into it.
 - Settings, Appearance, Animations off (1.12.0): nothing moves or
-  eases, not even the reduced-motion fades; spinners still turn. Since
+  eases, not even the reduced-motion fades; spinners still turn. Under
+  reduced motion a spinner breathes instead of turning, at its own pace
+  (the blanket 1 ms rule made it flicker every frame until 2026-11). Since
   1.48.3 that includes what a press does: the switch knob's stretch,
   the ? turning and the drop-down's face pop are off too (they ran with
   no easing and looked like a two-step jump).
 - A drop-down menu leaves by only the last quarter of its arrival, run
   backwards and fading, gone before it reaches its button (1.48.3,
-  `popOut`); shrinking the whole way back read as the menu crawling into
+  `popOut`). Since 2026-11 every menu and popover leaves that way: the
+  ⋯ menus, a clip's menu, the reader's panels under Aa and ⋯ on a big
+  screen, the drawing bar's menus and the highlight colours (they
+  used `popInto` or grew out of a point); shrinking the whole way back read as the menu crawling into
   the button. The fade is the exception to "nothing fades": a partial
   shrink ending in a cut looked like a glitch.
 - Only `transform` and `opacity` move on screens; small menus use a

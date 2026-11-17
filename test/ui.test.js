@@ -3280,6 +3280,8 @@ c("bk1", { at: 0.01 })]);
       assert.strictEqual(await q.locator(".ink-pop-sizes button").count(), 5);
       assert.deepStrictEqual(await q.locator(".ink-pop-sizes .ink-pop-n").allInnerTexts(), ["1", "2", "3", "4", "5"]);
       assert.strictEqual(await q.locator('.ink-pop-sizes [aria-checked="true"]').count(), 1);
+      // Where it settles: it grows out of its button, and the bar rises from the bottom.
+      await until(q, () => ![".ink-pop-sizes", ".ink-bar"].some((s) => document.querySelector(s).getAnimations().length));
       const onScreen = await q.evaluate(() => { const r = document.querySelector(".ink-pop-sizes").getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.bottom <= document.querySelector(".ink-bar").getBoundingClientRect().top; });
       assert.strictEqual(onScreen, true, "above its button, inside the screen");
       await q.locator(".ink-pop-sizes button").nth(4).click();
