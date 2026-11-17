@@ -156,7 +156,9 @@ picture viewer's fallback only, never for a menu, bar or dialog.
 - Collections › and Clips ›: the cards and tiles that stay move to their
   new places (FLIP); the sections that go leave past the top or bottom
   edge, new ones come in from there. Adding or removing a few clips
-  slides the list, and the card grows in or shrinks away.
+  slides the list, and the card grows in or shrinks away. A
+  collection's own list does the same, and a reorder slides (since
+  2026-11; it jumped).
 - Touch follows the finger. Sheets drag down to close (past a third or a
   flick), the sidebar drags left with the library drifting beside it,
   and in Pages the page follows the finger and springs to the next or
