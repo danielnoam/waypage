@@ -90,7 +90,7 @@ async function packDownload(s, how) {
   renderDiscoverSoon();
   try {
     // Big packs wait for Wi-Fi when asked, shown as waiting.
-    while (how.wifi && C.platform.metered) {
+    while (how.wifi && C.platform.metered && !k.run.stopped) {
       k.run.now = t("Waiting for Wi-Fi");
       updateRunCard(k.run);
       await new Promise((go) => wifiWaiters.push(go));
@@ -103,7 +103,7 @@ async function packDownload(s, how) {
     const got = state.pages.find((p) => p.link === ref && p.zim);
     if (got && how.where !== "folder") { got.zim.ours = true; await C.store.writeIndex(state.pages); }
   } catch (e) {
-    toast(t("Couldn't download {title}. Try again: it goes on from where it stopped.", { title: s.title }));
+    toast(k.run.stopped ? t("Stopped.") : t("Couldn't download {title}. Try again: it goes on from where it stopped.", { title: s.title }));
   } finally {
     packsComing.delete(s.file);
     k.done();
@@ -267,7 +267,7 @@ async function bookAsFile(s, how) {
       await openFile(file, null, false, ref, { ref });
     } catch (e) {
       k.done();
-      toast(t("Couldn't download it just now. Try again later{x}", { x: t(", or open it on the site.") }));
+      toast(k.run.stopped ? t("Stopped.") : t("Couldn't download it just now. Try again later{x}", { x: t(", or open it on the site.") }));
     }
     return;
   }

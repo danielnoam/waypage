@@ -596,6 +596,31 @@ async function phone(browser) {
       assert.deepStrictEqual(got.opened, [{ ref: "file:///kept/wikipedia_en_100_maxi_2026-10.zim", forced: "file:///kept/wikipedia_en_100_maxi_2026-10.zim" }]);
     });
 
+    await test("Stop on a pack waiting for Wi-Fi stops it then, not once Wi-Fi comes", async () => {
+      const { ctx, p } = await phone(browser);
+      const got = await p.evaluate(async (xml) => {
+        const P = Waypage.platform;
+        const s = Waypage.discover.parseKiwix(xml, "https://library.kiwix.org/catalog/v2/entries")[0];
+        window.kept = [];
+        P.keepFile = async (url) => { window.kept.push(url); return "file:///kept/x.zim"; };
+        Object.defineProperty(P, "native", { value: true, configurable: true });
+        Object.defineProperty(P, "metered", { get: () => true, configurable: true });
+        const going = packDownload(s, { where: "app", wifi: true });
+        await new Promise((r) => setTimeout(r, 100));
+        const run = [...runs][0];
+        const waiting = run && run.now;
+        stopRun(run);
+        const ended = await Promise.race([going.then(() => true), new Promise((r) => setTimeout(() => r(false), 2000))]);
+        return { waiting, ended, runs: runs.size, kept: window.kept, toast: document.getElementById("toast").textContent };
+      }, fixture("kiwix.xml"));
+      await ctx.close();
+      assert.strictEqual(got.waiting, "Waiting for Wi-Fi");
+      assert.ok(got.ended, "the download ends at Stop");
+      assert.strictEqual(got.runs, 0, "its card leaves Downloads");
+      assert.deepStrictEqual(got.kept, [], "nothing is fetched");
+      assert.match(got.toast, /^Stopped\./);
+    });
+
     await test("tapping a Wikipedia today row reads it without saving; its + saves it", async () => {
       const { ctx, p } = await phone(browser);
       await p.evaluate(([wiki]) => {
