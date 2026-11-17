@@ -554,7 +554,7 @@ function dictsGroup() {
 function libraryActions() {
   const sec = section(t("Actions"), null,
     el("div", { class: "group" }, ...importRow(),
-      navRow(t("Edit clips"), t("Find and replace across many clips and files"), () => openSection("edit", false, true))));
+      navRow(t("Find and replace"), t("In many clips and files at once"), () => openSection("edit", false, true))));
   sec.id = "importSection";
   return sec;
 }
@@ -977,7 +977,7 @@ function browserStorageGroup() {
   return box;
 }
 
-// ---- Edit clips (1.22.0) ----
+// ---- Find and replace (1.22.0, was Edit clips) ----
 // Find and replace across many clips at once: in their text (a match
 // replaced, or removed with nothing to put instead) or their titles.
 // * stands for any words, so ~~*~~ finds everything between two pairs
@@ -1114,7 +1114,7 @@ function choiceList(name, label, options, current, set) {
 }
 
 function pickToEdit() {
-  toLibrary().then(() => { startSelect([]); toast(t("Pick the clips to edit, then tap Edit.")); });
+  toLibrary().then(() => { startSelect([]); toast(t("Pick the clips and files to change, then tap Edit.")); });
 }
 // From the library's Edit: the picked clips, here.
 async function editPicked() {
@@ -1306,7 +1306,7 @@ const SECTIONS = {
   syncHistory: { title: t("Sync history"), build: historySections, value: () => "", parent: "sync" },
   drive: { title: t("Google Drive"), build: driveSections, value: driveValue },
   notifications: { title: t("Notifications"), build: notesSections, value: notesValue },
-  edit: { title: t("Edit clips"), build: editGroup, value: () => "", parent: "library" },
+  edit: { title: t("Find and replace"), build: editGroup, value: () => "", parent: "library" },
   kokoro: { title: t("More speech engines"), build: kokoroSections, value: () => "", parent: "reading" },
   storage: { title: t("Storage"), build: () => [placeGroup(), storageGroup(), browserStorageGroup(), backupGroup(roomRows())], value: () => formatSize(totalBytes()) },
   updates: { title: t("About"), build: () => [updatesGroup(), aboutGroup()], value: () => (updateOut() ? t("{version} is out", { version: upd.latest }) : APP_VERSION) },

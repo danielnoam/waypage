@@ -1488,11 +1488,11 @@ function zipOf(files) {
       await q.reload();
       await q.click("#settingsBtn");
       await q.locator(".nav-row", { hasText: "Library" }).click();
-      await q.locator("#sectionBody .nav-row", { hasText: "Edit clips" }).click();
-      await q.locator("#sectionTitle", { hasText: "Edit clips" }).waitFor();
+      await q.locator("#sectionBody .nav-row", { hasText: "Find and replace" }).click();
+      await q.locator("#sectionTitle", { hasText: "Find and replace" }).waitFor();
       await q.click("#sectionBack");
       await q.locator("#sectionTitle", { hasText: "Library" }).waitFor();
-      await q.locator("#sectionBody .nav-row", { hasText: "Edit clips" }).click();
+      await q.locator("#sectionBody .nav-row", { hasText: "Find and replace" }).click();
       await q.fill("#editFind", "~~*~~");
       await q.locator("#editResult .row", { hasText: "Find" }).click();
       await q.locator("#editResult .section-lead", { hasText: "Found" }).waitFor();
@@ -1531,7 +1531,7 @@ function zipOf(files) {
       await q.reload();
       await q.click("#settingsBtn");
       await q.locator(".nav-row", { hasText: "Library" }).click();
-      await q.locator("#sectionBody .nav-row", { hasText: "Edit clips" }).click();
+      await q.locator("#sectionBody .nav-row", { hasText: "Find and replace" }).click();
       await q.fill("#editFind", "oceanofpdf.com");
       await q.locator("#editResult .row", { hasText: "Find" }).click();
       await q.locator("#editResult .section-lead", { hasText: "Found" }).waitFor();
@@ -1556,7 +1556,7 @@ function zipOf(files) {
       await q.reload();
       await q.click("#settingsBtn");
       await q.locator(".nav-row", { hasText: "Library" }).click();
-      await q.locator("#sectionBody .nav-row", { hasText: "Edit clips" }).click();
+      await q.locator("#sectionBody .nav-row", { hasText: "Find and replace" }).click();
       await q.locator(".pick-row .dropdown-btn").click();
       await q.locator(".dropdown-item", { hasText: "All files" }).click();
       await q.fill("#editFind", "[ad]");

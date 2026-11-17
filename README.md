@@ -44,7 +44,7 @@ Each section below shows the computer (left) and the phone (right).
 - Search titles, tags and the full text of every clip.
 - Favourites, tags, and a star on a clip's picture.
 - Pick several clips to tag, move, mark read, export or delete together; hold or right-click for a clip's menu.
-- Edit clips: find and remove or replace words across many clips.
+- Find and replace: find and remove or replace words across many clips and files.
 - Import from Pocket, Instapaper, Omnivore, Raindrop and Wallabag.
 - Import a Kindle's highlights and notes (My Clippings.txt) onto the same books in your library.
 
