@@ -1584,7 +1584,7 @@ function zipOf(files) {
       await q.click("#folderMore");
       await q.locator("#folderPop .pop-item", { hasText: "Make it a series" }).click();
       await q.locator(".sheet-row", { hasText: "Make it a series, move 1 series out" }).click();
-      await until(q, () => isSeriesFolder("Shelf") && !seriesHost("Saga") && state.pages.every((p) => p.folder !== "Saga" || !p.folderIn && !state.menu);
+      await until(q, () => isSeriesFolder("Shelf") && !seriesHost("Saga") && state.pages.every((p) => p.folder !== "Saga" || !p.folderIn) && !state.menu);
       // And back, from its ⋯ menu; then Saga goes into Weekend.
       await q.click("#folderMore");
       await q.locator("#folderPop .pop-item", { hasText: "Make it a collection" }).click();
