@@ -2054,6 +2054,7 @@
   const hasStuff = (n) => !!(n.textContent.trim() || (n.nodeType === 1 && (n.matches(MEDIA) || n.querySelector(MEDIA))));
   function tidyMail(body, rule) {
     const doc = body.ownerDocument;
+    if (rule && rule.strip) rule.strip(body);
     for (const table of [...body.querySelectorAll("table")].reverse()) {
       if (table.querySelector("th, caption")) continue;
       const rows = [...table.querySelectorAll(":scope > tbody > tr, :scope > thead > tr, :scope > tr")];
@@ -2063,9 +2064,9 @@
       for (const cell of full.flat()) frag.append(...cell.childNodes);
       table.replaceWith(frag);
     }
-    // Text a mail hides (its preview line) goes, and what the tables held
-    // then sits in one column, so the reader keeps every part together.
-    for (const el of [...body.querySelectorAll("[hidden], [style]")]) if (el.hasAttribute("hidden") || /display:\s*none|visibility:\s*hidden|max-height:\s*0|mso-hide:\s*all/i.test(el.getAttribute("style"))) el.remove();
+    // What the tables held then sits in one column, so the reader keeps
+    // every part together.
+    stripMail(body);
     for (const div of [...body.querySelectorAll("div, center")].reverse()) div.replaceWith(...div.childNodes);
     const walk = doc.createTreeWalker(body, 4);
     for (let n = walk.nextNode(); n; n = walk.nextNode()) { const d = n.data.replace(ZERO_WIDTH, ""); if (d !== n.data) n.data = d; }
@@ -2090,6 +2091,17 @@
     }
   }
 
+  // What no newsletter's reader wants, taken out of every email before
+  // it's read: text it hides (its preview line), the part Kit (ConvertKit)
+  // marks as only for the inbox (why you got it, unsubscribe, the postal
+  // address) and the pictures that tell the sender it was opened.
+  const OPEN_PIXEL = /^https?:\/\/([^/]+\.)?open\.[^/]+\/|\/(open|o)\/[^/]+\.(gif|png)(\?|$)/i;
+  function stripMail(body) {
+    for (const el of [...body.querySelectorAll("[hidden], [style]")]) if (el.hasAttribute("hidden") || /display:\s*none|visibility:\s*hidden|max-height:\s*0|mso-hide:\s*all/i.test(el.getAttribute("style"))) el.remove();
+    for (const el of body.querySelectorAll(".ck-hide-in-public-posts")) el.remove();
+    for (const img of body.querySelectorAll("img")) if (OPEN_PIXEL.test(img.getAttribute("src") || "")) img.remove();
+  }
+
   // Newsletters with a rule of their own, known by the address they're
   // sent from, or failing that by their subject and their links home.
   const NEWSLETTERS = [
@@ -2098,8 +2110,18 @@
       from: /(^|\.)jamesclear\.com$/i,
       subject: /^3-2-1\b/i,
       home: /^https?:\/\/(www\.)?jamesclear\.com\//i,
-      // 3-2-1: the logo and its tagline up top, the weekly greeting, and
-      // the banner over each of the 3 ideas, 2 quotes and 1 question go.
+      // 3-2-1: `strip`, while Kit's classes are still on (before the
+      // tables open up), takes the line with the site and date and the
+      // book and calendar ads at the foot (footer boxes and buttons);
+      // `tidy` the logo and its tagline, the weekly greeting and the
+      // banner over each of the 3 ideas, 2 quotes and 1 question.
+      strip(body) {
+        for (const el of [...body.querySelectorAll(".footer-box, .email-button, .button-table")]) el.remove();
+        for (const t of [...body.querySelectorAll("table.ck-layout-stack")]) {
+          const words = t.textContent.replace(/\s+/g, " ").trim();
+          if (/jamesclear\.com/i.test(words) && words.length < 80) t.remove();
+        }
+      },
       tidy(body) {
         const text = (n) => n.textContent.replace(/\s+/g, " ").trim();
         for (const p of body.querySelectorAll("p, div, em")) {
@@ -2956,10 +2978,9 @@
     if (given && given.mail) {
       const d = new DOMParser().parseFromString(given.html, "text/html");
       letter = mailRule(given.from, given.title, d.body);
-      if (letter) {
-        tidyMail(d.body, letter);
-        given = { ...given, html: "<!doctype html>\n" + d.documentElement.outerHTML };
-      }
+      if (letter) tidyMail(d.body, letter);
+      else stripMail(d.body);
+      given = { ...given, html: "<!doctype html>\n" + d.documentElement.outerHTML };
     }
     const got = wiki ? await fromWikipedia(wiki) : await fromAnyPage(archived ? archived.url : url, () => onProgress && onProgress({ stage: "drawing" }), kind === "comic", asPage, archived ? null : given);
     // A newsletter's email (1.43.0) is named by its subject and sender.
