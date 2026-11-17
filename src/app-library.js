@@ -449,6 +449,8 @@ function renderFolder() {
   // chapters with what they keep, to put in order.
   else if (editing) {
     top = [el("div", { class: "folder-edit" }, ...bookHead(list, next, done),
+      sharing() ? el("div", { class: "group" },
+        switchRow(t("In other apps"), "", !list.some((p) => p.folderNoShare), (v) => setFolderShare(state.folder, !v))) : null,
       sectionHead(t("Cover")), coverPanel(list),
       sectionHead((isSeries(list) ? t("Chapters") : t("Clips")) + " · " + list.length),
       savedLine(list),
@@ -696,11 +698,6 @@ function openFolderMenu() {
       { note: list.some((p) => p.folderTagNew) ? t("On") : t("Off") })] : []),
     item("select", t("Select"), () => startSelect([])),
     item("send", t("Export"), () => setFolderMode("export")),
-    ...(sharing() ? [
-      sep(),
-      item("share", t("In other apps"), () => setFolderShare(state.folder, !list.some((p) => p.folderNoShare)),
-        { note: list.some((p) => p.folderNoShare) ? t("Kept out") : t("Shown") }),
-    ] : []),
     sep(),
     item("remove", t("Remove"), () => openMenu("remove"), { warn: true }));
   const more = $("folderMore"), at = more.getBoundingClientRect();
@@ -1249,12 +1246,12 @@ async function setShareMark(p, key, on) {
   await C.store.writeIndex(state.pages);
   syncSoon();
 }
-// The same for a collection: a mark on its clips, like a favourite's.
+// The same for a collection, a switch in its Edit: a mark on its clips,
+// like a favourite's.
 async function setFolderShare(name, on) {
   for (const p of folderPages(name)) { if (on) p.folderNoShare = true; else delete p.folderNoShare; }
   await C.store.writeIndex(state.pages);
   syncSoon();
-  toast(on ? t("{name} is kept out of other apps", { name: name }) : t("{name} is in other apps", { name: name }));
 }
 
 // A PDF read from outside stays as it is: its printed pages are pictures.

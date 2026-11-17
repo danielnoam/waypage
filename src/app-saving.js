@@ -843,7 +843,7 @@ const SHARE_KINDS = [["book", t("Books"), "EPUB, PDF, MOBI, AZW3 and FB2 files"]
 function syncActivity() {
   const on = C.sync.what.activity, kinds = C.sync.shareKinds;
   const sw = (label, note, checked, set) => switchRow(label, note, checked, (v) => { set(v); renderSection(); syncSoon(500); });
-  return section(t("Other apps"), t("Other apps you connect to your {x} repo can read what you've read: titles, authors, how far you are, when you started and finished, and your minutes a day. It goes only to that repo, as activity/reading.json; no text, highlights or notes. A clip or collection's ⋯ can keep it out. Turned off, the file is removed at the next sync. Each device has its own switch.", { x: C.sync.account.split("/")[1] }),
+  return section(t("Other apps"), t("Other apps you connect to your {x} repo can read what you've read: titles, authors, how far you are, when you started and finished, and your minutes a day. It goes only to that repo, as activity/reading.json; no text, highlights or notes. A clip's ⋯ or a collection's Edit can keep it out. Turned off, the file is removed at the next sync. Each device has its own switch.", { x: C.sync.account.split("/")[1] }),
     el("div", { class: "group" },
       sw(t("Share reading activity"), "", on, (v) => C.sync.setWhat("activity", v)),
       ...(on ? SHARE_KINDS.map(([k, label, note]) => sw(label, note, !!kinds[k], (v) => C.sync.setShareKind(k, v))) : [])));

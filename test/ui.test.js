@@ -2351,6 +2351,31 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("a collection's In other apps is a switch in its Edit, not in its ⋯ (Daniel's ask)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t", what: { activity: true }, shareKinds: { article: true } }));
+        const c = (id) => ({ id, url: "https://example.com/" + id, title: "Clip " + id, site: "example.com", savedAt: 100, minutes: 1, mode: "links", at: 0, folder: "Trip" });
+        await window.Waypage.store.writeIndex([c("tr1"), c("tr2")]);
+        for (const id of ["tr1", "tr2"]) await window.Waypage.store.writePage(id, "<!doctype html><html><body><p>" + id + "</p></body></html>", c(id));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => openFolder("Trip"));
+      await q.click("#folderMore");
+      assert.ok(!(await q.locator("#folderPop .pop-label").allTextContents()).includes("In other apps"));
+      await q.keyboard.press("Escape");
+      await q.click("#folderEdit");
+      const sw = q.locator("#folderBody .folder-edit label.row", { hasText: "In other apps" }).locator("input.switch");
+      assert.ok(await sw.isChecked());
+      await sw.click();
+      await until(q, () => folderPages("Trip").every((p) => p.folderNoShare));
+      await sw.click();
+      await until(q, () => folderPages("Trip").every((p) => !p.folderNoShare));
+      const errs = q.errors.filter((e) => !/workers\.dev|api\.github/.test(e));
+      assert.deepStrictEqual(errs, [], errs.join(" | "));
+      await q.context().close();
+    });
     await test("reading on while a sync runs keeps the new place, not the one the sync started with (1.36.1)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
