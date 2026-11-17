@@ -151,7 +151,7 @@ themselves, so a new row is found without any extra work.
 
 **Nothing touches.** Sections, cards and a heading's ? keep their gaps
 on every screen, whatever the section is built from
-(`.settings-section` gaps in `src/styles.css`). Check at phone width.
+(`.settings-section` gaps in `src/styles.css`). Check at 320 px and 390 px.
 
 **Animations off means off.** With Settings › Appearance › Animations
 off, nothing moves at all: no easing, and no press stretch, turn or pop
@@ -180,6 +180,32 @@ the same version code. The release PR is the one that bumps
 
 **"Add to TODO" means plan it, not build it.** It goes on the to-do list
 with enough detail for someone else to pick it up.
+
+## Rules from bugs that shipped
+
+One line each. Every one is here because breaking it shipped a bug; the
+pull request that fixed it is in brackets. A fix for a kind of bug not
+listed here adds its line in the same pull request.
+
+**Code**
+
+- **A fix comes with a test that fails without it.** (#345, #346, #347)
+- **A new state on a job (held, paused, stopped, waiting) is handled everywhere the job is run, retried, stopped or shown.** Search for every caller first. (#345: Try again skipped `hold`)
+- **Retry, Undo and Back call the first path's function, never a copy of half of it.** (#345: `retryJob` skipped `updateClip`'s placing)
+- **A failed or stopped job never blocks the next try;** asking again replaces it. (#345)
+- **Undo removes what the action added; it doesn't add the opposite.** (#345: stats ended as `{a: b, b: a}`)
+- **After an `await`, read stored state again before writing it back.** Updates run three at a time. (#345: `sweepEarlier`)
+- **Stop wakes every wait it owns, and every loop checks for stop after each `await`.** (#346: the Wi-Fi wait)
+- **Something the user stopped says "Stopped.", never "Couldn't …".** (#346)
+- **A login, token or cookie goes only to the origin it was given for** (or the same host moved up to https, never down), whatever link, cover, page or redirect the server's answer points to. (#347)
+- **Before writing a guard or helper, look for the one a sibling area already has.** WebDAV had the login guard Catalogs lacked. (#347)
+
+**UI**
+
+- **Every move is the one DESIGN.md §4's "Which move" table gives for that kind of thing;** a new kind gets a row there first. (#348: four kinds had drifted)
+- **A looping animation gets its own duration in the reduced-motion block and an Animations off rule,** in the same change. (#348: spinners flickered)
+- **A flex child that holds text or a control gets `min-width: 0`; a title that can hold one long word gets `hyphens: auto` or `overflow-wrap: anywhere`.** (#348)
+- **Every changed screen is checked at 320 px, 390 px and ~1280 px.** 390 px alone hid three breaks. (#348)
 
 ## Keeping the notes files right
 
@@ -275,7 +301,7 @@ secrets, so it can't sign or publish anything.
 
 **Before a release:** `node --check` every edited `.js`, run
 `node test/run-all.js`, then run `node server.js` and check at phone width
-(390 px) and desktop width (~1280 px) in Paper, Sepia and Night with zero
+(320 px and 390 px) and desktop width (~1280 px) in Paper, Sepia and Night with zero
 console errors. Saving and reading can only be fully checked in the app
 (CapacitorHttp and Filesystem don't exist in a browser): say so when a
 change touches them and wasn't run on a phone. After merging, check that
