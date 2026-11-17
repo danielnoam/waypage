@@ -1193,6 +1193,7 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
   background: var(--bg); color: var(--ink); font: inherit; font-weight: 500; cursor: pointer;
 }
 .sheet-row.danger { color: var(--warn); }
+.sheet-row[aria-pressed="true"] { color: var(--accent); font-weight: 600; }
 .share-rows { display: flex; gap: var(--s-2); }
 .share-rows .sheet-row { flex: 1; justify-content: center; }
 .sheet-row.two-line { flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: var(--s-2) var(--s-3); text-align: start; }
@@ -2152,6 +2153,8 @@ span.update-text { cursor: default; }
 }
 .book-saved .accent { font-weight: 600; }
 .book-saved:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
+/* A series' collection, under its name: still a 44px target. */
+.book-saved.series-in { width: auto; margin: 0; padding: 0; }
 
 .chapter-mark { flex-shrink: 0; width: 20px; display: flex; justify-content: center; }
 .chapter-mark.done { color: var(--ok); }

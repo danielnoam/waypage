@@ -219,7 +219,7 @@ function renderLibrary() {
   const flat = ts.length || (state.filter !== "all" && !status && !favs);
   const folders = flat ? [] : allFolders().filter((f) => favs ? folderFav(f) : !status
     || (state.filter === "unread" ? folderPages(f).some(unread) : folderPages(f).every((x) => x.finished)));
-  const folderSig = (f) => [f, freshCount(f), folderFav(f), ...folderPages(f).map((x) => x.id + readingLine(x) + (x.thumb || "") + (x.cover || "") + (x.coverPick || ""))].join("|");
+  const folderSig = (f) => [f, freshCount(f), folderFav(f), isSeriesFolder(f), seriesInside(f).length, ...folderPages(f).map((x) => x.id + readingLine(x) + (x.thumb || "") + (x.cover || "") + (x.coverPick || ""))].join("|");
   if (!ts.length && state.filter === "all" && !state.part) {
     const going = !state.select && load(CONTINUE_KEY, true) && continuePage();
     if (going) {
@@ -259,8 +259,11 @@ function renderLibrary() {
     const notes = apart ? loose.filter((p) => p.note) : [];
     const mine = apart ? loose.filter((p) => p.link && !p.note) : [];
     const clips = apart ? loose.filter((p) => !p.link && !p.note) : loose;
-    if (folders.length && (!part || part === "collections")) {
-      const names = sorted(folders.map(asItem)).map((x) => x.folder);
+    // Series (2026-11) have their own section under Collections.
+    const series = folders.filter(isSeriesFolder);
+    const plain = series.length ? folders.filter((f) => !isSeriesFolder(f)) : folders;
+    if (plain.length && (!part || part === "collections")) {
+      const names = sorted(plain.map(asItem)).map((x) => x.folder);
       const label = t("Collections") + " · " + names.length;
       if (part) keep("h:folders:all", () => sectionHead(label), label);
       else keep("h:folders", () => partHead("collections", t("Collections")));
@@ -268,6 +271,14 @@ function renderLibrary() {
       // drawn whole, it lost where it was scrolled to with every page
       // that landed in a collection.
       keep(part ? "folders:all" : "folders", () => { const strip = foldersStrip([]); if (part) strip.classList.add("folder-grid"); return strip; });
+      fillStrip(nodes[nodes.length - 1], names, folderSig);
+    }
+    if (series.length && (!part || part === "series")) {
+      const names = sorted(series.map(asItem)).map((x) => x.folder);
+      const label = t("Series") + " · " + names.length;
+      if (part) keep("h:series:all", () => sectionHead(label), label);
+      else keep("h:series", () => partHead("series", t("Series")));
+      keep(part ? "series:all" : "series", () => { const strip = foldersStrip([]); strip.setAttribute("aria-label", t("Series")); if (part) strip.classList.add("folder-grid"); return strip; });
       fillStrip(nodes[nodes.length - 1], names, folderSig);
     }
     if (clips.length && (!part || part === "pages")) {

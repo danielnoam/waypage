@@ -1544,6 +1544,63 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a series has its own section, sits in a collection, and turns back into a collection with nothing lost", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (id, folder, extra) => ({ id, url: "https://example.com/" + id, title: id, site: "example.com", savedAt: 1000, minutes: 1, mode: "links", at: 0, finished: false, folder, folderAt: Number(id.slice(1)), ...extra });
+        // m3 lost its marks, as on a device without series.
+        const list = [c("m1", "Saga", { folderSeries: true, folderIn: "Shelf" }), c("m2", "Saga", { folderSeries: true, folderIn: "Shelf" }), c("m3", "Saga"),
+          c("s1", "Shelf"), c("w1", "Weekend"), c("x1")];
+        delete list[5].folder;
+        await S.writeIndex(list);
+        for (const x of list) await S.writePage(x.id, "<!doctype html><html><body><p>" + x.id + "</p></body></html>", x);
+      });
+      await q.reload();
+      await until(q, () => !!document.querySelector('[data-key="series"] .tile[data-name="Saga"]'));
+      // The clip that lost the mark takes it back.
+      await until(q, () => state.pages.find((p) => p.id === "m3").folderSeries && state.pages.find((p) => p.id === "m3").folderIn === "Shelf");
+      assert.deepStrictEqual(await q.locator('[data-key="folders"] .tile').evaluateAll((t) => t.map((x) => x.dataset.name).sort()), ["Shelf", "Weekend"]);
+      // Its clips show only inside it; the collection shows it above its own.
+      assert.strictEqual(await q.locator('#library .page-card[data-ids="m1"]').count(), 0);
+      await q.evaluate(() => openFolder("Shelf"));
+      await q.locator('#folderBody .tile[data-name="Saga"]').waitFor();
+      await q.locator('#folderBody .tile[data-name="Saga"] .card-open').click();
+      await until(q, () => state.folder === "Saga");
+      assert.strictEqual(await q.textContent("#folderBody .book-site"), "example.com · Series");
+      assert.strictEqual(await q.textContent("#folderBody .series-in"), "In Shelf");
+      // A collection holding a series asks before it becomes one.
+      await q.evaluate(() => { history.back(); });
+      await until(q, () => state.folder === "Shelf");
+      await q.click("#folderMore");
+      await q.locator("#folderPop .pop-item", { hasText: "Make it a series" }).click();
+      await q.locator(".sheet-row", { hasText: "Make it a series, move 1 series out" }).click();
+      await until(q, () => isSeriesFolder("Shelf") && !seriesHost("Saga") && state.pages.every((p) => p.folder !== "Saga" || !p.folderIn));
+      // And back, from its ⋯ menu; then Saga goes into Weekend.
+      await q.click("#folderMore");
+      await q.locator("#folderPop .pop-item", { hasText: "Make it a collection" }).click();
+      await until(q, () => !isSeriesFolder("Shelf") && state.pages.find((p) => p.id === "s1").folder === "Shelf");
+      await q.evaluate(() => openFolder("Saga"));
+      await until(q, () => state.folder === "Saga");
+      await q.click("#folderMore");
+      await q.locator("#folderPop .pop-item", { hasText: "Put in a collection" }).click();
+      await q.locator(".sheet-row", { hasText: "Weekend" }).click();
+      await until(q, () => seriesHost("Saga") === "Weekend");
+      // Renaming the collection keeps the series in it; removing it lets go.
+      await q.evaluate(async () => { openFolder("Weekend"); await renameFolder("Weekends"); });
+      assert.strictEqual(await q.evaluate(() => seriesHost("Saga")), "Weekends");
+      await q.evaluate(() => removeFolder(false));
+      await until(q, () => !seriesHost("Saga") && isSeriesFolder("Saga"));
+      // Without the marks, nothing moves: it's a collection again.
+      await q.evaluate(async () => { for (const p of state.pages) { delete p.folderSeries; delete p.folderIn; } renderLibrary(); });
+      await until(q, () => !document.querySelector('[data-key="series"]') && !!document.querySelector('[data-key="folders"] .tile[data-name="Saga"]'));
+      assert.strictEqual(await q.evaluate(() => folderPages("Saga").length), 3);
+      // Opening a collection looks for a cover on the web, which is offline here.
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a collection sorts by release date, date added and title, shows as covers, and says what it holds", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
@@ -1561,7 +1618,7 @@ function zipOf(files) {
       await q.evaluate(() => openFolder("Serial"));
       // Favourite and Edit sit in the bar; the ⋯ menu keeps the rest.
       await q.click("#folderMore");
-      assert.deepStrictEqual(await q.locator("#folderPop .pop-label").allTextContents(), ["Website sync", "Add clips", "Show as covers", "Select", "Export", "Remove"]);
+      assert.deepStrictEqual(await q.locator("#folderPop .pop-label").allTextContents(), ["Website sync", "Add clips", "Show as a grid", "Make it a series", "Select", "Export", "Remove"]);
       await q.keyboard.press("Escape");
       await q.click("#folderFav");
       await until(q, () => folderFav("Serial") && document.getElementById("folderFav").getAttribute("aria-pressed") === "true");

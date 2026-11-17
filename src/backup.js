@@ -81,6 +81,13 @@
     if (m.noShare === true) out.noShare = true;
     if (folder && m.folderNoShare === true) out.folderNoShare = true;
     if (folder && m.folderTagNew === true) out.folderTagNew = true;
+    // A series (2026-11), and the collection it sits in: marks on its
+    // clips too, so without them it's a plain collection.
+    if (folder && m.folderSeries === true) {
+      out.folderSeries = true;
+      const host = text(m.folderIn, 32).replace(/\s+/g, " ").trim();
+      if (host) out.folderIn = host;
+    }
     if (folder && httpUrl(m.source)) out.source = httpUrl(m.source);
     if (folder && typeof m.coverPick === "string" && (COVER_FILE.test(m.coverPick) || /^clip:[a-z0-9]{4,24}$/.test(m.coverPick))) out.coverPick = m.coverPick;
     if (text(m.series, 200)) out.series = text(m.series, 200);

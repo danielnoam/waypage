@@ -311,7 +311,7 @@ async function saveOnce(job, opts) {
 
 // What a clip saved again keeps from the copy it replaces: where it is,
 // how it's marked and read. The rest comes from the new copy.
-const AGAIN_KEEP = ["requested", "folder", "folderAt", "folderFav", "folderFavAt", "coverPick", "source", "tags", "at", "finished", "readAt", "readOn", "placeAt", "fav", "favAt", "marks", "noShare", "folderNoShare", "folderTagNew", "movedAt", "live"];
+const AGAIN_KEEP = ["requested", "folder", "folderAt", "folderFav", "folderFavAt", "coverPick", "source", "tags", "at", "finished", "readAt", "readOn", "placeAt", "fav", "favAt", "marks", "noShare", "folderNoShare", "folderTagNew", "folderSeries", "folderIn", "movedAt", "live"];
 
 async function runJob(job) {
   job.started = Date.now();

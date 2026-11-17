@@ -213,6 +213,12 @@ options offers them as one switch, off until turned on, remembered in
 A collection marked "Tag new clips" (`folderTagNew` on its clips, like
 `folderFav`; synced) gives a clip joining it the tags all its clips
 share (`joinTags`, run from `joinFav` and on every new save into it).
+A series (2026-11) is a collection whose clips carry `folderSeries`, and
+`folderIn` naming the collection it sits in (one level: a series holds
+only clips and files, a collection never sits in another). Nothing else
+changes, so an app or device without series shows a plain collection and
+no clip moves. `seriesInfo` reads the marks once per task; one clip still
+marked is enough, and `healSeries` puts them back on the rest.
 
 ## Where clips live
 
@@ -949,6 +955,8 @@ adds a line here.
 
 Things that broke once and would again. Check here before touching the
 area.
+
+- A field missing from sync's `SYNCED`, backup's `cleanMeta`, `SYNCED_KEEP` and `AGAIN_KEEP` is dropped on the next sync or update. `folderSeries` and `folderIn` are in all four; a device without them strips them from clips it changes, which `healSeries` repairs while any clip of the series keeps them.
 
 - The reduced-motion rule in src/styles.css sets every CSS animation to 1 ms. An infinite one (a spinner's breathing) then runs a thousand times a second and flickers, so each gets its own duration back in that same block; a new looping animation does too.
 

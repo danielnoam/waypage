@@ -11,7 +11,7 @@
 const PICTURES_KEY = "waypage.syncPictures";
 let syncTimer = null, syncQueue = load(PICTURES_KEY, null) || [], fetchingPictures = false;
 const keepQueue = () => store(PICTURES_KEY, syncQueue.length ? [...new Set(syncQueue)] : null);
-const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "turn", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks", "noShare", "folderNoShare", "folderTagNew", "live"];
+const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "turn", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks", "noShare", "folderNoShare", "folderTagNew", "folderSeries", "folderIn", "live"];
 // While a run of saves is on, sync waits longer (1.2.0): each sync is a
 // merge of the whole library, and one after every page landing was a
 // stutter every few seconds.
@@ -1002,15 +1002,34 @@ function newField(cls, placeholder, label, then) {
   });
   return input;
 }
+// Collections and series (2026-11) in one list, each under its name.
+const NEW_SERIES = "\u0000series";
 function folderRow(p, redraw) {
-  const input = newField("new-collection", t("Name the new collection"), t("New collection"), (v) => setFolder(p, v).then(redraw));
+  let asSeries = false;
+  const input = newField("new-collection", t("Name the new collection"), t("New collection"), (v) => {
+    const fresh = !allFolders().some((n) => sameTag(n, cleanTag(v)));
+    return setFolder(p, v).then(async () => {
+      if (asSeries && fresh) { markSeries(p.folder, true); await C.store.writeIndex(state.pages); renderLibrary(); }
+      redraw();
+    });
+  });
   const names = allFolders().sort((a, b) => a.localeCompare(b));
+  const series = names.filter(isSeriesFolder), plain = names.filter((n) => !isSeriesFolder(n));
+  const opts = (list) => list.map((n) => ({ value: n, label: n }));
   const pick = dropdown({
     label: t("Collection"), cls: "field-pick",
-    options: [{ value: "", label: t("None") }, ...names.map((n) => ({ value: n, label: n })), { value: NEW_PICK, label: t("New collection…") }],
+    options: [{ value: "", label: t("None") },
+      ...(series.length && plain.length ? [{ head: t("Collections") }] : []), ...opts(plain),
+      ...(series.length ? [{ head: t("Series") }] : []), ...opts(series),
+      { value: NEW_PICK, label: t("New collection…") }, { value: NEW_SERIES, label: t("New series…") }],
     value: p.folder && names.find((n) => sameTag(n, p.folder)) || "",
     onpick: (v) => {
-      if (v === NEW_PICK) { input.hidden = false; input.focus(); return; }
+      if (v === NEW_PICK || v === NEW_SERIES) {
+        asSeries = v === NEW_SERIES;
+        input.placeholder = asSeries ? t("Name the new series") : t("Name the new collection");
+        input.setAttribute("aria-label", asSeries ? t("New series") : t("New collection"));
+        input.hidden = false; input.focus(); return;
+      }
       setFolder(p, v || null).then(redraw);
     },
   });
@@ -1673,7 +1692,9 @@ async function renameFolder(raw) {
   if (name === old) return true;
   const clash = allFolders().find((n) => sameTag(n, name) && !sameTag(n, old));
   if (clash) { toast(t("There's already a collection called {clash}.", { clash: clash })); return false; }
+  const inside = seriesInside(old);
   for (const p of folderPages(old)) p.folder = name;
+  for (const f of inside) for (const p of folderPages(f)) p.folderIn = name;
   renameReadingSet(old, name);
   renameFolderLook(old, name);
   C.platform.widgets.renamed(old, name);
