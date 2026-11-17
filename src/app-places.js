@@ -1605,13 +1605,21 @@ function pullToCheck(root) {
   }, { passive: true });
 }
 
+// Website sync collections' new chapters and live clips' changes.
 async function pullChapters(app) {
-  if (navigator.onLine && !allFolders().some((n) => isSeries(folderPages(n)))) {
+  const series = allFolders().some((n) => isSeries(folderPages(n)));
+  const live = state.pages.some(liveNow);
+  if (!navigator.onLine || (series && !live)) { await Promise.all([checkChapters(), app]); return; }
+  if (!series && !live) {
     await app;
     toast(updateOut() ? t("Waypage {latest} is out.", { latest: upd.latest }) : t("Nothing new."));
     return;
   }
-  await Promise.all([checkChapters(), app]);
+  const [found, changed] = await Promise.all([series ? dailyCheck(true) : 0, updateLiveClips(), app]);
+  renderLibrary();
+  const said = [found ? tn(found, "New chapters in 1 collection.", "New chapters in {n} collections.") : null,
+    changed ? tn(changed, "1 live clip updated.", "{n} live clips updated.") : null].filter(Boolean);
+  toast(said.length ? said.join(" ") : series ? t("No new chapters.") : t("Nothing new."));
 }
 
 async function checkChapters() {

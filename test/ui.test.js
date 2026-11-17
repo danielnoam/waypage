@@ -2377,6 +2377,28 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("a pull on the library updates live clips too, like Website sync (Daniel's ask)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const c = (id, more) => ({ id, url: "https://example.com/" + id, title: "Clip " + id, site: "example.com", savedAt: 100, minutes: 1, mode: "links", at: 0, ...more });
+        const list = [c("lv1", { live: true }), c("lv2", { live: true, liveAt: Date.now() }), c("still1"), c("lvf", { live: true, file: { kind: "epub" } })];
+        await window.Waypage.store.writeIndex(list);
+        for (const x of list) await window.Waypage.store.writePage(x.id, "<!doctype html><html><body><p>" + x.id + "</p></body></html>", x);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const calls = [];
+        window.updateClip = async (p, how) => { calls.push(p.id + ":" + how); return p.id === "lv1" ? "updated" : "same"; };
+        await pullChapters(Promise.resolve());
+        return { calls: calls.sort(), said: document.getElementById("toast").textContent };
+      });
+      assert.deepStrictEqual(got.calls, ["lv1:pull", "lv2:pull"], JSON.stringify(got));
+      assert.ok(/1 live clip updated/.test(got.said), got.said);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a clip's Live sits right above In other apps, which says what it does; the sidebar's version opens About (Daniel's ask)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
