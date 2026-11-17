@@ -950,6 +950,8 @@ adds a line here.
 Things that broke once and would again. Check here before touching the
 area.
 
+- The reduced-motion rule in src/styles.css sets every CSS animation to 1 ms. An infinite one (a spinner's breathing) then runs a thousand times a second and flickers, so each gets its own duration back in that same block; a new looping animation does too.
+
 - `earlier` holds the other copy's own meta; the clip's place, tags, highlights and the rest (`AGAIN_KEEP`, app-jobs.js) always come from the entry it replaces. An earlier copy whose clip left the library some other way (deleted, replaced through sync) is only removed by `sweepEarlier` on the next update, from the ids listed in `waypage.earlierCopies`.
 - On Android, `FileInputStream.skip` past the end still returns what was
   asked, so a skip-to-count loop never ends. FilesPlugin.info and
