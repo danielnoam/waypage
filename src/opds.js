@@ -177,11 +177,20 @@
   // home network: a password never goes through the proxy, and the proxy
   // can't reach a home server anyway. Straight means the server has to
   // allow the web copy (CORS), which few do.
-  const login = (cat) => (cat && cat.user ? { Authorization: "Basic " + btoa(unescape(encodeURIComponent(cat.user + ":" + cat.pass))) } : {});
+  // The login goes only to the catalog's own server: a feed can link
+  // folders, books and covers anywhere, and those never get it. The same
+  // server moved up to https (a redirect) still does.
+  const own = (cat, url) => {
+    try {
+      const a = new URL(cat.url), b = new URL(url);
+      return a.origin === b.origin || (b.protocol === "https:" && a.hostname === b.hostname);
+    } catch (e) { return false; }
+  };
+  const login = (cat, url) => (cat && cat.user && own(cat, url) ? { Authorization: "Basic " + btoa(unescape(encodeURIComponent(cat.user + ":" + cat.pass))) } : {});
   const home = (url) => { try { return /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1|[^.]+$|.*\.(local|lan|home|internal)$)/i.test(new URL(url).hostname); } catch (e) { return false; } };
-  const straight = (cat, url) => !C.platform.native && (!!(cat && cat.user) || home(url));
+  const straight = (cat, url) => !C.platform.native && (!!(cat && cat.user && own(cat, url)) || home(url));
   async function get(cat, url) {
-    const headers = { Accept: ACCEPT, ...login(cat) };
+    const headers = { Accept: ACCEPT, ...login(cat, url) };
     if (straight(cat, url)) {
       let res;
       try { res = await fetch(url, { headers, credentials: "omit" }); } catch (e) { throw new CatalogError("browser"); }
@@ -204,10 +213,10 @@
   async function bytes(cat, url, name) {
     if (straight(cat, url)) {
       let res;
-      try { res = await fetch(url, { headers: login(cat), credentials: "omit" }); } catch (e) { throw new TypeError("Failed to fetch (browser)"); }
+      try { res = await fetch(url, { headers: login(cat, url), credentials: "omit" }); } catch (e) { throw new TypeError("Failed to fetch (browser)"); }
       return { status: res.status, url: res.url || url, type: res.headers.get("Content-Type") || "", blob: await res.blob() };
     }
-    return C.platform.fetchBytes(url, name, login(cat));
+    return C.platform.fetchBytes(url, name, login(cat, url));
   }
 
   C.opds = { list, add, update, remove, changed, shared, mergeIn, parse, parseSearchDoc, read, searchUrl, bytes, login, host, home, CatalogError };

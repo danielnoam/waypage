@@ -389,7 +389,7 @@ async function dzCoverAgain(img, s) {
   try {
     const name = "discover-covers/" + String(s.id || "").replace(/[^a-z0-9_-]/gi, "_").slice(-80) + ".jpg";
     // A catalog's covers may want its login, or be plain http (blocked in the app's page).
-    const src = await C.platform.downloadTo(s.cover, name, s.url, "CACHE", s.catalog ? C.opds.login(s.catalog) : undefined);
+    const src = await C.platform.downloadTo(s.cover, name, s.url, "CACHE", s.catalog ? C.opds.login(s.catalog, s.cover) : undefined);
     if (src) img.src = src; else img.remove();
   } catch (e) { img.remove(); }
 }

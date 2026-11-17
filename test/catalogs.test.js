@@ -160,6 +160,27 @@ async function phone(browser) {
       assert.ok(got.asked.some((a) => a.url === BASE + "/opds/new?page=2"));
     });
 
+    await test("a catalog's login goes only to its own server, never to a host its feed links to", async () => {
+      const { ctx, p } = await phone(browser);
+      const got = await p.evaluate(async () => {
+        const O = window.Waypage.opds;
+        const cat = { id: "c1", url: "http://books.example.test/opds", user: "daniel", pass: "s3cret" };
+        await O.bytes(cat, "https://elsewhere.example.test/book.epub", "a.epub");
+        await O.bytes(cat, "https://books.example.test/get/epub/1", "b.epub");
+        await O.read(cat, "https://evil.example.test/opds").catch(() => null);
+        return { fetched: window.fetched, asked: window.asked,
+          cover: O.login(cat, "https://covers.example.test/1.jpg"), own: O.login(cat, "http://books.example.test/c.jpg"),
+          down: O.login({ ...cat, url: "https://books.example.test/opds" }, "http://books.example.test/c.jpg") };
+      });
+      await ctx.close();
+      const auth = "Basic " + Buffer.from("daniel:s3cret").toString("base64");
+      assert.deepStrictEqual(got.fetched, [{ url: "https://elsewhere.example.test/book.epub", auth: "" }, { url: "https://books.example.test/get/epub/1", auth }], "the same server moved to https keeps it");
+      assert.ok(got.asked.length && got.asked.every((a) => a.url.startsWith("https://evil.example.test/") && a.auth === ""), JSON.stringify(got.asked));
+      assert.deepStrictEqual(got.cover, {});
+      assert.strictEqual(got.own.Authorization, auth);
+      assert.deepStrictEqual(got.down, {}, "never down to plain http");
+    });
+
     await test("a catalog's own search runs from the top field; Settings lists the catalog and removes it", async () => {
       const { ctx, p } = await phone(browser);
       await p.evaluate(() => {
