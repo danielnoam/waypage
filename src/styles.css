@@ -2284,6 +2284,8 @@ span.update-text { cursor: default; }
 }
 .side-space { flex-shrink: 0; height: var(--s-5); }
 .side-version { flex-shrink: 0; margin: auto var(--s-5) 0; padding-top: var(--s-5); color: var(--muted); font: var(--fs-meta)/var(--lh-meta) var(--sans); font-variant-numeric: tabular-nums; }
+button.side-version { align-self: flex-start; min-height: 44px; padding-bottom: 0; padding-inline: 0; border: 0; background: none; text-align: start; cursor: pointer; }
+@media (hover: hover) { button.side-version:hover { color: var(--ink); } }
 .side-sub { min-height: var(--tap); margin-inline-start: calc(var(--s-2) + var(--s-4)); font-size: var(--fs-label); }
 .side-sub .side-icon { color: var(--accent); }
 /* A heading with its fold arrow is one item (1.45.5): the arrow sits

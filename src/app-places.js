@@ -998,7 +998,9 @@ function renderSide() {
     // On a big screen the sidebar carries the rest (1.5.0): the tags,
     // and Settings at its foot. Feeds are added from the Feeds place.
     ...(big ? sideMore() : []),
-    el("p", { class: "side-version" }, t("Version {APP_VERSION}", { APP_VERSION: APP_VERSION })));
+    // Opens Settings › About (Daniel's ask, 2026-11-17).
+    el("button", { class: "side-version", type: "button", onclick: () => (state.side ? back() : Promise.resolve()).then(() => openSettings(false, "updates")) },
+      t("Version {APP_VERSION}", { APP_VERSION: APP_VERSION })));
 }
 
 function sideMore() {

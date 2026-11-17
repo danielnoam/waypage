@@ -972,6 +972,7 @@ Keel.i18n.strings("he", {
   "In a dark theme, the paper takes its colours": "בערכת נושא כהה, הדף מקבל את הצבעים שלה",
   "In GitHub's Fine-grained tokens; other devices then ask for the new one": "ב-Fine-grained tokens של GitHub; מכשירים אחרים יבקשו אז את החדש",
   "In other apps": "באפליקציות אחרות",
+  "Listed in the reading activity that apps you connect to your sync repo can read": "מופיע בפעילות הקריאה שאפליקציות שחיברת למאגר הסנכרון יכולות לקרוא",
   "In the library": "בספרייה",
   "in this browser": "בדפדפן הזה",
   "in this engine": "במנוע הזה",

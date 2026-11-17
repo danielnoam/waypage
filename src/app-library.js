@@ -450,7 +450,7 @@ function renderFolder() {
   else if (editing) {
     top = [el("div", { class: "folder-edit" }, ...bookHead(list, next, done),
       sharing() ? el("div", { class: "group" },
-        switchRow(t("In other apps"), "", !list.some((p) => p.folderNoShare), (v) => setFolderShare(state.folder, !v))) : null,
+        switchRow(t("In other apps"), t("Listed in the reading activity that apps you connect to your sync repo can read"), !list.some((p) => p.folderNoShare), (v) => setFolderShare(state.folder, !v))) : null,
       sectionHead(t("Cover")), coverPanel(list),
       sectionHead((isSeries(list) ? t("Chapters") : t("Clips")) + " · " + list.length),
       savedLine(list),
@@ -1154,8 +1154,6 @@ function pageSheet(p, where) {
           el("span", { class: "row-label accent" }, C.platform.signIn.for(p.url) ? t("Sign in again to {site}", { site: C.platform.signIn.host(p.url) }) : t("Sign in to {site}", { site: C.platform.signIn.host(p.url) })),
           el("span", { class: "row-value" }, t("Only the start")))) : null,
       tooBigLine(p) ? el("p", { class: "meta warn" }, tooBigLine(p)) : null,
-      // Live (2026-11-16): updated from the site as it opens.
-      webCopy(p) ? el("div", { class: "group" }, switchRow(t("Live"), t("Updates from the site when you open it, at most once an hour"), !!p.live, (v) => setLive(p, v).then(draw))) : null,
       tagsRow(p, draw),
       folderRow(p, draw),
       p.file ? null : picturesRow(p, draw),
@@ -1163,6 +1161,9 @@ function pageSheet(p, where) {
       ...series,
       el("h3", { class: "overline" }, t("More")),
       el("div", { class: "group" },
+        // Live (2026-11-16): updated from the site as it opens. Above In
+        // other apps (Daniel's ask, 2026-11-17).
+        webCopy(p) ? switchRow(t("Live"), t("Updates from the site when you open it, at most once an hour"), !!p.live, (v) => setLive(p, v).then(draw)) : null,
         ...shareRows(p, draw),
         inReader ? null : menuRow(t("Rename"), () => { renaming = true; draw(); }),
         p.link && p.file && p.file.kind === "pdf" && !p.comic
@@ -1238,7 +1239,7 @@ function shareRows(p, redraw) {
   const folderOff = p.folder && folderPages(p.folder).some((x) => x.folderNoShare);
   const row = (label, note, on, set, off) => switchRow(label, note, on, (v) => set(v).then(redraw), off ? { disabled: "" } : null);
   return [
-    row(t("In other apps"), folderOff ? t("Its collection is kept out") : "", !p.noShare && !folderOff, (v) => setShareMark(p, "noShare", !v), folderOff),
+    row(t("In other apps"), folderOff ? t("Its collection is kept out") : t("Listed in the reading activity that apps you connect to your sync repo can read"), !p.noShare && !folderOff, (v) => setShareMark(p, "noShare", !v), folderOff),
   ];
 }
 async function setShareMark(p, key, on) {
