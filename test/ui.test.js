@@ -5099,6 +5099,36 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("an update that failed, tried again from Downloads, takes the clip's place; going back leaves no loop in Stats", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async (url) => {
+        const S = window.Waypage.store;
+        const a = { id: "again1", url, title: "Again", site: "localhost", savedAt: 1, minutes: 1, mode: "links", tags: ["kept"] };
+        await S.writeIndex([a]);
+        await S.writePage("again1", "<!doctype html><html><body><p>Old words.</p></body></html>", a);
+      }, ARTICLE);
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      // As the first try left it: failed, waiting in Downloads.
+      await q.evaluate(() => {
+        const p = state.pages[0];
+        state.saving.unshift({ ...newJob(p.url, p.folder), key: "again:" + p.id, again: p, mode: p.mode, kind: "article", hold: true, error: "Couldn't reach it." });
+      });
+      await q.evaluate(() => retryJob(state.saving[0]));
+      const now = await q.evaluate(() => ({ n: state.pages.length, id: state.pages[0].id, earlier: state.pages[0].earlier && state.pages[0].earlier.id, tags: state.pages[0].tags, saving: state.saving.length }));
+      assert.strictEqual(now.n, 1);
+      assert.notStrictEqual(now.id, "again1", "the new copy is in the library, not left aside");
+      assert.strictEqual(now.earlier, "again1");
+      assert.deepStrictEqual(now.tags, ["kept"]);
+      assert.strictEqual(now.saving, 0);
+      await q.evaluate((id) => goBackCopy(id), now.id);
+      await until(q, () => state.pages[0].id === "again1");
+      const moved = await q.evaluate(() => window.Waypage.stats.all().moved || {});
+      assert.ok(!(moved.again1 && moved[moved.again1] === "again1"), JSON.stringify(moved));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("reading stats count time, words and saves (1.38.0)", async () => {
       const q = await page(browser, 390);
       await q.fill("#saveUrl", ARTICLE);
