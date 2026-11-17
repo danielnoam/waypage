@@ -1846,6 +1846,7 @@ Keel.i18n.strings("he", {
   "Name the new series": "שם הסדרה החדשה",
   "New series": "סדרה חדשה",
   "Series apart": "סדרות בנפרד",
+  "Collections and series": "אוספים וסדרות",
   "Their own section, under Collections": "באזור משלהן, מתחת לאוספים",
   "Show as printed pages": "הצגה כעמודים מודפסים",
   "Show as text": "הצגה כטקסט",

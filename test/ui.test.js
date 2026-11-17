@@ -1565,6 +1565,7 @@ function zipOf(files) {
       await q.click("#viewBtn");
       await q.locator(".lib-view .row", { hasText: "Series apart" }).locator("input").click();
       await until(q, () => !document.querySelector('[data-key="series"]') && !!document.querySelector('[data-key="folders"] .tile[data-name="Saga"]'));
+      assert.strictEqual(await q.textContent('[data-key="h:folders"] .section-link'), "Collections and series›");
       await q.locator(".lib-view .row", { hasText: "Series apart" }).locator("input").click();
       await until(q, () => !!document.querySelector('[data-key="series"] .tile[data-name="Saga"]'));
       await q.evaluate(() => history.back());

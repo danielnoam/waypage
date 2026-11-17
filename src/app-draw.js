@@ -264,9 +264,11 @@ function renderLibrary() {
     const plain = series.length ? folders.filter((f) => !isSeriesFolder(f)) : folders;
     if (plain.length && (!part || part === "collections")) {
       const names = sorted(plain.map(asItem)).map((x) => x.folder);
-      const label = t("Collections") + " · " + names.length;
+      // Mixed in (Series apart off), the head says both are there.
+      const head = !series.length && plain.some(isSeriesFolder) ? t("Collections and series") : t("Collections");
+      const label = head + " · " + names.length;
       if (part) keep("h:folders:all", () => sectionHead(label), label);
-      else keep("h:folders", () => partHead("collections", t("Collections")));
+      else keep("h:folders", () => partHead("collections", head), head);
       // The strip stays and only its changed tiles are drawn again (1.1.1):
       // drawn whole, it lost where it was scrolled to with every page
       // that landed in a collection.
