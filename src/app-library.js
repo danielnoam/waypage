@@ -422,7 +422,40 @@ function saveNewButton(list) {
   return b;
 }
 
+// What a collection's list showed last, so a draw again of the same list
+// slides what moved and grows or shrinks what came or went, as the
+// library does (DESIGN.md §4); a new collection, mode or look just draws.
+let folderDrawn = "";
+function folderSnap() {
+  const m = new Map();
+  if (M.reduced() || $("folderView").hidden || covered($("folderView"))) return m;
+  for (const li of $("folderBody").querySelectorAll(".folder-list > li, .folder-covers > li")) {
+    const r = li.getBoundingClientRect();
+    if (r.width && r.bottom > 0 && r.top < innerHeight) m.set(li.dataset.id, { n: li, r });
+  }
+  return m;
+}
+function folderFlip(before) {
+  if (!before.size) return;
+  const after = new Map(), moved = new Map();
+  for (const li of $("folderBody").querySelectorAll(".folder-list > li, .folder-covers > li")) after.set(li.dataset.id, li);
+  let came = 0, went = 0;
+  for (const id of after.keys()) if (!before.has(id)) came++;
+  for (const id of before.keys()) if (!after.has(id)) went++;
+  if (came + went > 6) return;
+  for (const [id, li] of after) {
+    const b = before.get(id);
+    if (b) moved.set(li, b.r);
+    else { const r = li.getBoundingClientRect(); if (r.bottom > 0 && r.top < innerHeight) M.appear(li); }
+  }
+  M.flip(moved);
+  for (const [id, b] of before) if (!after.has(id)) { const g = ghost(b.n, b.r); M.vanish(g).finally(() => g.remove()); }
+}
+
 function renderFolder() {
+  const key = state.folder + "|" + folderMode + "|" + folderLook(state.folder);
+  const before = key === folderDrawn ? folderSnap() : new Map();
+  folderDrawn = key;
   // A handle or star with focus keeps it through a draw again (a cover
   // drawn late redraws the list after a move by keys).
   const a = document.activeElement;
@@ -481,6 +514,7 @@ function renderFolder() {
         ordering ? dragHandle(p, i, list.length) : editing ? null : itemFav(p)))) : null);
   paintFolderBar();
   paintPicks();
+  folderFlip(before);
   const again = had && $("folderBody").querySelector("li" + had);
   if (again) again.focus({ preventScroll: true });
 }
