@@ -2,6 +2,26 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.65.1] - 2026-11-17
+
+### Added
+- James Clear's 3-2-1 is in Discover's newsletters: sign up with your Newsletters address and each Thursday's email comes in cleaned up.
+- James Clear's 3-2-1 newsletter reads cleanly: no logo, tagline, weekly greeting or banner lines, its 3 ideas, 2 quotes and 1 question as headings, and it's named James Clear instead of "Jamesclear".
+- Live clips: turn on Live in a clip's menu and it updates from the site each time you open it, at most once an hour, when you're online. Good for a Reddit thread whose comments keep coming.
+- Update from the site keeps the copy it replaced on this device. Undo on the toast, or "Go back to the earlier copy" in the clip's menu, brings it back.
+- Stats keeps a deleted clip or file in "Most time", greyed. Tap it to save it again, open the original, or remove it from Stats. Its time stays in your totals either way.
+- Saving the same page again, or bringing back the same file, picks up its old reading time and place in Stats.
+
+### Changed
+- An update that comes back much shorter, or only the start of a page that was whole, keeps your copy and offers "Use it anyway".
+- An update that finds nothing changed keeps the clip as it was, so nothing new goes to sync.
+- A collection's In other apps is now a switch in its Edit, no longer in its ⋯ menu.
+
+### Fixed
+- Newsletter emails no longer show their layout as boxed tables, blank lines or an empty heading at the end.
+- Downloads that save as files (LibriVox audiobooks, Kiwix packs, books from Discover) no longer get stuck after the first file or at "Opening".
+- Pause and Stop now work on those downloads.
+
 ## [1.65.0] - 2026-11-16
 
 ### Added
