@@ -958,6 +958,7 @@
       // file list around it.
       chapter(doc, url) {
         const parts = new URL(url).pathname.split("/").filter(Boolean);
+        if (parts[2] === "releases" && parts[3] === "tag") return githubRelease(doc, parts);
         if (parts.length < 2 || (parts.length > 2 && !/^(tree|blob)$/.test(parts[2]))) return null;
         const body = doc.querySelector("article.markdown-body");
         if (!body) return null;
@@ -1197,6 +1198,18 @@
       byline: [owner + "/" + repo].concat(segs.length > 2 ? [segs.slice(1, -1).map(decodeURIComponent).join("/")] : []).join(" · "),
       body: doc.body, base: url, licence: null, lang: "", dir: "", next: "", prev: "",
     };
+  }
+
+  // A release's notes (2026-11), titled by the release's name, without
+  // GitHub's header, assets list and reactions around them.
+  function githubRelease(doc, parts) {
+    const body = doc.querySelector('[data-test-selector="body-content"]');
+    if (!body) return null;
+    const content = doc.createElement("div");
+    content.append(body.cloneNode(true));
+    const h1 = [...doc.querySelectorAll("h1")].find((h) => !h.closest("dialog, [role=dialog], .Overlay") && text(h));
+    const title = (h1 && text(h1)) || decodeURIComponent(parts[4] || "");
+    return { content, siteName: "GitHub", title, byline: parts[0] + "/" + parts[1], next: "", prev: "" };
   }
 
   // ---- Reddit ----

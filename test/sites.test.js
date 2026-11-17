@@ -139,6 +139,18 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       assert.ok(!/Go to file|Latest commit/.test(plain(html)), "no file list");
     });
 
+    await test("GitHub: a release is its notes, titled by the release", async () => {
+      const { meta, html } = await saveWith(browser, "https://github.com/danielnoam/waypage/releases/tag/app-v1.65.1", [
+        ["https://github.com/danielnoam/waypage/releases/tag/app-v1.65.1", "github-release.html"],
+      ]);
+      assert.strictEqual(meta.title, "Waypage 1.65.1");
+      assert.strictEqual(meta.site, "GitHub");
+      assert.strictEqual(meta.byline, "danielnoam/waypage");
+      assert.ok(/<h3[^>]*>Added<\/h3>/.test(html), "the notes' headings");
+      assert.ok(plain(html).includes("Live clips"), "the notes");
+      assert.ok(!/Choose a tag to compare|commits to main since this release/.test(plain(html)), "none of GitHub's header");
+    });
+
     await test("GitHub: when the API fails, the page is read as before", async () => {
       const { meta } = await saveWith(browser, "https://github.com/danielnoam/waypage/pull/182", [
         ["https://api.github.com/", null],

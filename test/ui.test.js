@@ -5213,6 +5213,57 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    // GitHub (2026-11): a repo link follows its releases (its tags when it
+    // has no releases), named for the repo, each release counting its lines.
+    await test("feeds: a GitHub repo link follows its releases, named for the repo", async () => {
+      const q = await page(browser, 390);
+      const esc = (h) => h.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+      const entry = (tag, name, html, ago) => '<entry><id>tag:github.com,2008:Repository/1/' + tag + '</id><updated>' + new Date(Date.now() - ago * 36e5).toISOString() + '</updated>'
+        + '<link rel="alternate" type="text/html" href="https://github.com/someone/tool/releases/tag/' + tag + '"/><title>' + name + '</title>'
+        + '<content type="html">' + esc(html) + '</content><author><name>someone</name></author>'
+        + '<media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/1?s=60&amp;v=4"/></entry>';
+      const feed = (title, entries) => '<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">'
+        + '<link type="text/html" rel="alternate" href="https://github.com/someone/tool/releases"/><title>' + title + '</title>' + entries + '</feed>';
+      const releases = feed("Release notes from tool", entry("v2.0", "Tool 2.0", "<h3>Added</h3><ul><li>a</li><li>b</li></ul><h3>Fixed</h3><ul><li>c</li></ul>", 3) + entry("v1.9", "Tool 1.9", "<p>Small things.</p>", 400));
+      const tags = feed("Tags from bare", entry("v0.1", "v0.1", "<p>x</p>", 5));
+      const got = await q.evaluate(async ([releases, tags]) => {
+        const asked = [];
+        C.platform.fetchText = async (url) => {
+          asked.push(url);
+          const text = url === "https://github.com/someone/tool/releases.atom" ? releases
+            : url === "https://github.com/someone/bare/releases.atom" ? releases.replace(/<entry>[\s\S]*<\/entry>/, "")
+            : url === "https://github.com/someone/bare/tags.atom" ? tags : null;
+          return text ? { status: 200, url, text } : { status: 404, url, text: "" };
+        };
+        const one = await C.feeds.findFeed("github.com/someone/tool/pulls");
+        const bare = await C.feeds.findFeed("https://github.com/someone/bare");
+        const f = { url: one.url, title: one.feed.title, link: one.feed.link, icon: one.feed.icon, releases: true, mode: "show", images: "previews", folder: one.feed.title, days: 30, addedAt: Date.now(), checkedAt: Date.now(), error: "", items: [] };
+        mergeFeed(f, one.feed);
+        feeds.push(f);
+        saveFeeds();
+        await goPlace("feeds");
+        const all = [...document.querySelectorAll("#feeds .post-meta")].map((n) => n.textContent);
+        pickFeed(f.url);
+        const own = [...document.querySelectorAll("#feeds .post-meta")].map((n) => n.textContent);
+        return { url: one.url, title: one.feed.title, icon: one.feed.icon, notes: f.items[0].notes, image: one.feed.items[0].image, bare: [bare.url, bare.feed.title], asked, all, own,
+          line: releasesLine(one.feed.items), owner: C.feeds.githubRepo("https://github.com/settings/profile") };
+      }, [releases, tags]);
+      assert.strictEqual(got.url, "https://github.com/someone/tool/releases.atom");
+      assert.strictEqual(got.title, "tool", "named for the repo, not \"Release notes from tool\"");
+      assert.strictEqual(got.icon, "https://github.com/someone.png?size=64", "the owner's picture");
+      assert.deepStrictEqual(got.notes, { added: 2, fixed: 1 });
+      assert.strictEqual(got.image, undefined, "no author avatar as the post's picture");
+      assert.deepStrictEqual(got.bare, ["https://github.com/someone/bare/tags.atom", "bare"], "no releases: its tags");
+      assert.ok(!got.asked.some((u) => /pulls|commits/.test(u)), "neither the page nor its commits are read");
+      assert.ok(/^Release · /.test(got.all[0]), got.all[0]);
+      assert.ok(/^2 added · 1 fixed · /.test(got.own[0]), got.own[0]);
+      assert.ok(/^Release · /.test(got.own[1]), "a release without the usual headings: " + got.own[1]);
+      assert.ok(/^Releases on GitHub · last one /.test(got.line), got.line);
+      assert.strictEqual(got.owner, null, "github.com/settings isn't a repo");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     // Newsletters (1.43.0): a Kill the Newsletter feed, its sender and
     // confirm link read, the footer link gone from the saved clip, and the
     // email kept out of Feeds.

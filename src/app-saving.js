@@ -1832,6 +1832,19 @@ function rateLine(items, mail) {
   return rate + " · " + t("last one {when}", { when: last });
 }
 
+// A GitHub repo's releases (2026-11): what the add sheet says of them,
+// and each release's row, "6 added · 3 changed · 3 fixed" in its own
+// list and just "Release" among every feed's posts.
+function releasesLine(items) {
+  const last = Math.max(0, ...items.map((it) => it.date || 0));
+  return last ? t("Releases on GitHub · last one {when}", { when: whenText(last) }) : t("Releases on GitHub · none yet");
+}
+function releaseMeta(it, short) {
+  const n = it.notes || {};
+  const parts = [n.added && t("{n} added", { n: n.added }), n.changed && t("{n} changed", { n: n.changed }), n.fixed && t("{n} fixed", { n: n.fixed }), n.removed && t("{n} removed", { n: n.removed })].filter(Boolean);
+  return short || !parts.length ? t("Release") : parts.join(" · ");
+}
+
 // Today, Yesterday, a weekday this week, then the date.
 function dayName(t) {
   const start = new Date().setHours(0, 0, 0, 0);
@@ -1856,6 +1869,7 @@ function mergeFeed(f, got) {
     // whether it was opened.
     if (it.from) out.from = it.from;
     if (it.act) out.act = it.act;
+    if (it.notes) out.notes = it.notes;
     if (old && old.opened) out.opened = true;
     return out;
   });

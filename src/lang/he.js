@@ -1,6 +1,14 @@
 // Hebrew. Keys are the English text; a missing key shows in English.
 // Plurals: one, two (optional), other. Keep {placeholders} and edge spaces.
 Keel.i18n.strings("he", {
+  "Releases on GitHub · last one {when}": "גרסאות ב-GitHub · האחרונה {when}",
+  "Releases on GitHub · none yet": "גרסאות ב-GitHub · עוד אין",
+  "{n} added": "{n} נוספו",
+  "{n} changed": "{n} השתנו",
+  "{n} fixed": "{n} תוקנו",
+  "{n} removed": "{n} הוסרו",
+  "Release": "גרסה",
+  "Couldn't read {repo}'s releases on GitHub.": "לא הצלחנו לקרוא את הגרסאות של {repo} ב-GitHub.",
   "Remove from Stats": "הסרה מהסטטיסטיקה",
   "Its time stays in your totals. Save it again and it picks up where it left off.": "הזמן שלו נשאר בסיכומים. שומרים אותו מחדש והוא ממשיך מאיפה שהפסיק.",
   "Its time stays in your totals. Bring the same file back and it picks up where it left off.": "הזמן שלו נשאר בסיכומים. מחזירים את אותו קובץ והוא ממשיך מאיפה שהפסיק.",
