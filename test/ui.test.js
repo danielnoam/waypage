@@ -5180,6 +5180,9 @@ c("bk1", { at: 0.01 })]);
       await q.evaluate(() => { localStorage.setItem("waypage.place", JSON.stringify("library")); renderLibrary(); });
       await q.locator('.page-card[data-ids="lm2"] .card-live').waitFor();
       assert.strictEqual(await q.locator('.page-card[data-ids="lm3"] .card-live').count(), 0);
+      // Turned on from its menu, the card already on screen says so too.
+      await q.evaluate(() => setLive(state.pages.find((p) => p.id === "lm3"), true));
+      await q.locator('.page-card[data-ids="lm3"] .card-live').waitFor({ timeout: 3000 });
       await q.evaluate(() => openFolder("Threads"));
       await q.locator('#folderBody li[data-id="lm1"] .card-live').waitFor();
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
