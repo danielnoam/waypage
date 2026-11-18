@@ -956,6 +956,7 @@ adds a line here.
 Things that broke once and would again. Check here before touching the
 area.
 
+- The books of an audiobook folder added as a series share one `link`, the folder picked. Removing an entry lets go of its `link` only when no other entry still reads from it (`releaseLinks`).
 - A field missing from sync's `SYNCED`, backup's `cleanMeta`, `SYNCED_KEEP` and `AGAIN_KEEP` is dropped on the next sync or update. `folderSeries` and `folderIn` are in all four; a device without them strips them from clips it changes, which `healSeries` repairs while any clip of the series keeps them.
 
 - The reduced-motion rule in src/styles.css sets every CSS animation to 1 ms. An infinite one (a spinner's breathing) then runs a thousand times a second and flickers, so each gets its own duration back in that same block; a new looping animation does too.

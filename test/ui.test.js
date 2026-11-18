@@ -1612,6 +1612,48 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("an audiobook folder of book folders becomes a series, discs stay one book, and removing one book keeps the folder", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(() => {
+        const F = window.Waypage.platform.files, A = window.Waypage.platform.audio;
+        Object.defineProperty(A, "native", { get: () => true, configurable: true });
+        A.probe = async () => ({ duration: 60000 });
+        window.released = [];
+        F.release = async (ref) => { released.push(ref); };
+        F.blob = async () => new Blob([new Uint8Array(16)]);
+        const tree = { "tree:saga": ["Book 2 Salt/01.mp3", "Book 1 Road/02.mp3", "Book 1 Road/01.mp3", "Book 3/a.m4b", "cover.txt"],
+          "tree:discs": ["CD1/01.mp3", "CD2/01.mp3"] };
+        window.pickNext = "";
+        F.pickFolder = async () => ({ ref: pickNext, name: pickNext.slice(5) });
+        F.scan = async (ref) => ({ ok: true, name: ref === "tree:saga" ? "The Saga" : "Discs", files: tree[ref].map((path) => ({ ref: ref + "/" + path, path, name: path.split("/").pop(), size: 10 })) });
+      });
+      await q.evaluate(() => { pickNext = "tree:saga"; return addAudiobookFolder(); });
+      await until(q, () => state.folder === "The Saga");
+      const saga = await q.evaluate(() => ({ titles: folderPages("The Saga").map((p) => p.title), series: isSeriesFolder("The Saga"),
+        parts: folderPages("The Saga").map((p) => p.audio.parts.length), links: [...new Set(folderPages("The Saga").map((p) => p.link))],
+        head: [...document.querySelectorAll("#folderBody .section-head, #folderBody h2, #folderBody h3")].map((h) => h.textContent).join("|") }));
+      assert.deepStrictEqual(saga.titles, ["Book 1 Road", "Book 2 Salt", "Book 3"]);
+      assert.ok(saga.series);
+      assert.deepStrictEqual(saga.parts, [2, 1, 1]);
+      assert.deepStrictEqual(saga.links, ["tree:saga"]);
+      assert.ok(/Files · 3/.test(saga.head), saga.head);
+      assert.ok(/0 of 3 heard/.test(await q.evaluate(() => document.getElementById("folderBody").textContent)));
+      // The same folder again is already here; a folder of discs is one book.
+      await q.evaluate(() => addAudiobookFolder());
+      assert.strictEqual(await q.evaluate(() => state.pages.length), 3);
+      await q.evaluate(() => { history.back(); pickNext = "tree:discs"; return addAudiobookFolder(); });
+      await until(q, () => state.pages.some((p) => p.title === "Discs"));
+      const discs = await q.evaluate(() => { const p = state.pages.find((x) => x.title === "Discs"); return { parts: p.audio.parts.length, folder: p.folder || "" }; });
+      assert.deepStrictEqual(discs, { parts: 2, folder: "" });
+      // Removing one book keeps the folder the others read from.
+      q.on("dialog", (d) => d.accept());
+      await q.evaluate(() => deletePage(folderPages("The Saga")[0]));
+      assert.deepStrictEqual(await q.evaluate(() => released), []);
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("Edit clips edits the words of files read from where they are, not PDFs or comics", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

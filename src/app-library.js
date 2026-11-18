@@ -228,6 +228,10 @@ async function setFolder(p, name) {
 // how much of it is read.
 // What a collection is made of, by the library's own parts: "8 clips,
 // 2 files". A copy made from a file is a clip, as in the library.
+// A list of only files says Files, and of only audiobooks, heard for read.
+const allFiles = (list) => list.length > 0 && list.every((p) => p.file);
+const allHeard = (list) => list.length > 0 && list.every((p) => p.audio && p.audio.parts && !p.audio.overlay);
+const listHead = (list) => (allFiles(list) ? t("Files") : isSeries(list) ? t("Chapters") : t("Clips")) + " · " + list.length;
 const HOLDS = [["note", (n) => tn(n, "1 note", "{n} notes")], ["audio", (n) => tn(n, "1 audiobook", "{n} audiobooks")], ["file", (n) => tn(n, "1 file", "{n} files")], ["clip", (n) => tn(n, "1 clip", "{n} clips")]];
 const holdKind = (p) => (p.note ? "note" : isAudiobook(p) ? "audio" : p.link ? "file" : "clip");
 // ...and as marks along the bottom of its cover, one per kind it holds,
@@ -263,7 +267,7 @@ function folderTile(name) {
   const fav = list.some((p) => p.folderFav);
   const series = isSeriesFolder(name), inside = series ? 0 : seriesInside(name).length;
   const tile = el("div", { class: "tile", role: "listitem", "data-ids": list.map((p) => p.id).join(","), "data-name": name },
-    el("button", { class: "card-open", type: "button", "aria-label": [name, fav ? t("favourite") : "", series ? t("series") : t("collection"), inside ? tn(inside, "1 series", "{n} series") : "", holdsLine(list), t("{n} read", { n: done }), fresh ? tn(fresh, "1 new chapter", "{n} new chapters") : ""].filter(Boolean).join(", "),
+    el("button", { class: "card-open", type: "button", "aria-label": [name, fav ? t("favourite") : "", series ? t("series") : t("collection"), inside ? tn(inside, "1 series", "{n} series") : "", holdsLine(list), (allHeard(list) ? t("{n} heard", { n: done }) : t("{n} read", { n: done })), fresh ? tn(fresh, "1 new chapter", "{n} new chapters") : ""].filter(Boolean).join(", "),
       onclick: () => tapPages(list.map((p) => p.id), () => openFolder(name)) }),
     pickMark(),
     el("span", { class: "tile-thumb" + (thumb ? "" : " blank") },
@@ -279,7 +283,7 @@ function folderTile(name) {
           saveNewChapters(name, e.currentTarget);
         } }, "+" + (fresh >= NEW_MAX ? NEW_MAX : fresh)) : null),
     el("span", { class: "tile-name", dir: "auto" }, name),
-    el("span", { class: "tile-meta" }, el("span", { class: "tile-kind" }, series ? t("Series · ") : t("Collection · ")), inside ? tn(inside, "1 series, {clips}", "{n} series, {clips}", { clips: holdsLine(list) }) : (done === list.length ? t("All read") : t("{done} of {n} read", { done: done, n: list.length })), el("span", { class: "tile-size" }, " · " + formatSize(sizeOf(list)))),
+    el("span", { class: "tile-meta" }, el("span", { class: "tile-kind" }, series ? t("Series · ") : t("Collection · ")), inside ? tn(inside, "1 series, {clips}", "{n} series, {clips}", { clips: holdsLine(list) }) : (allHeard(list) ? (done === list.length ? t("All heard") : t("{done} of {n} heard", { done: done, n: list.length })) : done === list.length ? t("All read") : t("{done} of {n} read", { done: done, n: list.length })), el("span", { class: "tile-size" }, " · " + formatSize(sizeOf(list)))),
     el("span", { class: "progress thin", "aria-hidden": "true" },
       el("span", { class: "progress-fill", style: "transform: scaleX(" + done / list.length + ")" })));
   // A cover whose file is gone (a restored backup) is read again.
@@ -430,9 +434,10 @@ function bookHead(list, next, done) {
     });
   } else title = el("h2", { class: "book-title", dir: "auto" }, name);
   const left = minutesLeft(list);
-  const meta = done === n ? t("All {n} read", { n }) : t("{done} of {n} read · {left} left", { done, n, left: minutesText(left) });
+  const heard = allHeard(list);
+  const meta = done === n ? (heard ? t("All {n} heard", { n }) : t("All {n} read", { n })) : heard ? t("{done} of {n} heard · {left} left", { done, n, left: minutesText(left) }) : t("{done} of {n} read · {left} left", { done, n, left: minutesText(left) });
   const bar = el("div", { class: "book-progress", role: "progressbar", "aria-label": t("Read"), "aria-valuemin": "0",
-    "aria-valuemax": String(n), "aria-valuenow": String(done), "aria-valuetext": t("{done} of {n} read", { done, n }) },
+    "aria-valuemax": String(n), "aria-valuenow": String(done), "aria-valuetext": heard ? t("{done} of {n} heard", { done, n }) : t("{done} of {n} read", { done, n }) },
     el("span", { class: "book-progress-fill", style: "width: " + (done / n * 100).toFixed(1) + "%" }));
   const head = el("div", { class: "book-head" },
     bookCover(list),
@@ -557,7 +562,7 @@ function renderFolder() {
       sharing() ? el("div", { class: "group" },
         switchRow(t("In other apps"), t("Listed in the reading activity that apps you connect to your sync repo can read"), !list.some((p) => p.folderNoShare), (v) => setFolderShare(state.folder, !v))) : null,
       sectionHead(t("Cover")), coverPanel(list),
-      sectionHead((isSeries(list) ? t("Chapters") : t("Clips")) + " · " + list.length),
+      sectionHead(listHead(list)),
       savedLine(list),
       ordering ? el("div", { class: "order-hint" },
         el("div", { class: "chips sort-chips", role: "group", "aria-label": t("Sort by") },
@@ -571,7 +576,7 @@ function renderFolder() {
   fill($("folderBody"),
     ...top,
     ...(showList && !editing ? insideStrip(state.folder) : []),
-    showList && !editing ? sectionHead((isSeries(list) ? t("Chapters") : t("Clips")) + " · " + list.length) : null,
+    showList && !editing ? sectionHead(listHead(list)) : null,
     covers ? el("ol", { class: "folder-covers" }, ...list.map((p) => coverItem(p, p === next && done < list.length))) : null,
     showList && !covers ? el("ol", { class: "group folder-list" + (ordering ? " ordering" : "") },
       ...list.map((p, i) => el("li", folderMode ? { "data-id": p.id } : { "data-id": p.id, "data-ids": p.id },
@@ -1185,9 +1190,9 @@ async function removeFolder(withPages) {
   const list = folderPages(name);
   const inside = seriesInside(name);
   if (withPages && !confirm(t("Delete “{name}” and its {countLine} from {HERE}?{alsoSynced}{filesNote}", { name: name, countLine: countLine(list.length), HERE: HERE, alsoSynced: alsoSynced(), filesNote: filesNote(list) }))) return;
-  if (withPages) forgetWatched(list);
+  if (withPages) { forgetWatched(list); releaseLinks(list); }
   for (const p of list) {
-    if (withPages) { if (p.link && !p.watched) C.platform.files.release(p.link); dropPackFile(p); dropAudioFiles(p); await C.store.removePage(p.id); }
+    if (withPages) { dropPackFile(p); dropAudioFiles(p); await C.store.removePage(p.id); }
     else { delete p.folder; delete p.folderAt; delete p.folderFav; delete p.folderFavAt; delete p.coverPick; delete p.folderNoShare; delete p.folderTagNew; delete p.folderSeries; delete p.folderIn; }
   }
   // Its series stay, in the library's Series.
@@ -1497,11 +1502,19 @@ async function switchView(p, where) {
   C.files.drawNear($("readerFrame"));
 }
 
+// The outside files and folders these were read from, let go of unless
+// another entry still reads from one: the books of an audiobook folder
+// added as a series all share its folder.
+function releaseLinks(list) {
+  const links = new Set(list.filter((p) => p.link && !p.watched).map((p) => p.link));
+  for (const x of state.pages) if (!list.includes(x)) links.delete(x.link);
+  for (const l of links) C.platform.files.release(l);
+}
 async function deletePage(p, where) {
   if (!confirm(p.link ? t("Remove “{title}” from Waypage? {linkedStays}", { title: p.title, linkedStays: linkedStays([p]) })
     : t("Delete “{title}” from {HERE}?{alsoSynced}", { title: p.title, HERE: HERE, alsoSynced: alsoSynced() }))) return;
   forgetWatched([p]);
-  if (p.link && !p.watched) C.platform.files.release(p.link); dropPackFile(p); dropAudioFiles(p);
+  releaseLinks([p]); dropPackFile(p); dropAudioFiles(p);
   await C.store.removePage(p.id);
   state.pages = state.pages.filter((x) => x.id !== p.id);
   await C.store.writeIndex(state.pages);
@@ -1704,7 +1717,8 @@ async function deletePicked() {
     ? tn(list.length, "Remove 1 file from Waypage? {stays}", "Remove {n} files from Waypage? {stays}", { stays: linkedStays(list) })
     : t("Delete {countLine} from {HERE}?{alsoSynced}{filesNote}", { countLine: countLine(list.length), HERE: HERE, alsoSynced: alsoSynced(), filesNote: filesNote(list) }))) return;
   forgetWatched(list);
-  for (const p of list) { if (p.link && !p.watched) C.platform.files.release(p.link); dropPackFile(p); dropAudioFiles(p); await C.store.removePage(p.id); }
+  releaseLinks(list);
+  for (const p of list) { dropPackFile(p); dropAudioFiles(p); await C.store.removePage(p.id); }
   state.pages = state.pages.filter((p) => !list.includes(p));
   await C.store.writeIndex(state.pages);
   await back(andFolder(1));
