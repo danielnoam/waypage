@@ -14,12 +14,14 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # pages.yml runs it before a deploy.
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: tests-${{ github.ref }}
+  group: tests-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

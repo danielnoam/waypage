@@ -123,6 +123,22 @@ jobs:
           name: Waypage-${{ steps.v.outputs.version }}${{ steps.sign.outputs.signed == 'true' && '-release-key' || '-throwaway-key' }}
           path: Waypage.apk
 
+      # Every build of main with the real key is the unreleased channel's
+      # (2026-11-18): an artifact the Pages deploy serves from unreleased/,
+      # never the Releases page. Same version as the last release, so it
+      # installs over it and the next release installs over it.
+      - name: Note the unreleased build
+        if: github.ref == 'refs/heads/main' && steps.sign.outputs.signed == 'true'
+        run: node tools/unreleased.js note android Waypage.apk > unreleased-android.json
+
+      - uses: actions/upload-artifact@v4
+        if: github.ref == 'refs/heads/main' && steps.sign.outputs.signed == 'true'
+        with:
+          name: unreleased-android
+          path: |
+            Waypage.apk
+            unreleased-android.json
+
       # Only from main, only with the real key, and only once per version:
       # each APK has to install over the last.
       - name: Publish the release

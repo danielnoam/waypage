@@ -278,9 +278,19 @@ secrets, so it can't sign or publish anything.
 
 **What a merge does:**
 
-- A merge to **`main`** refreshes the web copy (GitHub Pages serves
-  `main` as it is; the service worker paints from cache and fetches the
-  new files for the next launch), version bump or not.
+- A merge to **`main`** refreshes the web copy (`pages.yml` deploys
+  `main` to GitHub Pages once the tests pass, 2026-11-18; the service
+  worker paints from cache and fetches the new files for the next
+  launch), version bump or not. Settings → Pages → Source has to be
+  **GitHub Actions** for it.
+- **Unreleased builds (2026-11-18).** Every build of `main` also leaves
+  the artifact `unreleased-android` (the APK and a note, keel's
+  `tools/unreleased.js`); `pages.yml` puts the newest under the site's
+  `unreleased/` with `build.json`, and deploys again when a build of
+  `main` finishes. Never on the Releases page: only Settings → About →
+  **Unreleased builds** (Android, per device) offers it. Hidden, not
+  private: the repo is public. It keeps the last release's version, so
+  it installs over the release and the next release installs over it.
 - `.github/workflows/android.yml` and `ios.yml` build on every push to
   `main`, and on a branch push only when its open pull request has a
   test label (a quick `gate` job checks first). Pushes that only touch `**.md`, `test/**` or `.claude/**`

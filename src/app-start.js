@@ -423,10 +423,18 @@ async function checkForNewerApp(byHand) {
   if (C.platform.previewBranch && !byHand) { setUpd({ phase: "preview" }); return; }
   setUpd({ phase: "checking" });
   try {
-    const got = await appReleases.latest();
-    const latest = got && got.version;
-    if (latest && isNewerVersion(latest, APP_VERSION)) {
-      setUpd({ phase: upd.latest === latest && upd.apk ? "ready" : "available", latest, notes: got.notes });
+    // keel's releases.js: a newer release, or with About → Unreleased
+    // builds on (2026-11-18, Android only) the newest build of main, from
+    // the site's unreleased/, never the Releases page. It's named by its
+    // commit, and its tag "unreleased" sends View to About, not What's new.
+    const build = C.platform.build || {};
+    const got = await appReleases.check({ version: APP_VERSION, sha: build.sha, at: build.builtAt }, C.platform.android ? "android" : null);
+    if (got && got.channel === "unreleased") {
+      const short = got.sha.slice(0, 7);
+      const latest = t("build {sha}", { sha: short });
+      setUpd({ phase: upd.latest === latest && upd.apk ? "ready" : "available", latest, notes: "", tag: "unreleased", key: "unreleased-" + short, url: got.url });
+    } else if (got) {
+      setUpd({ phase: upd.latest === got.version && upd.apk ? "ready" : "available", latest: got.version, notes: got.notes, ...(upd.tag === "unreleased" ? { tag: null, key: null, url: null } : {}) });
     } else setUpd({ phase: "current" });
   } catch (e) {
     setUpd({ phase: "failed", error: t("Couldn't check. Try again when you're online.") });
@@ -450,7 +458,7 @@ async function startUpdate() {
   if (!resuming && !state.downloads) toast(t("Downloading Waypage {latest}.", { latest: upd.latest }), t("Downloads"), () => openDownloads());
   let apk;
   try {
-    apk = await C.platform.downloadUpdate(upd.key || upd.latest, (f, bytes, total) => setUpd({ pct: Math.round(f * 100), bytes: bytes || 0, total: total || 0 }), "Waypage.apk", upd.tag || undefined);
+    apk = await C.platform.downloadUpdate(upd.key || upd.latest, (f, bytes, total) => setUpd({ pct: Math.round(f * 100), bytes: bytes || 0, total: total || 0 }), "Waypage.apk", upd.url ? undefined : upd.tag || undefined, upd.url || null);
   } catch (e) {
     if (e && e.code === "PAUSED") { setUpd({ phase: "paused" }); return; }
     setUpd({ phase: "paused", error: t("The download stopped. Resume picks up where it was.") });
@@ -458,7 +466,7 @@ async function startUpdate() {
   }
   if (!apk) {
     setUpd({ phase: "available" });
-    C.platform.openOutside(upd.tag ? C.platform.releaseUrl(upd.tag) : C.platform.apkUrl());
+    C.platform.openOutside(upd.url || (upd.tag ? C.platform.releaseUrl(upd.tag) : C.platform.apkUrl()));
     return;
   }
   setUpd({ phase: "ready", apk, error: "", pct: 100 });
@@ -539,6 +547,13 @@ function updatesGroup() {
     }[upd.phase];
     list.append(versionRow(t("Version {version}", { version: APP_VERSION }), status, out && !upd.tag ? () => openNews(false, true) : null));
     if (out && upd.error) list.append(el("div", { class: "row" }, el("span", { class: "row-label warn" }, upd.error)));
+    if (C.platform.android && C.platform.build && C.platform.build.repo) {
+      list.append(switchRow(t("Unreleased builds"), t("Every change once it's merged, before it's a release. This device only"), appReleases.channel() === "unreleased", (on) => {
+        appReleases.setChannel(on ? "unreleased" : "release");
+        if (!on && upd.tag === "unreleased" && !["downloading", "paused"].includes(upd.phase)) setUpd({ phase: "idle", latest: null, tag: null, key: null, url: null, apk: null });
+        checkForNewerApp(true);
+      }));
+    }
     if (C.platform.build && C.platform.build.repo) {
       list.append(navRow(t("Test builds"), preview ? t("Back to the release is here") : t("Try a branch before it's released"), openPreviews));
     }
@@ -656,7 +671,7 @@ async function openWebPreview(p) {
 function installPreview(p) {
   if (!C.platform.native) { if (p.sha) openWebPreview(p); return; }
   if (!p.apk && !C.platform.ios) { C.platform.openOutside(C.platform.releaseUrl(p.tag)); return; }
-  Object.assign(upd, { phase: "available", latest: t("test build of {branch}", { branch: p.branch }), tag: p.tag, key: p.tag + "-" + p.sha.slice(0, 7), notes: "", apk: null, error: "" });
+  Object.assign(upd, { phase: "available", latest: t("test build of {branch}", { branch: p.branch }), tag: p.tag, key: p.tag + "-" + p.sha.slice(0, 7), url: null, notes: "", apk: null, error: "" });
   startUpdate();
 }
 function backToRelease() {
