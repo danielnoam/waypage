@@ -292,6 +292,21 @@ test("a series and the collection it sits in go to the other device, and a backu
   assert.strictEqual(B.cleanMeta(page("a1b2", { folderSeries: true }), "a1b2").folderSeries, undefined);
 });
 
+test("Live survives the sync merge and a backup (2026-11)", () => {
+  require("../src/backup.js");
+  const B = window.Waypage.backup;
+  assert.strictEqual(B.cleanMeta(page("a1b2", { live: true }), "a1b2").live, true);
+  assert.strictEqual(B.cleanMeta(page("a1b2", { live: "yes" }), "a1b2").live, undefined);
+  // Turned on here since the last sync, nothing on GitHub: kept, and sent.
+  const base = lib([page("a1b2")]);
+  const here = lib([B.cleanMeta(page("a1b2", { live: true }), "a1b2")]);
+  const r = S.merge(base, here, base, NOW);
+  assert.strictEqual(r.pages[0].live, true);
+  // And after that sync, GitHub's copy keeps it on.
+  const after = lib([r.pages[0]]);
+  assert.strictEqual(S.merge(after, after, after, NOW).pages[0].live, true);
+});
+
 test("a note has no address, and is never taken for a copy of another note (2.0.0)", () => {
   const note = (id, more) => ({ id, url: "", title: "Note " + id, savedAt: 100, at: 0, finished: false, note: { paper: "lines" }, ...more });
   const r = S.merge(null, lib([note("a1b2"), note("c3d4")]), null, NOW, undefined, (a, b) => a === b, (u) => u);
