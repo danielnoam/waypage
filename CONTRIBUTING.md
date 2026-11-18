@@ -274,7 +274,8 @@ Playwright on every PR and on `main`, split over four machines, see
 runs just `build.test.js` and `docs.test.js`, which read it). No review is required: anyone
 with write access merges on green. Turn on auto-merge as soon as the
 work is done (`gh pr merge <n> --auto --squash`, or the PR's "Enable
-auto-merge" button) so nobody has to wait for the run to finish. Daniel decides who has write
+auto-merge" button) so nobody has to wait for the run to finish (`auto-merge.yml` does this
+for Daniel's own PRs). Daniel decides who has write
 access. A PR from a fork runs the tests too, but without the repo's
 secrets, so it can't sign or publish anything.
 
