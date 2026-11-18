@@ -580,8 +580,8 @@ function tagsSections() {
         el("span", { class: "row-chev", "aria-hidden": "true" }, "›"))))
         : el("p", { class: "footnote" }, t("No tags yet. Add them from a clip's ⋯, or pick several clips and tap Tags.")),
       tags.length ? el("p", { class: "footnote" }, t("Tap a tag to rename, merge or delete it. Renaming one to a tag you already have makes them one.")) : null),
-    section(t("From sites"), t("Royal Road, AO3, Scribble Hub and many news sites and blogs tag their pages. A story saved as a collection asks in Save with options instead."),
-      el("div", { class: "group" }, how)),
+    section(t("From sites"), null, el("div", { class: "group" }, how),
+      el("p", { class: "footnote" }, t("Royal Road, AO3, Scribble Hub and many news sites and blogs tag their pages. A story saved as a collection asks in Save with options instead."))),
   ];
 }
 // Back out of every Settings page, however deep, to what was under it.

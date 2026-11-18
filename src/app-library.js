@@ -3023,9 +3023,6 @@ async function lookInOne(w, said, scan) {
         if (dir) { meta.folder = folderName(dir); meta.folderAt = Date.now(); }
         fileSeries(meta);
         outsideKnown(meta);
-        // A Discover book's tags from its site (2026-11).
-        if (forced && forced.siteTags) meta.siteTags = forced.siteTags;
-        if (forced && forced.tags && forced.tags.length) meta.tags = withTags(meta.tags, forced.tags.map(cleanTag).filter(Boolean));
         state.pages.unshift(meta);
         await C.store.writeIndex(state.pages);
         added++;
