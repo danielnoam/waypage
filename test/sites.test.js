@@ -394,6 +394,19 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       await ctx.close();
     });
 
+    // Any page's own tags (2026-11): schema.org keywords first (machine
+    // labels and repeats left out), else the post's rel="tag" links but not
+    // a sidebar's tag cloud. Kept on the clip as suggestions.
+    await test("a page's own tags: schema.org keywords, or the post's rel=tag links", async () => {
+      const { got } = await inPage(browser, [["https://blog.example/ld", "tags-ld.html"], ["https://blog.example/rel", "tags-rel.html"]], async () => {
+        const a = await Waypage.save.save("https://blog.example/ld", { mode: "links" });
+        const b = await Waypage.save.save("https://blog.example/rel", { mode: "links" });
+        return [a.siteTags, b.siteTags];
+      });
+      assert.deepStrictEqual(got[0], { site: "blog.example", tags: ["Rail travel", "Europe"] });
+      assert.deepStrictEqual(got[1], { site: "blog.example", tags: ["Sleeper trains"] });
+    });
+
     // Website sync reads a collection's chapters from any site's contents
     // page, not only the ones with rules of their own.
     await test("Website sync: a contents page with each chapter in a block of its own", async () => {

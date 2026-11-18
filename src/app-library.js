@@ -30,6 +30,142 @@ async function setTags(p, tags) {
   renderLibrary();
 }
 
+// What a tag is on (2026-11): its clips, and a collection counts once,
+// so one story's tags don't read as a hundred clips.
+function tagUse(tag) {
+  let clips = 0;
+  const folders = new Set();
+  for (const p of state.pages) {
+    if (!(p.tags || []).some((x) => sameTag(x, tag))) continue;
+    if (p.folder) folders.add(p.folder.toLowerCase()); else clips++;
+  }
+  return { clips, folders: folders.size };
+}
+function tagUseLine(tag) {
+  const u = tagUse(tag);
+  const c = u.clips ? tn(u.clips, "1 clip", "{n} clips") : "";
+  const f = u.folders ? tn(u.folders, "1 collection", "{n} collections") : "";
+  return c && f ? t("{clips} · {collections}", { clips: c, collections: f }) : c || f;
+}
+
+// A tag renamed everywhere; to a name another tag has, the two become one.
+async function renameTag(from, to) {
+  const name = cleanTag(to);
+  if (!name) return;
+  const into = allTags().find((x) => sameTag(x, name) && !sameTag(x, from)) || name;
+  for (const p of state.pages) {
+    if (!(p.tags || []).some((x) => sameTag(x, from))) continue;
+    p.tags = withTags(p.tags.map((x) => (sameTag(x, from) ? into : x)), []);
+  }
+  if (state.filter.startsWith("#") && sameTag(state.filter.slice(1), from)) { state.filter = "#" + into; store(FILTER_KEY, state.filter); }
+  await C.store.writeIndex(state.pages);
+  syncSoon();
+  renderLibrary();
+  return into;
+}
+// Off every clip; the clips stay. Undo puts it back where it was.
+async function deleteTag(tag) {
+  const had = state.pages.filter((p) => (p.tags || []).some((x) => sameTag(x, tag)));
+  const was = new Map(had.map((p) => [p, p.tags.slice()]));
+  for (const p of had) p.tags = p.tags.filter((x) => !sameTag(x, tag));
+  await C.store.writeIndex(state.pages);
+  syncSoon();
+  renderLibrary();
+  toast(t("Deleted #{tag}", { tag }), t("Undo"), async () => {
+    for (const [p, tags] of was) p.tags = tags;
+    await C.store.writeIndex(state.pages);
+    syncSoon();
+    renderLibrary();
+    if (state.section) renderSection();
+  });
+}
+
+// A site's own tags on a new clip (Settings › Library › Tags): offered on
+// the clip (the default), added when you already have the tag, all
+// added, or not read.
+const SITE_TAGS_HOW_KEY = "waypage.siteTagsHow";
+const siteTagsHow = () => load(SITE_TAGS_HOW_KEY, "suggest");
+function takeSiteTags(meta) {
+  const how = siteTagsHow();
+  if (how === "off") { delete meta.siteTags; return; }
+  const got = meta.siteTags ? meta.siteTags.tags.map(cleanTag).filter(Boolean) : [];
+  if (!got.length || how === "suggest") return;
+  const known = allTags();
+  const take = how === "all" ? got.map((x) => known.find((k) => sameTag(k, x)) || x)
+    : got.map((x) => known.find((k) => sameTag(k, x))).filter(Boolean);
+  if (take.length) meta.tags = withTags(meta.tags, take);
+}
+// The site's tags a clip (or a collection's clips) doesn't have yet.
+function siteSuggestions(list) {
+  const from = list.find((p) => p.siteTags && p.siteTags.tags && p.siteTags.tags.length);
+  if (!from) return null;
+  const has = (x) => list.every((p) => (p.tags || []).some((y) => sameTag(y, x)));
+  const tags = from.siteTags.tags.map(cleanTag).filter((x) => x && !has(x));
+  return tags.length ? { site: from.siteTags.site, tags } : null;
+}
+
+// Tags as chips (2026-11, was a drop-down): the ones on, with ×, then the
+// rest of your tags to add with a tap, New tag, and the site's own tags
+// as dashed suggestions. `list` is one clip or a collection's clips: a
+// tag on all of them is on, one on some is dashed with how many.
+const TAG_CHIPS = 10;
+let tagChipsAll = false, tagChipsTyping = false;
+function tagChips(list, redraw) {
+  const n = list.length;
+  const on = (x) => list.filter((p) => (p.tags || []).some((y) => sameTag(y, x))).length;
+  const write = async (change) => {
+    list.forEach(change);
+    await C.store.writeIndex(state.pages);
+    syncSoon();
+    renderLibrary();
+    if (state.folder) renderFolder();
+    redraw();
+  };
+  const add = (raw) => {
+    const x = cleanTag(raw);
+    if (!x) return Promise.resolve();
+    const name = allTags().find((k) => sameTag(k, x)) || x;
+    return write((p) => { p.tags = withTags(p.tags, [name]); });
+  };
+  const drop = (x) => write((p) => { p.tags = (p.tags || []).filter((y) => !sameTag(y, x)); });
+  const tags = allTags();
+  const all = tags.filter((x) => on(x) === n), some = tags.filter((x) => on(x) && on(x) < n), rest = tags.filter((x) => !on(x));
+  const shown = tagChipsAll ? rest : rest.slice(0, TAG_CHIPS);
+  const input = el("input", { class: "tag-input new-tag", type: "text", placeholder: t("New tag"), "aria-label": t("Name the new tag"),
+    maxlength: "32", enterkeyhint: "done", autocapitalize: "off", hidden: !tagChipsTyping || undefined });
+  input.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    tagChipsTyping = true;
+    add(input.value);
+  });
+  if (tagChipsTyping) {
+    tagChipsTyping = false;
+    setTimeout(() => { const i = document.querySelector(".sheet:not([hidden]) .new-tag"); if (i) i.focus({ preventScroll: true }); }, 0);
+  }
+  const chip = (x) => {
+    const k = on(x), full = k === n;
+    return el("button", { class: "chip" + (full ? " on" : k ? " some" : ""), type: "button", "aria-pressed": full ? "true" : k ? "mixed" : "false",
+      "aria-label": full ? t("Remove tag {t}", { t: x }) : k ? t("{tag}, on {k} of {n}, add to all", { tag: x, k, n }) : t("{tag}, add", { tag: x }),
+      onclick: () => (full ? drop(x) : add(x)) },
+    x, full ? el("span", { class: "chip-x", "aria-hidden": "true" }, "×") : k ? el("span", { class: "chip-n" }, k + "/" + n) : null);
+  };
+  const site = siteSuggestions(list);
+  return el("div", { class: "tag-chips" },
+    el("div", { class: "chips" }, ...all.map(chip), ...some.map(chip), ...shown.map(chip),
+      rest.length > shown.length ? el("button", { class: "chip chip-quiet", type: "button", onclick: () => { tagChipsAll = true; redraw(); } },
+        t("{n} more", { n: rest.length - shown.length })) : null,
+      el("button", { class: "chip chip-quiet", type: "button", onclick: () => { input.hidden = false; input.focus(); } }, t("+ New tag"))),
+    input,
+    site ? el("p", { class: "meta tag-from" }, t("From {site}", { site: site.site })) : null,
+    site ? el("div", { class: "chips" }, ...site.tags.map((x) => el("button", { class: "chip some", type: "button", "aria-label": t("{tag}, add", { tag: x }),
+      onclick: () => add(x) }, "+ " + x)),
+      site.tags.length > 1 ? el("button", { class: "chip chip-quiet", type: "button", onclick: () => write((p) => {
+        const known = allTags();
+        p.tags = withTags(p.tags, site.tags.map((x) => known.find((k) => sameTag(k, x)) || x));
+      }) }, t("Add all {n}", { n: site.tags.length })) : null) : null);
+}
+
 // ---- Folders ----
 // An ordered run of pages, like a web novel's chapters. A page is in at
 // most one, named by `folder` on its index entry, in the order it joined
@@ -100,6 +236,15 @@ function joinTags(p, name, on) {
   p.folderTagNew = true;
   const shared = mates.length ? (mates[0].tags || []).filter((t) => mates.every((x) => (x.tags || []).some((y) => sameTag(y, t)))) : [];
   if (shared.length) p.tags = withTags(p.tags, shared);
+}
+// The story page's tags, kept on each of a collection's clips (like
+// folderFav) for its Tags sheet to offer; Website sync refreshes them.
+async function keepStoryTags(name, got) {
+  if (!got || !got.tags || !got.tags.length) return;
+  const was = JSON.stringify(got);
+  let changed = false;
+  for (const p of folderPages(name)) if (JSON.stringify(p.siteTags || null) !== was) { p.siteTags = got; changed = true; }
+  if (changed) await C.store.writeIndex(state.pages);
 }
 async function setFolderTagNew(name, on) {
   for (const p of folderPages(name)) { if (on) p.folderTagNew = true; else delete p.folderTagNew; }
@@ -370,6 +515,7 @@ function bookHead(list, next, done) {
       el("p", { class: "book-site" }, [siteOf(list[0]), t("Collection")].filter(Boolean).join(" · ")),
       title,
       el("p", { class: "meta folder-meta" }, meta),
+      folderTagLine(list),
       bar));
   if (renaming) return [head];
   const go = done === n ? t("Read again from the start") : (next.at > 0.02 || done ? t("Continue: {title}", { title: next.title }) : t("Start: {title}", { title: next.title }));
@@ -377,6 +523,33 @@ function bookHead(list, next, done) {
     el("button", { class: "btn-primary folder-go", type: "button", dir: "auto", onclick: () => openPage(done === n ? list[0].id : next.id) }, go),
     saveNewButton(list),
     savedLine(list)];
+}
+// The tags every clip in the collection has, under its name (2026-11);
+// a tap opens its Tags sheet.
+const sharedTags = (list) => (list[0].tags || []).filter((x) => list.every((p) => (p.tags || []).some((y) => sameTag(y, x))));
+function folderTagLine(list) {
+  const tags = sharedTags(list);
+  if (!tags.length) return null;
+  return el("button", { class: "folder-tags", type: "button", "aria-label": t("Tags: {tags}", { tags: tags.join(", ") }), onclick: () => openMenu("folderTags") },
+    ...tags.map((x) => el("span", { class: "card-tag", dir: "auto" }, "#" + x)));
+}
+// A collection's tags (2026-11): on every clip in it, the site's own to
+// add, and whether chapters added later take them.
+function folderTagsSheet() {
+  const box = el("div", { class: "page-controls folder-tags-sheet" });
+  const draw = () => {
+    const list = folderPages(state.folder);
+    if (!list.length) return;
+    const tagNew = list.some((p) => p.folderTagNew);
+    fill(box,
+      el("div", { class: "menu-head" },
+        el("p", { class: "menu-title" }, t("Tags")),
+        el("p", { class: "meta", dir: "auto" }, state.folder + " · " + countLine(list.length))),
+      tagChips(list, draw),
+      el("div", { class: "group" }, switchRow(t("Tag new clips too"), t("Chapters added later get these tags"), tagNew, (v) => setFolderTagNew(state.folder, v).then(draw))));
+  };
+  draw();
+  return box;
 }
 function savedLine(list) {
   const web = webClips(list);
@@ -729,9 +902,7 @@ function openFolderMenu() {
     folderLook(state.folder) === "covers"
       ? item("chapters", t("Show as a list"), () => setFolderLook(state.folder, "list"))
       : item("grid", t("Show as covers"), () => setFolderLook(state.folder, "covers")),
-    // Offered once its clips have tags to give.
-    ...(list.some((p) => p.folderTagNew || (p.tags || []).length) ? [item("tag", t("Tag new clips"), () => setFolderTagNew(state.folder, !list.some((p) => p.folderTagNew)),
-      { note: list.some((p) => p.folderTagNew) ? t("On") : t("Off") })] : []),
+    item("tag", t("Tags"), () => openMenu("folderTags"), sharedTags(list).length ? { note: String(sharedTags(list).length) } : {}),
     item("select", t("Select"), () => startSelect([])),
     item("send", t("Export"), () => setFolderMode("export")),
     sep(),
@@ -1297,40 +1468,8 @@ function kindable(p) {
   return !!p.file || /^https?:/.test(p.url || "");
 }
 
-let tagTyping = false;
 function tagsRow(p, redraw) {
-  const tags = p.tags || [];
-  const others = allTags().filter((t) => !tags.some((x) => sameTag(x, t))).sort((a, b) => a.localeCompare(b));
-  const add = (raw, typed) => {
-    const t = cleanTag(raw);
-    if (!t || tags.some((x) => sameTag(x, t))) return;
-    const known = allTags().find((x) => sameTag(x, t));
-    // Typed tags keep the field open for the next one.
-    tagTyping = !!typed;
-    setTags(p, [...tags, known || t]).then(redraw);
-  };
-  const input = newField("new-tag", t("Name the new tag"), t("New tag"), (v) => add(v, true));
-  input.setAttribute("autocapitalize", "off");
-  if (tagTyping) {
-    tagTyping = false;
-    input.hidden = false;
-    setTimeout(() => { const i = document.querySelector(".sheet:not([hidden]) .new-tag"); if (i) i.focus({ preventScroll: true }); }, 0);
-  }
-  const pick = dropdown({
-    label: t("Add a tag"), cls: "field-pick", placeholder: t("Add a tag"),
-    options: [...others.map((t) => ({ value: t, label: t })), { value: NEW_PICK, label: t("New tag…") }],
-    value: null,
-    onpick: (v) => {
-      if (v === NEW_PICK) { input.hidden = false; input.focus(); return; }
-      add(v);
-    },
-  });
-  return el("div", { class: "rc-row tall" }, el("span", { class: "rc-label" }, t("Tags")),
-    el("div", { class: "tag-edit" },
-      tags.length ? el("div", { class: "chips" },
-        ...tags.map((t) => el("button", { class: "chip on", type: "button", "aria-label": i18n.t("Remove tag {t}", { t: t }),
-          onclick: () => setTags(p, tags.filter((x) => x !== t)).then(redraw) }, t, el("span", { class: "chip-x", "aria-hidden": "true" }, "×")))) : null,
-      pick, input));
+  return el("div", { class: "rc-row tall" }, el("span", { class: "rc-label" }, t("Tags")), tagChips([p], redraw));
 }
 
 // From the reader, back out of it; from the library's sheet, back to the
@@ -1580,6 +1719,7 @@ async function deletePicked() {
 const MENUS = {
   page: { label: t("Clip"), build: () => pageSheet(state.menu.page, "library") },
   tags: { label: t("Tags"), build: tagsSheet },
+  folderTags: { label: t("Tags"), build: folderTagsSheet },
   folder: { label: t("Collection"), build: folderSheet },
   saved: { label: t("What's saved"), build: savedSheet },
   file: { label: t("Opening a file"), build: fileSheet },
@@ -2670,6 +2810,9 @@ async function openFile(file, btn, open, ref, forced) {
       } else {
         fileSeries(meta);
         outsideKnown(meta);
+        // A Discover book's tags from its site (2026-11).
+        if (forced && forced.siteTags) meta.siteTags = forced.siteTags;
+        if (forced && forced.tags && forced.tags.length) meta.tags = withTags(meta.tags, forced.tags.map(cleanTag).filter(Boolean));
         state.pages.unshift(meta);
         pairArrived(meta);
         await C.store.writeIndex(state.pages);
