@@ -129,6 +129,7 @@ tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools
 tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
 tools/keel-sync.js  brings the files shared with LifeLog up to a keel release (below)
 tools/keel-checks.js  contrast and CSP checks the tests use (from keel, below)
+tools/unreleased.js  the unreleased channel's files: a note beside main's APK, then the Pages deploy puts the newest under unreleased/ (from keel)
 tools/sign-apk.sh   signs the APK with the release key in CI
 tools/sherpa-lib.sh   fetches sherpa-onnx's arm64 library (Kokoro voices) into the Android build, pinned and checked
 tools/test-build.sh        puts a labelled pull request's build on its test-<branch> pre-release
@@ -140,7 +141,7 @@ keel.config.json, keel.lock.json  the files shared with LifeLog through keel (se
 design/             the design canvas's artboards, for the exact markup
 docs/PROPOSAL.md    the original architecture, storage, legal and store reasoning
 docs/shots/         the README's screenshots
-.github/workflows/  test.yml (every PR), android.yml and ios.yml (builds, releases, test builds), test-builds.yml (test labels: build on, remove off), worker.yml (deploys worker/ to Cloudflare), discover-check.yml (Discover's list, weekly)
+.github/workflows/  test.yml (every PR), pages.yml (the web copy after the tests, with unreleased/), android.yml and ios.yml (builds, releases, test builds), test-builds.yml (test labels: build on, remove off), worker.yml (deploys worker/ to Cloudflare), discover-check.yml (Discover's list, weekly)
 ```
 
 ## Load order and the one scope
@@ -612,7 +613,7 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
 
 The files listed in `keel.lock.json` (`server.js`, `src/keel/qr.js`,
 `src/keel/github.js`, `src/keel/drive.js`, `src/keel/errlog.js`, `src/keel/platform.js`, `src/keel/releases.js`, `src/keel/sw-preview.js`, `src/keel/i18n.js`,
-`tools/release.js`, `tools/android-version.js`, `tools/keel-sync.js`, `tools/keel-checks.js`,
+`tools/release.js`, `tools/android-version.js`, `tools/keel-sync.js`, `tools/keel-checks.js`, `tools/unreleased.js`,
 `test/keel.test.js`, the github-pages skill) come from keel
 (danielnoam/keel), shared with LifeLog. Don't edit them here:
 `keel.test.js` fails. Change them in keel, tag a release there, then run
@@ -626,6 +627,9 @@ The files listed in `keel.lock.json` (`server.js`, `src/keel/qr.js`,
   (a branch only with a test label), signs it with the release key (secrets
   `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, alias `carryon`)
   and publishes the release `app-v<version>` when `APP_VERSION` is new.
+  Every signed build of `main` is also the unreleased channel's: the
+  artifact `unreleased-android`, which `pages.yml` serves from the site's
+  `unreleased/` for About → Unreleased builds (2026-11-18).
   Without the secrets it builds a test APK and publishes nothing.
 - **Test builds (1.48.0 as previews, by label since 1.49.1, renamed 1.50.0):** on any other branch whose
   open pull request has a test label, `tools/test-build.sh` remakes the pre-release `test-<branch>`
