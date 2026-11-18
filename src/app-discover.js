@@ -637,15 +637,20 @@ function dzAddSheet() {
     options: [{ value: "file", label: t("EPUB file") }, { value: "clips", label: t("Clips") }],
     get: () => as, set: (v) => { as = v; store(DZ_AS_KEY, v); paint(); } });
   paint();
+  // The book's own tags from its site (Gutenberg's bookshelves, a
+  // catalog's subjects): a remembered switch, as in Save with options.
+  const siteTags = !pack && s.site && s.tags && s.tags.length ? { site: s.site, tags: s.tags } : null;
+  let useTags = load(SITE_TAGS_KEY, false);
+  const tagsRow = siteTags ? switchRow(t("{site}'s tags", { site: siteTags.site }), siteTags.tags.join(", "), useTags, (v) => { useTags = v; store(SITE_TAGS_KEY, v); }) : null;
   const facts = [s.site || (pack ? "Kiwix" : ""), s.by, big ? formatSize(big) : ""].filter(Boolean).join(" · ");
   return el("div", { class: "page-controls dz-add" },
     el("div", { class: "menu-head" },
       el("p", { class: "menu-title", dir: "auto" }, s.title),
       facts ? el("p", { class: "meta" }, facts) : null),
-    el("div", { class: "group" }, asRow, whereRow,
+    el("div", { class: "group" }, asRow, whereRow, tagsRow,
       pack && big > 50e6 ? switchRow(t("Wait for Wi-Fi"), t("Starts on Wi-Fi, not on mobile data"), wifi, (on) => { wifi = on; }) : null),
     note,
-    el("button", { class: "btn-primary", type: "button", onclick: async () => { await back(); dzAddGo(s, { as, where, wifi }); } },
+    el("button", { class: "btn-primary", type: "button", onclick: async () => { await back(); dzAddGo(s, { as, where, wifi, siteTags, tags: siteTags && useTags ? siteTags.tags : [] }); } },
       pack ? t("Download") : t("Add the book")));
 }
 MENUS.addBook = { label: t("Add"), build: () => dzAddSheet() };
@@ -653,7 +658,8 @@ MENUS.addBook = { label: t("Add"), build: () => dzAddSheet() };
 // Downloads the book's EPUB and adds it like a file brought in.
 function dzSaveBook(s) {
   if (dzSavedStory(s)) { toast(t("It's in your library already.")); return; }
-  saveFileLink(s.epub, dzBookName(s), s.url, s.catalog ? (u, n) => C.opds.bytes(s.catalog, u, n) : undefined);
+  saveFileLink(s.epub, dzBookName(s), s.url, s.catalog ? (u, n) => C.opds.bytes(s.catalog, u, n) : undefined,
+    s.site && s.tags && s.tags.length ? { siteTags: { site: s.site, tags: s.tags } } : undefined);
 }
 
 // ---- Wikipedia today ----

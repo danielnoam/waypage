@@ -125,7 +125,7 @@ function groupOf(x) {
 
 const layout = () => { const v = load(LAYOUT_KEY, "shelf"); return LAYOUTS.some((l) => l.value === v) ? v : "shelf"; };
 
-const pageSig = (p) => [p.title, readingLine(p), p.missing, p.thumb, Math.round((p.at || 0) * 50), navigator.onLine, (p.tags || []).join(","), p.folder, p.mode, !!p.fav].join("|");
+const pageSig = (p) => [p.title, readingLine(p), p.missing, p.thumb, Math.round((p.at || 0) * 50), navigator.onLine, (p.tags || []).join(","), p.folder, p.mode, !!p.fav, !!p.live].join("|");
 
 // The pages the library is showing, for Select all.
 let onScreen = [];

@@ -1272,7 +1272,7 @@ function renderBatch(text, preset, from, siteTags) {
     if (!urls.length) return;
     if (urls.length > LONG_LIST && !confirm(t("Save {n} clips? They save one at a time, so a list this long takes a while. Pause and Stop are on its card.", { n: urls.length }))) return;
     history.back();
-    saveAll(skipSaved ? all : urls, folder, tags, mode, skipSaved, kind, source, !!(folder && tags.length && tagNew));
+    saveAll(skipSaved ? all : urls, folder, tags, mode, skipSaved, kind, source, !!(folder && tags.length && tagNew), siteTags || undefined);
   });
   $("batchBody").replaceChildren(form);
   if (folder) choose(folder);
@@ -1480,6 +1480,7 @@ async function checkNew(name, quiet) {
       count = all.filter((u) => !savedAs(u) && !savingAs(u)).length;
       setNewFor(name, { at: Date.now(), count, all });
       await updateCover(name, found.cover || "");
+      await keepStoryTags(name, found.siteTags);
     } else {
       let url = await C.save.findNext(last.url);
       if (url && !savedAs(url)) {
@@ -1575,6 +1576,7 @@ function sourceSection(list) {
       const found = await C.save.findChapters(u);
       if (!found.links.length) { toast(t("Couldn't find a list of chapters on that page.")); return; }
       setSource(name, found.page || u, found.cover || "");
+      keepStoryTags(name, found.siteTags);
       toast(t("Linked to {replace} on {siteName}", { replace: countLine(found.links.length).replace("clip", "chapter"), siteName: C.save.siteName(u) }));
     } catch (e) {
       toast(e instanceof C.save.SaveError ? e.message : t("Couldn't read that page. Try again."));

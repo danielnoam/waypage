@@ -9,4 +9,4 @@
 - Continue reading shows a series' cover, and a clip in a plain collection as itself.
 - A collection or series of only files lists them under Files, not Clips, and one of only audiobooks counts them heard, not read.
 - A clip's Collection row is now Part of, since it lists series too.
-- A collection's "Show as covers" is now "Show as a grid".
+- A collection's "Show as covers" is now "Show as a grid". Until one is picked, a series shows as a list and a collection as a grid.

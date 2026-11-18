@@ -93,7 +93,8 @@ async function isFileBlob(blob) {
   return FILE_HEADS.some((h) => h.every((b, i) => head[i] === b));
 }
 // `fetchBytes` stands in for the platform's (a catalog's, with its login).
-async function saveFileLink(url, name, page, fetchBytes) {
+// `more` ({ siteTags, tags }): a Discover book's tags, offered or added.
+async function saveFileLink(url, name, page, fetchBytes, more) {
   const getBytes = fetchBytes || ((u, n) => C.platform.fetchBytes(u, n));
   if (!navigator.onLine) { toast(t("You're offline. Add it when you're back online.")); return; }
   if (!C.platform.canReadPages) { toast(t("This browser can't download from that site. Add it in Waypage on your phone.")); return; }
@@ -101,7 +102,7 @@ async function saveFileLink(url, name, page, fetchBytes) {
   toast(t("Downloading “{replace}”…", { replace: name.replace(/\.[a-z0-9]+$/i, "") }));
   try {
     const file = await fetchFileLink(url, name, getBytes);
-    await openFile(file, null, true, null, {});
+    await openFile(file, null, true, null, { ...more });
   } catch (e) {
     toast(t("Couldn't download it just now. Try again later{x}", { x: page ? t(", or open it on the site.") : "." }));
   }
@@ -200,13 +201,15 @@ const PACE_MS = 500;
 // `tags` is a list for every link, or (an import, 1.9.0) a function
 // giving each link its own { tags, finished }.
 // `tagNew`: the collection's later clips take the tags its clips share.
-async function saveAll(all, folder, tags = [], mode, skipSaved, kind, source, tagNew) {
+// `siteTags` ({ site, tags }): the story page's, kept on each of the
+// collection's clips for its Tags sheet to offer.
+async function saveAll(all, folder, tags = [], mode, skipSaved, kind, source, tagNew, siteTags) {
   const name = folder ? folderName(folder) : null;
   const per = typeof tags === "function" ? tags : () => ({ tags });
   const places = skipSaved && name ? placesBetween(all, name) : new Map();
   if (name && tagNew) for (const p of folderPages(name)) p.folderTagNew = true;
   const urls = skipSaved ? all.filter((u) => !savedAs(u)) : all;
-  const jobs = urls.filter((u) => !savingAs(u)).map((u) => ({ ...newJob(u, name), tags: [], ...per(u), mode, kind, source: name ? source : undefined, tagNew: !!(name && tagNew) }));
+  const jobs = urls.filter((u) => !savingAs(u)).map((u) => ({ ...newJob(u, name), tags: [], ...per(u), mode, kind, source: name ? source : undefined, tagNew: !!(name && tagNew), siteTags: name ? siteTags : undefined }));
   state.saving = state.saving.filter((s) => !(s.error && jobs.some((j) => sameUrl(j.url, s.url))));
   const fresh = jobs.filter((j) => !savedAs(j.url));
   fresh.forEach((j) => { if (places.has(j.url)) j.folderAt = places.get(j.url); });
@@ -359,6 +362,12 @@ async function runJob(job) {
       meta.requested = job.url;
       if (job.folder) { meta.folder = folderName(job.folder); meta.folderAt = job.folderAt || Date.now(); if (job.source) meta.source = job.source; }
       if (job.tags && job.tags.length) meta.tags = withTags([], job.tags);
+      // A chapter's own page tags aren't the story's: a collection's clips
+      // keep the story page's, picked from in Save with options.
+      if (meta.folder) {
+        const story = job.siteTags || (folderPages(meta.folder).find((x) => x.siteTags) || {}).siteTags;
+        if (story) meta.siteTags = story; else delete meta.siteTags;
+      } else takeSiteTags(meta);
       if (meta.folder) joinTags(meta, meta.folder, job.tagNew);
       if (job.finished) meta.finished = true;
       state.pages.unshift(meta);

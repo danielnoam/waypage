@@ -1008,7 +1008,8 @@ function sideMore() {
   const tags = allTags().slice(0, 12);
   return [
     tags.length ? el("div", { class: "side-space", "aria-hidden": "true" }) : null,
-    tags.length ? el("p", { class: "side-over" }, t("Tags")) : null,
+    tags.length ? el("div", { class: "side-over-row" }, el("p", { class: "side-over" }, t("Tags")),
+      el("button", { class: "btn-text side-edit", type: "button", onclick: () => (state.side ? back() : Promise.resolve()).then(() => openSettings(false, "tags")) }, t("Edit"))) : null,
     tags.length ? el("div", { class: "side-tags" }, ...tags.map((t) => {
       const on = state.place === "library" && state.filter === "#" + t;
       const b = el("button", { class: "chip side-tag" + (on ? " on" : ""), type: "button", "aria-pressed": String(on), dir: "auto",

@@ -552,11 +552,86 @@ function dictsGroup() {
 // Library's Actions: importing from another app, then Edit clips (inside
 // Library since 1.27.1, when it was its own menu entry).
 function libraryActions() {
+  const n = allTags().length;
   const sec = section(t("Actions"), null,
     el("div", { class: "group" }, ...importRow(),
+      navRow(t("Tags"), n ? tn(n, "1 tag", "{n} tags") : t("Rename, merge or delete"), () => openSection("tags", false, true)),
       navRow(t("Find and replace"), t("In many clips and files at once"), () => openSection("edit", false, true))));
   sec.id = "importSection";
   return sec;
+}
+
+// Tags (2026-11, Daniel's ask): every tag with what it's on, each opening
+// its own page to rename (to another tag's name merges the two) or
+// delete; and what a site's own tags do on a new clip.
+let tagAt = "";
+function tagsSections() {
+  const tags = allTags().sort((a, b) => a.localeCompare(b));
+  const how = pickRow({ label: t("Site's tags"), get: siteTagsHow, set: (v) => store(SITE_TAGS_HOW_KEY, v), options: [
+    { value: "suggest", label: t("Suggest"), note: t("Shown on the clip to add with a tap") },
+    { value: "known", label: t("Ones I have"), note: t("Added when you already have that tag") },
+    { value: "all", label: t("Add all"), note: t("Every tag the site gives, up to 10") },
+    { value: "off", label: t("Off"), note: t("Not read") }] });
+  return [
+    section(tags.length ? t("Your tags · {n}", { n: tags.length }) : t("Your tags"), null,
+      tags.length ? el("div", { class: "group" }, ...tags.map((x) => el("button", { class: "row nav-row", type: "button", onclick: () => { tagAt = x; openSection("tag", false, true); } },
+        el("span", { class: "row-label", dir: "auto" }, "#" + x),
+        el("span", { class: "row-value" }, tagUseLine(x)),
+        el("span", { class: "row-chev", "aria-hidden": "true" }, "›"))))
+        : el("p", { class: "footnote" }, t("No tags yet. Add them from a clip's ⋯, or pick several clips and tap Tags.")),
+      tags.length ? el("p", { class: "footnote" }, t("Tap a tag to rename, merge or delete it. Renaming one to a tag you already have makes them one.")) : null),
+    section(t("From sites"), null, el("div", { class: "group" }, how),
+      el("p", { class: "footnote" }, t("Royal Road, AO3, Scribble Hub and many news sites and blogs tag their pages. A story saved as a collection asks in Save with options instead."))),
+  ];
+}
+// Back out of every Settings page, however deep, to what was under it.
+// On a big screen the route takes its own step back from the menu (it
+// leaves Settings with the section), so each step waits for that first.
+async function outOfSettings() {
+  for (let i = 0; i < 6 && state.settings; i++) {
+    await back();
+    await new Promise((done) => setTimeout(done, 150));
+  }
+}
+function tagSections() {
+  const tag = allTags().find((x) => sameTag(x, tagAt));
+  if (!tag) return [el("p", { class: "footnote" }, t("No clip has this tag any more."))];
+  const input = el("input", { class: "tag-input", type: "text", value: tag, "aria-label": t("Name"), maxlength: "32",
+    enterkeyhint: "done", autocapitalize: "off", spellcheck: "false", dir: "auto" });
+  const note = el("p", { class: "footnote accent", hidden: true });
+  const go = el("button", { class: "btn-primary tag-save", type: "button", disabled: true });
+  const into = () => {
+    const name = cleanTag(input.value);
+    return { name, other: name && allTags().find((x) => sameTag(x, name) && !sameTag(x, tag)) };
+  };
+  const paint = () => {
+    const { name, other } = into();
+    go.disabled = !name || name === tag;
+    go.textContent = other ? t("Merge into #{tag}", { tag: other }) : t("Rename");
+    note.hidden = !other;
+    if (other) note.textContent = t("#{tag} is already a tag. The two become one, with every clip of both.", { tag: other });
+  };
+  const save = async () => {
+    if (go.disabled) return;
+    const { other } = into();
+    const now = await renameTag(tag, input.value);
+    tagAt = now;
+    toast(other ? t("Merged into #{tag}", { tag: now }) : t("Renamed to #{tag}", { tag: now }));
+    history.back();
+  };
+  input.addEventListener("input", paint);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); save(); } });
+  go.addEventListener("click", save);
+  paint();
+  return [
+    el("p", { class: "meta tag-use" }, tagUseLine(tag)),
+    section(t("Name"), null, el("div", { class: "tag-detail" }, input), note, go),
+    section(null, null, el("div", { class: "group" },
+      el("button", { class: "row", type: "button", onclick: () => outOfSettings().then(() => goPlace("library")).then(() => setFilter("#" + tag)) },
+        el("span", { class: "row-label accent" }, t("Show its clips"))),
+      el("button", { class: "row", type: "button", onclick: async () => { await deleteTag(tag); history.back(); } },
+        el("span", { class: "row-label warn" }, t("Delete tag")), el("span", { class: "row-value" }, t("Clips stay"))))),
+  ];
 }
 
 // Notifications (1.30.0): the app's only ones that alert are new feed
@@ -1309,6 +1384,8 @@ const SECTIONS = {
   drive: { title: t("Google Drive"), build: driveSections, value: driveValue },
   notifications: { title: t("Notifications"), build: notesSections, value: notesValue },
   edit: { title: t("Find and replace"), build: editGroup, value: () => "", parent: "library" },
+  tags: { title: t("Tags"), build: tagsSections, value: () => "", parent: "library" },
+  tag: { get title() { return "#" + tagAt; }, build: tagSections, value: () => "", parent: "tags" },
   kokoro: { title: t("More speech engines"), build: kokoroSections, value: () => "", parent: "reading" },
   storage: { title: t("Storage"), build: () => [placeGroup(), storageGroup(), browserStorageGroup(), backupGroup(roomRows())], value: () => formatSize(totalBytes()) },
   updates: { title: t("About"), build: () => [updatesGroup(), aboutGroup()], value: () => (updateOut() ? t("{version} is out", { version: upd.latest }) : APP_VERSION) },
@@ -1361,7 +1438,7 @@ const FIND_ALIASES = {
 };
 let settingsIdx = null;
 const settingsQuery = () => { const i = $("settingsSearch"); return i ? i.value.trim() : ""; };
-const menuKeys = () => Object.keys(SECTIONS).filter((k) => k !== "news" && k !== "ahead" && !((k === "notifications" || k === "previews") && !C.platform.native) && !(k === "drive" && !C.drive.available) && !(k === "lock" && !lockCan()));
+const menuKeys = () => Object.keys(SECTIONS).filter((k) => k !== "news" && k !== "ahead" && k !== "tag" && !((k === "notifications" || k === "previews") && !C.platform.native) && !(k === "drive" && !C.drive.available) && !(k === "lock" && !lockCan()));
 const text = (n) => (n ? n.textContent.replace(/\s+/g, " ").trim() : "");
 function settingsIndex() {
   if (settingsIdx) return settingsIdx;
