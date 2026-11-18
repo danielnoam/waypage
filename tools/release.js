@@ -86,7 +86,7 @@ const newer = (a, b) => {
 
 if (require.main === module) {
   const r = bump(process.argv[2] || "");
-  console.log(r.was + " -> " + r.version + ": src/app.js, " + r.tags + " tags in index.html, sw.js " + r.cache + ", CHANGELOG.md written from " + r.notes + " notes in changes/. Now commit, open the release PR and turn on auto-merge (gh pr merge <n> --auto --squash).");
+  console.log(r.was + " -> " + r.version + ": src/app.js, " + r.tags + " tags in index.html, sw.js " + r.cache + ", CHANGELOG.md written from " + r.notes + " notes in changes/. Now commit and open the release PR.");
 }
 
 module.exports = { bump, newer, mergeNotes };
