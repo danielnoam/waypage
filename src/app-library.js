@@ -509,7 +509,7 @@ function renderFolder() {
           el("span", { class: "choice-text" },
             el("span", { class: "row-label", dir: "auto" }, p.title),
             editing ? el("span", { class: "choice-note" }, formatSize(p.bytes || 0))
-              : el("span", { class: "choice-note" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, readingLine(p))),
+              : el("span", { class: "choice-note" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, ...liveMark(p), readingLine(p))),
           ordering ? null : chapterMark(p)),
         ordering ? dragHandle(p, i, list.length) : editing ? null : itemFav(p)))) : null);
   paintFolderBar();
@@ -549,6 +549,8 @@ function renameFolderLook(old, name) {
 
 // One clip as a cover in that view: its picture (or its site's mark),
 // its title and how far it's read.
+// A live clip says so in a collection too, as on its library card.
+const liveMark = (p) => (p.live ? [el("span", { class: "card-live" }, t("Live")), " · "] : []);
 function coverItem(p, now) {
   const src = thumbUrl(p);
   return el("li", { "data-id": p.id, "data-ids": p.id },
@@ -556,7 +558,7 @@ function coverItem(p, now) {
       pickMark(),
       el("span", { class: "tile-thumb" + (src ? "" : " blank") }, src ? el("img", { src, alt: "", loading: "lazy" }) : siteMark(p)),
       el("span", { class: "tile-name", dir: "auto" }, p.title),
-      el("span", { class: "tile-meta" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, readingLine(p))),
+      el("span", { class: "tile-meta" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, ...liveMark(p), readingLine(p))),
     itemFav(p));
 }
 
