@@ -247,8 +247,8 @@ a saved-page format old versions can't read: major, and always above the
 latest release, since the updater ignores lower numbers). It bumps the
 three version places, folds every `changes/*.md` note into one
 `## [1.46.0] - date` entry in CHANGELOG.md and deletes the notes.
-Look at the diff, commit it as "Release 1.46.0", open the PR, merge on
-green.
+Look at the diff, commit it as "Release 1.46.0", open the PR and turn
+on auto-merge, so it merges itself when Tests go green.
 
 **The three places,** so a bump by hand is the same as the tool's:
 
@@ -272,7 +272,9 @@ branch, open a PR, and merge it when the **Tests** check is green
 Playwright on every PR and on `main`, split over four machines, see
 [ARCHITECTURE.md › Tests and screenshots](ARCHITECTURE.md#tests-and-screenshots); a PR that only changes Markdown
 runs just `build.test.js` and `docs.test.js`, which read it). No review is required: anyone
-with write access merges on green, and Daniel decides who has write
+with write access merges on green. Turn on auto-merge as soon as the
+work is done (`gh pr merge <n> --auto --squash`, or the PR's "Enable
+auto-merge" button) so nobody has to wait for the run to finish. Daniel decides who has write
 access. A PR from a fork runs the tests too, but without the repo's
 secrets, so it can't sign or publish anything.
 
