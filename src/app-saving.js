@@ -1017,7 +1017,7 @@ function folderRow(p, redraw) {
   const series = names.filter(isSeriesFolder), plain = names.filter((n) => !isSeriesFolder(n));
   const opts = (list) => list.map((n) => ({ value: n, label: n }));
   const pick = dropdown({
-    label: t("Collection"), cls: "field-pick",
+    label: t("Part of"), cls: "field-pick",
     options: [{ value: "", label: t("None") },
       ...(series.length && plain.length ? [{ head: t("Collections") }] : []), ...opts(plain),
       ...(series.length ? [{ head: t("Series") }] : []), ...opts(series),
@@ -1033,7 +1033,7 @@ function folderRow(p, redraw) {
       setFolder(p, v || null).then(redraw);
     },
   });
-  return el("div", { class: "rc-row tall" }, el("span", { class: "rc-label" }, t("Collection")),
+  return el("div", { class: "rc-row tall" }, el("span", { class: "rc-label" }, t("Part of")),
     el("div", { class: "tag-edit" }, pick, input));
 }
 
