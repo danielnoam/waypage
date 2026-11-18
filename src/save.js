@@ -384,18 +384,40 @@
     return { title: readTitle(doc), links: links.map((l) => l.url), cover, page: url, siteTags };
   }
 
-  // The tags a story's page gives it (Royal Road's genres and tags, AO3's
-  // fandom and tags), or any page's article:tag meta: { site, tags }, or
-  // null. Offered in Save with options, never added unasked.
+  // The tags a page gives itself: a site rule's (Royal Road's genres and
+  // tags, AO3's fandom and tags), else the article:tag meta, the
+  // schema.org keywords, Parse.ly's tags or the post's rel="tag" links
+  // (WordPress, Blogger). { site, tags } or null. Never the old keywords
+  // meta, mostly words for search engines. Added only as the person picked
+  // (the batch switch, Tags › Site's tags), else offered on the clip.
   const MAX_TAGS = 10;
+  function ldKeywords(doc) {
+    const out = [];
+    for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) {
+      let data;
+      try { data = JSON.parse(s.textContent); } catch (e) { continue; }
+      for (const d of [].concat(data, (data && data["@graph"]) || [])) {
+        const k = d && d.keywords;
+        if (k) out.push(...(Array.isArray(k) ? k : String(k).split(",")));
+      }
+      if (out.length) break;
+    }
+    return out;
+  }
   function pageTags(doc, url) {
     const rule = siteRule(url);
     let raw = rule && rule.tags ? rule.tags(doc) : [];
-    if (!raw.length) raw = [...doc.querySelectorAll('meta[property="article:tag"]')].map((m) => m.getAttribute("content") || "");
+    const metas = (sel) => [...doc.querySelectorAll(sel)].map((m) => m.getAttribute("content") || "");
+    if (!raw.length) raw = metas('meta[property="article:tag"]');
+    if (!raw.length) raw = ldKeywords(doc);
+    if (!raw.length) raw = metas('meta[name="parsely-tags"]').flatMap((x) => x.split(","));
+    if (!raw.length) raw = [...doc.querySelectorAll('a[rel~="tag"]')].filter((a) => !a.closest("aside, nav, footer, .widget, .sidebar")).map((a) => a.textContent);
     const tags = [];
     for (const r of raw) {
-      const t = String(r).replace(/\s+/g, " ").trim().slice(0, 32);
-      if (t && !tags.some((x) => x.toLowerCase() === t.toLowerCase())) tags.push(t);
+      const t = String(r || "").replace(/\s+/g, " ").trim();
+      // Machine labels (section:news, type=video) and sentences aren't tags.
+      if (!t || t.length > 32 || /[:=|<>{}]/.test(t)) continue;
+      if (!tags.some((x) => x.toLowerCase() === t.toLowerCase())) tags.push(t);
       if (tags.length >= MAX_TAGS) break;
     }
     return tags.length ? { site: (rule && rule.name) || siteName(url), tags } : null;
@@ -2355,13 +2377,15 @@
     if (contents) return { contents };
     let next = nextLink(doc, finalUrl);
     let prev = nextLink(doc, finalUrl, true);
+    // Read before Readability, which takes the scripts (and JSON-LD) out.
+    const siteTags = pageTags(doc, finalUrl);
     resolveLazyImages(doc, finalUrl);
     if (!comic && own && own.content && own.content.textContent.trim().length >= MIN_TEXT / 5) {
       if (own.next !== undefined) next = own.next;
       if (own.prev !== undefined) prev = own.prev;
       const t = own.content.textContent;
       const article = { content: own.content.innerHTML, title: own.title, byline: own.byline, siteName: own.siteName || site.name, textContent: t, lang: "", dir: "" };
-      return { doc, docTitle, headline: own.title || headline, next, prev, article, series: own.series || "", licence: own.licence || null, published: publishedAt(doc, html) };
+      return { doc, docTitle, headline: own.title || headline, next, prev, article, series: own.series || "", licence: own.licence || null, published: publishedAt(doc, html), siteTags };
     }
     if (comic) {
       let panels = comicPanels(doc, finalUrl);
@@ -2386,7 +2410,7 @@
     if (!article || (article.textContent || "").trim().length < MIN_TEXT) return null;
     if (own && own.next !== undefined) next = own.next;
     if (own && own.prev !== undefined) prev = own.prev;
-    return { doc, docTitle, headline: (own && own.title) || headline, next, prev, article, series: (own && own.series) || "", published: publishedAt(doc, html) };
+    return { doc, docTitle, headline: (own && own.title) || headline, next, prev, article, series: (own && own.series) || "", published: publishedAt(doc, html), siteTags };
   }
 
   // A page cut short for subscribers or signed-in readers (1.7.0). Waypage
@@ -2500,6 +2524,7 @@
       lang: (doc.documentElement.getAttribute("lang") || article.lang || "").trim(),
       dir: article.dir === "rtl" || textDir(doc, article.textContent) === "rtl" ? "rtl" : "",
       next, prev, icon: siteIcon(doc, finalUrl), cut: cutShort(html, article.textContent), published: got.published,
+      siteTags: given ? null : got.siteTags || null,
     };
   }
 
@@ -3025,6 +3050,7 @@
       next: got.next || "", prev: got.prev || "",
     };
     if (got.series) meta.series = got.series;
+    if (got.siteTags && !letter) meta.siteTags = got.siteTags;
     if (got.cut) meta.cut = true;
     if (got.published) meta.published = got.published;
     if (archived) meta.archived = archived.at;

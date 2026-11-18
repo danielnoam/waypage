@@ -43,6 +43,7 @@ Each section below shows the computer (left) and the phone (right).
 - Filter by unread, finished or a tag; sort by saved, read, length or site.
 - Search titles, tags and the full text of every clip.
 - Favourites, tags, and a star on a clip's picture.
+- Tags as a row of chips over the library, and Settings › Library › Tags to rename, merge or delete them; a site's own tags offered on each clip.
 - Pick several clips to tag, move, mark read, export or delete together; hold or right-click for a clip's menu.
 - Find and replace: find and remove or replace words across many clips and files.
 - Import from Pocket, Instapaper, Omnivore, Raindrop and Wallabag.

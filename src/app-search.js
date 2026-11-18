@@ -188,7 +188,7 @@ function renderTools() {
   if (libTools.dataset.sig === sig) return;
   libTools.dataset.sig = sig;
   libTools.hidden = !state.pages.length;
-  if (libTools.hidden) return;
+  if (libTools.hidden) { $("libTags").hidden = true; return; }
   fill(libTools, dropdown({
     label: t("Show"), cls: "start show-wrap" + (state.filter === "all" ? "" : " on"),
     icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>',
@@ -201,6 +201,26 @@ function renderTools() {
     value: state.filter,
     onpick: setFilter,
   }), el("div", { class: "lib-tools-end" }, sortControl()));
+  renderTagRow(tags);
+}
+
+// The tags as a row of chips under Show and Order (2026-11, Daniel's ask:
+// tags were hard to find behind Show). A tap shows a tag's clips and
+// another goes back to all; Edit tags opens Settings › Library › Tags.
+// Phone width only: a big screen has them in the sidebar.
+function renderTagRow(tags) {
+  const row = $("libTags");
+  row.hidden = !tags.length;
+  if (row.hidden) return;
+  const at = state.filter.startsWith("#") ? tags.find((x) => sameTag(x, state.filter.slice(1))) : null;
+  const chip = (x) => {
+    const on = x === at;
+    return el("button", { class: "chip" + (on ? " on" : ""), type: "button", "aria-pressed": String(on), dir: "auto",
+      onclick: () => setFilter(on ? "all" : "#" + x) }, x, on ? el("span", { class: "chip-x", "aria-hidden": "true" }, "×") : null);
+  };
+  fill(row, ...(at ? [at] : []).concat(tags.filter((x) => x !== at)).map(chip),
+    el("button", { class: "chip chip-quiet", type: "button", onclick: () => openSettings(false, "tags") }, t("Edit tags")));
+  if (at) row.scrollLeft = 0;
 }
 
 

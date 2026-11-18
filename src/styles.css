@@ -1960,6 +1960,26 @@ span.update-text { cursor: default; }
 :is([data-layout="shelf"], [data-layout="grid"]) .tile-size { display: none; }
 .library > .section-head:first-child { margin-top: 0; }
 .top:has(.lib-tools:not([hidden])) + .library { padding-top: 0; }
+/* 2026-11: the tags as a row of chips under Show and Order, scrolling
+   edge to edge; a big screen has them in the sidebar instead. */
+.lib-tags {
+  display: flex; gap: var(--s-2); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain;
+  margin: var(--s-1) calc(-1 * var(--gutter)) 0; padding: var(--s-1) var(--gutter); scroll-padding-inline: var(--gutter);
+}
+.lib-tags::-webkit-scrollbar { display: none; }
+.lib-tags[hidden] { display: none; }
+.lib-tags .chip { flex: none; }
+@media (min-width: 700px) { .lib-tags { display: none; } }
+.chip.chip-quiet { border-color: transparent; background: transparent; color: var(--accent); }
+.tag-chips { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
+.tag-chips .tag-input[hidden] { display: none; }
+.tag-from { margin: var(--s-2) 0 0; }
+.folder-tags {
+  display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); margin: var(--s-1) 0 var(--s-2); padding: 0;
+  border: 0; background: none; font: inherit; font-size: var(--fs-meta); text-align: start; cursor: pointer;
+}
+.folder-tags-sheet .tag-chips { margin: var(--s-2) 0 var(--s-4); }
+.tag-detail .tag-input { width: 100%; }
 
 /* Continue reading: its collection's cover, standing, beside the page. */
 .card-thumb.cover { width: 80px; height: 120px; border-radius: var(--r-sm); }
@@ -2645,6 +2665,9 @@ button.side-version { align-self: flex-start; min-height: 44px; padding-bottom: 
   .side-sub { margin-inline-start: var(--s-4); }
   .side-over { margin: 0 var(--s-3) var(--s-2); font: 600 var(--fs-meta)/var(--lh-meta) var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
   .side-tags { display: flex; flex-wrap: wrap; gap: var(--s-2); padding: 0 var(--s-3); }
+  .side-over-row { display: flex; align-items: center; justify-content: space-between; padding-inline-end: var(--s-1); }
+  .side-over-row .side-over { margin-bottom: 0; }
+  .side-edit { min-height: var(--tap); font-size: var(--fs-meta); }
   .side-tag { min-height: 32px; }
   .side-gap { flex: 1; min-height: var(--s-4); }
   .side-version { margin: 0 var(--s-3); padding-top: 0; }

@@ -13,7 +13,7 @@
 // The + sheet's answer: { as: "file" | "clips", where, wifi }.
 async function dzAddGo(s, how) {
   if (s.zim) return packDownload(s, how);
-  if (how.as === "clips") return bookAsClips(s);
+  if (how.as === "clips") return bookAsClips(s, how);
   return bookAsFile(s, how);
 }
 
@@ -264,7 +264,7 @@ async function bookAsFile(s, how) {
       const ref = await k.keep(s.epub, name, how.where, tree);
       const file = await C.platform.files.blob(ref, 0);
       k.done();
-      await openFile(file, null, false, ref, { ref });
+      await openFile(file, null, false, ref, { ref, siteTags: how.siteTags, tags: how.tags });
     } catch (e) {
       k.done();
       toast(k.run.stopped ? t("Stopped.") : t("Couldn't download it just now. Try again later{x}", { x: t(", or open it on the site.") }));
@@ -278,10 +278,10 @@ async function bookAsFile(s, how) {
   try { file = await fetchFileLink(s.epub, name); } catch (e) { toast(t("Couldn't download it just now. Try again later{x}", { x: t(", or open it on the site.") })); return; }
   const kept = await C.platform.saveLinked(file, name, "application/epub+zip").catch(() => ({ saved: null, ref: null }));
   if (kept.saved === false) return;
-  await openFile(file, null, false, kept.ref || null, kept.ref ? { ref: kept.ref } : {});
+  await openFile(file, null, false, kept.ref || null, { ...(kept.ref ? { ref: kept.ref } : {}), siteTags: how.siteTags, tags: how.tags });
 }
 
-async function bookAsClips(s) {
+async function bookAsClips(s, how = {}) {
   if (!navigator.onLine) { toast(t("You're offline. Add it when you're back online.")); return; }
   if (!C.platform.canReadPages) { toast(t("This browser can't download from that site. Add it in Waypage on your phone.")); return; }
   const k = keepRun(t("Adding a book"), s.title);
@@ -291,7 +291,12 @@ async function bookAsClips(s) {
     updateRunCard(k.run);
     const made = await C.files.bookClips(file, (done, total) => { k.run.part = done / total; k.run.now = t("Chapter {done} of {total}", { done, total }); updateRunCard(k.run); });
     const folder = folderName(made[0].folder);
-    made.forEach((m) => { m.folder = folder; joinFav(m, folder); });
+    made.forEach((m) => {
+      m.folder = folder;
+      joinFav(m, folder);
+      if (how.siteTags) m.siteTags = how.siteTags;
+      if (how.tags && how.tags.length) m.tags = withTags(m.tags, how.tags.map(cleanTag).filter(Boolean));
+    });
     state.pages.unshift(...made.slice().reverse());
     await C.store.writeIndex(state.pages);
     await loadThumbs();

@@ -5451,6 +5451,74 @@ c("bk1", { at: 0.01 })]);
       }
     });
 
+    // Tags (2026-11): a row of them under Show and Order, Settings › Tags to
+    // rename, merge and delete, chips in a clip's sheet with the site's own
+    // tags offered, and a collection's Tags sheet.
+    await test("tags: the row filters, Settings › Tags renames, merges and deletes, chips and site tags add", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const c = (id, more) => ({ id, url: "https://example.org/" + id, title: id, site: "example.org", savedAt: 1, minutes: 1, mode: "links", ...more });
+        state.pages = [c("a", { tags: ["Travel"], siteTags: { site: "Slow Air", tags: ["Aviation", "travel"] } }), c("b", { tags: ["Travelling", "Food"] }),
+          c("s1", { folder: "Story", tags: ["Fantasy"], siteTags: { site: "Royal Road", tags: ["Fantasy", "Magic"] } }), c("s2", { folder: "Story", tags: ["Fantasy"] })];
+        await window.Waypage.store.writeIndex(state.pages);
+        renderLibrary();
+      });
+      const row = q.locator("#libTags");
+      await row.waitFor();
+      assert.deepStrictEqual(await row.locator(".chip").allTextContents(), ["Fantasy", "Food", "Travel", "Travelling", "Edit tags"]);
+      await row.locator(".chip", { hasText: "Food" }).click();
+      assert.strictEqual(await q.evaluate(() => state.filter), "#Food");
+      assert.strictEqual(await row.locator(".chip").first().textContent(), "Food×", "the picked one comes first");
+      await row.locator(".chip", { hasText: "Food" }).click();
+      assert.strictEqual(await q.evaluate(() => state.filter), "all");
+      // A collection counts once in Settings › Tags.
+      await row.locator(".chip", { hasText: "Edit tags" }).click();
+      await q.locator("#sectionView:not([hidden])").waitFor();
+      assert.strictEqual(await q.locator("#sectionBody .nav-row", { hasText: "#Fantasy" }).locator(".row-value").textContent(), "1 collection");
+      await q.locator("#sectionBody .nav-row", { hasText: "#Travelling" }).click();
+      await q.fill("#sectionBody .tag-input", "travel");
+      assert.strictEqual(await q.locator("#sectionBody .tag-save").textContent(), "Merge into #Travel");
+      await q.locator("#sectionBody .tag-save").click();
+      await until(q, () => state.section === "tags");
+      assert.deepStrictEqual(await q.evaluate(() => state.pages.find((p) => p.id === "b").tags), ["Travel", "Food"]);
+      await q.locator("#sectionBody .nav-row", { hasText: "#Food" }).click();
+      await q.locator("#sectionBody .row", { hasText: "Delete tag" }).click();
+      await until(q, () => state.section === "tags");
+      assert.deepStrictEqual(await q.evaluate(() => state.pages.find((p) => p.id === "b").tags), ["Travel"], "the clip stays, the tag goes");
+      // What a site's tags do on a new clip: suggested by default, or those you have.
+      assert.strictEqual(await q.evaluate(() => siteTagsHow()), "suggest");
+      const took = await q.evaluate(() => {
+        const out = {};
+        const m = () => ({ siteTags: { site: "x", tags: ["travel", "Brand new"] } });
+        for (const how of ["suggest", "known", "all", "off"]) { store(SITE_TAGS_HOW_KEY, how); const x = m(); takeSiteTags(x); out[how] = [x.tags || [], !!x.siteTags]; }
+        store(SITE_TAGS_HOW_KEY, "suggest");
+        return out;
+      });
+      assert.deepStrictEqual(took, { suggest: [[], true], known: [["Travel"], true], all: [["Travel", "Brand new"], true], off: [[], false] });
+      await q.evaluate(() => outOfSettings());
+      await until(q, () => !state.settings);
+      // A clip's sheet: chips, and the site's tags it hasn't got, a tap each.
+      await q.evaluate(() => openMenu("page", state.pages.find((p) => p.id === "a")));
+      const sheet = q.locator("#menuSheet");
+      await sheet.locator(".tag-from", { hasText: "From Slow Air" }).waitFor();
+      assert.deepStrictEqual(await sheet.locator(".chip.some").allTextContents(), ["+ Aviation"], "travel is on already");
+      await sheet.locator(".chip.some").click();
+      await sheet.locator(".chip.on", { hasText: "Aviation" }).waitFor();
+      assert.deepStrictEqual(await q.evaluate(() => state.pages.find((p) => p.id === "a").tags), ["Travel", "Aviation"]);
+      await q.goBack();
+      await until(q, () => !state.menu);
+      // A collection's Tags sheet puts a tag on every clip in it.
+      await q.evaluate(() => openFolder("Story"));
+      await q.locator("#folderView .folder-tags", { hasText: "#Fantasy" }).waitFor();
+      await q.locator("#folderView .folder-tags").click();
+      await q.locator("#menuSheet .chip.some", { hasText: "Magic" }).click();
+      await until(q, () => state.pages.filter((p) => p.folder === "Story").every((p) => p.tags.includes("Magic")));
+      // The collection looks for its cover on the made-up site; nothing else may fail.
+      const errors = q.errors.filter((e) => !/example\.org/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("Save with options offers a story page's own tags as one switch, off until turned on, and remembers it", async () => {
       const q = await page(browser, 390);
       const open = () => q.evaluate(() => openBatch("https://www.royalroad.com/fiction/1/s/chapter/1/a\nhttps://www.royalroad.com/fiction/1/s/chapter/2/b", false, "A Story",

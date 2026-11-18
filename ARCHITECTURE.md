@@ -781,6 +781,8 @@ for back, forward, previous and next flip.
 What the app gives up on purpose, said plainly. A change that adds one
 adds a line here.
 
+- Tags stay on each clip (2026-11): a collection has no tags of its own, so its Tags sheet writes the tag to every clip in it, and its story page's tags (`siteTags`) are copied onto each clip like `folderFav`. A few bytes a clip, but sync, filters and search keep working as they did. A site's tags are only offered by default (Suggest): added unasked, one story fills the tag list.
+
 - Live clips and Update from the site (2026-11) keep one earlier copy of the page on the device (`earlier` in the index, app-cards.js), never synced or backed up, so going back works only on the device that fetched it. A copy that looks broken (under half the words, under 100 where there were more, or only the start where it was whole) is kept as the other copy instead of put in place. An unchanged page keeps its copy and id, so nothing new goes to sync. A live clip updates on open at most once an hour (`liveAt`, device-only), and on every pull down the library (`updateLiveClips`, three at a time, quiet per clip).
 - Deleted clips in Stats (2026-11): stats.js keeps only ids, so each device keeps a name (title, site, address or file key) for every clip it has read, in its synced stats file, and marks it gone when the clip leaves its library. No cover is kept for a deleted clip. Clips deleted before this have no name and stay out of the list. Removing one from Stats hides it on every device but leaves its time in the totals.
 - Kiwix packs (2026-11) are read over the bridge a stretch at a time (`files.blob`, 4 MB pieces, small reads through zim.js's 64 KB blocks): a title search on a big pack makes a few hundred small reads. A native ZIM reader would be faster but is Android and iOS code twice; this is plain JS everywhere. Downloads go one at a time through the Downloads plugin, which resumes but never runs two.
@@ -949,6 +951,9 @@ adds a line here.
 
 Things that broke once and would again. Check here before touching the
 area.
+
+- A site's tags (`siteTags`, { site, tags }) are read in `readArticle` before Readability runs: Readability takes the `<script>` tags out, and the schema.org keywords with them. A collection's clips carry the story page's tags, never a chapter page's own (`runJob`).
+- On a big screen the route steps back out of Settings by itself when it lands on the menu with a section open, so leaving Settings from deep inside (`outOfSettings`) waits a moment after each step instead of reading `history.state`: two backs at once leave the app.
 
 - The reduced-motion rule in src/styles.css sets every CSS animation to 1 ms. An infinite one (a spinner's breathing) then runs a thousand times a second and flickers, so each gets its own duration back in that same block; a new looping animation does too.
 
