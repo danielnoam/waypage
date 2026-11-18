@@ -615,12 +615,13 @@ function itemFav(p) {
 }
 
 // How a collection shows what's in it, kept on this device: a list of
-// chapters (the default), or covers, for a shelf of books.
+// chapters or covers, for a shelf of books. Unpicked, a series is a list
+// and a collection covers (Daniel, 2026-11).
 const LOOK_KEY = "waypage.collectionLook";
-const folderLook = (name) => (load(LOOK_KEY, {})[name] === "covers" ? "covers" : "list");
+const folderLook = (name) => { const o = load(LOOK_KEY, {})[name]; return o === "covers" || o === "list" ? o : isSeriesFolder(name) ? "list" : "covers"; };
 function setFolderLook(name, look) {
   const all = load(LOOK_KEY, {});
-  if (look === "covers") all[name] = "covers"; else delete all[name];
+  all[name] = look === "covers" ? "covers" : "list";
   store(LOOK_KEY, all);
   renderFolder();
 }
