@@ -784,10 +784,12 @@
   // pause rejects with code "PAUSED". Older builds use Filesystem.
   // A test build (1.48.0) comes from the pre-release `tag` instead,
   // and `version` is then its file's name part (test-<branch>-<sha>).
-  async function downloadUpdate(version, onProgress, file = "Waypage.apk", tag = "app-v" + version) {
+  // An unreleased build (2026-11-18) passes its own `url` (the site's
+  // unreleased/Waypage.apk), and `version` is unreleased-<sha>.
+  async function downloadUpdate(version, onProgress, file = "Waypage.apk", tag = "app-v" + version, url = null) {
     const FS = plugin("Filesystem");
     if (os !== "android" || !FS || !plugin("FileOpener") || !repo()) return null;
-    const url = "https://github.com/" + repo() + "/releases/download/" + tag + "/" + file;
+    url = url || "https://github.com/" + repo() + "/releases/download/" + tag + "/" + file;
     const path = file.replace(/\.apk$/, "") + "-" + version + ".apk";
     const D = plugin("Downloads");
     if (D && typeof D.fetch === "function") {
@@ -896,7 +898,7 @@
       for (const f of files || []) {
         const name = typeof f === "string" ? f : f.name;
         const m = /^Waypage-(\d+\.\d+\.\d+)\.apk(\.part)?$/.exec(name || "");
-        const p = /^Waypage-(?:test|preview)-.*-([0-9a-f]{7})\.apk(\.part)?$/.exec(name || "");
+        const p = /^Waypage-(?:test|preview|unreleased)-(?:.*-)?([0-9a-f]{7})\.apk(\.part)?$/.exec(name || "");
         if ((m && !isNewer(m[1], currentVersion)) || (p && p[1] === here)) await FS.deleteFile({ path: name, directory: "CACHE" });
       }
     } catch (e) { /* nothing to tidy */ }
