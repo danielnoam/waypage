@@ -114,27 +114,31 @@ async function folderCover(all) {
   } catch (e) { return null; }
 }
 
-// A folder of sound files, one book (the app): in name order, each a
-// chapter unless a file has chapters of its own.
-async function addAudiobookFolder() {
-  let got = null;
-  try { got = await C.platform.files.pickFolder(); } catch (e) { got = null; }
-  if (!got) return;
-  const scan = await C.platform.files.scan(got.ref);
-  const files = L.inOrder(scan.files || []);
-  if (!scan.ok || !files.length) {
-    const lock = scan.ok && (scan.files || []).map((f) => L.locked(null, f.name)).find(Boolean);
-    toast(lock ? L.lockedText(lock) : t("There are no sound files in {name}.", { name: got.name }));
-    C.platform.files.release(got.ref);
-    return;
+// Subfolders that are one book split up (CD1, Disc 2, Part 3), not books.
+const DISC_DIR = /^(cd|disc|disk|part|side|tape)[\s._-]*\d+\b/i;
+
+// A folder of book folders (Book 1/, Book 2/…), as [{ name, files }] in
+// name order; null for a folder of files, or of one book's discs.
+function audioBooks(files) {
+  const groups = new Map();
+  for (const f of files) {
+    const p = String(f.path || f.name), i = p.indexOf("/");
+    const k = i < 0 ? "" : p.slice(0, i);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(f);
   }
-  if (state.pages.some((p) => isAudiobook(p) && p.link === got.ref)) { toast(t("Already in your library")); return; }
-  toast(t("Adding “{x}”, {n} files…", { x: scan.name || got.name, n: files.length }));
+  const keys = [...groups.keys()];
+  if (groups.has("") || keys.length < 2 || keys.some((k) => DISC_DIR.test(k))) return null;
+  return keys.map((k) => ({ name: k, files: groups.get(k) }));
+}
+
+// One book from sound files in name order, each a chapter unless a file
+// has chapters of its own. Named `title` (a file's own title is its
+// chapter's), with the picture in `all` as the cover, else one a file
+// carries. Null when none of them plays.
+async function folderBook(title, files, all, link) {
   const parts = [], chapters = [];
-  // Named for the folder (a file's own title is its chapter's), with the
-  // picture in it as the cover, else one a file carries.
-  const title = scan.name || got.name;
-  let artist = "", cover = await folderCover(scan.files || []), at = 0;
+  let artist = "", cover = await folderCover(all), at = 0;
   for (const f of files) {
     const part = { ref: f.ref, name: String(f.name).slice(0, 200), size: f.size || 0, dur: 0 };
     const { dur, got: g } = await partLength(part, null);
@@ -156,15 +160,62 @@ async function addAudiobookFolder() {
     parts.push(part);
     at += dur;
   }
-  if (!parts.length) { toast(t("Waypage can't play the files in {name}.", { name: got.name })); C.platform.files.release(got.ref); return; }
+  if (!parts.length) return null;
   const fp = await sha(parts.map((p) => p.name + ":" + p.size).join("|"));
   const size = parts.reduce((s, p) => s + p.size, 0);
-  const meta = await newAudiobook({
+  return newAudiobook({
     title, byline: artist,
-    file: { name: (scan.name || got.name).slice(0, 200), kind: "audio", ext: L.extOf(parts[0].name) || "mp3", size, fp }, link: got.ref,
+    file: { name: String(title).slice(0, 200), kind: "audio", ext: L.extOf(parts[0].name) || "mp3", size, fp }, link,
     audio: { parts, chapters, dur: at, folder: true },
   }, cover);
-  arrived(meta);
+}
+
+// A folder of sound files, one book (the app); a folder of book folders,
+// a series of them (2026-11). Every book reads from the folder picked.
+async function addAudiobookFolder() {
+  let got = null;
+  try { got = await C.platform.files.pickFolder(); } catch (e) { got = null; }
+  if (!got) return;
+  const scan = await C.platform.files.scan(got.ref);
+  const files = L.inOrder(scan.files || []);
+  if (!scan.ok || !files.length) {
+    const lock = scan.ok && (scan.files || []).map((f) => L.locked(null, f.name)).find(Boolean);
+    toast(lock ? L.lockedText(lock) : t("There are no sound files in {name}.", { name: got.name }));
+    C.platform.files.release(got.ref);
+    return;
+  }
+  if (state.pages.some((p) => isAudiobook(p) && p.link === got.ref)) { toast(t("Already in your library")); return; }
+  const title = scan.name || got.name, all = scan.files || [];
+  const books = audioBooks(files);
+  if (!books) {
+    toast(t("Adding “{x}”, {n} files…", { x: title, n: files.length }));
+    const meta = await folderBook(title, files, all, got.ref);
+    if (!meta) { toast(t("Waypage can't play the files in {name}.", { name: got.name })); C.platform.files.release(got.ref); return; }
+    arrived(meta);
+    return;
+  }
+  toast(tn(books.length, "Adding “{x}”, 1 book…", "Adding “{x}”, {n} books, as a series…", { x: title }));
+  const made = [];
+  for (const b of books) {
+    const inside = all.filter((f) => String(f.path || "").startsWith(b.name + "/"));
+    const meta = await folderBook(b.name, b.files, inside.concat(all.filter((f) => !String(f.path || "").includes("/"))), got.ref);
+    if (meta) made.push(meta);
+  }
+  if (!made.length) { toast(t("Waypage can't play the files in {name}.", { name: got.name })); C.platform.files.release(got.ref); return; }
+  if (made.length === 1) { arrived(made[0]); return; }
+  // Its own series, never into a collection already named so.
+  const taken = new Set(allFolders().map((n) => n.toLocaleLowerCase()));
+  let name = String(title).trim().slice(0, 32) || t("Audiobooks");
+  for (let i = 2; taken.has(name.toLocaleLowerCase()); i++) name = String(title).trim().slice(0, 28) + " " + i;
+  const now = Date.now();
+  made.forEach((m, i) => { outsideKnown(m); if (!m.folder) { m.folder = name; m.folderAt = now + i; } });
+  state.pages.unshift(...made.slice().reverse());
+  markSeries(name, true, null);
+  await C.store.writeIndex(state.pages);
+  await loadThumbs();
+  renderLibrary();
+  toast(tn(made.length, "Added “{title}”, 1 book", "Added “{title}”, {n} books", { title: name }));
+  openFolder(name);
 }
 
 // The library entry and its page: the chapters until there are words.

@@ -226,6 +226,63 @@ function joinFav(p, name) {
   joinTags(p, name);
   const pick = name ? coverPick(folderPages(name).filter((x) => x !== p)) : "";
   if (pick) p.coverPick = pick; else delete p.coverPick;
+  joinSeries(p, name);
+}
+
+// A series (2026-11): a collection marked as one, on its clips like a
+// favourite, with `folderIn` naming the collection it sits in. Nothing
+// else changes, so an app without series (an older one, or another
+// device on one) shows it as a plain collection and no clip moves. One
+// clip still carrying the mark is enough: the rest take it back.
+let seriesMemo = null;
+function seriesInfo() {
+  if (seriesMemo) return seriesMemo;
+  const idx = folderIndex(), marked = new Set(), into = new Map();
+  let heal = false;
+  for (const [k, list] of idx.by) {
+    const m = list.find((p) => p.folderSeries);
+    if (!m) continue;
+    marked.add(k);
+    const host = (list.find((p) => p.folderIn) || {}).folderIn;
+    if (host) into.set(k, host.toLocaleLowerCase());
+    if (list.some((p) => !p.folderSeries || (p.folderIn || "") !== (host || ""))) heal = true;
+  }
+  const hostOf = new Map();
+  for (const [k, h] of into) if (idx.by.has(h) && !marked.has(h) && h !== k) hostOf.set(k, idx.by.get(h)[0].folder);
+  seriesMemo = { marked, hostOf };
+  queueMicrotask(() => { seriesMemo = null; });
+  if (heal) setTimeout(healSeries);
+  return seriesMemo;
+}
+const isSeriesFolder = (name) => !!name && seriesInfo().marked.has(String(name).toLocaleLowerCase());
+const seriesHost = (name) => (name && seriesInfo().hostOf.get(String(name).toLocaleLowerCase())) || "";
+const seriesInside = (name) => allFolders().filter((f) => sameTag(seriesHost(f), name));
+const plainFolders = () => allFolders().filter((f) => !isSeriesFolder(f));
+function joinSeries(p, name) {
+  const mates = name ? folderPages(name).filter((x) => x !== p) : [];
+  const host = (mates.find((x) => x.folderIn) || {}).folderIn;
+  if (mates.some((x) => x.folderSeries)) p.folderSeries = true; else delete p.folderSeries;
+  if (p.folderSeries && host) p.folderIn = host; else delete p.folderIn;
+}
+async function healSeries() {
+  let changed = false;
+  for (const [, list] of folderIndex().by) {
+    if (!list.some((p) => p.folderSeries)) continue;
+    const host = (list.find((p) => p.folderIn) || {}).folderIn;
+    for (const p of list) {
+      if (!p.folderSeries) { p.folderSeries = true; changed = true; }
+      if (host && p.folderIn !== host) { p.folderIn = host; changed = true; }
+    }
+  }
+  seriesMemo = null;
+  if (changed) await C.store.writeIndex(state.pages);
+}
+function markSeries(name, on, host) {
+  for (const p of folderPages(name)) {
+    if (on) p.folderSeries = true; else delete p.folderSeries;
+    if (on && host) p.folderIn = host; else delete p.folderIn;
+  }
+  seriesMemo = null;
 }
 
 // "Tag new clips" (folderTagNew, on its clips like folderFav): a clip
@@ -316,6 +373,10 @@ async function setFolder(p, name) {
 // how much of it is read.
 // What a collection is made of, by the library's own parts: "8 clips,
 // 2 files". A copy made from a file is a clip, as in the library.
+// A list of only files says Files, and of only audiobooks, heard for read.
+const allFiles = (list) => list.length > 0 && list.every((p) => p.file);
+const allHeard = (list) => list.length > 0 && list.every((p) => p.audio && p.audio.parts && !p.audio.overlay);
+const listHead = (list) => (allFiles(list) ? t("Files") : isSeries(list) ? t("Chapters") : t("Clips")) + " · " + list.length;
 const HOLDS = [["note", (n) => tn(n, "1 note", "{n} notes")], ["audio", (n) => tn(n, "1 audiobook", "{n} audiobooks")], ["file", (n) => tn(n, "1 file", "{n} files")], ["clip", (n) => tn(n, "1 clip", "{n} clips")]];
 const holdKind = (p) => (p.note ? "note" : isAudiobook(p) ? "audio" : p.link ? "file" : "clip");
 // ...and as marks along the bottom of its cover, one per kind it holds,
@@ -349,8 +410,9 @@ function folderTile(name) {
   const thumb = cover || (withThumb ? thumbUrl(withThumb) : null);
   const fresh = freshCount(name);
   const fav = list.some((p) => p.folderFav);
+  const series = isSeriesFolder(name), inside = series ? 0 : seriesInside(name).length;
   const tile = el("div", { class: "tile", role: "listitem", "data-ids": list.map((p) => p.id).join(","), "data-name": name },
-    el("button", { class: "card-open", type: "button", "aria-label": [name, fav ? t("favourite") : "", t("collection"), holdsLine(list), t("{n} read", { n: done }), fresh ? tn(fresh, "1 new chapter", "{n} new chapters") : ""].filter(Boolean).join(", "),
+    el("button", { class: "card-open", type: "button", "aria-label": [name, fav ? t("favourite") : "", series ? t("series") : t("collection"), inside ? tn(inside, "1 series", "{n} series") : "", holdsLine(list), (allHeard(list) ? t("{n} heard", { n: done }) : t("{n} read", { n: done })), fresh ? tn(fresh, "1 new chapter", "{n} new chapters") : ""].filter(Boolean).join(", "),
       onclick: () => tapPages(list.map((p) => p.id), () => openFolder(name)) }),
     pickMark(),
     el("span", { class: "tile-thumb" + (thumb ? "" : " blank") },
@@ -366,7 +428,7 @@ function folderTile(name) {
           saveNewChapters(name, e.currentTarget);
         } }, "+" + (fresh >= NEW_MAX ? NEW_MAX : fresh)) : null),
     el("span", { class: "tile-name", dir: "auto" }, name),
-    el("span", { class: "tile-meta" }, el("span", { class: "tile-kind" }, t("Collection · ")), (done === list.length ? t("All read") : t("{done} of {n} read", { done: done, n: list.length })), el("span", { class: "tile-size" }, " · " + formatSize(sizeOf(list)))),
+    el("span", { class: "tile-meta" }, el("span", { class: "tile-kind" }, series ? t("Series · ") : t("Collection · ")), inside ? tn(inside, "1 series, {clips}", "{n} series, {clips}", { clips: holdsLine(list) }) : (allHeard(list) ? (done === list.length ? t("All heard") : t("{done} of {n} heard", { done: done, n: list.length })) : done === list.length ? t("All read") : t("{done} of {n} read", { done: done, n: list.length })), el("span", { class: "tile-size" }, " · " + formatSize(sizeOf(list)))),
     el("span", { class: "progress thin", "aria-hidden": "true" },
       el("span", { class: "progress-fill", style: "transform: scaleX(" + done / list.length + ")" })));
   // A cover whose file is gone (a restored backup) is read again.
@@ -405,12 +467,16 @@ const foldersStrip = (names) => el("div", { class: "folder-strip wide", role: "l
 function openFolder(name, fromHistory) {
   if (state.folder && sameTag(state.folder, name)) return;
   if (!folderPages(name).length) return;
+  // A series opened from its collection (2026-11) takes the screen in
+  // place; Back comes back to the collection.
+  const shown = !!state.folder;
+  if (shown) closeFolderMenu(true);
   state.folder = folderPages(name)[0].folder;
   folderMode = "";
   renderFolder();
   if (!fromHistory) history.pushState({ view: "folder", folder: state.folder }, "");
   $("folderBody").scrollTop = 0;
-  pushScreen($("folderView")).then(() => $("folderBack").focus());
+  if (!shown) pushScreen($("folderView")).then(() => $("folderBack").focus());
   updateCover(state.folder);
   if (pinned.matches) renderSide();
 }
@@ -485,9 +551,17 @@ function bookCover(list) {
 const drawnCover = (list) => el("div", { class: "book-cover drawn", "aria-hidden": "true" }, collectionIcon(list, 44));
 // A story's book, or a plain folder (0.30.3: no name drawn on it).
 function collectionIcon(list, size) {
+  if (list.length && isSeriesFolder(list[0].folder)) return seriesIcon(size);
   if (folderSource(list)) return bookIcon(size);
   const s = el("span", { class: "folder-icon", "aria-hidden": "true" });
   s.innerHTML = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+  return s;
+}
+
+// A series: a stack of pages.
+function seriesIcon(size) {
+  const s = el("span", { class: "folder-icon", "aria-hidden": "true" });
+  s.innerHTML = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="15" rx="1.5"/><path d="M4 6v13.5A1.5 1.5 0 0 0 5.5 21H16"/><path d="M9.5 8h5M9.5 11h5"/></svg>';
   return s;
 }
 
@@ -505,15 +579,18 @@ function bookHead(list, next, done) {
     });
   } else title = el("h2", { class: "book-title", dir: "auto" }, name);
   const left = minutesLeft(list);
-  const meta = done === n ? t("All {n} read", { n }) : t("{done} of {n} read · {left} left", { done, n, left: minutesText(left) });
+  const heard = allHeard(list);
+  const meta = done === n ? (heard ? t("All {n} heard", { n }) : t("All {n} read", { n })) : heard ? t("{done} of {n} heard · {left} left", { done, n, left: minutesText(left) }) : t("{done} of {n} read · {left} left", { done, n, left: minutesText(left) });
   const bar = el("div", { class: "book-progress", role: "progressbar", "aria-label": t("Read"), "aria-valuemin": "0",
-    "aria-valuemax": String(n), "aria-valuenow": String(done), "aria-valuetext": t("{done} of {n} read", { done, n }) },
+    "aria-valuemax": String(n), "aria-valuenow": String(done), "aria-valuetext": heard ? t("{done} of {n} heard", { done, n }) : t("{done} of {n} read", { done, n }) },
     el("span", { class: "book-progress-fill", style: "width: " + (done / n * 100).toFixed(1) + "%" }));
   const head = el("div", { class: "book-head" },
     bookCover(list),
     el("div", { class: "book-facts" },
-      el("p", { class: "book-site" }, [siteOf(list[0]), t("Collection")].filter(Boolean).join(" · ")),
+      el("p", { class: "book-site" }, [siteOf(list[0]), isSeriesFolder(name) ? t("Series") : t("Collection")].filter(Boolean).join(" · ")),
       title,
+      !renaming && seriesHost(name) ? el("button", { class: "book-saved series-in", type: "button", onclick: () => openFolder(seriesHost(name)) },
+        el("span", { class: "accent", dir: "auto" }, t("In {collection}", { collection: seriesHost(name) }))) : null,
       el("p", { class: "meta folder-meta" }, meta),
       folderTagLine(list),
       bar));
@@ -658,7 +735,7 @@ function renderFolder() {
       sharing() ? el("div", { class: "group" },
         switchRow(t("In other apps"), t("Listed in the reading activity that apps you connect to your sync repo can read"), !list.some((p) => p.folderNoShare), (v) => setFolderShare(state.folder, !v))) : null,
       sectionHead(t("Cover")), coverPanel(list),
-      sectionHead((isSeries(list) ? t("Chapters") : t("Clips")) + " · " + list.length),
+      sectionHead(listHead(list)),
       savedLine(list),
       ordering ? el("div", { class: "order-hint" },
         el("div", { class: "chips sort-chips", role: "group", "aria-label": t("Sort by") },
@@ -671,7 +748,8 @@ function renderFolder() {
   const covers = showList && !editing && folderLook(state.folder) === "covers";
   fill($("folderBody"),
     ...top,
-    showList && !editing ? sectionHead((isSeries(list) ? t("Chapters") : t("Clips")) + " · " + list.length) : null,
+    ...(showList && !editing ? insideStrip(state.folder) : []),
+    showList && !editing ? sectionHead(listHead(list)) : null,
     covers ? el("ol", { class: "folder-covers" }, ...list.map((p) => coverItem(p, p === next && done < list.length))) : null,
     showList && !covers ? el("ol", { class: "group folder-list" + (ordering ? " ordering" : "") },
       ...list.map((p, i) => el("li", folderMode ? { "data-id": p.id } : { "data-id": p.id, "data-ids": p.id },
@@ -692,6 +770,13 @@ function renderFolder() {
   if (again) again.focus({ preventScroll: true });
 }
 
+// The series a collection holds, above its own clips (2026-11).
+function insideStrip(name) {
+  const names = seriesInside(name);
+  if (!names.length) return [];
+  return [sectionHead(t("Series") + " · " + names.length), el("div", { class: "folder-strip", role: "list", "aria-label": t("Series") }, ...names.map(folderTile))];
+}
+
 // A star on each clip in a collection (Daniel 2026-11-13), the same as
 // Favourite in its sheet.
 function itemFav(p) {
@@ -703,12 +788,13 @@ function itemFav(p) {
 }
 
 // How a collection shows what's in it, kept on this device: a list of
-// chapters (the default), or covers, for a shelf of books.
+// chapters or covers, for a shelf of books. Unpicked, a series is a list
+// and a collection covers (Daniel, 2026-11).
 const LOOK_KEY = "waypage.collectionLook";
-const folderLook = (name) => (load(LOOK_KEY, {})[name] === "covers" ? "covers" : "list");
+const folderLook = (name) => { const o = load(LOOK_KEY, {})[name]; return o === "covers" || o === "list" ? o : isSeriesFolder(name) ? "list" : "covers"; };
 function setFolderLook(name, look) {
   const all = load(LOOK_KEY, {});
-  if (look === "covers") all[name] = "covers"; else delete all[name];
+  all[name] = look === "covers" ? "covers" : "list";
   store(LOOK_KEY, all);
   renderFolder();
 }
@@ -901,7 +987,13 @@ function openFolderMenu() {
     sep(),
     folderLook(state.folder) === "covers"
       ? item("chapters", t("Show as a list"), () => setFolderLook(state.folder, "list"))
-      : item("grid", t("Show as covers"), () => setFolderLook(state.folder, "covers")),
+      : item("grid", t("Show as a grid"), () => setFolderLook(state.folder, "covers")),
+    // A series or a collection (2026-11), from here only; a collection
+    // holding series asks first, since they'd move out.
+    ...(isSeriesFolder(state.folder)
+      ? [item("folder", t("Make it a collection"), () => setFolderSeries(state.folder, false)),
+        item("folder", t("Put in a collection"), () => openMenu("seriesHost"), { note: seriesHost(state.folder) || t("None") })]
+      : [item("series", t("Make it a series"), () => (seriesInside(state.folder).length ? openMenu("toSeries") : setFolderSeries(state.folder, true)))]),
     item("tag", t("Tags"), () => openMenu("folderTags"), sharedTags(list).length ? { note: String(sharedTags(list).length) } : {}),
     item("select", t("Select"), () => startSelect([])),
     item("send", t("Export"), () => setFolderMode("export")),
@@ -1202,6 +1294,57 @@ function savedSheet() {
     go);
 }
 
+// A collection becomes a series, or back (2026-11). A series holds only
+// clips and files, so a collection's own series move out to the
+// library's Series first; a collection sits in nothing.
+async function setFolderSeries(name, on) {
+  if (on) for (const f of seriesInside(name)) for (const p of folderPages(f)) delete p.folderIn;
+  markSeries(name, on);
+  await C.store.writeIndex(state.pages);
+  syncSoon();
+  if (state.menu) await back();
+  renderLibrary();
+  if (state.folder) renderFolder();
+  toast(on ? t("{name} is a series now", { name }) : t("{name} is a collection now", { name }));
+}
+
+function toSeriesSheet() {
+  const name = state.folder, inside = seriesInside(name);
+  return el("div", { class: "page-controls remove-sheet" },
+    el("div", { class: "menu-head" },
+      el("p", { class: "menu-title", dir: "auto" }, t("Make “{name}” a series?", { name })),
+      el("p", { class: "meta" }, inside.length === 1
+        ? t("A series holds only clips and files. {series} moves out of {name} and stays in your Series.", { series: inside[0], name })
+        : t("A series holds only clips and files. Its {n} series move out of {name} and stay in your Series.", { n: inside.length, name }))),
+    el("button", { class: "sheet-row", type: "button", onclick: () => setFolderSeries(name, true) },
+      tn(inside.length, "Make it a series, move 1 series out", "Make it a series, move {n} series out")),
+    el("button", { class: "btn-text menu-cancel", type: "button", onclick: () => history.back() }, t("Cancel")));
+}
+
+function seriesHostSheet() {
+  const name = state.folder, now = seriesHost(name);
+  const put = async (host) => {
+    markSeries(name, true, host);
+    await C.store.writeIndex(state.pages);
+    syncSoon();
+    await back();
+    renderLibrary();
+    renderFolder();
+    toast(host ? t("{name} is in {host} now", { name, host }) : t("{name} is in no collection now", { name }));
+  };
+  const row = (host, label) => el("button", { class: "sheet-row" + (sameTag(host, now) ? " accent" : ""), type: "button", "aria-pressed": sameTag(host, now) ? "true" : "false",
+    dir: "auto", onclick: () => put(host) }, label);
+  const hosts = plainFolders().sort((a, b) => a.localeCompare(b));
+  return el("div", { class: "page-controls" },
+    el("div", { class: "menu-head" },
+      el("p", { class: "menu-title", dir: "auto" }, t("Put “{name}” in a collection", { name })),
+      el("p", { class: "meta" }, t("It shows there and in your Series."))),
+    row("", t("None")),
+    ...hosts.map((h) => row(h, h)),
+    hosts.length ? null : el("p", { class: "meta" }, t("No collections yet.")),
+    el("button", { class: "btn-text menu-cancel", type: "button", onclick: () => history.back() }, t("Cancel")));
+}
+
 function removeSheet() {
   const list = folderPages(state.folder);
   const n = list.length;
@@ -1219,12 +1362,16 @@ function removeSheet() {
 async function removeFolder(withPages) {
   const name = state.folder;
   const list = folderPages(name);
+  const inside = seriesInside(name);
   if (withPages && !confirm(t("Delete “{name}” and its {countLine} from {HERE}?{alsoSynced}{filesNote}", { name: name, countLine: countLine(list.length), HERE: HERE, alsoSynced: alsoSynced(), filesNote: filesNote(list) }))) return;
-  if (withPages) forgetWatched(list);
+  if (withPages) { forgetWatched(list); releaseLinks(list); }
   for (const p of list) {
-    if (withPages) { if (p.link && !p.watched) C.platform.files.release(p.link); dropPackFile(p); dropAudioFiles(p); await C.store.removePage(p.id); }
-    else { delete p.folder; delete p.folderAt; delete p.folderFav; delete p.folderFavAt; delete p.coverPick; delete p.folderNoShare; delete p.folderTagNew; }
+    if (withPages) { dropPackFile(p); dropAudioFiles(p); await C.store.removePage(p.id); }
+    else { delete p.folder; delete p.folderAt; delete p.folderFav; delete p.folderFavAt; delete p.coverPick; delete p.folderNoShare; delete p.folderTagNew; delete p.folderSeries; delete p.folderIn; }
   }
+  // Its series stay, in the library's Series.
+  for (const f of inside) for (const p of folderPages(f)) delete p.folderIn;
+  seriesMemo = null;
   if (withPages) state.pages = state.pages.filter((p) => !list.includes(p));
   await C.store.writeIndex(state.pages);
   folderMode = "";
@@ -1255,6 +1402,7 @@ const ICONS = {
   remove: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
   tag: '<path d="M3 12V4h8l9 9-8 8z"/><circle cx="7.5" cy="8.5" r="1.2"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  series: '<rect x="6" y="3" width="12" height="15" rx="1.5"/><path d="M4 6v13.5A1.5 1.5 0 0 0 5.5 21H16"/><path d="M9.5 8h5M9.5 11h5"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
   star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.7l5.9-.9z"/>',
@@ -1496,11 +1644,19 @@ async function switchView(p, where) {
   C.files.drawNear($("readerFrame"));
 }
 
+// The outside files and folders these were read from, let go of unless
+// another entry still reads from one: the books of an audiobook folder
+// added as a series all share its folder.
+function releaseLinks(list) {
+  const links = new Set(list.filter((p) => p.link && !p.watched).map((p) => p.link));
+  for (const x of state.pages) if (!list.includes(x)) links.delete(x.link);
+  for (const l of links) C.platform.files.release(l);
+}
 async function deletePage(p, where) {
   if (!confirm(p.link ? t("Remove “{title}” from Waypage? {linkedStays}", { title: p.title, linkedStays: linkedStays([p]) })
     : t("Delete “{title}” from {HERE}?{alsoSynced}", { title: p.title, HERE: HERE, alsoSynced: alsoSynced() }))) return;
   forgetWatched([p]);
-  if (p.link && !p.watched) C.platform.files.release(p.link); dropPackFile(p); dropAudioFiles(p);
+  releaseLinks([p]); dropPackFile(p); dropAudioFiles(p);
   await C.store.removePage(p.id);
   state.pages = state.pages.filter((x) => x.id !== p.id);
   await C.store.writeIndex(state.pages);
@@ -1703,7 +1859,8 @@ async function deletePicked() {
     ? tn(list.length, "Remove 1 file from Waypage? {stays}", "Remove {n} files from Waypage? {stays}", { stays: linkedStays(list) })
     : t("Delete {countLine} from {HERE}?{alsoSynced}{filesNote}", { countLine: countLine(list.length), HERE: HERE, alsoSynced: alsoSynced(), filesNote: filesNote(list) }))) return;
   forgetWatched(list);
-  for (const p of list) { if (p.link && !p.watched) C.platform.files.release(p.link); dropPackFile(p); dropAudioFiles(p); await C.store.removePage(p.id); }
+  releaseLinks(list);
+  for (const p of list) { dropPackFile(p); dropAudioFiles(p); await C.store.removePage(p.id); }
   state.pages = state.pages.filter((p) => !list.includes(p));
   await C.store.writeIndex(state.pages);
   await back(andFolder(1));
@@ -1721,6 +1878,8 @@ const MENUS = {
   tags: { label: t("Tags"), build: tagsSheet },
   folderTags: { label: t("Tags"), build: folderTagsSheet },
   folder: { label: t("Collection"), build: folderSheet },
+  seriesHost: { label: t("Put in a collection"), build: seriesHostSheet },
+  toSeries: { label: t("Make it a series"), build: toSeriesSheet },
   saved: { label: t("What's saved"), build: savedSheet },
   file: { label: t("Opening a file"), build: fileSheet },
   remove: { label: t("Remove collection"), build: removeSheet },

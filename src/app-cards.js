@@ -636,7 +636,9 @@ function readingLine(p) {
 // load online only. Anything else is ready offline, which goes unsaid.
 // Continue reading's card shows its collection's cover, when it has one.
 function pageCard(p, found, hero) {
-  const cover = hero && p.folder ? coverUrl(folderPages(p.folder)) : null;
+  // Continue reading shows a series' cover, but a clip in a plain
+  // collection as itself (2026-11, Daniel's ask).
+  const cover = hero && p.folder && isSeriesFolder(p.folder) ? coverUrl(folderPages(p.folder)) : null;
   const thumb = thumbUrl(p);
   const facts = isAudiobook(p) ? readingLine(p) : [readingLine(p), formatSize(p.bytes || 0)].join(" · ");
   const done = isAudiobook(p) ? listenDone(p) : p.at;

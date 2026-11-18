@@ -213,6 +213,12 @@ options offers them as one switch, off until turned on, remembered in
 A collection marked "Tag new clips" (`folderTagNew` on its clips, like
 `folderFav`; synced) gives a clip joining it the tags all its clips
 share (`joinTags`, run from `joinFav` and on every new save into it).
+A series (2026-11) is a collection whose clips carry `folderSeries`, and
+`folderIn` naming the collection it sits in (one level: a series holds
+only clips and files, a collection never sits in another). Nothing else
+changes, so an app or device without series shows a plain collection and
+no clip moves. `seriesInfo` reads the marks once per task; one clip still
+marked is enough, and `healSeries` puts them back on the rest.
 
 ## Where clips live
 
@@ -952,6 +958,8 @@ adds a line here.
 Things that broke once and would again. Check here before touching the
 area.
 
+- The books of an audiobook folder added as a series share one `link`, the folder picked. Removing an entry lets go of its `link` only when no other entry still reads from it (`releaseLinks`).
+- A field missing from sync's `SYNCED`, backup's `cleanMeta`, `SYNCED_KEEP` and `AGAIN_KEEP` is dropped on the next sync or update. `folderSeries` and `folderIn` are in all four; a device without them strips them from clips it changes, which `healSeries` repairs while any clip of the series keeps them.
 - A site's tags (`siteTags`, { site, tags }) are read in `readArticle` before Readability runs: Readability takes the `<script>` tags out, and the schema.org keywords with them. A collection's clips carry the story page's tags, never a chapter page's own (`runJob`).
 - On a big screen the route steps back out of Settings by itself when it lands on the menu with a section open, so leaving Settings from deep inside (`outOfSettings`) waits a moment after each step instead of reading `history.state`: two backs at once leave the app.
 

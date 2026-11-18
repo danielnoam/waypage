@@ -37,7 +37,7 @@ function route(s) {
   if (part !== state.part) { if (view === "part" || !part) changePart(part); else { state.part = part; renderLibrary(); } }
   const folder = ["folder", "reader", "batch", "select", "menu"].includes(view) && s.folder;
   if (!folder) closeFolder();
-  else if (!state.folder) openFolder(folder, true);
+  else if (!state.folder || !sameTag(state.folder, folder)) openFolder(folder, true);
   if (view === "select") startSelect([], true);
   // A sheet isn't rebuilt going forward: step back off it instead.
   if (view === "menu" && !state.menu) history.back();
