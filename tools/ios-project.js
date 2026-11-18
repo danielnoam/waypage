@@ -38,6 +38,9 @@
 // address, and the SceneDelegate handing them to WidgetsPlugin.shortcut,
 // at launch and with the app running.
 //
+// NSFaceIDUsageDescription: App lock's Face ID (AppLockPlugin), which iOS
+// refuses without saying why it's asked for.
+//
 // Idempotent, and fails loudly if what it edits isn't where it expects.
 const fs = require("fs");
 const path = require("path");
@@ -83,7 +86,11 @@ const PLIST = [
   ["UIBackgroundModes", arr([str("audio"), str("fetch")])],
   ["BGTaskSchedulerPermittedIdentifiers", arr([str(FEEDS_TASK)])],
   ["NSCameraUsageDescription", "<string>Waypage uses the camera to read the sync setup code from your other device.</string>"],
+  ["NSFaceIDUsageDescription", "<string>Waypage uses Face ID to unlock when you turn it on in App lock.</string>"],
   ["UIFileSharingEnabled", "<true/>"],
+  // A book server at home over plain http (the Catalogs extension).
+  ["NSAppTransportSecurity", "<dict>\n\t\t<key>NSAllowsLocalNetworking</key>\n\t\t<true/>\n\t</dict>"],
+  ["NSLocalNetworkUsageDescription", "<string>Waypage reads the book catalogs you add, such as a Calibre or Kavita server at home.</string>"],
   ["LSSupportsOpeningDocumentsInPlace", "<true/>"],
   ["CFBundleDocumentTypes", arr(DOCS.map(docType))],
   ["UTImportedTypeDeclarations", arr([

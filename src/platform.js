@@ -10,12 +10,10 @@
 // `build` is app-build.json, written into the bundle by tools/build-www.js.
 // It only exists inside the app; in a browser it is null.
 (function () {
-  const cap = window.Capacitor;
-  const native = !!(cap && typeof cap.isNativePlatform === "function" && cap.isNativePlatform());
-  const os = native ? String((cap.getPlatform && cap.getPlatform()) || "android") : "web";
-  const plugin = (name) => (native && cap.Plugins && cap.Plugins[name]) || null;
-
-  if (native) document.documentElement.classList.add("native");
+  // Where it runs, app-build.json, links out to the phone's browser and
+  // deadline() are keel's (src/keel/platform.js).
+  const K = window.Keel.platform;
+  const { cap, native, os, plugin, ready, openOutside, deadline } = K;
   // App lock (1.38.0): hidden from the first paint, before the library
   // draws, when a passcode is set (app-lock.js shows the keypad).
   try { if (localStorage.getItem("waypage.lock")) document.documentElement.classList.add("locked"); } catch (e) { /* no storage */ }
@@ -35,92 +33,10 @@
   } catch (e) { /* storage blocked: nothing to copy */ }
 
   // What went wrong lately (1.9.0), for Report a problem: errors nothing
-  // caught, console errors, and saves that failed, the last LOG_KEEP of
-  // them in localStorage. Addresses keep their page but lose their query,
-  // where sign-in tokens and tracking live, and anything that looks like a
-  // GitHub or Google token is cut (1.29.1). Nothing leaves the phone
-  // unless the person sends a report.
-  const LOG_KEY = "waypage.log";
-  const LOG_KEEP = 60;
-  const cleanText = (t) => String(t == null ? "" : t)
-    .replace(/(https?:\/\/[^\s?#"'<>)]+)[?#][^\s"'<>)]*/g, "$1")
-    .replace(/(token|key|password|secret)=[^\s&]+/gi, "$1=…")
-    .replace(/\b(github_pat_|gh[pousr]_|ya29\.)[\w.-]+/g, "$1…")
-    .replace(/(Bearer\s+)\S+/gi, "$1…")
-    .slice(0, 600);
-  function logList() {
-    try { const v = JSON.parse(localStorage.getItem(LOG_KEY)); return Array.isArray(v) ? v : []; } catch (e) { return []; }
-  }
-  let logging = false;
-  function note(kind, text) {
-    if (logging) return;
-    logging = true;
-    try {
-      const list = logList();
-      const msg = cleanText(text);
-      const last = list[list.length - 1];
-      // The same error over and over is one line with a count.
-      if (last && last.kind === kind && last.msg === msg) { last.n = (last.n || 1) + 1; last.at = Date.now(); }
-      else list.push({ at: Date.now(), kind, msg });
-      localStorage.setItem(LOG_KEY, JSON.stringify(list.slice(-LOG_KEEP)));
-    } catch (e) { /* storage full or blocked: not kept */ }
-    logging = false;
-  }
-  const errorText = (e) => (e && (e.stack || e.message)) ? String(e.stack || e.message).split("\n").slice(0, 4).join(" | ") : String(e);
-  addEventListener("error", (e) => {
-    if (e.error || e.message) note("error", (e.message || errorText(e.error)) + (e.filename ? " @ " + e.filename.split("/").pop() + ":" + e.lineno : ""));
-  });
-  addEventListener("unhandledrejection", (e) => note("error", errorText(e.reason)));
-  const consoleError = console.error.bind(console);
-  console.error = (...args) => { note("console", args.map((a) => (a instanceof Error ? errorText(a) : typeof a === "string" ? a : (() => { try { return JSON.stringify(a); } catch (x) { return String(a); } })())).join(" ")); consoleError(...args); };
-  const log = {
-    note,
-    list: logList,
-    clear() { try { localStorage.removeItem(LOG_KEY); } catch (e) { /* none */ } },
-  };
-
-  let build = null;
-  const ready = native
-    ? fetch("app-build.json", { cache: "no-store" })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((b) => { build = b; return b; })
-        .catch(() => null)
-    : Promise.resolve(null);
-
-  // Links that leave the app (the original page, a store link) open in the
-  // phone's own browser, not inside the app's WebView, which has no address
-  // bar and where back would put the whole app away.
-  const isOutside = (url) => {
-    try {
-      const u = new URL(String(url), location.href);
-      return /^https?:$/.test(u.protocol) && u.origin !== location.origin;
-    } catch (e) { return false; }
-  };
-  const nativeOpen = window.open.bind(window);
-  // Only web and mail addresses leave the app (1.29.1): a clip's address
-  // can come from a backup or a synced library, and a javascript: one
-  // opened here would run with the app's plugins.
-  function openOutside(url) {
-    if (!/^(https?|mailto):/i.test(String(url || "").trim())) return false;
-    const L = plugin("AppLauncher");
-    if (L) {
-      Promise.resolve(L.openUrl({ url: String(url) }))
-        .then((r) => { if (r && r.completed === false) nativeOpen(url, "_blank"); })
-        .catch(() => nativeOpen(url, "_blank"));
-      return true;
-    }
-    nativeOpen(url, "_blank");
-    return true;
-  }
-  if (native) {
-    window.open = (url, target, features) => (isOutside(url) ? (openOutside(url), null) : nativeOpen(url, target, features));
-    document.addEventListener("click", (e) => {
-      const a = e.target && e.target.closest && e.target.closest("a[href]");
-      if (!a || a.hasAttribute("download") || !isOutside(a.href)) return;
-      e.preventDefault();
-      openOutside(a.href);
-    }, true);
-  }
+  // caught, console errors, and saves that failed. keel's errlog.js keeps
+  // them (index.html sets it up), with addresses cut to their pages and
+  // tokens cut. Nothing leaves the phone unless the person sends a report.
+  const log = window.Keel.errlog;
 
   // The WebView's own browser string with the app named after it: some news
   // sites (ynet among them) never answer a request that doesn't look like a
@@ -129,16 +45,9 @@
     "Waypage (offline reader; https://github.com/danielnoam/waypage)";
 
   // Native requests have no deadline of their own, so a site that holds the
-  // connection open would leave "Saving" up for good.
+  // connection open would leave "Saving" up for good (keel's deadline()).
   const PAGE_TIMEOUT = 30000;
   const FILE_TIMEOUT = 20000;
-  function deadline(promise, ms) {
-    let timer;
-    return Promise.race([
-      promise,
-      new Promise((_, reject) => { timer = setTimeout(() => reject(new TypeError("Timed out")), ms); }),
-    ]).finally(() => clearTimeout(timer));
-  }
 
   // The web copy's fetch proxy (worker/, a Cloudflare Worker): a browser
   // can't read most sites itself (CORS), so its page fetches go through it.
@@ -193,21 +102,52 @@
   // link), with its final address and type. The app downloads it into the
   // cache and reads it back from there; a browser fetches it, through the
   // proxy unless the site allows any origin.
-  async function fetchBytes(url, name) {
+  // `headers` (a catalog's login) go only to the site itself, never through
+  // the proxy.
+  async function fetchBytes(url, name, headers) {
     if (plugin("Filesystem") && plugin("CapacitorHttp")) {
       const path = "fetched/" + String(name || "file").replace(/[^\w.-]+/g, "_").slice(0, 80);
-      const src = await downloadTo(url, path, null, "CACHE");
+      const src = await downloadTo(url, path, null, "CACHE", headers);
       if (!src) throw new TypeError("Failed to fetch (no file)");
       const blob = await (await fetch(src)).blob();
       plugin("Filesystem").deleteFile({ path, directory: "CACHE" }).catch(() => {});
       return { status: 200, url, type: blob.type, blob };
     }
-    const res = !PROXY || direct(url)
-      ? await deadline(fetch(url), PAGE_TIMEOUT * 2)
+    const res = !PROXY || direct(url) || (headers && Object.keys(headers).length)
+      ? await deadline(fetch(url, { headers: headers || {}, credentials: "omit" }), PAGE_TIMEOUT * 2)
       : await deadline(fetch(PROXY + "?" + new URLSearchParams({ url, accept: "*/*" }), { credentials: "omit" }), PAGE_TIMEOUT * 2);
     const refused = res.headers.get("X-Proxy-Error");
     if (refused && res.status !== 429) throw new TypeError("Failed to fetch (" + refused + ")");
     return { status: res.status, url: res.headers.get("X-Final-Url") || res.url || url, type: res.headers.get("Content-Type") || "", blob: await res.blob() };
+  }
+
+  // A WebDAV folder's listing (the WebDAV extension, 2026-11) as
+  // { status, url, text }: a PROPFIND, which Android's own http refuses, so
+  // there it goes through the Files plugin's davList (Dav.java); iOS's
+  // CapacitorHttp sends any method; a browser asks the server straight, so
+  // the server has to allow the web copy. Never through the fetch proxy:
+  // it carries a login. `auth` is the Authorization header, or "".
+  async function dav(url, auth, depth = "1") {
+    const F = plugin("Files");
+    if (os === "android" && F) {
+      let r;
+      try { r = await deadline(F.davList({ url, auth: auth || "", depth }), PAGE_TIMEOUT + 15000); }
+      catch (e) { throw new TypeError("Failed to fetch (" + ((e && e.message) || e) + ")"); }
+      return { status: r.status, url: r.url || url, text: r.text || "" };
+    }
+    const headers = { Depth: depth, ...(auth ? { Authorization: auth } : {}) };
+    const http = plugin("CapacitorHttp");
+    if (http) {
+      let res;
+      try {
+        res = await deadline(http.request({ url, method: "PROPFIND", headers: { ...headers, "User-Agent": USER_AGENT }, responseType: "text",
+          connectTimeout: PAGE_TIMEOUT / 2, readTimeout: PAGE_TIMEOUT }), PAGE_TIMEOUT + 5000);
+      } catch (e) { throw new TypeError("Failed to fetch (" + ((e && e.message) || e) + ")"); }
+      return { status: res.status, url: res.url || url, text: typeof res.data === "string" ? res.data : "" };
+    }
+    const res = await deadline(fetch(url, { method: "PROPFIND", headers: { ...headers, "Content-Type": "application/xml; charset=utf-8" }, credentials: "omit",
+      body: '<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:allprop/></d:propfind>' }), PAGE_TIMEOUT);
+    return { status: res.status, url: res.url || url, text: await res.text() };
   }
 
   // A form sent to a site (1.43.0, making or deleting a newsletter
@@ -226,6 +166,25 @@
       throw new TypeError("Failed to fetch (" + ((e && e.message) || e) + ")");
     }
     return { status: res.status, text: typeof res.data === "string" ? res.data : JSON.stringify(res.data) };
+  }
+
+  // A call to a server's own API (Audiobookshelf), as { status, text }.
+  // The app asks natively; a browser asks the server straight, never
+  // through the proxy, since `headers` carry a login.
+  async function request(url, { method = "GET", headers = {}, body } = {}) {
+    const http = plugin("CapacitorHttp");
+    if (http) {
+      let res;
+      try {
+        res = await deadline(http.request({ url, method, headers: { "User-Agent": USER_AGENT, ...headers }, ...(body != null ? { data: body } : {}), responseType: "text",
+          connectTimeout: PAGE_TIMEOUT / 2, readTimeout: PAGE_TIMEOUT }), PAGE_TIMEOUT + 5000);
+      } catch (e) {
+        throw new TypeError("Failed to fetch (" + ((e && e.message) || e) + ")");
+      }
+      return { status: res.status, text: typeof res.data === "string" ? res.data : res.data == null ? "" : JSON.stringify(res.data) };
+    }
+    const res = await deadline(fetch(url, { method, headers, body: body == null ? undefined : body, credentials: "omit" }), PAGE_TIMEOUT);
+    return { status: res.status, text: await res.text() };
   }
 
   // Saving signed in (1.8.0): native/share's SignIn plugin opens a site in a
@@ -281,21 +240,25 @@
   }
 
   // A whole clip translated on this device (1.42.0): ML Kit through the
-  // Translate plugin on Android, the browser's own Translator elsewhere
-  // (Chrome on a computer). Neither sends the words anywhere; each
-  // downloads a language once. Not on iOS yet, or in other browsers.
-  const held = { translator: null, pair: "" };
+  // Translate plugin on Android, Apple's Translation on iOS 18 and later,
+  // the browser's own Translator elsewhere (Chrome on a computer). None
+  // sends the words anywhere; each downloads a language once. Not in
+  // other browsers.
+  const held = { translator: null, pair: "", ios: false };
+  if (os === "ios" && plugin("Translate")) plugin("Translate").supported().then((r) => { held.ios = !!(r && r.ok); }).catch(() => {});
+  const phoneTranslates = () => (os === "android" && !!plugin("Translate")) || (os === "ios" && held.ios);
   const translator = {
     get available() {
-      if (os === "android") return !!plugin("Translate");
-      return !native && typeof self.Translator === "function";
+      if (native) return phoneTranslates();
+      return typeof self.Translator === "function";
     },
-    get onPhone() { return os === "android"; },
+    get onPhone() { return native; },
+    get byApple() { return os === "ios"; },
     // The language of a clip whose page didn't say: "" when it can't tell.
     async detect(text) {
       const T = plugin("Translate");
       try {
-        if (os === "android" && T) return (await T.detect({ text: text.slice(0, 2000) })).lang || "";
+        if (T && phoneTranslates()) return (await T.detect({ text: text.slice(0, 2000) })).lang || "";
         if (typeof self.LanguageDetector !== "function") return "";
         const d = await self.LanguageDetector.create();
         const [best] = await d.detect(text.slice(0, 2000));
@@ -306,7 +269,7 @@
     async ready(from, to) {
       const T = plugin("Translate");
       try {
-        if (os === "android" && T) return (await T.ready({ from, to })).state;
+        if (T && phoneTranslates()) return (await T.ready({ from, to })).state;
         const s = await self.Translator.availability({ sourceLanguage: from, targetLanguage: to });
         return s === "unavailable" ? "unavailable" : s === "available" ? "available" : "downloadable";
       } catch (e) { return "unavailable"; }
@@ -315,7 +278,7 @@
     // to start from a tap, so it is the first thing a tap on Translate does.
     async prepare(from, to, onProgress) {
       const T = plugin("Translate");
-      if (os === "android" && T) { await T.prepare({ from, to }); return; }
+      if (T && phoneTranslates()) { await T.prepare({ from, to }); return; }
       held.translator = null;
       held.translator = await self.Translator.create({ sourceLanguage: from, targetLanguage: to,
         monitor: (m) => m.addEventListener("downloadprogress", (e) => { if (onProgress) onProgress(e.loaded); }) });
@@ -323,8 +286,8 @@
     },
     async translate(texts, from, to) {
       const T = plugin("Translate");
-      if (os === "android" && T) return (await T.clip({ from, to, texts })).texts || [];
-      if (!held.translator || held.pair !== from + ">" + to) throw new Error("Not ready to translate");
+      if (T && phoneTranslates()) return (await T.clip({ from, to, texts })).texts || [];
+      if (!held.translator || held.pair !== from + ">" + to) throw new Error(t("Not ready to translate"));
       const out = [];
       for (const t of texts) out.push(await held.translator.translate(t));
       return out;
@@ -484,18 +447,18 @@
       if (S) return S.volume({ volume }).catch(() => {});
     },
     // The sleep timer (1.32.0): pause after `seconds`, 0 to cancel. The
-    // Android service keeps the time itself, put away; elsewhere the page
-    // does. Resolves whether the phone took it.
+    // phone keeps the time itself, put away; in a browser the page does.
+    // Resolves whether the phone took it.
     async sleep(seconds) {
       const S = plugin("Speech");
-      if (!S || os !== "android") return false;
+      if (!S) return false;
       try { await S.sleep({ seconds: Math.max(0, Math.round(seconds)) }); return true; } catch (e) { return false; }
     },
-    // Told { at } when Android's lock-screen Sleep 15 min sets the timer
-    // or it runs out (1.36.0).
+    // Told { at } when the lock screen's Sleep 15 min (Android) sets the
+    // timer or it runs out (1.36.0).
     onSleep(fn) {
       const S = plugin("Speech");
-      if (S && os === "android" && S.addListener) S.addListener("sleep", (e) => fn(Number((e && e.at) || 0)));
+      if (S && S.addListener) S.addListener("sleep", (e) => fn(Number((e && e.at) || 0)));
     },
     async stop() {
       const S = plugin("Speech");
@@ -535,6 +498,15 @@
       if (!S || awake.noPip) return false;
       try { return !!(await S.pipState()).on; } catch (e) { return false; }
     },
+    // The Personal Voice the person made in iOS's Settings (iOS 17): asks
+    // once, then it is among the voices. "authorized", "denied",
+    // "unsupported", or null where there's no such thing.
+    async personalVoice() {
+      const S = plugin("Speech");
+      if (!S || os !== "ios") return null;
+      try { return (await S.personalVoice()).state || null; } catch (e) { return null; }
+    },
+    get hasPersonalVoice() { return os === "ios" && !!plugin("Speech"); },
     async state() {
       const S = plugin("Speech");
       if (S) { try { return await S.state(); } catch (e) { return { key: "", index: -1, state: "stopped" }; } }
@@ -543,11 +515,11 @@
     // The clip to go on to when the clip `after` ends (1.23.0), read by
     // the phone with no help from the page, which can't draw it while the
     // app is put away. { after, items, start, lang, voice, title, subtitle, key };
-    // no items clears it. Resolves false where the phone can't (iOS for
-    // now, a browser): the app goes on itself at the end, as before.
+    // no items clears it. Resolves false where the phone can't (a
+    // browser): the app goes on itself at the end, as before.
     async queue(o) {
       const S = plugin("Speech");
-      if (!S || os !== "android") return false;
+      if (!S) return false;
       try { await S.queue(o); return true; } catch (e) { return false; }
     },
   };
@@ -679,16 +651,18 @@
     try { await FS.mkdir({ path: dir, directory, recursive: true }); }
     catch (e) { /* there already */ }
   }
-  async function downloadTo(url, path, page, directory = "DATA") {
+  // `wait`: how long the whole download may take (an audiobook's part is
+  // tens of megabytes), FILE_TIMEOUT's few seconds otherwise.
+  async function downloadTo(url, path, page, directory = "DATA", extra, wait) {
     const FS = plugin("Filesystem");
     if (!FS) return null;
     // The page's own site as Referer, as a browser sends it (its origin,
     // not the whole address).
-    const headers = { "User-Agent": USER_AGENT };
+    const headers = { "User-Agent": USER_AGENT, ...(extra || {}) };
     try { if (page) headers.Referer = new URL(page).origin + "/"; } catch (e) { /* no referer */ }
     await folderFor(FS, path, directory);
     await deadline(FS.downloadFile({ url, path, directory, recursive: true, headers,
-      connectTimeout: FILE_TIMEOUT / 2, readTimeout: FILE_TIMEOUT }), FILE_TIMEOUT + 5000);
+      connectTimeout: FILE_TIMEOUT / 2, readTimeout: FILE_TIMEOUT }), wait || FILE_TIMEOUT + 5000);
     const { uri } = await FS.getUri({ path, directory });
     return cap.convertFileSrc ? cap.convertFileSrc(uri) : uri;
   }
@@ -718,7 +692,7 @@
   // the person picks, with a lasting permission so a clip can read from
   // it. `near` is a file whose folder the picker opens in. Resolves to
   // { saved, ref }: ref is null when the place can't be held on to (no
-  // such picker, or iOS), and saved false when it was put away.
+  // such picker), and saved false when it was put away.
   async function saveLinked(blob, name, mime, near) {
     const F = plugin("FileSave");
     if (F) {
@@ -729,7 +703,7 @@
     }
     if (!native && typeof window.showSaveFilePicker === "function") {
       let handle;
-      try { handle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: "PDF", accept: { [mime]: [".pdf"] } }] }); } catch (e) { return { saved: false, ref: null }; }
+      try { handle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: (name.split(".").pop() || "PDF").toUpperCase(), accept: { [mime]: ["." + (name.split(".").pop() || "pdf").toLowerCase()] } }] }); } catch (e) { return { saved: false, ref: null }; }
       const w = await handle.createWritable();
       await w.write(blob);
       await w.close();
@@ -760,7 +734,7 @@
     }
     return true;
   }
-  const shareFile = (uri, name) => share({ title: name, files: [uri], dialogTitle: "Save or send " + name });
+  const shareFile = (uri, name) => share({ title: name, files: [uri], dialogTitle: t("Save or send {name}", { name }) });
   const shareLink = (title, url) => share({ title, url, dialogTitle: "Share " + title });
   // Plain text to the share sheet (1.9.0), for Report a problem.
   async function shareText(title, text) {
@@ -803,17 +777,19 @@
   // file's uri so a dismissed installer can be reopened without downloading
   // again; null where there's no in-app installer (iOS, a browser).
   const APK_MIME = "application/vnd.android.package-archive";
-  const repo = () => (build && build.repo) || null;
+  const repo = () => (K.build && K.build.repo) || null;
   // `file` is the release's APK: Waypage.apk once Waypage is Waypage (0.36.0).
   // Since 1.23.0 it comes through Downloads' own fetch, which goes on
   // with the app put away and can pause and pick up where it stopped: a
   // pause rejects with code "PAUSED". Older builds use Filesystem.
   // A test build (1.48.0) comes from the pre-release `tag` instead,
   // and `version` is then its file's name part (test-<branch>-<sha>).
-  async function downloadUpdate(version, onProgress, file = "Waypage.apk", tag = "app-v" + version) {
+  // An unreleased build (2026-11-18) passes its own `url` (the site's
+  // unreleased/Waypage.apk), and `version` is unreleased-<sha>.
+  async function downloadUpdate(version, onProgress, file = "Waypage.apk", tag = "app-v" + version, url = null) {
     const FS = plugin("Filesystem");
     if (os !== "android" || !FS || !plugin("FileOpener") || !repo()) return null;
-    const url = "https://github.com/" + repo() + "/releases/download/" + tag + "/" + file;
+    url = url || "https://github.com/" + repo() + "/releases/download/" + tag + "/" + file;
     const path = file.replace(/\.apk$/, "") + "-" + version + ".apk";
     const D = plugin("Downloads");
     if (D && typeof D.fetch === "function") {
@@ -838,6 +814,72 @@
     }
     return (await FS.getUri({ path, directory: "CACHE" })).uri;
   }
+  // A file kept where the person picked (2026-11: a Kiwix pack, a book
+  // kept as a file): downloaded into the cache natively, resumable (the
+  // part already there is kept if it stops), then moved to "app" (the
+  // app's own files), "documents" (Documents/Waypage), "downloads" (the
+  // phone's Download folder) or "folder" (`tree`, a folder picked with
+  // files.pickFolder); a `name` of "Folder/file" puts it in that folder.
+  // Resolves to the file's lasting ref for files.blob
+  // and files.info; null in a browser, which can't keep one.
+  let keeping = Promise.resolve();
+  function keepFile(url, name, where, onProgress, tree) {
+    const run = keeping.then(() => keepOne(url, name, where, onProgress, tree));
+    keeping = run.catch(() => {});
+    return run;
+  }
+  async function keepOne(url, name, where, onProgress, tree) {
+    const FS = plugin("Filesystem");
+    if (!FS || !native) return null;
+    // "Folder/file.mp3" keeps a file in a folder of its own (an audiobook's parts).
+    const clean = (x) => String(x || "").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
+    const safe = String(name || "file").split("/").map(clean).filter(Boolean).slice(-2).join("/") || "file";
+    const temp = "keep-" + safe.replace(/[^\w.-]+/g, "_");
+    const D = plugin("Downloads");
+    let from = null;
+    if (D && typeof D.fetch === "function") {
+      const heard = await D.addListener("fetched", (p) => { if (onProgress && p && p.path === temp) onProgress(p.bytes, p.total); });
+      try { from = (await D.fetch({ url, path: temp })).uri; }
+      catch (e) { if (!(e && e.code === "UNIMPLEMENTED") && !/not implemented/i.test(String((e && e.message) || e))) throw e; }
+      finally { if (heard && heard.remove) heard.remove(); }
+    }
+    if (!from) {
+      const listener = await FS.addListener("progress", (p) => { if (onProgress && p) onProgress(p.bytes, p.contentLength); });
+      try { await FS.downloadFile({ url, path: temp, directory: "CACHE", progress: true, headers: { "User-Agent": USER_AGENT } }); }
+      finally { if (listener && listener.remove) listener.remove(); }
+      from = (await FS.getUri({ path: temp, directory: "CACHE" })).uri;
+    }
+    if (where === "folder" && tree) {
+      const F = plugin("Files");
+      await F.folderMoveIn({ tree, path: safe, from });
+      const got = await F.folderStat({ tree, path: safe });
+      if (!got || !got.uri) throw new Error("not in the folder");
+      return got.uri;
+    }
+    const to = where === "documents" ? { directory: "DOCUMENTS", dir: "Waypage/" }
+      : where === "downloads" ? (os === "android" ? { directory: "EXTERNAL_STORAGE", dir: "Download/" } : { directory: "DOCUMENTS", dir: "Downloads/" })
+        : { directory: "DATA", dir: "Files/" };
+    // A file of that name already there is kept: this one gets a number.
+    let path = to.dir + safe;
+    for (let n = 2; n < 50; n++) {
+      try { await FS.stat({ path, directory: to.directory }); } catch (e) { break; }
+      path = to.dir + safe.replace(/(\.[a-z0-9]+)?$/i, (ext) => " (" + n + ")" + ext);
+    }
+    await folderFor(FS, path, to.directory);
+    try { await FS.rename({ from: temp, directory: "CACHE", to: path, toDirectory: to.directory }); }
+    catch (e) {
+      await FS.copy({ from: temp, directory: "CACHE", to: path, toDirectory: to.directory });
+      await FS.deleteFile({ path: temp, directory: "CACHE" }).catch(() => {});
+    }
+    return (await FS.getUri({ path, directory: to.directory })).uri;
+  }
+  // A file keepFile kept in one of the app's places, deleted (a pack
+  // removed from the library). A picked folder's file is left alone.
+  async function dropKept(ref) {
+    const FS = plugin("Filesystem");
+    if (!FS || !/^file:/.test(String(ref || ""))) return false;
+    try { await FS.deleteFile({ path: ref }); return true; } catch (e) { return false; }
+  }
   function pauseUpdate() {
     const D = plugin("Downloads");
     return D && typeof D.pauseFetch === "function" ? D.pauseFetch().then(() => true, () => false) : Promise.resolve(false);
@@ -850,13 +892,13 @@
   async function clearOldUpdates(currentVersion, isNewer) {
     const FS = plugin("Filesystem");
     if (!FS) return;
-    const here = build && build.sha ? String(build.sha).slice(0, 7) : null;
+    const here = K.build && K.build.sha ? String(K.build.sha).slice(0, 7) : null;
     try {
       const { files } = await FS.readdir({ path: "", directory: "CACHE" });
       for (const f of files || []) {
         const name = typeof f === "string" ? f : f.name;
         const m = /^Waypage-(\d+\.\d+\.\d+)\.apk(\.part)?$/.exec(name || "");
-        const p = /^Waypage-(?:test|preview)-.*-([0-9a-f]{7})\.apk(\.part)?$/.exec(name || "");
+        const p = /^Waypage-(?:test|preview|unreleased)-(?:.*-)?([0-9a-f]{7})\.apk(\.part)?$/.exec(name || "");
         if ((m && !isNewer(m[1], currentVersion)) || (p && p[1] === here)) await FS.deleteFile({ path: name, directory: "CACHE" });
       }
     } catch (e) { /* nothing to tidy */ }
@@ -880,7 +922,7 @@
           const done = (fn, arg) => { if (handle) handle.remove(); fn(arg); };
           Promise.resolve(S.addListener("googleBarcodeScannerModuleInstallProgress", (ev) => {
             if (ev.state === 4) done(resolve);
-            else if (ev.state === 3 || ev.state === 5) done(reject, new Error("The scanner couldn't be installed."));
+            else if (ev.state === 3 || ev.state === 5) done(reject, new Error(t("The scanner couldn't be installed.")));
           })).then((h) => { handle = h; return S.installGoogleBarcodeScannerModule(); }).catch(reject);
         });
       }
@@ -909,9 +951,11 @@
     "application/x-mobipocket-ebook", "application/vnd.amazon.ebook", "application/x-mobi8-ebook", "application/x-fictionbook+xml",
     "application/x-fictionbook", "text/xml", "application/xml", "application/octet-stream",
     // Audiobooks (2026-11).
-    "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/x-m4b", "audio/m4b", "audio/aac", "audio/ogg", "audio/opus", "audio/flac", "audio/x-flac", "audio/wav", "audio/x-wav"];
-  const FILE_EXTS = [".epub", ".mobi", ".azw", ".azw3", ".prc", ".fb2", ".md", ".markdown", ".txt", ".html", ".htm", ".eml", ".pdf", ".pptx", ".cbz", ".csv", ".json", ".zip",
-    ".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".oga", ".opus", ".flac", ".wav"];
+    "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/x-m4b", "audio/m4b", "audio/aac", "audio/ogg", "audio/opus", "audio/flac", "audio/x-flac", "audio/wav", "audio/x-wav", "audio/x-m4p", "audio/vnd.audible.aax", "audio/audible",
+    // Kiwix packs (2026-11).
+    "application/x-zim"];
+  const FILE_EXTS = [".zim", ".epub", ".mobi", ".azw", ".azw3", ".prc", ".fb2", ".md", ".markdown", ".txt", ".html", ".htm", ".eml", ".pdf", ".pptx", ".cbz", ".csv", ".json", ".zip",
+    ".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".oga", ".opus", ".flac", ".wav", ".aa", ".aax", ".aaxc", ".m4p"];
   const PIECE = 4 << 20;
   const KEEP = 64 << 20;
 
@@ -967,7 +1011,7 @@
       let handle;
       try {
         [handle] = await window.showOpenFilePicker({ multiple: false,
-          types: [{ description: "Books, notes and comics", accept: { "*/*": FILE_EXTS } }] });
+          types: [{ description: t("Books, notes and comics"), accept: { "*/*": FILE_EXTS } }] });
       } catch (e) { return null; }
       return handle ? files.adopt(handle) : null;
     },
@@ -986,7 +1030,7 @@
       const F = plugin("Files");
       if (!F) return null;
       const got = await F.pickFolder(initial ? { initial } : {});
-      return got && got.uri ? { ref: got.uri, name: got.name || "Folder" } : null;
+      return got && got.uri ? { ref: got.uri, name: got.name || t("Folder") } : null;
     },
     // Every file in a picked folder and its folders: { ok, files: [{ ref,
     // path, name, size }] }, ok false when the folder can't be read.
@@ -997,6 +1041,18 @@
         const got = await F.folderScan({ tree });
         return { ok: !!got.ok, name: got.name || "", files: (got.files || []).map((f) => ({ ref: f.uri, path: f.path || f.name, name: f.name, size: f.size || 0 })) };
       } catch (e) { return { ok: false, files: [] }; }
+    },
+    // A file at `path` in a picked folder, as a ref for info, blob and
+    // linking (the Calibre extension); null when it isn't there. iOS's refs
+    // are the folder's plus the path, as scan makes them.
+    async child(tree, path) {
+      const F = plugin("Files");
+      if (!F) return null;
+      if (os === "ios") return tree + "/" + String(path).split("/").map(encodeURIComponent).join("/");
+      try {
+        const got = await F.folderStat({ tree, path });
+        return got && got.exists && got.uri ? got.uri : null;
+      } catch (e) { return null; }
     },
     // The folder a file sits in, opened in the phone's Files app (1.27.2,
     // Android). { opened, where }, where its path ("Download/Books").
@@ -1255,7 +1311,7 @@
     ready,
     named,
     get deviceName() { return deviceName; },
-    get build() { return build; },
+    get build() { return K.build; },
     plugin,
     // Whether this copy can fetch any page itself (the app) or is limited by
     // CORS (a browser).
@@ -1288,20 +1344,20 @@
       set: (level) => plugin("Brightness").set(level == null ? {} : { level }),
     },
     // App lock (1.38.0): the phone's fingerprint or face, native/share's
-    // AppLock plugin on Android (iOS later); the passcode
+    // AppLock plugin (Face ID or Touch ID on iOS); the passcode
     // itself is checked in app-lock.js.
     lock: {
       async biometric() {
-        const L = os === "android" && plugin("AppLock");
+        const L = plugin("AppLock");
         if (!L) return false;
         try { return !!(await L.available()).ok; } catch (e) { return false; }
       },
       async verify(title) {
-        const L = os === "android" && plugin("AppLock");
+        const L = plugin("AppLock");
         if (!L) return false;
         try { return !!(await L.verify({ title })).ok; } catch (e) { return false; }
       },
-      hideRecents(on) { const L = os === "android" && plugin("AppLock"); if (L) L.hideRecents({ on: !!on }).catch(() => {}); },
+      hideRecents(on) { const L = plugin("AppLock"); if (L) L.hideRecents({ on: !!on }).catch(() => {}); },
     },
     // Volume buttons turn pages (1.32.0), native/share's VolumeKeys
     // plugin on Android; `f` hears "up" or "down".
@@ -1332,7 +1388,9 @@
     },
     fetchText,
     fetchBytes,
+    dav,
     postForm,
+    request,
     signIn,
     translateText,
     translator,
@@ -1357,18 +1415,18 @@
     onBack,
     exitApp,
     download,
-    downloadUpdate,
+    downloadUpdate, keepFile, dropKept, pauseKeep: () => pauseUpdate(),
     pauseUpdate,
     openInstaller,
     clearOldUpdates,
     releasesUrl() { return repo() ? "https://github.com/" + repo() + "/releases/latest" : null; },
     releaseUrl(tag) { return repo() ? "https://github.com/" + repo() + "/releases/tag/" + tag : null; },
     // The branch this build came from, when it isn't a release (1.48.0).
-    get previewBranch() { return build && build.branch && build.branch !== "main" ? build.branch : null; },
+    get previewBranch() { return K.build && K.build.branch && K.build.branch !== "main" ? K.build.branch : null; },
     apkUrl(file = "Waypage.apk") { return repo() ? "https://github.com/" + repo() + "/releases/latest/download/" + file : null; },
     // The web copy the app was built from: inside the app this page is at
     // https://localhost, which another device can't open.
-    webUrl() { return (build && build.webUrl) || null; },
+    webUrl() { return (K.build && K.build.webUrl) || null; },
     files,
     audio,
     car,

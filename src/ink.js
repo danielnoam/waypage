@@ -215,12 +215,13 @@
     return c;
   }
   // Items shifted together so their box lies inside a page of height h (a
-  // box bigger than the page keeps its top left corner on it).
-  function clampInto(items, h) {
+  // box bigger than the page keeps its top left corner on it). Across, the
+  // page may reach into its margins: from `l` to `r` in its widths.
+  function clampInto(items, h, l = 0, r = 1) {
     const b = boxOf(items);
     if (!b) return [0, 0];
-    const fit = (lo, len, max) => (len >= max ? -lo : lo < 0 ? -lo : lo + len > max ? max - (lo + len) : 0);
-    const dx = fit(b[0], b[2], 1), dy = fit(b[1], b[3], h);
+    const fit = (a, len, lo, hi) => (len >= hi - lo || a < lo ? lo - a : a + len > hi ? hi - (a + len) : 0);
+    const dx = fit(b[0], b[2], Math.min(0, l), Math.max(1, r)), dy = fit(b[1], b[3], 0, h);
     if (!dx && !dy) return [0, 0];
     for (const s of items) {
       if (boxy(s)) { s.x = r5(s.x + dx); s.y = r5(s.y + dy); continue; }
@@ -231,33 +232,38 @@
   // Where an item drawn or dropped on page `origin` belongs: a copy on every
   // page its box reaches, or, when too little of it is on any page, on the
   // nearest one, moved inside. [{ n, s }]; the origin's own copy is `s`.
+  // A page takes in its margins (`l`, `r`: how far across it reaches, in its
+  // widths), so a line beside the text stays there.
   function placeOn(s, origin, pages) {
     const from = pages.find((p) => p.n === origin);
     const b = boxOf([s]);
     if (!from || !b) return [{ n: origin, s }];
     const k = from.rect.width;
     const cb = { l: from.rect.left + b[0] * k, t: from.rect.top + b[1] * k, r: from.rect.left + (b[0] + b[2]) * k, b: from.rect.top + (b[1] + b[3]) * k };
+    const across = (p) => [p.rect.left + Math.min(0, p.l || 0) * p.rect.width, p.rect.left + Math.max(1, p.r || 1) * p.rect.width];
     const hit = [];
     for (const p of pages) {
-      const ox = Math.min(cb.r, p.rect.left + p.rect.width) - Math.max(cb.l, p.rect.left);
+      const [pl, pr] = across(p);
+      const ox = Math.min(cb.r, pr) - Math.max(cb.l, pl);
       const oy = Math.min(cb.b, p.rect.top + p.rect.height) - Math.max(cb.t, p.rect.top);
-      if (ox > 0 && oy > 0) hit.push({ p, ox, oy });
+      if (ox > 0 && oy > 0) hit.push({ p, ox, oy, w: pr - pl });
     }
     let best = null;
     for (const h of hit) if (!best || h.ox * h.oy > best.ox * best.oy) best = h;
     const bw = cb.r - cb.l, bh = cb.b - cb.t;
-    if (!best || best.ox < Math.min(bw, best.p.rect.width) * 0.25 || best.oy < Math.min(bh, best.p.rect.height) * 0.25) {
+    if (!best || best.ox < Math.min(bw, best.w) * 0.25 || best.oy < Math.min(bh, best.p.rect.height) * 0.25) {
       let target = best && best.p;
       if (!target) {
         const cx = (cb.l + cb.r) / 2, cy = (cb.t + cb.b) / 2;
         let d = Infinity;
         for (const p of pages) {
-          const dx = Math.max(p.rect.left - cx, 0, cx - (p.rect.left + p.rect.width)), dy = Math.max(p.rect.top - cy, 0, cy - (p.rect.top + p.rect.height));
+          const [pl, pr] = across(p);
+          const dx = Math.max(pl - cx, 0, cx - pr), dy = Math.max(p.rect.top - cy, 0, cy - (p.rect.top + p.rect.height));
           if (Math.hypot(dx, dy) < d) { d = Math.hypot(dx, dy); target = p; }
         }
       }
       const c = target.n === origin ? s : convertItem(s, from.rect, target.rect);
-      clampInto([c], target.h);
+      clampInto([c], target.h, target.l, target.r);
       return [{ n: target.n, s: c }];
     }
     if (hit.length === 1 && hit[0].p.n === origin) return [{ n: origin, s }];
@@ -427,6 +433,7 @@
     bind(svg);
     paint(n);
     place(svg);
+    padSoon();
     return svg;
   }
   function drop(n) {
@@ -448,6 +455,74 @@
     const h = b.height / (b.width || 1);
     svg.setAttribute("viewBox", "0 0 1 " + r5(h));
     rescue(svg, h);
+    padSoon();
+  }
+  // The margins (2026-11): a layer reaches past its text or page, over to
+  // the edge of the screen or halfway to the page beside it, so a note can
+  // be written beside the words. Strokes stay in the layer's widths (x below
+  // 0 or past 1), so they keep beside their paragraph; a margin narrower
+  // than the one they were drawn in shows what fits. `pads` holds how far
+  // each layer reaches, in its widths: { l, r }.
+  const pads = new WeakMap();
+  let padRaf = 0;
+  function padSoon() {
+    const W = frameDoc() && frameDoc().defaultView;
+    if (padRaf || !W) return;
+    padRaf = W.requestAnimationFrame(() => { padRaf = 0; fitPads(); });
+  }
+  function fitPads() {
+    const D = frameDoc(), W = D && D.defaultView;
+    if (!W) return;
+    const vw = W.innerWidth || 1;
+    const all = [];
+    for (const svg of layers.values()) {
+      if (svg.style.display === "none") continue;
+      const r = svg.getBoundingClientRect();
+      if (r.width) all.push({ svg, r });
+    }
+    for (const a of all) {
+      const { r } = a;
+      // The screen the layer is on (Pages turns a screen at a time), and no
+      // further than halfway to a layer beside it.
+      const base = Math.floor((r.left + r.width / 2) / vw) * vw;
+      let lo = base, hi = base + vw;
+      for (const b of all) {
+        if (b === a || b.r.top >= r.bottom - 1 || b.r.bottom <= r.top + 1) continue;
+        if (b.r.right <= r.left + 1) lo = Math.max(lo, (b.r.right + r.left) / 2);
+        else if (b.r.left >= r.right - 1) hi = Math.min(hi, (r.right + b.r.left) / 2);
+      }
+      lo = Math.min(lo, r.left); hi = Math.max(hi, r.right);
+      const pad = { l: r5((lo - r.left) / r.width), r: r5((hi - r.left) / r.width) };
+      pads.set(a.svg, pad);
+      // In the layer's own px, which a zoom's transform may scale.
+      const k = (parseFloat(a.svg.style.width) || r.width) / r.width;
+      a.svg.style.clipPath = "inset(0px " + -Math.round((hi - r.right) * k) + "px 0px " + -Math.round((r.left - lo) * k) + "px)";
+      padRect(a.svg);
+    }
+  }
+  // The see-through box a stroke can start on in the margins.
+  function padRect(svg) {
+    const pad = pads.get(svg) || { l: 0, r: 1 };
+    let rect = svg.querySelector(":scope > rect.pad");
+    if (!rect) { rect = frameDoc().createElementNS(NS, "rect"); rect.setAttribute("class", "pad"); svg.prepend(rect); }
+    const vb = (svg.getAttribute("viewBox") || "0 0 1 1").split(" ").map(Number);
+    rect.setAttribute("x", String(pad.l));
+    rect.setAttribute("y", "0");
+    rect.setAttribute("width", String(r5(pad.r - pad.l)));
+    rect.setAttribute("height", String(vb[3] || 1));
+    // What is mostly past a margin narrower than the one it was written in
+    // isn't shown at all, rather than as a sliver at the screen's edge.
+    const by = new Map(strokes(Number(svg.dataset.page)).map((x) => [x.id, x]));
+    for (const node of svg.querySelectorAll(":scope > [data-id]")) {
+      const it = by.get(node.dataset.id), b = it && boxOf([it]);
+      const seen = b ? Math.min(b[0] + b[2], pad.r) - Math.max(b[0], pad.l) : 1;
+      node.style.display = b && b[2] > 0 && seen < b[2] / 2 ? "none" : "";
+    }
+  }
+  // A layer's rect on screen with its margins: { r, left, right }.
+  function reach(svg) {
+    const r = svg.getBoundingClientRect(), pad = pads.get(svg) || { l: 0, r: 1 };
+    return { r, left: r.left + pad.l * r.width, right: r.left + pad.r * r.width };
   }
   // A drag used to leave things off the page's edge, where they couldn't be
   // seen: anything wholly outside its page comes back inside.
@@ -456,9 +531,11 @@
     const n = Number(svg.dataset.page), img = C.reader.pageImg(n);
     if (!clip || !img || !img.complete || !img.naturalWidth || !(h > 0.1)) return;
     let moved = false;
+    // Across, only what is past any margin: a margin is narrower on a
+    // narrower screen, and what was written there stays where it was.
     for (const s of strokes(n)) {
       const b = boxOf([s]);
-      if (b && (b[0] >= 1.05 || b[0] + b[2] <= -0.05 || b[1] >= h + 0.05 || b[1] + b[3] <= -0.05)) { clampInto([s], h); moved = true; }
+      if (b && (b[0] >= 2 || b[0] + b[2] <= -1 || b[1] >= h + 0.05 || b[1] + b[3] <= -0.05)) { clampInto([s], h, -1, 2); moved = true; }
     }
     if (!moved) return;
     paint(n);
@@ -502,6 +579,7 @@
     const svg = layers.get(n);
     if (!svg) return;
     svg.replaceChildren(...strokes(n).map((s) => el(n, s)));
+    padRect(svg);
     selDraw(n);
   }
   // By block, the layers move with the text: placed again when the frame
@@ -630,11 +708,7 @@
     const D = frameDoc();
     if (!D) return;
     // The page under the point.
-    let under = null;
-    for (const svg of layers.values()) {
-      const r = svg.getBoundingClientRect();
-      if (px >= r.left && px <= r.right && py >= r.top && py <= r.bottom) { under = { svg, r }; break; }
-    }
+    const under = layerAt(px, py);
     if (phase === "down") {
       if (cur) cur = null;
       cur = { id: -1, kind: "phone", n: 0, svg: null, erase: true, gone: [], at: performance.now() };
@@ -854,17 +928,21 @@
   // The pages' shapes on screen, for placing things between them.
   function pagesOf() {
     return [...layers].map(([n, svg]) => {
-      const r = svg.getBoundingClientRect();
-      return { n, rect: { left: r.left, top: r.top, width: r.width, height: r.height }, h: r.height / (r.width || 1) };
+      const r = svg.getBoundingClientRect(), pad = pads.get(svg) || { l: 0, r: 1 };
+      return { n, rect: { left: r.left, top: r.top, width: r.width, height: r.height }, h: r.height / (r.width || 1), l: pad.l, r: pad.r };
     });
   }
-  // The page under a point, and its rect.
+  // The page under a point, and its rect (without its margins, which count
+  // when the point is on no page itself).
   function layerAt(cx, cy) {
+    let side = null;
     for (const [n, svg] of layers) {
-      const r = svg.getBoundingClientRect();
-      if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) return { n, svg, r };
+      const a = reach(svg), r = a.r;
+      if (cy < r.top || cy > r.bottom) continue;
+      if (cx >= r.left && cx <= r.right) return { n, svg, r };
+      if (!side && cx >= a.left && cx <= a.right) side = { n, svg, r };
     }
-    return null;
+    return side;
   }
   // The lists of some pages as they are (to undo to), and put back.
   function snap(ns) {
@@ -1210,26 +1288,26 @@
   // The colour under a point on a page: a stroke's own, else the page's
   // picture there. "#rrggbb", or null off the pages.
   function colorAt(clientX, clientY) {
-    for (const [n, svg] of layers) {
-      const r = svg.getBoundingClientRect();
-      if (clientX < r.left || clientX > r.right || clientY < r.top || clientY > r.bottom) continue;
-      const x = (clientX - r.left) / (r.width || 1), y = (clientY - r.top) / (r.width || 1);
-      const top = [...strokes(n)].reverse().find((s) => !boxy(s) && hits(s, x, y, 0.004));
-      if (top) { const v = rgbOf(top); return v ? rgbHex(...v) : null; }
-      const img = C.reader.pageImg(n);
-      if (!img || !img.naturalWidth) return null;
-      try {
-        const b = img.getBoundingClientRect();
-        const cv = document.createElement("canvas");
-        cv.width = cv.height = 1;
-        const g = cv.getContext("2d", { willReadFrequently: true });
-        g.drawImage(img, Math.floor(((clientX - b.left) / (b.width || 1)) * img.naturalWidth), Math.floor(((clientY - b.top) / (b.height || 1)) * img.naturalHeight), 1, 1, 0, 0, 1, 1);
-        const d = g.getImageData(0, 0, 1, 1).data;
-        return rgbHex(d[0], d[1], d[2]);
-      } catch (err) { return null; }
-    }
-    return null;
+    const L = layerAt(clientX, clientY);
+    if (!L) return null;
+    const { n, r } = L;
+    const x = (clientX - r.left) / (r.width || 1), y = (clientY - r.top) / (r.width || 1);
+    const top = [...strokes(n)].reverse().find((s) => !boxy(s) && hits(s, x, y, 0.004));
+    if (top) { const v = rgbOf(top); return v ? rgbHex(...v) : null; }
+    if (x < 0 || x > 1) return null;
+    const img = C.reader.pageImg(n);
+    if (!img || !img.naturalWidth) return null;
+    try {
+      const b = img.getBoundingClientRect();
+      const cv = document.createElement("canvas");
+      cv.width = cv.height = 1;
+      const g = cv.getContext("2d", { willReadFrequently: true });
+      g.drawImage(img, Math.floor(((clientX - b.left) / (b.width || 1)) * img.naturalWidth), Math.floor(((clientY - b.top) / (b.height || 1)) * img.naturalHeight), 1, 1, 0, 0, 1, 1);
+      const d = g.getImageData(0, 0, 1, 1).data;
+      return rgbHex(d[0], d[1], d[2]);
+    } catch (err) { return null; }
   }
+
   // The next tap on a page is read for its colour and handed to `f`
   // (null when it fell off the pages); pick(null) stops waiting.
   function pick(f) { picker = f || null; }

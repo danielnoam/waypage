@@ -103,6 +103,23 @@ and the page shows above it.
 
 ## 4. Motion (Now, 1.11.0, `src/motion.js`)
 
+**Which move (2026-11).** Pick by what the thing is, never by what a
+neighbour does. The moves are in `src/keel/motion.js`.
+
+| What it is | In | Out |
+|---|---|---|
+| Menu, popover, drop-down, the reader's Aa and ⋯ panels on a big screen | `popFrom` its button | `popOut` (never `popInto`) |
+| Dialog: Downloads, Sync, Save with options, Settings and centred reader sheets on a big screen, the colour picker | `dialogIn` toward its button | `dialogOut` |
+| Sheet on a phone | `rise` | `sink`, or the drag |
+| Bar or toast: Find, select bars, the drawing bar, toasts, the Narrate bar | `edgeIn` from its nearest edge | `edgeOut` to the same edge |
+| Screen with no card behind it (Settings, a pane on a phone) | `push` | `pop` |
+| Clip or collection opened from its card | `grow` from the card | `shrink` back to it |
+| Sidebar | `slideIn` | `slideOut` |
+| Row added to or taken from a list | `appear`, or `flip` | `vanish`, or `ghostOut` |
+
+`appear` and `vanish` (scale from a point) are for list rows and the
+picture viewer's fallback only, never for a menu, bar or dialog.
+
 - Springs, not durations, sampled into CSS `linear()`. Two tiers:
   - Touch (phone and tablet): stiffness 400, damping 32 for sheets,
     screens and cards; stiffness 600, damping 40 for small controls.
@@ -128,7 +145,10 @@ and the page shows above it.
   right; on touch the screen under them drifts 25% left. Downloads and
   dialogs fade in as they settle from 96%, leaning toward their
   button, and fade out a little quicker (1.49.0, `dialogIn` and
-  `dialogOut`, the one planned fade). On a big screen (700 px and up)
+  `dialogOut`, the one planned fade). So do the other dialogs: a
+  link, note or look-up in the middle of a big screen (it rose from the
+  bottom edge into the middle), and the drawing colour picker, toward
+  the colour it was held on. On a big screen (700 px and up)
   Settings is such a window, opened from the gear (1.49.0): there,
   nothing crosses the window to land on the far side; a screen comes
   from its button or from the side it ends up on. Menus and popovers grow from their
@@ -136,22 +156,32 @@ and the page shows above it.
 - Collections › and Clips ›: the cards and tiles that stay move to their
   new places (FLIP); the sections that go leave past the top or bottom
   edge, new ones come in from there. Adding or removing a few clips
-  slides the list, and the card grows in or shrinks away.
+  slides the list, and the card grows in or shrinks away. A
+  collection's own list does the same, and a reorder slides (since
+  2026-11; it jumped).
 - Touch follows the finger. Sheets drag down to close (past a third or a
   flick), the sidebar drags left with the library drifting beside it,
   and in Pages the page follows the finger and springs to the next or
   back.
 - Toasts and bars come in from their nearest edge and leave the same
-  way. The brightness slider slides past the left edge. Checkmarks grow.
+  way: Find over the reader's bar from the top, the drawing bar from the
+  bottom (since 2026-11; Find cut in and out, the drawing bar popped out
+  of a point). The brightness slider slides past the left edge.
+  Checkmarks grow.
 - The picture viewer grows from the picture and shrinks back into it.
 - Settings, Appearance, Animations off (1.12.0): nothing moves or
-  eases, not even the reduced-motion fades; spinners still turn. Since
+  eases, not even the reduced-motion fades; spinners still turn. Under
+  reduced motion a spinner breathes instead of turning, at its own pace
+  (the blanket 1 ms rule made it flicker every frame until 2026-11). Since
   1.48.3 that includes what a press does: the switch knob's stretch,
   the ? turning and the drop-down's face pop are off too (they ran with
   no easing and looked like a two-step jump).
 - A drop-down menu leaves by only the last quarter of its arrival, run
   backwards and fading, gone before it reaches its button (1.48.3,
-  `popOut`); shrinking the whole way back read as the menu crawling into
+  `popOut`). Since 2026-11 every menu and popover leaves that way: the
+  ⋯ menus, a clip's menu, the reader's panels under Aa and ⋯ on a big
+  screen, the drawing bar's menus and the highlight colours (they
+  used `popInto` or grew out of a point); shrinking the whole way back read as the menu crawling into
   the button. The fade is the exception to "nothing fades": a partial
   shrink ending in a cut looked like a glitch.
 - Only `transform` and `opacity` move on screens; small menus use a
@@ -290,7 +320,13 @@ and the page shows above it.
   (PDF, HTML, EPUB, Markdown, Page source, each with a one-line note, the
   last pick remembered), and two 48 px buttons side by side: "Save to
   device" (primary) and "Send" (quiet). PDF has one button, "Print or
-  save as PDF". The web copy has one, "Download".
+  save as PDF". The web copy has one, "Download". While the file is
+  made, the pressed button turns a 12 px spinner (accent ink on the
+  primary) beside what it's on ("Making the book…" or "Making the comic…", "Chapter 12 of 48",
+  "Packing the book…"), over a 3 px bar inset along its foot that sweeps
+  until it can count, then fills (chapters are most of a book, packing
+  the rest). The kind and the other button wait, disabled; Back doesn't.
+  Reduced motion: the spinner and bar breathe.
 - **Settings (Now):** a menu of three groups: Appearance and Saving (the
   current choice on the right), Storage and backup (the total), Updates
   and About (the version). Each row ends with a chevron and pushes its

@@ -132,6 +132,9 @@ html[data-co-pdf-dark] .co-printed img[src] { filter: url(#co-pdf-dark); }
 .co-comic { margin: 0 -20px; touch-action: pan-x pan-y; }
 /* A long clip's chapters lay out as they're reached (reader.js, chunkUp). */
 .co-lazy { content-visibility: auto; }
+.co-lazy.co-far { content-visibility: hidden; }
+/* A long clip while it parses (reader.js srcdoc), until chunkUp. */
+.co-parsing .co-body > * { content-visibility: auto; contain-intrinsic-block-size: auto 600px; }
 .co-comic img { display: block; width: 100%; height: auto; margin: 0; border-radius: 0; background: var(--preview); cursor: default; }
 /* A comic page still in its file, from before 1.29.0 wrote sizes: a page's room until it's read. */
 .co-comic img[data-in]:not([width]) { aspect-ratio: 2 / 3; }
@@ -173,8 +176,12 @@ mark.co-mark.co-pm.co-noted { box-shadow: inset 0 -2px var(--muted); }
    that show on the dark page. */
 .co-ink { position: absolute; z-index: 2; overflow: hidden; pointer-events: none; -webkit-user-select: none; user-select: none; }
 .co-ink[data-on="1"] { pointer-events: auto; cursor: crosshair; }
+/* Margins (2026-11): past its sides a layer is cut by its clip-path, which ink.js sets to its margins. */
+.co-ink[style*="clip-path"] { overflow: visible; }
+.co-ink .pad { fill: transparent; pointer-events: none; }
+.co-ink[data-on="1"] .pad { pointer-events: all; }
 /* A stroke being drawn or an item being dragged shows over the next page too. */
-.co-ink[data-lift] { overflow: visible; z-index: 3; }
+.co-ink[data-lift] { overflow: visible; clip-path: none !important; z-index: 3; }
 /* While a pen is near (ink.js near()), no pan under it: it draws. */
 html[data-co-pen-near] .co-ink[data-on="1"], html[data-co-inking][data-co-pen-near], html[data-co-inking][data-co-pen-near] body { touch-action: none; }
 .co-ink path.pen { stroke: none; }

@@ -43,9 +43,11 @@ Each section below shows the computer (left) and the phone (right).
 - Filter by unread, finished or a tag; sort by saved, read, length or site.
 - Search titles, tags and the full text of every clip.
 - Favourites, tags, and a star on a clip's picture.
+- Tags as a row of chips over the library, and Settings › Library › Tags to rename, merge or delete them; a site's own tags offered on each clip.
 - Pick several clips to tag, move, mark read, export or delete together; hold or right-click for a clip's menu.
-- Edit clips: find and remove or replace words across many clips.
+- Find and replace: find and remove or replace words across many clips and files.
 - Import from Pocket, Instapaper, Omnivore, Raindrop and Wallabag.
+- Import a Kindle's highlights and notes (My Clippings.txt) onto the same books in your library.
 
 ## Sidebar
 
@@ -87,7 +89,7 @@ Each section below shows the computer (left) and the phone (right).
 <p><img src="docs/shots/saving-desktop.jpg" width="74%" alt="Save with options on a computer"> <img src="docs/shots/saving-phone.jpg" width="21%" alt="Save with options on a phone"></p>
 
 - Paste, drop or share a link; Ctrl V saves on a computer.
-- Save with options: several links at once, a file, article or comic, a collection and tags.
+- Save with options: several links at once, a file, article or comic, a collection and tags; a story page's own tags (Royal Road, AO3, Scribble Hub) with one switch.
 - Wikipedia through its REST API, with its licence line; Readability for everything else.
 - Discussions whole: Reddit, Hacker News, Lobsters, Stack Overflow and the other Stack Exchange sites, any Discourse forum, Lemmy, Substack (comments too), LessWrong and the EA Forum, Bluesky and Mastodon threads, and GitHub issues and pull requests, with who said what and replies indented. A GitHub code file as code, a repo as its README; an arXiv paper whole, from its web version.
 - Pictures as small previews, full size (capped at 1600 px WebP) or links only, per clip or in Settings; or load pictures only when tapped.
@@ -191,7 +193,9 @@ Each section below shows the computer (left) and the phone (right).
 - Browse feeds, newsletters and Royal Road stories to follow, by kind (Sites, Feeds, Newsletters), and add one with a tap; swipe to move between the chips.
 - A feed goes to Feeds, a story saves as a collection that gets its new chapters, and a newsletter (by email) copies your Newsletters address and opens its sign-up page.
 - On the phone, Sites browses Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON, Tapas, SpaceBattles and Sufficient Velocity as a grid by list and genre, page after page, plus hand-picked web serials.
-- Books: Project Gutenberg and Standard Ebooks by list and subject, and Wikisource's texts; a book's EPUB downloads into the Library. These work in the browser too.
+- Books: Project Gutenberg and Standard Ebooks by list and subject, and Wikisource's texts. A book's + asks how to add it: as an EPUB file kept where you pick (inside Waypage, Downloads, Documents or a folder), or as a collection with a clip for each chapter. These work in the browser too.
+- Audiobooks: LibriVox's free recordings by most listened, newest or genre. On Android one downloads into the Library as an audiobook, with its Project Gutenberg book to read along with.
+- Kiwix packs: whole sites in one file to read with no connection (Wikipedia, Wiktionary, Stack Exchange and more), by topic and language with their sizes. A pack downloads where you pick, waits for Wi-Fi if it's big, and opens in the reader: links between articles stay in the pack, Back goes back through them, Find searches its titles, and Save this article makes a clip. A .zim from anywhere opens with Add a file.
 - The list is checked every week, so a feed that dies gets fixed or dropped.
 - The search at the top searches what's shown: the lists as you type, a story site when you press search.
 
@@ -211,6 +215,10 @@ Features you turn on in Settings › Extensions, above About. Their code ships w
 - **Anki** adds an Anki place to the sidebar, above Stats. Select up to six words in a clip and tap the Anki button: the word is the front, you write the back (or Fill it), the sentence it came from comes along with a way back to the clip.
 - Study with Again, Hard, Good and Easy, each showing its wait, scheduled by FSRS; Undo, Edit, Bury and Suspend; keys 1 to 4, Space and Z. Browse and edit cards, and set each deck's new cards a day, reviews a day, steps and retention.
 - **Languages** (Settings › Extensions › Anki): download a language pack, German → English to begin with (4 MB, words from Wiktionary). Fill writes a card's back from it and finds the headword from the form you picked (Häusern gives Haus). A pack is a dictionary on the device, so Look up uses it too.
+- **Calibre** adds your Calibre library folder to the sidebar, with no server: pick the folder once (synced to the phone with Drive, Syncthing or the like) and its books show as covers, found by title, author, series or tag. **Read it** opens the book from the folder, nothing copied; **Copy into your Library** brings it in to sync and back up. Either way its series becomes a collection in order and its Calibre tags become tags. On a computer it works in Chrome and Edge.
+- **Audiobookshelf** adds your own Audiobookshelf server to the sidebar: what you're listening to, then every audiobook as covers, with its search. **Play** streams the book in Waypage's own audiobook player (chapters, speed, sleep timer, read-along) and sends where you are back to the server, so its app and Waypage agree. Sign in once per device; the password isn't kept, and sync takes the server to your other devices without the sign-in.
+- **Catalogs** adds a Catalogs place to the sidebar for book catalogs (OPDS) you add: Calibre, Calibre-Web, COPS, Kavita, Komga and any library that shares one. Open its folders, search it, and + downloads a book's EPUB, PDF or CBZ into the Library. Sync takes the list to your other devices, but a password stays on the device it was typed on. Home servers over plain http work in the app; in a browser, only catalogs that allow it.
+- **WebDAV** adds a folder on your server to the sidebar: Nextcloud, ownCloud, a NAS or Koofr, with no book software needed. Walk its folders, find a book by name, and add it to the Library to read offline. A picture beside a book with the same name is its cover. Sync takes the server list to your other devices, but a password stays on the device it was typed on. In a browser, only servers that allow it (Nextcloud doesn't); use the app.
 - **Export** a deck, or all of them, as a text file Anki imports (its HTML, deck and a guid, so importing again updates instead of copying). **Import** a deck from Anki (.apkg, exported with "Support older Anki versions" ticked): its decks, cards and review history come in, as text; pictures and sounds don't.
 - On Android, **Send to AnkiDroid** on the card sheet opens the share sheet; AnkiDroid takes it as a new note.
 - Decks, cards and reviews sync through GitHub sync with their own switch; each device's reviews are kept apart and replayed together, so what you review on one phone is done on the other.
@@ -233,6 +241,7 @@ Features you turn on in Settings › Extensions, above About. Their code ships w
 
 - Settings in groups: Appearance, Reading, Library, App lock, Saving, GitHub sync, Google Drive, Storage; a search box at the top finds any setting. On a computer or tablet it opens as a window from the gear at the top right.
 - Every setting is a name and one short line; the longer explanation is behind a ? on its heading. Options are drop-downs, themes a grid of swatches.
+- English and Hebrew (עברית), right to left, in Settings › Appearance › Language; System follows the phone.
 - About has the version, the changelog, and Credits: what Waypage is built with.
 - App lock: passcode, fingerprint or face on Android, erase when forgotten.
 - Home screen widgets on Android and iOS: Keep reading, Feeds, Favourites, Collection, Highlight; app icon shortcuts.

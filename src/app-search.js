@@ -54,7 +54,7 @@ function readTexts() {
       }
       texts.set(p.id, { text, folded: fold(text) });
       done++;
-      if (todo.length > 10 && done % 5 === 0) searchNote("Searching the text of your clips · " + done + " of " + todo.length);
+      if (todo.length > 10 && done % 5 === 0) searchNote(t("Searching the text of your clips · {done} of {total}", { done, total: todo.length }));
     }
   })().finally(() => { reading = null; });
   return reading;
@@ -117,10 +117,10 @@ function postSearchBox() {
   const place = state.place;
   let box = postBoxes[place];
   if (!box) {
-    const label = place === "feeds" ? "Search your feeds" : "Search your newsletters";
+    const label = place === "feeds" ? t("Search your feeds") : t("Search your newsletters");
     const input = el("input", { type: "search", placeholder: label, "aria-label": label, autocomplete: "off", autocapitalize: "off",
       spellcheck: "false", enterkeyhint: "search", dir: "auto" });
-    const clear = el("button", { class: "icon-btn search-clear", type: "button", "aria-label": "Clear search" });
+    const clear = el("button", { class: "icon-btn search-clear", type: "button", "aria-label": t("Clear search") });
     clear.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>';
     input.addEventListener("input", () => { postQuery = input.value; renderPosts(); });
     input.addEventListener("keydown", (e) => {
@@ -169,7 +169,7 @@ function shown(p) {
   return true;
 }
 
-const FILTER_NAMES = { unread: "Unread", finished: "Finished", favourites: "Favourites", highlights: "Highlighted", notes: "Notes" };
+const FILTER_NAMES = { unread: t("Unread"), finished: t("Finished"), favourites: t("Favourites"), highlights: t("Highlighted"), notes: t("Notes") };
 const filterName = () => FILTER_NAMES[state.filter] || state.filter;
 
 function setFilter(f) {
@@ -188,23 +188,43 @@ function renderTools() {
   if (libTools.dataset.sig === sig) return;
   libTools.dataset.sig = sig;
   libTools.hidden = !state.pages.length;
-  if (libTools.hidden) return;
+  if (libTools.hidden) { $("libTags").hidden = true; return; }
   fill(libTools, dropdown({
-    label: "Show", cls: "start show-wrap" + (state.filter === "all" ? "" : " on"),
+    label: t("Show"), cls: "start show-wrap" + (state.filter === "all" ? "" : " on"),
     icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>',
-    options: [{ value: "all", label: "All clips" },
+    options: [{ value: "all", label: t("All clips") },
       // Once there is a note (2.0.0), all of them in one list, right under All clips.
-      ...(state.pages.some((p) => p.note) || state.filter === "notes" ? [{ value: "notes", label: "All notes" }] : []),
-      { value: "unread", label: "Unread" }, { value: "finished", label: "Finished" }, { value: "favourites", label: "Favourites" },
-      ...(state.pages.some((p) => p.marks && p.marks.length) || state.filter === "highlights" ? [{ value: "highlights", label: "Highlighted" }] : []),
-      ...(tags.length ? [{ head: "Tags" }, ...tags.map((t) => ({ value: "#" + t, label: "#" + t }))] : [])],
+      ...(state.pages.some((p) => p.note) || state.filter === "notes" ? [{ value: "notes", label: t("All notes") }] : []),
+      { value: "unread", label: t("Unread") }, { value: "finished", label: t("Finished") }, { value: "favourites", label: t("Favourites") },
+      ...(state.pages.some((p) => p.marks && p.marks.length) || state.filter === "highlights" ? [{ value: "highlights", label: t("Highlighted") }] : []),
+      ...(tags.length ? [{ head: t("Tags") }, ...tags.map((t) => ({ value: "#" + t, label: "#" + t }))] : [])],
     value: state.filter,
     onpick: setFilter,
   }), el("div", { class: "lib-tools-end" }, sortControl()));
+  renderTagRow(tags);
+}
+
+// The tags as a row of chips under Show and Order (2026-11, Daniel's ask:
+// tags were hard to find behind Show). A tap shows a tag's clips and
+// another goes back to all; Edit tags opens Settings › Library › Tags.
+// Phone width only: a big screen has them in the sidebar.
+function renderTagRow(tags) {
+  const row = $("libTags");
+  row.hidden = !tags.length;
+  if (row.hidden) return;
+  const at = state.filter.startsWith("#") ? tags.find((x) => sameTag(x, state.filter.slice(1))) : null;
+  const chip = (x) => {
+    const on = x === at;
+    return el("button", { class: "chip" + (on ? " on" : ""), type: "button", "aria-pressed": String(on), dir: "auto",
+      onclick: () => setFilter(on ? "all" : "#" + x) }, x, on ? el("span", { class: "chip-x", "aria-hidden": "true" }, "×") : null);
+  };
+  fill(row, ...(at ? [at] : []).concat(tags.filter((x) => x !== at)).map(chip),
+    el("button", { class: "chip chip-quiet", type: "button", onclick: () => openSettings(false, "tags") }, t("Edit tags")));
+  if (at) row.scrollLeft = 0;
 }
 
 
-const SORTS = [["saved", "Newest saved"], ["read", "Last read"], ["length", "Longest"], ["site", "Site"]];
+const SORTS = [["saved", t("Newest saved")], ["read", t("Last read")], ["length", t("Longest")], ["site", t("Site")]];
 const BY = {
   saved: (a, b) => (b.savedAt || 0) - (a.savedAt || 0),
   read: (a, b) => (b.readAt || 0) - (a.readAt || 0) || (b.savedAt || 0) - (a.savedAt || 0),
@@ -215,7 +235,7 @@ const sorted = (list) => [...list].sort(BY[state.sort] || BY.saved);
 
 function sortControl() {
   return dropdown({
-    label: "Order", cls: "end sort-wrap",
+    label: t("Order"), cls: "end sort-wrap",
     icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg>',
     options: SORTS.map(([value, label]) => ({ value, label })),
     value: BY[state.sort] ? state.sort : "saved",
@@ -227,15 +247,16 @@ function sortControl() {
 function libViewSheet() {
   const note = el("p", { class: "choice-note" }, (LAYOUTS.find((l) => l.value === layout()) || LAYOUTS[0]).note);
   return el("div", { class: "page-controls lib-view" },
-    el("h2", { class: "menu-title" }, "View options"),
+    el("h2", { class: "menu-title" }, t("View options")),
     el("div", { class: "group" }, el("div", { class: "rc-list" },
-      seg("libViewLayout", "Layout", LAYOUTS.map((l) => ({ value: l.value, label: l.label })), layout(), (v) => {
+      seg("libViewLayout", t("Layout"), LAYOUTS.map((l) => ({ value: l.value, label: l.label })), layout(), (v) => {
         store(LAYOUT_KEY, v);
         note.textContent = LAYOUTS.find((l) => l.value === v).note;
         renderLibrary();
       }), note)),
     el("div", { class: "group" },
-      switchRow("Continue reading", "Your last clip at the top of the library", load(CONTINUE_KEY, true), (on) => { store(CONTINUE_KEY, on); renderLibrary(); })));
+      switchRow(t("Continue reading"), t("Your last clip at the top of the library"), load(CONTINUE_KEY, true), (on) => { store(CONTINUE_KEY, on); renderLibrary(); }),
+      allFolders().some(isSeriesFolder) ? switchRow(t("Series apart"), t("Their own section, under Collections"), load(SERIES_APART_KEY, true), (on) => { store(SERIES_APART_KEY, on); renderLibrary(); if (pinned.matches) renderSide(); }) : null));
 }
 
 // Our own dropdown (0.26.0), in place of the system's <select>: a

@@ -60,7 +60,7 @@
         async base() {
           if (!P.ios) return location.origin + "/_waypage_folder_/";
           const got = await F().serve({ tree });
-          if (!got || !got.path) throw new Error("Can't reach the folder");
+          if (!got || !got.path) throw new Error(t("Can't reach the folder"));
           return window.Capacitor.convertFileSrc("file://" + encodeURI(got.path)).replace(/\/?$/, "/");
         },
       };
@@ -109,14 +109,14 @@
     problem = null;
     if (place.kind !== "app") {
       try { await cur.stat("library.json"); }
-      catch (e) { problem = "Waypage can't reach " + placeName(place) + ". Pick it again in Settings, under Storage."; }
+      catch (e) { problem = t("Waypage can't reach {place}. Pick it again in Settings, under Storage.", { place: placeName(place) }); }
     }
   })();
 
   function placeName(place) {
     if (place.kind === "documents") return "Documents/Waypage";
-    if (place.kind === "folder") return place.name || "the folder you picked";
-    return "the app's own storage";
+    if (place.kind === "folder") return place.name || t("the folder you picked");
+    return t("the app's own storage");
   }
 
   // While the library moves, everything else waits for it.
@@ -758,8 +758,8 @@
     return out;
   }
 
-  // On Android the files go across in Java, at disk speed, instead of each
-  // one through the bridge as base64 (1.19.0).
+  // In the app the files go across natively, at disk speed, instead of
+  // each one through the bridge as base64 (1.19.0 Android, iOS later).
   async function endOf(b) {
     if (b.place.kind === "folder") return { tree: b.place.tree };
     const { uri } = await FS().getUri({ path: b.pre, directory: b.directory });
@@ -795,12 +795,12 @@
       try { there = JSON.parse(await to.read("library.json")); } catch (e) { there = []; }
       const files = [...await walkAll(from, "pages"), ...await walkAll(from, "fonts")];
       if (onProgress) onProgress(0, files.length);
-      if (P.android && files.length) await copyNative(from, to, files, onProgress);
+      if ((P.android || P.ios) && files.length) await copyNative(from, to, files, onProgress);
       else {
         let done = 0;
         for (const path of files) {
           const r = await fetch(fromBase + path.split("/").map(encodeURIComponent).join("/"));
-          if (!r.ok) throw new Error("Couldn't read " + path);
+          if (!r.ok) throw new Error(t("Couldn't read {path}", { path: path }));
           await to.write(path, toBase64(new Uint8Array(await r.arrayBuffer())));
           if (onProgress) onProgress(++done, files.length);
         }
@@ -808,7 +808,7 @@
       const joined = [...mine, ...there.filter((p) => !mine.some((m) => m.id === p.id))];
       await to.write("library.json", JSON.stringify(joined), true);
       // Read back before anything is let go.
-      if (JSON.parse(await to.read("library.json")).length !== joined.length) throw new Error("The library didn't arrive whole.");
+      if (JSON.parse(await to.read("library.json")).length !== joined.length) throw new Error(t("The library didn't arrive whole."));
       const old = from.place;
       localStorage.setItem(PLACE_KEY, JSON.stringify(next));
       await use(next);

@@ -23,6 +23,9 @@
   const COVERS_KEY = "waypage.syncCovers"; // picked covers this device knows are on GitHub
   const STATS_KEY = "waypage.syncStats"; // { device: sha of its stats file as last read, _sent: what this device last wrote }
   const ANKI_KEY = "waypage.syncAnki"; // { decks, cards: sha as last seen; log: { device: sha }; sent: hash of what GitHub has of decks, cards, log }
+  const ABS_KEY = "waypage.syncAbs"; // { sha: audiobookshelf.json as last seen, sent: hash of what GitHub has }
+  const CAT_KEY = "waypage.syncCatalogs"; // { sha: catalogs.json as last seen, sent: hash of what GitHub has }
+  const DAV_KEY = "waypage.syncWebdav"; // the same for webdav.json
   const ACT_KEY = "waypage.syncActivity"; // { sig } of the reading activity this device last wrote
   const ACT_PATH = "activity/reading.json";
   const DAY = 24 * 3600 * 1000;
@@ -44,14 +47,14 @@
   // (backup.cleanMeta); anything else on a page stays on its device.
   const SYNCED = new Set(["id", "url", "title", "site", "byline", "licence", "savedAt", "minutes", "lang", "dir", "mode", "images",
     "at", "finished", "readAt", "readOn", "placeAt", "spot", "comic", "manga", "volume", "turn", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "file", "marks", "ink", "inkAt", "cut", "archived", "editedAt", "note", "published",
-    "noShare", "folderNoShare", "movedAt"]);
+    "noShare", "folderNoShare", "folderTagNew", "folderSeries", "folderIn", "movedAt", "live"]);
   // Where the reader is, which goes with whichever device moved it last:
   // placeAt (1.30.2), or readAt on entries from before it. Opening a clip
   // stamps readAt alone, so a device that opened one at an older place
   // no longer sends that place everywhere.
   const PLACE = ["at", "finished", "placeAt", "spot"];
   const placeTime = (p) => p.placeAt || p.readAt || 0;
-  const FOLDER = ["folder", "folderAt", "folderFav", "folderFavAt", "movedAt"];
+  const FOLDER = ["folder", "folderAt", "folderFav", "folderFavAt", "folderSeries", "folderIn", "movedAt"];
   // Which copy of a page's text this is: when it was saved, or edited
   // since in Edit clips (1.22.0), so an edit goes up like a save again.
   const ver = (p) => Math.max(p.savedAt || 0, p.editedAt || 0);
@@ -153,7 +156,7 @@
 
   // Highlights (1.7.0), by id like tags: what either added stays, what
   // either removed goes, and one changed on both keeps the later change.
-  function mergeMarks(b, l, r) {
+  function mergeById(b, l, r) {
     const B = new Set((b || []).map((m) => m.id)), L = new Map((l || []).map((m) => [m.id, m])), R = new Map((r || []).map((m) => [m.id, m]));
     const out = [];
     for (const [id, m] of L) {
@@ -161,7 +164,10 @@
       else if (!B.has(id)) out.push(m);
     }
     for (const [id, m] of R) if (!L.has(id) && !B.has(id)) out.push(m);
-    return out.sort((x, y) => (x.page ? 1 : 0) - (y.page ? 1 : 0) || (x.page ? x.page - y.page : x.block - y.block) || x.start - y.start);
+    return out;
+  }
+  function mergeMarks(b, l, r) {
+    return mergeById(b, l, r).sort((x, y) => (x.page ? 1 : 0) - (y.page ? 1 : 0) || (x.page ? x.page - y.page : x.block - y.block) || x.start - y.start);
   }
 
   // Drawings (2026-11), stroke by stroke, like highlights: what either
@@ -187,8 +193,8 @@
   // An audiobook's listening (2026-11).
   const fixKey = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
   // Both sides changed it: the place from the one listened last, fixes
-  // from both (the newer of two for the same words), the rest from the
-  // side that changed last.
+  // from both (the newer of two for the same words), bookmarks from both,
+  // the rest from the side that changed last.
   function mergeListen(b, l, r) {
     if (!l || !r) return l || r;
     const newer = (r.tAt || 0) > (l.tAt || 0) ? r : l;
@@ -206,6 +212,9 @@
       for (const k of base) if (!has.has(k)) fixes.delete(k);
     }
     if (fixes.size) out.fixes = [...fixes.values()]; else delete out.fixes;
+    // Bookmarks like highlights: what either added stays, what either removed goes.
+    const marks = mergeById(b && b.bookmarks, l.bookmarks, r.bookmarks).sort((x, y) => x.t - y.t);
+    if (marks.length) out.bookmarks = marks; else delete out.bookmarks;
     return out;
   }
 
@@ -260,7 +269,7 @@
   // stats add up as one. Drawings go too: `ink` by block, and `pages`,
   // a printed PDF's drawn pages, which live beside the clip (store.readInk)
   // and so come in on the copies outsidePages makes.
-  const OUTSIDE = ["at", "finished", "readAt", "readOn", "placeAt", "spot", "turn", "tags", "folder", "folderAt", "fav", "favAt", "folderFav", "folderFavAt", "marks", "listen", "ink", "inkAt", "noShare", "folderNoShare", "movedAt"];
+  const OUTSIDE = ["at", "finished", "readAt", "readOn", "placeAt", "spot", "turn", "tags", "folder", "folderAt", "fav", "favAt", "folderFav", "folderFavAt", "marks", "listen", "ink", "inkAt", "noShare", "folderNoShare", "folderTagNew", "folderSeries", "folderIn", "movedAt"];
   const FP = /^[0-9a-f]{32}$/;
   const OUT_MAX = 2000;
   // This device's outside files as entries: one a fingerprint, the copy
@@ -351,6 +360,7 @@
       if (!win.folder && lose.folder) {
         win.folder = lose.folder; win.folderAt = lose.folderAt;
         if (lose.folderFav) { win.folderFav = true; win.folderFavAt = lose.folderFavAt; }
+        if (lose.folderSeries) { win.folderSeries = true; if (lose.folderIn) win.folderIn = lose.folderIn; }
       }
       kept[i] = win;
       deleted[lose.id] = now;
@@ -453,32 +463,35 @@
 
   // ---- GitHub ----
 
-  const b64encode = (s) => btoa(unescape(encodeURIComponent(s)));
-  const b64decode = (s) => decodeURIComponent(escape(atob(s.replace(/\s/g, ""))));
-  const headers = (extra) => Object.assign({ Authorization: "Bearer " + cfg.token, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" }, extra || {});
+  // The requests themselves come from keel (src/keel/github.js), shared
+  // with LifeLog; what's in the repo and how it merges stay here.
+  const gh = () => window.Keel.github.client(() => cfg);
   const contents = (path) => API + "/repos/" + cfg.owner + "/" + cfg.repo + "/contents/" + path;
 
   class SyncError extends Error {}
   // Paused part way (0.30.4): what was done so far stays, the rest waits.
   class Paused extends Error {}
   const halt = () => { if (cfg && cfg.paused) throw new Paused(); };
+  // Waypage's words for what went wrong; the status stays on the error.
+  function word(e) {
+    if (!e || !e.kind || e instanceof SyncError) return e;
+    const w = new SyncError(e.kind === "offline" ? t("You're offline. Sync tries again when you're back online.")
+      : e.status === 401 ? t("GitHub didn't accept the token. Make a new one and connect again.")
+      : e.kind === "ratelimit" ? t("GitHub asked Waypage to slow down. Sync tries again in a few minutes.")
+      : e.status === 403 || e.status === 404 ? t("The token can't reach the {repo} repo. Give it Contents: Read and write on that repo.", { repo: REPO })
+      : e.kind === "server" ? t("GitHub isn't answering right now. Sync tries again later.")
+      : t("GitHub said: {what}", { what: e.detail || e.status }));
+    w.status = e.status;
+    return w;
+  }
+  const worded = (p) => p.catch((e) => { throw word(e); });
   async function fail(r) {
-    let msg = "";
-    try { msg = (await r.json()).message || ""; } catch (e) { /* none */ }
-    const e = new SyncError(r.status === 401 ? "GitHub didn't accept the token. Make a new one and connect again."
-      : (r.status === 403 || r.status === 429) && /rate limit/i.test(msg) ? "GitHub asked Waypage to slow down. Sync tries again in a few minutes."
-      : r.status === 403 || r.status === 404 ? "The token can't reach the " + REPO + " repo. Give it Contents: Read and write on that repo."
-      : r.status >= 500 ? "GitHub isn't answering right now. Sync tries again later."
-      : "GitHub said: " + (msg || r.status));
-    e.status = r.status;
-    return e;
+    let text = "";
+    try { text = await r.text(); } catch (e) { /* none */ }
+    return word(window.Keel.github.httpError(r.status, text, r));
   }
-  async function call(url, opts) {
-    let r;
-    try { r = await fetch(url, Object.assign({ cache: "no-store" }, opts)); }
-    catch (e) { throw new SyncError("You're offline. Sync tries again when you're back online."); }
-    return r;
-  }
+  // A Response from anywhere in the API (`opts.body` an object).
+  const call = (url, opts) => worded(gh().request(url, opts));
 
   // A look at the library on GitHub without a sync (1.3.0): for the
   // furthest-read check when a clip opens, and for the poll while the app
@@ -488,26 +501,15 @@
   let peeked = null;
   async function peek() {
     if (!cfg || cfg.paused) return null;
-    const h = headers({ Accept: "application/vnd.github.object+json" });
-    if (peeked && peeked.etag) h["If-None-Match"] = peeked.etag;
-    const r = await call(contents("library.json") + "?ref=" + encodeURIComponent(cfg.branch), { headers: h });
-    if (r.status === 304 && peeked) return { ...peeked, changed: false };
-    if (r.status === 404) { peeked = null; return null; }
-    if (!r.ok) throw await fail(r);
-    const j = await r.json();
-    let b64 = j.content;
-    if (!b64 && j.size) {
-      const br = await call(API + "/repos/" + cfg.owner + "/" + cfg.repo + "/git/blobs/" + j.sha, { headers: headers() });
-      if (!br.ok) throw await fail(br);
-      b64 = (await br.json()).content;
-    }
-    if (!b64) return null;
-    const text = b64decode(b64);
+    const f = await worded(gh().getFile("library.json", { etag: peeked && peeked.etag }));
+    if (f && f.notModified && peeked) return { ...peeked, changed: false };
+    if (!f || f.notModified) { peeked = null; return null; }
+    if (!f.text) return null;
     let data;
-    try { data = JSON.parse(text); } catch (e) { return null; }
+    try { data = JSON.parse(f.text); } catch (e) { return null; }
     const pages = data && Array.isArray(data.pages) ? data.pages : [];
-    const changed = !peeked || peeked.sha !== j.sha;
-    peeked = { etag: r.headers.get("ETag") || "", sha: j.sha, pages, text };
+    const changed = !peeked || peeked.sha !== f.sha;
+    peeked = { etag: f.etag, sha: f.sha, pages, text: f.text };
     return { ...peeked, changed };
   }
   // Whether the library on GitHub differs from what this device last
@@ -520,55 +522,25 @@
     return got.text !== baseText;
   }
 
-  // { data, sha } or null. Files past 1 MB come as a blob, as in LifeLog.
+  // { data, sha } or null. Files past 1 MB come as a blob (keel).
   async function readJson(path, ref) {
-    const r = await call(contents(path) + "?ref=" + encodeURIComponent(ref || cfg.branch), { headers: headers({ Accept: "application/vnd.github.object+json" }) });
-    if (r.status === 404) return null;
-    if (!r.ok) throw await fail(r);
-    const j = await r.json();
-    let b64 = j.content;
-    if (!b64 && j.size) {
-      const br = await call(API + "/repos/" + cfg.owner + "/" + cfg.repo + "/git/blobs/" + j.sha, { headers: headers() });
-      if (!br.ok) throw await fail(br);
-      b64 = (await br.json()).content;
-    }
-    if (!b64) return null;
-    return { data: JSON.parse(b64decode(b64)), sha: j.sha };
+    const f = await worded(gh().getFile(path, { ref }));
+    if (!f || !f.text) return null;
+    return { data: JSON.parse(f.text), sha: f.sha };
   }
   async function readBytes(path, ref) {
-    const r = await call(contents(path) + "?ref=" + encodeURIComponent(ref || cfg.branch), { headers: headers({ Accept: "application/vnd.github.raw" }) });
-    if (!r.ok) throw await fail(r);
-    return new Uint8Array(await r.arrayBuffer());
+    const b = await worded(gh().getRaw(path, { ref, as: "bytes" }));
+    if (!b) throw word(window.Keel.github.httpError(404, ""));
+    return b;
   }
-  async function readText(path, ref) {
-    const r = await call(contents(path) + "?ref=" + encodeURIComponent(ref || cfg.branch), { headers: headers({ Accept: "application/vnd.github.raw" }) });
-    if (r.status === 404) return null;
-    if (!r.ok) throw await fail(r);
-    return r.text();
-  }
-  async function write(path, text, sha, message, bytes) {
-    const body = { message, content: bytes ? C.store.toBase64(bytes) : b64encode(text), branch: cfg.branch };
-    if (sha) body.sha = sha;
-    const r = await call(contents(path), { method: "PUT", headers: headers({ "Content-Type": "application/json" }), body: JSON.stringify(body) });
-    if (!r.ok) throw await fail(r);
-    return (await r.json()).content.sha;
-  }
+  const readText = (path, ref) => worded(gh().getRaw(path, { ref }));
+  const write = (path, text, sha, message, bytes) => worded(gh().putFile(path, { text, bytes, sha, message }));
   // Writes a file whether or not this device knew its sha: one already
-  // there under another is asked for and written again.
+  // there under another is written over.
   async function put(path, text, sha, message, bytes) {
-    try { return await write(path, text, sha, message, bytes); }
-    catch (e) {
-      if (e.status !== 409 && e.status !== 422) throw e;
-      const now = await call(contents(path) + "?ref=" + encodeURIComponent(cfg.branch), { headers: headers({ Accept: "application/vnd.github.object+json" }) });
-      if (!now.ok) throw await fail(now);
-      return write(path, text, (await now.json()).sha, message, bytes);
-    }
+    return (await worded(gh().saveFile(path, { text, bytes, sha, message, tries: 1 }))).sha;
   }
-  async function remove(path, sha) {
-    const r = await call(contents(path), { method: "DELETE", headers: headers({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ message: "Remove " + path, sha, branch: cfg.branch }) });
-    if (!r.ok && r.status !== 404 && r.status !== 409 && r.status !== 422) throw await fail(r);
-  }
+  const remove = (path, sha) => worded(gh().removeFile(path, sha));
 
   // ---- Sending in batches (1.15.0) ----
   // A first sync sent each clip with its own Contents PUT, each its own
@@ -579,40 +551,12 @@
   const BATCH = 50;
   const BATCH_BYTES = 8 * 1024 * 1024;
   const utf8 = (t) => new TextEncoder().encode(t);
-  // The sha GitHub gives a file's contents, worked out here, since a tree
-  // made with inline text doesn't say it for files in a folder.
-  async function blobSha(bytes) {
-    const head = utf8("blob " + bytes.length + "\0");
-    const all = new Uint8Array(head.length + bytes.length);
-    all.set(head);
-    all.set(bytes, head.length);
-    const h = new Uint8Array(await crypto.subtle.digest("SHA-1", all));
-    return [...h].map((b) => b.toString(16).padStart(2, "0")).join("");
-  }
+  const blobSha = (bytes) => window.Keel.github.blobSha(bytes);
   async function git(path, opts) {
-    const r = await call(API + "/repos/" + cfg.owner + "/" + cfg.repo + "/git/" + path,
-      Object.assign({ headers: headers({ "Content-Type": "application/json" }) }, opts));
-    if (!r.ok) throw await fail(r);
-    return r.json();
+    return worded(gh().json((opts && opts.method) || "GET", "git/" + path, opts && opts.body ? JSON.parse(opts.body) : undefined));
   }
   // files: [{ path, text } | { path, sha }], sha null removing it.
-  async function commitFiles(files, message) {
-    const tree = files.map((f) => (f.text != null ? { path: f.path, mode: "100644", type: "blob", content: f.text }
-      : { path: f.path, mode: "100644", type: "blob", sha: f.sha }));
-    for (let tries = 0; ; tries++) {
-      halt();
-      const head = (await git("ref/heads/" + encodeURIComponent(cfg.branch))).object.sha;
-      const base = (await git("commits/" + head)).tree.sha;
-      const made = await git("trees", { method: "POST", body: JSON.stringify({ base_tree: base, tree }) });
-      const commit = await git("commits", { method: "POST", body: JSON.stringify({ message, tree: made.sha, parents: [head] }) });
-      try {
-        await git("refs/heads/" + encodeURIComponent(cfg.branch), { method: "PATCH", body: JSON.stringify({ sha: commit.sha, force: false }) });
-        return;
-      } catch (e) {
-        if (e.status !== 422 || tries >= 3) throw e;
-      }
-    }
-  }
+  const commitFiles = (files, message) => worded(gh().commitFiles(files, message, { beforeTry: halt }));
   // Sends `list` ([{ p, html, packs, was }]) a batch at a time; `sent(p,
   // file)` is told of each page once its batch is on GitHub.
   async function sendBatches(list, sent, onProgress, total, from) {
@@ -666,7 +610,7 @@
   const KEY_URL = "https://github.com/settings/personal-access-tokens/new?name=Waypage+sync" +
     "&description=Keeps+Waypage%27s+library+in+step+through+a+private+repo+called+" + REPO +
     "&expires_in=none&contents=write";
-  const PUBLIC_REPO = "Your " + REPO + " repo is public, so anyone could read your library. Sync is stopped until you make it private on GitHub, in the repo's Settings.";
+  const PUBLIC_REPO = t("Your {repo} repo is public, so anyone could read your library. Sync is stopped until you make it private on GitHub, in the repo's Settings.", { repo: REPO });
   // Another device joins from a link to the web copy with the token after
   // the # (which a browser never sends to the server), as LifeLog's setup
   // link does; the app takes the same link from a QR code or pasted.
@@ -680,11 +624,9 @@
     const was = cfg;
     cfg = { token: String(tokenIn(token) || token || "").trim(), repo: REPO, branch: "main" };
     try {
-      if (!cfg.token) throw new SyncError("Paste the token first.");
-      const me = await call(API + "/user", { headers: headers() });
-      if (!me.ok) throw await fail(me);
-      cfg.owner = (await me.json()).login;
-      let repo = await call(API + "/repos/" + cfg.owner + "/" + REPO, { headers: headers() });
+      if (!cfg.token) throw new SyncError(t("Paste the token first."));
+      cfg.owner = await worded(gh().me());
+      let repo = await call(API + "/repos/" + cfg.owner + "/" + REPO);
       if (repo.status === 404) repo = await adoptOld();
       if (repo.ok) {
         const j = await repo.json();
@@ -693,10 +635,10 @@
         cfg.repo = j.name || cfg.repo;
       }
       else if (repo.status === 404) {
-        const made = await call(API + "/user/repos", { method: "POST", headers: headers({ "Content-Type": "application/json" }),
-          body: JSON.stringify({ name: REPO, private: true, auto_init: true, description: "Waypage's library" }) });
-        if (!made.ok) throw new SyncError("Waypage can't find your " + REPO + " repo. Make it in step 2, then make the token with only that repo picked.");
-        cfg.branch = (await made.json()).default_branch || "main";
+        let made;
+        try { made = await gh().createRepo(REPO, "Waypage's library"); }
+        catch (e) { throw new SyncError(t("Waypage can't find your {REPO} repo. Make it in step 2, then make the token with only that repo picked.", { REPO: REPO })); }
+        cfg.branch = made.default_branch || "main";
       } else throw await fail(repo);
       if (was && was.links) cfg.links = true;
       cfg.scoped = true;
@@ -718,6 +660,9 @@
     keep(SENT_KEY, null);
     keep(STATS_KEY, null);
     keep(ACT_KEY, null);
+    keep(CAT_KEY, null);
+    keep(DAV_KEY, null);
+    keep(ABS_KEY, null);
   }
 
   // ---- A page's text going up and coming down ----
@@ -761,10 +706,7 @@
     }
   }
   async function shaOf(path) {
-    const r = await call(contents(path) + "?ref=" + encodeURIComponent(cfg.branch), { headers: headers({ Accept: "application/vnd.github.object+json" }) });
-    if (r.status === 404) return null;
-    if (!r.ok) throw await fail(r);
-    return (await r.json()).sha;
+    return worded(gh().shaOf(path));
   }
   async function noteFilesOut(p) {
     const note = await C.store.readNote(p.id);
@@ -1035,7 +977,7 @@
   async function history(page = 1) {
     if (!cfg) return { list: [], more: false };
     const r = await call(API + "/repos/" + cfg.owner + "/" + cfg.repo + "/commits?path=library.json&sha=" + encodeURIComponent(cfg.branch)
-      + "&per_page=" + HISTORY_PAGE + "&page=" + page, { headers: headers() });
+      + "&per_page=" + HISTORY_PAGE + "&page=" + page);
     if (!r.ok) throw await fail(r);
     const raw = await r.json();
     const list = parseHistory(raw), known = load(PRINTS_KEY, {});
@@ -1068,7 +1010,7 @@
   // The library as it was in that commit, down to what Waypage writes.
   async function target(sha) {
     const got = await readJson("library.json", sha);
-    if (!got || !got.data || !Array.isArray(got.data.pages)) throw new SyncError("That version of the library can't be read.");
+    if (!got || !got.data || !Array.isArray(got.data.pages)) throw new SyncError(t("That version of the library can't be read."));
     return clean(got.data);
   }
   // What putting the library back as T was takes, done here as if by hand
@@ -1172,10 +1114,9 @@
   // token may (one made before 1.29.1 has Administration: write),
   // used as it is when not. Resolves to the repo's response, or the 404.
   async function adoptOld() {
-    const old = await call(API + "/repos/" + cfg.owner + "/" + OLD_REPO, { headers: headers() });
+    const old = await call(API + "/repos/" + cfg.owner + "/" + OLD_REPO);
     if (!old.ok) return old;
-    const moved = await call(API + "/repos/" + cfg.owner + "/" + OLD_REPO, { method: "PATCH",
-      headers: headers({ "Content-Type": "application/json" }), body: JSON.stringify({ name: REPO, description: "Waypage's library" }) });
+    const moved = await call(API + "/repos/" + cfg.owner + "/" + OLD_REPO, { method: "PATCH", body: { name: REPO, description: "Waypage's library" } });
     if (moved.ok) cfg.repo = REPO;
     else cfg.repo = OLD_REPO;
     return moved.ok ? moved : old;
@@ -1186,7 +1127,7 @@
   // and nothing goes up.
   async function settle() {
     if (!cfg || (cfg.repo === REPO && cfg.looked > Date.now() - DAY)) return false;
-    const r = await call(API + "/repos/" + cfg.owner + "/" + cfg.repo, { headers: headers() });
+    const r = await call(API + "/repos/" + cfg.owner + "/" + cfg.repo);
     if (!r.ok) return false;
     const j = await r.json();
     if (j.name && j.name !== cfg.repo) cfg.repo = j.name;
@@ -1206,7 +1147,7 @@
   function space() {
     if (!cfg || asking || (cfg.sizeAt && Date.now() - cfg.sizeAt < 10 * 60 * 1000)) return asking || Promise.resolve(false);
     asking = (async () => {
-      const r = await call(API + "/repos/" + cfg.owner + "/" + cfg.repo, { headers: headers() });
+      const r = await call(API + "/repos/" + cfg.owner + "/" + cfg.repo);
       if (!r.ok) return false;
       const was = cfg.size;
       took(await r.json());
@@ -1230,7 +1171,7 @@
         return res;
       } catch (e) {
         if (e instanceof Paused) return null;
-        last = { at: last.at, error: e instanceof SyncError ? e.message : "Sync stopped: " + (e && e.message ? e.message : e) };
+        last = { at: last.at, error: e instanceof SyncError ? e.message : t("Sync stopped: {why}", { why: e && e.message ? e.message : e }) };
         throw e;
       } finally { running = null; progress = null; putBack = ""; }
     })();
@@ -1323,7 +1264,7 @@
     let merged, remote;
     for (let tries = 0; ; tries++) {
       remote = await readJson("library.json");
-      if (remote && (!remote.data || !Array.isArray(remote.data.pages))) throw new SyncError("The library.json on GitHub isn't Waypage's. Move it away and sync again.");
+      if (remote && (!remote.data || !Array.isArray(remote.data.pages))) throw new SyncError(t("The library.json on GitHub isn't Waypage's. Move it away and sync again."));
       await breathe();
       // What GitHub would hold of each page, so the two compare like for
       // like; then the merge, off the main thread where it can be.
@@ -1486,6 +1427,9 @@
     const stats = async () => {
       if (what.stats) try { await syncStats(); } catch (e) { if (e instanceof Paused) throw e; }
       if (what.anki) try { await syncAnki(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
+      try { await syncCatalogs(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
+      try { await syncWebdav(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
+      try { await syncAbs(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
       try { await syncActivity(getPages()); } catch (e) { if (e instanceof Paused) throw e; }
     };
     // Feeds the same way as clips: one changed here while this ran keeps
@@ -1665,7 +1609,7 @@
   async function syncStats() {
     if (!C.stats) return;
     const dev = C.stats.device;
-    const r = await call(contents("stats") + "?ref=" + encodeURIComponent(cfg.branch), { headers: headers() });
+    const r = await call(contents("stats") + "?ref=" + encodeURIComponent(cfg.branch));
     if (!r.ok && r.status !== 404) throw await fail(r);
     const list = r.ok ? await r.json() : [];
     const known = load(STATS_KEY, {}) || {};
@@ -1708,7 +1652,7 @@
     known.log = known.log || {};
     known.sent = known.sent || {};
     const list = async (path) => {
-      const r = await call(contents(path) + "?ref=" + encodeURIComponent(cfg.branch), { headers: headers() });
+      const r = await call(contents(path) + "?ref=" + encodeURIComponent(cfg.branch));
       if (r.status === 404) return [];
       if (!r.ok) throw await fail(r);
       const l = await r.json();
@@ -1769,6 +1713,63 @@
     }
   }
 
+  // Catalogs (2026-11, an extension): catalogs.json, the list without
+  // passwords (src/opds.js shared), merged with what's here and sent back
+  // only when it changed. Only while the extension is on.
+  async function syncCatalogs() {
+    if (!C.ext || !C.ext.on("catalogs")) return;
+    await C.ext.load("catalogs");
+    const known = load(CAT_KEY, {}) || {};
+    for (let tries = 0; ; tries++) {
+      halt();
+      const r = await readJson("catalogs.json").catch((e) => { if (e instanceof Paused || !(e instanceof SyntaxError)) throw e; return null; });
+      if (r && r.sha !== known.sha) { C.opds.mergeIn(r.data); known.sha = r.sha; }
+      const out = JSON.stringify(C.opds.shared()), h = hashOf(out);
+      // Nothing to say, or GitHub says it already.
+      if (r ? hashOf(JSON.stringify(r.data)) === h : !C.opds.list().length) { known.sent = h; keep(CAT_KEY, known); return; }
+      halt();
+      try { known.sha = await write("catalogs.json", out, r && r.sha, "Catalogs"); known.sent = h; keep(CAT_KEY, known); return; }
+      catch (e) { if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e; }
+    }
+  }
+
+  // WebDAV (2026-11, an extension): webdav.json, the servers without
+  // passwords (src/webdav.js shared), the same way as catalogs.json.
+  async function syncWebdav() {
+    if (!C.ext || !C.ext.on("webdav")) return;
+    await C.ext.load("webdav");
+    const known = load(DAV_KEY, {}) || {};
+    for (let tries = 0; ; tries++) {
+      halt();
+      const r = await readJson("webdav.json").catch((e) => { if (e instanceof Paused || !(e instanceof SyntaxError)) throw e; return null; });
+      if (r && r.sha !== known.sha) { C.webdav.mergeIn(r.data); known.sha = r.sha; }
+      const out = JSON.stringify(C.webdav.shared()), h = hashOf(out);
+      if (r ? hashOf(JSON.stringify(r.data)) === h : !C.webdav.list().length) { known.sent = h; keep(DAV_KEY, known); return; }
+      halt();
+      try { known.sha = await write("webdav.json", out, r && r.sha, "WebDAV servers"); known.sent = h; keep(DAV_KEY, known); return; }
+      catch (e) { if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e; }
+    }
+  }
+
+  // Audiobookshelf (2026-11, an extension): audiobookshelf.json, the
+  // servers without their tokens (src/abs.js shared), the same way as
+  // catalogs. Where you are in a book goes to the server itself, not here.
+  async function syncAbs() {
+    if (!C.ext || !C.ext.on("audiobookshelf")) return;
+    await C.ext.load("audiobookshelf");
+    const known = load(ABS_KEY, {}) || {};
+    for (let tries = 0; ; tries++) {
+      halt();
+      const r = await readJson("audiobookshelf.json").catch((e) => { if (e instanceof Paused || !(e instanceof SyntaxError)) throw e; return null; });
+      if (r && r.sha !== known.sha) { C.abs.mergeIn(r.data); known.sha = r.sha; }
+      const out = JSON.stringify(C.abs.shared()), h = hashOf(out);
+      if (r ? hashOf(JSON.stringify(r.data)) === h : !C.abs.list().length) { known.sent = h; keep(ABS_KEY, known); return; }
+      halt();
+      try { known.sha = await write("audiobookshelf.json", out, r && r.sha, "Audiobookshelf"); known.sent = h; keep(ABS_KEY, known); return; }
+      catch (e) { if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e; }
+    }
+  }
+
   // Share reading activity (2026-11): activity/reading.json, written
   // only while the switch is on, and only when what it says changed.
   // Turned off, the file is removed once, and nothing else is touched.
@@ -1777,7 +1778,7 @@
     if (!C.sync.what.activity) {
       if (!cfg.activityGone) return;
       halt();
-      const r = await call(contents(ACT_PATH) + "?ref=" + encodeURIComponent(cfg.branch), { headers: headers({ Accept: "application/vnd.github.object+json" }) });
+      const r = await call(contents(ACT_PATH) + "?ref=" + encodeURIComponent(cfg.branch), { accept: "application/vnd.github.object+json" });
       if (r.ok) await remove(ACT_PATH, (await r.json()).sha);
       else if (r.status !== 404) throw await fail(r);
       delete cfg.activityGone;

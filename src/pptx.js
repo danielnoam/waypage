@@ -138,7 +138,7 @@
   }
   async function openDeck(file) {
     let entries;
-    try { entries = await B().zipEntries(file); } catch (e) { throw new C.files.FileError("This isn't a PowerPoint file Waypage can read."); }
+    try { entries = await B().zipEntries(file); } catch (e) { throw new C.files.FileError(t("This isn't a PowerPoint file Waypage can read.")); }
     const deck = { file, entries, docs: new Map(), bmp: new Map(), skipped: 0 };
     deck.bytes = async (p) => {
       const e = entries.get(p);
@@ -821,13 +821,13 @@
   async function load(file) {
     const deck = await openDeck(file);
     const pres = await deck.xml("ppt/presentation.xml");
-    if (!pres) throw new C.files.FileError("This PowerPoint file has no slides Waypage can read.");
+    if (!pres) throw new C.files.FileError(t("This PowerPoint file has no slides Waypage can read."));
     const rels = await deck.rels("ppt/presentation.xml");
     const root = pres.documentElement;
     const sz = kid(root, "sldSz");
     const d = { w: num(attr(sz, "cx"), 9144000) / PT, h: num(attr(sz, "cy"), 6858000) / PT, defaultStyle: kid(root, "defaultTextStyle") };
     const slides = kids(kid(root, "sldIdLst"), "sldId").map((s) => rels.get(s.getAttributeNS(R_NS, "id"))).filter((r) => r && r.path);
-    if (!slides.length) throw new C.files.FileError("This PowerPoint file has no slides in it.");
+    if (!slides.length) throw new C.files.FileError(t("This PowerPoint file has no slides in it."));
     deck.hidden = new Set();
     // A slide marked hidden isn't part of the show.
     const keep = [];
@@ -835,7 +835,7 @@
       const doc = await deck.xml(r.path);
       if (doc && attr(doc.documentElement, "show") !== "0") keep.push(r.path);
     }
-    if (!keep.length) throw new C.files.FileError("Every slide in this PowerPoint file is hidden.");
+    if (!keep.length) throw new C.files.FileError(t("Every slide in this PowerPoint file is hidden."));
     return { deck, d, slides: keep, total: slides.length };
   }
 

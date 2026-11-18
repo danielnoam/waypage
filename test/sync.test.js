@@ -1,9 +1,11 @@
 // Sync's merge (0.30.0): `node test/sync.test.js`. Two devices changing
 // the library at once, against the last library both saw.
 const assert = require("assert");
+require("./lang.js");
 
 global.window = { Waypage: { platform: {} } };
 global.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+require("../src/keel/github.js");
 require("../src/sync.js");
 const S = window.Waypage.sync;
 
@@ -273,6 +275,21 @@ test("a collection's picked cover goes to the other device, and only a name Wayp
   assert.strictEqual(keep("../library.json"), undefined);
   assert.strictEqual(keep("https://example.com/x.jpg"), undefined);
   assert.strictEqual(keep("uabcd1234.jpg", ""), undefined);
+});
+
+test("a series and the collection it sits in go to the other device, and a backup keeps them (2026-11)", () => {
+  const base = lib([page("a1b2", { folder: "Saga" })]);
+  const r = S.merge(base, lib([page("a1b2", { folder: "Saga", folderSeries: true, folderIn: "Shelf" })]), base, NOW);
+  assert.strictEqual(r.pages[0].folderSeries, true);
+  assert.strictEqual(r.pages[0].folderIn, "Shelf");
+  require("../src/backup.js");
+  const B = window.Waypage.backup;
+  const m = B.cleanMeta(page("a1b2", { folder: "Saga", folderSeries: true, folderIn: "  Shelf " }), "a1b2");
+  assert.strictEqual(m.folderSeries, true);
+  assert.strictEqual(m.folderIn, "Shelf");
+  // Not a series, or in no collection: nothing to keep.
+  assert.strictEqual(B.cleanMeta(page("a1b2", { folder: "Saga", folderIn: "Shelf" }), "a1b2").folderIn, undefined);
+  assert.strictEqual(B.cleanMeta(page("a1b2", { folderSeries: true }), "a1b2").folderSeries, undefined);
 });
 
 test("a note has no address, and is never taken for a copy of another note (2.0.0)", () => {

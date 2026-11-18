@@ -2,8 +2,177 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.67.0] - 2026-11-18
 
+### Added
+- Settings › Edit clips is now Find and replace, and it edits files read from where they are, too: EPUB, Kindle, FB2, Markdown, text, HTML and email. Pick All files, a collection, or files picked in the library. Only Waypage's copy of the words changes; the file itself stays as it is, and the change stays on that device. PDFs and comics aren't offered: a PDF shows its printed pages, and a comic has no words.
+- Follow a GitHub repo in Feeds: paste any link to the repo and you get its releases (or its tags, if it has never made a release). The feed is named after the repo with its owner's picture, keeps a month of releases, and each release's row says what it brings ("6 added · 3 changed · 3 fixed"). A commits feed is still followed if you paste its own address.
+- Series: a collection can be made a series from its ⋯ menu (Make it a series, and back with Make it a collection). Series have their own section in the library under Collections, and in the sidebar. A clip's Collection picker lists both, and has New series….
+- A series can sit in a collection (Put in a collection, in its ⋯ menu). The collection shows its series above its own clips, and the series says which collection it's in. A collection holding series asks before it becomes one, since they move out.
+- Series apart, in the library's View options and Settings, Library: turned off, series sit among the collections.
+- Add an audiobook folder that holds a folder per book (Book 1, Book 2…) makes a series with one audiobook each. A folder of sound files, or of one book's CD1, CD2 or Disc 1, Disc 2, stays one audiobook.
+- Without series (an older version, or another device on one), a series shows as a plain collection and nothing moves.
+- Tags are easier to reach. On a phone they show as a row of chips under Show and Order; tap one to see its clips, tap it again for all. On a big screen the sidebar's Tags have an Edit link.
+- Settings › Library › Tags lists every tag with what it's on (a collection counts once). Tap one to rename it, merge it into another (rename it to a tag you already have), show its clips, or delete it (the clips stay; Undo puts it back).
+- A clip's ⋯ sheet shows your tags as chips: tap to add, × to remove, + New tag to type one. No more drop-down.
+- A collection has a Tags sheet (its ⋯ › Tags, or tap the tags under its name): a tag there goes on every clip in it, and Tag new clips too sits there now.
+- A page's own tags are read on every save, not only from story pages: Royal Road, AO3 and Scribble Hub as before, plus a page's article tags, schema.org keywords, Parse.ly tags and a post's tag links (WordPress, Blogger). They're offered on the clip under "From {site}", a tap each. Settings › Library › Tags › Site's tags picks Suggest (the default), Ones I have, Add all or Off.
+- A collection keeps its story page's tags, and Website sync refreshes them, so a story saved before can still pick them up from its Tags sheet.
+- Adding a book from Discover (Project Gutenberg, Standard Ebooks, a catalog) offers its site's tags with a switch, as Save with options does for stories.
+- Settings → About → **Unreleased builds** (Android, this device only): the update check also offers the newest build of main, every change once it's merged, before it's a release. It's named by its commit ("Waypage build 4f2c9a1 is out") and downloads like an update. Off goes back to releases only. These builds aren't on the Releases page.
 
+### Changed
+- A GitHub release opens and saves as just its notes, titled by the release ("Waypage 1.65.1"), without GitHub's header and assets around them.
+- Continue reading shows a series' cover, and a clip in a plain collection as itself.
+- A collection or series of only files lists them under Files, not Clips, and one of only audiobooks counts them heard, not read.
+- A clip's Collection row is now Part of, since it lists series too.
+- A collection's "Show as covers" is now "Show as a grid". Until one is picked, a series shows as a list and a collection as a grid.
+- The web copy deploys from GitHub Actions after the tests pass (`pages.yml`), as LifeLog's does, and serves the unreleased build under `unreleased/`.
+
+### Fixed
+- A live clip in a collection now says Live in the collection's list and covers, as it does on its library card.
+- Turning Live on now shows the Live mark on the clip's library card at once, not only after the app restarts.
+
+## [1.66.0] - 2026-11-17
+
+### Changed
+- In a clip's sheet, Live now sits under More, right above In other apps.
+- In other apps (on a clip and in a collection's Edit) now says what it does.
+- Tapping the version at the foot of the sidebar opens Settings › About.
+- Pulling down the library now updates live clips too, like it checks Website sync collections. It says how many changed.
+- Every menu now leaves the same quick way the drop-downs do: the ⋯ menus, a clip's menu, the reader's panels on a big screen and the drawing menus no longer shrink all the way back into their button.
+- Find in a clip slides down over the reader's bar and back up when it closes, instead of cutting in and out.
+- The drawing bar rises from the bottom and sinks back, and its menus grow out of their button; the colour picker fades in by the colour it was opened from.
+- On a big screen, a link, note or look-up in the middle of the reader fades in like the other dialogs instead of rising from the bottom.
+- In a collection, a clip that's removed, added or moved now shrinks away, grows in or slides to its place, as it does in the library, instead of the list jumping.
+- The + on Discover and Feeds rows and the reader's Contents button dip under a finger like every other button.
+
+### Fixed
+- A catalog's username and password now go only to that catalog's own server. Before, they went along to any other site its feed linked a folder, book or cover to.
+- Stop on a Kiwix pack, book or LibriVox audiobook that's waiting for Wi-Fi now stops it at once. Before, its card stayed in Downloads until Wi-Fi came.
+- A pack or book you stop now says "Stopped." instead of "Couldn't download it".
+- James Clear's 3-2-1 now saves without its footer: the book and calendar ads, "Follow me on social", the unsubscribe and postal-address lines, the site-and-date line and the "What else am I working on?" heading are gone. Every newsletter also loses its inbox-only footer (Kit's) and its open-tracking picture.
+- Update from the site that failed and was tried again from Downloads now puts the new copy in place. Before, the retry downloaded it but left it out of the library.
+- Update from the site works again on a clip whose last update failed. Before, the tap did nothing until the failed one was cleared from Downloads.
+- Going back to a live clip's earlier copy no longer splits its reading time in Stats between the two copies.
+- With reduced motion on, spinners flickered on every frame instead of breathing slowly.
+- On the narrowest phones (320 px): a collection's long title broke mid-word, the reader's Text size row ran off the edge, and Margins (Narrow / Normal / Wide) ran past its card.
+
+## [1.65.1] - 2026-11-17
+
+### Added
+- James Clear's 3-2-1 is in Discover's newsletters: sign up with your Newsletters address and each Thursday's email comes in cleaned up.
+- James Clear's 3-2-1 newsletter reads cleanly: no logo, tagline, weekly greeting or banner lines, its 3 ideas, 2 quotes and 1 question as headings, and it's named James Clear instead of "Jamesclear".
+- Live clips: turn on Live in a clip's menu and it updates from the site each time you open it, at most once an hour, when you're online. Good for a Reddit thread whose comments keep coming.
+- Update from the site keeps the copy it replaced on this device. Undo on the toast, or "Go back to the earlier copy" in the clip's menu, brings it back.
+- Stats keeps a deleted clip or file in "Most time", greyed. Tap it to save it again, open the original, or remove it from Stats. Its time stays in your totals either way.
+- Saving the same page again, or bringing back the same file, picks up its old reading time and place in Stats.
+
+### Changed
+- An update that comes back much shorter, or only the start of a page that was whole, keeps your copy and offers "Use it anyway".
+- An update that finds nothing changed keeps the clip as it was, so nothing new goes to sync.
+- A collection's In other apps is now a switch in its Edit, no longer in its ⋯ menu.
+
+### Fixed
+- Newsletter emails no longer show their layout as boxed tables, blank lines or an empty heading at the end.
+- Downloads that save as files (LibriVox audiobooks, Kiwix packs, books from Discover) no longer get stuck after the first file or at "Opening".
+- Pause and Stop now work on those downloads.
+
+## [1.65.0] - 2026-11-16
+
+### Added
+- Audiobookshelf, an extension (Settings › Extensions): your own Audiobookshelf server in the sidebar, with what you're listening to, every audiobook and its search. Play streams a book in Waypage's audiobook player, with read-along, and where you are goes back to the server. The password isn't kept, and sync takes the server to your other devices without the sign-in.
+- Kindle highlights: import a Kindle's My Clippings.txt from Settings, Library, Import from another app. Each book's highlights and notes join the same book in your library, matched by title; books that aren't here are listed.
+- Kiwix packs in Discover › Sites › Kiwix: whole sites in one file for reading with no connection (Wikipedia, Wiktionary, Wikivoyage, Stack Exchange, Gutenberg and more), by topic and language, with each pack's size. + downloads a pack where you pick (inside Waypage, Downloads, Documents or a folder you pick), and a big one can wait for Wi-Fi. A stopped download goes on from where it stopped.
+- A pack opens in the reader at its main page, then at the article you were last on. Links between articles stay in the pack and Back goes back through them; Find searches the pack's titles; Save this article makes a normal clip, with its pictures and, for Wikipedia, its link and licence. A pack lives in Files, read from where it's saved: never synced or backed up. A .zim file from anywhere opens with Add a file too.
+- Discover has LibriVox: free public-domain audiobooks, browsed by most listened, newest or genre, or searched. On Android, its + asks where to save it (inside Waypage, Downloads, Documents or a folder you pick), like Kiwix packs and books, then downloads its parts into a folder named for the book and adds them to Files as one audiobook, its chapters named, to listen offline. A long book can wait for Wi-Fi; the download shows in Downloads and can be stopped there.
+- When LibriVox knows the book it was read from on Project Gutenberg, its EPUB downloads too and the audiobook reads along with it (Read along with the book, on by default).
+- In a browser, a LibriVox book offers its zip of MP3s instead.
+- WebDAV, a new extension: a folder of books on Nextcloud, ownCloud, a NAS or any WebDAV server gets its own place in the sidebar. Walk its folders, find a book by name, and add it to your Library to read offline; a picture beside a book with the same name is its cover. Sync takes the server list to your other devices, but a password stays on the device it was typed on.
+
+### Changed
+- The + on a Project Gutenberg or Standard Ebooks book always asks how to add it: as an EPUB file kept where you pick, read from there in Files, or as a collection with a clip for each chapter, which syncs.
+
+## [1.64.0] - 2026-11-16
+
+### Added
+- Calibre, a new extension (Settings › Extensions): pick your Calibre library folder and its books show in the sidebar, with no server. Search them by title, author, series or tag, then read one straight from the folder or copy it into your Library. Its series becomes a collection in order and its Calibre tags become tags.
+- Catalogs, a new extension (Settings › Extensions): add book catalogs (OPDS) such as Calibre, Calibre-Web, COPS, Kavita or Komga, with a login if they need one. They get their own place in the sidebar, Catalogs: open their folders, search them, and add a book's EPUB, PDF or CBZ to the Library. Sync carries your catalogs to your other devices but never their passwords: each device asks for one once.
+
+### Changed
+- Searching Project Gutenberg, Standard Ebooks and Wikisource from Discover › Sites works in the browser too, as browsing them already did.
+- The app can reach plain http addresses, for book servers at home.
+
+## [1.63.1] - 2026-11-16
+
+### Fixed
+- In Hebrew, the sidebar, the desktop panes and the reader's contents rail sit on the right and slide in from there; a screen comes in from the left. Swipes between feeds, the swipe that opens the sidebar, dragging the line between panes, and the picture viewer's arrows and keys all go the right way.
+- Turning to the next clip in a collection slides the way the clip reads, whatever the app's language.
+- A few words that stayed in English in Hebrew are translated: Continue and Start on a collection, chapters and followers in Discover, time left in Listen, highlights, and the text size.
+
+## [1.63.0] - 2026-11-15
+
+### Added
+- Exporting a collection has a Chapter headers switch. Turn it off and each chapter starts straight with its text, without the clip's name, site and author on top, for a story whose chapters already open with their own titles. The book's contents still list every chapter by name. Works for EPUB, HTML, PDF and Markdown, and it's remembered.
+- Exporting a collection can change the exported book without touching your clips. Pick the first and last chapter to export only part of it. Book details sets the book's title and author. Clean up the text lists paragraphs that repeat in many chapters (a site's "Previous Chapter / Next Chapter", a Patreon plea) for you to leave out, and has find and replace with Edit clips' rules (`A/N: *` removes an author's note). The title, author and clean-up are kept for the next export of that collection.
+- Hebrew: every screen, button and message in Hebrew, right to left, with Heebo and Frank Ruhl Libre for its letters. Settings › Appearance › Language picks System, English or עברית; System follows the phone.
+- Record timings, in Settings › Report a problem: turn it on, do the slow thing, and the report carries what stalled and which taps waited.
+
+### Changed
+- A collection's EPUB names the first chapter's author as the book's author, not the site.
+- Animations now run on keel's shared motion engine, the same one LifeLog and new apps use. They move exactly as before.
+- A big book opens at the chapter you were reading and loads the rest behind it: a 47 MB book shows your page in about 2 s instead of 10 on a slow phone. Narrate, Find and Highlights wait the few seconds until the whole book is in.
+- A big book's Contents opens at once: the chapters around yours come first, the rest as you scroll (a 900-chapter list held the screen for half a second).
+- Leaving a big book no longer stalls on the way back to the library.
+- Taps in a big book no longer freeze the phone for seconds: the chapters far from the screen are kept out of what the phone reads from the page.
+
+### Fixed
+- A book opened from its collection in the reader (or by swiping to it) showed the book before's pictures, or blanks, until it was reopened from the library.
+- A book's first pictures (its cover) could stay blank when it was opened right after another book.
+- A very long book couldn't be scrolled or jumped past a point (chapter 600 of 840 in one), and a jump could slide a few screens once there.
+- Leaving a book while Narrate was going could forget your place and reopen it near the start.
+
+## [1.62.0] - 2026-11-15
+
+### Added
+- Add a folder, on the Add page: every book, note and comic in the folder you pick (and its folders) is added on its own, in a collection named after its folder. In the app each file is read from where it is; in a browser the files are copied in.
+- Audiobook bookmarks. The bookmark button in the player marks where you are, with a note if you like. They're listed under the chapters, play from there when tapped, and sync with the book.
+- Search the transcript: every time a word or phrase was heard in the whole audiobook, not just the chapter on the page, with the words around it. Tap one to play from there. Find in this clip opens it on a transcript, and so does ⋯ › Read along.
+- Export the transcript as Markdown, with its chapters and the time each paragraph starts (⋯ › Read along).
+- Draw in the margins: beside a clip's text, and beside a PDF page or a note's sheet. A drawing there stays next to its paragraph, and a narrower screen shows what fits.
+- A book or PDF too long for one note (over 500 pages) asks which chapters, or which pages, to make the note from. It's measured first, so you don't wait for the whole book to be laid out before hearing it's too long.
+- Comics export as CBZ: a comic clip, or a whole collection of comics in order, becomes one comic book file for any comic reader, with its title, series and right-to-left reading kept. CBR can't be offered, RAR files can't be written freely.
+- iPhone: App lock can use Face ID or Touch ID, and while a lock is on the app switcher shows a plain page instead of what you were reading.
+- iPhone: reading widgets (This week, Today, Days in a row) and a Collection widget; pick its collection with Edit Widget (iOS 17).
+- iPhone: Translate this clip, on the phone with Apple's translation (iOS 18).
+- iPhone: your Personal Voice (iOS 17) can read in Narrate; allow it in More speech engines.
+- Save with options offers a story page's own tags when saving it as a collection (Royal Road, AO3, Scribble Hub, or any page that lists its tags), from Discover or a pasted link. One switch adds them all; it's off until you turn it on, and stays as you left it.
+- Tag new clips: a collection can give its tags to every clip that joins it later (new chapters from Website sync or Next, or a clip moved in). Save with options turns it on with the tags you pick ("Tag new clips too"), and the collection's ⋯ menu turns it on or off.
+- Stats has All time next to Week, Month and Year: everything since Waypage began counting, from every device, with a bar a month (a year once it's past two years), the totals, and the clips you've spent most time on overall.
+
+### Changed
+- The Add page's options are now Add a file, Add a folder, Add an audiobook folder (was Open an audiobook folder) and New note.
+- An audiobook locked to Audible (AA, AAX) or Apple Books (M4P) says so, instead of "can't play this file".
+- Stats calls Narrate and audiobooks together "Listening" (was "Narrated"), and an audiobook's own time says "listened".
+- Waypage now has a Content-Security-Policy: the app runs only its own scripts, so a saved page or a bad link can't run code in it.
+- Exporting a clip or a collection shows it's working: the button you pressed turns a spinner and says what it's on ("Chapter 12 of 48", "Packing the book…", "Making the comic…") over a bar that fills as it goes, instead of just greying out.
+- iPhone: Narrate keeps the screen on, keeps the sleep timer with the app put away, and goes on to the next clip with the app put away, as on Android.
+- iPhone: a deck turned into a PDF opens from where you saved it, and moving a big library copies the files natively, as on Android.
+- iPhone: a page drawn by script on a site you saved signed in to now draws signed in.
+- Google Drive backups now go through keel's shared Drive code, which LifeLog will use too.
+- The log behind Report a problem is now keel's shared error log, the same as LifeLog's. Each entry also keeps the first lines of where the error happened, and the report includes them.
+- Sync's requests to GitHub now go through keel's shared GitHub code, the same as LifeLog's.
+- Where the app runs, and links to other sites opening in the phone's browser, now come from keel's shared code, the same as LifeLog's.
+- The update check, the Test builds list and test builds in the browser now go through keel's shared code, the same as LifeLog's.
+- In the browser, a file a test build's commit doesn't have now loads from the release instead of failing.
+- The shared build tools, local server and setup-link QR code now come from keel, one copy kept with LifeLog instead of two.
+
+### Fixed
+- Export no longer offers "Page source" for a file, which has no page to fetch.
+- Very big books open far faster. A 47 MB EPUB (900 chapters) opened at chapter 772 in about 90 s on a slowed-down test phone, now about 11 s; jumping to a chapter from Contents took 2.4 s, now under a tenth of a second.
+- The local server (`node server.js`) only answers this computer, no longer serves files from a folder next to Waypage's whose name starts the same way, and no longer stops on a malformed address.
+- PDF pages whose pictures are JPEG 2000, as many scanned books from the Internet Archive are, showed blank. They now show their pictures.
+- Swiping between feeds in Feeds and Newsletters moved the search field along with the posts. It now stays put with the chips, and only the list slides.
 
 ## [1.61.0] - 2026-11-14
 

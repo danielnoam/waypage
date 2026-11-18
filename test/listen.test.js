@@ -3,9 +3,11 @@
 // fixes, matching heard words to a book's, Media Overlay clocks, and the
 // listening entry as sync and backups keep it.
 const assert = require("assert");
+require("./lang.js");
 
 global.window = { Waypage: { platform: {} } };
 require("../src/backup.js");
+require("../src/keel/github.js");
 require("../src/sync.js");
 require("../src/listen.js");
 const L = window.Waypage.listen;
@@ -211,6 +213,48 @@ test("how much of a chapter is written", () => {
   assert.strictEqual(L.covered([[0, 300]], 100, 200), 1);
   assert.strictEqual(L.covered([], 0, 10), 0);
   assert.strictEqual(L.covered([[0, 5]], 10, 10), 0);
+});
+
+test("a book locked to a store (DRM) is known by its bytes or its name", () => {
+  const head = (brand) => Uint8Array.from([0, 0, 0, 32, ...ascii("ftyp"), ...ascii(brand), 0, 0, 0, 0]);
+  assert.strictEqual(L.locked(head("aax "), "book.m4b"), "Audible");
+  assert.strictEqual(L.locked(head("M4P "), "song.m4a"), "Apple");
+  assert.strictEqual(L.locked(Uint8Array.from([0, 0, 1, 0, 0x57, 0x90, 0x75, 0x36, 0, 0, 0, 0]), "x.bin"), "Audible");
+  assert.strictEqual(L.locked(null, "Book Part 1.aax"), "Audible");
+  assert.strictEqual(L.locked(head("M4B "), "book.m4b"), null);
+  assert.strictEqual(L.locked(Uint8Array.from([...ascii("ID3"), 4, 0, 0, 0, 0, 0, 0, 0, 0]), "a.mp3"), null);
+  assert.ok(/Apple Books \(DRM\)/.test(L.lockedText("Apple")));
+});
+
+test("search the transcript: every time a phrase was heard, with the words around it", () => {
+  const words = "Louis Blériot flew. Then blériot's plane landed, and the crowd cheered Blériot again".split(" ").map((w, i) => ({ w, t: i * 2, q: 0 }));
+  const one = L.findHeard(words, "bleriot");
+  assert.deepStrictEqual(one.map((h) => h.t), [2, 8, 22]);
+  assert.strictEqual(one[0].hit, "Blériot");
+  assert.strictEqual(one[0].before, "Louis");
+  const two = L.findHeard(words, "the crowd");
+  assert.deepStrictEqual(two.map((h) => [h.t, h.hit]), [[16, "the crowd"]]);
+  assert.strictEqual(L.findHeard(words, "crowd che")[0].hit, "crowd cheered");
+  assert.deepStrictEqual(L.findHeard(words, "  "), []);
+  assert.strictEqual(L.findHeard(words, "a", { limit: 2 }).length, 2);
+});
+
+test("a transcript as Markdown: chapters as headings, each paragraph after its time", () => {
+  const words = [{ w: "Hello", t: 1, q: 0 }, { w: "there.", t: 2, q: 0 }, { w: "Next", t: 65, q: 0 }, { w: "part.", t: 66, q: 0 }];
+  const parts = L.paragraphs(words, { chapters: [{ t: 0, title: "One" }, { t: 60, title: "Two" }] });
+  assert.strictEqual(L.transcriptMarkdown("Book", "An Author", parts), "# Book\n\nAn Author\n\n## One\n\n[0:01] Hello there.\n\n## Two\n\n[1:05] Next part.\n");
+});
+
+test("bookmarks: kept clean, and merged by id in sync", () => {
+  const clean = B.cleanListen({ t: 1, tAt: 1, bookmarks: [{ id: "abcd1234", t: 61.27, at: 3, note: "  the  storm " }, { id: "BAD!", t: 2 }, { id: "efgh5678", t: -1 }, { id: "ijkl9012", t: 5 }] });
+  assert.deepStrictEqual(clean.bookmarks, [{ id: "abcd1234", t: 61.3, at: 3, note: "the storm" }, { id: "ijkl9012", t: 5, at: 0 }]);
+  const base = { t: 0, tAt: 1, bookmarks: [{ id: "keep0001", t: 10, at: 1 }, { id: "gone0001", t: 20, at: 1 }] };
+  const here = { t: 5, tAt: 5, bookmarks: [{ id: "keep0001", t: 10, at: 6, note: "here" }, { id: "here0001", t: 40, at: 5 }] };
+  const there = { t: 9, tAt: 9, bookmarks: [{ id: "keep0001", t: 10, at: 1 }, { id: "gone0001", t: 20, at: 1 }, { id: "away0001", t: 30, at: 7 }] };
+  const m = S.mergeListen(base, here, there);
+  assert.strictEqual(m.t, 9);
+  assert.deepStrictEqual(m.bookmarks.map((x) => x.id + (x.note ? ":" + x.note : "")), ["keep0001:here", "away0001", "here0001"]);
+  assert.strictEqual(S.mergeListen(base, { t: 1, tAt: 2 }, { t: 1, tAt: 3, bookmarks: [{ id: "gone0001", t: 20, at: 1 }] }).bookmarks, undefined);
 });
 
 test("times and lengths as words", () => {

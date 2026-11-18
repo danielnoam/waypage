@@ -59,13 +59,13 @@ const newJob = (url, folder) => ({ key: url, url, site: C.save.siteName(url), do
 async function savePage(url, folder, how) {
   if (!(how && how.given) && fileLinkName(url)) return saveFileLink(url);
   const existing = savedAs(url);
-  if (existing) { toast("Already in your library"); openPage(existing.id); return; }
+  if (existing) { toast(t("Already in your library")); openPage(existing.id); return; }
   if (state.saving.some((s) => !s.error && sameUrl(s.url, url))) return;
   state.saving = state.saving.filter((s) => !(s.error && sameUrl(s.url, url)));
   const job = { ...newJob(url, folder), ...how };
   state.saving.unshift(job);
   renderLibrary();
-  toast(waitsForWifi(DATA_SAVE_KEY) ? "It saves when you're on Wi-Fi. It's in Downloads." : "Saving. It's in Downloads.");
+  toast(waitsForWifi(DATA_SAVE_KEY) ? t("It saves when you're on Wi-Fi. It's in Downloads.") : t("Saving. It's in Downloads."));
   await wifiGate(job);
   if (!state.saving.includes(job)) return;
   job.waiting = false;
@@ -92,13 +92,27 @@ async function isFileBlob(blob) {
   const head = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
   return FILE_HEADS.some((h) => h.every((b, i) => head[i] === b));
 }
-async function saveFileLink(url, name, page) {
-  if (!navigator.onLine) { toast("You're offline. Add it when you're back online."); return; }
-  if (!C.platform.canReadPages) { toast("This browser can't download from that site. Add it in Waypage on your phone."); return; }
+// `fetchBytes` stands in for the platform's (a catalog's, with its login).
+// `more` ({ siteTags, tags }): a Discover book's tags, offered or added.
+async function saveFileLink(url, name, page, fetchBytes, more) {
+  const getBytes = fetchBytes || ((u, n) => C.platform.fetchBytes(u, n));
+  if (!navigator.onLine) { toast(t("You're offline. Add it when you're back online.")); return; }
+  if (!C.platform.canReadPages) { toast(t("This browser can't download from that site. Add it in Waypage on your phone.")); return; }
   name = name || fileLinkName(url) || "file";
-  toast("Downloading “" + name.replace(/\.[a-z0-9]+$/i, "") + "”…");
+  toast(t("Downloading “{replace}”…", { replace: name.replace(/\.[a-z0-9]+$/i, "") }));
   try {
-    let got = await C.platform.fetchBytes(url, name);
+    const file = await fetchFileLink(url, name, getBytes);
+    await openFile(file, null, true, null, { ...more });
+  } catch (e) {
+    toast(t("Couldn't download it just now. Try again later{x}", { x: page ? t(", or open it on the site.") : "." }));
+  }
+}
+// A linked file's bytes as a File named `name`; a thank-you page in the
+// way is followed to the file it links. Throws when no file came.
+async function fetchFileLink(url, name, getBytes) {
+  getBytes = getBytes || ((u, n) => C.platform.fetchBytes(u, n));
+  {
+    let got = await getBytes(url, name);
     // Some sites answer the first download with a page that links the file
     // (a thank-you page); its link to the same kind of file is followed.
     if (got.status === 200 && !(await isFileBlob(got.blob)) && got.blob.size < 2e6) {
@@ -107,13 +121,11 @@ async function saveFileLink(url, name, page) {
       const refresh = doc.querySelector('meta[http-equiv="refresh" i]');
       const a = [...doc.querySelectorAll("a[href]")].map((x) => x.getAttribute("href")).find((h) => new RegExp("\\." + ext + "(\\?|$)", "i").test(h) && !/kepub|advanced/i.test(h));
       const next = (refresh && (/url=(.+)$/i.exec(refresh.getAttribute("content") || "") || [])[1]) || a;
-      if (next) got = await C.platform.fetchBytes(new URL(next.replace(/^['"]|['"]$/g, ""), got.url || url).href, name);
+      if (next) got = await getBytes(new URL(next.replace(/^['"]|['"]$/g, ""), got.url || url).href, name);
     }
     if (got.status >= 400) throw new Error("HTTP " + got.status);
     if (!(await isFileBlob(got.blob))) throw new Error("not a file");
-    await openFile(new File([got.blob], name, { type: got.blob.type || got.type || "" }), null, true, null, {});
-  } catch (e) {
-    toast("Couldn't download it just now. Try again later" + (page ? ", or open it on the site." : "."));
+    return new File([got.blob], name, { type: got.blob.type || got.type || "" });
   }
 }
 
@@ -126,7 +138,7 @@ function saveLater(url, folder) {
   const list = load(LATER_KEY, []);
   if (!list.some((x) => sameUrl(x.url, url))) { list.push({ url, folder: folder || null }); store(LATER_KEY, list); }
   showWaiting();
-  toast("It saves when you're back online. It's in Downloads.");
+  toast(t("It saves when you're back online. It's in Downloads."));
 }
 function showWaiting() {
   for (const x of load(LATER_KEY, [])) {
@@ -152,8 +164,8 @@ async function saveWaiting() {
 // A link that turned out to be a contents page opens as a list to check.
 function contentsFound(job) {
   dropFailed(job);
-  openBatch(job.contents.links.join("\n"), false, folderName(job.contents.title || job.site), job.url);
-  toast("That's a list of chapters. Check them, then save.");
+  openBatch(job.contents.links.join("\n"), false, folderName(job.contents.title || job.site), job.url, job.contents.siteTags);
+  toast(t("That's a list of chapters. Check them, then save."));
 }
 
 // Waiting for Wi-Fi (1.4.1): with "Wait for Wi-Fi" on and the phone on
@@ -188,12 +200,16 @@ const PACE_MS = 500;
 // saved isn't saved again; it just joins the folder at its place.
 // `tags` is a list for every link, or (an import, 1.9.0) a function
 // giving each link its own { tags, finished }.
-async function saveAll(all, folder, tags = [], mode, skipSaved, kind, source) {
+// `tagNew`: the collection's later clips take the tags its clips share.
+// `siteTags` ({ site, tags }): the story page's, kept on each of the
+// collection's clips for its Tags sheet to offer.
+async function saveAll(all, folder, tags = [], mode, skipSaved, kind, source, tagNew, siteTags) {
   const name = folder ? folderName(folder) : null;
   const per = typeof tags === "function" ? tags : () => ({ tags });
   const places = skipSaved && name ? placesBetween(all, name) : new Map();
+  if (name && tagNew) for (const p of folderPages(name)) p.folderTagNew = true;
   const urls = skipSaved ? all.filter((u) => !savedAs(u)) : all;
-  const jobs = urls.filter((u) => !savingAs(u)).map((u) => ({ ...newJob(u, name), tags: [], ...per(u), mode, kind, source: name ? source : undefined }));
+  const jobs = urls.filter((u) => !savingAs(u)).map((u) => ({ ...newJob(u, name), tags: [], ...per(u), mode, kind, source: name ? source : undefined, tagNew: !!(name && tagNew), siteTags: name ? siteTags : undefined }));
   state.saving = state.saving.filter((s) => !(s.error && jobs.some((j) => sameUrl(j.url, s.url))));
   const fresh = jobs.filter((j) => !savedAs(j.url));
   fresh.forEach((j) => { if (places.has(j.url)) j.folderAt = places.get(j.url); });
@@ -202,14 +218,14 @@ async function saveAll(all, folder, tags = [], mode, skipSaved, kind, source) {
   state.saving = [...fresh, ...state.saving];
   renderLibrary();
   if (state.folder) renderFolder();
-  if (run) toast("Saving " + countLine(fresh.length) + ". They're in Downloads.");
+  if (run) toast(t("Saving {countLine}. They're in Downloads.", { countLine: countLine(fresh.length) }));
   let saved = 0, failed = 0, had = 0, stopped = 0;
   for (const job of jobs) {
     if (job.waiting && !state.saving.includes(job)) { stopped++; continue; }
     const existing = savedAs(job.url);
     if (existing) {
       had++;
-      if (name) { joinFav(existing, name); existing.folder = name; existing.folderAt = Date.now(); if (source) existing.source = source; }
+      if (name) { joinFav(existing, name); if (tagNew) existing.folderTagNew = true; existing.folder = name; existing.folderAt = Date.now(); if (source) existing.source = source; }
       if (job.tags.length) existing.tags = withTags(existing.tags, job.tags);
       if (name || job.tags.length) { await C.store.writeIndex(state.pages); renderLibrary(); if (state.folder) renderFolder(); }
       continue;
@@ -229,9 +245,9 @@ async function saveAll(all, folder, tags = [], mode, skipSaved, kind, source) {
   if (run) renderLibrary();
   if (name && source) updateCover(name);
   if (!jobs.length) return;
-  toast([saved ? "Saved " + countLine(saved) + (name ? " into " + name : "") : "",
-    had ? had + " already saved" + (name && !saved ? ", now in " + name : "") : "",
-    failed ? failed + " couldn't be saved" : "", stopped ? "stopped before " + countLine(stopped) : ""].filter(Boolean).join(" · ") + ".");
+  toast([saved ? (name ? t("Saved {clips} into {folder}", { clips: countLine(saved), folder: name }) : t("Saved {clips}", { clips: countLine(saved) })) : "",
+    had ? (name && !saved ? t("{n} already saved, now in {folder}", { n: had, folder: name }) : t("{n} already saved", { n: had })) : "",
+    failed ? t("{n} couldn't be saved", { n: failed }) : "", stopped ? t("stopped before {clips}", { clips: countLine(stopped) }) : ""].filter(Boolean).join(" · ") + ".");
 }
 
 // Where new pages go in a folder when the pages around them in the list
@@ -296,6 +312,10 @@ async function saveOnce(job, opts) {
   }
 }
 
+// What a clip saved again keeps from the copy it replaces: where it is,
+// how it's marked and read. The rest comes from the new copy.
+const AGAIN_KEEP = ["requested", "folder", "folderAt", "folderFav", "folderFavAt", "coverPick", "source", "tags", "at", "finished", "readAt", "readOn", "placeAt", "fav", "favAt", "marks", "noShare", "folderNoShare", "folderTagNew", "folderSeries", "folderIn", "movedAt", "live"];
+
 async function runJob(job) {
   job.started = Date.now();
   job.triedAgain = false;
@@ -314,10 +334,14 @@ async function runJob(job) {
       },
     });
     const old = job.again;
-    if (old) {
+    if (old && job.hold) {
+      // Fetched again and held (live clips): the caller decides whether
+      // it takes the old copy's place.
+      for (const k of AGAIN_KEEP) if (old[k] !== undefined) meta[k] = old[k];
+    } else if (old) {
       // Saved again: the new copy takes the old one's place, keeping its
       // collection, tags and read position.
-      for (const k of ["requested", "folder", "folderAt", "folderFav", "folderFavAt", "coverPick", "source", "tags", "at", "finished", "readAt", "readOn", "placeAt", "fav", "favAt", "marks", "noShare", "folderNoShare", "movedAt"]) if (old[k] !== undefined) meta[k] = old[k];
+      for (const k of AGAIN_KEEP) if (old[k] !== undefined) meta[k] = old[k];
       if (job.keep) Object.assign(meta, job.keep);
       C.stats.moved(old.id, meta.id);
       const i = state.pages.indexOf(old);
@@ -338,17 +362,24 @@ async function runJob(job) {
       meta.requested = job.url;
       if (job.folder) { meta.folder = folderName(job.folder); meta.folderAt = job.folderAt || Date.now(); if (job.source) meta.source = job.source; }
       if (job.tags && job.tags.length) meta.tags = withTags([], job.tags);
+      // A chapter's own page tags aren't the story's: a collection's clips
+      // keep the story page's, picked from in Save with options.
+      if (meta.folder) {
+        const story = job.siteTags || (folderPages(meta.folder).find((x) => x.siteTags) || {}).siteTags;
+        if (story) meta.siteTags = story; else delete meta.siteTags;
+      } else takeSiteTags(meta);
+      if (meta.folder) joinTags(meta, meta.folder, job.tagNew);
       if (job.finished) meta.finished = true;
       state.pages.unshift(meta);
       C.stats.saved();
       await indexSoon();
     }
     state.saving = state.saving.filter((s) => s !== job);
-    if (!job.run) finish({ key: "p:" + meta.id, page: meta.id });
+    if (!job.run && !job.quiet) finish({ key: "p:" + meta.id, page: meta.id });
     renderLibraryLater();
     return meta;
   } catch (e) {
-    job.error = e instanceof C.save.SaveError ? e.message : "Couldn't save this clip. Try again.";
+    job.error = e instanceof C.save.SaveError ? e.message : t("Couldn't save this clip. Try again.");
     job.gone = e instanceof C.save.SaveError && e.gone && !job.archived;
     if (e instanceof C.save.ContentsPage) job.contents = e.contents;
     if (!(e instanceof C.save.SaveError)) console.error(e);

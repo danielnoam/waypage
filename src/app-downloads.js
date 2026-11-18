@@ -19,17 +19,17 @@ function renderDownloads() {
   const going = state.saving.filter((s) => !s.error && !(s.run && !s.run.done));
   const app = updShown();
   const restoring = !!driveRun && driveRun.restore;
-  if (runs.size || going.length || app || restoring) keep("h:going", () => sectionHead("Downloading"));
+  if (runs.size || going.length || app || restoring) keep("h:going", () => sectionHead(t("Downloading")));
   if (app) keep("u:" + upd.latest, updateCard, upd.phase + upd.error);
   if (restoring) keep("d:drive", driveCard, [driveRun.restore, driveRun.paused, driveRun.stopped, !!driveRun.merging].join());
   for (const r of runs) keep("r:" + r.id, () => runCard(r), [r.paused, r.stopped, failedOf(r).length].join());
   for (const s of going) keep("s:" + s.key, () => savingCard(s));
   const shown = new Set(state.finished.map((e) => e.run).filter(Boolean));
   const lone = state.saving.filter((s) => s.error && (!s.run || (s.run.done && !shown.has(s.run))));
-  if (lone.length) keep("h:failed", () => sectionHead("Couldn't be saved"));
+  if (lone.length) keep("h:failed", () => sectionHead(t("Couldn't be saved")));
   for (const s of lone) keep("f:" + s.key, () => failedCard(s));
   const done = state.finished.filter((e) => e.run || state.pages.some((p) => p.id === e.page));
-  if (done.length) keep("h:done", () => sectionHead("Done", el("button", { class: "btn-text", type: "button", onclick: clearFinished }, "Clear")));
+  if (done.length) keep("h:done", () => sectionHead(t("Done"), el("button", { class: "btn-text", type: "button", onclick: clearFinished }, t("Clear"))));
   for (const e of done) {
     if (e.run) keep(e.key, () => doneRunCard(e), [e.run.saved, failedOf(e.run).length, whenText(e.at), !!(e.run.folder && folderPages(e.run.folder).length)].join());
     else {
@@ -39,9 +39,9 @@ function renderDownloads() {
   }
   if (!nodes.length) {
     keep("empty", () => el("div", { class: "empty wide" },
-      el("h2", { class: "empty-title" }, "Nothing downloading"),
-      el("p", { class: "empty-text" }, "Clips you save show their progress here, and stay here once they're done until you close the app."),
-      el("button", { class: "btn-quiet", type: "button", onclick: () => toSettings("saving") }, "Before you go offline")));
+      el("h2", { class: "empty-title" }, t("Nothing downloading")),
+      el("p", { class: "empty-text" }, t("Clips you save show their progress here, and stay here once they're done until you close the app.")),
+      el("button", { class: "btn-quiet", type: "button", onclick: () => toSettings("saving") }, t("Before you go offline"))));
   }
   root.replaceChildren(...nodes);
   if (app) paintUpdateCard();
@@ -58,16 +58,16 @@ function renderDownloads() {
 // `tag` and `key` are set when what downloads is a preview build (1.48.0):
 // the pre-release's tag and the APK's file name part; `latest` is then the
 // words shown ("test build of <branch>").
-const upd = { phase: "idle", latest: null, notes: "", pct: 0, bytes: 0, total: 0, apk: null, error: "", tag: null, key: null };
+const upd = { phase: "idle", latest: null, notes: "", pct: 0, bytes: 0, total: 0, apk: null, error: "", tag: null, key: null, url: null };
 const UPD_OUT = ["available", "downloading", "paused", "ready"];
 const updShown = () => C.platform.android && ["downloading", "paused", "ready"].includes(upd.phase) && !!upd.latest;
 function updateCard() {
   const st = upd.phase;
-  const act = st === "downloading" ? ["Pause", pauseUpdate] : st === "paused" ? ["Resume", startUpdate] : ["Install", install];
-  return el("div", { class: "card saving app-update wide", role: "group", "aria-label": "Waypage " + upd.latest },
+  const act = st === "downloading" ? [t("Pause"), pauseUpdate] : st === "paused" ? [t("Resume"), startUpdate] : [t("Install"), install];
+  return el("div", { class: "card saving app-update wide", role: "group", "aria-label": t("Waypage {latest}", { latest: upd.latest }) },
     el("span", { class: "card-body" },
-      el("span", { class: "card-site" }, "App update"),
-      el("span", { class: "card-title" }, "Waypage " + upd.latest),
+      el("span", { class: "card-site" }, t("App update")),
+      el("span", { class: "card-title" }, t("Waypage {latest}", { latest: upd.latest })),
       st === "ready" ? null : el("span", { class: "progress", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(upd.pct) },
         el("span", { class: "progress-fill" })),
       el("span", { class: "card-status" + (st === "downloading" ? " accent" : upd.error ? " warn" : "") },
@@ -77,10 +77,10 @@ function updateCard() {
         el("button", { class: st === "ready" ? "btn-small" : "btn-quiet", type: "button", onclick: act[1] }, act[0]))));
 }
 function updStatus() {
-  if (upd.phase === "ready") return "Ready to install";
+  if (upd.phase === "ready") return t("Ready to install");
   if (upd.error) return upd.error;
-  const size = upd.total > 0 ? " · " + formatSize(upd.bytes) + " of " + formatSize(upd.total) : "";
-  return (upd.phase === "paused" ? "Paused at " : "") + upd.pct + "%" + size;
+  const size = upd.total > 0 ? " · " + t("{done} of {total}", { done: formatSize(upd.bytes), total: formatSize(upd.total) }) : "";
+  return (upd.phase === "paused" ? t("Paused at {pct}%", { pct: upd.pct }) : upd.pct + "%") + size;
 }
 function paintUpdateCard() {
   paintDownloads();
@@ -103,15 +103,15 @@ function clearFinished() {
 function doneRunCard(e) {
   const r = e.run;
   const name = r.folder && folderPages(r.folder).length ? folderPages(r.folder)[0].folder : null;
-  const saved = r.files ? (r.saved === 1 ? "1 file added" : (r.saved || "No") + " files added")
-    : r.saved ? countLine(r.saved) + (r.again ? " saved again" : " saved") : "Nothing saved";
-  return el("div", { class: "card done-run wide", role: "group", "aria-label": (r.folder || "Several clips") + ", done" },
+  const saved = r.files ? (r.saved ? tn(r.saved, "1 file added", "{n} files added") : t("No files added"))
+    : r.saved ? (r.again ? t("{clips} saved again", { clips: countLine(r.saved) }) : t("{clips} saved", { clips: countLine(r.saved) })) : t("Nothing saved");
+  return el("div", { class: "card done-run wide", role: "group", "aria-label": t("{x}, done", { x: r.folder || t("Several clips") }) },
     el("span", { class: "card-body" },
       el("span", { class: "card-site" }, r.site),
-      el("span", { class: "card-title", dir: "auto" }, r.folder || r.label || "Several clips"),
-      el("span", { class: "card-status" }, [saved, r.stopped ? "Stopped" : null, whenText(e.at)].filter(Boolean).join(" · ")),
+      el("span", { class: "card-title", dir: "auto" }, r.folder || r.label || t("Several clips")),
+      el("span", { class: "card-status" }, [saved, r.stopped ? t("Stopped") : null, whenText(e.at)].filter(Boolean).join(" · ")),
       name ? el("span", { class: "card-actions" },
-        el("button", { class: "btn-small", type: "button", onclick: () => toLibrary().then(() => openFolder(name)) }, "Open")) : null,
+        el("button", { class: "btn-small", type: "button", onclick: () => toLibrary().then(() => openFolder(name)) }, t("Open"))) : null,
       failedList(r)));
 }
 
@@ -123,8 +123,8 @@ function donePageCard(p, e) {
     el("span", { class: "card-body" },
       el("span", { class: "card-site", dir: "auto" }, ...dotted(siteOf(p), p.folder)),
       el("span", { class: "card-title", dir: "auto" }, p.title),
-      el("span", { class: "card-status" }, "Saved " + whenText(e.at),
-        p.missing ? " · " : null, p.missing ? el("span", { class: "warn" }, p.missing + (p.missing === 1 ? " preview" : " previews") + " missing") : null)));
+      el("span", { class: "card-status" }, t("Saved {whenText}", { whenText: whenText(e.at) }),
+        p.missing ? " · " : null, p.missing ? el("span", { class: "warn" }, tn(p.missing, "1 preview missing", "{n} previews missing")) : null)));
 }
 
 // The bar's Downloads button: a ring filling with everything being
@@ -154,12 +154,12 @@ function paintDownloads() {
   btn.classList.toggle("busy", busy);
   btn.classList.toggle("failed", failed);
   btn.querySelector(".dl-ring-fill").style.strokeDashoffset = String(100 - share * 100);
-  btn.setAttribute("aria-label", busy ? "Downloads, " + Math.round(share * 100) + "% done"
-    : failed ? "Downloads, some clips couldn't be saved" : "Downloads");
+  btn.setAttribute("aria-label", busy ? t("Downloads, {x}% done", { x: Math.round(share * 100) })
+    : failed ? t("Downloads, some clips couldn't be saved") : t("Downloads"));
   if (!busy) {
     // A sync (and its pictures) keeps the same notification while it
     // runs, so it goes on with the app in the background (0.30.4).
-    const sync = driveRun ? { title: "Backing up to Google Drive", text: driveStatusText(), done: Math.round((driveRun.share || 0) * 1000), total: 1000 } : syncNote();
+    const sync = driveRun ? { title: t("Backing up to Google Drive"), text: driveStatusText(), done: Math.round((driveRun.share || 0) * 1000), total: 1000 } : syncNote();
     if (sync) {
       const said = JSON.stringify(sync);
       if (said !== toldNative) { toldNative = said; C.platform.downloads.update(sync); }
@@ -170,10 +170,10 @@ function paintDownloads() {
     return;
   }
   const one = active.length === 1 && !singles.length ? active[0] : null;
-  const title = drive && units === 1 ? (driveRun.restore ? "Restoring from Google Drive" : "Backing up to Google Drive") : app && units === 1 ? "Downloading Waypage " + upd.latest : one ? (one.files ? "Adding " + one.label : (one.again ? "Saving again in " : "Saving into ") + (one.folder || "your library"))
-    : !active.length && singles.length === 1 ? "Saving a clip from " + singles[0].site : "Saving " + Math.round(units) + " clips";
-  const text = drive && units === 1 ? driveStatusText() : app && units === 1 ? upd.pct + "% done" : one ? (one.total ? one.saved + one.failed + " of " + one.total + " done" : countLine(one.saved) + " saved") + (one.paused ? " · Paused" : "")
-    : Math.round(share * 100) + "% done";
+  const title = drive && units === 1 ? (driveRun.restore ? t("Restoring from Google Drive") : t("Backing up to Google Drive")) : app && units === 1 ? t("Downloading Waypage {version}", { version: upd.latest }) : one ? (one.files ? t("Adding {label}", { label: one.label }) : one.folder ? (one.again ? t("Saving again in {folder}", { folder: one.folder }) : t("Saving into {folder}", { folder: one.folder })) : (one.again ? t("Saving again in your library") : t("Saving into your library")))
+    : !active.length && singles.length === 1 ? t("Saving a clip from {site}", { site: singles[0].site }) : tn(Math.round(units), "Saving 1 clip", "Saving {n} clips");
+  const text = drive && units === 1 ? driveStatusText() : app && units === 1 ? t("{pct}% done", { pct: upd.pct }) : one ? (one.total ? t("{done} of {total} done", { done: one.saved + one.failed, total: one.total }) : t("{clips} saved", { clips: countLine(one.saved) })) + (one.paused ? " · " + t("Paused") : "")
+    : t("{pct}% done", { pct: Math.round(share * 100) });
   const o = { title, text, done: Math.round(share * 1000), total: 1000 };
   const said = JSON.stringify(o);
   if (said === toldNative) return;
@@ -199,7 +199,7 @@ function closeDownloads() {
 }
 
 function savingCard(s) {
-  return el("div", { class: "card saving wide", role: "group", "aria-label": "Saving " + s.site },
+  return el("div", { class: "card saving wide", role: "group", "aria-label": t("Saving {site}", { site: s.site }) },
     el("span", { class: "card-body" },
       el("span", { class: "card-site" }, s.site),
       el("span", { class: "card-title", dir: "auto" }, s.url),
@@ -209,7 +209,7 @@ function savingCard(s) {
         s.waiting ? null : el("span", { class: "spinner", "aria-hidden": "true" }),
         el("span", { class: "status-text" }, savingStatus(s))),
       s.offline ? el("span", { class: "card-actions" },
-        el("button", { class: "btn-quiet", type: "button", onclick: () => dropLater(s) }, "Remove")) : null));
+        el("button", { class: "btn-quiet", type: "button", onclick: () => dropLater(s) }, t("Remove"))) : null));
 }
 
 // Progress lands in the card that's already there, so the bar grows on

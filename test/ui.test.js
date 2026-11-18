@@ -117,13 +117,40 @@ function pdfBytes() {
   return Buffer.from(out, "latin1");
 }
 
+// A one-page PDF whose only picture is JPEG 2000 (JPXDecode), red all over:
+// pdf.js decodes it with WebAssembly, which both policies have to allow.
+const JP2_RED = "AAAADGpQICANCocKAAAAFGZ0eXBqcDIgAAAAAGpwMiAAAAAtanAyaAAAABZpaGRyAAAAEAAAABAAAwcHAAAAAAAPY29scgEAAAAAABAAAACtanAyY/9P/1EALwAAAAAAEAAAABAAAAAAAAAAAAAAABAAAAAQAAAAAAAAAAAAAwcBAQcBAQcBAf9SAAwAAAABAAQEBAAB/1wAEEBASEhQSEhQSEhQSEhQ/2QAJQABQ3JlYXRlZCBieSBPcGVuSlBFRyB2ZXJzaW9uIDIuNS40/5AACgAAAAAAKQAB/5PPtAgDM8+0CAifz7QICJ+AgICAgICAgICAgID/2Q==";
+function jpxPdfBytes() {
+  const img = Buffer.from(JP2_RED, "base64");
+  const draw = "q 200 0 0 200 0 0 cm /Im0 Do Q";
+  const objs = [null,
+    Buffer.from("<< /Type /Catalog /Pages 2 0 R >>"),
+    Buffer.from("<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
+    Buffer.from("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>"),
+    Buffer.concat([Buffer.from("<< /Type /XObject /Subtype /Image /Width 16 /Height 16 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /JPXDecode /Length " + img.length + " >>\nstream\n"), img, Buffer.from("\nendstream")]),
+    Buffer.from("<< /Length " + draw.length + " >>\nstream\n" + draw + "\nendstream")];
+  const parts = [Buffer.from("%PDF-1.5\n")];
+  let size = parts[0].length;
+  const at = [];
+  for (let i = 1; i < objs.length; i++) {
+    at[i] = size;
+    const b = Buffer.concat([Buffer.from(i + " 0 obj\n"), objs[i], Buffer.from("\nendobj\n")]);
+    parts.push(b); size += b.length;
+  }
+  let tail = "xref\n0 " + objs.length + "\n0000000000 65535 f \n";
+  for (let i = 1; i < objs.length; i++) tail += String(at[i]).padStart(10, "0") + " 00000 n \n";
+  tail += "trailer\n<< /Size " + objs.length + " /Root 1 0 R >>\nstartxref\n" + size + "\n%%EOF\n";
+  parts.push(Buffer.from(tail));
+  return Buffer.concat(parts);
+}
+
 // A small EPUB, stored (not deflated): chapter titles are plain styled
 // paragraphs, as many books have them, and the book's nav lists them.
 function epubBytes() { return zipOf(EPUB_FILES); }
 // A long linked book for the lazy reader (1.29.0): 200 chapters of 1600
 // characters and a picture each, over the LONG line in reader.js.
-function longEpubBytes() {
-  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+// `png`: the picture every chapter shows (1×1 unless another is given).
+function longEpubBytes(png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64")) {
   const files = [EPUB_FILES[0], EPUB_FILES[1]];
   const items = [], spine = [];
   for (let i = 0; i < 200; i++) {
@@ -894,11 +921,11 @@ function zipOf(files) {
       assert.strictEqual(await swipe(300, 80), "https://a.example/feed.xml");
       assert.strictEqual(await swipe(300, 80), "https://b.example/rss");
       assert.strictEqual(await swipe(80, 300), "https://a.example/feed.xml");
-      // Mid-swipe the chips stay put and the posts follow (1.45.6).
+      // Mid-swipe the chips and the search field stay put and the posts follow (1.45.6).
       await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: 300, y: 500 }] });
       for (let i = 1; i <= 4; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: 300 - i * 25, y: 500 }] });
-      const mid = await q.evaluate(() => [document.querySelector("#feeds .feed-chips").style.transform, document.querySelector("#feeds .feed-head").style.transform]);
-      assert.ok(mid[0] === "" && /^translateX\(-\d+px\)$/.test(mid[1]), JSON.stringify(mid));
+      const mid = await q.evaluate(() => ["#feeds .feed-chips", "#feeds .post-search", "#feeds .feed-head"].map((s) => document.querySelector(s).style.transform));
+      assert.ok(mid[0] === "" && mid[1] === "" && /^translateX\(-\d+px\)$/.test(mid[2]), JSON.stringify(mid));
       await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
       await ctx.close();
     });
@@ -1307,6 +1334,27 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("Record timings notes a page opening and its sheets, and the report carries them (Unreleased)", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ARTICLE); await q.press("#saveUrl", "Enter");
+      await until(q, async () => (await window.Waypage.store.readIndex()).length === 1);
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Report a problem" }).click();
+      await q.locator("label.row", { hasText: "Record timings" }).click();
+      await q.locator(".row", { hasText: "Copy the timings" }).waitFor();
+      await q.evaluate(() => { history.back(); history.back(); });
+      await until(q, () => !document.querySelector("#settingsView") || document.getElementById("settingsView").hidden || !document.getElementById("settingsView").offsetParent);
+      await q.evaluate(() => openPage(state.pages[0].id));
+      await until(q, () => !document.getElementById("readerContents").hidden || !document.getElementById("readerFrame").classList.contains("unready"));
+      await q.evaluate(() => openSheet("contents"));
+      const text = await q.evaluate(() => reportText());
+      assert.ok(/Timings \(ms/.test(text) && /\d+ open \d+ characters/.test(text) && /\d+ shown/.test(text) && /sheet contents/.test(text), text.slice(-600));
+      await q.evaluate(() => { localStorage.setItem("waypage.recordTimings", "false"); timingWatch(false); timing.rows = []; });
+      assert.ok(!/Timings \(ms/.test(await q.evaluate(() => reportText())), "off still reports timings");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a Pocket export imports with its tags, archived clips finished", async () => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), "waypage-"));
       const file = path.join(dir, "ril_export.html");
@@ -1324,6 +1372,37 @@ function zipOf(files) {
       assert.deepStrictEqual(art && art[1], ["travel", "air"]);
       assert.strictEqual(art[2], false);
       assert.strictEqual(pic && pic[2], true, "the archived one is finished");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    await test("Kindle's My Clippings.txt adds highlights to the book in the library, placed when it opens (2026-11)", async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "waypage-"));
+      const file = path.join(dir, "My Clippings.txt");
+      const entry = (book, kind, loc, words) => [book, "- Your " + kind + " on Location " + loc + " | Added on Monday, March 4, 2024 10:15:32 AM", "", words, "=========="].join("\r\n");
+      fs.writeFileSync(file, "﻿" + [
+        entry("Plain Chapters (Ada Writer)", "Highlight", "10-12", "A later scene begins. A later scene begins."),
+        entry("Plain Chapters (Ada Writer)", "Note", "12", "Where it turns"),
+        entry("Another Book (Someone)", "Highlight", "5-6", "Not here."),
+      ].join("\r\n") + "\r\n");
+      const q = await page(browser, 390);
+      const bytes = [...epubBytes()];
+      await q.evaluate(async (b) => { askKeep = async () => false; await openFile(new File([new Uint8Array(b)], "plain.epub", { type: "application/epub+zip" }), null, false); }, bytes);
+      await until(q, () => state.pages.length === 1);
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Storage" }).click();
+      await q.locator("#backupSection input[type=file]").setInputFiles(file);
+      await q.locator(".import-sheet").waitFor();
+      assert.ok(/Not in your library/.test(await q.locator(".import-sheet").textContent()));
+      await q.locator(".import-go", { hasText: "Add 1 highlight" }).click();
+      await until(q, async () => ((await window.Waypage.store.readIndex())[0].marks || []).length === 1);
+      const kept = await q.evaluate(async () => (await window.Waypage.store.readIndex())[0].marks[0]);
+      assert.deepStrictEqual([kept.text, kept.note, kept.end], ["A later scene begins. A later scene begins.", "Where it turns", 0]);
+      await q.evaluate(() => { history.back(); history.back(); });
+      await q.evaluate(() => openPage(state.pages[0].id));
+      await until(q, () => state.pages[0].marks[0].end > 0, null, 15000);
+      assert.strictEqual(await q.frameLocator("#readerFrame").locator("mark.co-mark").count() > 0, true);
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
       fs.rmSync(dir, { recursive: true, force: true });
@@ -1460,11 +1539,11 @@ function zipOf(files) {
       await q.reload();
       await q.click("#settingsBtn");
       await q.locator(".nav-row", { hasText: "Library" }).click();
-      await q.locator("#sectionBody .nav-row", { hasText: "Edit clips" }).click();
-      await q.locator("#sectionTitle", { hasText: "Edit clips" }).waitFor();
+      await q.locator("#sectionBody .nav-row", { hasText: "Find and replace" }).click();
+      await q.locator("#sectionTitle", { hasText: "Find and replace" }).waitFor();
       await q.click("#sectionBack");
       await q.locator("#sectionTitle", { hasText: "Library" }).waitFor();
-      await q.locator("#sectionBody .nav-row", { hasText: "Edit clips" }).click();
+      await q.locator("#sectionBody .nav-row", { hasText: "Find and replace" }).click();
       await q.fill("#editFind", "~~*~~");
       await q.locator("#editResult .row", { hasText: "Find" }).click();
       await q.locator("#editResult .section-lead", { hasText: "Found" }).waitFor();
@@ -1503,7 +1582,7 @@ function zipOf(files) {
       await q.reload();
       await q.click("#settingsBtn");
       await q.locator(".nav-row", { hasText: "Library" }).click();
-      await q.locator("#sectionBody .nav-row", { hasText: "Edit clips" }).click();
+      await q.locator("#sectionBody .nav-row", { hasText: "Find and replace" }).click();
       await q.fill("#editFind", "oceanofpdf.com");
       await q.locator("#editResult .row", { hasText: "Find" }).click();
       await q.locator("#editResult .section-lead", { hasText: "Found" }).waitFor();
@@ -1513,6 +1592,151 @@ function zipOf(files) {
       const html = await q.evaluate(() => window.Waypage.store.readPage("lk1"));
       assert.ok(!/oceanofpdf/.test(html) && /Get book one and <a href="https:\/\/example.org\/b">book two<\/a>/.test(html) && /Also <b>three<\/b>/.test(html), html);
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a series has its own section, sits in a collection, and turns back into a collection with nothing lost", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (id, folder, extra) => ({ id, url: "https://example.com/" + id, title: id, site: "example.com", savedAt: 1000, minutes: 1, mode: "links", at: 0, finished: false, folder, folderAt: Number(id.slice(1)), ...extra });
+        // m3 lost its marks, as on a device without series.
+        const list = [c("m1", "Saga", { folderSeries: true, folderIn: "Shelf" }), c("m2", "Saga", { folderSeries: true, folderIn: "Shelf" }), c("m3", "Saga"),
+          c("s1", "Shelf"), c("w1", "Weekend"), c("x1")];
+        delete list[5].folder;
+        await S.writeIndex(list);
+        for (const x of list) await S.writePage(x.id, "<!doctype html><html><body><p>" + x.id + "</p></body></html>", x);
+      });
+      await q.reload();
+      await until(q, () => !!document.querySelector('[data-key="series"] .tile[data-name="Saga"]'));
+      // The clip that lost the mark takes it back.
+      await until(q, () => state.pages.find((p) => p.id === "m3").folderSeries && state.pages.find((p) => p.id === "m3").folderIn === "Shelf");
+      assert.deepStrictEqual(await q.locator('[data-key="folders"] .tile').evaluateAll((t) => t.map((x) => x.dataset.name).sort()), ["Shelf", "Weekend"]);
+      // View options can show them mixed in with the collections.
+      await q.click("#viewBtn");
+      await q.locator(".lib-view .row", { hasText: "Series apart" }).locator("input").click();
+      await until(q, () => !document.querySelector('[data-key="series"]') && !!document.querySelector('[data-key="folders"] .tile[data-name="Saga"]'));
+      assert.strictEqual(await q.textContent('[data-key="h:folders"] .section-link'), "Collections and series›");
+      await q.locator(".lib-view .row", { hasText: "Series apart" }).locator("input").click();
+      await until(q, () => !!document.querySelector('[data-key="series"] .tile[data-name="Saga"]'));
+      await q.evaluate(() => history.back());
+      await until(q, () => !state.menu);
+      // Its clips show only inside it; the collection shows it above its own.
+      assert.strictEqual(await q.locator('#library .page-card[data-ids="m1"]').count(), 0);
+      await q.evaluate(() => openFolder("Shelf"));
+      await q.locator('#folderBody .tile[data-name="Saga"]').waitFor();
+      await q.locator('#folderBody .tile[data-name="Saga"] .card-open').click();
+      await until(q, () => state.folder === "Saga");
+      assert.strictEqual(await q.textContent("#folderBody .book-site"), "example.com · Series");
+      assert.strictEqual(await q.textContent("#folderBody .series-in"), "In Shelf");
+      // A collection holding a series asks before it becomes one.
+      await q.evaluate(() => { history.back(); });
+      await until(q, () => state.folder === "Shelf");
+      await q.click("#folderMore");
+      await q.locator("#folderPop .pop-item", { hasText: "Make it a series" }).click();
+      await q.locator(".sheet-row", { hasText: "Make it a series, move 1 series out" }).click();
+      await until(q, () => isSeriesFolder("Shelf") && !seriesHost("Saga") && state.pages.every((p) => p.folder !== "Saga" || !p.folderIn) && !state.menu);
+      // And back, from its ⋯ menu; then Saga goes into Weekend.
+      await q.click("#folderMore");
+      await q.locator("#folderPop .pop-item", { hasText: "Make it a collection" }).click();
+      await until(q, () => !isSeriesFolder("Shelf") && state.pages.find((p) => p.id === "s1").folder === "Shelf");
+      await q.evaluate(() => openFolder("Saga"));
+      await until(q, () => state.folder === "Saga");
+      await q.click("#folderMore");
+      await q.locator("#folderPop .pop-item", { hasText: "Put in a collection" }).click();
+      await q.locator(".sheet-row", { hasText: "Weekend" }).click();
+      await until(q, () => seriesHost("Saga") === "Weekend" && !state.menu && state.folder === "Saga");
+      // Renaming the collection keeps the series in it; removing it lets go.
+      await q.evaluate(() => openFolder("Weekend"));
+      await until(q, () => state.folder === "Weekend");
+      await q.evaluate(() => renameFolder("Weekends"));
+      assert.strictEqual(await q.evaluate(() => seriesHost("Saga")), "Weekends");
+      await q.evaluate(() => removeFolder(false));
+      await until(q, () => !seriesHost("Saga") && isSeriesFolder("Saga") && !allFolders().includes("Weekends"));
+      // Without the marks, nothing moves: it's a collection again.
+      await q.evaluate(async () => { for (const p of state.pages) { delete p.folderSeries; delete p.folderIn; } renderLibrary(); });
+      await until(q, () => !document.querySelector('[data-key="series"]') && !!document.querySelector('[data-key="folders"] .tile[data-name="Saga"]'));
+      assert.strictEqual(await q.evaluate(() => folderPages("Saga").length), 3);
+      // Opening a collection looks for a cover on the web, which is offline here.
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("an audiobook folder of book folders becomes a series, discs stay one book, and removing one book keeps the folder", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(() => {
+        const F = window.Waypage.platform.files, A = window.Waypage.platform.audio;
+        Object.defineProperty(A, "native", { get: () => true, configurable: true });
+        A.probe = async () => ({ duration: 60000 });
+        window.released = [];
+        F.release = async (ref) => { released.push(ref); };
+        F.blob = async () => new Blob([new Uint8Array(16)]);
+        const tree = { "tree:saga": ["Book 2 Salt/01.mp3", "Book 1 Road/02.mp3", "Book 1 Road/01.mp3", "Book 3/a.m4b", "cover.txt"],
+          "tree:discs": ["CD1/01.mp3", "CD2/01.mp3"] };
+        window.pickNext = "";
+        F.pickFolder = async () => ({ ref: pickNext, name: pickNext.slice(5) });
+        F.scan = async (ref) => ({ ok: true, name: ref === "tree:saga" ? "The Saga" : "Discs", files: tree[ref].map((path) => ({ ref: ref + "/" + path, path, name: path.split("/").pop(), size: 10 })) });
+      });
+      await q.evaluate(() => { pickNext = "tree:saga"; return addAudiobookFolder(); });
+      await until(q, () => state.folder === "The Saga");
+      const saga = await q.evaluate(() => ({ titles: folderPages("The Saga").map((p) => p.title), series: isSeriesFolder("The Saga"),
+        parts: folderPages("The Saga").map((p) => p.audio.parts.length), links: [...new Set(folderPages("The Saga").map((p) => p.link))],
+        head: [...document.querySelectorAll("#folderBody .section-head, #folderBody h2, #folderBody h3")].map((h) => h.textContent).join("|") }));
+      assert.deepStrictEqual(saga.titles, ["Book 1 Road", "Book 2 Salt", "Book 3"]);
+      assert.ok(saga.series);
+      assert.deepStrictEqual(saga.parts, [2, 1, 1]);
+      assert.deepStrictEqual(saga.links, ["tree:saga"]);
+      assert.ok(/Files · 3/.test(saga.head), saga.head);
+      assert.ok(/0 of 3 heard/.test(await q.evaluate(() => document.getElementById("folderBody").textContent)));
+      // The same folder again is already here; a folder of discs is one book.
+      await q.evaluate(() => addAudiobookFolder());
+      assert.strictEqual(await q.evaluate(() => state.pages.length), 3);
+      await q.evaluate(() => { history.back(); pickNext = "tree:discs"; return addAudiobookFolder(); });
+      await until(q, () => state.pages.some((p) => p.title === "Discs"));
+      const discs = await q.evaluate(() => { const p = state.pages.find((x) => x.title === "Discs"); return { parts: p.audio.parts.length, folder: p.folder || "" }; });
+      assert.deepStrictEqual(discs, { parts: 2, folder: "" });
+      // Removing one book keeps the folder the others read from.
+      q.on("dialog", (d) => d.accept());
+      await q.evaluate(() => deletePage(folderPages("The Saga")[0]));
+      assert.deepStrictEqual(await q.evaluate(() => released), []);
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Edit clips edits the words of files read from where they are, not PDFs or comics", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const f = (id, kind, folder) => ({ id, url: "", title: "File " + id, site: kind.toUpperCase(), savedAt: 1000, minutes: 1, mode: "previews", at: 0, finished: false, link: "handle:" + id, file: { name: id + "." + kind, kind, ext: kind, size: 9 }, ...(folder ? { folder } : {}) });
+        const list = [f("fe1", "epub", "Shelf"), f("fe2", "txt"), f("fe3", "pdf", "Shelf"), f("fe4", "cbz"), { id: "fc1", url: "https://example.com/c", title: "Clip", site: "example.com", savedAt: 1000, minutes: 1, mode: "links", at: 0, finished: false, folder: "Shelf" }];
+        await S.writeIndex(list);
+        for (const m of list) await S.writePage(m.id, "<!doctype html><html><body><p>A [ad] here</p></body></html>", m);
+      });
+      await q.reload();
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Library" }).click();
+      await q.locator("#sectionBody .nav-row", { hasText: "Find and replace" }).click();
+      await q.locator(".pick-row .dropdown-btn").click();
+      await q.locator(".dropdown-item", { hasText: "All files" }).click();
+      await q.fill("#editFind", "[ad]");
+      await q.locator("#editResult .row", { hasText: "Find" }).click();
+      await q.locator("#editResult .section-lead", { hasText: "Found" }).waitFor();
+      assert.strictEqual(await q.textContent("#editResult .section-lead"), "Found 2 times in 2 files.");
+      assert.ok(await q.locator("#editResult .footnote", { hasText: "stays as it is" }).count() === 1);
+      await q.locator("#editResult .row", { hasText: "Remove from 2 files" }).click();
+      await until(q, () => !!document.querySelector("#editResult") && /Undo/.test(document.querySelector("#editResult").textContent));
+      const got = await q.evaluate(async () => Object.fromEntries(await Promise.all(["fe1", "fe2", "fe3", "fe4", "fc1"].map(async (id) => [id, /\[ad\]/.test(await window.Waypage.store.readPage(id))]))));
+      assert.deepStrictEqual(got, { fe1: false, fe2: false, fe3: true, fe4: true, fc1: true });
+      // A collection holding both: its clips and its files that have words.
+      await q.locator(".pick-row .dropdown-btn").click();
+      await q.locator(".dropdown-item", { hasText: "Collections" }).click();
+      await q.locator(".edit-folders label.row", { hasText: "Shelf" }).locator("input").click();
+      assert.ok(/1 clip, 1 file|1 file, 1 clip/.test(await q.textContent(".edit-folders label.row")));
+      // A PDF's library card reads it in pdf.js's sandboxed frame.
+      const errors = q.errors.filter((e) => !/serviceWorker/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
       await q.context().close();
     });
 
@@ -1533,7 +1757,7 @@ function zipOf(files) {
       await q.evaluate(() => openFolder("Serial"));
       // Favourite and Edit sit in the bar; the ⋯ menu keeps the rest.
       await q.click("#folderMore");
-      assert.deepStrictEqual(await q.locator("#folderPop .pop-label").allTextContents(), ["Website sync", "Add clips", "Show as covers", "Select", "Export", "Remove"]);
+      assert.deepStrictEqual(await q.locator("#folderPop .pop-label").allTextContents(), ["Website sync", "Add clips", "Show as a list", "Make it a series", "Tags", "Select", "Export", "Remove"]);
       await q.keyboard.press("Escape");
       await q.click("#folderFav");
       await until(q, () => folderFav("Serial") && document.getElementById("folderFav").getAttribute("aria-pressed") === "true");
@@ -1734,6 +1958,142 @@ function zipOf(files) {
       const auto = await book();
       assert.ok(/href="images\/cover\.jpg"/.test(auto.cover) && auto.page, JSON.stringify(auto));
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("exporting a collection shows what it's making, then gives the button back", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const c = (i) => ({ id: "xb" + i, url: "https://example.com/xb" + i, title: "Part " + i, site: "example.com", savedAt: 1000 + i, minutes: 1, mode: "links", at: 0, finished: false, folder: "Tome", folderAt: i });
+        await window.Waypage.store.writeIndex([c(1), c(2), c(3)]);
+        for (const i of [1, 2, 3]) await window.Waypage.store.writePage("xb" + i, "<!doctype html><html><body><h1>Part " + i + "</h1><p>Words.</p></body></html>", c(i));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        let file = null;
+        window.Waypage.platform.download = (name) => { file = name; };
+        const box = exportControls({ pages: folderPages("Tome"), title: "Tome" }, () => {});
+        document.body.append(box);
+        const [save, other] = box.querySelectorAll(".export-actions button");
+        const face = save.textContent;
+        const seen = [];
+        let bar = false, held = false;
+        new MutationObserver(() => {
+          const l = save.querySelector(".export-label");
+          if (l && seen[seen.length - 1] !== l.textContent) seen.push(l.textContent);
+          bar = bar || !!save.querySelector(".export-bar .progress-fill");
+          held = held || (!!l && box.querySelector(".dropdown-btn").disabled);
+        }).observe(save, { subtree: true, childList: true, characterData: true });
+        const kind = box.querySelector(".dropdown-btn");
+        save.click();
+        await new Promise((r) => { const t = setInterval(() => { if (file) { clearInterval(t); r(); } }, 20); });
+        await new Promise((r) => setTimeout(r, 0));
+        return { seen, bar, held, file, face, after: save.textContent, busy: save.classList.contains("busy"), disabled: save.disabled || kind.disabled || other.disabled };
+      });
+      assert.strictEqual(got.file, "Tome.epub");
+      assert.deepStrictEqual(got.seen.slice(0, 1), ["Making the book…"], JSON.stringify(got.seen));
+      assert.ok(got.seen.includes("Chapter 2 of 3") && got.seen.includes("Packing the book…"), JSON.stringify(got.seen));
+      assert.ok(got.bar && got.held, JSON.stringify(got));
+      assert.ok(got.after === got.face && !got.busy && !got.disabled, JSON.stringify(got));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a collection exports without chapter headers when the switch is off, and remembers it", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const c = (i) => ({ id: "ch" + i, url: "https://example.com/ch" + i, title: "Part " + i, site: "example.com", byline: "Ann Author", savedAt: 1000 + i, minutes: 1, mode: "links", at: 0, finished: false, folder: "Tome", folderAt: i });
+        await window.Waypage.store.writeIndex([c(1), c(2)]);
+        for (const i of [1, 2]) await window.Waypage.store.writePage("ch" + i, "<!doctype html><html><body><header class=\"co-head\"><p class=\"co-meta\">example.com</p><h1>Part " + i + "</h1><p class=\"co-byline\">Ann Author</p></header><p>Words of part " + i + ".</p></body></html>", c(i));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const made = (heads) => q.evaluate(async (heads) => {
+        const B = window.Waypage.backup;
+        let got = null;
+        window.Waypage.platform.download = (name, blob) => { got = blob; };
+        const what = { pages: folderPages("Tome"), title: "Tome" };
+        const box = document.body.appendChild(exportControls(what, () => {}));
+        const sw = box.querySelector('[data-pref="exportHeads"]');
+        if (sw.checked !== heads) sw.click();
+        const opts = { heads: sw.checked };
+        box.remove();
+        await exportAs(what, "epub", "save", document.createElement("button"), opts);
+        if (!got) return { err: document.body.innerText.slice(-300) };
+        const files = await B.zipEntries(got);
+        const read = async (n) => new TextDecoder().decode(await B.zipRead(got, files.get(n)));
+        const ch = await read("OEBPS/text/1.xhtml");
+        const nav = await read("OEBPS/nav.xhtml");
+        const md = (await B.exportMarkdownAll(what.pages, "Tome", null, opts)).text;
+        const html = (await B.exportPages(what.pages, "Tome", null, opts)).html;
+        return { ch, nav, md, html, stored: localStorage.getItem("waypage.exportHeads") };
+      }, heads);
+      const on = await made(true);
+      assert.ok(!on.err, on.err + " | " + q.errors.join(" | "));
+      assert.ok(/<h1[^>]*>Part 1<\/h1>/.test(on.ch) && /Ann Author/.test(on.ch), on.ch);
+      assert.ok(/## Part 1/.test(on.md) && /<h2>Part 1<\/h2>/.test(on.html), on.md);
+      const off = await made(false);
+      assert.strictEqual(off.stored, "false");
+      assert.ok(!/Part 1|Ann Author|co-meta/.test(off.ch.split("<body>")[1]) && /Words of part 1/.test(off.ch), off.ch);
+      assert.ok(/Part 1/.test(off.nav), "the contents still name each chapter");
+      assert.ok(!/Part 1|Ann Author/.test(off.md) && /Words of part 2/.test(off.md), off.md);
+      assert.ok(!/Part 1|co-head/.test(off.html) && /Words of part 1/.test(off.html), off.html);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a collection's export edits change only the exported copy: chapters, title, author, repeated lines, find and replace", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const c = (i) => ({ id: "ee" + i, url: "https://example.com/ee" + i, title: "Part " + i, site: "example.com", byline: "Ann Author", savedAt: 1000 + i, minutes: 1, mode: "links", at: 0, finished: false, folder: "Saga", folderAt: i });
+        await window.Waypage.store.writeIndex([1, 2, 3, 4, 5].map(c));
+        for (const i of [1, 2, 3, 4, 5]) await window.Waypage.store.writePage("ee" + i, "<!doctype html><html><body><header class=\"co-head\"><h1>Part " + i + "</h1></header><div class=\"co-body\"><p>Previous Chapter Next Chapter</p><p>Words of part " + i + ".</p><p>A/N: thanks for reading " + i + "</p></div></body></html>", c(i));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => { openFolder("Saga"); setFolderMode("export"); });
+      const box = q.locator(".export");
+      await box.locator(".nav-row", { hasText: "Clean up the text" }).click();
+      await box.locator(".export-lines .switch").first().waitFor();
+      assert.match(await box.locator(".export-lines").innerText(), /Previous Chapter Next Chapter[\s\S]*In 5 of 5 chapters/);
+      await box.locator(".export-lines .switch").first().check();
+      await box.locator("input.feed-input").first().fill("A/N: *");
+      await box.locator(".export-back").click();
+      await box.locator(".nav-row", { hasText: "Book details" }).click();
+      await box.locator("input.feed-input").nth(0).fill("The Saga");
+      await box.locator("input.feed-input").nth(1).fill("A. Writer");
+      await box.locator(".export-back").click();
+      assert.match(await box.innerText(), /1 repeated line left out, 1 find and replace/);
+      // The pick rows' drop-downs: pick chapters 2 to 3 the way a person does.
+      for (const [label, option] of [["First chapter", "2. Part 2"], ["Last chapter", "3. Part 3"]]) {
+        await box.locator(".pick-row", { hasText: label }).locator(".dropdown-btn").click();
+        await q.getByRole("listbox", { name: label }).getByRole("option", { name: option }).click();
+      }
+      const out = await q.evaluate(async () => {
+        const B = window.Waypage.backup;
+        let got = null, name = null;
+        window.Waypage.platform.download = (n, blob) => { name = n; got = blob; };
+        document.querySelector(".export .export-save").click();
+        await new Promise((r) => { const t = setInterval(() => { if (got) { clearInterval(t); r(); } }, 20); });
+        const files = await B.zipEntries(got);
+        const read = async (n) => new TextDecoder().decode(await B.zipRead(got, files.get(n)));
+        const opf = await read("OEBPS/content.opf");
+        const chapters = [...files.keys()].filter((k) => /^OEBPS\/text\/\d+\.xhtml$/.test(k));
+        const one = await read("OEBPS/text/1.xhtml");
+        const kept = await window.Waypage.store.readPage("ee2");
+        return { name, opf, chapters: chapters.length, one, kept, stored: JSON.parse(localStorage.getItem("waypage.exportEdits")).Saga };
+      });
+      assert.strictEqual(out.name, "The Saga.epub");
+      assert.match(out.opf, /<dc:title>The Saga<\/dc:title>/);
+      assert.match(out.opf, /<dc:creator>A\. Writer<\/dc:creator>/);
+      assert.strictEqual(out.chapters, 2, "chapters 2 and 3 only");
+      assert.ok(/Words of part 2/.test(out.one) && !/Previous Chapter|A\/N|thanks for reading/.test(out.one), out.one);
+      assert.ok(/Previous Chapter Next Chapter/.test(out.kept) && /A\/N: thanks/.test(out.kept), "the clip itself is untouched");
+      assert.deepStrictEqual(out.stored, { title: "The Saga", author: "A. Writer", lines: ["Previous Chapter Next Chapter"], rules: [{ find: "A/N: *", put: "" }] });
+      // Opening the collection reaches for the site, which tests have no way to.
+      const errs = q.errors.filter((e) => !/example\.com%2Fee/.test(e));
+      assert.deepStrictEqual(errs, [], errs.join(" | "));
       await q.context().close();
     });
 
@@ -2187,6 +2547,79 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("a collection's In other apps is a switch in its Edit, not in its ⋯ (Daniel's ask)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t", what: { activity: true }, shareKinds: { article: true } }));
+        const c = (id) => ({ id, url: "https://example.com/" + id, title: "Clip " + id, site: "example.com", savedAt: 100, minutes: 1, mode: "links", at: 0, folder: "Trip" });
+        await window.Waypage.store.writeIndex([c("tr1"), c("tr2")]);
+        for (const id of ["tr1", "tr2"]) await window.Waypage.store.writePage(id, "<!doctype html><html><body><p>" + id + "</p></body></html>", c(id));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => openFolder("Trip"));
+      await q.click("#folderMore");
+      assert.ok(!(await q.locator("#folderPop .pop-label").allTextContents()).includes("In other apps"));
+      await q.keyboard.press("Escape");
+      await q.click("#folderEdit");
+      const sw = q.locator("#folderBody .folder-edit label.row", { hasText: "In other apps" }).locator("input.switch");
+      assert.ok(await sw.isChecked());
+      await sw.click();
+      await until(q, () => folderPages("Trip").every((p) => p.folderNoShare));
+      await sw.click();
+      await until(q, () => folderPages("Trip").every((p) => !p.folderNoShare));
+      const errs = q.errors.filter((e) => !/workers\.dev|api\.github/.test(e));
+      assert.deepStrictEqual(errs, [], errs.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a pull on the library updates live clips too, like Website sync (Daniel's ask)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const c = (id, more) => ({ id, url: "https://example.com/" + id, title: "Clip " + id, site: "example.com", savedAt: 100, minutes: 1, mode: "links", at: 0, ...more });
+        const list = [c("lv1", { live: true }), c("lv2", { live: true, liveAt: Date.now() }), c("still1"), c("lvf", { live: true, file: { kind: "epub" } })];
+        await window.Waypage.store.writeIndex(list);
+        for (const x of list) await window.Waypage.store.writePage(x.id, "<!doctype html><html><body><p>" + x.id + "</p></body></html>", x);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const calls = [];
+        window.updateClip = async (p, how) => { calls.push(p.id + ":" + how); return p.id === "lv1" ? "updated" : "same"; };
+        await pullChapters(Promise.resolve());
+        return { calls: calls.sort(), said: document.getElementById("toast").textContent };
+      });
+      assert.deepStrictEqual(got.calls, ["lv1:pull", "lv2:pull"], JSON.stringify(got));
+      assert.ok(/1 live clip updated/.test(got.said), got.said);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a clip's Live sits right above In other apps, which says what it does; the sidebar's version opens About (Daniel's ask)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        localStorage.setItem("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t", what: { activity: true }, shareKinds: { article: true } }));
+        const c = { id: "lv1", url: "https://example.com/lv1", title: "Clip lv1", site: "example.com", savedAt: 100, minutes: 1, mode: "links", at: 0 };
+        await window.Waypage.store.writeIndex([c]);
+        await window.Waypage.store.writePage("lv1", "<!doctype html><html><body><p>lv1</p></body></html>", c);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => openMenu("page", state.pages[0]));
+      const rows = await q.locator(".group label.row .choice-label").allTextContents();
+      const i = rows.indexOf("Live");
+      assert.ok(i >= 0 && rows[i + 1] === "In other apps", rows.join(", "));
+      assert.ok(/reading activity/.test(await q.locator("label.row", { hasText: "In other apps" }).locator(".choice-note").textContent()));
+      await q.evaluate(() => history.back());
+      await until(q, () => !state.menu);
+      await q.click("#sideBtn");
+      await q.click("#sidebar .side-version");
+      await until(q, () => state.settings && !state.side);
+      await until(q, () => document.getElementById("sectionTitle").textContent === "About");
+      const errs = q.errors.filter((e) => !/workers\.dev|api\.github/.test(e));
+      assert.deepStrictEqual(errs, [], errs.join(" | "));
+      await q.context().close();
+    });
     await test("reading on while a sync runs keeps the new place, not the one the sync started with (1.36.1)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
@@ -2280,6 +2713,14 @@ c("bk1", { at: 0.01 })]);
       assert.ok(await q.evaluate(() => document.querySelectorAll(".rs-col").length >= 28));
       await q.click(".rs-tab >> text=Year");
       assert.strictEqual(await q.evaluate(() => document.querySelectorAll(".rs-col").length), 12);
+      await q.click(".rs-tab >> text=All time");
+      const all = await q.evaluate(() => ({ total: document.querySelector(".rs-total").textContent, title: document.querySelector(".rs-title").textContent,
+        cols: document.querySelectorAll(".rs-col").length, steps: [...document.querySelectorAll(".rs-range button")].map((b) => b.disabled), top: document.querySelector(".rs-over").textContent }));
+      assert.ok(/^Since /.test(all.title), all.title);
+      assert.ok(all.cols >= 6, "a month each, six at least");
+      assert.deepStrictEqual(all.steps, [true, true], "nothing before or after all time");
+      assert.strictEqual(all.top, "Most time overall");
+      assert.notStrictEqual(all.total, week.total, "all ten days, not just this week's");
       await q.click(".rs-tab >> text=Week");
       await q.click(".rs-range button[aria-label=Before]");
       assert.notStrictEqual(await q.textContent(".rs-total"), week.total, "last week is its own total");
@@ -2296,6 +2737,43 @@ c("bk1", { at: 0.01 })]);
       assert.ok(!(await q.evaluate(() => C.reader.readable().some((t) => /narrated/.test(t)))), "it isn't narrated");
       await q.evaluate(() => { store(SPENT_KEY, false); C.reader.setEnd(spentLines(state.open)); });
       assert.strictEqual(await frameText(q).locator(".co-spent").count(), 0);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a deleted clip stays in Stats greyed, saved again takes its time back, and can be removed from Stats (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ARTICLE);
+      await q.press("#saveUrl", "Enter");
+      await until(q, () => state.pages.length === 1 && !state.saving.length, null, 15000);
+      const id = await q.evaluate(() => {
+        const S = window.Waypage.stats, id = state.pages[0].id, now = Date.now(), days = {};
+        for (let i = 0; i < 3; i++) days[S.dayKey(now - i * 864e5)] = { readMs: 20 * 60000, words: 3000, opened: 1, clips: { [id]: 20 * 60000 } };
+        S.take("otherdevice5", { since: now - 30 * 864e5, days, clips: { [id]: { readMs: 60 * 60000, opened: 3, far: 0.6 } } });
+        statsNames();
+        return id;
+      });
+      assert.ok(await q.evaluate((id) => window.Waypage.stats.mine().names[id].t === state.pages[0].title, id), "a clip read gets a name");
+      await q.evaluate(() => { window.confirm = () => true; return deletePage(state.pages[0], "keys"); });
+      await q.evaluate(() => { statsNames(); goPlace("reading"); });
+      await q.waitForSelector(".rs-gone");
+      const total = await q.textContent(".rs-total");
+      assert.ok(/^Deleted/.test(await q.textContent(".rs-gone .meta")));
+      await q.click(".rs-gone .rs-clip");
+      await q.locator("#menuSheet:not([hidden]) button", { hasText: "Save again" }).click();
+      await until(q, () => state.pages.length === 1 && !state.saving.length, null, 15000);
+      const back = await q.evaluate(() => { statsNames(); renderReading(); const c = window.Waypage.stats.clip(state.pages[0].id); return { readMs: c && c.readMs, far: c && c.far, grey: document.querySelectorAll(".rs-gone").length, rows: document.querySelectorAll(".rs-clip").length }; });
+      assert.ok(back.readMs >= 60 * 60000 && back.far === 0.6, "the copy saved again has the old time: " + JSON.stringify(back));
+      assert.deepStrictEqual([back.grey, back.rows], [0, 1]);
+      await q.evaluate(() => deletePage(state.pages[0], "keys"));
+      await q.evaluate(() => { statsNames(); goPlace("reading"); renderReading(); });
+      await q.waitForSelector(".rs-gone");
+      await q.click(".rs-gone .rs-clip");
+      await q.locator("#menuSheet:not([hidden]) button", { hasText: "Remove from Stats" }).click();
+      await until(q, () => !document.querySelector(".rs-gone"));
+      assert.strictEqual(await q.textContent(".rs-total"), total, "the totals stay");
+      const kept = await q.evaluate(() => { const S = window.Waypage.stats, c = S.clean(JSON.parse(JSON.stringify(S.mine()))); return { names: Object.keys(c.names || {}).length, hidden: Object.keys(c.hidden || {}).length }; });
+      assert.ok(kept.names >= 1 && kept.hidden === 1, "names and removals go to the other devices: " + JSON.stringify(kept));
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });
@@ -2759,6 +3237,22 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("a PDF page whose picture is JPEG 2000 draws it, not a blank page", async () => {
+      const q = await page(browser, 390);
+      const px = await q.evaluate(async (b) => {
+        const pdf = await window.Waypage.pdf.open(new Uint8Array(b));
+        const bytes = await pdf.draw(1, 200);
+        pdf.close();
+        const bmp = await createImageBitmap(new Blob([bytes]));
+        const c = new OffscreenCanvas(bmp.width, bmp.height);
+        const x = c.getContext("2d");
+        x.drawImage(bmp, 0, 0);
+        return [...x.getImageData(bmp.width >> 1, bmp.height >> 1, 1, 1).data];
+      }, [...jpxPdfBytes()]);
+      assert.ok(px[0] > 180 && px[1] < 80 && px[2] < 80, "the middle of the page is " + px.join(","));
+      await q.context().close();
+    });
+
     await test("dark PDF pages map white to the theme's background and black to its ink, in a dark theme only (1.49.0)", async () => {
       const q = await page(browser, 390);
       const got = await q.evaluate(() => {
@@ -2982,6 +3476,8 @@ c("bk1", { at: 0.01 })]);
       assert.strictEqual(await q.locator(".ink-pop-sizes button").count(), 5);
       assert.deepStrictEqual(await q.locator(".ink-pop-sizes .ink-pop-n").allInnerTexts(), ["1", "2", "3", "4", "5"]);
       assert.strictEqual(await q.locator('.ink-pop-sizes [aria-checked="true"]').count(), 1);
+      // Where it settles: it grows out of its button, and the bar rises from the bottom.
+      await until(q, () => ![".ink-pop-sizes", ".ink-bar"].some((s) => document.querySelector(s).getAnimations().length));
       const onScreen = await q.evaluate(() => { const r = document.querySelector(".ink-pop-sizes").getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.bottom <= document.querySelector(".ink-bar").getBoundingClientRect().top; });
       assert.strictEqual(onScreen, true, "above its button, inside the screen");
       await q.locator(".ink-pop-sizes button").nth(4).click();
@@ -3628,6 +4124,104 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("drawings can go in the margins beside a clip's text and beside a note's sheet, and stay there on a narrower screen (2026-11)", async () => {
+      const q = await page(browser, 1280);
+      await q.evaluate(async () => {
+        const md = "# Margins\n\n" + Array.from({ length: 12 }, (_, i) => "Paragraph " + (i + 1) + " has words enough to wrap over a few lines on a phone, and then some more.").join("\n\n");
+        const meta = await Waypage.files.bring(new File([md], "margins.md"), "md", { has: () => false });
+        await Waypage.store.writeIndex([meta, ...await Waypage.store.readIndex()]);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => openPage(state.pages.find((x) => x.title === "Margins").id));
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open && Waypage.ink.blocks);
+      await q.evaluate(() => { inkSet(true); Waypage.ink.setting({ finger: true, tool: "pen" }); });
+      await q.waitForTimeout(400);
+      // Left of the third paragraph, in the margin.
+      const [x0, y0] = await q.evaluate(() => {
+        const f = document.getElementById("readerFrame").getBoundingClientRect(), b = document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-body p")[2].getBoundingClientRect();
+        return [f.left + b.left - 90, f.top + b.top + b.height / 2];
+      });
+      await q.mouse.move(x0, y0); await q.mouse.down();
+      for (let i = 1; i <= 8; i++) await q.mouse.move(x0 + i * 6, y0 + (i % 2 ? 8 : -8));
+      await q.mouse.up();
+      await until(q, () => !!state.open.ink && Object.keys(state.open.ink).length === 1);
+      const kept = await q.evaluate(() => ({ block: Object.keys(state.open.ink)[0], xs: Object.values(state.open.ink)[0][0].p.filter((_, i) => i % 3 === 0) }));
+      assert.strictEqual(kept.block, "4", "the stroke is beside the third paragraph");
+      assert.ok(Math.max(...kept.xs) < 0, "kept in the margin: " + kept.xs.join(","));
+      const shows = () => q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument, a = d.querySelector(".co-ink path").getBoundingClientRect(), p = d.querySelectorAll(".co-body p")[2].getBoundingClientRect();
+        return { left: a.right < p.left, beside: a.top >= p.top - 30 && a.bottom <= p.bottom + 30, wide: d.documentElement.scrollWidth > d.defaultView.innerWidth + 1 };
+      });
+      assert.deepStrictEqual(await shows(), { left: true, beside: true, wide: false });
+      // A phone's margin is narrow: the stroke stays where it was written, and the page doesn't scroll sideways.
+      await q.setViewportSize({ width: 390, height: 800 });
+      await q.waitForTimeout(800);
+      assert.strictEqual((await shows()).wide, false, "the page scrolls sideways");
+      assert.deepStrictEqual(await q.evaluate(() => Object.values(state.open.ink)[0][0].p.filter((_, i) => i % 3 === 0)), kept.xs, "the stroke was moved");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+      // A note: in the margin left of its sheet.
+      const n = await page(browser, 1280);
+      await n.click("#severalBtn");
+      await n.locator("#batchView .row", { hasText: "New note" }).click();
+      await n.locator(".paper-row", { hasText: "Blank note" }).click();
+      await until(n, () => !!state.open && state.open.note && C.ink.on && (C.reader.frameDoc || document).querySelectorAll("svg.co-ink").length === 1);
+      await n.waitForTimeout(800);
+      await n.evaluate(() => C.ink.setting({ ...inkPrefs(), finger: true }));
+      const sheet = await n.evaluate(() => { const r = C.reader.frameDoc.querySelector("svg.co-ink").getBoundingClientRect(); return [r.left, r.top]; });
+      assert.ok(sheet[0] > 50, "no margin to draw in: " + sheet[0]);
+      const fb = await n.locator("#readerFrame").boundingBox();
+      await n.mouse.move(fb.x + sheet[0] - 40, fb.y + sheet[1] + 100);
+      await n.mouse.down();
+      await n.mouse.move(fb.x + sheet[0] - 15, fb.y + sheet[1] + 160, { steps: 8 });
+      await n.mouse.up();
+      await until(n, () => C.ink.state().count === 1);
+      const gap = await n.evaluate(() => C.reader.frameDoc.querySelector('svg.co-ink[data-page="1"]').getBoundingClientRect().left - C.reader.frameDoc.querySelector('svg.co-ink[data-page="1"] path').getBoundingClientRect().right);
+      assert.ok(gap > 0, "the stroke was pulled onto the sheet: " + gap);
+      assert.deepStrictEqual(n.errors, [], n.errors.join(" | "));
+      await n.context().close();
+    });
+
+    await test("a book too long for one note is measured first, and the note is made from the chapters picked (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const para = "Words enough to fill a line or two of a printed page, and then some more of them so the book runs long. ".repeat(6);
+        const md = "# Long book\n\n" + Array.from({ length: 40 }, (_, i) => "## Chapter " + (i + 1) + "\n\n" + Array.from({ length: 40 }, () => para).join("\n\n")).join("\n\n");
+        const meta = await Waypage.files.bring(new File([md], "long.md"), "md", { has: () => false });
+        await Waypage.store.writeIndex([meta, ...await Waypage.store.readIndex()]);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const t0 = Date.now();
+      q.evaluate(() => makeNoteFrom(state.pages.find((x) => x.title === "Long book")));
+      await q.locator('#menuSheet[data-kind="noteParts"]:not([hidden]) .row', { hasText: "Make the note" }).waitFor();
+      assert.ok(Date.now() - t0 < 8000, "measuring took " + (Date.now() - t0) + " ms");
+      const head = await q.locator("#menuSheet .menu-head .meta").innerText();
+      const pages = Number(head.match(/About (\d+) pages/)[1]);
+      assert.ok(pages > 500, head);
+      const total = () => q.locator("#menuSheet p.meta:not(.menu-head *)").last().innerText();
+      assert.match(await total(), /^About \d+ pages$/, "the first chapters that fit are picked");
+      assert.strictEqual(await q.locator("#menuSheet .row", { hasText: "Make the note" }).isDisabled(), false);
+      // To the last chapter: too many.
+      const pick = async (label, name) => {
+        await q.locator("#menuSheet .pick-row", { hasText: label }).locator("button").first().click();
+        await q.locator('[role="option"]', { hasText: new RegExp("^" + name + "$") }).last().click();
+      };
+      await pick("To", "Chapter 40");
+      assert.match(await total(), /over the 500 a note holds/);
+      assert.strictEqual(await q.locator("#menuSheet .row", { hasText: "Make the note" }).isDisabled(), true);
+      await pick("From", "Chapter 3");
+      await pick("To", "Chapter 4");
+      await q.locator("#menuSheet .row", { hasText: "Make the note" }).click();
+      await until(q, () => !!state.pages.find((x) => x.note && x.title === "Long book, Chapter 3 to Chapter 4"), null, 60000);
+      const sheets = await q.evaluate(async () => (await Waypage.store.readNote(state.pages.find((x) => x.note).id)).sheets.length);
+      assert.ok(sheets > 10 && sheets < 60, "sheets " + sheets);
+      const errors = q.errors.filter((e) => !/serviceWorker/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a pinch deep in a linked PDF keeps the spot under the fingers, gaps and all", async () => {
       const maker = await browser.newPage();
       let html = "<style>@page{size:A4;margin:0} div{height:297mm;box-sizing:border-box;padding:40px;font:28px sans-serif;page-break-after:always}</style>";
@@ -3851,6 +4445,58 @@ c("bk1", { at: 0.01 })]);
       await until(q, () => state.pages[0].folder === "Google Drive" && watches()[0].into === "Google Drive");
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
+    });
+
+    await test("Add a folder: the Add page's four rows, each book in the folder added on its own in its folder's collection, its sound files left to Add an audiobook folder", async () => {
+      const q = await page(browser, 390);
+      const bytes = [...epubBytes()];
+      await q.evaluate(() => {
+        Object.defineProperty(window.Waypage.platform.files, "canPickFolder", { get: () => true });
+        window.released = [];
+      });
+      await q.click("#severalBtn");
+      assert.deepStrictEqual(await q.locator("#batchView .batch-file .row-label").allTextContents(), ["Add a file", "Add a folder", "Add an audiobook folder", "New note"]);
+      const got = await q.evaluate(async (b) => {
+        const F = window.Waypage.platform.files;
+        const book = (n) => new File([new Uint8Array(b)], n, { type: "application/epub+zip" });
+        const files = { "content://f/a.epub": book("a.epub"), "content://f/b.epub": book("b.epub") };
+        F.pickFolder = async () => ({ ref: "content://f", name: "Savage Divinity" });
+        F.scan = async () => ({ ok: true, name: "Savage Divinity", files: [
+          { ref: "content://f/b.epub", path: "Book 2/b.epub", name: "b.epub", size: files["content://f/b.epub"].size },
+          { ref: "content://f/a.epub", path: "a.epub", name: "a.epub", size: files["content://f/a.epub"].size },
+          { ref: "content://f/1.mp3", path: "1.mp3", name: "1.mp3", size: 10 },
+          { ref: "content://f/cover.jpg", path: "cover.jpg", name: "cover.jpg", size: 10 }] });
+        F.blob = async (ref) => files[ref];
+        F.release = (ref) => window.released.push(ref);
+        await addFolder();
+        return { pages: state.pages.map((p) => [p.file.name, p.folder, p.link]), released: window.released };
+      }, bytes);
+      assert.deepStrictEqual(got.pages, [["b.epub", "Book 2", "content://f/b.epub"], ["a.epub", "Savage Divinity", "content://f/a.epub"]], JSON.stringify(got));
+      assert.deepStrictEqual(got.released, []);
+      // The same folder again adds nothing.
+      const again = await q.evaluate(async () => { await addFolder(); return { n: state.pages.length, released: window.released }; });
+      assert.deepStrictEqual(again, { n: 2, released: ["content://f"] });
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Add a folder in a browser: its books are copied in, in its collection", async () => {
+      const q = await page(browser, 390);
+      const dir = fs.mkdtempSync(path.join(require("os").tmpdir(), "wp-folder-"));
+      fs.mkdirSync(path.join(dir, "Stories"));
+      fs.writeFileSync(path.join(dir, "Stories", "one.md"), "# One\n\nThe first story.");
+      fs.writeFileSync(path.join(dir, "Stories", "two.md"), "# Two\n\nThe second story.");
+      fs.writeFileSync(path.join(dir, "Stories", "song.mp3"), "not really");
+      await q.click("#severalBtn");
+      const chooser = q.waitForEvent("filechooser");
+      await q.locator("#batchView .row", { hasText: "Add a folder" }).click();
+      await (await chooser).setFiles(path.join(dir, "Stories"));
+      await until(q, () => state.pages.length === 2 && !runs.size);
+      const got = await q.evaluate(() => state.pages.map((p) => [p.title, p.folder, !!p.link]));
+      assert.deepStrictEqual(got, [["Two", "Stories", false], ["One", "Stories", false]], JSON.stringify(got));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+      fs.rmSync(dir, { recursive: true, force: true });
     });
 
     // CONTRIBUTING "Explain less": a ? only where Daniel agreed to one.
@@ -4257,6 +4903,70 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("a big book opens at its place first and fills in the rest behind it (Unreleased)", async () => {
+      const q = await page(browser, 390);
+      // 40 chapters of 60 KB: past the 2 MB a book is cut apart from.
+      const files = [["mimetype", "application/epub+zip"], ["META-INF/container.xml", EPUB_FILES[1][1]]];
+      let man = "", spine = "";
+      for (let i = 0; i < 40; i++) {
+        let body = "<h1>Chapter " + (i + 1) + "</h1>";
+        for (let k = 0; body.length < 60000; k++) body += "<p>Words of chapter " + (i + 1) + ", paragraph " + k + ", long enough to wrap onto a few lines at phone width for the reader to lay out.</p>";
+        files.push(["OEBPS/c" + i + ".xhtml", '<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml"><body>' + body + "</body></html>"]);
+        man += '<item id="c' + i + '" href="c' + i + '.xhtml" media-type="application/xhtml+xml"/>';
+        spine += '<itemref idref="c' + i + '"/>';
+      }
+      files.push(["OEBPS/book.opf", '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Long Road</dc:title></metadata><manifest>' + man + "</manifest><spine>" + spine + "</spine></package>"]);
+      const bytes = [...zipOf(files)];
+      const id = await q.evaluate(async (b) => {
+        const file = new File([new Uint8Array(b)], "long.epub", { type: "application/epub+zip" });
+        const meta = await window.Waypage.files.bring(file, "epub", { has: () => false });
+        await window.Waypage.store.writeIndex([meta, ...(await window.Waypage.store.readIndex())]);
+        return meta.id;
+      }, bytes);
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const shown = () => until(q, () => !document.getElementById("readerFrame").classList.contains("unready") && state.open);
+      const whole = () => until(q, () => !window.Waypage.reader.filling);
+      // Unread, it opens at its start and learns where its chapters start.
+      await q.evaluate((id) => openPage(id), id);
+      await shown();
+      await whole();
+      assert.strictEqual(await q.evaluate(() => window.Waypage.reader.headings().length), 40);
+      await until(q, () => Object.keys(JSON.parse(localStorage.getItem("waypage.bookMaps") || "{}")).length === 1);
+      // A scroll within 400 ms of the reader putting the page back isn't
+      // the reader's own move, so it isn't kept as the place.
+      await q.waitForTimeout(500);
+      await q.frameLocator("#readerFrame").locator("#c30").evaluate((el) => { el.scrollIntoView(); el.ownerDocument.defaultView.scrollBy(0, 1500); });
+      await until(q, () => /^Chapter 31$/.test(window.Waypage.reader.section()) && state.pages.find((x) => x.file).spot === window.Waypage.reader.spot());
+      const left = await q.evaluate(() => state.pages.find((x) => x.file).spot);
+      await q.evaluate(() => history.back());
+      await until(q, () => !state.open);
+      // Then at its place, with the rest still to come (on a slow phone).
+      const cdp = await q.context().newCDPSession(q);
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 6 });
+      await q.evaluate((id) => openPage(id), id);
+      await shown();
+      const first = await q.evaluate(() => ({ filling: window.Waypage.reader.filling, spot: window.Waypage.reader.spot(), section: window.Waypage.reader.section(), empty: window.Waypage.reader.frameDoc.querySelectorAll("section[data-co-wait]").length }));
+      assert.strictEqual(first.filling, true);
+      assert.strictEqual(first.spot, left);
+      assert.strictEqual(first.section, "Chapter 31");
+      assert.ok(first.empty > 0, "chapters not cut");
+      // Narrate waits for the whole book, then starts.
+      await q.evaluate(() => { window.asked = 0; const go = window.startAloud; window.startAloud = function () { window.asked++; return go.apply(this, arguments); }; });
+      await q.evaluate(() => toggleBar());
+      await q.locator("#readerAloud").click();
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+      await whole();
+      const after = await q.evaluate(() => ({ spot: window.Waypage.reader.spot(), empty: window.Waypage.reader.frameDoc.querySelectorAll("section[data-co-wait]").length, words: window.Waypage.reader.frameDoc.querySelector("#c0").textContent.length, contents: window.Waypage.reader.headings().length }));
+      assert.strictEqual(after.empty, 0);
+      assert.ok(after.words > 50000, "first chapter not filled");
+      assert.strictEqual(after.contents, 40);
+      assert.strictEqual(after.spot.split("/")[0], left.split("/")[0], after.spot + " vs " + left);
+      await until(q, () => window.asked > 0);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a Kindle book (MOBI) opens with its contents, link, picture and cover; a locked one says so (1.42.0)", async () => {
       const q = await page(browser, 390);
       const got = await q.evaluate(async ([b, locked]) => {
@@ -4364,8 +5074,52 @@ c("bk1", { at: 0.01 })]);
       await reopen();
       got = await look();
       assert.ok(Math.abs(Number(got.spot.split("/")[0]) - Number(left.spot.split("/")[0])) <= 1, "back at " + got.spot + ", left at " + left.spot);
+      // The parse's skip-everything rule is gone once the chapters take over,
+      // and the chapter named is the one read, found by halving (2026-11).
+      const named = await q.evaluate(() => {
+        const d = document.getElementById("readerFrame").contentDocument, R = window.Waypage.reader;
+        const edge = document.querySelector("#readerView .reader-bar").offsetHeight + 24;
+        const marked = [...d.querySelectorAll("[data-toc]")];
+        const heads = marked.length > 1 ? marked : [...d.querySelectorAll("h2, h3")];
+        const real = heads.filter((h) => h.getBoundingClientRect().top <= edge).pop();
+        return { parsing: d.documentElement.classList.contains("co-parsing"), section: R.section(), real: real ? (real.getAttribute("data-toc-t") || real.textContent).replace(/\s+/g, " ").trim() : "" };
+      });
+      assert.strictEqual(named.parsing, false);
+      assert.ok(named.real && named.section === named.real, named.section + " vs " + named.real);
       // The scroll back to the place has the pictures there read.
       await until(q, () => { const d = document.getElementById("readerFrame").contentDocument; return [...d.querySelectorAll("img[data-at]")].some((i) => { const r = i.getBoundingClientRect(); return r.bottom > -innerHeight && r.top < innerHeight * 2; }); });
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("going on to the next book in a collection opens that book's own file for its pictures (Unreleased)", async () => {
+      const q = await page(browser, 390);
+      // The same picture names, a 1×1 picture in the first and a 2×2 in the second.
+      const books = { "one.epub": [...longEpubBytes()], "two.epub": [...longEpubBytes(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEUlEQVR4nGP4z8DwnwGMgRQAH+4D/dJQfRoAAAAASUVORK5CYII=", "base64"))] };
+      const ids = await q.evaluate(async (books) => {
+        const out = [];
+        for (const name of Object.keys(books)) {
+          const book = new File([new Uint8Array(books[name])], name, { type: "application/epub+zip" });
+          window.Waypage.platform.files.blob = async () => book;
+          const meta = await window.Waypage.files.bring(book, "epub", { has: () => false, link: "content://books/" + name });
+          meta.folder = "Saga"; meta.folderAt = out.length + 1;
+          await window.Waypage.store.writeIndex([meta, ...await window.Waypage.store.readIndex()]);
+          out.push(meta.id);
+        }
+        return out;
+      }, books);
+      await q.reload();
+      await q.evaluate((books) => { window.Waypage.platform.files.blob = async (link) => new File([new Uint8Array(books[link.split("/").pop()])], "x.epub"); }, books);
+      const shown = () => until(q, () => { const img = document.getElementById("readerFrame").contentDocument.querySelector(".co-body img"); return img && img.hasAttribute("data-at") && img.complete && img.naturalWidth > 0; });
+      const width = () => q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelector(".co-body img").naturalWidth);
+      await q.evaluate((id) => openPage(id), ids[0]);
+      await until(q, () => !document.getElementById("readerView").classList.contains("waiting") && state.open);
+      await shown();
+      assert.strictEqual(await width(), 1);
+      await q.evaluate((id) => goTo(state.pages.find((x) => x.id === id), 1), ids[1]);
+      assert.strictEqual(await q.evaluate(() => state.open.id), ids[1]);
+      await shown();
+      assert.strictEqual(await width(), 2, "the first book's picture was shown");
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });
@@ -4489,10 +5243,109 @@ c("bk1", { at: 0.01 })]);
       const id = await q.evaluate(() => { const p = state.pages[0]; p.tags = ["kept"]; p.at = 0.4; return p.id; });
       await q.evaluate(() => updateClip(state.pages[0]));
       await until(q, () => state.pages.length === 1 && !state.saving.length && /up to date/.test(document.getElementById("toast").textContent), null, 15000);
-      const now = await q.evaluate(() => ({ id: state.pages[0].id, tags: state.pages[0].tags, at: state.pages[0].at }));
-      assert.notStrictEqual(now.id, id, "the new copy took the old one's place");
+      const now = await q.evaluate(() => ({ id: state.pages[0].id, tags: state.pages[0].tags, at: state.pages[0].at, earlier: state.pages[0].earlier }));
+      assert.strictEqual(now.id, id, "nothing changed, so the copy here stays and nothing new goes to sync");
+      assert.strictEqual(now.earlier, undefined);
       assert.deepStrictEqual(now.tags, ["kept"]);
       assert.strictEqual(now.at, 0.4);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("live clips update as they open, keep the earlier copy, and keep theirs when the new one looks broken (2026-11-16)", async () => {
+      const q = await page(browser, 390);
+      const words = (n) => Array.from({ length: n }, (_, i) => "word" + i).join(" ");
+      await q.evaluate(async ([url, short, long]) => {
+        const S = window.Waypage.store;
+        const a = { id: "live1", url, title: "Live", site: "localhost", savedAt: 1, minutes: 1, mode: "links", at: 0.3, tags: ["kept"], live: true };
+        const b = { id: "live2", url: url + "?long", title: "Long", site: "localhost", savedAt: 1, minutes: 1, mode: "links", at: 0 };
+        await S.writeIndex([a, b]);
+        await S.writePage("live1", "<!doctype html><html><body><p>" + short + "</p></body></html>", a);
+        await S.writePage("live2", "<!doctype html><html><body><p>" + long + "</p></body></html>", b);
+      }, [ARTICLE, "Old words.", words(5000)]);
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => openPage("live1"));
+      await until(q, () => !state.saving.length && state.pages[0].id !== "live1", null, 15000);
+      const now = await q.evaluate(() => ({ ...state.pages[0] }));
+      assert.strictEqual(now.earlier.id, "live1", "the copy it replaced is kept as the earlier one");
+      assert.deepStrictEqual(now.tags, ["kept"]);
+      assert.strictEqual(now.live, true);
+      assert.strictEqual(now.at, 0.3);
+      assert.ok(await q.evaluate(() => window.Waypage.store.readPage("live1")), "the earlier copy is still stored");
+      assert.strictEqual(await q.evaluate(() => state.open.id), now.id, "the reader shows the new copy");
+      await q.locator("#toast", { hasText: "Updated from the site" }).waitFor();
+      // Opened again within the hour: no fetch.
+      await q.evaluate(() => { history.back(); });
+      await q.waitForTimeout(400);
+      await q.evaluate((id) => openPage(id), now.id);
+      await q.waitForTimeout(800);
+      assert.strictEqual(await q.evaluate(() => state.saving.length + ":" + state.pages[0].id), "0:" + now.id);
+      // Going back swaps the two.
+      await q.evaluate((id) => goBackCopy(id), now.id);
+      await until(q, () => state.pages[0].id === "live1");
+      assert.strictEqual(await q.evaluate(() => state.pages[0].earlier.id), now.id);
+      assert.deepStrictEqual(await q.evaluate(() => state.pages[0].tags), ["kept"]);
+      // A much shorter copy isn't put in place.
+      await q.evaluate(() => updateClip(state.pages.find((p) => p.id === "live2")));
+      await q.locator("#toast", { hasText: "Kept your copy" }).waitFor({ timeout: 15000 });
+      const long = await q.evaluate(() => state.pages.find((p) => p.title === "Long"));
+      assert.strictEqual(long.id, "live2");
+      assert.ok(long.earlier && long.earlier.id !== "live2", "the short copy waits as the other one");
+      assert.ok((long.earlier.savedAt || 0) > (long.savedAt || 0));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("an update that failed, tried again from Downloads, takes the clip's place; going back leaves no loop in Stats", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async (url) => {
+        const S = window.Waypage.store;
+        const a = { id: "again1", url, title: "Again", site: "localhost", savedAt: 1, minutes: 1, mode: "links", tags: ["kept"] };
+        await S.writeIndex([a]);
+        await S.writePage("again1", "<!doctype html><html><body><p>Old words.</p></body></html>", a);
+      }, ARTICLE);
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      // As the first try left it: failed, waiting in Downloads.
+      await q.evaluate(() => {
+        const p = state.pages[0];
+        state.saving.unshift({ ...newJob(p.url, p.folder), key: "again:" + p.id, again: p, mode: p.mode, kind: "article", hold: true, error: "Couldn't reach it." });
+      });
+      await q.evaluate(() => retryJob(state.saving[0]));
+      const now = await q.evaluate(() => ({ n: state.pages.length, id: state.pages[0].id, earlier: state.pages[0].earlier && state.pages[0].earlier.id, tags: state.pages[0].tags, saving: state.saving.length }));
+      assert.strictEqual(now.n, 1);
+      assert.notStrictEqual(now.id, "again1", "the new copy is in the library, not left aside");
+      assert.strictEqual(now.earlier, "again1");
+      assert.deepStrictEqual(now.tags, ["kept"]);
+      assert.strictEqual(now.saving, 0);
+      await q.evaluate((id) => goBackCopy(id), now.id);
+      await until(q, () => state.pages[0].id === "again1");
+      const moved = await q.evaluate(() => window.Waypage.stats.all().moved || {});
+      assert.ok(!(moved.again1 && moved[moved.again1] === "again1"), JSON.stringify(moved));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a live clip says Live on its card and in its collection", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const a = { id: "lm1", url: "https://example.com/lm1", title: "Thread", site: "example.com", savedAt: 1, minutes: 1, mode: "links", at: 0, live: true, folder: "Threads", folderAt: 1 };
+        const b = { id: "lm2", url: "https://example.com/lm2", title: "Other", site: "example.com", savedAt: 2, minutes: 1, mode: "links", at: 0, live: true };
+        const c = { id: "lm3", url: "https://example.com/lm3", title: "Plain", site: "example.com", savedAt: 3, minutes: 1, mode: "links", at: 0 };
+        await window.Waypage.store.writeIndex([a, b, c]);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await until(q, () => state.pages.length === 3);
+      await q.evaluate(() => { localStorage.setItem("waypage.place", JSON.stringify("library")); renderLibrary(); });
+      await q.locator('.page-card[data-ids="lm2"] .card-live').waitFor();
+      assert.strictEqual(await q.locator('.page-card[data-ids="lm3"] .card-live').count(), 0);
+      // Turned on from its menu, the card already on screen says so too.
+      await q.evaluate(() => setLive(state.pages.find((p) => p.id === "lm3"), true));
+      await q.locator('.page-card[data-ids="lm3"] .card-live').waitFor({ timeout: 3000 });
+      await q.evaluate(() => openFolder("Threads"));
+      await q.locator('#folderBody li[data-id="lm1"] .card-live').waitFor();
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });
@@ -4579,6 +5432,57 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    // GitHub (2026-11): a repo link follows its releases (its tags when it
+    // has no releases), named for the repo, each release counting its lines.
+    await test("feeds: a GitHub repo link follows its releases, named for the repo", async () => {
+      const q = await page(browser, 390);
+      const esc = (h) => h.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+      const entry = (tag, name, html, ago) => '<entry><id>tag:github.com,2008:Repository/1/' + tag + '</id><updated>' + new Date(Date.now() - ago * 36e5).toISOString() + '</updated>'
+        + '<link rel="alternate" type="text/html" href="https://github.com/someone/tool/releases/tag/' + tag + '"/><title>' + name + '</title>'
+        + '<content type="html">' + esc(html) + '</content><author><name>someone</name></author>'
+        + '<media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/1?s=60&amp;v=4"/></entry>';
+      const feed = (title, entries) => '<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">'
+        + '<link type="text/html" rel="alternate" href="https://github.com/someone/tool/releases"/><title>' + title + '</title>' + entries + '</feed>';
+      const releases = feed("Release notes from tool", entry("v2.0", "Tool 2.0", "<h3>Added</h3><ul><li>a</li><li>b</li></ul><h3>Fixed</h3><ul><li>c</li></ul>", 3) + entry("v1.9", "Tool 1.9", "<p>Small things.</p>", 400));
+      const tags = feed("Tags from bare", entry("v0.1", "v0.1", "<p>x</p>", 5));
+      const got = await q.evaluate(async ([releases, tags]) => {
+        const asked = [];
+        C.platform.fetchText = async (url) => {
+          asked.push(url);
+          const text = url === "https://github.com/someone/tool/releases.atom" ? releases
+            : url === "https://github.com/someone/bare/releases.atom" ? releases.replace(/<entry>[\s\S]*<\/entry>/, "")
+            : url === "https://github.com/someone/bare/tags.atom" ? tags : null;
+          return text ? { status: 200, url, text } : { status: 404, url, text: "" };
+        };
+        const one = await C.feeds.findFeed("github.com/someone/tool/pulls");
+        const bare = await C.feeds.findFeed("https://github.com/someone/bare");
+        const f = { url: one.url, title: one.feed.title, link: one.feed.link, icon: one.feed.icon, releases: true, mode: "show", images: "previews", folder: one.feed.title, days: 30, addedAt: Date.now(), checkedAt: Date.now(), error: "", items: [] };
+        mergeFeed(f, one.feed);
+        feeds.push(f);
+        saveFeeds();
+        await goPlace("feeds");
+        const all = [...document.querySelectorAll("#feeds .post-meta")].map((n) => n.textContent);
+        pickFeed(f.url);
+        const own = [...document.querySelectorAll("#feeds .post-meta")].map((n) => n.textContent);
+        return { url: one.url, title: one.feed.title, icon: one.feed.icon, notes: f.items[0].notes, image: one.feed.items[0].image, bare: [bare.url, bare.feed.title], asked, all, own,
+          line: releasesLine(one.feed.items), owner: C.feeds.githubRepo("https://github.com/settings/profile") };
+      }, [releases, tags]);
+      assert.strictEqual(got.url, "https://github.com/someone/tool/releases.atom");
+      assert.strictEqual(got.title, "tool", "named for the repo, not \"Release notes from tool\"");
+      assert.strictEqual(got.icon, "https://github.com/someone.png?size=64", "the owner's picture");
+      assert.deepStrictEqual(got.notes, { added: 2, fixed: 1 });
+      assert.strictEqual(got.image, undefined, "no author avatar as the post's picture");
+      assert.deepStrictEqual(got.bare, ["https://github.com/someone/bare/tags.atom", "bare"], "no releases: its tags");
+      assert.ok(!got.asked.some((u) => /pulls|commits/.test(u)), "neither the page nor its commits are read");
+      assert.ok(/^Release · /.test(got.all[0]), got.all[0]);
+      assert.ok(/^2 added · 1 fixed · /.test(got.own[0]), got.own[0]);
+      assert.ok(/^Release · /.test(got.own[1]), "a release without the usual headings: " + got.own[1]);
+      assert.ok(/^Releases on GitHub · last one /.test(got.line), got.line);
+      assert.strictEqual(got.owner, null, "github.com/settings isn't a repo");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     // Newsletters (1.43.0): a Kill the Newsletter feed, its sender and
     // confirm link read, the footer link gone from the saved clip, and the
     // email kept out of Feeds.
@@ -4652,6 +5556,53 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("a comic exports as a CBZ that comes back in whole: its pages in order, its series and direction (2026-11)", async () => {
+      const q = await page(browser, 390);
+      const add = (b, name) => q.evaluate(async ([b, name]) => { askKeep = async () => false; await openFile(new File([new Uint8Array(b)], name), null, false); }, [b, name]);
+      await add([...mangaBytes(2)], "v2.cbz");
+      await add([...mangaBytes(1)], "v1.cbz");
+      await add([...Buffer.from("# Plain words\n\nNo pictures here.")], "plain.md");
+      const got = await q.evaluate(async () => {
+        const B = window.Waypage.backup;
+        const kinds = (what) => {
+          const box = document.body.appendChild(exportControls(what, () => {}));
+          box.querySelector(".dropdown-btn").click();
+          const list = [...document.querySelectorAll(".dropdown-item")].map((i) => i.textContent + (i.getAttribute("aria-selected") === "true" ? "*" : ""));
+          document.querySelectorAll(".dropdown-item").forEach((n) => n.remove());
+          box.remove();
+          return list;
+        };
+        const one = state.pages.find((p) => p.title === "Volume 1"), plain = state.pages.find((p) => p.title === "Plain words");
+        let blob = null;
+        window.Waypage.platform.download = (name, b) => { blob = b; blob.label = name; };
+        const out = async (what) => {
+          await exportAs(what, "cbz", "save", document.createElement("button"));
+          const files = await B.zipEntries(blob);
+          const info = new TextDecoder().decode(await B.zipRead(blob, files.get("ComicInfo.xml")));
+          return { name: blob.label, files: [...files.keys()], info, blob };
+        };
+        const single = await out(one);
+        const both = await out({ pages: folderPages("Night Ferry"), title: "Night Ferry" });
+        // Back in: the same comic, filed with its series, right to left.
+        const back = await Waypage.files.bring(new File([both.blob], both.name), "cbz", { has: () => false });
+        return {
+          comic: kinds(one), plain: kinds(plain), folder: kinds({ pages: folderPages("Night Ferry"), title: "Night Ferry" }),
+          single: { ...single, blob: null }, both: { ...both, blob: null }, back: [back.series, back.manga, back.images],
+        };
+      });
+      assert.ok(got.comic.includes("CBZ*"), "a comic offers CBZ, picked at first: " + got.comic);
+      assert.ok(!got.plain.some((k) => k.startsWith("CBZ")), "words offer no CBZ: " + got.plain);
+      assert.ok(got.folder.includes("CBZ*"), "a collection of comics offers CBZ: " + got.folder);
+      assert.strictEqual(got.single.name, "Volume 1.cbz");
+      assert.deepStrictEqual(got.single.files, ["0001.png", "0002.png", "0003.png", "0004.png", "0005.png", "0006.png", "ComicInfo.xml"]);
+      assert.ok(/<Series>Night Ferry<\/Series>/.test(got.single.info) && /<Number>1<\/Number>/.test(got.single.info) && /<Manga>YesAndRightToLeft<\/Manga>/.test(got.single.info), got.single.info);
+      assert.strictEqual(got.both.files.length, 13, "both volumes, one after the other");
+      assert.ok(/<PageCount>12<\/PageCount>/.test(got.both.info), got.both.info);
+      assert.deepStrictEqual(got.back, ["Night Ferry", true, 12]);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a comic in Pages: a page a screen, a manga turns right to left, a spread in halves, two up on a wide window (1.53.0)", async () => {
       for (const width of [390, 1280]) {
         const q = await page(browser, width);
@@ -4682,6 +5633,129 @@ c("bk1", { at: 0.01 })]);
         assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
         await q.context().close();
       }
+    });
+
+    // Tags (2026-11): a row of them under Show and Order, Settings › Tags to
+    // rename, merge and delete, chips in a clip's sheet with the site's own
+    // tags offered, and a collection's Tags sheet.
+    await test("tags: the row filters, Settings › Tags renames, merges and deletes, chips and site tags add", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const c = (id, more) => ({ id, url: "https://example.org/" + id, title: id, site: "example.org", savedAt: 1, minutes: 1, mode: "links", ...more });
+        state.pages = [c("a", { tags: ["Travel"], siteTags: { site: "Slow Air", tags: ["Aviation", "travel"] } }), c("b", { tags: ["Travelling", "Food"] }),
+          c("s1", { folder: "Story", tags: ["Fantasy"], siteTags: { site: "Royal Road", tags: ["Fantasy", "Magic"] } }), c("s2", { folder: "Story", tags: ["Fantasy"] })];
+        await window.Waypage.store.writeIndex(state.pages);
+        renderLibrary();
+      });
+      const row = q.locator("#libTags");
+      await row.waitFor();
+      assert.deepStrictEqual(await row.locator(".chip").allTextContents(), ["Fantasy", "Food", "Travel", "Travelling", "Edit tags"]);
+      await row.locator(".chip", { hasText: "Food" }).click();
+      assert.strictEqual(await q.evaluate(() => state.filter), "#Food");
+      assert.strictEqual(await row.locator(".chip").first().textContent(), "Food×", "the picked one comes first");
+      await row.locator(".chip", { hasText: "Food" }).click();
+      assert.strictEqual(await q.evaluate(() => state.filter), "all");
+      // A collection counts once in Settings › Tags.
+      await row.locator(".chip", { hasText: "Edit tags" }).click();
+      await q.locator("#sectionView:not([hidden])").waitFor();
+      assert.strictEqual(await q.locator("#sectionBody .nav-row", { hasText: "#Fantasy" }).locator(".row-value").textContent(), "1 collection");
+      await q.locator("#sectionBody .nav-row", { hasText: "#Travelling" }).click();
+      await q.fill("#sectionBody .tag-input", "travel");
+      assert.strictEqual(await q.locator("#sectionBody .tag-save").textContent(), "Merge into #Travel");
+      await q.locator("#sectionBody .tag-save").click();
+      await until(q, () => state.section === "tags");
+      assert.deepStrictEqual(await q.evaluate(() => state.pages.find((p) => p.id === "b").tags), ["Travel", "Food"]);
+      await q.locator("#sectionBody .nav-row", { hasText: "#Food" }).click();
+      await q.locator("#sectionBody .row", { hasText: "Delete tag" }).click();
+      await until(q, () => state.section === "tags");
+      assert.deepStrictEqual(await q.evaluate(() => state.pages.find((p) => p.id === "b").tags), ["Travel"], "the clip stays, the tag goes");
+      // What a site's tags do on a new clip: suggested by default, or those you have.
+      assert.strictEqual(await q.evaluate(() => siteTagsHow()), "suggest");
+      const took = await q.evaluate(() => {
+        const out = {};
+        const m = () => ({ siteTags: { site: "x", tags: ["travel", "Brand new"] } });
+        for (const how of ["suggest", "known", "all", "off"]) { store(SITE_TAGS_HOW_KEY, how); const x = m(); takeSiteTags(x); out[how] = [x.tags || [], !!x.siteTags]; }
+        store(SITE_TAGS_HOW_KEY, "suggest");
+        return out;
+      });
+      assert.deepStrictEqual(took, { suggest: [[], true], known: [["Travel"], true], all: [["Travel", "Brand new"], true], off: [[], false] });
+      await q.evaluate(() => outOfSettings());
+      await until(q, () => !state.settings);
+      // A clip's sheet: chips, and the site's tags it hasn't got, a tap each.
+      await q.evaluate(() => openMenu("page", state.pages.find((p) => p.id === "a")));
+      const sheet = q.locator("#menuSheet");
+      await sheet.locator(".tag-from", { hasText: "From Slow Air" }).waitFor();
+      assert.deepStrictEqual(await sheet.locator(".chip.some").allTextContents(), ["+ Aviation"], "travel is on already");
+      await sheet.locator(".chip.some").click();
+      await sheet.locator(".chip.on", { hasText: "Aviation" }).waitFor();
+      assert.deepStrictEqual(await q.evaluate(() => state.pages.find((p) => p.id === "a").tags), ["Travel", "Aviation"]);
+      await q.goBack();
+      await until(q, () => !state.menu);
+      // A collection's Tags sheet puts a tag on every clip in it.
+      await q.evaluate(() => openFolder("Story"));
+      await q.locator("#folderView .folder-tags", { hasText: "#Fantasy" }).waitFor();
+      await q.locator("#folderView .folder-tags").click();
+      await q.locator("#menuSheet .chip.some", { hasText: "Magic" }).click();
+      await until(q, () => state.pages.filter((p) => p.folder === "Story").every((p) => p.tags.includes("Magic")));
+      // The collection looks for its cover on the made-up site; nothing else may fail.
+      const errors = q.errors.filter((e) => !/example\.org/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Save with options offers a story page's own tags as one switch, off until turned on, and remembers it", async () => {
+      const q = await page(browser, 390);
+      const open = () => q.evaluate(() => openBatch("https://www.royalroad.com/fiction/1/s/chapter/1/a\nhttps://www.royalroad.com/fiction/1/s/chapter/2/b", false, "A Story",
+        "https://www.royalroad.com/fiction/1/s", { site: "Royal Road", tags: ["Fantasy", "Action", "LitRPG", "Magic"] }));
+      await open();
+      const row = q.locator(".batch-site-tags .row");
+      await row.waitFor();
+      assert.strictEqual(await row.locator(".choice-label").textContent(), "Royal Road's tags");
+      assert.strictEqual(await row.locator(".choice-note").textContent(), "Fantasy, Action, LitRPG and 1 more");
+      assert.strictEqual(await q.locator("#batchView .chip.on").count(), 0, "not added unasked");
+      await row.click();
+      assert.deepStrictEqual(await q.locator("#batchView .chip.on").allTextContents(), ["Fantasy×", "Action×", "LitRPG×", "Magic×"]);
+      await q.locator("#batchView .chip.on", { hasText: "Action" }).click();
+      await row.click();
+      assert.strictEqual(await q.locator("#batchView .chip.on").count(), 0, "off takes them back out");
+      await row.click();
+      await q.goBack();
+      await until(q, () => !state.batch);
+      await q.waitForTimeout(500);
+      await open();
+      await q.locator(".batch-site-tags .row").waitFor();
+      assert.strictEqual(await q.locator("#batchView .chip.on").count(), 4, "on stays on for the next story");
+      // With a collection and tags, its later clips can take them too (on by default).
+      const later = q.locator(".batch-tag-new .row");
+      assert.strictEqual(await later.locator(".choice-label").textContent(), "Tag new clips too");
+      assert.strictEqual(await later.locator("input").isChecked(), true);
+      // A clip joining a collection marked so takes the tags all its clips share.
+      const joined = await q.evaluate(() => {
+        const a = { id: "a1", folder: "A Story", folderTagNew: true, tags: ["Fantasy", "Magic"] };
+        const b = { id: "b1", folder: "A Story", folderTagNew: true, tags: ["fantasy", "Action"] };
+        const c = { id: "c1", tags: ["Mine"] };
+        const was = state.pages;
+        state.pages = [a, b, c];
+        joinFav(c, "A Story");
+        const out = { tags: c.tags, on: c.folderTagNew };
+        setFolderTagNew("A Story", false);
+        const d = { id: "d1" };
+        state.pages.push(d);
+        joinFav(d, "A Story");
+        out.off = d.tags || [];
+        state.pages = was;
+        return out;
+      });
+      assert.deepStrictEqual(joined, { tags: ["Mine", "Fantasy"], on: true, off: [] });
+      // Links with no story page behind them show no row.
+      await q.goBack();
+      await until(q, () => !state.batch);
+      await q.waitForTimeout(500);
+      await q.evaluate(() => openBatch("https://a.example/1\nhttps://a.example/2"));
+      await q.locator("#batchView .batch-links").waitFor();
+      assert.strictEqual(await q.locator(".batch-site-tags .row").count(), 0);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
     });
 
     await test("a note: New note picks paper, opens in Scroll with the pen on, can show as Pages, grows with a stroke on its last sheet, has its own settings, and has its own part of the library (2.0.0)", async () => {
@@ -4961,6 +6035,74 @@ c("bk1", { at: 0.01 })]);
       await touch("touchEnd");
       await until(q, () => heard.length > 1);
       assert.deepStrictEqual(await now(), ["1:15", "play 180, seek 75"]);
+      await ctx.close();
+    });
+
+    await test("an audiobook's bookmarks, and searching and finding in its whole transcript (2026-11)", async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      const errors = [];
+      q.on("pageerror", (e) => errors.push(e.message));
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      const id = await q.evaluate(async () => {
+        const A = window.Waypage.platform.audio;
+        window.heard = [];
+        A.play = async (o) => { heard.push("play " + o.pos / 1000); };
+        A.seek = (part, ms) => { heard.push("seek " + ms / 1000); };
+        const m = await newAudiobook({ title: "Marks", byline: "", file: { name: "m.mp3", kind: "audio", ext: "mp3", size: 10 }, link: "x",
+          audio: { parts: [{ ref: "x", name: "m.mp3", size: 10, dur: 600 }], chapters: [{ t: 0, title: "One" }, { t: 300, title: "Two" }], dur: 600 } }, null);
+        m.listen.t = 42;
+        arrived(m);
+        return m.id;
+      });
+      await q.evaluate((i) => { openPage(i); }, id);
+      await until(q, () => !document.getElementById("listenPlayer").hidden);
+      await until(q, () => { document.getElementById("toast").hidden = true; if (state.sheet) closeSheet(true); return !state.sheet; });
+      // Play sits in the middle of the player, with the bookmark on the right.
+      const mid = await q.evaluate(() => { const p = document.getElementById("listenPlay").getBoundingClientRect(), b = document.getElementById("listenPlayer").getBoundingClientRect(); return Math.abs(p.left + p.width / 2 - (b.left + b.width / 2)); });
+      assert.ok(mid < 2, "play is off centre by " + mid);
+      await q.click("#listenMark");
+      await until(q, () => (state.open.listen.bookmarks || []).length === 1 && /Bookmarked at 0:42/.test(document.getElementById("toast").textContent));
+      assert.ok(await q.evaluate(() => document.getElementById("listenMark").classList.contains("on")), "the button shows a bookmark is here");
+      await q.click("#toast .toast-act");
+      await until(q, () => state.sheet === "listenMark");
+      await q.fill("#readingBody .tag-input", "The storm");
+      await q.click("#readingBody .btn-primary");
+      await until(q, () => state.open.listen.bookmarks[0].note === "The storm");
+      // Under the chapters, where tapping it plays from there.
+      await q.evaluate(() => { if (state.sheet) closeSheet(true); });
+      await q.click("#readerChapters");
+      await until(q, () => !!document.querySelector(".listen-marks .row"));
+      assert.match(await q.textContent(".listen-marks .row"), /The storm.*0:42.*One/);
+      await q.click(".listen-marks .row");
+      await until(q, () => heard.length > 0);
+      assert.deepStrictEqual(await q.evaluate(() => heard), ["play 42"]);
+      // A bookmark at the same moment opens the one there; Remove takes it away.
+      await q.evaluate(() => { if (state.sheet) closeSheet(true); lis.state = "stopped"; lis.key = ""; });
+      await q.click("#listenMark");
+      await until(q, () => state.sheet === "listenMark");
+      await q.click("#readingBody .btn-quiet");
+      await until(q, () => !state.open.listen.bookmarks);
+      // The whole transcript, both chapters, from Find in this clip.
+      await q.evaluate(async () => {
+        const a = state.open;
+        a.listen.mode = "transcript";
+        const piece = (t0, text) => ({ t0, t1: t0 + 4, text, words: text.split(" "), times: text.split(" ").map((_, i) => t0 + i) });
+        await C.store.writeListen(a.id, { pieces: [piece(10, "Louis Blériot crossed the channel."), piece(310, "Later Blériot landed at Dover.")], ranges: [[0, 600]] });
+        lis.data = null; lis.dataFor = "";
+        closeSheet(true);
+      });
+      await q.evaluate(() => openFind());
+      await until(q, () => state.sheet === "listenSearch");
+      await q.fill("#readingBody input[type=search]", "bleriot");
+      await until(q, () => document.querySelectorAll(".listen-hits .row").length === 2);
+      assert.match(await q.textContent("#readingBody .menu-head .meta"), /Heard 2 times/);
+      assert.match(await q.textContent(".listen-hits .row:nth-child(2)"), /Later Blériot landed.*5:11.*Two/);
+      await q.click(".listen-hits .row:nth-child(2)");
+      await until(q, () => heard.length > 1);
+      assert.strictEqual((await q.evaluate(() => heard))[1], "play 310.7");
+      assert.deepStrictEqual(errors, []);
       await ctx.close();
     });
 

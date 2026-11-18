@@ -2,6 +2,7 @@
 // The sync's last step put back every clip it had decided on, so one
 // deleted meanwhile came straight back and had to be deleted again.
 const assert = require("assert");
+require("./lang.js");
 
 const mem = new Map();
 global.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
@@ -32,6 +33,7 @@ global.fetch = async (url) => {
 };
 
 mem.set("waypage.sync", JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t", looked: Date.now(), scoped: true, what: { stats: false } }));
+require("../src/keel/github.js");
 require("../src/sync.js");
 const S = window.Waypage.sync;
 

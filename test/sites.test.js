@@ -139,6 +139,18 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       assert.ok(!/Go to file|Latest commit/.test(plain(html)), "no file list");
     });
 
+    await test("GitHub: a release is its notes, titled by the release", async () => {
+      const { meta, html } = await saveWith(browser, "https://github.com/danielnoam/waypage/releases/tag/app-v1.65.1", [
+        ["https://github.com/danielnoam/waypage/releases/tag/app-v1.65.1", "github-release.html"],
+      ]);
+      assert.strictEqual(meta.title, "Waypage 1.65.1");
+      assert.strictEqual(meta.site, "GitHub");
+      assert.strictEqual(meta.byline, "danielnoam/waypage");
+      assert.ok(/<h3[^>]*>Added<\/h3>/.test(html), "the notes' headings");
+      assert.ok(plain(html).includes("Live clips"), "the notes");
+      assert.ok(!/Choose a tag to compare|commits to main since this release/.test(plain(html)), "none of GitHub's header");
+    });
+
     await test("GitHub: when the API fails, the page is read as before", async () => {
       const { meta } = await saveWith(browser, "https://github.com/danielnoam/waypage/pull/182", [
         ["https://api.github.com/", null],
@@ -372,12 +384,27 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
         Object.defineProperty(P, "canRender", { get: () => true, configurable: true });
         window.drawn = [];
         const rows = Array.from({ length: 8 }, (_, i) => '<tr class="chapter-row"><td><a href="/fiction/1/s/chapter/' + (i + 1) + '/c">Chapter ' + (i + 1) + "</a></td></tr>").join("");
-        P.render = async (url) => { window.drawn.push(url); return { url, text: "<html><head><title>A Story | Royal Road</title></head><body><h1>A Story</h1><table id=\"chapters\"><tbody>" + rows + "</tbody></table></body></html>" }; };
+        P.render = async (url) => { window.drawn.push(url); return { url, text: "<html><head><title>A Story | Royal Road</title></head><body><h1>A Story</h1><span class=\"tags\"><a class=\"fiction-tag\" href=\"/fictions/search?tagsAdd=fantasy\">Fantasy</a> <a class=\"fiction-tag\" href=\"/fictions/search?tagsAdd=litrpg\">  LitRPG </a><a class=\"fiction-tag\" href=\"/fictions/search?tagsAdd=fantasy\">fantasy</a></span><table id=\"chapters\"><tbody>" + rows + "</tbody></table></body></html>" }; };
         return Waypage.save.findChapters("https://www.royalroad.com/fiction/1/a-story");
       });
       assert.strictEqual(found.links.length, 8);
+      // Its tags, offered in Save with options (each once).
+      assert.deepStrictEqual(found.siteTags, { site: "Royal Road", tags: ["Fantasy", "LitRPG"] });
       assert.deepStrictEqual(await p.evaluate(() => window.drawn), ["https://www.royalroad.com/fiction/1/a-story"]);
       await ctx.close();
+    });
+
+    // Any page's own tags (2026-11): schema.org keywords first (machine
+    // labels and repeats left out), else the post's rel="tag" links but not
+    // a sidebar's tag cloud. Kept on the clip as suggestions.
+    await test("a page's own tags: schema.org keywords, or the post's rel=tag links", async () => {
+      const { got } = await inPage(browser, [["https://blog.example/ld", "tags-ld.html"], ["https://blog.example/rel", "tags-rel.html"]], async () => {
+        const a = await Waypage.save.save("https://blog.example/ld", { mode: "links" });
+        const b = await Waypage.save.save("https://blog.example/rel", { mode: "links" });
+        return [a.siteTags, b.siteTags];
+      });
+      assert.deepStrictEqual(got[0], { site: "blog.example", tags: ["Rail travel", "Europe"] });
+      assert.deepStrictEqual(got[1], { site: "blog.example", tags: ["Sleeper trains"] });
     });
 
     // Website sync reads a collection's chapters from any site's contents
@@ -390,6 +417,7 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       assert.match(got.links[23], /\/02\/24\/2-24\/$/);
       assert.ok(got.links.some((u) => /interlude/.test(u)), "an interlude without a number keeps its place");
       assert.strictEqual(got.cover, "https://wanderinginn.example/cover.jpg");
+      assert.strictEqual(got.siteTags, null, "a page with no tags offers none");
     });
 
     await test("Website sync: arcs in paragraphs of their own are one list", async () => {
@@ -452,6 +480,64 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       });
       assert.deepStrictEqual(got, [Date.parse("2026-03-01T10:00:00Z"), Date.parse("2025-12-24T08:00:00Z"), 1700000000000, 0, 0]);
       await ctx.close();
+    });
+
+    // A newsletter's email (Kill the Newsletter), saved the way the
+    // Newsletters screen saves one (mailPage): given whole, with its sender.
+    const saveMail = (html, from, title, site) => inPage(browser, [], async (a) => {
+      const url = "https://kill-the-newsletter.com/feeds/abc/entries/def.html";
+      const given = mailPage({ title: "James Clear" }, { url, title: a.title, from: a.from }, a.html);
+      if (a.site) given.site = a.site;
+      const meta = await window.Waypage.save.save(url, { given });
+      return { meta, html: await window.Waypage.store.readPage(meta.id) };
+    }, { html, from, title, site });
+
+    await test("James Clear's 3-2-1: no logo, greeting, banners, blank lines or empty section", async () => {
+      const { got } = await saveMail(fixture("mail-jamesclear-321.html"), "james@send.jamesclear.com", "3-2-1: On following your dreams", "Jamesclear");
+      const { meta, html } = got;
+      if (process.env.DUMP) fs.writeFileSync(process.env.DUMP + "/jc.html", html);
+      assert.strictEqual(meta.site, "James Clear");
+      assert.strictEqual(meta.byline, "James Clear");
+      const text = plain(html);
+      assert.ok(!/wisdom per word|Happy 3-2-1 Thursday|Here are 3 ideas|What else am I working on/.test(text), text.slice(0, 300));
+      assert.ok(!/\u200b/.test(html));
+      assert.strictEqual(count(html, /<table/g), 0);
+      assert.strictEqual(count(html, /<img/g), 0);
+      assert.ok(/<h2>3 Ideas From Me<\/h2>/.test(html) && /<h2>2 Quotes From Others<\/h2>/.test(html) && /<h2>1 Question For You<\/h2>/.test(html));
+      assert.ok(/<p>II\.<\/p>/.test(html));
+      assert.ok(text.includes("Talent is a gift") && text.includes("What is the first right thing I can do?"));
+    });
+
+    await test("James Clear's 3-2-1 from a mailer's address is known by its subject and links", async () => {
+      const { got } = await saveMail(fixture("mail-jamesclear-321.html"), "bounce-123@ckespa.com", "3-2-1: On following your dreams", "James Clear");
+      assert.strictEqual(got.meta.site, "James Clear");
+      assert.ok(!/Happy 3-2-1 Thursday/.test(plain(got.html)));
+    });
+
+    await test("James Clear's 3-2-1 as Kill the Newsletter serves it: a Kit email inside its page", async () => {
+      const { got } = await saveMail(fixture("mail-jamesclear-321-raw.html"), "bounces+e5ur7ex443@ckespa.jamesclear.com", "3-2-1: On following your dreams, making the first right choice, and how to\thandle a storm", "Jamesclear");
+      const { meta, html } = got;
+      if (process.env.DUMP) fs.writeFileSync(process.env.DUMP + "/jc-raw.html", html);
+      assert.strictEqual(meta.site, "James Clear");
+      const text = plain(html);
+      assert.ok(text.includes("Talent is a gift") && text.includes("Endeavor to live") && text.includes("What is the first right thing I can do?"), text.slice(0, 400));
+      assert.ok(!/wisdom per word|Happy 3-2-1 Thursday|Here are 3 ideas|What else am I working on|JAMESCLEAR\.COM|NOVEMBER 12|Get my book|habit calendar|Follow me on social|About this newsletter|unsubscribe|Example Street|feed settings/i.test(text), text);
+      assert.strictEqual(count(html, /<table/g), 0);
+      assert.strictEqual(count(html, /<img/g), 0);
+      assert.ok(/<h2>3 Ideas From Me<\/h2>/.test(html) && /<h2>2 Quotes From Others<\/h2>/.test(html) && /<h2>1 Question For You<\/h2>/.test(html));
+      assert.ok(!/\u200b/.test(html));
+    });
+
+    await test("any newsletter: layout tables open up, a data table stays", async () => {
+      const html = '<!doctype html><html><body><table><tr><td></td><td><div><h2>News</h2><p>\u200b</p><p>Lead story here, long enough to read as the article body of this email, and then some more words.</p>'
+        + '<table><tr><th>Team</th><th>Score</th></tr><tr><td>A</td><td>3</td></tr><tr><td>B</td><td>1</td></tr></table>'
+        + '<p>More text follows the table so it reads as one article, with plenty of words in it. Another sentence, and another, so the reader takes this as the story of the email and keeps all of it together, the way a real one reads.</p><p>One more paragraph of plain words about the news of the week, how it went, and what comes next for everyone reading this letter.</p><h3>Elsewhere</h3></div></td><td></td></tr></table></body></html>';
+      const { got } = await saveMail(html, "news@example.com", "News", "Example");
+      assert.strictEqual(got.meta.site, "Example");
+      assert.strictEqual(count(got.html, /<table/g), 1);
+      assert.ok(/<th>Team<\/th>/.test(got.html));
+      assert.ok(!/Elsewhere/.test(got.html));
+      assert.ok(!/<p>\s*<\/p>/.test(got.html));
     });
 
   } finally {

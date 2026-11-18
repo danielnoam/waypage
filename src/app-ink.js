@@ -6,8 +6,8 @@
 const INK_KEY = "waypage.ink";
 const INK_OFFER_KEY = "waypage.inkOffered";
 const INK_COLORS = {
-  pen: [["ink", "Black"], ["red", "Red"], ["blue", "Blue"], ["green", "Green"]],
-  highlighter: [["yellow", "Yellow"], ["green", "Green"], ["blue", "Blue"], ["pink", "Pink"], ["purple", "Purple"]],
+  pen: [["ink", t("Black")], ["red", t("Red")], ["blue", t("Blue")], ["green", t("Green")]],
+  highlighter: [["yellow", t("Yellow")], ["green", t("Green")], ["blue", t("Blue")], ["pink", t("Pink")], ["purple", t("Purple")]],
 };
 const INK_ICONS = {
   pen: '<path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path>',
@@ -65,7 +65,7 @@ async function inkSync(p) {
   penNativeSet({ on: true });
   const { stale } = await C.ink.load(p);
   if (state.open !== p) return;
-  if (stale) toast("This PDF has changed since you drew on it. The drawings may not line up.");
+  if (stale) toast(t("This PDF has changed since you drew on it. The drawings may not line up."));
   // A note is for writing: its pen is ready when it opens.
   if (p.note) { inkSet(true); if (!p.thumb) noteCoverSoon(p, 1500); }
 }
@@ -185,18 +185,18 @@ function inkSet(on) {
   C.ink.setOn(on);
   penNativeSet({ grab: on });
   $("readerInk").setAttribute("aria-pressed", String(on));
-  $("readerInk").setAttribute("aria-label", on ? "Stop drawing" : "Draw");
+  $("readerInk").setAttribute("aria-label", on ? t("Stop drawing") : t("Draw"));
   if (on) {
     if (!inkBar) inkBuild();
     inkPaint();
     inkBar.hidden = false;
-    M.appear(inkBar);
+    M.edgeIn(inkBar, "bottom");
     hideReadHere();
   } else if (inkBar && !inkBar.hidden) {
     inkPopClose(true);
     if (inkColor) inkColor.close();
     const bar = inkBar;
-    M.vanish(bar).finally(() => { if (!C.ink.on) bar.hidden = true; });
+    M.edgeOut(bar, "bottom").finally(() => { if (!C.ink.on) bar.hidden = true; });
   }
 }
 
@@ -206,13 +206,13 @@ function inkBuild() {
     if (icon) b.append(inkIcon(icon));
     return b;
   };
-  inkBar = el("div", { class: "ink-bar", role: "toolbar", "aria-label": "Draw", hidden: true },
+  inkBar = el("div", { class: "ink-bar", role: "toolbar", "aria-label": t("Draw"), hidden: true },
     el("div", { class: "ink-row ink-tools" },
-      btn("Pen", "pen", "tool:pen"), btn("Highlighter", "highlighter", "tool:highlighter"), btn("Eraser", "eraser", "tool:eraser"), btn("Select", "select", "tool:select"),
-      btn("Add", "add", "add", { "aria-haspopup": "menu", "aria-expanded": "false" }),
+      btn(t("Pen"), "pen", "tool:pen"), btn(t("Highlighter"), "highlighter", "tool:highlighter"), btn(t("Eraser"), "eraser", "tool:eraser"), btn(t("Select"), "select", "tool:select"),
+      btn(t("Add"), "add", "add", { "aria-haspopup": "menu", "aria-expanded": "false" }),
       el("span", { class: "ink-gap" }),
-      btn("Undo", "undo", "undo"), btn("Redo", "redo", "redo"),
-      el("button", { type: "button", class: "ink-done", "data-act": "done" }, "Done")),
+      btn(t("Undo"), "undo", "undo"), btn(t("Redo"), "redo", "redo"),
+      el("button", { type: "button", class: "ink-done", "data-act": "done" }, t("Done"))),
     el("div", { class: "ink-row ink-style" }));
   inkBar.addEventListener("click", (e) => {
     const b = e.target.closest("button[data-act]");
@@ -279,7 +279,7 @@ async function inkAddImage(file) {
     inkSelect();
     if (!C.ink.addImage(url, h / w)) throw new Error("no page");
   } catch (e) {
-    toast("Couldn't add that picture. Try another.");
+    toast(t("Couldn't add that picture. Try another."));
   }
 }
 // The picture just added is taken, so it can be moved: Select is the tool.
@@ -289,7 +289,7 @@ function inkSelect() {
 // ---- Size and pen style: a small menu above their button ----
 
 const INK_DOTS = [3, 6, 9, 12, 16];
-const INK_STYLES = [["ball", "Ballpoint"], ["marker", "Marker"], ["fountain", "Fountain pen"], ["brush", "Brush"]];
+const INK_STYLES = [["ball", t("Ballpoint")], ["marker", t("Marker")], ["fountain", t("Fountain pen")], ["brush", t("Brush")]];
 const inkStyleName = (y) => (INK_STYLES.find((x) => x[0] === y) || INK_STYLES[0])[1];
 let inkPop = null;     // { kind, el }
 
@@ -316,18 +316,18 @@ function inkPopMenu(kind) {
   const s = C.ink.state();
   const pick = (patch) => { C.ink.setting(patch); inkKeep(); inkPopClose(); };
   if (kind === "size") {
-    return el("div", { class: "ink-pop ink-pop-sizes", role: "menu", "aria-label": "Size" },
-      ...INK_DOTS.map((d, i) => el("button", { type: "button", role: "menuitemradio", "aria-checked": String(s.size === i), "aria-pressed": String(s.size === i), "aria-label": "Size " + (i + 1), onclick: () => pick({ size: i }) },
+    return el("div", { class: "ink-pop ink-pop-sizes", role: "menu", "aria-label": t("Size") },
+      ...INK_DOTS.map((d, i) => el("button", { type: "button", role: "menuitemradio", "aria-checked": String(s.size === i), "aria-pressed": String(s.size === i), "aria-label": t("Size {i}", { i: i + 1 }), onclick: () => pick({ size: i }) },
         el("span", { class: "ink-pop-dot" }, el("span", { class: "ink-size", style: "width:" + d + "px;height:" + d + "px" })), el("span", { class: "ink-pop-n" }, String(i + 1)))));
   }
   if (kind === "add") {
-    return el("div", { class: "ink-pop ink-pop-styles", role: "menu", "aria-label": "Add" },
+    return el("div", { class: "ink-pop ink-pop-styles", role: "menu", "aria-label": t("Add") },
       // A picture stays on this device, so a clip's drawings, which sync, take none.
-      C.ink.blocks ? null : el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkFile.click(); } }, inkIcon("image"), el("span", { class: "ink-pop-name" }, "Image")),
+      C.ink.blocks ? null : el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkFile.click(); } }, inkIcon("image"), el("span", { class: "ink-pop-name" }, t("Image"))),
       // Typed text goes on a note (2.0.0).
-      el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkText(null); } }, inkIcon("text"), el("span", { class: "ink-pop-name" }, "Text")));
+      el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkText(null); } }, inkIcon("text"), el("span", { class: "ink-pop-name" }, t("Text"))));
   }
-  return el("div", { class: "ink-pop ink-pop-styles", role: "menu", "aria-label": "Pen style" },
+  return el("div", { class: "ink-pop ink-pop-styles", role: "menu", "aria-label": t("Pen style") },
     ...INK_STYLES.map(([y, name]) => el("button", { type: "button", role: "menuitemradio", "aria-checked": String(s.style === y), "aria-pressed": String(s.style === y), onclick: () => pick({ style: y }) },
       inkSample(y, 72, 28), el("span", { class: "ink-pop-name" }, name), el("span", { class: "ink-pop-tick", "aria-hidden": "true" }, s.style === y ? "✓" : ""))));
 }
@@ -342,9 +342,8 @@ function inkPopOpen(kind, btn) {
   const left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2));
   menu.style.left = left + "px";
   menu.style.bottom = (innerHeight - top + 8) + "px";
-  menu.style.transformOrigin = (r.left + r.width / 2 - left) + "px 100%";
-  M.appear(menu);
-  inkPop = { kind, el: menu };
+  M.popFrom(menu, r);
+  inkPop = { kind, el: menu, btn };
   inkPopMark();
   const first = menu.querySelector('[aria-checked="true"]') || menu.querySelector("button");
   if (first && document.body.classList.contains("keys")) first.focus();
@@ -354,7 +353,7 @@ function inkPopClose(now) {
   if (!p) return;
   inkPop = null;
   if (now) p.el.remove();
-  else M.vanish(p.el).finally(() => p.el.remove());
+  else M.popOut(p.el, p.btn.getBoundingClientRect()).then(() => p.el.remove());
   inkPopMark();
 }
 // Which button has its menu open, said in place: the bar's buttons stay as they are, so a tap on
@@ -405,18 +404,18 @@ function inkPaint() {
   const kind = hl ? "highlighter" : "pen";
   const swatches = s.tool === "eraser" || s.tool === "select" ? [] : INK_COLORS[kind].map(([name0, name], i) => {
     const c = inkSlotsOf(kind)[i], mine = c[0] === "#";
-    return el("button", { type: "button", "aria-label": mine ? "Your colour " + c.toUpperCase() : name, title: "Hold to change this colour", "aria-pressed": String(s.color === c), "data-act": "color:" + c, "data-slot": String(i) },
+    return el("button", { type: "button", "aria-label": mine ? t("Your colour {toUpperCase}", { toUpperCase: c.toUpperCase() }) : name, title: t("Hold to change this colour"), "aria-pressed": String(s.color === c), "data-act": "color:" + c, "data-slot": String(i) },
       el("span", { class: "ink-dot", "data-c": mine ? "" : c, "data-t": hl ? "h" : "p", ...(mine ? { style: "background:" + c } : {}) }));
   });
   const act = (label, icon, a, on) => el("button", { type: "button", "aria-label": label, title: label, "data-act": a, ...(on ? {} : { disabled: "" }) }, inkIcon(icon));
-  const editRow = s.tool === "select" ? [...(C.ink.selectedText() ? [act("Edit text", "text", "edittext", true)] : []), act("Cut", "cut", "cut", s.selected), act("Copy", "copy", "copy", s.selected), act("Paste", "paste", "paste", s.canPaste), act("Delete", "trash", "delete", s.selected), act("Move to top", "front", "front", s.selected), act("Move to bottom", "back", "back", s.selected)] : [];
-  const sizeBtn = s.tool === "eraser" || s.tool === "select" ? null : el("button", { type: "button", "aria-label": "Size " + (s.size + 1) + " of 5", title: "Size", "aria-haspopup": "menu", "aria-expanded": String(!!inkPop && inkPop.kind === "size"), "data-act": "size" },
+  const editRow = s.tool === "select" ? [...(C.ink.selectedText() ? [act(t("Edit text"), "text", "edittext", true)] : []), act(t("Cut"), "cut", "cut", s.selected), act(t("Copy"), "copy", "copy", s.selected), act(t("Paste"), "paste", "paste", s.canPaste), act(t("Delete"), "trash", "delete", s.selected), act(t("Move to top"), "front", "front", s.selected), act(t("Move to bottom"), "back", "back", s.selected)] : [];
+  const sizeBtn = s.tool === "eraser" || s.tool === "select" ? null : el("button", { type: "button", "aria-label": t("Size {n} of 5", { n: s.size + 1 }), title: t("Size"), "aria-haspopup": "menu", "aria-expanded": String(!!inkPop && inkPop.kind === "size"), "data-act": "size" },
     el("span", { class: "ink-size", style: "width:" + INK_DOTS[s.size] + "px;height:" + INK_DOTS[s.size] + "px" }));
-  const styleBtn = s.tool !== "pen" ? null : el("button", { type: "button", "aria-label": "Pen style: " + inkStyleName(s.style), title: "Pen style", "aria-haspopup": "menu", "aria-expanded": String(!!inkPop && inkPop.kind === "style"), "data-act": "style" },
+  const styleBtn = s.tool !== "pen" ? null : el("button", { type: "button", "aria-label": t("Pen style: {inkStyleName}", { inkStyleName: inkStyleName(s.style) }), title: t("Pen style"), "aria-haspopup": "menu", "aria-expanded": String(!!inkPop && inkPop.kind === "style"), "data-act": "style" },
     inkSample(s.style, 28, 16));
   fill(row, ...swatches, ...editRow, sizeBtn, styleBtn,
     s.tool === "select" ? el("span", { class: "ink-gap" }) : null,
-    el("button", { type: "button", "aria-label": "Draw with a finger", title: "Draw with a finger or mouse", "aria-pressed": String(s.finger), "data-act": "finger" }, inkIcon("finger")));
+    el("button", { type: "button", "aria-label": t("Draw with a finger"), title: t("Draw with a finger or mouse"), "aria-pressed": String(s.finger), "data-act": "finger" }, inkIcon("finger")));
   // What's open can't be, with this tool.
   if (inkPop && ((inkPop.kind === "style" && s.tool !== "pen") || (inkPop.kind === "size" && s.tool === "eraser"))) inkPopClose(true);
 }
@@ -442,7 +441,7 @@ C.ink.onSaved = (id) => {
 C.ink.onPen = () => {
   if (C.ink.on || !inkReady() || state.sheet || load(INK_OFFER_KEY, false)) return;
   store(INK_OFFER_KEY, true);
-  toast(state.open && state.open.note ? "Draw on this note with your pen?" : "Draw here with your pen?", "Draw", () => inkSet(true));
+  toast(state.open && state.open.note ? t("Draw on this note with your pen?") : t("Draw here with your pen?"), t("Draw"), () => inkSet(true));
 };
 $("readerInk").addEventListener("click", () => inkSet(!C.ink.on));
 // A note grows as you write: a stroke on its last sheet adds one.
@@ -480,10 +479,9 @@ function inkProbe() {
   const yes = (v) => (v ? "yes" : "no");
   const paint = () => {
     const n = C.ink.nat;
-    out.textContent = "Page: " + (web ? web.pointerType + " " + web.type + " · button " + web.button + " · buttons " + web.buttons + " · pressure " + web.pressure + (touch ? " · touch " + touch : "") : "nothing yet") + "\n" +
-      "Phone: " + (C.platform.pen.available ? "near " + yes(n.near) + " · down " + yes(n.down) + " · button " + yes(n.button) + " · eraser " + yes(n.eraser) + " · tool " + n.tool + " · buttons " + n.buttons : "no pen reading here");
+    out.textContent = t("Page: {x}\nPhone: {x2}", { x: web ? web.pointerType + " " + web.type + " · button " + web.button + " · buttons " + web.buttons + " · pressure " + web.pressure + (touch ? " · touch " + touch : "") : "nothing yet", x2: C.platform.pen.available ? "near " + yes(n.near) + " · down " + yes(n.down) + " · button " + yes(n.button) + " · eraser " + yes(n.eraser) + " · tool " + n.tool + " · buttons " + n.buttons : t("no pen reading here") });
   };
-  const pad = el("div", { class: "ink-probe-pad" }, "Touch here with the pen, with a button held too");
+  const pad = el("div", { class: "ink-probe-pad" }, t("Touch here with the pen, with a button held too"));
   for (const t of ["pointerdown", "pointermove", "pointerup", "pointercancel", "pointerenter"]) {
     pad.addEventListener(t, (e) => { web = { type: e.type, pointerType: e.pointerType, button: e.button, buttons: e.buttons, pressure: Math.round(e.pressure * 100) / 100 }; paint(); });
   }
@@ -499,22 +497,22 @@ function inkProbe() {
 // person picks. The file Waypage reads from is never changed.
 async function inkCopy(p) {
   const pdf = C.files.heldPdf();
-  if (!pdf || !pdf.ink) { toast("Open the PDF's pages first."); return; }
-  toast("Making the copy…");
+  if (!pdf || !pdf.ink) { toast(t("Open the PDF's pages first.")); return; }
+  toast(t("Making the copy…"));
   try {
     await C.ink.flush();
     const bytes = await pdf.ink(C.ink.forPdf());
-    const name = ((p.file && p.file.name) || p.title || "Drawing").replace(/\.pdf$/i, "") + " (drawn).pdf";
+    const name = ((p.file && p.file.name) || p.title || t("Drawing")).replace(/\.pdf$/i, "") + " (drawn).pdf";
     if (!C.platform.canSaveFiles) { C.platform.download(name, new Blob([bytes], { type: "application/pdf" })); return; }
     const cache = await C.store.cacheFile(name);
     for (let i = 0; i < bytes.length; i += 1 << 20) await cache.append(bytes.subarray(i, i + (1 << 20)));
     const uri = await cache.uri();
     const saved = await C.platform.saveFile(uri, name, "application/pdf");
     if (saved === null) await C.platform.shareFile(uri, name);
-    else if (saved) toast("Saved " + name);
+    else if (saved) toast(t("Saved {name}", { name: name }));
   } catch (e) {
     console.error(e);
-    toast("Couldn't make the copy. Try again.");
+    toast(t("Couldn't make the copy. Try again."));
   }
 }
 
@@ -534,22 +532,23 @@ function inkColorOpen(at) {
   inkPopClose(true);
   const slots = [...inkSlotsOf(kind)];
   const k = { kind, slots, orig: [...slots], at, h: 0, s: 0, v: 1, stop: null };
-  const sheet = el("div", { class: "ink-color", role: "dialog", "aria-label": "Colour" });
+  const sheet = el("div", { class: "ink-color", role: "dialog", "aria-label": t("Colour") });
   k.el = sheet;
   inkColor = k;
-  const canvas = el("canvas", { class: "ic-spectrum", width: 320, height: 200, "aria-label": "Colour spectrum" });
+  const slotRect = () => { const b = inkBar && inkBar.querySelector('[data-slot="' + at + '"]'); return b ? b.getBoundingClientRect() : null; };
+  const canvas = el("canvas", { class: "ic-spectrum", width: 320, height: 200, "aria-label": t("Colour spectrum") });
   const ring = el("span", { class: "ic-ring" });
-  const slider = el("input", { type: "range", class: "ic-slider", min: 0, max: 100, step: 1, "aria-label": "Lightness" });
+  const slider = el("input", { type: "range", class: "ic-slider", min: 0, max: 100, step: 1, "aria-label": t("Lightness") });
   const pct = el("span", { class: "ic-pct" });
   const oldSw = el("span", { class: "ic-old" }), newSw = el("span", { class: "ic-new" });
   const field = (label, attrs) => { const i = el("input", { class: "ic-field", "aria-label": label, autocomplete: "off", spellcheck: "false", ...attrs }); return [i, el("label", { class: "ic-col" }, el("span", {}, label), i)]; };
-  const [hexI, hexC] = field("Hex", { type: "text", maxlength: 7, inputmode: "text" });
-  const [rI, rC] = field("Red", { type: "text", inputmode: "numeric", maxlength: 3 });
-  const [gI, gC] = field("Green", { type: "text", inputmode: "numeric", maxlength: 3 });
-  const [bI, bC] = field("Blue", { type: "text", inputmode: "numeric", maxlength: 3 });
-  const slotRow = el("div", { class: "ic-slots", role: "group", "aria-label": "Which colour to change" });
-  const dropper = el("button", { type: "button", class: "ic-drop", "aria-label": "Pick a colour from the page", title: "Pick a colour from the page" }, inkIcon("drop"));
-  const cancel = el("button", { type: "button", class: "ic-btn" }, "Cancel"), done = el("button", { type: "button", class: "ic-btn" }, "Done");
+  const [hexI, hexC] = field(t("Hex"), { type: "text", maxlength: 7, inputmode: "text" });
+  const [rI, rC] = field(t("Red"), { type: "text", inputmode: "numeric", maxlength: 3 });
+  const [gI, gC] = field(t("Green"), { type: "text", inputmode: "numeric", maxlength: 3 });
+  const [bI, bC] = field(t("Blue"), { type: "text", inputmode: "numeric", maxlength: 3 });
+  const slotRow = el("div", { class: "ic-slots", role: "group", "aria-label": t("Which colour to change") });
+  const dropper = el("button", { type: "button", class: "ic-drop", "aria-label": t("Pick a colour from the page"), title: t("Pick a colour from the page") }, inkIcon("drop"));
+  const cancel = el("button", { type: "button", class: "ic-btn" }, t("Cancel")), done = el("button", { type: "button", class: "ic-btn" }, t("Done"));
 
   const rgb = () => C.ink.hsvRgb(k.h, k.s, k.v);
   const hex = () => C.ink.rgbHex(...rgb());
@@ -578,7 +577,7 @@ function inkColorOpen(at) {
     paintSlots();
   }
   function paintSlots() {
-    slotRow.replaceChildren(...k.slots.map((c, i) => el("button", { type: "button", class: "ic-slot", "aria-pressed": String(i === k.at), "aria-label": "Colour " + (i + 1) + ", " + c.toUpperCase(), onclick: () => { k.at = i; oldSw.style.background = "rgb(" + inkRgbOf(kind, k.orig[i]).join(",") + ")"; set(inkRgbOf(kind, c)); } },
+    slotRow.replaceChildren(...k.slots.map((c, i) => el("button", { type: "button", class: "ic-slot", "aria-pressed": String(i === k.at), "aria-label": t("Colour {n}, {hex}", { n: i + 1, hex: c.toUpperCase() }), onclick: () => { k.at = i; oldSw.style.background = "rgb(" + inkRgbOf(kind, k.orig[i]).join(",") + ")"; set(inkRgbOf(kind, c)); } },
       el("span", { class: "ink-dot", style: "background:rgb(" + inkRgbOf(kind, c).join(",") + ")" }))), dropper);
   }
   // Drag on the spectrum with a pen, a finger or the mouse.
@@ -588,7 +587,7 @@ function inkColorOpen(at) {
     k.s = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
     paint();
   };
-  const wrap = el("div", { class: "ic-spec", tabindex: "0", role: "slider", "aria-label": "Hue and paleness" }, canvas, ring);
+  const wrap = el("div", { class: "ic-spec", tabindex: "0", role: "slider", "aria-label": t("Hue and paleness") }, canvas, ring);
   wrap.addEventListener("pointerdown", (e) => { e.preventDefault(); try { wrap.setPointerCapture(e.pointerId); } catch (err) { /* it drags anyway */ } k.drag = true; fromSpectrum(e); });
   wrap.addEventListener("pointermove", (e) => { if (k.drag) fromSpectrum(e); });
   for (const t of ["pointerup", "pointercancel"]) wrap.addEventListener(t, () => { k.drag = false; });
@@ -608,15 +607,15 @@ function inkColorOpen(at) {
   for (const i of [hexI, rI, gI, bI]) i.addEventListener("blur", () => paint());
   dropper.addEventListener("click", () => {
     sheet.hidden = true;
-    toast("Tap the page to take its colour. Esc to stop.");
+    toast(t("Tap the page to take its colour. Esc to stop."));
     const back = () => { k.stop = null; if (inkColor === k) sheet.hidden = false; };
     k.stop = back;
     C.ink.pick((c) => {
       back();
-      if (c) set(C.ink.hexRgb(c)); else toast("Couldn't read a colour there.");
+      if (c) set(C.ink.hexRgb(c)); else toast(t("Couldn't read a colour there."));
     });
   });
-  const close = () => { C.ink.pick(null); inkColor = null; M.vanish(sheet).finally(() => sheet.remove()); };
+  const close = () => { C.ink.pick(null); inkColor = null; M.dialogOut(sheet, slotRect()).then(() => sheet.remove()); };
   k.close = close;
   cancel.addEventListener("click", close);
   done.addEventListener("click", () => {
@@ -636,7 +635,7 @@ function inkColorOpen(at) {
     el("div", { class: "ic-actions" }, cancel, done));
   inkInit(k, oldSw, set);
   $("readerView").append(sheet);
-  M.appear(sheet);
+  M.dialogIn(sheet, slotRect());
   hexI.blur();
 }
 function inkInit(k, oldSw, set) {
@@ -667,7 +666,7 @@ document.addEventListener("keydown", (e) => {
 // picture to a page. Saved or shared the way the copy of a PDF is.
 async function noteToPdf(p) {
   if (!p.note || state.open !== p) return;
-  toast("Making the PDF…");
+  toast(t("Making the PDF…"));
   try {
     await C.ink.flush();
     const { blob, name } = await C.notes.toPdf(p, C.files.heldPdf(), C.ink.strokes);
@@ -678,10 +677,10 @@ async function noteToPdf(p) {
     const uri = await cache.uri();
     const saved = await C.platform.saveFile(uri, name, "application/pdf");
     if (saved === null) await C.platform.shareFile(uri, name);
-    else if (saved) toast("Saved " + name);
+    else if (saved) toast(t("Saved {name}", { name: name }));
   } catch (e) {
     console.error(e);
-    toast("Couldn't make the PDF. Try again.");
+    toast(t("Couldn't make the PDF. Try again."));
   }
 }
 
@@ -696,10 +695,10 @@ function inkText(existing) {
 // The words in a box, a size, and Done; empty, a text is taken off.
 function noteTextSheet() {
   const t = inkTextFor || { id: null, text: "", z: C.ink.TEXT_SIZES[1] };
-  const box = el("textarea", { class: "note-text", rows: "5", "aria-label": "Text", placeholder: "Type here", maxlength: "4000", dir: "auto" });
+  const box = el("textarea", { class: "note-text", rows: "5", "aria-label": i18n.t("Text"), placeholder: i18n.t("Type here"), maxlength: "4000", dir: "auto" });
   box.value = t.text;
-  const names = ["Small", "Medium", "Large"];
-  const sizes = seg("note-text-size", "Size", C.ink.TEXT_SIZES.map((v, i) => ({ value: String(v), label: names[i] })), String(t.z), (v) => { t.z = Number(v); });
+  const names = [i18n.t("Small"), i18n.t("Medium"), i18n.t("Large")];
+  const sizes = seg("note-text-size", i18n.t("Size"), C.ink.TEXT_SIZES.map((v, i) => ({ value: String(v), label: names[i] })), String(t.z), (v) => { t.z = Number(v); });
   const done = () => {
     const text = box.value, z = t.z, id = t.id;
     back().then(() => {
@@ -709,12 +708,12 @@ function noteTextSheet() {
   };
   setTimeout(() => box.focus(), 80);
   return el("div", { class: "page-controls" },
-    el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, t.id ? "Edit text" : "Add text")),
+    el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, t.id ? i18n.t("Edit text") : i18n.t("Add text"))),
     box,
-    el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, "Size"), sizes),
+    el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, i18n.t("Size")), sizes),
     el("div", { class: "group" },
-      el("button", { class: "row", type: "button", onclick: done }, el("span", { class: "row-label accent" }, "Done")),
-      el("button", { class: "row", type: "button", onclick: () => back() }, el("span", { class: "row-label" }, "Cancel"))));
+      el("button", { class: "row", type: "button", onclick: done }, el("span", { class: "row-label accent" }, i18n.t("Done"))),
+      el("button", { class: "row", type: "button", onclick: () => back() }, el("span", { class: "row-label" }, i18n.t("Cancel")))));
 }
 
 // ---- Drawings in Highlights (2026-11) ----
@@ -741,11 +740,11 @@ const inkTotal = (p) => inkGroups(p).reduce((a, g) => a + inkGroupCount(g), 0);
 // Where a row goes among the highlights: by block (highlights count blocks
 // from 0) or by page.
 const inkOrder = (g) => (g.page ? g.n : g.n - 1);
-const inkWord = (n) => (n === 1 ? "1 drawing" : n + " drawings");
+const inkWord = (n) => tn(n, "1 drawing", "{n} drawings");
 function inkLabel(p, g) {
   if (g.page) return (p.note ? "Sheet " : "Page ") + g.n;
   const w = state.open === p ? C.reader.inkBlockWords(g.n) : null;
-  return w && w.picture ? "Picture" : "Paragraph " + g.n;
+  return w && w.picture ? t("Picture") : t("Paragraph {n}", { n: g.n });
 }
 // A small picture of what's drawn there: the strokes alone, fitted.
 function inkThumb(strokes) {
@@ -802,7 +801,7 @@ function inkRow(p, g, onGo, onRemove) {
         el("span", { class: "row-label" }, inkLabel(p, g)),
         el("span", { class: "meta" }, inkWord(k)),
         words && words.text ? el("span", { class: "mark-note", dir: "auto" }, "“" + words.text.slice(0, 90) + (words.text.length > 90 ? "…" : "") + "”") : null)),
-    onRemove ? el("button", { class: "icon-btn mark-edit", type: "button", "aria-label": "Remove these drawings", title: "Remove these drawings", onclick: onRemove },
+    onRemove ? el("button", { class: "icon-btn mark-edit", type: "button", "aria-label": t("Remove these drawings"), title: t("Remove these drawings"), onclick: onRemove },
       svgIcon("remove", 18)) : null);
 }
 // Out of an open sheet or menu (app-library.js back), for where `back` means another thing.

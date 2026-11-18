@@ -360,13 +360,14 @@
     const at = res.url || url;
     const doc = parse(res.text, at);
     const cover = pageImage(doc, at);
+    const siteTags = pageTags(doc, at);
     if (site) {
       const own = (site.contents && await site.contents(doc, at, res.text)) || null;
       const links = own ? own.links : site.list ? await site.list(doc, at, res.text) : [];
-      if (links.length) return { title: (own && own.title) || readTitle(doc), links, cover, page: url };
+      if (links.length) return { title: (own && own.title) || readTitle(doc), links, cover, page: url, siteTags };
       // A site whose chapters are only ever its own kind of link (a
       // Wikisource work's subpages): no guessing from the page's links.
-      if (site.ownChapters) return { title: readTitle(doc), links: [], cover, page: url };
+      if (site.ownChapters) return { title: readTitle(doc), links: [], cover, page: url, siteTags };
     }
     let links = widen(pickChapters(linkGroups(doc, at)), doc, at);
     if (links.length) links = await laterPages(doc, at, links);
@@ -380,7 +381,46 @@
       }
     }
     if (!links.length) links = namedChapters(doc, at);
-    return { title: readTitle(doc), links: links.map((l) => l.url), cover, page: url };
+    return { title: readTitle(doc), links: links.map((l) => l.url), cover, page: url, siteTags };
+  }
+
+  // The tags a page gives itself: a site rule's (Royal Road's genres and
+  // tags, AO3's fandom and tags), else the article:tag meta, the
+  // schema.org keywords, Parse.ly's tags or the post's rel="tag" links
+  // (WordPress, Blogger). { site, tags } or null. Never the old keywords
+  // meta, mostly words for search engines. Added only as the person picked
+  // (the batch switch, Tags › Site's tags), else offered on the clip.
+  const MAX_TAGS = 10;
+  function ldKeywords(doc) {
+    const out = [];
+    for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) {
+      let data;
+      try { data = JSON.parse(s.textContent); } catch (e) { continue; }
+      for (const d of [].concat(data, (data && data["@graph"]) || [])) {
+        const k = d && d.keywords;
+        if (k) out.push(...(Array.isArray(k) ? k : String(k).split(",")));
+      }
+      if (out.length) break;
+    }
+    return out;
+  }
+  function pageTags(doc, url) {
+    const rule = siteRule(url);
+    let raw = rule && rule.tags ? rule.tags(doc) : [];
+    const metas = (sel) => [...doc.querySelectorAll(sel)].map((m) => m.getAttribute("content") || "");
+    if (!raw.length) raw = metas('meta[property="article:tag"]');
+    if (!raw.length) raw = ldKeywords(doc);
+    if (!raw.length) raw = metas('meta[name="parsely-tags"]').flatMap((x) => x.split(","));
+    if (!raw.length) raw = [...doc.querySelectorAll('a[rel~="tag"]')].filter((a) => !a.closest("aside, nav, footer, .widget, .sidebar")).map((a) => a.textContent);
+    const tags = [];
+    for (const r of raw) {
+      const t = String(r || "").replace(/\s+/g, " ").trim();
+      // Machine labels (section:news, type=video) and sentences aren't tags.
+      if (!t || t.length > 32 || /[:=|<>{}]/.test(t)) continue;
+      if (!tags.some((x) => x.toLowerCase() === t.toLowerCase())) tags.push(t);
+      if (tags.length >= MAX_TAGS) break;
+    }
+    return tags.length ? { site: (rule && rule.name) || siteName(url), tags } : null;
   }
 
   // A chapter page's link to its story's contents page.
@@ -566,6 +606,7 @@
         const og = doc.querySelector('meta[property="og:title"]');
         return links.length ? { title: text(doc.querySelector(".fic-header h1")) || (og && og.content.trim()) || "", links } : null;
       },
+      tags: (doc) => [...doc.querySelectorAll(".tags a.fiction-tag, span.tags a[href*='tagsAdd=']")].map(text),
       chapter(doc) {
         removeHidden(doc);
         const inner = doc.querySelector(".chapter-inner.chapter-content, .chapter-inner");
@@ -614,6 +655,8 @@
         const nav = parse(res.text, res.url || url);
         return uniqueLinks([...nav.querySelectorAll("ol.chapter a[href], ol.index a[href]")].map((a) => absolute(a.getAttribute("href"), url)));
       },
+      // Its fandom first, then the freeform tags the author gave it.
+      tags: (doc) => [...doc.querySelectorAll("dd.fandom.tags a.tag, dd.freeform.tags a.tag")].map(text),
       chapter(doc) {
         const box = doc.querySelector("#chapters");
         const body = box && (box.querySelector(".userstuff.module, [role='article'].userstuff") || box.querySelector(".userstuff"));
@@ -655,6 +698,7 @@
         links = uniqueLinks(links).reverse();
         return links.length ? { title: text(doc.querySelector("div.fic_title")), links } : null;
       },
+      tags: (doc) => [...doc.querySelectorAll(".wi_fic_genre a.fic_genre, .wi_fic_showtags a.stag")].map(text),
       chapter(doc) {
         const raw = doc.querySelector("#chp_raw");
         if (!raw) return null;
@@ -826,7 +870,7 @@
         try {
           for (let n = 1; n <= Math.min(part.pages || 1, 60); n++) pages.push((await get(from + n)).text);
         } catch (e) {
-          throw new SaveError("Wattpad didn't send the whole chapter. Try again in a minute.");
+          throw new SaveError(t("Wattpad didn't send the whole chapter. Try again in a minute."));
         }
         const box = '<div id="co-wattpad-text">' + pages.join("\n") + "</div>";
         return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, box + "</body>") : html + box;
@@ -936,6 +980,7 @@
       // file list around it.
       chapter(doc, url) {
         const parts = new URL(url).pathname.split("/").filter(Boolean);
+        if (parts[2] === "releases" && parts[3] === "tag") return githubRelease(doc, parts);
         if (parts.length < 2 || (parts.length > 2 && !/^(tree|blob)$/.test(parts[2]))) return null;
         const body = doc.querySelector("article.markdown-body");
         if (!body) return null;
@@ -1114,7 +1159,7 @@
   async function getJson(url, headers) {
     const res = await get(url, { Accept: "application/json", ...headers });
     try { return { url: res.url || url, data: JSON.parse(res.text) }; }
-    catch (e) { throw new SaveError("The site's answer couldn't be read. Try again later.", true); }
+    catch (e) { throw new SaveError(t("The site's answer couldn't be read. Try again later."), true); }
   }
 
   // ---- GitHub ----
@@ -1175,6 +1220,18 @@
       byline: [owner + "/" + repo].concat(segs.length > 2 ? [segs.slice(1, -1).map(decodeURIComponent).join("/")] : []).join(" · "),
       body: doc.body, base: url, licence: null, lang: "", dir: "", next: "", prev: "",
     };
+  }
+
+  // A release's notes (2026-11), titled by the release's name, without
+  // GitHub's header, assets list and reactions around them.
+  function githubRelease(doc, parts) {
+    const body = doc.querySelector('[data-test-selector="body-content"]');
+    if (!body) return null;
+    const content = doc.createElement("div");
+    content.append(body.cloneNode(true));
+    const h1 = [...doc.querySelectorAll("h1")].find((h) => !h.closest("dialog, [role=dialog], .Overlay") && text(h));
+    const title = (h1 && text(h1)) || decodeURIComponent(parts[4] || "");
+    return { content, siteName: "GitHub", title, byline: parts[0] + "/" + parts[1], next: "", prev: "" };
   }
 
   // ---- Reddit ----
@@ -2018,6 +2075,113 @@
     };
   }
 
+  // ---- Newsletters ----
+
+  // Every newsletter's email, once read: hidden text goes, the tables
+  // mails lay themselves out with are opened up (a table is layout when no
+  // row has more than one cell with something in it), zero-width spaces
+  // and the blank lines they leave go, so do divider lines drawn as
+  // pictures, and a heading left with nothing under it at the end. A
+  // newsletter with a rule of its own (`rule`) is tidied before it's read
+  // too, so the reader takes all of it as one column.
+  const ZERO_WIDTH = /[\u200b-\u200d\u2060\ufeff]/g;
+  const MEDIA = "img, picture, video, iframe, svg, math, hr";
+  const hasStuff = (n) => !!(n.textContent.trim() || (n.nodeType === 1 && (n.matches(MEDIA) || n.querySelector(MEDIA))));
+  function tidyMail(body, rule) {
+    const doc = body.ownerDocument;
+    if (rule && rule.strip) rule.strip(body);
+    for (const table of [...body.querySelectorAll("table")].reverse()) {
+      if (table.querySelector("th, caption")) continue;
+      const rows = [...table.querySelectorAll(":scope > tbody > tr, :scope > thead > tr, :scope > tr")];
+      const full = rows.map((tr) => [...tr.children].filter(hasStuff));
+      if (full.some((cells) => cells.length > 1)) continue;
+      const frag = doc.createDocumentFragment();
+      for (const cell of full.flat()) frag.append(...cell.childNodes);
+      table.replaceWith(frag);
+    }
+    // What the tables held then sits in one column, so the reader keeps
+    // every part together.
+    stripMail(body);
+    for (const div of [...body.querySelectorAll("div, center")].reverse()) div.replaceWith(...div.childNodes);
+    const walk = doc.createTreeWalker(body, 4);
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) { const d = n.data.replace(ZERO_WIDTH, ""); if (d !== n.data) n.data = d; }
+    for (const img of [...body.querySelectorAll("img")]) {
+      const w = parseInt(img.getAttribute("width"), 10), h = parseInt(img.getAttribute("height"), 10);
+      if ((h && h <= 8) || (w && h && h / w < 0.02)) img.remove();
+    }
+    if (rule) rule.tidy(body);
+    for (const el of [...body.querySelectorAll("p, div, span, figure, em, strong, b, i, a, center, font, section")].reverse()) {
+      if (el.isConnected && !hasStuff(el)) el.remove();
+    }
+    for (;;) {
+      const heads = body.querySelectorAll("h1, h2, h3, h4, h5, h6");
+      const last = heads[heads.length - 1];
+      if (!last) break;
+      let after = false;
+      for (let n = last; n && n !== body && !after; n = n.parentNode) {
+        for (let s = n.nextSibling; s && !after; s = s.nextSibling) if (hasStuff(s) && !(s.nodeType === 1 && s.localName === "hr")) after = true;
+      }
+      if (after) break;
+      last.remove();
+    }
+  }
+
+  // What no newsletter's reader wants, taken out of every email before
+  // it's read: text it hides (its preview line), the part Kit (ConvertKit)
+  // marks as only for the inbox (why you got it, unsubscribe, the postal
+  // address) and the pictures that tell the sender it was opened.
+  const OPEN_PIXEL = /^https?:\/\/([^/]+\.)?open\.[^/]+\/|\/(open|o)\/[^/]+\.(gif|png)(\?|$)/i;
+  function stripMail(body) {
+    for (const el of [...body.querySelectorAll("[hidden], [style]")]) if (el.hasAttribute("hidden") || /display:\s*none|visibility:\s*hidden|max-height:\s*0|mso-hide:\s*all/i.test(el.getAttribute("style"))) el.remove();
+    for (const el of body.querySelectorAll(".ck-hide-in-public-posts")) el.remove();
+    for (const img of body.querySelectorAll("img")) if (OPEN_PIXEL.test(img.getAttribute("src") || "")) img.remove();
+  }
+
+  // Newsletters with a rule of their own, known by the address they're
+  // sent from, or failing that by their subject and their links home.
+  const NEWSLETTERS = [
+    {
+      name: "James Clear", byline: "James Clear",
+      from: /(^|\.)jamesclear\.com$/i,
+      subject: /^3-2-1\b/i,
+      home: /^https?:\/\/(www\.)?jamesclear\.com\//i,
+      // 3-2-1: `strip`, while Kit's classes are still on (before the
+      // tables open up), takes the line with the site and date and the
+      // book and calendar ads at the foot (footer boxes and buttons);
+      // `tidy` the logo and its tagline, the weekly greeting and the
+      // banner over each of the 3 ideas, 2 quotes and 1 question.
+      strip(body) {
+        for (const el of [...body.querySelectorAll(".footer-box, .email-button, .button-table")]) el.remove();
+        for (const t of [...body.querySelectorAll("table.ck-layout-stack")]) {
+          const words = t.textContent.replace(/\s+/g, " ").trim();
+          if (/jamesclear\.com/i.test(words) && words.length < 80) t.remove();
+        }
+      },
+      tidy(body) {
+        const text = (n) => n.textContent.replace(/\s+/g, " ").trim();
+        for (const p of body.querySelectorAll("p, div, em")) {
+          const words = text(p);
+          if ((/most wisdom per word/i.test(words) && words.length < 80)
+            || /^happy 3-2-1 thursday!?$/i.test(words)
+            || /^here are 3 ideas, 2 quotes,? and 1 question to consider this week\W*$/i.test(words)) p.remove();
+        }
+        const order = [...body.querySelectorAll("p, h1, h2, h3, h4, h5, h6, li, blockquote, img")];
+        const firstText = order.findIndex((n) => n.localName !== "img" && text(n));
+        order.forEach((img, i) => {
+          if (img.localName !== "img") return;
+          const next = order.slice(i + 1).find((n) => n.localName !== "img" && text(n));
+          if (i < firstText || (next && /^h\d$/.test(next.localName))) img.remove();
+        });
+      },
+    },
+  ];
+  function mailRule(from, title, body) {
+    const host = String(from || "").split("@").pop().trim();
+    return NEWSLETTERS.find((n) => host && n.from.test(host))
+      || NEWSLETTERS.find((n) => n.subject.test(title || "") && body && [...body.querySelectorAll("a[href]")].some((a) => n.home.test(a.getAttribute("href"))))
+      || null;
+  }
+
   // A rule with `path` instead of `host` is for software that runs on many
   // sites (Mastodon), told by the shape of the address.
   function siteRule(url) {
@@ -2063,14 +2227,14 @@
         if (drawn && !challengePage(drawn.text)) res = { status: 200, url: drawn.url, text: drawn.text };
       }
     } catch (e) {
-      if (/time(d)?\s?out/i.test((e && e.message) || "")) throw new SaveError("The site didn't answer. Try again, or later on a better connection.", true);
+      if (/time(d)?\s?out/i.test((e && e.message) || "")) throw new SaveError(t("The site didn't answer. Try again, or later on a better connection."), true);
       throw new SaveError(C.platform.canReadPages
-        ? "Couldn't reach this page. Check the link, or try again when you're online."
-        : "This browser can't reach that site directly. Save it in Waypage on your phone, then bring it here with a backup.", C.platform.canReadPages);
+        ? t("Couldn't reach this page. Check the link, or try again when you're online.")
+        : t("This browser can't reach that site directly. Save it in Waypage on your phone, then bring it here with a backup."), C.platform.canReadPages);
     }
-    if (res.status === 429) throw new SaveError("The site asked to slow down. Try again in a few minutes.");
-    if (res.status === 404 || res.status === 410) throw new SaveError("That page doesn't exist any more. Check the link.", false, true);
-    if (res.status >= 400) throw new SaveError("The site answered with an error (" + res.status + "). Try again later.", res.status >= 500 || res.status === 403, res.status === 403);
+    if (res.status === 429) throw new SaveError(t("The site asked to slow down. Try again in a few minutes."));
+    if (res.status === 404 || res.status === 410) throw new SaveError(t("That page doesn't exist any more. Check the link."), false, true);
+    if (res.status >= 400) throw new SaveError(t("The site answered with an error ({status}). Try again later.", { status: res.status }), res.status >= 500 || res.status === 403, res.status === 403);
     return res;
   }
 
@@ -2213,13 +2377,15 @@
     if (contents) return { contents };
     let next = nextLink(doc, finalUrl);
     let prev = nextLink(doc, finalUrl, true);
+    // Read before Readability, which takes the scripts (and JSON-LD) out.
+    const siteTags = pageTags(doc, finalUrl);
     resolveLazyImages(doc, finalUrl);
     if (!comic && own && own.content && own.content.textContent.trim().length >= MIN_TEXT / 5) {
       if (own.next !== undefined) next = own.next;
       if (own.prev !== undefined) prev = own.prev;
       const t = own.content.textContent;
       const article = { content: own.content.innerHTML, title: own.title, byline: own.byline, siteName: own.siteName || site.name, textContent: t, lang: "", dir: "" };
-      return { doc, docTitle, headline: own.title || headline, next, prev, article, series: own.series || "", licence: own.licence || null, published: publishedAt(doc, html) };
+      return { doc, docTitle, headline: own.title || headline, next, prev, article, series: own.series || "", licence: own.licence || null, published: publishedAt(doc, html), siteTags };
     }
     if (comic) {
       let panels = comicPanels(doc, finalUrl);
@@ -2229,7 +2395,7 @@
       if (own && own.prev !== undefined) prev = own.prev;
       return panels ? { published: publishedAt(doc, html), doc, docTitle, headline: (own && own.title) || headline, next, prev, panels, series: (own && own.series) || "", byline: (own && own.byline) || "", blanks: standIns(doc) } : null;
     }
-    if (typeof window.Readability !== "function") throw new SaveError("The reader part of the app didn't load. Restart Waypage.");
+    if (typeof window.Readability !== "function") throw new SaveError(t("The reader part of the app didn't load. Restart Waypage."));
     const article = new window.Readability(doc, { charThreshold: 500, keepClasses: false }).parse();
     // A comic chapter nobody said was one (1.49.0): little or no text and a
     // column of large pictures. A page with real text stays an article.
@@ -2244,7 +2410,7 @@
     if (!article || (article.textContent || "").trim().length < MIN_TEXT) return null;
     if (own && own.next !== undefined) next = own.next;
     if (own && own.prev !== undefined) prev = own.prev;
-    return { doc, docTitle, headline: (own && own.title) || headline, next, prev, article, series: (own && own.series) || "", published: publishedAt(doc, html) };
+    return { doc, docTitle, headline: (own && own.title) || headline, next, prev, article, series: (own && own.series) || "", published: publishedAt(doc, html), siteTags };
   }
 
   // A page cut short for subscribers or signed-in readers (1.7.0). Waypage
@@ -2291,8 +2457,9 @@
       try { res.text = await site.prepare(res.text, finalUrl); } catch (e) { if (!given) throw e; }
     }
     if (site && site.contents && !comic && !asPage) {
-      const own = await site.contents(parse(res.text, finalUrl), finalUrl, res.text);
-      if (own && own.links.length) throw new ContentsPage(own);
+      const doc = parse(res.text, finalUrl);
+      const own = await site.contents(doc, finalUrl, res.text);
+      if (own && own.links.length) throw new ContentsPage({ ...own, siteTags: pageTags(doc, finalUrl) });
     }
     let got = readArticle(res.text, finalUrl, comic, site, asPage);
     let html = res.text;
@@ -2322,13 +2489,13 @@
         got = again;
       }
     }
-    if (got && got.check) throw new SaveError("The site asked for a browser check, so Waypage can't save it yet.", true);
-    if (got && got.contents) throw new ContentsPage(got.contents);
-    if (!got && comic) throw new SaveError("Waypage couldn't find the pictures on this page.");
+    if (got && got.check) throw new SaveError(t("The site asked for a browser check, so Waypage can't save it yet."), true);
+    if (got && got.contents) throw new ContentsPage({ ...got.contents, siteTags: pageTags(parse(html, finalUrl), finalUrl) });
+    if (!got && comic) throw new SaveError(t("Waypage couldn't find the pictures on this page."));
     if (!got) {
       throw new SaveError(C.platform.canRender
-        ? "Waypage couldn't find the article on this page, even after letting it draw itself."
-        : "This page builds itself with JavaScript, which Waypage can't save yet.", C.platform.canRender);
+        ? t("Waypage couldn't find the article on this page, even after letting it draw itself.")
+        : t("This page builds itself with JavaScript, which Waypage can't save yet."), C.platform.canRender);
     }
     if (got.panels) {
       const { doc, docTitle, headline, next, prev, panels, series, byline } = got;
@@ -2357,6 +2524,7 @@
       lang: (doc.documentElement.getAttribute("lang") || article.lang || "").trim(),
       dir: article.dir === "rtl" || textDir(doc, article.textContent) === "rtl" ? "rtl" : "",
       next, prev, icon: siteIcon(doc, finalUrl), cut: cutShort(html, article.textContent), published: got.published,
+      siteTags: given ? null : got.siteTags || null,
     };
   }
 
@@ -2367,8 +2535,8 @@
   async function findArchived(url) {
     let res;
     try { res = await C.platform.fetchText("https://archive.org/wayback/available?url=" + encodeURIComponent(url)); }
-    catch (e) { throw new SaveError("Couldn't reach the Internet Archive. Try again when you're online.", true); }
-    if (res.status >= 400) throw new SaveError("The Internet Archive didn't answer. Try again later.", true);
+    catch (e) { throw new SaveError(i18n.t("Couldn't reach the Internet Archive. Try again when you're online."), true); }
+    if (res.status >= 400) throw new SaveError(i18n.t("The Internet Archive didn't answer. Try again later."), true);
     let snap = null;
     try { snap = JSON.parse(res.text).archived_snapshots.closest; } catch (e) { snap = null; }
     if (!snap || !snap.available || String(snap.status) !== "200" || !/^\d{14}$/.test(snap.timestamp || "")) return null;
@@ -2844,10 +3012,20 @@
     if (kind !== "comic" && rule && rule.comic && rule.comic(url)) { kind = "comic"; mode = "full"; }
     const wiki = kind !== "comic" && !archived && wikipediaPage(url);
     if (onProgress) onProgress({ stage: "text" });
+    let letter = null;
+    if (given && given.mail) {
+      const d = new DOMParser().parseFromString(given.html, "text/html");
+      letter = mailRule(given.from, given.title, d.body);
+      if (letter) tidyMail(d.body, letter);
+      else stripMail(d.body);
+      given = { ...given, html: "<!doctype html>\n" + d.documentElement.outerHTML };
+    }
     const got = wiki ? await fromWikipedia(wiki) : await fromAnyPage(archived ? archived.url : url, () => onProgress && onProgress({ stage: "drawing" }), kind === "comic", asPage, archived ? null : given);
     // A newsletter's email (1.43.0) is named by its subject and sender.
     if (given && given.title) got.title = given.title;
     if (given && given.site) got.site = given.site;
+    if (given && given.mail) tidyMail(got.body, letter);
+    if (letter) Object.assign(got, { site: letter.name, byline: letter.byline });
     if (archived) {
       if (!got.site || got.site === "web.archive.org") got.site = siteName(url);
       got.url = url;
@@ -2857,7 +3035,7 @@
     const out = document.implementation.createHTMLDocument("");
     const { root, media } = rebuild(got.body, got.base, got.url, out);
     if (got.comic) root.classList.add("co-comic");
-    else if (!root.textContent.trim()) throw new SaveError("Nothing readable was found on this page.");
+    else if (!root.textContent.trim()) throw new SaveError(t("Nothing readable was found on this page."));
     // The page's own headline, when the article kept it, would sit under the
     // one savedPageHtml writes.
     const norm = (t) => t.replace(/\s+/g, " ").trim().toLowerCase();
@@ -2872,6 +3050,7 @@
       next: got.next || "", prev: got.prev || "",
     };
     if (got.series) meta.series = got.series;
+    if (got.siteTags && !letter) meta.siteTags = got.siteTags;
     if (got.cut) meta.cut = true;
     if (got.published) meta.published = got.published;
     if (archived) meta.archived = archived.at;
@@ -2891,7 +3070,7 @@
       meta.bytes += C.store.bytesOf(text);
     } catch (e) {
       await C.store.removePage(id);
-      throw new SaveError("Couldn't write the clip to the phone. Free some space and try again.");
+      throw new SaveError(t("Couldn't write the clip to the phone. Free some space and try again."));
     }
     return meta;
   }
@@ -3058,7 +3237,7 @@
     const got = wiki ? await fromWikipedia(wiki) : await fromAnyPage(url, () => {}, false, false);
     const out = document.implementation.createHTMLDocument("");
     const { root, media } = rebuild(got.body, got.base, got.url, out);
-    if (!root.textContent.trim()) throw new SaveError("Nothing readable was found on this page.");
+    if (!root.textContent.trim()) throw new SaveError(t("Nothing readable was found on this page."));
     const norm = (t) => t.replace(/\s+/g, " ").trim().toLowerCase();
     const first = root.querySelector("h2, h3");
     if (first && norm(first.textContent) === norm(got.title) && norm(root.textContent).startsWith(norm(first.textContent))) first.remove();
@@ -3073,8 +3252,8 @@
 
   C.save = {
     get compress() { return compress; }, set compress(v) { compress = v !== false; }, compressPictures,
-    pageSource, preview,
-    save, findArchived, unWayback, formatDate, publishedAt, SaveError, ContentsPage, cutShort, findChapters, pageImage, siteIcon, keepCover, siteRule, removeHidden, scriptJson, chapterNumber, pickChapters, comicGroup, isPanel, retryMissing, saveFullImages, setPictures, findNext, creditLine, cleanSaved, savedPageHtml, newId, textDir, isNextText, isPrevText, plainText, replaceText,
+    pageSource, preview, rebuild,
+    save, findArchived, unWayback, tidyMail, mailRule, formatDate, publishedAt, SaveError, ContentsPage, cutShort, findChapters, pageImage, siteIcon, keepCover, siteRule, removeHidden, scriptJson, chapterNumber, pickChapters, comicGroup, isPanel, retryMissing, saveFullImages, setPictures, findNext, creditLine, cleanSaved, savedPageHtml, newId, textDir, isNextText, isPrevText, plainText, replaceText,
     wikipediaPage, wikimediaThumb, parseSrcset, pickWidth, youtubeId, vimeoId, extOf, isTrackingPixel, readingMinutes, WORDS_PER_MINUTE, siteName,
   };
 })();

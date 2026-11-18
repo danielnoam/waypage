@@ -4,6 +4,7 @@
 // meantime gets the commit made again on its new head, and each page's sha
 // is the one git gives its text.
 const assert = require("assert");
+require("./lang.js");
 const crypto = require("crypto");
 
 global.window = { Waypage: { platform: {}, store: { toBase64: (b) => Buffer.from(b).toString("base64") } } };
@@ -55,6 +56,7 @@ global.fetch = async (url, opts = {}) => {
   throw new Error("unexpected " + method + " " + path);
 };
 
+require("../src/keel/github.js");
 require("../src/sync.js");
 const S = window.Waypage.sync;
 

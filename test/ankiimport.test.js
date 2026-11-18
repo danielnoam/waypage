@@ -4,6 +4,7 @@
 // The collection is test/fixtures/anki/collection.anki2, made by
 // make-collection.py from Anki's documented tables (not exported by Anki).
 const assert = require("assert");
+require("./lang.js");
 const fs = require("fs");
 const path = require("path");
 

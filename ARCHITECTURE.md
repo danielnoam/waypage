@@ -17,11 +17,13 @@ line is the way it is lives in its commit and PR (`git log -S`,
 - [Where clips live](#where-clips-live)
 - [Reading](#reading)
 - [Files: EPUB, PDF, comics](#files-epub-pdf-comics)
+- [Kiwix packs](#kiwix-packs)
 - [Browser versus app](#browser-versus-app)
 - [Sync and backups](#sync-and-backups)
 - [Versions, cache and updates](#versions-cache-and-updates)
 - [The phone apps](#the-phone-apps)
 - [Tests and screenshots](#tests-and-screenshots)
+- [Languages](#languages)
 - [Trade-offs](#trade-offs)
 - [Traps](#traps)
 - [The docs](#the-docs)
@@ -45,6 +47,8 @@ sw.js               offline cache for the web copy; its ASSETS list is also what
 manifest.json       the web copy as an installable app
 privacy.html, terms.html   the pages Google's OAuth branding links to
 src/boot.js         runs in <head>: puts the saved theme on <html> before the first frame
+src/language.js     runs in <head>: picks English or Hebrew, sets lang and dir on <html>, loads the Hebrew words; gives every script t() and tn()
+src/lang/he.js      the Hebrew for every English word the app shows, keyed by the English
 src/app.js          APP_VERSION, the shared helpers (el, load, store, toast), theme and state
 src/app-reading.js  text size, spacing, margins, alignment, fonts (bundled and added)
 src/app-cards.js    clip cards, saving cards and runs, failed saves, update and archive a clip
@@ -58,6 +62,7 @@ src/app-pentest.js  the pen test in Try your pen: asks for ten things in turn, r
 src/app-library.js  tags, collections, a clip's sheet, multi-select, export, import, watched folders
 src/app-saving.js   sync screen, saving several, next links and new chapters, feeds, home-screen widgets
 src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestures, a feed's sheets
+src/app-kiwix.js    Kiwix packs and books kept as files: the + sheet's downloads (where they're kept, Wi-Fi wait), a pack's articles in the reader (links, Back, Search this pack, Save this article), a book as a collection of clips
 src/app-discover.js the Discover place: Wikipedia today, the list, its search, the Sites grid (stories, books, texts), the story and sign-up sheets
 src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
 src/app-listen.js   audiobooks: bringing one in, the player and its bar, reading along, transcripts written ahead, fixes, Find the book in Discover, Settings › Audiobooks
@@ -71,19 +76,20 @@ src/store.js        one directory per clip and library.json; IndexedDB in a brow
 src/platform.js     browser vs app: native fetch, plugins, downloads, speech, opening links
 src/files.js        EPUB, Kindle (MOBI/AZW3), FB2, CBZ, Markdown, text and HTML files
 src/listen.js       audiobooks' pure parts: chapters from M4B and MP3 tags, transcripts as paragraphs, fixes, heard words matched to a book's, EPUB Media Overlays
+src/zim.js          Kiwix packs (.zim): the header, entries by path, the title index, clusters stored, xz (its own LZMA2 decoder) or Zstandard (src/vendor/fzstd.mjs); loaded by files.js the first time a pack is opened
 src/pdf.js          PDFs through pdf.js in a locked-down frame
 src/ink.js          drawing over a clip's blocks or a PDF's pages: strokes, layers, undo, what a copy of the PDF is given
 src/notes.js        notes: sheets of paper you draw on, opened through the PDF pages pipeline with a stand-in document; any clip laid out as a PDF to make one
 src/recover.js      Settings › Report a problem › Recover: finds highlights and drawings an update left behind (scan) and puts them back (fix); no page code
 src/pptx.js         PowerPoint decks redrawn on a canvas and written as a PDF (1.49.0)
 src/epub.js         clips as an EPUB 3 book, for e-readers and Send to Kindle
-src/feeds.js        RSS, Atom and JSON Feed, read into one shape
-src/discover.js     Discover's sources: the hand-picked list, Wikipedia today, and the sites' lists and search (Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON, Tapas, SpaceBattles, Sufficient Velocity; books from Project Gutenberg via Gutendex and Standard Ebooks; Wikisource)
+src/feeds.js        RSS, Atom and JSON Feed, read into one shape; a GitHub repo link follows its releases
+src/discover.js     Discover's sources: the hand-picked list, Wikipedia today, and the sites' lists and search (Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON, Tapas, SpaceBattles, Sufficient Velocity; books from Project Gutenberg via Gutendex and Standard Ebooks; Wikisource; LibriVox's audiobooks via archive.org and LibriVox's API)
 src/discover-list.js  the hand-picked list itself (strict JSON between markers, refreshed from GitHub)
 src/sync.js         GitHub sync; src/sync-worker.js runs the merge off the main thread
 src/drive.js        Google Drive backups
 src/backup.js       one-file backups and exports
-src/imports.js      Pocket, Instapaper, Omnivore, Raindrop, Wallabag exports
+src/imports.js      Pocket, Instapaper, Omnivore, Raindrop, Wallabag exports, Kindle highlights
 src/stats.js        reading stats and the reading pace
 src/activity.js     Share reading activity: builds activity/reading.json (docs/reading-activity.md)
 src/dict.js         StarDict dictionaries in IndexedDB
@@ -92,20 +98,39 @@ src/fsrs.js         the Anki extension's scheduler: FSRS-5 in plain JS; loaded o
 src/sqlite.js       a read-only SQLite reader (table b-trees and overflow pages, UTF-8), loaded with the Anki extension, for opening an Anki deck
 src/anki-import.js  reads an Anki deck (.apkg: a zip with a SQLite collection) into cards and reviews, and Anki's text export's counterpart lives in anki.js; loaded with the Anki extension
 src/anki.js         the Anki extension's engine: decks, cards and a review log (anki/ beside the library, per-device log), each card's schedule replayed from the log
+src/calibre.js      the Calibre extension's library folder: picked once (the Files plugin, or a browser's folder picker kept in IndexedDB), metadata.db read with sqlite.js into books, a book's best file and its cover read from the folder by path
+src/app-calibre.js  the Calibre extension's place: the books as covers with search, sort and tag, a book's sheet (Read it from the folder, or Copy into your Library), Settings › Extensions › Calibre
+src/opds.js         the Catalogs extension's catalogs: the list on this device, OPDS 1 (Atom) and 2 (JSON) feeds read into folders and books, search, a book's file with the catalog's login
+src/app-catalogs.js the Catalogs extension's screens: the Catalogs place in the sidebar (folders, books, search), the Add a catalog sheet, Settings › Extensions › Catalogs
+src/webdav.js       the WebDAV extension's servers: the list on this device, a PROPFIND answer read into folders and books, a book's picture found beside it, a file with the server's login
+src/app-webdav.js   the WebDAV extension's screens: the WebDAV place in the sidebar (folders, books as covers, find in folder), a book's sheet (Add to your Library), the Add a server sheet, Settings › Extensions › WebDAV
+src/abs.js          the Audiobookshelf extension's servers: the list on this device with its tokens, signing in and renewing, libraries, books, search, play sessions and your place on the server
+src/app-abs.js      the Audiobookshelf extension's screens: its place in the sidebar (continue listening, books, search), a book's sheet (Play adds a streaming audiobook), the sign-in sheet, Settings › Extensions › Audiobookshelf; streams for app-listen.js through REMOTE_AUDIO
 src/app-anki.js     the Anki extension's screens: the selection bar's button and card sheet, the place (decks, study, browse, edit, options)
-src/motion.js       the springs from DESIGN.md, sampled into CSS linear()
-src/qr.js           QR code for sync's setup link, made on the device so the token never leaves it
+src/motion.js       Waypage's springs from DESIGN.md, given to keel's motion engine (src/keel/motion.js)
+src/keel/qr.js      QR code for sync's setup link, made on the device so the token never leaves it (from keel, below)
+src/keel/github.js  the GitHub requests sync.js makes: reading, writing and committing files, errors with a kind (from keel, below)
+src/keel/errlog.js  the errors this device hit, for Report a problem; loaded first, set up by its tag in index.html (from keel, below)
+src/keel/platform.js  where it runs (phone, browser), app-build.json, links out to the phone's browser (from keel, below); src/platform.js builds on it
+src/keel/releases.js  the app's releases on GitHub: the update check, the Test builds list, opening one in the browser (from keel, below)
+src/keel/motion.js  the motion engine: springs sampled into CSS linear(), every move, reduced motion and Animations off (from keel, below); src/motion.js gives it Waypage's springs
+src/keel/sw-preview.js  sw.js's half of a test build in the browser (from keel, below)
+src/keel/i18n.js    translations: t() and tn() with plurals, dir, dates and numbers in the chosen language (from keel, below)
+src/keel/drive.js   Google Drive sign-in, folder, resumable sending and keeping the newest; drive.js says what a backup is (from keel, below)
 src/styles.css      tokens, themes, layout (DESIGN.md)
 src/reader.css      the saved page inside the reader's frame
 src/fonts.css       the bundled fonts (src/fonts/)
-src/vendor/         Readability, pdf.js, foliate-js's MOBI reader, each with its licence
+src/vendor/         Readability, pdf.js, foliate-js's MOBI reader, fzstd (Zstandard, for Kiwix packs), each with its licence
 assets/             icon and splash sources for the apps
 icons/, icon.svg    app icons
 worker/             the web copy's fetch proxy, a Cloudflare Worker (worker.js, wrangler.toml, README.md has the setup)
-native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Pen, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes), Audiobook (AudiobookService plays with the screen off; Listen writes transcripts with sherpa-onnx's offline recognizer), Car (Android Auto: CarService, Car's one shared media session), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
+native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Pen, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes), Audiobook (AudiobookService plays with the screen off; Listen writes transcripts with sherpa-onnx's offline recognizer), Car (Android Auto: CarService, Car's one shared media session), Dav (a WebDAV PROPFIND written over a socket, for Files' davList), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
 tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-build.json
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
 tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
+tools/keel-sync.js  brings the files shared with LifeLog up to a keel release (below)
+tools/keel-checks.js  contrast and CSP checks the tests use (from keel, below)
+tools/unreleased.js  the unreleased channel's files: a note beside main's APK, then the Pages deploy puts the newest under unreleased/ (from keel)
 tools/sign-apk.sh   signs the APK with the release key in CI
 tools/sherpa-lib.sh   fetches sherpa-onnx's arm64 library (Kokoro voices) into the Android build, pinned and checked
 tools/test-build.sh        puts a labelled pull request's build on its test-<branch> pre-release
@@ -113,16 +138,17 @@ tools/packs/build-lang.js  builds Anki's language packs (a StarDict .tar.gz) fro
 tools/shots.js      retakes the README's screenshots (tools/shots/demo is the demo library)
 tools/check-discover.js  checks every feed, sign-up and serial in Discover's list still answers (weekly, discover-check.yml)
 test/               node test/run-all.js runs every *.test.js
+keel.config.json, keel.lock.json  the files shared with LifeLog through keel (see Versions, cache and updates)
 design/             the design canvas's artboards, for the exact markup
 docs/PROPOSAL.md    the original architecture, storage, legal and store reasoning
 docs/shots/         the README's screenshots
-.github/workflows/  test.yml (every PR), android.yml and ios.yml (builds, releases, test builds), test-builds.yml (test labels: build on, remove off), worker.yml (deploys worker/ to Cloudflare), discover-check.yml (Discover's list, weekly)
+.github/workflows/  test.yml (every PR), pages.yml (the web copy after the tests, with unreleased/), android.yml and ios.yml (builds, releases, test builds), test-builds.yml (test labels: build on, remove off), worker.yml (deploys worker/ to Cloudflare), discover-check.yml (Discover's list, weekly)
 ```
 
 ## Load order and the one scope
 
 `index.html` loads every script as a classic `<script>`, in the order
-listed there: platform, motion, Readability, store, save, feeds, backup,
+listed there: platform, motion (keel's, then Waypage's), Readability, store, save, feeds, backup,
 imports, dict, sync, drive, qr, stats, activity, epub, files, pdf, reader, then the
 shell (`app.js` and the `app-*.js` files). No modules, no bundler.
 
@@ -182,6 +208,19 @@ way); a list over pages followed by its Next link (40 pages at
 most); a chapter's own link led on to its "Table of contents" link; and
 a list of named, unnumbered chapters taken when six or more links of one
 shape share the site's first folder.
+The same read gives the page's own tags (`pageTags`: a site rule's
+`tags`, else `article:tag` meta, ten at most) as `siteTags`; Save with
+options offers them as one switch, off until turned on, remembered in
+`waypage.saveSiteTags`.
+A collection marked "Tag new clips" (`folderTagNew` on its clips, like
+`folderFav`; synced) gives a clip joining it the tags all its clips
+share (`joinTags`, run from `joinFav` and on every new save into it).
+A series (2026-11) is a collection whose clips carry `folderSeries`, and
+`folderIn` naming the collection it sits in (one level: a series holds
+only clips and files, a collection never sits in another). Nothing else
+changes, so an app or device without series shows a plain collection and
+no clip moves. `seriesInfo` reads the marks once per task; one clip still
+marked is enough, and `healSeries` puts them back on the rest.
 
 ## Where clips live
 
@@ -225,7 +264,11 @@ FB2, CBZ, Markdown, text and HTML, either copied in as a normal clip or
 read from where they are (shown under Files, not synced). PDFs go through
 `pdf.js` in its own iframe with `allow-scripts` but no access to the app
 (`src/pdf.js` is the bridge, `src/vendor/pdf.min.mjs` and its worker the library); large
-linked PDFs are read in ranges.
+linked PDFs are read in ranges. It also writes comics back out
+(`exportComic`): a comic clip or a collection of them as one CBZ, pages
+numbered 0001… and a ComicInfo.xml (title, series, number, manga
+direction) that `fromCbz` reads back. CBR isn't offered: RAR can't be
+written freely.
 
 A linked PDF's printed pages can be highlighted (1.56.0). As a page is
 drawn, `files.js` asks the sandbox for its words where they sit
@@ -330,6 +373,18 @@ with no layer yet (not near the screen) get no copy, and in Pages layout
 (one page a screen) only a side-by-side spread has a neighbour to drop on.
 There's no scrolling while dragging near the screen's edge.
 
+Margins (2026-11): a layer reaches past its text column or page, to the
+screen's edge or halfway to a layer beside it (`fitPads`; Pages counts the
+screen the layer is on). A see-through `rect.pad` gives a stroke somewhere
+to start there, and the layer is cut at its margins by an inline
+`clip-path` instead of `overflow: hidden`. Strokes stay in the layer's own
+widths, so one in a margin has x below 0 or past 1 and keeps beside its
+paragraph or page; `placeOn` and `clampInto` take a page's reach (`l`, `r`
+in `pagesOf`), and `rescue` only brings back what is past any margin (x
+under -1 or over 2), so a margin narrower than the one it was written in
+cuts the stroke and never moves it. A copy of the PDF and a note's Save as
+PDF have only the page: what is in the margins is left out.
+
 A note (2.0.0, `notes.js`) is a library item with `note: { paper, from? }`
 and no file: a stack of sheets, in `note.json` (`store.readNote`,
 `writeNote`), `{ bg: "paper" }` or `{ bg: "pdf", n }`, with its strokes in
@@ -360,6 +415,15 @@ marker in sync; the old copy is left alone.
 Opening a PDF asks Keep a copy, Read from where it is or Make a note too
 (`noteFromFile`, `fileSheet`), in a browser as well; the library's Show has
 All notes (`filter "notes"`) while a note exists.
+A note holds 500 sheets (`MAX_SHEETS`). For a longer book `notes.plan`
+first measures it without drawing (`layout(..., dry)`: the same setting of
+lines on a small canvas, pictures counted by their width and height
+attributes or as half a page) and gives its chapters (`units`: the contents'
+`data-toc` marks, else h1 to h3, else runs of about 50 pages) with the pages
+each comes to; `askParts` (`notePartsSheet`) picks From and To and the note
+is set from that part only (`range`). A longer PDF picks runs of 50 of its
+pages (`pdfPart`): the copy is still the whole PDF, its sheets name only
+the pages picked.
 Typed text is an item in `ink.json` like a picture, `{ id, t: "x", c, x, y,
 w, h, z, text }` (`z` the size in page widths, `ink.js addText`, `editText`),
 so Select, move, cut, paste, delete and undo take it with no more code. Save
@@ -377,6 +441,34 @@ is `dir="rtl"` on the body. Comics have their own Show as (`comicLayout`)
 and a clip's `turn` overrides the ComicInfo `manga` flag. A file naming its
 series gets `series` and `volume`, and `fileSeries` (app-library.js) puts it
 into that collection in volume order.
+
+## Kiwix packs
+
+A Kiwix pack (2026-11) is a whole site in one `.zim` file: Wikipedia,
+Wiktionary, Stack Exchange. Discover › Sites › Kiwix lists Kiwix's own
+catalog (library.kiwix.org, OPDS), by topic and language with sizes
+(`discover.js parseKiwix`). Its + opens the same sheet as a book's
+(`app-discover.js dzAddSheet`): where to keep the file (inside Waypage,
+Downloads, Documents/Waypage or a picked folder) and, for a big one, Wait
+for Wi-Fi. `platform.keepFile` downloads it natively into the cache with
+the Downloads plugin (resumable, one at a time) and moves it there; its
+`file://` address (or the folder's document) is the lasting ref, read
+with `files.blob` like any outside file. A browser can't keep one: the
+browser downloads it and Add a file brings it in.
+
+A pack is a clip read from where it is (`file.kind` "zim", `zim: { at,
+main, wiki, ours }`), never copied, synced or backed up. `files.js
+openZim` reads `zim.at` through `zim.js` and gives the reader the article
+rebuilt by save.js's allowlist (`rebuild`), its links as addresses under
+`zim.ORIGIN` and its pictures as `data-in="zim:<path>"` slots, filled as
+they come near like an EPUB's. A tap on such a link (`app-kiwix.js
+packGo`) shows that article and pushes a history entry with `pack`, so
+Back goes back through the articles; `route` turns a `pack` it lands on
+into that article. Find becomes Search this pack (titles, from the title
+index), and Save this article makes an ordinary clip of it with its
+pictures and, for Wikipedia, its address and licence line. Highlights are
+off on a pack: they'd land on whichever article is open. Removing a pack
+Waypage downloaded into its own places deletes the file.
 
 ## Browser versus app
 
@@ -478,6 +570,23 @@ web copy stay links, as before.
   A device that has reviewed nothing sends no log. Changes made here
   start a sync 30 seconds after the last one (`anki.edited`).
   `test/syncanki.test.js` plays two devices on one made-up repo.
+- **Catalogs** (2026-11, while the extension is on): `catalogs.json`, the
+  list with each catalog's address, name and username but never its
+  password (`opds.shared()`), and the ones removed with when, so a removal
+  sticks. Merged by id, the newer change winning (`opds.mergeIn`); a
+  password typed on this device stays, unless the username changed. One
+  that arrives with a username and no password asks for it in its place.
+  Sent only when it differs from GitHub's; no sync of its own, it goes
+  with the next. `test/synccatalogs.test.js`.
+- **WebDAV** (2026-11, while the extension is on): `webdav.json`, the
+  servers the same way as `catalogs.json` (address, name, username, the
+  ones removed; never a password). `test/syncwebdav.test.js`.
+- **Audiobookshelf** (2026-11, while the extension is on):
+  `audiobookshelf.json`, the servers (address, name, username) without
+  their tokens (`abs.shared()`), merged like catalogs (`abs.mergeIn`). A
+  server that arrives with no tokens asks to sign in in its place. Where
+  you are in a streamed book goes to the server itself (its play session),
+  and through OUTSIDE like any audiobook's place. `test/abs.test.js`.
 - **Share reading activity** (2026-11, `activity.js`, off by default, a
   switch per device in `what.activity`): after the stats, sync writes
   `activity/reading.json`, what you're reading and minutes a day, for
@@ -497,7 +606,9 @@ web copy stay links, as before.
 - **Backups and exports** (`backup.js`, `epub.js`): one zip of the whole
   library, one HTML file per clip, an EPUB of chosen clips.
 - **Imports** (`imports.js`): other read-later apps' exports become
-  saving jobs.
+  saving jobs. A Kindle's My Clippings.txt becomes highlights on books
+  already here, matched by title; they come with words only (block 0,
+  start and end 0) and take a place when the reader first finds them.
 
 Nothing leaves the device unless the person turned it on (CONTRIBUTING.md).
 
@@ -515,6 +626,14 @@ built-in updater (`app-start.js`) reads the repo's GitHub releases and
 offers any version higher than its own. A merge without a bump only
 refreshes the web copy. CONTRIBUTING.md has the steps.
 
+The files listed in `keel.lock.json` (`server.js`, `src/keel/qr.js`,
+`src/keel/github.js`, `src/keel/drive.js`, `src/keel/errlog.js`, `src/keel/platform.js`, `src/keel/releases.js`, `src/keel/sw-preview.js`, `src/keel/i18n.js`,
+`tools/release.js`, `tools/android-version.js`, `tools/keel-sync.js`, `tools/keel-checks.js`, `tools/unreleased.js`,
+`test/keel.test.js`, the github-pages skill) come from keel
+(danielnoam/keel), shared with LifeLog. Don't edit them here:
+`keel.test.js` fails. Change them in keel, tag a release there, then run
+`node tools/keel-sync.js v<version>` in a PR here.
+
 ## The phone apps
 
 - **Android:** `.github/workflows/android.yml` generates the Capacitor
@@ -523,6 +642,9 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
   (a branch only with a test label), signs it with the release key (secrets
   `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, alias `carryon`)
   and publishes the release `app-v<version>` when `APP_VERSION` is new.
+  Every signed build of `main` is also the unreleased channel's: the
+  artifact `unreleased-android`, which `pages.yml` serves from the site's
+  `unreleased/` for About → Unreleased builds (2026-11-18).
   Without the secrets it builds a test APK and publishes nothing.
 - **Test builds (1.48.0 as previews, by label since 1.49.1, renamed 1.50.0):** on any other branch whose
   open pull request has a test label, `tools/test-build.sh` remakes the pre-release `test-<branch>`
@@ -561,16 +683,16 @@ refreshes the web copy. CONTRIBUTING.md has the steps.
 ## Tests and screenshots
 
 `node test/run-all.js` runs every `test/*.test.js` in its own process.
-`ui.test.js`, `drive.test.js`, `sites.test.js` and `discover.test.js`
+`ui.test.js`, `drive.test.js`, `sites.test.js`, `discover.test.js`, `kiwix.test.js`, `catalogs.test.js`, `calibre.test.js`, `abs.test.js` and `webdav.test.js`
 drive the app in Chromium with Playwright and skip when it isn't installed
 (`sites.test.js` saves the discussion and code sites from their answers
 saved in `test/fixtures/sites/`, with nothing going out; `discover.test.js`
 reads the story sites' lists from hand-made pages and pages cut from WEBTOON, Tapas and Wattpad in `test/fixtures/discover/`); `build.test.js` checks the
 bundle, the three version places and CHANGELOG.md; `contrast.test.js`
-checks every theme for WCAG AA; `docs.test.js` checks this file names
-every source file (and `build.test.js` that no two shell files share
+checks every theme for WCAG AA; `csp.test.js` checks the page's Content-Security-Policy through keel's check (ui.test.js fails on anything it blocks); `docs.test.js` checks this file names
+every source file, that the app uses only DESIGN.md's moves and that every looping animation has a reduced-motion answer (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `syncanki.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `recover.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR and on `main`, spread
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `syncanki.test.js`, `synccatalogs.test.js`, `syncwebdav.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `recover.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) and `zim.test.js` (Kiwix packs, old and new layout, xz and Zstandard, against `test/fixtures/zim/`, which `make.py` builds) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR and on `main`, spread
 over four machines: `TEST_SHARD=2/4 node test/run-all.js` runs one
 slice. `ui.test.js` is most of the time, so it is split too
 (`UI_SHARD`): the tests on its first page `p` build on each other and
@@ -608,6 +730,29 @@ with the CSS Custom Highlight API. A transcript clip is aligned to its
 own text the same way, so both read along through one path. An EPUB's
 Media Overlays (SMIL) give the times themselves (`overlaySync`).
 
+An audiobook from Discover (LibriVox, `getAudiobook`) is downloaded:
+its MP3 parts go one at a time through `platform.keepFile` to the place
+the + sheet's Save in picked (inside Waypage, Downloads, Documents or a
+picked folder), in a folder named for the book (`"Book/001 Title.mp3"`),
+and each part's ref is that file's lasting address. `audio.from` is the
+Discover id ("lv:<archive.org item>"), the fingerprint is made from it,
+so another phone that downloads the same recording picks up the place.
+`audio.ours` marks parts in Waypage's own places, which `dropAudioFiles`
+deletes with the clip; a picked folder's stay. Its Gutenberg book (the
+recording's `url_text_source`) downloads after it and is paired
+through `pairPending`, as Find the book in Discover does.
+
+A streamed audiobook (the Audiobookshelf extension) is an entry with
+`remote` (`{ kind, server, item }`) and a `link` of `abs:<server>:<item>`
+that no file has, so it is treated as read from outside: not uploaded
+by sync, not backed up. Its extension fills `REMOTE_AUDIO[kind]` in
+app-listen.js: `open` starts a play session on the server (its tracks
+become the parts, its chapters the chapters, and a newer place there is
+taken), the parts play from the session's own addresses, `heard` sends
+where you are every half minute and on a pause, `done` closes the
+session. Transcripts are written from the same addresses while the
+session is open.
+
 ## Android Auto
 
 Android Auto lists Waypage through `CarService` (a framework
@@ -632,10 +777,46 @@ SharedPreferences (`Car.heardBook`, `Car.heardClip`) and `carPlaces`
 takes it back into the library when the app opens. A clip's place there
 is its share of the text, so it lands near, not on, the sentence.
 
+## Languages
+
+English and Hebrew (1.63.0). Every word the app shows goes through
+`t("English text")`, or `tn(n, "one", "other")` for a count; the English
+is the key, and `src/lang/he.js` has the Hebrew for each. Elements in
+`index.html` carry `data-t` (their text) or `data-t-attr` (an attribute),
+turned once by `i18n.apply()` at the top of app.js. `src/language.js`
+runs in `<head>`: it reads Settings › Appearance › Language (or the
+phone's language), sets `lang` and `dir="rtl"` on `<html>`, and writes the
+Hebrew file's tag only when it's needed, so English loads nothing more.
+Changing the language reloads. A sentence is one key with `{name}` in it,
+never pieces glued together; Hebrew word order differs. `test/i18n.test.js`
+fails on a word with no Hebrew, Hebrew for a word that's gone, or a
+`{placeholder}` that doesn't match. Not translated on purpose: the problem
+report and pen test (they're read by whoever fixes it), Discover's genres
+and lists (they come from the sites), font and service names, and what's
+saved into a clip. Right to left everything mirrors: the sidebar, the
+desktop panes and the reader's rail sit on the right and slide from there,
+a screen is pushed in from the left (keel's motion follows `<html dir>`,
+keel 0.10.0), and swipes, the pane line, the picture viewer's arrows and
+their keys turn with it (`M.x()`, `M.rtl()`). Inside the reader the clip
+keeps its own direction: a page turn goes the clip's reading way. Arrows
+for back, forward, previous and next flip.
+
 ## Trade-offs
 
 What the app gives up on purpose, said plainly. A change that adds one
 adds a line here.
+
+- Tags stay on each clip (2026-11): a collection has no tags of its own, so its Tags sheet writes the tag to every clip in it, and its story page's tags (`siteTags`) are copied onto each clip like `folderFav`. A few bytes a clip, but sync, filters and search keep working as they did. A site's tags are only offered by default (Suggest): added unasked, one story fills the tag list.
+
+- Live clips and Update from the site (2026-11) keep one earlier copy of the page on the device (`earlier` in the index, app-cards.js), never synced or backed up, so going back works only on the device that fetched it. A copy that looks broken (under half the words, under 100 where there were more, or only the start where it was whole) is kept as the other copy instead of put in place. An unchanged page keeps its copy and id, so nothing new goes to sync. A live clip updates on open at most once an hour (`liveAt`, device-only), and on every pull down the library (`updateLiveClips`, three at a time, quiet per clip).
+- Deleted clips in Stats (2026-11): stats.js keeps only ids, so each device keeps a name (title, site, address or file key) for every clip it has read, in its synced stats file, and marks it gone when the clip leaves its library. No cover is kept for a deleted clip. Clips deleted before this have no name and stay out of the list. Removing one from Stats hides it on every device but leaves its time in the totals.
+- Kiwix packs (2026-11) are read over the bridge a stretch at a time (`files.blob`, 4 MB pieces, small reads through zim.js's 64 KB blocks): a title search on a big pack makes a few hundred small reads. A native ZIM reader would be faster but is Android and iOS code twice; this is plain JS everywhere. Downloads go one at a time through the Downloads plugin, which resumes but never runs two.
+- The page's Content-Security-Policy (index.html) lets in inline styles
+  and a `<base>` of any web address, because a page being saved is parsed
+  under it: without them every `style=""` logs a violation and relative
+  links resolve against the app. Scripts stay the app's own files, plus
+  blob:, one hash for the PDF sandbox and `'wasm-unsafe-eval'` for its
+  JPEG 2000 decoder (`test/csp.test.js`).
 
 - Full pictures load from the web when a clip is opened online, so the
   picture host sees the visit (Settings › Saving › Load pictures only
@@ -670,6 +851,11 @@ adds a line here.
   Gutendex is a volunteer-run index of Gutenberg and has been slow or down
   at times, and Standard Ebooks' list markup is scraped. A book's EPUB is
   downloaded once, on the tap, never in bulk (Gutenberg bans crawlers).
+- LibriVox's lists (most listened, newest) and search come from
+  archive.org's scrape API, a genre and a book's parts from LibriVox's
+  own API (by title, then archive.org's file list). Neither was reached
+  from a test machine; their answers were read once by hand.  A
+  downloaded audiobook is in no backup (a book is hundreds of megabytes).
 - A path rule (Lemmy's /post/123, Substack's /p/slug) tries the API of
   any site whose address has that shape before reading the page, so one
   of those that isn't Lemmy or Substack costs a request that fails.
@@ -696,6 +882,57 @@ adds a line here.
   never turns one on.
 - Anki import reads only the older collection layout (Anki's "Support older Anki versions" export, `collection.anki21`), since the newer `collection.anki21b` is zstd-compressed and a decompressor would be one more thing to vendor; a deck in the newer layout is told to be exported again. Pictures and sounds aren't brought in, a card keeps its Anki id (so a deck read twice, or on two devices, is the same cards), and its schedule is replayed from its review log through FSRS, so a card with no log starts as new. The fixture was built from Anki's documented tables, not exported by Anki itself.
 - A card goes to AnkiDroid through the share sheet (it takes shared text as a new note and asks which deck), not through its content provider: that would be a native plugin and a permission to ask for, and it can't be built or tried without the Android toolchain.
+- The Calibre extension reads a Calibre library folder in place, with no
+  server: metadata.db through sqlite.js (read-only, tables only), and each
+  book's file and cover.jpg by its path (`files.child`: on Android the
+  Files plugin's folderStat now gives the file's uri; on iOS the ref is
+  the folder's plus the path, as scan makes them). It never writes to the
+  folder, so Calibre stays the owner of it. Read it adds the book as a
+  file read from where it is (not synced or backed up, like any outside
+  file); Copy brings it in. A database Calibre has open in WAL mode may
+  miss its latest changes until Calibre closes. In a browser the folder
+  works in Chrome and Edge only (showDirectoryPicker), and the browser
+  asks again after a restart. Books are matched to clips by Calibre's
+  uuid (`calibre` on the clip, this device's only).
+- Catalogs (OPDS) are the person's own: Waypage ships none. Each is kept in
+  this device's localStorage (`waypage.catalogs`), password included. Sync
+  carries the list but never a password (Daniel, 2026-11-16: a leaked sync
+  token shouldn't leak a library login too), and backups leave catalogs
+  out. The app sends a login only to the catalog's
+  own address. A browser reads an open catalog through the fetch proxy but
+  one with a login, or on the home network, straight from the page: a
+  password never goes through the proxy (which can't reach a home server
+  anyway), so those work in a browser only when the server allows the web
+  copy (CORS). Only Basic logins and keys in the address (Kavita) work;
+  Calibre's server asks for Digest over plain http unless it's set to
+  Basic. Book servers at home are mostly plain http, which Android refuses
+  unless the app allows cleartext, and it can't allow it for home addresses
+  only: so `tools/android-manifest.js` allows plain http everywhere (iOS
+  allows it for the local network only). Covers that a page can't load
+  (http, or behind the login) are downloaded once into the cache instead.
+- WebDAV servers are kept and synced like catalogs (`waypage.webdav`, the
+  password on this device only, never through the fetch proxy). A listing
+  is a PROPFIND, which Android's HttpURLConnection (and so CapacitorHttp)
+  refuses outright, so on Android `Dav.java` writes that one request by
+  hand over a socket, checking TLS against the phone's certificates and
+  the host's name, and following a redirect only on the same server.
+  It ignores a proxy set on the phone. iOS's CapacitorHttp sends it as is;
+  a browser asks straight, so only a server that allows the web copy
+  (CORS) works there, and Nextcloud doesn't. A book is downloaded into
+  the Library (no reading from the server: it wouldn't be offline), and
+  the clip keeps its address (`webdav`) to show it's there. Covers are a
+  picture beside the book with its name, or a folder's cover.jpg when the
+  book is alone in it; no file is opened to find one.
+- Audiobookshelf: the password is sent once to the server's `/login` and
+  never kept; this device keeps the access token (an hour) and the
+  refresh token (30 days, renewed with each use) in localStorage, never
+  synced, never backed up, never through the fetch proxy. Streams use
+  the play session's `/public/session/<id>/track/<n>` address, which the
+  server serves without a login while the session is open, so no token is
+  ever in a URL; anyone who saw that address could play that book until
+  the session closes. In a browser it works only when the server lists the
+  web copy under Allowed origins (CORS) and is https (the web copy is).
+  Book libraries only; podcasts aren't shown.
 - Language packs live on the repository's orphan `packs` branch (files and a README, no code, no workflows), fetched from `raw.githubusercontent.com` at one commit so a file can't change under its pinned hash. A new or changed pack is built with `tools/packs/build-lang.js`, committed to `packs`, and its commit, SHA-256 and size go in `src/extensions.js`'s catalogue (`test/extensions.test.js` checks the pins have that shape). A language pack is a hash-pinned download of Wiktionary's words as a StarDict dictionary; hashed and size-checked before `dict.js` reads it, and never run as code. It is the same dictionary as one you add yourself, so Settings › Reading › Dictionaries lists and removes it too. It isn't synced or backed up.
 - The web copy reads pages through the fetch proxy (`worker/`), so
   Cloudflare sees which addresses a browser user saves (not the app's).
@@ -744,6 +981,28 @@ area.
   so the next merge marks them deleted and removes their folders on the
   phone. GitHub's `notes/<id>/` is left, which is what Recover's Look for
   deleted notes reads. Don't sync a library with Notes from such a build.
+
+- The books of an audiobook folder added as a series share one `link`, the folder picked. Removing an entry lets go of its `link` only when no other entry still reads from it (`releaseLinks`).
+- A field missing from sync's `SYNCED`, backup's `cleanMeta`, `SYNCED_KEEP` and `AGAIN_KEEP` is dropped on the next sync or update. `folderSeries` and `folderIn` are in all four; a device without them strips them from clips it changes, which `healSeries` repairs while any clip of the series keeps them.
+- A site's tags (`siteTags`, { site, tags }) are read in `readArticle` before Readability runs: Readability takes the `<script>` tags out, and the schema.org keywords with them. A collection's clips carry the story page's tags, never a chapter page's own (`runJob`).
+- On a big screen the route steps back out of Settings by itself when it lands on the menu with a section open, so leaving Settings from deep inside (`outOfSettings`) waits a moment after each step instead of reading `history.state`: two backs at once leave the app.
+
+- The reduced-motion rule in src/styles.css sets every CSS animation to 1 ms. An infinite one (a spinner's breathing) then runs a thousand times a second and flickers, so each gets its own duration back in that same block; a new looping animation does too.
+
+- `earlier` holds the other copy's own meta; the clip's place, tags, highlights and the rest (`AGAIN_KEEP`, app-jobs.js) always come from the entry it replaces. An earlier copy whose clip left the library some other way (deleted, replaced through sync) is only removed by `sweepEarlier` on the next update, from the ids listed in `waypage.earlierCopies`.
+- On Android, `FileInputStream.skip` past the end still returns what was
+  asked, so a skip-to-count loop never ends. FilesPlugin.info and
+  describe read a file:// size from `File.length()` instead (1.65.0 hung
+  every kept download after its first file).
+- Changing `BOOT` in src/pdf.js changes its hash in index.html's
+  Content-Security-Policy; without the new one no PDF opens.
+  `test/csp.test.js` fails and prints the hash to put there. The PDF
+  sandbox stays a srcdoc frame: a sandboxed frame from a file isn't
+  served by the service worker, so PDFs wouldn't open offline.
+- pdf.js decodes JPEG 2000 pictures (common in scanned books) with
+  WebAssembly, in the sandbox's worker. Both policies, the sandbox's and
+  index.html's (a srcdoc frame takes both), need `'wasm-unsafe-eval'`;
+  without it in either one those pages draw blank, with no error.
 
 - A `ui.test.js` test that needs what an earlier test left behind must
   use the first page `p`; that is how the slicing (`UI_SHARD`) keeps it
@@ -920,7 +1179,31 @@ area.
   screen. Move its children. Only Playwright with `isMobile: true` shows it.
 - **Long clips use `content-visibility` chunks:** measuring anything
   inside a skipped chunk lays it out, so a loop over
-  `getBoundingClientRect` across a book undoes the speed-up.
+  `getBoundingClientRect` across a book undoes the speed-up. Anything
+  that finds a place in a book (`spot`, `section`) halves over it and
+  judges a skipped chapter by its own box (`above`). The chunks only
+  exist after the page has loaded, so while it parses `co-parsing` on
+  `<html>` skips every part of the body: without it Chrome lays out the
+  growing book again and again (a 47 MB book, 54 s at 6x against 7 s).
+  `textContent` on a whole book is a 40 MB string; count with a walker.
+- **Chrome lays nothing out past 33,554,431 px, and Android's WebView past that in device pixels** (11,184,811 CSS px on a Pixel 8 at 3x) (`reader.js guessAll, fitEnd`): a 900-chapter book guessed taller ended there, so jumps and scrolling stopped short (chapter 600 of 840 on Daniel's phone, with guesses already capped at 30,000,000 px). No fixed cap is safe, so `fitEnd` checks after each guess, before a jump and when a scroll settles that the last chunk starts below the one before it, and guesses every unseen chunk shorter until it does. `jumpTo` holds the heading in place for 1.5 s (until a touch) while the chapters around it take real heights.
+- **A chunk far from the screen is content-visibility: hidden** (`reader.js lazy`, `co-far`): `auto` still keeps a chunk in the accessibility tree, and an Android WebView with anything reading it (Daniel's Pixel 8, no accessibility service on) described a 47 MB book on every tap: 5 s to open Contents, and a 4.8 s layout in a sheet's closing `focus()`. Chunks over two screens away go hidden; desktop Chrome only shows it with `--force-renderer-accessibility`.
+- **A big book opens at its place first** (`reader.js slimmed`): an EPUB
+  page over 2 MB is cut apart as a string at its `<section id="cN">`
+  chapters; the page shows the place's chapter and the ones either side,
+  the rest are empty sections (`data-co-wait`) that `fillRest` fills a
+  few a turn, nearest first. A spot is a block number in the whole book,
+  so which chapter it's in comes from `waypage.bookMaps` in localStorage
+  (each chapter's first block, written the first time it's open whole),
+  and while it fills `spot`/`toSpot` count from the first chapter in
+  (`rest.base`). Never give a chapter a new height while it fills: one
+  above the text moves it. Whatever needs every block waits for
+  `C.reader.whole()`; the reader bar holds taps until then.
+- **A row put in above others restyles all that follow** (sibling rules
+  like `li + li`): a long list grows at its end, and what goes above goes
+  in once (`contentsList`). Theming the reader's page on the way out
+  restyled a 47 MB book, so `paintTheme` leaves the frame alone once the
+  reader is closed.
 - **Moving an iframe reloads it.** Wrap it where it will stay at start-up.
 - **Classic scripts share one scope:** a global function can shadow a
   `window` method (`moveTo` had to become `moveInFolder`).
@@ -963,6 +1246,15 @@ area.
   +6 dB). A new MediaPlayer per part means a new session: `release()`
   drops the enhancer and `applyVolume()` makes it again. iOS's
   utterance volume also stops at 1, so iPhone Narrate can't go louder.
+- **iOS frameworks newer than the app's oldest iOS:** Swift links what it
+  imports strongly, and a framework the phone doesn't have stops the app
+  before it opens. `Translation` (iOS 17.4+) is in WaypageShare.podspec's
+  `weak_frameworks`; anything else newer than iOS 15.5 imported by the
+  app's plugins needs the same. The widgets are their own target, iOS 17
+  and later, so AppIntents is fine there.
+- **iOS Translation needs a SwiftUI view:** a `TranslationSession` only
+  comes from `translationTask`, so TranslatePlugin keeps a one-point
+  SwiftUI view behind the WebView and runs one job at a time in it.
 
 ## The docs
 

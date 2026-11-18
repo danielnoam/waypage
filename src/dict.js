@@ -94,14 +94,14 @@
       if (/\.zip$/.test(n)) {
         const B = window.Waypage.backup;
         let entries;
-        try { entries = await B.zipEntries(f); } catch (e) { throw new Error("That zip couldn't be opened."); }
+        try { entries = await B.zipEntries(f); } catch (e) { throw new Error(t("That zip couldn't be opened.")); }
         for (const [name, e] of entries) if (kindOf(name)) out.push({ name, blob: new Blob([await B.zipRead(f, e)]) });
       } else if (/\.(tar\.gz|tgz)$/.test(n)) {
         out.push(...await untar(f.stream().pipeThrough(new DecompressionStream("gzip")), (x) => !!kindOf(x)));
       } else if (/\.tar$/.test(n)) {
         out.push(...await untar(f.stream(), (x) => !!kindOf(x)));
       } else if (/\.(tar\.bz2|tar\.xz|7z|rar)$/.test(n)) {
-        throw new Error("Waypage can't open that kind of archive. Unpack it on a computer and pick its .ifo, .idx and .dict files.");
+        throw new Error(t("Waypage can't open that kind of archive. Unpack it on a computer and pick its .ifo, .idx and .dict files."));
       } else if (kindOf(n)) out.push({ name: f.name, blob: f });
     }
     return out;
@@ -155,8 +155,8 @@
     const got = await unpack([...files]);
     const by = (k) => got.filter((x) => kindOf(x.name) === k);
     const ifos = by("ifo");
-    if (!ifos.length) throw new Error("Pick the dictionary's .ifo file with its .idx and .dict, or a .zip of them.");
-    if (ifos.length > 1) throw new Error("That's more than one dictionary. Add them one at a time.");
+    if (!ifos.length) throw new Error(t("Pick the dictionary's .ifo file with its .idx and .dict, or a .zip of them."));
+    if (ifos.length > 1) throw new Error(t("That's more than one dictionary. Add them one at a time."));
     const stem = ifos[0].name.replace(/\.ifo$/i, "").toLowerCase();
     const one = (...kinds) => {
       for (const k of kinds) {
@@ -167,10 +167,10 @@
       return null;
     };
     const ifo = parseIfo(await ifos[0].blob.text());
-    if (!ifo) throw new Error("That .ifo isn't a StarDict dictionary.");
+    if (!ifo) throw new Error(t("That .ifo isn't a StarDict dictionary."));
     const idx = one("idx", "idx.gz"), dict = one("dict.dz", "dict"), syn = one("syn", "syn.dz");
-    if (!idx || !dict) throw new Error("The " + (!idx ? ".idx" : ".dict") + " file is missing. Pick it with the .ifo.");
-    if (got.reduce((s, x) => s + x.blob.size, 0) > MAX_BYTES) throw new Error("That dictionary is over 400 MB.");
+    if (!idx || !dict) throw new Error(t("The {x} file is missing. Pick it with the .ifo.", { x: !idx ? ".idx" : ".dict" }));
+    if (got.reduce((s, x) => s + x.blob.size, 0) > MAX_BYTES) throw new Error(t("That dictionary is over 400 MB."));
     const idxBlob = idx.kind === "idx.gz" ? await gunzip(idx.blob) : idx.blob;
     const synBlob = syn ? (syn.kind === "syn.dz" ? await gunzip(syn.blob) : syn.blob) : null;
     let dictBlob = dict.blob, dz = false;
@@ -180,7 +180,7 @@
     }
     // Read through once before it's kept, so a broken one is said now.
     const loaded = await build({ idx: idxBlob, dict: dictBlob, syn: synBlob, dz, ifo });
-    if (!loaded.n) throw new Error("That dictionary has no words in it.");
+    if (!loaded.n) throw new Error(t("That dictionary has no words in it."));
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     await idb("readwrite", (s) => {
       s.put(idxBlob, id + "/idx");

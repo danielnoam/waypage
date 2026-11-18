@@ -1,8 +1,8 @@
-// A small QR code encoder for sync's setup link, from LifeLog's src/qr.js.
-// Byte mode, error correction L, versions 1 to 9. It runs here so the token
-// in the link never goes to a QR service.
-// window.Waypage.qr.svg(text, {size}) gives an <svg> string, or null when the
-// text is too long; window.Waypage.qr.fits(text) says which.
+// keel: a small QR code encoder for a sync setup link. Byte mode, error
+// correction L, versions 1 to 9 (picked by length). It runs on the device
+// so the token in the link never goes to a QR service.
+// window.Keel.qr.svg(text, {size}) gives an <svg> string, or null when the
+// text is too long; window.Keel.qr.fits(text) says which.
 (function () {
   "use strict";
 
@@ -253,6 +253,9 @@
       '" shape-rendering="crispEdges"><rect width="' + dim + '" height="' + dim + '" fill="#ffffff"/><path d="' + d + '" fill="#000000"/></svg>';
   }
 
-  window.Waypage = window.Waypage || {};
-  window.Waypage.qr = { svg, fits: (t) => chooseVersion(utf8(t).length) !== null };
+  window.Keel = window.Keel || {};
+  window.Keel.qr = {
+    svg: svg, fits: (t) => chooseVersion(utf8(t).length) !== null,
+    _debug: (t, mask) => { const st = build(t, mask); return st ? { size: st.size, rows: st.m.map((r) => r.join("")) } : null; },
+  };
 })();

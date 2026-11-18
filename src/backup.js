@@ -80,6 +80,14 @@
     // collection (on its clips, like folderFav).
     if (m.noShare === true) out.noShare = true;
     if (folder && m.folderNoShare === true) out.folderNoShare = true;
+    if (folder && m.folderTagNew === true) out.folderTagNew = true;
+    // A series (2026-11), and the collection it sits in: marks on its
+    // clips too, so without them it's a plain collection.
+    if (folder && m.folderSeries === true) {
+      out.folderSeries = true;
+      const host = text(m.folderIn, 32).replace(/\s+/g, " ").trim();
+      if (host) out.folderIn = host;
+    }
     if (folder && httpUrl(m.source)) out.source = httpUrl(m.source);
     if (folder && typeof m.coverPick === "string" && (COVER_FILE.test(m.coverPick) || /^clip:[a-z0-9]{4,24}$/.test(m.coverPick))) out.coverPick = m.coverPick;
     if (text(m.series, 200)) out.series = text(m.series, 200);
@@ -98,7 +106,7 @@
 
   // The listening part of an index entry, as read from sync or a backup:
   // where you are (t seconds, at tAt), how fast, what you read along
-  // with, and your fixes. null when there's nothing usable.
+  // with, your fixes and your bookmarks. null when there's nothing usable.
   function cleanListen(v) {
     if (!v || typeof v !== "object" || Array.isArray(v)) return null;
     const out = { t: Math.max(0, num(v.t)), tAt: Math.max(0, num(v.tAt)) };
@@ -115,6 +123,9 @@
     const fixes = Array.isArray(v.fixes) ? v.fixes.slice(0, 500).filter((f) => f && typeof f.from === "string" && typeof f.to === "string" && f.from.trim() && f.to.trim())
       .map((f) => ({ from: f.from.replace(/\s+/g, " ").trim().slice(0, 100), to: f.to.replace(/\s+/g, " ").trim().slice(0, 100), at: num(f.at) })) : [];
     if (fixes.length) out.fixes = fixes;
+    const marks = Array.isArray(v.bookmarks) ? v.bookmarks.slice(0, 1000).filter((m) => m && typeof m.id === "string" && /^[a-z0-9]{4,24}$/.test(m.id) && typeof m.t === "number" && m.t >= 0)
+      .map((m) => ({ id: m.id, t: Math.round(num(m.t) * 10) / 10, at: num(m.at), ...(typeof m.note === "string" && m.note.trim() ? { note: m.note.replace(/\s+/g, " ").trim().slice(0, 500) } : {}) })) : [];
+    if (marks.length) out.bookmarks = marks;
     return out;
   }
   // Highlights (1.7.0): where each is in the clip's text blocks, its words,
@@ -307,7 +318,8 @@
     const covers = await coversOf(listed);
     return [
       { name: "waypage.json", text: JSON.stringify({ format: 1, app: C.version, made: Date.now(), pages: listed.length, feeds: (feeds || []).length }) },
-      { name: "library.json", text: JSON.stringify(listed) },
+      // An earlier copy of a live clip stays on its device.
+      { name: "library.json", text: JSON.stringify(listed.map(({ earlier, liveAt, ...p }) => p)) },
       ...(feeds && feeds.length ? [{ name: "feeds.json", text: JSON.stringify(feeds) }] : []),
       // Reading stats (1.39.0): this device's and the others it knows.
       ...(C.stats ? [{ name: "stats.json", text: JSON.stringify(C.stats.backup()) }] : []),
@@ -444,11 +456,11 @@
   // clips it holds as links only (1.47.0), not here yet, to be saved again.
   async function restoreLibrary(blob, current, same, onProgress) {
     let entries;
-    try { entries = await zipEntries(blob); } catch (e) { throw new Error("This file isn't a Waypage backup."); }
+    try { entries = await zipEntries(blob); } catch (e) { throw new Error(t("This file isn't a Waypage backup.")); }
     const indexEntry = entries.get("library.json");
     let list;
     try { list = JSON.parse(new TextDecoder().decode(await zipRead(blob, indexEntry))); } catch (e) { list = null; }
-    if (!indexEntry || !Array.isArray(list)) throw new Error("This file isn't a Waypage backup.");
+    if (!indexEntry || !Array.isArray(list)) throw new Error(t("This file isn't a Waypage backup."));
     const pages = [...current];
     const taken = new Set(pages.map((p) => p.id));
     let added = 0, replaced = 0, kept = 0, done = 0;
@@ -556,8 +568,11 @@
 
   // The page as one HTML file: its saved pictures inlined, its index entry
   // in a <meta> for importing it back. Resolves to { name, html }.
-  async function exportPage(p) {
+  // `fix(doc)` changes the copy before it's written: a collection's
+  // export edits, never the clip.
+  async function exportPage(p, fix) {
     const doc = new DOMParser().parseFromString(await S().readPage(p.id), "text/html");
+    if (fix) fix(doc);
     for (const img of doc.querySelectorAll("img[src]")) {
       const src = img.getAttribute("src");
       if (!LOCAL.test(src)) continue;
@@ -688,13 +703,19 @@
 
   // { name, text } for a saved page as Markdown: its title, byline and
   // source first, the licence line last.
-  async function exportMarkdown(p) {
+  // `heads` false leaves the title, byline and source out, for a
+  // collection's chapters exported without headers.
+  async function exportMarkdown(p, heads = true, fix) {
     const doc = new DOMParser().parseFromString(await S().readPage(p.id), "text/html");
+    if (fix) fix(doc);
     const out = [];
     mdBlocks(doc.body, out);
-    const head = ["# " + mdEscape(p.title)];
-    if (p.byline) head.push("*" + mdEscape(p.byline) + "*");
-    head.push("[" + mdEscape(p.site || p.url) + "](" + webUrl(p.url) + ")");
+    const head = [];
+    if (heads) {
+      head.push("# " + mdEscape(p.title));
+      if (p.byline) head.push("*" + mdEscape(p.byline) + "*");
+      head.push("[" + mdEscape(p.site || p.url) + "](" + webUrl(p.url) + ")");
+    }
     const licence = doc.querySelector(".co-licence");
     const foot = licence ? "---\n\n" + mdInline(licence).trim() : "";
     const marks = (p.marks || []).length || (p.ink && Object.keys(p.ink).length) ? "## Highlights\n\n" + marksBody(p) : "";
@@ -719,7 +740,8 @@
 
   // A folder as one file (0.26.0): its pages in order, each with its own
   // title and licence line, pictures inside.
-  async function exportPages(pages, title) {
+  async function exportPages(pages, title, onProgress, opts) {
+    const heads = !opts || opts.heads !== false;
     const out = document.implementation.createHTMLDocument(title);
     const charset = out.createElement("meta");
     charset.setAttribute("charset", "utf-8");
@@ -728,20 +750,26 @@
     h.className = "co-folder";
     h.textContent = title;
     out.body.append(h);
-    for (const p of pages) {
-      const doc = new DOMParser().parseFromString((await exportPage(p)).html, "text/html");
+    for (const [i, p] of pages.entries()) {
+      const doc = new DOMParser().parseFromString((await exportPage(p, opts && opts.fix)).html, "text/html");
       const part = out.createElement("section");
       part.className = "co-part";
       part.append(...[...doc.body.childNodes].map((n) => out.importNode(n, true)));
+      if (!heads) part.querySelectorAll(".co-head").forEach((n) => n.remove());
       part.querySelectorAll(".co-head h1").forEach((n) => { const h2 = out.createElement("h2"); h2.textContent = n.textContent; n.replaceWith(h2); });
       out.body.append(part);
+      if (onProgress) onProgress(i + 1, pages.length);
     }
     return { name: pageSlug(title) + ".html", html: "<!doctype html>\n" + out.documentElement.outerHTML };
   }
 
-  async function exportMarkdownAll(pages, title) {
+  async function exportMarkdownAll(pages, title, onProgress, opts) {
+    const heads = !opts || opts.heads !== false;
     const parts = [];
-    for (const p of pages) parts.push((await exportMarkdown(p)).text.replace(/^# /, "## ").trim());
+    for (const [i, p] of pages.entries()) {
+      parts.push((await exportMarkdown(p, heads, opts && opts.fix)).text.replace(/^# /, "## ").trim());
+      if (onProgress) onProgress(i + 1, pages.length);
+    }
     return { name: pageSlug(title) + ".md", text: "# " + mdEscape(title) + "\n\n" + parts.join("\n\n---\n\n") + "\n" };
   }
 
@@ -755,11 +783,11 @@
     try { raw = tag && JSON.parse(tag.getAttribute("content")); } catch (e) { raw = null; }
     const id = C.save.newId();
     const meta = cleanMeta(raw, id);
-    if (!meta) throw new Error("This file wasn't sent from Waypage, so it can't be opened here.");
+    if (!meta) throw new Error(t("This file wasn't sent from Waypage, so it can't be opened here."));
     if (has && has(meta.url)) return { already: meta.url };
     const out = document.implementation.createHTMLDocument("");
     const { root, images } = C.save.cleanSaved(doc.body, out);
-    if (!root.textContent.trim()) throw new Error("This clip file is empty.");
+    if (!root.textContent.trim()) throw new Error(t("This clip file is empty."));
     let bytes = 0, thumb = null;
     for (const [i, im] of images.entries()) {
       const [head, b64] = im.data.split(",");

@@ -722,6 +722,217 @@
     return got;
   }
 
+  // ---- Kiwix: whole sites for reading offline (2026-11) ----
+  // Kiwix's own catalog (OPDS, Atom) of packs: Wikipedia, Wiktionary,
+  // Stack Exchange and the rest, one .zim file each, by topic and
+  // language. + downloads the file into Files (app-kiwix.js); it is read
+  // from where it's saved, never synced or backed up.
+  const KIWIX = "https://library.kiwix.org";
+  const KX_TOPICS = ["wikipedia", "wiktionary", "wikivoyage", "wikibooks", "wikiquote", "wikisource", "wikiversity", "wikinews", "gutenberg", "stack_exchange", "ted", "other"]
+    .map((k) => ({ key: k, label: k === "stack_exchange" ? "Stack Exchange" : k === "ted" ? "TED" : k[0].toUpperCase() + k.slice(1) }));
+  const KX_LANGS = [["eng", "English"], ["heb", "עברית"], ["ara", "العربية"], ["deu", "Deutsch"], ["spa", "Español"], ["fra", "Français"], ["ita", "Italiano"], ["por", "Português"], ["rus", "Русский"], ["pol", "Polski"], ["nld", "Nederlands"], ["tur", "Türkçe"], ["ukr", "Українська"], ["zho", "中文"], ["jpn", "日本語"], ["kor", "한국어"], ["hin", "हिन्दी"]]
+    .map(([key, label]) => ({ key, label }));
+  const KX_PAGE = 40;
+  const langLabel = (code) => (KX_LANGS.find((l) => l.key === code) || {}).label || code;
+  const kxSize = (n) => (n >= 1e9 ? (n / 1e9).toFixed(n >= 1e10 ? 0 : 1) + " GB" : n >= 1e6 ? Math.round(n / 1e6) + " MB" : Math.max(1, Math.round(n / 1e3)) + " KB");
+  // One entry per pack; the newest of a name only (the catalog lists the
+  // latest already). The file is the .meta4 link without it.
+  function parseKiwix(xml, base) {
+    const doc = new DOMParser().parseFromString(String(xml || ""), "application/xml");
+    if (doc.querySelector("parsererror")) return [];
+    const kid = (e, name) => [...e.children].find((c) => c.localName === name);
+    const val = (e, name) => { const c = kid(e, name); return c ? c.textContent.replace(/\s+/g, " ").trim() : ""; };
+    const out = [];
+    for (const e of doc.getElementsByTagNameNS("*", "entry")) {
+      const links = [...e.children].filter((c) => c.localName === "link");
+      const get = links.find((l) => /acquisition/.test(l.getAttribute("rel") || "") && /zim/.test(l.getAttribute("type") || ""));
+      if (!get) continue;
+      let file;
+      try { file = new URL(get.getAttribute("href"), base || KIWIX).href.replace(/\.meta4$/, ""); } catch (x) { continue; }
+      if (!/^https:\/\//.test(file) || !/\.zim$/i.test(file)) continue;
+      const pic = links.find((l) => /image|thumbnail/.test(l.getAttribute("rel") || ""));
+      const size = Number(get.getAttribute("length")) || 0;
+      const tags = val(e, "tags").split(";");
+      const flavour = val(e, "flavour");
+      const count = Number(val(e, "articleCount")) || 0;
+      const lang = val(e, "language").split(",")[0];
+      const author = kid(e, "author");
+      out.push({
+        id: "kx:" + (val(e, "name") || file) + ":" + flavour, url: file, file, zim: true, site: "Kiwix", size,
+        title: val(e, "title").slice(0, 120) || file.split("/").pop(), about: val(e, "summary").slice(0, 300),
+        by: langLabel(lang), lang, flavour, pictures: !tags.includes("_pictures:no"), articles: count,
+        maker: author ? val(author, "name") : "", cover: pic ? httpUrl(new URL(pic.getAttribute("href"), base || KIWIX).href) : "",
+        date: (val(e, "issued") || val(e, "updated")).slice(0, 10), stat: [count ? short(count) + " articles" : "", size ? kxSize(size) : ""].filter(Boolean).join(" · "),
+        tags: [], chapters: 0, followers: 0, rating: 0,
+      });
+    }
+    return out;
+  }
+  const kxUrl = (topic, lang, page, words) => {
+    const u = new URL(KIWIX + "/catalog/v2/entries");
+    if (topic && topic !== "other") u.searchParams.set("category", topic);
+    if (lang) u.searchParams.set("lang", lang);
+    if (words) u.searchParams.set("q", words);
+    u.searchParams.set("start", String(Math.max(0, (page || 1) - 1) * KX_PAGE));
+    u.searchParams.set("count", String(KX_PAGE));
+    return u.href;
+  };
+  async function kxRead(url) {
+    const res = await C.platform.fetchText(url);
+    if (res.status !== 200) throw new Error("HTTP " + res.status);
+    return parseKiwix(res.text, res.url || url);
+  }
+  const kxBrowse = (k, g, p) => kxRead(kxUrl(k, g, p));
+  const kxSearch = (words) => kxRead(kxUrl("", "", 1, String(words || "").trim()));
+  // ---- Audiobooks: LibriVox ----
+  // Public-domain books read aloud by volunteers. Its lists come from
+  // archive.org, which keeps every recording (its scrape API gives titles
+  // and downloads in one call, sorted); a genre and the details of one
+  // book come from LibriVox's own API, whose sections are the MP3 parts
+  // (64 kbps, on archive.org). + downloads the parts into the app and adds
+  // them as one audiobook (app-listen.js). `audiobook` marks them; `parts`
+  // is [{ url, title, dur }] once known, `text` the book's own text
+  // (mostly Project Gutenberg), `ia` its archive.org item.
+  const LV_API = "https://librivox.org/api/feed/audiobooks";
+  const IA = "https://archive.org";
+  const LV_LISTS = [{ key: "popular", label: "Most listened" }, { key: "new", label: "Newest" }];
+  const LV_GENRES = ["Action & Adventure Fiction", "Children's Fiction", "Crime & Mystery Fiction", "Fantastic Fiction", "General Fiction", "Historical Fiction",
+    "Humorous Fiction", "Literary Fiction", "Nature & Animal Fiction", "Plays", "Poetry", "Romance", "Short Stories", "Suspense, Espionage, Political & Thrillers",
+    "War & Military Fiction", "Westerns", "*Non-fiction"].map((g) => ({ key: g, label: g.replace(/^\*/, "").replace(/^Suspense, Espionage, Political & Thrillers$/, "Thrillers") }));
+  const LV_PAGE = 32;
+  // "13:06:44" or "18:52" or "1133.07" (seconds), as seconds.
+  const seconds = (v) => {
+    if (typeof v === "number") return v > 0 ? v : 0;
+    const s = String(v || "").trim();
+    if (/^\d+(\.\d+)?$/.test(s)) return parseFloat(s);
+    const bits = s.split(":").map(Number);
+    return bits.length > 1 && bits.every((n) => Number.isFinite(n)) ? bits.reduce((a, n) => a * 60 + n, 0) : 0;
+  };
+  const hours = (sec) => { const m = Math.round(sec / 60); return m >= 60 ? Math.floor(m / 60) + " h " + (m % 60) + " min" : m + " min"; };
+  const iaOf = (u) => (/archive\.org\/(?:details|download)\/([^/?#]+)/.exec(String(u || "")) || [])[1] || "";
+  const unhtml = (h) => String(h || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ").trim();
+  // A book from LibriVox's API (extended=1: with its sections and covers).
+  function lvBook(b) {
+    const ia = iaOf(b.url_iarchive) || iaOf(((b.sections || [])[0] || {}).listen_url);
+    const parts = (b.sections || []).filter((x) => x && httpUrl(x.listen_url))
+      .sort((x, y) => Number(x.section_number) - Number(y.section_number))
+      .map((x) => ({ url: httpUrl(x.listen_url), title: unhtml(x.title).slice(0, 200), dur: seconds(x.playtime) }));
+    const secs = seconds(b.totaltimesecs) || seconds(b.totaltime);
+    return {
+      id: "lv:" + (ia || "lv" + b.id), lv: String(b.id), ia, url: httpUrl(b.url_librivox) || (ia ? IA + "/details/" + ia : "https://librivox.org/"), site: "LibriVox", audiobook: true,
+      title: unhtml(b.title).slice(0, 120), cover: httpUrl(b.coverart_thumbnail) || httpUrl(b.coverart_jpg) || (ia ? IA + "/services/img/" + ia : ""),
+      by: (b.authors || []).map((a) => [a && a.first_name, a && a.last_name].filter(Boolean).join(" ").trim()).filter(Boolean).slice(0, 2).join(", "),
+      about: unhtml(b.description).slice(0, 600), tags: (b.genres || []).map((g) => String((g && g.name) || "")).filter(Boolean).slice(0, 3),
+      chapters: 0, followers: 0, rating: 0, stat: [secs ? hours(secs) : "", parts.length || Number(b.num_sections) ? (parts.length || Number(b.num_sections)) + " parts" : ""].filter(Boolean).join(" · "),
+      secs, parts: parts.length ? parts : null, text: httpUrl(b.url_text_source), zip: httpUrl(String(b.url_zip_file || "").replace(/ /g, "%20")),
+    };
+  }
+  function parseLibriVox(body) {
+    let data;
+    try { data = JSON.parse(String(body || "").trim()); } catch (e) { return []; }
+    return ((data && data.books) || []).filter((b) => b && b.id && b.title).map(lvBook);
+  }
+  // archive.org's scrape answer: { items: [{ identifier, title, creator, downloads }], cursor }.
+  function parseIaScrape(body) {
+    let data;
+    try { data = JSON.parse(String(body || "").trim()); } catch (e) { return []; }
+    return ((data && data.items) || []).filter((x) => x && x.identifier && x.title).map((x) => {
+      const by = String(Array.isArray(x.creator) ? x.creator[0] : x.creator || "").split(";")[0].trim();
+      return {
+        id: "lv:" + x.identifier, ia: String(x.identifier), url: IA + "/details/" + x.identifier, site: "LibriVox", audiobook: true,
+        title: String(x.title).replace(/,\s+by\s+[^,]+$/i, "").replace(/\s+/g, " ").trim().slice(0, 120), cover: IA + "/services/img/" + x.identifier,
+        by: /^(various|unknown)$/i.test(by) ? "" : personName(by), about: "", tags: [], chapters: 0, followers: 0, rating: 0,
+        stat: x.downloads ? short(Number(x.downloads)) + " downloads" : "", secs: 0, parts: null, text: "",
+        zip: IA + "/compress/" + x.identifier + "/formats=64KBPS%20MP3&file=/" + x.identifier + ".zip",
+      };
+    });
+  }
+  const scrapeUrl = (q, sort, cursor) => {
+    const u = new URL(IA + "/services/search/v1/scrape");
+    u.searchParams.set("fields", "identifier,title,creator,downloads");
+    u.searchParams.set("q", "collection:librivoxaudio" + (q ? " AND " + q : ""));
+    u.searchParams.set("sorts", sort);
+    u.searchParams.set("count", "100");
+    if (cursor) u.searchParams.set("cursor", cursor);
+    return u.href;
+  };
+  // archive.org pages by cursor, not by number: page n needs the cursor page
+  // n - 1 gave. Each page is 100 books.
+  const iaCursors = {};
+  async function iaPage(q, sort, page) {
+    const key = q + "|" + sort;
+    const cursor = page > 1 ? (iaCursors[key] || {})[page] : "";
+    if (page > 1 && !cursor) return [];
+    const res = await C.platform.fetchText(scrapeUrl(q, sort, cursor));
+    if (res.status !== 200) throw new Error("HTTP " + res.status);
+    let next = "";
+    try { next = JSON.parse(res.text).cursor || ""; } catch (e) { /* the last page */ }
+    (iaCursors[key] = iaCursors[key] || {})[page + 1] = next;
+    return parseIaScrape(res.text);
+  }
+  const lvGenreUrl = (genre, page) => {
+    const u = new URL(LV_API);
+    for (const [k, v] of [["format", "json"], ["extended", "1"], ["coverart", "1"], ["limit", String(LV_PAGE)], ["offset", String((Math.max(1, page) - 1) * LV_PAGE)], ["genre", genre]]) u.searchParams.set(k, v);
+    return u.href;
+  };
+  async function lvApi(url) {
+    const res = await C.platform.fetchText(url);
+    // LibriVox answers "none found" with a 404.
+    if (res.status === 404) return [];
+    if (res.status !== 200) throw new Error("HTTP " + res.status);
+    return parseLibriVox(res.text);
+  }
+  function lvBrowse(key, genre, page) {
+    if (genre) return lvApi(lvGenreUrl(genre, page));
+    return iaPage("", key === "new" ? "publicdate desc" : "downloads desc", page);
+  }
+  // Words for archive.org's search: its own signs taken out.
+  const iaWords = (w) => String(w || "").replace(/[():"\\[\]{}^~*?!+\-/]/g, " ").replace(/\b(AND|OR|NOT)\b/g, " ").replace(/\s+/g, " ").trim();
+  async function lvSearch(words) {
+    const w = iaWords(words);
+    if (!w) return [];
+    return iaPage("(title:(" + w + ") OR creator:(" + w + "))", "downloads desc", 1);
+  }
+  // One book in full: its parts, length and text. From LibriVox's API by
+  // title (an archive.org list gives no parts), the one on the same item;
+  // else archive.org's list of the item's files.
+  async function lvDetails(s) {
+    if (s.parts && s.parts.length) return s;
+    const got = { ...s };
+    try {
+      const u = new URL(LV_API);
+      for (const [k, v] of [["format", "json"], ["extended", "1"], ["coverart", "1"], ["limit", "20"], ["title", "^" + s.title.replace(/\s*\(version \d+\)\s*$/i, "")]]) u.searchParams.set(k, v);
+      const books = await lvApi(u.href);
+      const same = books.find((b) => s.ia && b.ia === s.ia) || (!s.ia && books.find((b) => b.lv === s.lv));
+      if (same && same.parts) return { ...same, id: s.id, cover: s.cover || same.cover, stat: s.stat || same.stat };
+    } catch (e) { /* archive.org below */ }
+    if (!s.ia) throw new Error("no parts");
+    const res = await C.platform.fetchText(IA + "/metadata/" + encodeURIComponent(s.ia));
+    if (res.status !== 200) throw new Error("HTTP " + res.status);
+    const parts = iaParts(res.text, s.ia);
+    if (!parts.length) throw new Error("no parts");
+    got.parts = parts;
+    got.secs = parts.reduce((n, p) => n + p.dur, 0);
+    return got;
+  }
+  // The item's MP3s (64 kbps, the size LibriVox links), in track order.
+  function iaParts(body, ia) {
+    let data;
+    try { data = JSON.parse(String(body || "").trim()); } catch (e) { return []; }
+    const files = (data && data.files) || [];
+    const mp3 = files.filter((f) => f && /^64kbps mp3$/i.test(f.format || "") && /\.mp3$/i.test(f.name || ""));
+    const track = (f) => parseInt(String(f.track || "").split("/")[0], 10) || 0;
+    return mp3.sort((x, y) => track(x) - track(y) || String(x.name).localeCompare(String(y.name), undefined, { numeric: true }))
+      .map((f) => ({ url: IA + "/download/" + ia + "/" + String(f.name).split("/").map(encodeURIComponent).join("/"), title: unhtml(f.title || String(f.name).replace(/(_64kb)?\.mp3$/i, "")).slice(0, 200), dur: seconds(f.length) }));
+  }
+  // The Project Gutenberg book a recording was read from, by its number.
+  const pgNumber = (u) => (/gutenberg\.org\/(?:ebooks|etext|files)\/(\d+)/i.exec(String(u || "")) || [])[1] || "";
+  async function pgBook(n) {
+    if (!n) return null;
+    const res = await C.platform.fetchText(GUTENDEX + "?ids=" + encodeURIComponent(n));
+    return res.status === 200 ? parseGutendex(res.text)[0] || null : null;
+  }
+
   // The story sites Sites browses, each with its lists and genres (`once`:
   // one page, no more after it; no genres: no genre picker).
   const SOURCES = [
@@ -754,10 +965,15 @@
       browse: (k, g, p) => stories(pgBrowseUrl(k, g, p), parseGutendex), search: pgSearch },
     { key: "se", label: "Standard Ebooks", books: true, web: true, lists: SE_LISTS, genres: SE_SUBJECTS, anyGenre: true, genreLabel: "Subject",
       browse: (k, g, p) => stories(seBrowseUrl(k, g, p), parseSE), search: seSearch },
+    { key: "lv", label: "LibriVox", audiobooks: true, web: true, lists: LV_LISTS, genres: LV_GENRES, anyGenre: true,
+      browse: (k, g, p) => lvBrowse(k, g, p), search: lvSearch },
     { key: "ws", label: "Wikisource", texts: true, web: true, lists: WS_LISTS, genres: [], anyGenre: true,
       browse: (k, g, p) => wsBrowse(k, p), search: (w) => wsSearch(w) },
+    { key: "kx", label: "Kiwix", packs: true, web: true, lists: KX_TOPICS, genres: KX_LANGS, anyGenre: true, genreLabel: "Language",
+      browse: kxBrowse, search: kxSearch },
   ];
 
   C.discover = { list, refresh, fromSource, clean, isStory, storyId, parseList, rrLists: RR_LISTS, rrGenres: RR_GENRES, rrSaved, rrRead, rrSearch, rrBrowse, rrBrowseUrl, parseFP, parseFFN, parseAO3, parseSH, parseWattpad, parseWebtoon, parseTapas, fpBrowseUrl, ffnBrowseUrl, ao3BrowseUrl, wpBrowseUrl, firstSaved, firstRead, fpSaved, fpRead, serialLinks, serialChapters, sources: SOURCES,
-    parseGutendex, parseSE, parseWsList, parseXf, parseXfSearch, parseWikiToday, pgBrowseUrl, seBrowseUrl, xfBrowseUrl, seEpub, wikiSaved, wikiToday };
+    parseGutendex, parseSE, parseWsList, parseXf, parseXfSearch, parseWikiToday, pgBrowseUrl, seBrowseUrl, xfBrowseUrl, seEpub, wikiSaved, wikiToday,
+    parseLibriVox, parseIaScrape, iaParts, lvDetails, pgNumber, pgBook, parseKiwix, kxUrl, kxSize };
 })();

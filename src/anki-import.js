@@ -57,7 +57,7 @@
     db.rows("col", (id, v) => { if (!col) col = v; });
     let models, decks;
     try { models = JSON.parse(col[9]); decks = JSON.parse(col[10]); } catch (e) { models = null; }
-    if (!models || !Object.keys(models).length) throw new Error("This deck is from a newer Anki. In Anki, export it again with “Support older Anki versions” ticked.");
+    if (!models || !Object.keys(models).length) throw new Error(t("This deck is from a newer Anki. In Anki, export it again with “Support older Anki versions” ticked."));
 
     const notes = new Map();
     db.rows("notes", (id, v) => notes.set(id, { mid: String(v[2]), fields: String(v[6]).split(SEP) }));
@@ -102,14 +102,14 @@
   async function readApkg(file) {
     const B = C.backup;
     let entries;
-    try { entries = await B.zipEntries(file); } catch (e) { throw new Error("That isn't an Anki deck file (.apkg)."); }
+    try { entries = await B.zipEntries(file); } catch (e) { throw new Error(t("That isn't an Anki deck file (.apkg).")); }
     // With "Support older Anki versions" Anki writes the real collection as
     // collection.anki21, beside a stand-in collection.anki2 asking to update.
     const name = entries.has("collection.anki21") ? "collection.anki21" : entries.has("collection.anki21b") ? null : entries.has("collection.anki2") ? "collection.anki2" : undefined;
-    if (name === null) throw new Error("This deck is from a newer Anki. In Anki, export it again with “Support older Anki versions” ticked.");
-    if (!name) throw new Error("There's no Anki collection in that file.");
+    if (name === null) throw new Error(t("This deck is from a newer Anki. In Anki, export it again with “Support older Anki versions” ticked."));
+    if (!name) throw new Error(t("There's no Anki collection in that file."));
     const e = entries.get(name);
-    if (e.size > MAX_BYTES) throw new Error("That deck is over 200 MB.");
+    if (e.size > MAX_BYTES) throw new Error(t("That deck is over 200 MB."));
     return fromDb(C.sqlite.open(await B.zipRead(file, e)));
   }
 

@@ -18,12 +18,12 @@
   const S = () => C.store;
   const B = () => C.backup;
 
-  const KINDS = { epub: "EPUB", mobi: "MOBI", azw3: "AZW3", fb2: "FB2", md: "Markdown", txt: "Text", html: "HTML", cbz: "Comic", pdf: "PDF", eml: "Email" };
+  const KINDS = { epub: "EPUB", mobi: "MOBI", azw3: "AZW3", fb2: "FB2", md: "Markdown", txt: "Text", html: "HTML", cbz: "Comic", pdf: "PDF", eml: "Email", zim: "Kiwix" };
   // Kinds whose pictures can be left in the file and read as they're needed.
-  const LINKABLE = new Set(["epub", "cbz", "pdf"]);
+  const LINKABLE = new Set(["epub", "cbz", "pdf", "zim"]);
   // Kinds that can be a clip reading from its file: all of them.
   const canLink = (kind) => !!KINDS[kind];
-  const EXTS = { epub: "epub", mobi: "mobi", azw: "mobi", prc: "mobi", azw3: "azw3", fb2: "fb2", md: "md", markdown: "md", txt: "txt", text: "txt", html: "html", htm: "html", xhtml: "html", cbz: "cbz", eml: "eml" };
+  const EXTS = { epub: "epub", mobi: "mobi", azw: "mobi", prc: "mobi", azw3: "azw3", fb2: "fb2", md: "md", markdown: "md", txt: "txt", text: "txt", html: "html", htm: "html", xhtml: "html", cbz: "cbz", eml: "eml", zim: "zim" };
   const PICTURE = /\.(jpe?g|png|gif|webp)$/i;
   const MIME_EXT = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp" };
 
@@ -62,8 +62,11 @@
     const head = new Uint8Array(await file.slice(0, 1024).arrayBuffer());
     const ext = EXTS[extOf(file.name)] || extOf(file.name);
     if (head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46) return "pdf";
+    // A Kiwix pack (2026-11): ZIM's magic number, 72173914.
+    if (head[0] === 0x5a && head[1] === 0x49 && head[2] === 0x4d && head[3] === 0x04) return "zim";
     if (String.fromCharCode(...head.subarray(60, 68)) === "BOOKMOBI") return ext === "azw3" ? "azw3" : "mobi";
     // An audiobook, or one of its parts (2026-11): app-listen.js.
+    if (C.listen && C.listen.locked(head, file.name)) return "audio";
     if (head[0] !== 0x50 && C.listen && C.listen.sniff(head, file.name) && (C.listen.isAudioName(file.name) || /^(ID3|....ftyp|OggS|fLaC)/s.test(String.fromCharCode(...head.subarray(0, 8))))) return "audio";
     if (head[0] === 0x50 && head[1] === 0x4b) {
       let entries;
@@ -103,14 +106,14 @@
     const entries = await B().zipEntries(file);
     const read = async (path) => {
       const e = entries.get(path);
-      if (!e) throw new FileError("This EPUB is missing a part (" + path + ").");
+      if (!e) throw new FileError(t("This EPUB is missing a part ({path}).", { path: path }));
       return B().zipRead(file, e);
     };
     const xml = async (path) => new DOMParser().parseFromString(decode(await read(path)), "application/xml");
     const container = await xml("META-INF/container.xml");
     const rootfile = container.getElementsByTagName("rootfile")[0];
     const opfPath = rootfile && rootfile.getAttribute("full-path");
-    if (!opfPath) throw new FileError("This EPUB has no table of its parts.");
+    if (!opfPath) throw new FileError(t("This EPUB has no table of its parts."));
     const opf = await xml(opfPath);
     const first = (tag) => { const n = opf.getElementsByTagNameNS("*", tag)[0]; return n ? n.textContent.replace(/\s+/g, " ").trim() : ""; };
     const manifest = new Map();
@@ -120,7 +123,7 @@
     const spine = [...opf.getElementsByTagNameNS("*", "itemref")]
       .map((r) => manifest.get(r.getAttribute("idref")))
       .filter((it) => it && /html/.test(it.type) && entries.has(it.path));
-    if (!spine.length) throw new FileError("This EPUB has no chapters Waypage can read.");
+    if (!spine.length) throw new FileError(t("This EPUB has no chapters Waypage can read."));
     const chapterOf = new Map(spine.map((it, i) => [it.path, i]));
     const pics = pictures();
     const picAt = new Map();
@@ -307,7 +310,7 @@
     return rec.byteLength === 14 && new DataView(rec).getUint16(12) !== 0;
   }
   async function fromMobi(file, out) {
-    if (await mobiLocked(file)) throw new FileError("This book is locked to Kindle (DRM). Waypage opens Kindle books without DRM.");
+    if (await mobiLocked(file)) throw new FileError(t("This book is locked to Kindle (DRM). Waypage opens Kindle books without DRM."));
     const { MOBI } = await loadMobi();
     const book = await new MOBI({ unzlib: async () => { throw new Error("fonts aren't kept"); } }).open(file);
     try {
@@ -331,7 +334,7 @@
         if (doc.getElementsByTagName("parsererror").length || !doc.body) doc = new DOMParser().parseFromString(text, "text/html");
         if (doc.body) docs.set(i, doc);
       }
-      if (!docs.size) throw new FileError("This book has no text Waypage can read.");
+      if (!docs.size) throw new FileError(t("This book has no text Waypage can read."));
       // Where a link or a contents entry lands: "c<part>-<id>", the id
       // made up when the place has none.
       let made = 0;
@@ -429,7 +432,7 @@
     if (head[0] !== 0x50 || head[1] !== 0x4b) return new Uint8Array(await file.arrayBuffer());
     const entries = await B().zipEntries(file);
     const name = [...entries.keys()].find((n) => /\.fb2$/i.test(n));
-    if (!name) throw new FileError("There's no FB2 book in this zip.");
+    if (!name) throw new FileError(t("There's no FB2 book in this zip."));
     return B().zipRead(file, entries.get(name));
   }
   // An XML file in the encoding its first line names (windows-1251 is common).
@@ -444,7 +447,7 @@
   function fromFb2(bytes, out) {
     const doc = new DOMParser().parseFromString(xmlText(bytes), "application/xml");
     const book = doc.documentElement;
-    if (doc.getElementsByTagName("parsererror").length || !book || book.localName !== "FictionBook") throw new FileError("This FB2 book is damaged.");
+    if (doc.getElementsByTagName("parsererror").length || !book || book.localName !== "FictionBook") throw new FileError(t("This FB2 book is damaged."));
     const kids = (n, name) => (n ? [...n.children].filter((c) => c.localName === name) : []);
     const one = (n, ...path) => path.reduce((at, name) => kids(at, name)[0], n);
     const words = (n) => (n ? n.textContent.replace(/\s+/g, " ").trim() : "");
@@ -745,7 +748,7 @@
     const from = headerWords(top.headers.from);
     const sender = (from.match(/^\s*"?([^"<]*?)"?\s*</) || [])[1] || from.replace(/[<>]/g, "");
     const when = Date.parse((top.headers.date || "").replace(/\s*\([^)]*\)\s*$/, ""));
-    if (got.html == null && got.text == null) throw new FileError("There's nothing to read in this email.");
+    if (got.html == null && got.text == null) throw new FileError(t("There's nothing to read in this email."));
     const pics = pictures();
     const doc = new DOMParser().parseFromString(got.html != null ? got.html : plain(got.text), "text/html");
     for (const img of doc.querySelectorAll("img[src]")) {
@@ -766,7 +769,7 @@
   async function fromCbz(file, out, name) {
     const entries = await B().zipEntries(file);
     const names = [...entries.keys()].filter((n) => PICTURE.test(n) && !/(^|\/)(__MACOSX|\.)/.test(n)).sort(naturally);
-    if (!names.length) throw new FileError("There are no pictures in this comic.");
+    if (!names.length) throw new FileError(t("There are no pictures in this comic."));
     let title = "", series = null, manga = false;
     const info = [...entries.keys()].find((n) => /(^|\/)ComicInfo\.xml$/i.test(n));
     if (info) {
@@ -802,8 +805,8 @@
       got = await C.pdf.read(bytes, (done, total, stage) => onProgress && onProgress(done, total, stage === "pages" ? "pictures" : "words"),
         pics.link ? { sizes: true, maxDraw: 1, cover: true } : { cover: true });
     } catch (e) {
-      throw new FileError(/password|encrypt/i.test(String(e.message)) ? "This PDF is locked with a password."
-        : "Waypage couldn't read this PDF. It may be damaged." + why(e));
+      throw new FileError(/password|encrypt/i.test(String(e.message)) ? t("This PDF is locked with a password.")
+        : t("Waypage couldn't read this PDF. It may be damaged.") + why(e));
     }
     const root = out.createElement("div");
     root.className = "co-body";
@@ -823,7 +826,7 @@
         if (i === 0 && got.images[0]) await pics.put(img, got.images[0], "image/jpeg", false, "page:1");
         else { img.setAttribute("data-in", "page:" + (i + 1)); pics.n++; }
       }
-      if (!pics.n) throw new FileError("There's nothing to read in this PDF.");
+      if (!pics.n) throw new FileError(t("There's nothing to read in this PDF."));
     } else if (got.images) {
       root.classList.add("co-comic");
       for (const [i, b] of got.images.entries()) {
@@ -834,7 +837,7 @@
         await pics.put(img, b, "image/jpeg", false, "page:" + (i + 1));
         if (onProgress) onProgress(i + 1, got.images.length, "pictures");
       }
-      if (!pics.n) throw new FileError("There's nothing to read in this PDF.");
+      if (!pics.n) throw new FileError(t("There's nothing to read in this PDF."));
     } else {
       let page = 1;
       // A PDF in two directions, Hebrew and English say, gives each
@@ -848,7 +851,7 @@
         root.append(el);
         if (!at.has(page)) at.set(page, el);
       }
-      if (!root.textContent.trim()) throw new FileError("There's nothing to read in this PDF.");
+      if (!root.textContent.trim()) throw new FileError(t("There's nothing to read in this PDF."));
       // The first page as the card's picture (1.2.1).
       if (got.cover) await pics.cover(got.cover, "image/jpeg");
     }
@@ -888,6 +891,7 @@
   const drawable = (meta) => !!(meta && !meta.preview);
   const convertible = (meta) => !!(meta && !meta.note && !meta.preview && meta.file && KINDS[meta.file.kind]);
   async function openLinked(meta) {
+    if (meta.file.kind === "zim") return openZim(meta);
     closeHeld();
     const html = await S().readPage(meta.id);
     const isPdf = meta.file.kind === "pdf";
@@ -901,7 +905,7 @@
     } catch (e) {
       // Only for the contents: a file out of reach still opens.
       if (!slotted && !printed(meta)) return html;
-      throw new FileError("Waypage can't find " + meta.file.name + " any more. It may have been moved or deleted.");
+      throw new FileError(t("Waypage can't find {name} any more. It may have been moved or deleted.", { name: meta.file.name }));
     }
     if (isPdf) {
       const doc = new DOMParser().parseFromString(html, "text/html");
@@ -910,7 +914,7 @@
     const entries = await B().zipEntries(blob).catch(() => null);
     if (!entries) {
       if (!slotted) return html;
-      throw new FileError("Waypage can't read " + meta.file.name + " any more.");
+      throw new FileError(t("Waypage can't read {name} any more.", { name: meta.file.name }));
     }
     if (slotted) held = { zip: { blob, entries }, urls: new Map(), busy: false, frame: null };
     if (!unmarked) return html;
@@ -961,10 +965,14 @@
   async function fillNear(frame, onFirst) {
     const h = held;
     const win = frame && frame.contentWindow;
-    if (!h || !h.zip || !win || !win.document) { if (onFirst) onFirst(); return; }
+    if (!h || !(h.zip || h.zim) || !win || !win.document) { if (onFirst) onFirst(); return; }
     h.frame = frame;
-    if (h.busy) { if (onFirst) onFirst(); return; }
+    // A call while it's busy (the book's own first one, as the page before
+    // it was still scrolling) runs it again once it's done, not never: the
+    // cover at a book's start stayed blank.
+    if (h.busy) { h.again = true; if (C.timingNote) C.timingNote("pictures: asked while busy, again after"); if (onFirst) onFirst(); return; }
     h.busy = true;
+    h.again = false;
     try {
       for (;;) {
         if (held !== h) return;
@@ -994,23 +1002,32 @@
         }
         if (!next) return;
         const at = next.getAttribute("data-in");
-        const e = h.zip.entries.get(at);
+        const e = h.zim ? null : h.zip.entries.get(at);
         let url = null;
         try {
-          if (e) {
+          if (h.zim) {
+            const got = await h.zim.get(at.slice(4));
+            if (got && /^image\//.test(got.mime)) url = URL.createObjectURL(new Blob([got.bytes], { type: got.mime }));
+          } else if (e) {
             const bytes = await B().zipRead(h.zip.blob, e);
             url = URL.createObjectURL(new Blob([bytes], { type: B().imageType(bytes) || "image/jpeg" }));
           }
         } catch (err) { url = null; }
-        if (held !== h) { if (url) URL.revokeObjectURL(url); return; }
+        // Gone, or the frame went on to another document while it was read.
+        if (held !== h || next.ownerDocument !== win.document || !next.isConnected) { if (C.timingNote) C.timingNote("pictures: " + at + " read for a page no longer shown"); if (url) URL.revokeObjectURL(url); if (held !== h) return; continue; }
         next.removeAttribute("data-in");
         if (!url) { next.className = "co-missing"; continue; }
         h.urls.set(at, url);
         next.setAttribute("data-at", at);
         next.setAttribute("src", url);
+        if (!h.shown && C.timingNote) { h.shown = true; C.timingNote("pictures: first in, " + at); }
         if (onFirst) { onFirst(); onFirst = null; }
       }
-    } finally { h.busy = false; if (onFirst) onFirst(); }
+    } finally {
+      h.busy = false;
+      if (onFirst) onFirst();
+      if (h.again && held === h) { h.again = false; fillNear(frame); }
+    }
   }
 
   // A scan read from its PDF (1.1.0): the PDF is kept open and each page
@@ -1030,7 +1047,7 @@
       // A note hands over its own stand-in for the open document.
       pdf = blob && typeof blob.draw === "function" ? blob : await C.pdf.open(blob);
     } catch (e) {
-      throw new FileError("Waypage can't read " + meta.file.name + " any more.");
+      throw new FileError(t("Waypage can't read {name} any more.", { name: meta.file.name }));
     }
     // `words`: its pages get a layer of their words, to select (1.56.0).
     const h = held = { pdf, urls: new Map(), busy: false, frame: null, words: !!into, texts: new Map(), asking: new Set(), token: "h" + (++heldSeq) };
@@ -1153,7 +1170,7 @@
   // that, not for the screen and a half.
   async function drawNear(frame, onFirst) {
     const h = held;
-    if (h && h.zip) return fillNear(frame, onFirst);
+    if (h && (h.zip || h.zim)) return fillNear(frame, onFirst);
     const win = frame && frame.contentWindow;
     if (!h || !win || !win.document) { if (onFirst) onFirst(); return; }
     // The frame may still show the page that was open before (it slides away
@@ -1221,6 +1238,219 @@
       })());
     }
     return h.thumbs.get(n);
+  }
+
+  // ---- Kiwix packs (2026-11) ----
+  // A .zim file is a whole site (Wikipedia, Wiktionary...) in one file,
+  // read from where it is (zim.js, loaded the first time one is needed).
+  // The clip is the pack; the reader shows one of its articles at a time
+  // (meta.zim.at), its pictures read from the pack as they come near, and
+  // its links to other articles stay in the pack (app-reader.js).
+  let zimLib = null;
+  function loadZim() {
+    if (C.zim) return Promise.resolve();
+    return zimLib || (zimLib = new Promise((ok, no) => {
+      const s = document.createElement("script");
+      s.src = "src/zim.js" + (C.version ? "?v=" + C.version : "");
+      s.onload = () => ok();
+      s.onerror = () => { zimLib = null; s.remove(); no(new FileError(t("Couldn't load Waypage's Kiwix reader. Try again."))); };
+      document.head.append(s);
+    }));
+  }
+  const packs = new Map();
+  function zimPack(meta) {
+    let p = packs.get(meta.link);
+    if (!p) {
+      p = (async () => {
+        await loadZim();
+        const blob = await C.platform.files.blob(meta.link, meta.file.size);
+        return C.zim.open(blob);
+      })();
+      p.catch(() => packs.delete(meta.link));
+      packs.set(meta.link, p);
+    }
+    return p;
+  }
+  const forgetPack = (link) => packs.delete(link);
+  // What the pack says about itself, for its clip.
+  async function zimFacts(z) {
+    const [title, lang, creator, about] = await Promise.all(["Title", "Language", "Creator", "Description"].map((k) => z.meta(k)));
+    return { title, lang, creator, about };
+  }
+  const WIKI = /wikipedia/i;
+  // One article as the reader's page: the allowlist cleaner of a saved
+  // page, links inside the pack kept as the pack's own addresses and
+  // pictures as slots (data-in="zim:<path>"), or written into a clip
+  // when `pics` is given (Save this article).
+  async function zimArticle(z, path, out, pics) {
+    const got = await z.get(path);
+    if (!got || !/html/.test(got.mime)) return null;
+    const doc = new DOMParser().parseFromString(decode(got.bytes), "text/html");
+    const base = C.zim.urlOf(got.path);
+    const title = ((doc.querySelector("title") || {}).textContent || got.title || "").replace(/\s+/g, " ").trim();
+    const { root, media } = C.save.rebuild(doc.body, base, base, out);
+    const norm = (x) => x.replace(/\s+/g, " ").trim().toLowerCase();
+    const first = root.querySelector("h2, h3");
+    if (first && norm(first.textContent) === norm(title) && norm(root.textContent).startsWith(norm(first.textContent))) first.remove();
+    for (const m of media) {
+      if (m.video) { m.el.remove(); continue; }
+      const at = C.zim.pathOf(m.preview);
+      if (!at) { m.el.setAttribute("data-full", m.preview); m.el.className = "co-missing"; continue; }
+      if (!pics) { m.el.setAttribute("data-in", "zim:" + at); continue; }
+      let b = null;
+      try { const img = await z.get(at); b = img && img.bytes; } catch (e) { b = null; }
+      const type = b && B().imageType(b);
+      if (MIME_EXT[type]) await pics.put(m.el, b, type, false, null);
+      else m.el.remove();
+    }
+    return { root, title: title || got.title, path: got.path, lang: doc.documentElement.getAttribute("lang") || "", dir: doc.documentElement.getAttribute("dir") || "" };
+  }
+  // A pack brought in: its main page is the clip's page, its picture the card's.
+  async function fromZim(file, out, pics) {
+    await loadZim();
+    let z;
+    try { z = await C.zim.open(file); } catch (e) { throw new FileError(t("Waypage can't read this Kiwix file. It may be damaged.")); }
+    const facts = await zimFacts(z);
+    const main = await z.main();
+    const art = main ? await zimArticle(z, main, out, null) : null;
+    if (!art) throw new FileError(t("This Kiwix file has no pages Waypage can show."));
+    const icon = await z.icon().catch(() => null);
+    const type = icon && B().imageType(icon);
+    if (MIME_EXT[type]) await pics.cover(icon, type);
+    return { root: art.root, title: facts.title || baseName(file.name), byline: facts.about || "", lang: facts.lang.slice(0, 3),
+      zim: { at: art.path, main: art.path, wiki: WIKI.test(facts.creator + " " + facts.title) } };
+  }
+  // The article the reader is on, in the reader's frame.
+  async function openZim(meta, path) {
+    let z;
+    try { z = await zimPack(meta); } catch (e) {
+      forgetPack(meta.link);
+      throw new FileError(t("Waypage can't find {name} any more. It may have been moved or deleted.", { name: meta.file.name }));
+    }
+    const out = document.implementation.createHTMLDocument("");
+    const want = path || (meta.zim && meta.zim.at) || await z.main();
+    let art = want ? await zimArticle(z, want, out, null).catch(() => null) : null;
+    if (!art && !path) art = await zimArticle(z, await z.main(), out, null).catch(() => null);
+    if (!art) return null;
+    meta.zim = { ...(meta.zim || {}), at: art.path };
+    closeHeld();
+    held = { zim: z, urls: new Map(), busy: false, frame: null };
+    if (meta.zim.wiki) {
+      const credit = out.createElement("p");
+      credit.className = "co-credit";
+      credit.textContent = "Text from Wikipedia, CC BY-SA 4.0, by Wikipedia contributors.";
+      art.root.append(credit);
+    }
+    return C.save.savedPageHtml({ ...meta, title: art.title, byline: "", site: meta.title, savedAt: 0, lang: art.lang || meta.lang, dir: art.dir || meta.dir }, art.root, out);
+  }
+  // Where a link in the article shown goes: { path, hash } in the pack,
+  // or null for one out of it.
+  function zimLink(meta, href) {
+    return C.zim && meta.zim ? (C.zim.pathOf(href) ? { path: C.zim.pathOf(href), hash: (String(href).split("#")[1] || "") } : null) : null;
+  }
+  async function zimSearch(meta, words, most) {
+    const z = await zimPack(meta);
+    return z.search(words, most);
+  }
+  // Save this article: a clip of its own, its pictures copied out of the
+  // pack, with the article's address on Wikipedia when the pack is one.
+  async function zimSave(meta) {
+    const z = await zimPack(meta);
+    const id = C.save.newId();
+    const out = document.implementation.createHTMLDocument("");
+    const pics = picturesOut(id, false);
+    const art = await zimArticle(z, meta.zim.at, out, pics);
+    if (!art) throw new FileError(t("Couldn't read this article from the pack."));
+    const lang = (await z.meta("Source")).match(/^([a-z-]+)\.wikipedia\.org/) || null;
+    const wiki = meta.zim.wiki && lang;
+    const name = art.path.replace(/^[AC]\//, "").replace(/\.html?$/, "");
+    const words = art.root.textContent;
+    const clip = {
+      id, url: wiki ? "https://" + lang[1] + ".wikipedia.org/wiki/" + encodeURIComponent(name).replace(/%2F/g, "/") : "", title: art.title.slice(0, 300),
+      site: wiki ? "Wikipedia" : meta.title, byline: "", licence: wiki ? "wikipedia" : null, savedAt: Date.now(), minutes: C.save.readingMinutes(words),
+      lang: art.lang || meta.lang || "", dir: art.dir || C.save.textDir(out, words), mode: "full", next: "", prev: "", at: 0, finished: false,
+      images: art.root.querySelectorAll("img").length, missing: 0, imageBytes: pics.bytes,
+    };
+    if (pics.thumb) clip.thumb = pics.thumb;
+    try {
+      const html = C.save.savedPageHtml(clip, art.root, out);
+      const text = C.save.plainText(art.root);
+      clip.bytes = pics.bytes + await S().writePage(id, html, clip) + S().bytesOf(text);
+      await S().writeText(id, text);
+    } catch (e) {
+      await S().removePage(id);
+      throw new FileError(C.platform.native ? t("Couldn't write the clip to the phone. Free some space and try again.") : t("Couldn't keep this file on this browser. Free some space and try again."));
+    }
+    return clip;
+  }
+
+  // ---- A book as a collection of clips (2026-11) ----
+  // Discover's + on a book can add it as clips: one for each of the
+  // EPUB's own files in reading order (its chapters, as most books are
+  // made), a short one (a title page, a dedication) joined to the next.
+  // Each is a clip like any saved page, so it syncs; the collection is
+  // the book's title, in reading order. Resolves to the clips' entries.
+  async function bookClips(file, onProgress) {
+    const out = document.implementation.createHTMLDocument("");
+    let got;
+    try { got = await fromEpub(file, out); } catch (e) { throw new FileError(t("Waypage couldn't read this {kind} file. It may be damaged.", { kind: "EPUB" }) + why(e)); }
+    const { root, images } = C.save.cleanSaved(got.body, out);
+    const bytesOf = new Map();
+    for (const { el: img, data: src } of images) {
+      const kept = got.pics && got.pics.get(src);
+      if (kept) bytesOf.set(img, kept);
+      else img.remove();
+    }
+    const parts = [];
+    let run = [];
+    for (const sec of [...root.children]) {
+      run.push(sec);
+      const text = run.map((n) => n.textContent).join(" ").replace(/\s+/g, " ").trim();
+      if (text.length < 400 && sec !== root.lastElementChild) continue;
+      parts.push(run);
+      run = [];
+    }
+    if (run.length) parts.push(run);
+    if (!parts.length) throw new FileError(t("There's nothing to read in this file."));
+    const title = (got.title || baseName(file.name)).replace(/\s+/g, " ").trim().slice(0, 200);
+    const made = [];
+    for (const [i, nodes] of parts.entries()) {
+      const id = C.save.newId();
+      const body = out.createElement("div");
+      body.className = "co-body";
+      for (const n of nodes) body.append(...n.childNodes);
+      const mark = body.querySelector("[data-toc]");
+      const head = body.querySelector("h2, h3, h4");
+      const name = ((mark && mark.getAttribute("data-toc-t")) || (head && head.textContent) || "").replace(/\s+/g, " ").trim().slice(0, 200)
+        || t("Part {n}", { n: i + 1 });
+      // The clip's own heading says the chapter's name already.
+      if (head && head.textContent.replace(/\s+/g, " ").trim() === name && body.textContent.trim().startsWith(head.textContent.trim())) head.remove();
+      const pics = picturesOut(id, false);
+      for (const img of body.querySelectorAll("img")) {
+        const b = bytesOf.get(img);
+        if (b) await pics.put(img, b.bytes, b.type, false, null); else img.remove();
+      }
+      const words = body.textContent;
+      const meta = {
+        id, url: "", title: name, site: "", byline: got.byline || "", licence: null, savedAt: Date.now(), minutes: C.save.readingMinutes(words),
+        lang: (got.lang || "").slice(0, 20), dir: got.dir || C.save.textDir(out, words), mode: "full", next: "", prev: "", at: 0, finished: false,
+        images: body.querySelectorAll("img").length, missing: 0, imageBytes: pics.bytes, folder: title, folderAt: Date.now() + i,
+      };
+      if (pics.thumb) meta.thumb = pics.thumb;
+      try {
+        const html = C.save.savedPageHtml(meta, body, out);
+        const text = C.save.plainText(body);
+        meta.bytes = pics.bytes + await S().writePage(id, html, meta) + S().bytesOf(text);
+        await S().writeText(id, text);
+      } catch (e) {
+        for (const m of made) await S().removePage(m.id);
+        await S().removePage(id);
+        throw new FileError(C.platform.native ? t("Couldn't keep this file on the phone. Free some space and try again.") : t("Couldn't keep this file on this browser. Free some space and try again."));
+      }
+      made.push(meta);
+      if (onProgress) onProgress(i + 1, parts.length);
+    }
+    return made;
   }
 
   // ---- Bringing one in ----
@@ -1323,11 +1553,12 @@
         else p.img.remove();
         if (onProgress) onProgress(i + 1, got.panels.length, "pictures");
       }
-      if (!pics.n) throw new FileError("There are no pictures in this comic Waypage can show.");
+      if (!pics.n) throw new FileError(t("There are no pictures in this comic Waypage can show."));
       return { root: got.root, title: got.title, series: got.series, manga: got.manga };
     }
     let got;
     if (kind === "pdf") return fromPdf(file, out, onProgress, pics);
+    if (kind === "zim") return fromZim(file, out, pics);
     if (kind === "epub") got = await fromEpub(file, out);
     else if (kind === "mobi" || kind === "azw3") got = await fromMobi(file, out);
     else if (kind === "fb2") got = fromFb2(await fb2Bytes(file), out);
@@ -1344,7 +1575,7 @@
       }
     }
     const { root, images } = C.save.cleanSaved(got.body, out);
-    if (!root.textContent.trim() && !root.querySelector("img")) throw new FileError("There's nothing to read in this file.");
+    if (!root.textContent.trim() && !root.querySelector("img")) throw new FileError(t("There's nothing to read in this file."));
     // The book's stand-ins are swapped for their bytes, and any real data:
     // picture (an HTML file can carry them) decoded.
     const list = [];
@@ -1424,9 +1655,9 @@
   // it; its pictures then stay in the file. Resolves to the clip's index
   // entry, or { already } when `has(name, size)` says it's here.
   async function bring(file, kind, { has, onProgress, link = null, title = "" } = {}) {
-    if (!KINDS[kind]) throw new FileError("Waypage can't open this kind of file.");
+    if (!KINDS[kind]) throw new FileError(t("Waypage can't open this kind of file."));
     if (has && has(file.name, file.size)) return { already: true };
-    if (!file.size) throw new FileError("Waypage got nothing from " + file.name + ". If it's in a cloud folder, make it available offline and try again.");
+    if (!file.size) throw new FileError(t("Waypage got nothing from {name}. If it's in a cloud folder, make it available offline and try again.", { name: file.name }));
     const id = C.save.newId();
     const out = document.implementation.createHTMLDocument("");
     const ext = kind === "epub" || kind === "cbz" || !EXTS[extOf(file.name)] ? kind : extOf(file.name);
@@ -1437,7 +1668,7 @@
     } catch (e) {
       await S().removePage(id);
       if (!(e instanceof FileError)) console.error(e);
-      throw e instanceof FileError ? e : new FileError("Waypage couldn't read this " + KINDS[kind] + " file. It may be damaged." + why(e));
+      throw e instanceof FileError ? e : new FileError(t("Waypage couldn't read this {kind} file. It may be damaged.", { kind: KINDS[kind] }) + why(e));
     }
     const { root } = got;
     const words = root.textContent;
@@ -1449,6 +1680,7 @@
       file: { name: file.name.slice(0, 200), kind, ext, size: file.size },
     };
     if (kind === "cbz" || got.scan) meta.comic = true;
+    if (got.zim) Object.assign(meta, { zim: got.zim, site: "Kiwix" });
     if (got.manga) meta.manga = true;
     if (got.series && got.series.name) {
       meta.series = got.series.name.replace(/\s+/g, " ").trim().slice(0, 200);
@@ -1469,10 +1701,60 @@
       await S().writeText(id, text);
     } catch (e) {
       await S().removePage(id);
-      throw new FileError("Couldn't keep this file on " + (C.platform.native ? "the phone" : "this browser") + ". Free some space and try again.");
+      throw new FileError(C.platform.native ? t("Couldn't keep this file on the phone. Free some space and try again.") : t("Couldn't keep this file on this browser. Free some space and try again."));
     }
     return meta;
   }
 
-  C.files = { KINDS, LINKABLE, canLink, kindOf, bring, openLinked, openNoteItem, noteSheets, addSheet, printed, drawable, convertible, fingerprint, fingerprintOf, thumbnail, pictureSource, drawNear, findPage, heldPdf: () => (held && held.pdf) || null, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
+  // ---- CBZ out ----
+  // A comic clip, or a collection of them in order, as a CBZ: its pictures
+  // as they're kept, numbered so every reader keeps the order, and a
+  // ComicInfo.xml so the title, series and reading direction come back
+  // when it's opened again, here or in another comic reader. CBR can't be
+  // written: RAR is closed.
+  const CBZ_MIME = "application/vnd.comicbook+zip";
+  const comicName = (t) => (String(t || "").replace(/[\\/:*?"<>|#%\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 60) || "Comic") + ".cbz";
+  const xmlEsc = (s) => String(s).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  function comicInfo(pages, title, count) {
+    const one = pages.length === 1 ? pages[0] : null;
+    const series = one ? one.series : title;
+    const tags = [
+      ["Title", title],
+      ["Series", series],
+      ["Number", one && Number.isFinite(one.volume) ? String(one.volume) : ""],
+      ["Web", one && /^https?:/.test(one.url || "") ? one.url : ""],
+      ["LanguageISO", (pages[0].lang || "").split("-")[0]],
+      ["PageCount", String(count)],
+      ["Manga", pages.some((p) => p.manga) ? "YesAndRightToLeft" : ""],
+    ].filter(([, v]) => v);
+    return '<?xml version="1.0" encoding="utf-8"?>\n<ComicInfo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">\n' +
+      tags.map(([k, v]) => "  <" + k + ">" + xmlEsc(v) + "</" + k + ">\n").join("") + "</ComicInfo>\n";
+  }
+  const comicExportable = (p) => !!(p && p.comic && !p.preview);
+  async function exportComic(pages, title, onProgress) {
+    title = title || pages[0].title;
+    const name = comicName(title);
+    const native = C.platform.native;
+    const file = native ? await S().cacheFile(name) : null;
+    const parts = [];
+    const zip = B().zipWriter(native ? (b) => file.append(b) : (b) => { parts.push(b); });
+    let n = 0;
+    for (const [i, p] of pages.entries()) {
+      const root = new DOMParser().parseFromString(await S().readPage(p.id), "text/html").querySelector(".co-body");
+      const read = await pictureSource(p);
+      for (const img of root ? root.querySelectorAll("img") : []) {
+        let b = null;
+        try { b = await read(img); } catch (e) { b = null; }
+        const ext = b && MIME_EXT[B().imageType(b)];
+        if (ext) await zip.add(String(++n).padStart(4, "0") + "." + ext, b);
+      }
+      if (onProgress) onProgress(i + 1, pages.length);
+    }
+    if (!n) throw new FileError(t("There are no pictures here to put in a comic."));
+    await zip.add("ComicInfo.xml", new TextEncoder().encode(comicInfo(pages, title, n)));
+    await zip.finish();
+    return native ? { uri: await file.uri(), name } : { blob: new Blob(parts, { type: CBZ_MIME }), name };
+  }
+
+  C.files = { bookClips, openZim, zimLink, zimSearch, zimSave, forgetPack, KINDS, LINKABLE, canLink, kindOf, bring, openLinked, openNoteItem, noteSheets, addSheet, printed, drawable, convertible, fingerprint, fingerprintOf, thumbnail, pictureSource, comicExportable, exportComic, CBZ_MIME, drawNear, findPage, heldPdf: () => (held && held.pdf) || null, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
 })();

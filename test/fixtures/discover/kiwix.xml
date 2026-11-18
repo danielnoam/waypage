@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/terms/" xmlns:opds="https://specs.opds.io/opds-1.2" xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">
+  <id>4a1c2b3d-0000-0000-0000-000000000000</id>
+  <link rel="self" href="/catalog/v2/entries?category=wikipedia&amp;lang=eng" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <title>Filtered Entries (category=wikipedia&amp;lang=eng)</title>
+  <updated>2026-11-15T10:00:00Z</updated>
+  <opensearch:totalResults>2</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <opensearch:itemsPerPage>2</opensearch:itemsPerPage>
+  <entry>
+    <id>urn:uuid:11111111-2222-3333-4444-555555555555</id>
+    <title>Wikipedia 100</title>
+    <updated>2026-10-01T00:00:00Z</updated>
+    <summary>The top 100 articles of Wikipedia</summary>
+    <language>eng</language>
+    <name>wikipedia_en_100</name>
+    <flavour>maxi</flavour>
+    <category>wikipedia</category>
+    <tags>wikipedia;_category:wikipedia;_pictures:yes;_videos:no;_details:yes</tags>
+    <articleCount>18412</articleCount>
+    <mediaCount>4980</mediaCount>
+    <link rel="http://opds-spec.org/image/thumbnail" href="/catalog/v2/illustration/11111111-2222-3333-4444-555555555555/?size=48" type="image/png;width=48;height=48;scale=1"/>
+    <link type="text/html" href="/content/wikipedia_en_100_maxi_2026-10"/>
+    <author><name>Wikipedia</name></author>
+    <publisher><name>Kiwix</name></publisher>
+    <dc:issued>2026-10-01T00:00:00Z</dc:issued>
+    <link rel="http://opds-spec.org/acquisition/open-access" type="application/x-zim" href="https://download.kiwix.org/zim/wikipedia/wikipedia_en_100_maxi_2026-10.zim.meta4" length="331350016"/>
+  </entry>
+  <entry>
+    <id>urn:uuid:66666666-7777-8888-9999-000000000000</id>
+    <title>Wikipedia</title>
+    <updated>2026-09-01T00:00:00Z</updated>
+    <summary>The free encyclopedia, every article, without pictures</summary>
+    <language>eng</language>
+    <name>wikipedia_en_all</name>
+    <flavour>nopic</flavour>
+    <category>wikipedia</category>
+    <tags>wikipedia;_category:wikipedia;_pictures:no</tags>
+    <articleCount>6912345</articleCount>
+    <mediaCount>0</mediaCount>
+    <author><name>Wikipedia</name></author>
+    <link rel="http://opds-spec.org/acquisition/open-access" type="application/x-zim" href="https://download.kiwix.org/zim/wikipedia/wikipedia_en_all_nopic_2026-09.zim.meta4" length="49392123904"/>
+  </entry>
+  <entry>
+    <id>urn:uuid:no-file</id>
+    <title>No file here</title>
+    <language>eng</language>
+  </entry>
+</feed>

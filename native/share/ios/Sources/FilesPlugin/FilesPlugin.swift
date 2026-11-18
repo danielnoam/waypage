@@ -23,6 +23,10 @@ import UniformTypeIdentifiers
 //   serve({ tree })              { path } of the folder, readable from now on
 //   folderWrite / folderRead / folderStat / folderList / folderDelete /
 //   folderMoveIn / folderScan     as on Android
+//   copyFiles({ from, to, paths })   as on Android: each path copied from
+//                                one library to another off the WebView's
+//                                thread; from and to are { tree } or { dir };
+//                                "copied" { done, total } as it goes
 @objc(FilesPlugin)
 public class FilesPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDelegate {
     public let identifier = "FilesPlugin"
@@ -40,7 +44,8 @@ public class FilesPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDelegate 
         CAPPluginMethod(name: "folderStat", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "folderList", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "folderDelete", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "folderScan", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "folderScan", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "copyFiles", returnType: CAPPluginReturnPromise)
     ]
 
     private var pending: CAPPluginCall?
@@ -346,6 +351,46 @@ public class FilesPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDelegate 
         let (base, path) = f
         try? FileManager.default.removeItem(at: FilesPlugin.child(base, path))
         call.resolve()
+    }
+
+    // ---- Moving the library (store.js) ----
+
+    private static func end(_ o: JSObject?) -> URL? {
+        guard let o = o else { return nil }
+        if let t = o["tree"] as? String, !t.isEmpty { return root(t) }
+        if let d = o["dir"] as? String, !d.isEmpty { return URL(fileURLWithPath: d, isDirectory: true) }
+        return nil
+    }
+
+    @objc func copyFiles(_ call: CAPPluginCall) {
+        let paths = call.getArray("paths", String.self) ?? []
+        guard let from = FilesPlugin.end(call.getObject("from")), let to = FilesPlugin.end(call.getObject("to")) else {
+            call.reject("Nothing to copy")
+            return
+        }
+        work.async {
+            let fm = FileManager.default
+            var done = 0
+            for path in paths {
+                // Library paths are plain, not percent-encoded as refs are.
+                let parts = path.split(separator: "/").map(String.init)
+                let src = FilesPlugin.coordinated(parts.reduce(from) { $0.appendingPathComponent($1) })
+                let dst = parts.reduce(to) { $0.appendingPathComponent($1) }
+                do {
+                    try self.makeParent(dst)
+                    if fm.fileExists(atPath: dst.path) { try fm.removeItem(at: dst) }
+                    try fm.copyItem(at: src, to: dst)
+                } catch {
+                    call.reject("Couldn't copy " + path + ": " + error.localizedDescription)
+                    return
+                }
+                done += 1
+                if done % 20 == 0 || done == paths.count {
+                    self.notifyListeners("copied", data: ["done": done, "total": paths.count])
+                }
+            }
+            call.resolve(["done": done])
+        }
     }
 
     // ---- A watched folder (app.js): read, never written ----

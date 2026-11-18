@@ -31,6 +31,12 @@
 // - Picture in picture on MainActivity (1.25.0): reading aloud goes on in
 //   a small window when you go home, if Read aloud's switch allows it.
 //
+// - Plain http (2026-11, the Catalogs extension): a book server at home
+//   (Calibre, Kavita, Komga) is usually http://192.168.x.x, which Android
+//   refuses since 9 unless the app allows cleartext. Android can't allow it
+//   for home addresses only, so it's allowed for all; ARCHITECTURE.md's
+//   Trade-offs.
+//
 // Idempotent, and fails loudly if a tag it needs can't be found.
 const fs = require("fs");
 const path = require("path");
@@ -69,6 +75,8 @@ const INDENT = { manifest: "    ", application: "        ", "main-activity": "  
 
 // Attributes on MainActivity's own tag.
 const ATTRS = ['android:supportsPictureInPicture="true"', 'android:resizeableActivity="true"'];
+// Attributes on the <application> tag.
+const APP_ATTRS = ['android:usesCleartextTraffic="true"'];
 
 function patch(xml) {
   let out = xml;
@@ -79,6 +87,13 @@ function patch(xml) {
     if (m[0].includes(name + "=")) continue;
     const open = m[0].replace(/<activity\b/, "<activity " + attr);
     out = out.slice(0, m.index) + open + out.slice(m.index + m[0].length);
+  }
+  for (const attr of APP_ATTRS) {
+    const name = attr.split("=")[0];
+    const m = TAGS.application.exec(out);
+    if (!m) throw new Error("no <application> tag in AndroidManifest.xml");
+    if (m[0].includes(name + "=")) continue;
+    out = out.slice(0, m.index) + m[0].replace(/<application\b/, "<application " + attr) + out.slice(m.index + m[0].length);
   }
   for (const { inside, xml: entry } of ENTRIES) {
     const name = entry.match(/android:name="([^"]+)"/)[1];
@@ -98,4 +113,4 @@ if (require.main === module) {
   const n = ENTRIES.length;
   console.log("android: manifest " + (before === patch(before) ? "already has" : "gained") + " " + n + " Waypage entr" + (n === 1 ? "y" : "ies"));
 }
-module.exports = { patch, ENTRIES, ATTRS };
+module.exports = { patch, ENTRIES, ATTRS, APP_ATTRS };

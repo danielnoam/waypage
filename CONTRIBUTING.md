@@ -93,6 +93,12 @@ Use the least access (narrow tokens and scopes). Nothing leaves the device
 unless the user turned it on. Saved content stays sandboxed. Any
 trade-off is stated plainly and added to ARCHITECTURE.md's Trade-offs.
 
+**English and Hebrew.** Every word the app shows goes through `t()` or
+`tn()` with its Hebrew in `src/lang/he.js` in the same change (the test
+fails otherwise), as whole sentences with `{placeholders}`, never glued
+pieces. Layout uses logical CSS (`margin-inline-start`, `inset-inline-end`,
+`text-align: start`) so right to left works. ARCHITECTURE.md, "Languages".
+
 **Every platform.** Everything works on Android and on a computer (the web
 copy), and on iOS later. A feature that can't work somewhere gets that
 platform's nearest equivalent (keys on a computer for the volume buttons,
@@ -145,7 +151,7 @@ themselves, so a new row is found without any extra work.
 
 **Nothing touches.** Sections, cards and a heading's ? keep their gaps
 on every screen, whatever the section is built from
-(`.settings-section` gaps in `src/styles.css`). Check at phone width.
+(`.settings-section` gaps in `src/styles.css`). Check at 320 px and 390 px.
 
 **Animations off means off.** With Settings › Appearance › Animations
 off, nothing moves at all: no easing, and no press stretch, turn or pop
@@ -174,6 +180,32 @@ the same version code. The release PR is the one that bumps
 
 **"Add to TODO" means plan it, not build it.** It goes on the to-do list
 with enough detail for someone else to pick it up.
+
+## Rules from bugs that shipped
+
+One line each. Every one is here because breaking it shipped a bug; the
+pull request that fixed it is in brackets. A fix for a kind of bug not
+listed here adds its line in the same pull request.
+
+**Code**
+
+- **A fix comes with a test that fails without it.** (#345, #346, #347)
+- **A new state on a job (held, paused, stopped, waiting) is handled everywhere the job is run, retried, stopped or shown.** Search for every caller first. (#345: Try again skipped `hold`)
+- **Retry, Undo and Back call the first path's function, never a copy of half of it.** (#345: `retryJob` skipped `updateClip`'s placing)
+- **A failed or stopped job never blocks the next try;** asking again replaces it. (#345)
+- **Undo removes what the action added; it doesn't add the opposite.** (#345: stats ended as `{a: b, b: a}`)
+- **After an `await`, read stored state again before writing it back.** Updates run three at a time. (#345: `sweepEarlier`)
+- **Stop wakes every wait it owns, and every loop checks for stop after each `await`.** (#346: the Wi-Fi wait)
+- **Something the user stopped says "Stopped.", never "Couldn't …".** (#346)
+- **A login, token or cookie goes only to the origin it was given for** (or the same host moved up to https, never down), whatever link, cover, page or redirect the server's answer points to. (#347)
+- **Before writing a guard or helper, look for the one a sibling area already has.** WebDAV had the login guard Catalogs lacked. (#347)
+
+**UI**
+
+- **Every move is the one DESIGN.md §4's "Which move" table gives for that kind of thing;** a new kind gets a row there first. `docs.test.js` checks `popInto`, `appear` and `vanish`. (#348: four kinds had drifted)
+- **A looping animation gets its own duration in the reduced-motion block and an Animations off rule,** in the same change. `docs.test.js` checks it. (#348: spinners flickered)
+- **A flex child that holds text or a control gets `min-width: 0`; a title that can hold one long word gets `hyphens: auto` or `overflow-wrap: anywhere`.** (#348)
+- **Every changed screen is checked at 320 px, 390 px and ~1280 px.** 390 px alone hid three breaks. (#348)
 
 ## Keeping the notes files right
 
@@ -246,9 +278,19 @@ secrets, so it can't sign or publish anything.
 
 **What a merge does:**
 
-- A merge to **`main`** refreshes the web copy (GitHub Pages serves
-  `main` as it is; the service worker paints from cache and fetches the
-  new files for the next launch), version bump or not.
+- A merge to **`main`** refreshes the web copy (`pages.yml` deploys
+  `main` to GitHub Pages once the tests pass, 2026-11-18; the service
+  worker paints from cache and fetches the new files for the next
+  launch), version bump or not. Settings → Pages → Source has to be
+  **GitHub Actions** for it.
+- **Unreleased builds (2026-11-18).** Every build of `main` also leaves
+  the artifact `unreleased-android` (the APK and a note, keel's
+  `tools/unreleased.js`); `pages.yml` puts the newest under the site's
+  `unreleased/` with `build.json`, and deploys again when a build of
+  `main` finishes. Never on the Releases page: only Settings → About →
+  **Unreleased builds** (Android, per device) offers it. Hidden, not
+  private: the repo is public. It keeps the last release's version, so
+  it installs over the release and the next release installs over it.
 - `.github/workflows/android.yml` and `ios.yml` build on every push to
   `main`, and on a branch push only when its open pull request has a
   test label (a quick `gate` job checks first). Pushes that only touch `**.md`, `test/**` or `.claude/**`
@@ -269,7 +311,7 @@ secrets, so it can't sign or publish anything.
 
 **Before a release:** `node --check` every edited `.js`, run
 `node test/run-all.js`, then run `node server.js` and check at phone width
-(390 px) and desktop width (~1280 px) in Paper, Sepia and Night with zero
+(320 px and 390 px) and desktop width (~1280 px) in Paper, Sepia and Night with zero
 console errors. Saving and reading can only be fully checked in the app
 (CapacitorHttp and Filesystem don't exist in a browser): say so when a
 change touches them and wasn't run on a phone. After merging, check that

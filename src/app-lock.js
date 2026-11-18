@@ -16,10 +16,10 @@ const LOCK_MIN = 4, LOCK_MAX = 12;
 // Wrong five times: a wait, twice as long each time after.
 const LOCK_FREE_TRIES = 5, LOCK_WAIT_MS = 30000, LOCK_WAIT_MAX = 15 * 60000;
 const LOCK_AFTERS = [
-  { value: 0, label: "Right away", note: "Every time you leave the app" },
-  { value: 60000, label: "After 1 minute", note: "Time to pick a file or sign in" },
-  { value: 5 * 60000, label: "After 5 minutes" },
-  { value: 15 * 60000, label: "After 15 minutes" },
+  { value: 0, label: t("Right away"), note: t("Every time you leave the app") },
+  { value: 60000, label: t("After 1 minute"), note: t("Time to pick a file or sign in") },
+  { value: 5 * 60000, label: t("After 5 minutes") },
+  { value: 15 * 60000, label: t("After 15 minutes") },
 ];
 
 const lockCfg = () => { const c = load(LOCK_KEY, null); return c && c.hash && c.salt ? c : null; };
@@ -61,9 +61,9 @@ let lockWaitTimer = null;
 
 function lockKeys() {
   const key = (label, value, aria) => el("button", { class: "lock-key", type: "button", "data-key": value, "aria-label": aria || label }, label);
-  const del = el("button", { class: "lock-key lock-key-icon", type: "button", "data-key": "del", "aria-label": "Delete" });
+  const del = el("button", { class: "lock-key lock-key-icon", type: "button", "data-key": "del", "aria-label": t("Delete") });
   del.innerHTML = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5h11v14H9l-6-7z"></path><path d="M12.5 9.5l5 5M17.5 9.5l-5 5"></path></svg>';
-  const bio = el("button", { class: "lock-key lock-key-icon", type: "button", "data-key": "bio", id: "lockBio", "aria-label": "Use fingerprint or face", hidden: "" });
+  const bio = el("button", { class: "lock-key lock-key-icon", type: "button", "data-key": "bio", id: "lockBio", "aria-label": t("Use fingerprint or face"), hidden: "" });
   bio.innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.2A7.5 7.5 0 0 1 19.5 11"></path><path d="M4.6 9.5a7.7 7.7 0 0 0-.1 1.5c0 2.3.5 4.4 1.4 6.2"></path><path d="M8 18.8c-.9-2.1-1.5-4.6-1.5-7.3a5.5 5.5 0 0 1 11 0v.7"></path><path d="M12 11.5c0 3.3.7 6.3 2 8.8"></path><path d="M9.5 11.5a2.5 2.5 0 0 1 5 0c0 2.6.5 5 1.4 7"></path><path d="M17.6 15.5c.2 1.3.6 2.5 1.1 3.6"></path></svg>';
   return [..."123456789"].map((d) => key(d, d)).concat([el("span", { class: "lock-key-gap" }, bio), key("0", "0"), del]);
 }
@@ -72,22 +72,22 @@ function lockPaint(note, warn) {
   const t = lockTries();
   const waiting = lock.mode !== "set" && t.until > Date.now();
   const titles = {
-    unlock: "Enter your passcode",
-    check: "Enter your passcode",
-    set: lock.first ? "Enter it again" : "Choose a passcode",
+    unlock: i18n.t("Enter your passcode"),
+    check: i18n.t("Enter your passcode"),
+    set: lock.first ? i18n.t("Enter it again") : i18n.t("Choose a passcode"),
   };
-  $("lockTitle").textContent = lock.erase ? "Erase Waypage on this device?" : titles[lock.mode];
+  $("lockTitle").textContent = lock.erase ? i18n.t("Erase Waypage on this device?") : titles[lock.mode];
   $("lockView").classList.toggle("erasing", lock.erase);
   const n = lock.mode === "set" ? Math.max(LOCK_MIN, lock.code.length) : (lockCfg() || {}).len || Math.max(LOCK_MIN, lock.code.length);
   fill($("lockDots"), ...Array.from({ length: Math.min(LOCK_MAX, n) }, (_, i) => el("span", { class: "lock-dot" + (i < lock.code.length ? " on" : "") })));
-  $("lockDots").setAttribute("aria-label", lock.code.length + (lock.code.length === 1 ? " number" : " numbers") + " entered");
-  const text = waiting ? "Too many wrong tries. Try again in " + lockWaitText(t.until - Date.now()) + "."
-    : note || (lock.mode === "set" && !lock.first ? LOCK_MIN + " to " + LOCK_MAX + " numbers." + (C.platform.os === "android" ? " Fingerprint or face can be added after." : "") : "");
+  $("lockDots").setAttribute("aria-label", i18n.tn(lock.code.length, "1 number entered", "{n} numbers entered"));
+  const text = waiting ? i18n.t("Too many wrong tries. Try again in {wait}.", { wait: lockWaitText(t.until - Date.now()) })
+    : note || (lock.mode === "set" && !lock.first ? (C.platform.native ? i18n.t("{min} to {max} numbers. Fingerprint or face can be added after.", { min: LOCK_MIN, max: LOCK_MAX }) : i18n.t("{min} to {max} numbers.", { min: LOCK_MIN, max: LOCK_MAX })) : "");
   $("lockNote").textContent = text;
   $("lockNote").classList.toggle("warn", !!warn || waiting);
   $("lockNext").hidden = lock.mode !== "set";
   $("lockNext").disabled = lock.code.length < LOCK_MIN;
-  $("lockNext").textContent = lock.first ? "Turn on" : "Next";
+  $("lockNext").textContent = lock.first ? i18n.t("Turn on") : i18n.t("Next");
   $("lockCancel").hidden = lock.mode === "unlock";
   $("lockForgot").hidden = lock.mode === "set";
   for (const b of $("lockKeys").querySelectorAll("button")) b.disabled = lock.busy || waiting;
@@ -96,7 +96,7 @@ function lockPaint(note, warn) {
 }
 function lockWaitText(ms) {
   const s = Math.ceil(ms / 1000);
-  return s < 60 ? s + (s === 1 ? " second" : " seconds") : Math.ceil(s / 60) + (Math.ceil(s / 60) === 1 ? " minute" : " minutes");
+  return s < 60 ? tn(s, "1 second", "{n} seconds") : tn(Math.ceil(s / 60), "1 minute", "{n} minutes");
 }
 
 // Shows the keypad; resolves true once unlocked, set or checked, false
@@ -138,7 +138,7 @@ function lockHide(result) {
 async function lockBio() {
   if (lock.busy || !lock.up) return;
   lock.busy = true;
-  const ok = await C.platform.lock.verify("Unlock Waypage");
+  const ok = await C.platform.lock.verify(t("Unlock Waypage"));
   lock.busy = false;
   if (!lock.up) return;
   if (ok) { store(LOCK_TRIES_KEY, null); lockHide(true); return; }
@@ -151,7 +151,7 @@ async function lockEnter() {
   if (lock.mode === "set") {
     if (code.length < LOCK_MIN) return;
     if (!lock.first) { lock.first = code; lock.code = ""; lockPaint(); return; }
-    if (code !== lock.first) { lock.first = ""; lock.code = ""; lockPaint("Those didn't match. Choose a passcode again.", true); return; }
+    if (code !== lock.first) { lock.first = ""; lock.code = ""; lockPaint(i18n.t("Those didn't match. Choose a passcode again."), true); return; }
     lock.busy = true;
     lockPaint();
     await lockSet(code);
@@ -173,7 +173,7 @@ async function lockEnter() {
   $("lockDots").classList.remove("shake");
   void $("lockDots").offsetWidth;
   if (!M.reduced()) $("lockDots").classList.add("shake");
-  lockPaint("That's not it. Try again.", true);
+  lockPaint(i18n.t("That's not it. Try again."), true);
 }
 
 function lockPress(k) {
@@ -199,7 +199,7 @@ function lockPress(k) {
 async function eraseAll() {
   lock.busy = true;
   $("lockEraseGo").disabled = true;
-  $("lockEraseGo").textContent = "Erasing…";
+  $("lockEraseGo").textContent = t("Erasing…");
   try { stopAloud(); } catch (e) { /* not reading */ }
   try {
     await C.store.ready;
@@ -279,53 +279,54 @@ function lockBack() {
 
 // ---- Settings › App lock ----
 async function turnLockOn() {
-  if (!lockCan()) { toast("This browser can't keep a passcode safely here."); return; }
-  if (await lockShow("set")) { toast("App lock is on."); renderSection(); renderSettings(); }
+  if (!lockCan()) { toast(t("This browser can't keep a passcode safely here.")); return; }
+  if (await lockShow("set")) { toast(t("App lock is on.")); renderSection(); renderSettings(); }
 }
 async function turnLockOff() {
   if (!(await lockShow("check"))) return;
   store(LOCK_KEY, null);
   store(LOCK_TRIES_KEY, null);
   C.platform.lock.hideRecents(false);
-  toast("App lock is off.");
+  toast(t("App lock is off."));
   renderSection();
   renderSettings();
 }
 async function changeLock() {
   if (!(await lockShow("check"))) return;
-  if (await lockShow("set")) toast("Passcode changed.");
+  if (await lockShow("set")) toast(t("Passcode changed."));
 }
 async function setLockBio(on, input) {
-  if (on && !(await C.platform.lock.verify("Use your fingerprint or face for Waypage"))) { input.checked = false; return; }
+  if (on && !(await C.platform.lock.verify(t("Use your fingerprint or face for Waypage")))) { input.checked = false; return; }
   lockChange({ bio: on });
 }
 
 function lockSections() {
   const c = lockCfg();
-  const help = "The lock is for this " + (C.platform.native ? "phone" : "browser") + " only, and the passcode never leaves it. "
-    + "It keeps anyone who picks up your " + (C.platform.native ? "phone" : "computer") + " out of Waypage; it doesn't encrypt the files. "
-    + "Forgot it? You can erase Waypage on this device and start again: GitHub sync or a Google Drive backup brings your clips back.";
-  if (!c) return [section("Lock", help,
+  const help = (C.platform.native
+    ? t("The lock is for this phone only, and the passcode never leaves it. It keeps anyone who picks up your phone out of Waypage; it doesn't encrypt the files.")
+    : t("The lock is for this browser only, and the passcode never leaves it. It keeps anyone who picks up your computer out of Waypage; it doesn't encrypt the files."))
+    + " " + t("Forgot it? You can erase Waypage on this device and start again: GitHub sync or a Google Drive backup brings your clips back.");
+  if (!c) return [section(t("Lock"), help,
     el("div", { class: "group" },
       el("button", { class: "row", type: "button", onclick: turnLockOn },
         el("span", { class: "choice-text" },
-          el("span", { class: "choice-label accent" }, "Turn on app lock"),
-          el("span", { class: "choice-note" }, "A passcode" + (C.platform.os === "android" ? ", fingerprint or face" : ""))))))];
+          el("span", { class: "choice-label accent" }, t("Turn on app lock")),
+          el("span", { class: "choice-note" }, C.platform.native ? t("A passcode, fingerprint or face") : t("A passcode"))))))];
   const bio = el("label", { class: "row", hidden: "" });
   C.platform.lock.biometric().then((ok) => {
     if (!ok) return;
     const input = el("input", { class: "switch", type: "checkbox", role: "switch", checked: !!c.bio, onchange: (e) => setLockBio(e.target.checked, e.target) });
     bio.append(el("span", { class: "choice-text" },
-      el("span", { class: "choice-label" }, "Fingerprint or face"),
-      el("span", { class: "choice-note" }, "The passcode still works")), input);
+      el("span", { class: "choice-label" }, t("Fingerprint or face")),
+      el("span", { class: "choice-note" }, t("The passcode still works"))), input);
     bio.hidden = false;
   });
-  return [section("Lock", help + " Locks says how long Waypage stays open after you leave it; a minute gives time to pick a file or sign in to a site without unlocking again.",
+  return [section(t("Lock"), t("{help} Locks says how long Waypage stays open after you leave it; a minute gives time to pick a file or sign in to a site without unlocking again.", { help: help }),
     el("div", { class: "group" },
       bio,
-      pickRow({ key: LOCK_KEY + ".after", label: "Locks", get: () => (lockCfg() || {}).after || 0, set: (v) => lockChange({ after: Number(v) }), options: LOCK_AFTERS }),
-      menuRow("Change the passcode", changeLock),
-      menuRow("Turn off app lock", turnLockOff, "warn")))];
+      pickRow({ key: LOCK_KEY + ".after", label: t("Locks"), get: () => (lockCfg() || {}).after || 0, set: (v) => lockChange({ after: Number(v) }), options: LOCK_AFTERS }),
+      menuRow(t("Change the passcode"), changeLock),
+      menuRow(t("Turn off app lock"), turnLockOff, "warn")))];
 }
-const lockValue = () => (lockCfg() ? "On" : "Off");
-SECTIONS.lock = { title: "App lock", build: lockSections, value: lockValue };
+const lockValue = () => (lockCfg() ? "On" : t("Off"));
+SECTIONS.lock = { title: t("App lock"), build: lockSections, value: lockValue };

@@ -20,7 +20,7 @@ const dzCanRead = () => C.platform.canFetchPages;
 // The sites this copy can browse: all of them in the app; in a browser,
 // the books and texts, whose sites answer the fetch proxy.
 const dzSources = () => C.discover.sources.filter((x) => C.platform.canFetchPages || (x.web && C.platform.canReadPages));
-const DZ_KINDS = [["all", "All"], ["stories", "Sites"], ["feeds", "Feeds"], ["newsletters", "Newsletters"]];
+const DZ_KINDS = [["all", t("All")], ["stories", t("Sites")], ["feeds", t("Feeds")], ["newsletters", t("Newsletters")]];
 const dzHost = (u) => { try { return new URL(u).hostname.toLowerCase().replace(/^www\./, ""); } catch (e) { return ""; } };
 
 // Followed already: a feed from the same site (its page or its feed).
@@ -30,7 +30,9 @@ function dzFollowing(e) {
 }
 // A story saved already: a collection read from its page.
 function dzSavedStory(s) {
-  if (s.book) return state.pages.some((p) => p.file && p.file.name === dzBookName(s));
+  if (s.zim) return !!packHere(s);
+  if (s.book) return state.pages.some((p) => p.file && p.file.name === dzBookName(s)) || (!s.catalog && folderPages(folderName(s.title)).length > 0);
+  if (s.audiobook) return state.pages.some((p) => p.audio && p.audio.from === s.id);
   return allFolders().some((n) => { const src = folderSource(folderPages(n)); return src && (s.serial ? sameUrl(src, s.url) : C.discover.storyId(src) === s.id); });
 }
 
@@ -41,7 +43,7 @@ let dzHead = null;
 const dzQ = () => (dzHead ? dzHead.querySelector("input").value.trim() : "");
 const dzMatch = (e, q) => !q || [e.name, e.about || "", dzHost(e.url)].some((t) => t.toLowerCase().includes(q.toLowerCase()));
 function dzSearchHead() {
-  const input = el("input", { type: "search", "aria-label": "Search Discover", autocomplete: "off", autocapitalize: "off", spellcheck: "false", enterkeyhint: "search", dir: "auto" });
+  const input = el("input", { type: "search", "aria-label": t("Search Discover"), autocomplete: "off", autocapitalize: "off", spellcheck: "false", enterkeyhint: "search", dir: "auto" });
   input.addEventListener("input", () => { if (!input.value.trim()) dz.found = null; renderDiscover(); });
   input.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
@@ -57,7 +59,7 @@ function dzSearchHead() {
   });
   const box = el("div", { class: "search dz-search", role: "search" }, input);
   box.insertAdjacentHTML("afterbegin", '<svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path></svg>');
-  return el("div", { class: "dz-head" }, box, el("div", { class: "chips filters feed-chips", role: "group", "aria-label": "Show" }));
+  return el("div", { class: "dz-head" }, box, el("div", { class: "chips filters feed-chips", role: "group", "aria-label": t("Show") }));
 }
 function openDzSearch() {
   window.scrollTo({ top: 0, behavior: M.reduced() ? "auto" : "smooth" });
@@ -76,8 +78,8 @@ function renderDiscover() {
   if (!dzHead) dzHead = dzSearchHead();
   const input = dzHead.querySelector("input");
   const src = dzPick === "stories" ? dzSrc() : null;
-  input.placeholder = dzPick === "feeds" ? "Search feeds" : dzPick === "newsletters" ? "Search newsletters"
-    : dzPick === "stories" ? (src ? "Search " + src.label : "Search web serials") : "Search Discover";
+  input.placeholder = dzPick === "feeds" ? t("Search feeds") : dzPick === "newsletters" ? t("Search newsletters")
+    : dzPick === "stories" ? (src ? t("Search {label}", { label: src.label }) : t("Search web serials")) : t("Search Discover");
   const chip = (key, label) => el("button", { class: "chip" + (dzPick === key ? " on" : ""), type: "button", "aria-pressed": String(dzPick === key),
     "data-key": "chip:" + key, onclick: () => { dzPick = key; dz.found = null; renderDiscover(); } }, el("span", { class: "chip-label" }, label));
   const chips = dzHead.querySelector(".feed-chips");
@@ -93,14 +95,14 @@ function renderDiscover() {
   else if (show("stories")) nodes.push(...dzStories());
   const pick = (kind) => entries.filter((e) => e.kind === kind && dzMatch(e, q));
   if (show("feeds") && pick("feed").length) {
-    nodes.push(sectionHead("Feeds"), el("div", { class: "group feed-group" }, ...pick("feed").map(dzRow)));
+    nodes.push(sectionHead(t("Feeds")), el("div", { class: "group feed-group" }, ...pick("feed").map(dzRow)));
   }
   if (show("newsletters") && pick("newsletter").length) {
-    nodes.push(sectionHead("Newsletters"), el("div", { class: "group feed-group" }, ...pick("newsletter").map(dzRow)));
+    nodes.push(sectionHead(t("Newsletters")), el("div", { class: "group feed-group" }, ...pick("newsletter").map(dzRow)));
   }
-  if (q && dzPick !== "stories" && !nodes.some(Boolean)) nodes.push(el("p", { class: "empty-text dz-none" }, "Nothing here matches that."));
-  if (dzPick !== "stories" || !dzSrc()) nodes.push(el("p", { class: "footnote dz-foot" }, "Picked by hand. ",
-    el("button", { class: "btn-text dz-suggest", type: "button", onclick: () => C.platform.openOutside("https://github.com/danielnoam/waypage/issues/new?title=" + encodeURIComponent("Discover: ")) }, "Suggest one on GitHub")));
+  if (q && dzPick !== "stories" && !nodes.some(Boolean)) nodes.push(el("p", { class: "empty-text dz-none" }, t("Nothing here matches that.")));
+  if (dzPick !== "stories" || !dzSrc()) nodes.push(el("p", { class: "footnote dz-foot" }, t("Picked by hand. "),
+    el("button", { class: "btn-text dz-suggest", type: "button", onclick: () => C.platform.openOutside("https://github.com/danielnoam/waypage/issues/new?title=" + encodeURIComponent("Discover: ")) }, t("Suggest one on GitHub"))));
   if (dzHead.parentNode !== root) root.replaceChildren(dzHead, el("div", { class: "dz-body" }));
   fill(root.querySelector(".dz-body"), ...nodes.filter(Boolean));
   chips.scrollLeft = scrollX;
@@ -110,7 +112,7 @@ function renderDiscover() {
 function dzAsk(src) {
   const q = dzQ();
   return q && !dz.found ? el("button", { class: "btn-quiet dz-ask", type: "button", onclick: () => dzSearch(q, src) },
-    "Search " + src.label + " for “" + q + "”") : null;
+    t("Search {label} for “{q}”", { label: src.label, q: q })) : null;
 }
 
 function dzRow(e) {
@@ -123,8 +125,8 @@ function dzRow(e) {
       el("span", { class: "post-title", dir: "auto" }, e.name),
       e.about ? el("span", { class: "dz-about", dir: "auto" }, e.about) : null,
       el("span", { class: "post-meta" }, dzHost(e.url))),
-    on ? el("span", { class: "post-saved dz-on" }, dzIcon("check"), "Following")
-      : el("button", { class: "post-act post-save", type: "button", "aria-label": (e.kind === "newsletter" ? "Sign up to " : "Follow ") + e.name, onclick: add }, dzIcon("plus")));
+    on ? el("span", { class: "post-saved dz-on" }, dzIcon("check"), t("Following"))
+      : el("button", { class: "post-act post-save", type: "button", "aria-label": e.kind === "newsletter" ? t("Sign up to {name}", { name: e.name }) : t("Follow {name}", { name: e.name }), onclick: add }, dzIcon("plus")));
 }
 
 function dzOpenFollowed(e) {
@@ -154,14 +156,14 @@ function dzIcon(name, size) {
 
 function dzStories() {
   if (!dzCanRead()) {
-    return dzPick === "stories" ? [sectionHead("Royal Road"), el("p", { class: "footnote" }, "Royal Road's lists show in Waypage on your phone. A story's link saved in the Library becomes a collection too.")] : [];
+    return dzPick === "stories" ? [sectionHead(t("Royal Road")), el("p", { class: "footnote" }, t("Royal Road's lists show in Waypage on your phone. A story's link saved in the Library becomes a collection too."))] : [];
   }
   const rr = C.discover.sources.find((x) => x.key === "rr");
   if (dz.found) {
     const f = dz.found;
-    return [sectionHead(f.label + " · " + f.words, el("button", { class: "btn-text", type: "button", onclick: dzClearSearch }, "Clear")),
-      f.busy ? el("p", { class: "footnote dz-src" }, "Searching " + f.label + "…")
-        : f.items.length ? dzCovers(f.items) : el("p", { class: "footnote" + (f.error ? " warn" : "") }, f.error || "No stories with that in their title.")];
+    return [sectionHead(f.label + " · " + f.words, el("button", { class: "btn-text", type: "button", onclick: dzClearSearch }, t("Clear"))),
+      f.busy ? el("p", { class: "footnote dz-src" }, t("Searching {label}…", { label: f.label }))
+        : f.items.length ? dzCovers(f.items) : el("p", { class: "footnote" + (f.error ? " warn" : "") }, f.error || t("No stories with that in their title."))];
   }
   // A few from each site, taken in turn (Daniel: "Sites", then some from
   // different sites); the heading opens Sites to browse them all.
@@ -172,10 +174,10 @@ function dzStories() {
     .map((list) => list.filter((s) => !q || s.title.toLowerCase().includes(q)));
   const items = [];
   for (let i = 0; items.length < 18 && rows.some((r) => r[i]); i++) rows.forEach((r) => { if (r[i] && items.length < 18) items.push(r[i]); });
-  const line = dz.busy ? "Reading the story sites…" : dz.error ? dz.error : navigator.onLine || items.length ? "" : "Story sites show when you're online.";
+  const line = dz.busy ? t("Reading the story sites…") : dz.error ? dz.error : navigator.onLine || items.length ? "" : t("Story sites show when you're online.");
   const head = el("div", { class: "section-head wide" },
     el("h2", { class: "overline" }, el("button", { class: "section-link", type: "button", onclick: () => dzShowSites() },
-      "Sites", el("span", { class: "section-chev", "aria-hidden": "true" }, "›"))));
+      t("Sites"), el("span", { class: "section-chev", "aria-hidden": "true" }, "›"))));
   return [head,
     items.length ? dzCovers(items, false, true) : null,
     dzAsk(rr),
@@ -188,7 +190,7 @@ const DZ_FIRST = ["fp", "wp"];
 // The hand-picked web serials as stories.
 function dzSerials() {
   return C.discover.list().entries.filter((e) => e.kind === "serial")
-    .map((e) => ({ id: "serial:" + e.url, url: e.url, title: e.name, about: e.about, site: "Web serial", serial: true, tags: [], chapters: 0, cover: "" }));
+    .map((e) => ({ id: "serial:" + e.url, url: e.url, title: e.name, about: e.about, site: t("Web serial"), serial: true, tags: [], chapters: 0, cover: "" }));
 }
 
 function dzShowSites() {
@@ -210,7 +212,8 @@ const dzGrid0 = () => {
   const src = dzSrc();
   const pref = load("waypage.discover.pick." + (src ? src.key : dzSource), {});
   const key = src && src.lists.some((l) => l.key === pref.key) ? pref.key : src ? (src.key === "rr" ? dzList : src.lists[0].key) : "";
-  const genre = src && (src.genres.some((x) => x.key === pref.genre) ? pref.genre : src.anyGenre ? "" : src.genres[0].key);
+  const own = src && src.packs && pref.genre === undefined ? (i18n.lang === "he" ? "heb" : "eng") : pref.genre;
+  const genre = src && (src.genres.some((x) => x.key === own) ? own : src.anyGenre ? "" : src.genres[0].key);
   return { source: src ? src.key : dzSource, key, genre: genre || "", page: 0, items: [], busy: false, error: "", done: false };
 };
 dz.grid = dzGrid0();
@@ -220,31 +223,31 @@ function dzGrid() {
   const here = dzSrc();
   // The copy's reach can change after load (the app's plugins arrive).
   if (dz.grid.source !== (here ? here.key : "serials")) dz.grid = dzGrid0();
-  const sources = dropdown({ label: "Site", cls: "field-pick dz-pick", value: here ? here.key : "serials",
-    options: [...dzSources().map((x) => ({ value: x.key, label: x.label })), { value: "serials", label: "Web serials" }],
+  const sources = dropdown({ label: t("Site"), cls: "field-pick dz-pick", value: here ? here.key : "serials",
+    options: [...dzSources().map((x) => ({ value: x.key, label: x.label })), { value: "serials", label: t("Web serials") }],
     onpick: (v) => { dzSource = v; store("waypage.discover.source", v); dz.found = null; dz.grid = dzGrid0(); renderDiscover(); } });
   const src = dzSrc();
   if (!src) {
     const serials = C.discover.list().entries.filter((e) => e.kind === "serial" && dzMatch(e, dzQ()));
     return [el("div", { class: "dz-tools" }, sources),
-      serials.length ? el("div", { class: "group feed-group dz-serials" }, ...serials.map(dzSerialRow)) : el("p", { class: "empty-text dz-none" }, "Nothing here matches that."),
-      el("p", { class: "footnote" }, "Stories posted on their own sites, most on WordPress. A tap saves the whole story as a collection.")];
+      serials.length ? el("div", { class: "group feed-group dz-serials" }, ...serials.map(dzSerialRow)) : el("p", { class: "empty-text dz-none" }, t("Nothing here matches that.")),
+      el("p", { class: "footnote" }, t("Stories posted on their own sites, most on WordPress. A tap saves the whole story as a collection."))];
   }
   if (dz.found) {
     const f = dz.found;
     return [el("div", { class: "dz-tools" }, sources),
-      sectionHead("Results for “" + f.words + "”", el("button", { class: "btn-text", type: "button", onclick: dzClearSearch }, "Clear")),
-      f.busy ? el("p", { class: "footnote dz-src" }, "Searching " + src.label + "…")
-        : f.items.length ? dzCovers(f.items, true) : el("p", { class: "footnote" + (f.error ? " warn" : "") }, f.error || "No stories with that in their title.")];
+      sectionHead(t("Results for “{words}”", { words: f.words }), el("button", { class: "btn-text", type: "button", onclick: dzClearSearch }, t("Clear"))),
+      f.busy ? el("p", { class: "footnote dz-src" }, t("Searching {label}…", { label: src.label }))
+        : f.items.length ? (src.packs ? dzPacks(f.items) : dzCovers(f.items, true)) : el("p", { class: "footnote" + (f.error ? " warn" : "") }, f.error || (src.packs ? t("No packs with that in their name.") : t("No stories with that in their title.")))];
   }
   const g = dz.grid;
-  const phoneOnly = dzCanRead() ? null : el("p", { class: "footnote" }, "The story sites (Royal Road, AO3 and the rest) show in Waypage on your phone.");
+  const phoneOnly = dzCanRead() ? null : el("p", { class: "footnote" }, t("The story sites (Royal Road, AO3 and the rest) show in Waypage on your phone."));
   if (src.searchOnly) {
     if (src.browse) src.browse(g.key, "", 0);
-    const lists = dropdown({ label: src.label + " list", cls: "field-pick dz-pick", value: g.key,
+    const lists = dropdown({ label: t("{label} list", { label: src.label }), cls: "field-pick dz-pick", value: g.key,
       options: src.lists.map((l) => ({ value: l.key, label: l.label })), onpick: (v) => { store("waypage.discover.pick." + src.key, { key: v }); dz.grid = { ...dzGrid0(), key: v }; renderDiscover(); } });
     return [el("div", { class: "dz-tools" }, sources, lists), dzAsk(src),
-      el("p", { class: "footnote dz-src" }, src.label + " shows its lists only in its own app. Search it with the field above.")];
+      el("p", { class: "footnote dz-src" }, t("{label} shows its lists only in its own app. Search it with the field above.", { label: src.label }))];
   }
   if (!g.page && !g.busy && !g.error) {
     // Royal Road's first page of a list is the one the row keeps.
@@ -259,21 +262,22 @@ function dzGrid() {
     dz.grid = { ...dzGrid0(), ...pick };
     renderDiscover();
   };
-  const lists = dropdown({ label: src.label + " list", cls: "field-pick dz-pick", value: g.key,
+  const lists = dropdown({ label: t("{label} list", { label: src.label }), cls: "field-pick dz-pick", value: g.key,
     options: src.lists.map((l) => ({ value: l.key, label: l.label })), onpick: (v) => keep({ key: v }) });
-  const genres = src.genres.length ? dropdown({ label: src.genreLabel || "Genre", cls: "field-pick dz-pick", value: g.genre,
-    options: [...(src.anyGenre ? [{ value: "", label: src.genreLabel ? "Every " + src.genreLabel.toLowerCase() : "Every genre" }] : []), ...src.genres.map((x) => ({ value: x.key, label: x.label }))],
+  const genres = src.genres.length ? dropdown({ label: { Tag: t("Tag"), Subject: t("Subject"), Fandom: t("Fandom"), Language: t("Language") }[src.genreLabel] || t("Genre"), cls: "field-pick dz-pick", value: g.genre,
+    options: [...(src.anyGenre ? [{ value: "", label: ({ Tag: t("Every tag"), Subject: t("Every subject"), Fandom: t("Every fandom"), Language: t("Every language") }[src.genreLabel] || t("Every genre")) }] : []), ...src.genres.map((x) => ({ value: x.key, label: x.label }))],
     onpick: (v) => keep({ genre: v }) }) : null;
-  const line = g.busy ? (g.page ? "Reading more…" : "Reading " + src.label + "…") : g.error;
+  const line = g.busy ? (g.page ? t("Reading more…") : t("Reading {site}…", { site: src.label })) : g.error;
   const q = dzQ().toLowerCase();
   const shown = g.items.filter((s) => !q || s.title.toLowerCase().includes(q));
   return [
     el("div", { class: "dz-tools" }, sources, src.lists.length > 1 ? lists : null, genres),
     dzAsk(src),
-    shown.length ? dzCovers(shown, true) : null,
+    shown.length ? (src.packs ? dzPacks(shown) : dzCovers(shown, true)) : null,
+    src.packs && !g.busy && !g.error ? el("p", { class: "footnote" }, t("A pack is a whole site in one file, to read with no connection. It's read from where you save it, in Files.")) : null,
     line ? el("p", { class: "footnote dz-src" + (g.error && !g.busy ? " warn" : "") }, line) : null,
-    g.items.length && !g.done && !g.busy ? el("button", { class: "btn-quiet dz-more", type: "button", onclick: () => dzMore() }, src.books ? "More books" : src.texts ? "More texts" : "More stories") : null,
-    g.done && g.items.length ? el("p", { class: "footnote dz-src" }, "That's all of them.") : null,
+    g.items.length && !g.done && !g.busy ? el("button", { class: "btn-quiet dz-more", type: "button", onclick: () => dzMore() }, src.books ? t("More books") : src.audiobooks ? t("More audiobooks") : src.texts ? t("More texts") : src.packs ? t("More packs") : t("More stories")) : null,
+    g.done && g.items.length ? el("p", { class: "footnote dz-src" }, t("That's all of them.")) : null,
     phoneOnly,
   ];
 }
@@ -288,27 +292,29 @@ function dzSerialRow(e) {
       el("span", { class: "post-title", dir: "auto" }, e.name),
       e.about ? el("span", { class: "dz-about", dir: "auto" }, e.about) : null,
       el("span", { class: "post-meta" }, dzHost(e.url))),
-    on ? el("span", { class: "post-saved dz-on" }, dzIcon("check"), "Saved")
-      : el("button", { class: "post-act post-save", type: "button", "aria-label": "Save " + e.name, onclick: () => dzSaveStory({ url: e.url, title: e.name, serial: true }) }, dzIcon("plus")));
+    on ? el("span", { class: "post-saved dz-on" }, dzIcon("check"), t("Saved"))
+      : el("button", { class: "post-act post-save", type: "button", "aria-label": t("Save {name}", { name: e.name }), onclick: () => dzSaveStory({ url: e.url, title: e.name, serial: true }) }, dzIcon("plus")));
 }
 
 // A story to the library: its chapter list, to check and save as a
 // collection, which then follows its new chapters.
 async function dzSaveStory(s) {
-  if (!navigator.onLine) { toast("You're offline. Save it when you're back online."); return; }
-  toast("Finding its chapters…");
+  if (!navigator.onLine) { toast(t("You're offline. Save it when you're back online.")); return; }
+  toast(t("Finding its chapters…"));
   try {
     const found = s.serial ? await C.discover.serialChapters(s.url) : await C.save.findChapters(s.url);
     if (!found.links.length) { savePage(s.url); return; }
-    openBatch(found.links.join("\n"), false, folderName(found.title || s.title), s.url);
-  } catch (e) { toast(e instanceof C.save.SaveError ? e.message : "Couldn't read its chapters. Try again."); }
+    // The story page's own tags; Discover's list row, when it gave none.
+    const siteTags = found.siteTags || (s.tags && s.tags.length ? { site: s.serial ? dzHost(s.url) : s.site || "Royal Road", tags: s.tags } : null);
+    openBatch(found.links.join("\n"), false, folderName(found.title || s.title), s.url, siteTags);
+  } catch (e) { toast(e instanceof C.save.SaveError ? e.message : t("Couldn't read its chapters. Try again.")); }
 }
 
 // The next page of the grid's list, added under what's there.
 async function dzMore() {
   const g = dz.grid;
   if (g.busy || g.done) return;
-  if (!navigator.onLine) { g.error = "Story sites show when you're online."; renderDiscover(); return; }
+  if (!navigator.onLine) { g.error = t("Story sites show when you're online."); renderDiscover(); return; }
   g.busy = true;
   g.error = "";
   renderDiscover();
@@ -324,7 +330,7 @@ async function dzMore() {
   } catch (e) {
     if (dz.grid !== g) return;
     if (g.page && /^no stories/.test((e && e.message) || "")) g.done = true;
-    else g.error = "Couldn't read it just now. Pull down to try again. (" + dzWhy(e) + ")";
+    else g.error = t("Couldn't read it just now. Pull down to try again. ({why})", { why: dzWhy(e) });
   }
   g.busy = false;
   if (state.place === "discover") renderDiscover();
@@ -340,12 +346,37 @@ function dzCovers(items, grid, sites) {
       img.addEventListener("error", () => dzCoverAgain(img, s));
       art.prepend(img);
     }
-    const meta = [sites ? s.site || "Royal Road" : s.book ? s.by : s.tags[0], s.chapters ? s.chapters + " ch." : ""].filter(Boolean).join(" · ");
+    const meta = [sites ? s.site || "Royal Road" : s.book || s.audiobook ? s.by : s.tags[0], s.chapters ? s.chapters + " ch." : ""].filter(Boolean).join(" · ");
     return el("button", { class: "dz-book", type: "button", role: "listitem", "data-key": "rr:" + s.id,
-      "aria-label": s.title + (saved ? ", in your library" : ""), onclick: () => openMenu("story", s) },
+      "aria-label": saved ? t("{title}, in your library", { title: s.title }) : s.title, onclick: () => openMenu("story", s) },
       el("span", { class: "dz-art" }, art, el("span", { class: "dz-mark" + (saved ? " on" : "") }, dzIcon(saved ? "check" : "plus", 16))),
       el("span", { class: "dz-bt", dir: "auto" }, s.title),
       meta ? el("span", { class: "dz-bm" }, meta) : null);
+  }));
+}
+
+// Kiwix packs as rows: the pack's picture, name, what it is, its
+// language and size; + asks where to download it (the + sheet).
+function dzPacks(items) {
+  return el("div", { class: "group feed-group dz-packs" }, ...items.map((s) => {
+    const here = packHere(s), coming = packsComing.has(s.file);
+    const add = () => (here ? openPage(here.id) : openMenu("addBook", s));
+    const mark = el("span", { class: "site-mark feed-mark dz-pack-mark", "aria-hidden": "true" });
+    if (s.cover) {
+      const img = el("img", { src: s.cover, alt: "", loading: "lazy", referrerpolicy: "no-referrer", width: "48", height: "48" });
+      img.addEventListener("error", () => img.remove());
+      mark.append(img);
+    } else mark.textContent = (s.title || "?").slice(0, 1);
+    return el("div", { class: "post dz-row", "data-key": s.id },
+      el("button", { class: "post-open", type: "button", "aria-label": s.title + (here ? ", " + t("in your library") : ""), onclick: add }),
+      mark,
+      el("span", { class: "post-body" },
+        el("span", { class: "post-title", dir: "auto" }, s.title),
+        s.about ? el("span", { class: "dz-about", dir: "auto" }, s.about) : null,
+        el("span", { class: "post-meta" }, [s.by, s.flavour === "maxi" ? t("with pictures") : s.flavour === "nopic" ? t("no pictures") : s.flavour === "mini" ? t("introductions only") : "", s.size ? C.discover.kxSize(s.size) : ""].filter(Boolean).join(" · "))),
+      here ? el("span", { class: "post-saved dz-on" }, dzIcon("check"), t("Saved"))
+        : coming ? el("span", { class: "post-saved" }, t("Downloading"))
+          : el("button", { class: "post-act post-save", type: "button", "aria-label": t("Download {name}", { name: s.title }), onclick: add }, dzIcon("plus")));
   }));
 }
 
@@ -356,8 +387,9 @@ async function dzCoverAgain(img, s) {
   if (img.dataset.again || !C.platform.downloadTo || !s.cover) { img.remove(); return; }
   img.dataset.again = "1";
   try {
-    const name = "discover-covers/" + String(s.id || "").replace(/[^a-z0-9_-]/gi, "_") + ".jpg";
-    const src = await C.platform.downloadTo(s.cover, name, s.url, "CACHE");
+    const name = "discover-covers/" + String(s.id || "").replace(/[^a-z0-9_-]/gi, "_").slice(-80) + ".jpg";
+    // A catalog's covers may want its login, or be plain http (blocked in the app's page).
+    const src = await C.platform.downloadTo(s.cover, name, s.url, "CACHE", s.catalog ? C.opds.login(s.catalog, s.cover) : undefined);
     if (src) img.src = src; else img.remove();
   } catch (e) { img.remove(); }
 }
@@ -376,7 +408,7 @@ async function dzReadRR(force) {
   let rrErr = null;
   try { await C.discover.rrRead(def.key, force); } catch (e) { rrErr = e; }
   for (const k of DZ_FIRST) { try { await C.discover.firstRead(k, force); } catch (e) { /* the row shows the others */ } }
-  if (rrErr) dz.error = (had ? "Couldn't reach Royal Road. This is the list from " + whenText(had.at) + "." : "Couldn't read Royal Road's list just now. Pull down to try again.") + " (" + dzWhy(rrErr) + ")";
+  if (rrErr) dz.error = (had ? t("Couldn't reach Royal Road. This is the list from {when}.", { when: whenText(had.at) }) : t("Couldn't read Royal Road's list just now. Pull down to try again.")) + " (" + dzWhy(rrErr) + ")";
   dz.busy = false;
   if (state.place === "discover") renderDiscover();
 }
@@ -384,19 +416,19 @@ async function dzReadRR(force) {
 // Why Royal Road failed, in a few words, so a phone report says it.
 function dzWhy(e) {
   const m = String((e && e.message) || e || "");
-  if (/^HTTP (403|418|503)/.test(m)) return m + ": the site turned the app away";
+  if (/^HTTP (403|418|503)/.test(m)) return t("{m}: the site turned the app away", { m });
   if (/^HTTP /.test(m)) return m;
-  if (/no stories/.test(m)) return "the page came back, but no stories were found in it " + (m.match(/\(.*\)/) || [""])[0];
+  if (/no stories/.test(m)) return t("the page came back, but no stories were found in it") + " " + (m.match(/\(.*\)/) || [""])[0];
   return m.slice(0, 80) || "no answer";
 }
 
 async function dzSearch(words, src) {
-  if (!src || !dzCanRead()) return;
-  if (!navigator.onLine) { toast("You're offline. Search when you're back online."); return; }
+  if (!src || !(dzCanRead() || (src.web && C.platform.canReadPages))) return;
+  if (!navigator.onLine) { toast(t("You're offline. Search when you're back online.")); return; }
   const f = dz.found = { words, label: src.label, items: [], error: "", busy: true };
   renderDiscover();
   try { f.items = await src.search(words); }
-  catch (e) { f.error = "Couldn't reach " + src.label + ". Try again in a while. (" + dzWhy(e) + ")"; }
+  catch (e) { f.error = t("Couldn't reach {site}. Try again in a while. ({why})", { site: src.label, why: dzWhy(e) }); }
   f.busy = false;
   if (dz.found === f && state.place === "discover") renderDiscover();
 }
@@ -418,6 +450,7 @@ function openDiscover() {
 
 function storySheet() {
   const s = state.menu.page;
+  if (s.audiobook) return dzAudioSheet(s);
   const saved = dzSavedStory(s);
   const cover = el("span", { class: "dz-cover dz-sheet-cover", "aria-hidden": "true" }, el("span", { class: "dz-cover-t", dir: "auto" }, s.title));
   if (s.cover) {
@@ -426,14 +459,15 @@ function storySheet() {
     img.addEventListener("error", () => dzCoverAgain(img, s));
     cover.prepend(img);
   }
-  const parts = C.discover.sources.some((x) => x.comics && x.label === s.site) ? ["episode", "episodes"] : ["chapter", "chapters"];
-  const facts = [s.chapters ? s.chapters + " " + parts[s.chapters === 1 ? 0 : 1] : "", s.followers ? s.followers.toLocaleString() + " following" : "", s.stat || ""].filter(Boolean).join(" · ");
+  const comics = C.discover.sources.some((x) => x.comics && x.label === s.site);
+  const facts = [s.chapters ? (comics ? tn(s.chapters, "1 episode", "{n} episodes") : tn(s.chapters, "1 chapter", "{n} chapters")) : "", s.followers ? tn(s.followers, "1 following", "{n} following") : "", s.stat || ""].filter(Boolean).join(" · ");
   const rated = [s.rating ? "★ " + s.rating.toFixed(1) : "", s.tags.join(", ")].filter(Boolean).join(" · ");
   const site = s.serial ? dzHost(s.url) : s.site || "Royal Road";
+  const kind = (s.kind || "epub").toUpperCase();
   const save = s.book
-    ? el("button", { class: "btn-primary", type: "button", ...(saved ? { disabled: "" } : {}), onclick: async () => { await back(); dzSaveBook(s); } }, saved ? "In your library" : "Add the book")
+    ? el("button", { class: "btn-primary", type: "button", ...(saved ? { disabled: "" } : {}), onclick: async () => { await back(); if (s.catalog) dzSaveBook(s); else openMenu("addBook", s); } }, saved ? t("In your library") : t("Add the book"))
     : el("button", { class: "btn-primary", type: "button", onclick: async () => { await back(); dzSaveStory(s); } },
-      saved ? "Save it again" : s.texts ? "Save it" : "Save as a collection");
+      saved ? t("Save it again") : s.texts ? t("Save it") : t("Save as a collection"));
   return el("div", { class: "page-controls dz-story" },
     el("div", { class: "dz-sheethead" }, cover,
       el("div", { class: "dz-sheet-text" },
@@ -442,12 +476,70 @@ function storySheet() {
         facts ? el("p", { class: "meta" }, facts) : null,
         rated ? el("p", { class: "meta" }, rated) : null)),
     s.about ? el("p", { class: "dz-blurb", dir: "auto" }, s.about) : null,
-    saved ? el("p", { class: "footnote dz-ok" }, "It's in your library already.") : null,
+    saved ? el("p", { class: "footnote dz-ok" }, t("It's in your library already.")) : null,
     save,
-    el("p", { class: "footnote" }, s.book ? "Its EPUB downloads and joins your Library, to read offline. It's in the public domain."
-      : s.texts ? "A text in parts saves as a collection, its parts checked first; a short one saves as one clip."
-        : "Its chapter list opens to check, then every chapter saves for reading offline. New chapters join the collection when they're out."),
-    el("button", { class: "btn-quiet", type: "button", onclick: () => C.platform.openOutside(s.url) }, dzIcon("out", 16), "Open on " + site));
+    el("p", { class: "footnote" }, s.catalog ? t("Its {kind} downloads and joins your Library, to read offline.", { kind })
+      : s.book ? t("Its EPUB downloads and joins your Library, to read offline. It's in the public domain.")
+      : s.texts ? t("A text in parts saves as a collection, its parts checked first; a short one saves as one clip.")
+        : t("Its chapter list opens to check, then every chapter saves for reading offline. New chapters join the collection when they're out.")),
+    s.catalog && s.url === s.epub ? null : el("button", { class: "btn-quiet", type: "button", onclick: () => C.platform.openOutside(s.url) }, dzIcon("out", 16), t("Open on {site}", { site: site })));
+}
+
+// A LibriVox recording: + downloads its parts into the app as one
+// audiobook (app-listen.js), with its book from Project Gutenberg to read
+// along with when there is one. Its parts and book are asked for as the
+// sheet opens, when the list didn't give them.
+function dzAudioSheet(s) {
+  const saved = dzSavedStory(s);
+  const can = canGetAudiobooks();
+  const cover = el("span", { class: "dz-cover dz-sheet-cover", "aria-hidden": "true" }, el("span", { class: "dz-cover-t", dir: "auto" }, s.title));
+  if (s.cover) {
+    const img = el("img", { src: s.cover, alt: "", referrerpolicy: "no-referrer" });
+    img.addEventListener("load", () => cover.classList.add("has-img"));
+    img.addEventListener("error", () => img.remove());
+    cover.prepend(img);
+  }
+  const facts = el("p", { class: "meta" });
+  const blurb = el("p", { class: "dz-blurb", dir: "auto" });
+  const along = el("div");
+  // Where the parts go, as for any download; a long book (64 kbps: about
+  // 29 MB an hour) can wait for Wi-Fi.
+  let where = dzWhere(), wifi = null;
+  const size = () => Math.round((s.secs || 0) * 8000);
+  const paint = () => {
+    const n = s.parts ? s.parts.length : 0;
+    facts.textContent = [s.secs ? C.listen.lengthText(s.secs) : "", n ? tn(n, "1 part", "{n} parts") : "", size() ? formatSize(size()) : "", s.stat && !/parts$/.test(s.stat) && !s.secs ? s.stat : ""].filter(Boolean).join(" · ");
+    blurb.textContent = s.about || "";
+    blurb.hidden = !s.about;
+    const pg = C.discover.pgNumber(s.text);
+    if (wifi == null && size()) wifi = size() > 200e6;
+    fill(along, ...(can && !saved ? [el("div", { class: "group" }, dzWhereRow(() => where, (v) => { where = v; }),
+      size() > 50e6 ? switchRow(t("Wait for Wi-Fi"), t("Starts on Wi-Fi, not on mobile data"), !!wifi, (on) => { wifi = on; }) : null,
+      pg ? switchRow(t("Read along with the book"), t("Its text from Project Gutenberg downloads too"),
+        load("waypage.discover.lvBook", true) !== false, (on) => store("waypage.discover.lvBook", on)) : null)] : []));
+  };
+  paint();
+  if (!s.parts && !s.asked && navigator.onLine && C.platform.canReadPages) {
+    s.asked = true;
+    C.discover.lvDetails(s).then((d) => { Object.assign(s, d, { id: s.id }); if (facts.isConnected) paint(); }).catch(() => {});
+  }
+  const add = can
+    ? el("button", { class: "btn-primary", type: "button", ...(saved ? { disabled: "" } : {}), onclick: async () => { await back(); getAudiobook(s, { where, wifi: !!wifi, book: !!C.discover.pgNumber(s.text) && load("waypage.discover.lvBook", true) !== false }); } },
+      saved ? t("In your library") : t("Add the audiobook"))
+    : s.zip ? el("button", { class: "btn-primary", type: "button", onclick: () => C.platform.openOutside(s.zip) }, t("Download the zip")) : null;
+  return el("div", { class: "page-controls dz-story" },
+    el("div", { class: "dz-sheethead" }, cover,
+      el("div", { class: "dz-sheet-text" },
+        el("h2", { class: "menu-title dz-sheet-title", dir: "auto" }, s.title),
+        el("p", { class: "meta" }, "LibriVox" + (s.by ? " · " + s.by : "")),
+        facts)),
+    blurb,
+    saved ? el("p", { class: "footnote dz-ok" }, t("It's in your library already.")) : null,
+    along,
+    add,
+    el("p", { class: "footnote" }, can ? t("Its parts download where you pick, in a folder of its own, and join Files as one audiobook, to listen offline. It's in the public domain.")
+      : t("Audiobooks download into Waypage on Android. Here you can take the whole book as a zip of MP3s.")),
+    el("button", { class: "btn-quiet", type: "button", onclick: () => C.platform.openOutside(s.url) }, dzIcon("out", 16), t("Open on {site}", { site: s.lv ? "LibriVox" : "archive.org" })));
 }
 
 function signupSheet() {
@@ -461,9 +553,9 @@ function signupSheet() {
   const paint = () => {
     fill(chips, ...boxes.map((f) => el("button", { class: "chip" + (picked === f ? " on" : ""), type: "button", "aria-pressed": String(picked === f),
       onclick: () => { picked = f; paint(); } }, el("span", { class: "chip-label", dir: "auto" }, f.title))),
-      el("button", { class: "chip" + (!picked ? " on" : ""), type: "button", "aria-pressed": String(!picked), onclick: () => { picked = null; paint(); } }, "New address"));
-    addr.textContent = picked ? mailAddress(picked) : "A new address named " + e.name + ", made when you sign up.";
-    go.textContent = picked ? "Copy address and sign up" : "Make it, copy it and sign up";
+      el("button", { class: "chip" + (!picked ? " on" : ""), type: "button", "aria-pressed": String(!picked), onclick: () => { picked = null; paint(); } }, t("New address")));
+    addr.textContent = picked ? mailAddress(picked) : t("A new address named {name}, made when you sign up.", { name: e.name });
+    go.textContent = picked ? t("Copy address and sign up") : t("Make it, copy it and sign up");
   };
   paint();
   go.addEventListener("click", async () => {
@@ -477,22 +569,22 @@ function signupSheet() {
     }
     try { await navigator.clipboard.writeText(mailAddress(box)); } catch (err) { /* shown below */ }
     C.platform.openOutside(e.signup || e.url);
-    toast("Address copied. Paste it on their sign-up page, then tap Confirm in Newsletters when their mail comes.");
+    toast(t("Address copied. Paste it on their sign-up page, then tap Confirm in Newsletters when their mail comes."));
   });
   return el("div", { class: "page-controls dz-signup" },
     el("div", { class: "dz-sheethead" }, feedMark({ url: e.url, link: e.url, title: e.name }),
       el("div", { class: "dz-sheet-text" },
         el("h2", { class: "menu-title dz-sheet-title", dir: "auto" }, e.name),
-        el("p", { class: "meta" }, "Comes by email only"))),
-    el("p", { class: "dz-blurb" }, "It goes to one of your Newsletters addresses. Sign up with the address on their page, then tap Confirm in Newsletters when their first mail comes."),
+        el("p", { class: "meta" }, t("Comes by email only")))),
+    el("p", { class: "dz-blurb" }, t("It goes to one of your Newsletters addresses. Sign up with the address on their page, then tap Confirm in Newsletters when their first mail comes.")),
     chips, addr, go);
 }
 
 function dzViewSheet() {
   return el("div", { class: "page-controls dz-view" },
-    el("h2", { class: "menu-title" }, "View options"),
+    el("h2", { class: "menu-title" }, t("View options")),
     el("div", { class: "group" },
-      switchRow("Wikipedia today", "The featured article and the most read, at the top of All", dzWikiOn, (on) => {
+      switchRow(t("Wikipedia today"), t("The featured article and the most read, at the top of All"), dzWikiOn, (on) => {
         dzWikiOn = on;
         store("waypage.discover.showWiki", on);
         renderDiscover();
@@ -501,21 +593,73 @@ function dzViewSheet() {
 }
 $("viewBtn").addEventListener("click", () => openMenu(state.place === "discover" ? "discoverView" : "libView"));
 
-MENUS.discoverView = { label: "View options", build: () => dzViewSheet() };
-MENUS.libView = { label: "View options", build: () => libViewSheet() };
-MENUS.story = { label: "Story", build: () => storySheet() };
-MENUS.signup = { label: "Sign up", build: () => signupSheet() };
+MENUS.discoverView = { label: t("View options"), build: () => dzViewSheet() };
+MENUS.libView = { label: t("View options"), build: () => libViewSheet() };
+MENUS.story = { label: t("Story"), build: () => storySheet() };
+MENUS.signup = { label: t("Sign up"), build: () => signupSheet() };
 
 // ---- Books ----
 
 // A book's EPUB, named by its title and author, as the Library shows it.
 function dzBookName(s) {
-  return ((s.title || "Book") + (s.by ? " - " + s.by : "")).replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 100) + ".epub";
+  return ((s.title || t("Book")) + (s.by ? " - " + s.by : "")).replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 100) + "." + (s.kind || "epub");
 }
+// Where a downloaded file goes (2026-11, Daniel: "+ should always just ask"):
+// a book as an EPUB file read from where it's saved, or as a collection
+// of clips; a Kiwix pack always as a file. The place is remembered.
+const DZ_WHERE_KEY = "waypage.discover.saveIn";
+const DZ_AS_KEY = "waypage.discover.bookAs";
+const dzWhere = () => load(DZ_WHERE_KEY, "app");
+// The Save in row, shared by every + that downloads a file.
+function dzWhereRow(get, set) {
+  return pickRow({ label: t("Save in"), options: [
+    { value: "app", label: t("Inside Waypage"), note: t("Private to the app. Goes when Waypage is uninstalled.") },
+    { value: "downloads", label: t("Downloads"), note: t("The phone's Downloads folder. Stays after an uninstall.") },
+    { value: "documents", label: t("Documents"), note: t("Documents/Waypage, seen in the Files app. Stays after an uninstall.") },
+    { value: "folder", label: t("A folder you pick"), note: t("Anywhere on the phone, a memory card too. Asked each time.") },
+  ], get, set: (v) => { store(DZ_WHERE_KEY, v); set(v); } });
+}
+function dzAddSheet() {
+  const s = state.menu.page;
+  const pack = !!s.zim;
+  let as = pack ? "file" : load(DZ_AS_KEY, "file"), where = dzWhere();
+  const big = s.size || 0;
+  let wifi = big > 200e6;
+  const whereRow = dzWhereRow(() => where, (v) => { where = v; });
+  const note = el("p", { class: "footnote dz-add-note" });
+  const paint = () => {
+    whereRow.hidden = as !== "file" || !C.platform.native;
+    note.textContent = pack ? t("Read from where it's saved, in Files. Never synced or backed up.")
+      : as === "file" ? t("In Files, read from where it's saved. Doesn't sync.")
+        : t("A collection with a clip for each chapter. Syncs like any clip.");
+  };
+  const asRow = pack ? null : pickRow({ label: t("Add as"),
+    options: [{ value: "file", label: t("EPUB file") }, { value: "clips", label: t("Clips") }],
+    get: () => as, set: (v) => { as = v; store(DZ_AS_KEY, v); paint(); } });
+  paint();
+  // The book's own tags from its site (Gutenberg's bookshelves, a
+  // catalog's subjects): a remembered switch, as in Save with options.
+  const siteTags = !pack && s.site && s.tags && s.tags.length ? { site: s.site, tags: s.tags } : null;
+  let useTags = load(SITE_TAGS_KEY, false);
+  const tagsRow = siteTags ? switchRow(t("{site}'s tags", { site: siteTags.site }), siteTags.tags.join(", "), useTags, (v) => { useTags = v; store(SITE_TAGS_KEY, v); }) : null;
+  const facts = [s.site || (pack ? "Kiwix" : ""), s.by, big ? formatSize(big) : ""].filter(Boolean).join(" · ");
+  return el("div", { class: "page-controls dz-add" },
+    el("div", { class: "menu-head" },
+      el("p", { class: "menu-title", dir: "auto" }, s.title),
+      facts ? el("p", { class: "meta" }, facts) : null),
+    el("div", { class: "group" }, asRow, whereRow, tagsRow,
+      pack && big > 50e6 ? switchRow(t("Wait for Wi-Fi"), t("Starts on Wi-Fi, not on mobile data"), wifi, (on) => { wifi = on; }) : null),
+    note,
+    el("button", { class: "btn-primary", type: "button", onclick: async () => { await back(); dzAddGo(s, { as, where, wifi, siteTags, tags: siteTags && useTags ? siteTags.tags : [] }); } },
+      pack ? t("Download") : t("Add the book")));
+}
+MENUS.addBook = { label: t("Add"), build: () => dzAddSheet() };
+
 // Downloads the book's EPUB and adds it like a file brought in.
 function dzSaveBook(s) {
-  if (dzSavedStory(s)) { toast("It's in your library already."); return; }
-  saveFileLink(s.epub, dzBookName(s), s.url);
+  if (dzSavedStory(s)) { toast(t("It's in your library already.")); return; }
+  saveFileLink(s.epub, dzBookName(s), s.url, s.catalog ? (u, n) => C.opds.bytes(s.catalog, u, n) : undefined,
+    s.site && s.tags && s.tags.length ? { siteTags: { site: s.site, tags: s.tags } } : undefined);
 }
 
 // ---- Wikipedia today ----
@@ -524,8 +668,8 @@ let dzWikiBusy = false;
 function dzWiki() {
   const w = C.discover.wikiSaved();
   if (!w || (!w.featured && !w.most.length)) return [];
-  const rows = [w.featured ? { ...w.featured, what: "Featured article" } : null, ...w.most.map((a) => ({ ...a, what: "Most read" }))].filter(Boolean);
-  return [sectionHead("Wikipedia today"), el("div", { class: "group feed-group dz-wiki" }, ...rows.map(dzWikiRow))];
+  const rows = [w.featured ? { ...w.featured, what: t("Featured article") } : null, ...w.most.map((a) => ({ ...a, what: t("Most read") }))].filter(Boolean);
+  return [sectionHead(t("Wikipedia today")), el("div", { class: "group feed-group dz-wiki" }, ...rows.map(dzWikiRow))];
 }
 function dzWikiRow(a) {
   const had = savedAs(a.url);
@@ -537,8 +681,8 @@ function dzWikiRow(a) {
       el("span", { class: "post-title", dir: "auto" }, a.title),
       a.about ? el("span", { class: "dz-about", dir: "auto" }, a.about) : null,
       el("span", { class: "post-meta" }, a.what)),
-    had ? el("span", { class: "post-saved dz-on" }, dzIcon("check"), "Saved")
-      : el("button", { class: "post-act post-save", type: "button", "aria-label": "Save " + a.title, onclick: () => savePage(a.url) }, dzIcon("plus")));
+    had ? el("span", { class: "post-saved dz-on" }, dzIcon("check"), t("Saved"))
+      : el("button", { class: "post-act post-save", type: "button", "aria-label": t("Save {title}", { title: a.title }), onclick: () => savePage(a.url) }, dzIcon("plus")));
 }
 async function dzReadWiki() {
   if (!dzWikiOn || dzWikiBusy || !navigator.onLine || !C.platform.canReadPages) return;

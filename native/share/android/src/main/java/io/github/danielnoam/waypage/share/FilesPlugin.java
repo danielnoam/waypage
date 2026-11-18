@@ -58,7 +58,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *                                   /_waypage_folder_/<path>; tree null stops
  *   folderWrite({ tree, path, data, encoding })   utf8, or base64 bytes
  *   folderRead({ tree, path })      { data } as utf8
- *   folderStat({ tree, path })      { exists, size }
+ *   folderStat({ tree, path })      { exists, size, uri }, uri for info/read
  *   folderList({ tree, path })      { files: [{ name, type, size }] }
  *   folderDelete({ tree, path })    a file, or a folder and all in it
  *   folderMoveIn({ tree, path, from })  a file:// in the app moved in
@@ -74,6 +74,9 @@ import java.util.concurrent.ConcurrentHashMap;
  *                           file in it and its folders; ok false when the
  *                           folder itself can't be read (gone, or the
  *                           permission was taken back)
+ *
+ *   davList({ url, auth, depth })   a WebDAV folder's PROPFIND (Dav.java):
+ *                           { status, url, text }; rejects when it can't reach it
  *
  *   reveal({ uri, tree })   opens the folder a file sits in, in the phone's
  *                           Files app (1.27.2); tree is its watched folder.
@@ -269,6 +272,7 @@ public class FilesPlugin extends Plugin {
         Uri doc = find(tree, path, false);
         out.put("exists", doc != null);
         out.put("size", doc == null ? 0 : sizeOf(doc));
+        if (doc != null) out.put("uri", doc.toString());
         call.resolve(out);
     }
 
@@ -612,6 +616,17 @@ public class FilesPlugin extends Plugin {
         if (uri == null) return;
         new Thread(() -> {
             JSObject out = describe(uri);
+            // A file the app kept itself (keepFile, 1.65.0) is a file://
+            // address: no provider answers for it, so its size comes from
+            // the file. Counting it below hung: FileInputStream.skip goes
+            // past the end and says it did (1.65.1).
+            if ("file".equals(uri.getScheme()) && uri.getPath() != null) {
+                File f = new File(uri.getPath());
+                out.put("ok", f.isFile() && f.canRead());
+                out.put("size", f.length());
+                call.resolve(out);
+                return;
+            }
             try (InputStream in = getContext().getContentResolver().openInputStream(uri)) {
                 out.put("ok", in != null);
                 // Some providers (cloud drives, some file managers) don't
@@ -620,8 +635,10 @@ public class FilesPlugin extends Plugin {
                 if (in != null && out.optLong("size", 0) <= 0) {
                     long n = 0;
                     byte[] buf = new byte[1 << 16];
+                    // Skipped only while a stream says how much is left; reading
+                    // is the only count that can't run past the end.
                     for (;;) {
-                        long went = in.skip(1L << 30);
+                        long went = in.available() > 0 ? in.skip(Math.min(in.available(), 1L << 30)) : 0;
                         if (went > 0) { n += went; continue; }
                         int got = in.read(buf);
                         if (got < 0) break;
@@ -675,6 +692,26 @@ public class FilesPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void davList(PluginCall call) {
+        String url = call.getString("url");
+        if (url == null || !url.matches("(?i)^https?://.+")) { call.reject("Not a web address"); return; }
+        String auth = call.getString("auth", "");
+        String depth = call.getString("depth", "1");
+        new Thread(() -> {
+            try {
+                Dav.Result r = Dav.propfind(url, auth, depth);
+                JSObject out = new JSObject();
+                out.put("status", r.status);
+                out.put("url", r.url);
+                out.put("text", r.text);
+                call.resolve(out);
+            } catch (Exception e) {
+                call.reject("Couldn't reach it", e);
+            }
+        }).start();
+    }
+
+    @PluginMethod
     public void release(PluginCall call) {
         Uri uri = address(call);
         if (uri == null) return;
@@ -712,6 +749,7 @@ public class FilesPlugin extends Plugin {
             name = null;
         }
         if (name == null || name.trim().isEmpty()) name = uri.getLastPathSegment();
+        if (size <= 0 && "file".equals(uri.getScheme()) && uri.getPath() != null) size = new File(uri.getPath()).length();
         out.put("name", name == null ? "file" : name);
         out.put("size", size);
         return out;

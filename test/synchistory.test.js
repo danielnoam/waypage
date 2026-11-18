@@ -2,9 +2,11 @@
 // The list GitHub's commits make, what a put-back changes here, and that
 // the result travels to another device through the ordinary merge.
 const assert = require("assert");
+require("./lang.js");
 
 global.window = { Waypage: { platform: {} } };
 global.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+require("../src/keel/github.js");
 require("../src/sync.js");
 const S = window.Waypage.sync;
 

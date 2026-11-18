@@ -12,6 +12,10 @@
 // label, or null when nothing here can be put back safely.
 (() => {
   const C = window.Waypage;
+  // The app's words (language.js); English as written when it isn't loaded (Node tests).
+  const fill = (s, v) => String(s).replace(/{(w+)}/g, (m, k) => (v && k in v ? v[k] : m));
+  const L = typeof i18n !== "undefined" ? i18n : { t: fill, tn: (n, one, other, v) => fill(n === 1 ? one : other, Object.assign({ n }, v)) };
+  const t = (s, v) => L.t(s, v), tn = (n, one, other, v) => L.tn(n, one, other, v);
 
   const strokesOf = (v) => (Array.isArray(v) ? v.length : 0);
   // Pages of ink.json that have strokes: { "3": 12 }.
@@ -24,11 +28,11 @@
   const sheetCount = (d) => (d && Array.isArray(d.sheets) ? d.sheets.filter((s) => s && (s.bg === "paper" || (s.bg === "pdf" && s.n >= 1))).length : 0);
   const isPdfFile = (p) => !!(p.link && p.file && p.file.kind === "pdf" && !p.comic);
   const textMarks = (p) => (Array.isArray(p.marks) ? p.marks.filter((m) => m && typeof m.block === "number" && typeof m.text === "string") : []);
-  const said = (t) => "“" + (t.length > 60 ? t.slice(0, 57) + "…" : t) + "”";
+  const said = (s) => "“" + (s.length > 60 ? s.slice(0, 57) + "…" : s) + "”";
 
   async function scanOne(p, io) {
     const out = [];
-    const add = (kind, key, line, fix, extra) => out.push({ id: p.id + ":" + kind + ":" + key, clip: p.id, title: p.title || "Untitled", kind, line, fix, ...extra });
+    const add = (kind, key, line, fix, extra) => out.push({ id: p.id + ":" + kind + ":" + key, clip: p.id, title: p.title || t("Untitled"), kind, line, fix, ...extra });
 
     // A note: sheets and their pictures.
     if (p.note) {
@@ -37,10 +41,10 @@
       const top = highest(ink), have = sheetCount(raw);
       const kept = Math.max(1, have);
       if (top > kept) {
-        add("ink-sheets-missing", "sheets", "Drawing on sheet " + top + ", but only " + (kept === 1 ? "1 sheet is" : kept + " sheets are") + " kept", "Add the sheets", { top });
+        add("ink-sheets-missing", "sheets", tn(kept, "Drawing on sheet {top}, but only 1 sheet is kept", "Drawing on sheet {top}, but only {n} sheets are kept", { top }), t("Add the sheets"), { top });
       }
       if (raw && Array.isArray(raw.sheets) && raw.sheets.some((s) => s && s.bg === "pdf") && !(await io.hasBase(p))) {
-        add("ink-base-missing", "base", "Its PDF is missing, so the sheets drawn on it can't open", "Use blank sheets");
+        add("ink-base-missing", "base", t("Its PDF is missing, so the sheets drawn on it can't open"), t("Use blank sheets"));
       }
       return out;
     }
@@ -59,14 +63,14 @@
         for (const m of marks) {
           const r = byId.get(m.id);
           if (!r || r.state === "ok") continue;
-          if (r.state === "moved") add("mark-moved", m.id, "Highlight " + said(m.text) + " moved in the text", "Put it back", { mark: m.id, at: r.at });
-          else add("mark-lost", m.id, "Highlight " + said(m.text) + " isn't in this copy of the clip" + (m.note ? ", with its note" : ""), null, { mark: m.id });
+          if (r.state === "moved") add("mark-moved", m.id, t("Highlight {text} moved in the text", { text: said(m.text) }), t("Put it back"), { mark: m.id, at: r.at });
+          else add("mark-lost", m.id, (m.note ? t("Highlight {text} isn't in this copy of the clip, with its note", { text: said(m.text) }) : t("Highlight {text} isn't in this copy of the clip", { text: said(m.text) })), null, { mark: m.id });
         }
         const gone = strokeKeys.filter((k) => Number(k) > res.blocks);
         if (gone.length && res.blocks > 0) {
-          add("ink-block-gone", "blocks", "Drawing on " + (gone.length === 1 ? "a place" : gone.length + " places") + " that is no longer in the clip", "Move to the end", { keys: gone, to: res.blocks });
+          add("ink-block-gone", "blocks", tn(gone.length, "Drawing on a place that is no longer in the clip", "Drawing on {n} places that are no longer in the clip"), t("Move to the end"), { keys: gone, to: res.blocks });
         } else if (gone.length) {
-          add("ink-block-gone", "blocks", "Drawing on a clip with no text left to hold it", null, { keys: gone });
+          add("ink-block-gone", "blocks", t("Drawing on a clip with no text left to hold it"), null, { keys: gone });
         }
       }
     }
@@ -75,11 +79,11 @@
       const ink = inkPages(await io.ink(p));
       const drawn = Array.isArray(p.drawn) ? p.drawn.filter((d) => Array.isArray(d) && d[0] >= 1) : [];
       if (p.view === "text" && (Object.keys(ink).length || drawn.length)) {
-        add("ink-hidden-by-view", "view", "Drawn on, but shown as text, where drawings on the pages don't show", "Show as printed pages");
+        add("ink-hidden-by-view", "view", t("Drawn on, but shown as text, where drawings on the pages don't show"), t("Show as printed pages"));
       }
       const want = Object.keys(ink).map(Number).sort((a, b) => a - b).map((n) => [n, ink[n]]);
       if (JSON.stringify(want) !== JSON.stringify(drawn.map((d) => [d[0], d[1]]).sort((a, b) => a[0] - b[0]))) {
-        add("ink-drawn-stale", "drawn", "The list of drawn pages is out of date", "Rebuild the list", { want });
+        add("ink-drawn-stale", "drawn", t("The list of drawn pages is out of date"), t("Rebuild the list"), { want });
       }
     }
     return out;
@@ -182,16 +186,16 @@
             const parse = async (n) => { try { return JSON.parse(await io.text("notes/" + id + "/" + n)); } catch (e) { return null; } };
             const note = await parse("note.json");
             const ink = names["ink.json"] ? await parse("ink.json") : null;
-            found.push({ id, source: "sync", title: (await io.title(id)) || "Untitled note", sheets: sheetsIn(note), strokes: strokeTotal(ink), names, deletedAt: gone[id] || 0, pdf: !!names["base.pdf"] });
+            found.push({ id, source: "sync", title: (await io.title(id)) || t("Untitled note"), sheets: sheetsIn(note), strokes: strokeTotal(ink), names, deletedAt: gone[id] || 0, pdf: !!names["base.pdf"] });
           }
           if (onProgress) onProgress(++done, ids.length);
         }
-      } catch (e) { console.error(e); skipped.push("GitHub sync couldn't be read"); }
-    } else skipped.push("GitHub sync is off, so it wasn't searched");
+      } catch (e) { console.error(e); skipped.push(t("GitHub sync couldn't be read.")); }
+    } else skipped.push(t("GitHub sync is off, so it wasn't searched."));
     try {
       for (const o of await io.orphans(known)) {
         const files = await io.orphanFiles(o.id);
-        if (files) found.push({ id: o.id, source: "phone", title: o.title || "Untitled note", sheets: sheetsIn(files.note), strokes: strokeTotal(files.ink), paper: o.paper, pdf: !!files.base });
+        if (files) found.push({ id: o.id, source: "phone", title: o.title || t("Untitled note"), sheets: sheetsIn(files.note), strokes: strokeTotal(files.ink), paper: o.paper, pdf: !!files.base });
       }
     } catch (e) { console.error(e); }
     return { found, skipped };

@@ -22,16 +22,16 @@ const SPACES = {
 // gives a Hebrew page its letters: the one picked, or else the one
 // matching the Latin font's style.
 const FONTS = [
-  { value: "serif", label: "Source Serif", family: '"Source Serif 4"', kind: "serif" },
-  { value: "literata", label: "Literata", family: '"Literata"', kind: "serif" },
-  { value: "lora", label: "Lora", family: '"Lora"', kind: "serif" },
-  { value: "merriweather", label: "Merriweather", family: '"Merriweather"', kind: "serif" },
-  { value: "garamond", label: "EB Garamond", family: '"EB Garamond"', kind: "serif" },
-  { value: "sans", label: "Instrument Sans", family: '"Instrument Sans"', kind: "sans" },
-  { value: "inter", label: "Inter", family: '"Inter"', kind: "sans" },
-  { value: "atkinson", label: "Atkinson", family: '"Atkinson Hyperlegible"', kind: "sans" },
-  { value: "dyslexic", label: "OpenDyslexic", family: '"OpenDyslexic"', kind: "sans" },
-  { value: "system", label: "System", family: 'system-ui, -apple-system, "Segoe UI", Roboto', kind: "system" },
+  { value: "serif", label: t("Source Serif"), family: '"Source Serif 4"', kind: "serif" },
+  { value: "literata", label: t("Literata"), family: '"Literata"', kind: "serif" },
+  { value: "lora", label: t("Lora"), family: '"Lora"', kind: "serif" },
+  { value: "merriweather", label: t("Merriweather"), family: '"Merriweather"', kind: "serif" },
+  { value: "garamond", label: t("EB Garamond"), family: '"EB Garamond"', kind: "serif" },
+  { value: "sans", label: t("Instrument Sans"), family: '"Instrument Sans"', kind: "sans" },
+  { value: "inter", label: t("Inter"), family: '"Inter"', kind: "sans" },
+  { value: "atkinson", label: t("Atkinson"), family: '"Atkinson Hyperlegible"', kind: "sans" },
+  { value: "dyslexic", label: t("OpenDyslexic"), family: '"OpenDyslexic"', kind: "sans" },
+  { value: "system", label: t("System"), family: 'system-ui, -apple-system, "Segoe UI", Roboto', kind: "system" },
 ];
 // Your own fonts (1.33.0): files in the library's fonts folder, or added
 // in Settings › Reading. Their names are kept here so a font you picked
@@ -79,11 +79,11 @@ function fontsInto(doc) {
 }
 window.Waypage.fontsInto = fontsInto;
 const HEBREW = [
-  { value: "auto", label: "Auto" },
-  { value: "frank", label: "Frank Ruhl", family: '"Frank Ruhl Libre"' },
-  { value: "david", label: "David", family: '"David Libre"' },
-  { value: "assistant", label: "Assistant", family: '"Assistant"' },
-  { value: "heebo", label: "Heebo", family: '"Heebo"' },
+  { value: "auto", label: t("Auto") },
+  { value: "frank", label: t("Frank Ruhl"), family: '"Frank Ruhl Libre"' },
+  { value: "david", label: t("David"), family: '"David Libre"' },
+  { value: "assistant", label: t("Assistant"), family: '"Assistant"' },
+  { value: "heebo", label: t("Heebo"), family: '"Heebo"' },
 ];
 const MARGINS = { narrow: ["var(--s-3)", "44rem"], normal: ["20px", "38rem"], wide: ["var(--s-7)", "32rem"] };
 const READING_DEFAULT = { size: 19, spacing: 1.6, letters: 0, words: 0, paras: 1, weight: 400, hyphens: true, font: "serif", hebrew: "auto", margins: "normal", align: "auto", layout: "scroll", spread: "auto", rail: true, comicLayout: "scroll", wide: "split" };
@@ -91,8 +91,8 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 // Text alignment (1.19.0). "auto" leaves the clip or file as it came.
 const ALIGNS = [
-  { value: "auto", label: "Original" }, { value: "left", label: "Left" }, { value: "justify", label: "Justified" },
-  { value: "center", label: "Centered" }, { value: "right", label: "Right" },
+  { value: "auto", label: t("Original") }, { value: "left", label: t("Left") }, { value: "justify", label: t("Justified") },
+  { value: "center", label: t("Centered") }, { value: "right", label: t("Right") },
 ];
 
 // Settings per clip, per collection and per book (KOReader-style): a
@@ -191,7 +191,7 @@ function setReading(change, everywhere) {
     // clip: the next clip opening in its old look read as a reset.
     if (scopeNoted !== p) {
       scopeNoted = p;
-      toast("Changed for this " + (scope === "clip" ? clipWord(p) : "collection") + " only");
+      toast(scope !== "clip" ? t("Changed for this collection only") : p && p.file ? t("Changed for this book only") : t("Changed for this clip only"));
     }
   }
   readingChanged(was, change);
@@ -223,10 +223,9 @@ function setScope(to) {
   }
   store(READING_FOR_KEY, f);
   readingChanged(was, {});
-  const lost = from === "clip" ? "This " + clipWord(p) + "'s own settings" : from === "set" && to === "all" ? "The collection's own settings" : "";
-  if (lost && to !== "clip") toast(lost + " are gone.", "Undo", () => { const w = readingPrefs(); store(READING_FOR_KEY, JSON.parse(before)); readingChanged(w, {}); });
+  const lost = from === "clip" ? (p && p.file ? t("This book's own settings") : t("This clip's own settings")) : from === "set" && to === "all" ? t("The collection's own settings") : "";
+  if (lost && to !== "clip") toast(t("{lost} are gone.", { lost: lost }), t("Undo"), () => { const w = readingPrefs(); store(READING_FOR_KEY, JSON.parse(before)); readingChanged(w, {}); });
 }
-const clipWord = (p) => (p && p.file ? "book" : "clip");
 // A collection renamed keeps its settings; clips and collections that
 // are gone lose theirs (at start).
 function renameReadingSet(from, to) {

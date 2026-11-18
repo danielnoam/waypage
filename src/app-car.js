@@ -30,7 +30,7 @@ function carClips() {
 function carChapters(a) {
   return chaptersOf(a).map((c, i) => {
     const { part, pos } = L.partAt(a.audio.parts, c.t || 0);
-    return { title: c.title || "Chapter " + (i + 1), part, pos: Math.round(pos * 1000) };
+    return { title: c.title || t("Chapter {i}", { i: i + 1 }), part, pos: Math.round(pos * 1000) };
   });
 }
 
