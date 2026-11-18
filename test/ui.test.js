@@ -5166,6 +5166,26 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("a live clip says Live on its card and in its collection", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const a = { id: "lm1", url: "https://example.com/lm1", title: "Thread", site: "example.com", savedAt: 1, minutes: 1, mode: "links", at: 0, live: true, folder: "Threads", folderAt: 1 };
+        const b = { id: "lm2", url: "https://example.com/lm2", title: "Other", site: "example.com", savedAt: 2, minutes: 1, mode: "links", at: 0, live: true };
+        const c = { id: "lm3", url: "https://example.com/lm3", title: "Plain", site: "example.com", savedAt: 3, minutes: 1, mode: "links", at: 0 };
+        await window.Waypage.store.writeIndex([a, b, c]);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await until(q, () => state.pages.length === 3);
+      await q.evaluate(() => { localStorage.setItem("waypage.place", JSON.stringify("library")); renderLibrary(); });
+      await q.locator('.page-card[data-ids="lm2"] .card-live').waitFor();
+      assert.strictEqual(await q.locator('.page-card[data-ids="lm3"] .card-live').count(), 0);
+      await q.evaluate(() => openFolder("Threads"));
+      await q.locator('#folderBody li[data-id="lm1"] .card-live').waitFor();
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("reading stats count time, words and saves (1.38.0)", async () => {
       const q = await page(browser, 390);
       await q.fill("#saveUrl", ARTICLE);
