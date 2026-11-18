@@ -2,6 +2,37 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.67.0] - 2026-11-18
+
+### Added
+- Settings › Edit clips is now Find and replace, and it edits files read from where they are, too: EPUB, Kindle, FB2, Markdown, text, HTML and email. Pick All files, a collection, or files picked in the library. Only Waypage's copy of the words changes; the file itself stays as it is, and the change stays on that device. PDFs and comics aren't offered: a PDF shows its printed pages, and a comic has no words.
+- Follow a GitHub repo in Feeds: paste any link to the repo and you get its releases (or its tags, if it has never made a release). The feed is named after the repo with its owner's picture, keeps a month of releases, and each release's row says what it brings ("6 added · 3 changed · 3 fixed"). A commits feed is still followed if you paste its own address.
+- Series: a collection can be made a series from its ⋯ menu (Make it a series, and back with Make it a collection). Series have their own section in the library under Collections, and in the sidebar. A clip's Collection picker lists both, and has New series….
+- A series can sit in a collection (Put in a collection, in its ⋯ menu). The collection shows its series above its own clips, and the series says which collection it's in. A collection holding series asks before it becomes one, since they move out.
+- Series apart, in the library's View options and Settings, Library: turned off, series sit among the collections.
+- Add an audiobook folder that holds a folder per book (Book 1, Book 2…) makes a series with one audiobook each. A folder of sound files, or of one book's CD1, CD2 or Disc 1, Disc 2, stays one audiobook.
+- Without series (an older version, or another device on one), a series shows as a plain collection and nothing moves.
+- Tags are easier to reach. On a phone they show as a row of chips under Show and Order; tap one to see its clips, tap it again for all. On a big screen the sidebar's Tags have an Edit link.
+- Settings › Library › Tags lists every tag with what it's on (a collection counts once). Tap one to rename it, merge it into another (rename it to a tag you already have), show its clips, or delete it (the clips stay; Undo puts it back).
+- A clip's ⋯ sheet shows your tags as chips: tap to add, × to remove, + New tag to type one. No more drop-down.
+- A collection has a Tags sheet (its ⋯ › Tags, or tap the tags under its name): a tag there goes on every clip in it, and Tag new clips too sits there now.
+- A page's own tags are read on every save, not only from story pages: Royal Road, AO3 and Scribble Hub as before, plus a page's article tags, schema.org keywords, Parse.ly tags and a post's tag links (WordPress, Blogger). They're offered on the clip under "From {site}", a tap each. Settings › Library › Tags › Site's tags picks Suggest (the default), Ones I have, Add all or Off.
+- A collection keeps its story page's tags, and Website sync refreshes them, so a story saved before can still pick them up from its Tags sheet.
+- Adding a book from Discover (Project Gutenberg, Standard Ebooks, a catalog) offers its site's tags with a switch, as Save with options does for stories.
+- Settings → About → **Unreleased builds** (Android, this device only): the update check also offers the newest build of main, every change once it's merged, before it's a release. It's named by its commit ("Waypage build 4f2c9a1 is out") and downloads like an update. Off goes back to releases only. These builds aren't on the Releases page.
+
+### Changed
+- A GitHub release opens and saves as just its notes, titled by the release ("Waypage 1.65.1"), without GitHub's header and assets around them.
+- Continue reading shows a series' cover, and a clip in a plain collection as itself.
+- A collection or series of only files lists them under Files, not Clips, and one of only audiobooks counts them heard, not read.
+- A clip's Collection row is now Part of, since it lists series too.
+- A collection's "Show as covers" is now "Show as a grid". Until one is picked, a series shows as a list and a collection as a grid.
+- The web copy deploys from GitHub Actions after the tests pass (`pages.yml`), as LifeLog's does, and serves the unreleased build under `unreleased/`.
+
+### Fixed
+- A live clip in a collection now says Live in the collection's list and covers, as it does on its library card.
+- Turning Live on now shows the Live mark on the clip's library card at once, not only after the app restarts.
+
 ## [1.66.0] - 2026-11-17
 
 ### Changed
