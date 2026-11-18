@@ -184,7 +184,7 @@ function setFilter(f) {
 // doesn't close a menu that's open.
 function renderTools() {
   const tags = allTags();
-  const sig = [state.pages.length > 0, state.filter, state.sort, state.pages.some((p) => p.marks && p.marks.length), state.pages.some((p) => p.note), tags.join("\u0000")].join("|");
+  const sig = [state.pages.length > 0, state.filter, state.sort, state.pages.some((p) => p.marks && p.marks.length), state.pages.some((p) => p.note), tags.join("\u0000"), load(TAG_ROW_KEY, true)].join("|");
   if (libTools.dataset.sig === sig) return;
   libTools.dataset.sig = sig;
   libTools.hidden = !state.pages.length;
@@ -210,7 +210,7 @@ function renderTools() {
 // Phone width only: a big screen has them in the sidebar.
 function renderTagRow(tags) {
   const row = $("libTags");
-  row.hidden = !tags.length;
+  row.hidden = !tags.length || !load(TAG_ROW_KEY, true);
   if (row.hidden) return;
   const at = state.filter.startsWith("#") ? tags.find((x) => sameTag(x, state.filter.slice(1))) : null;
   const chip = (x) => {
@@ -243,6 +243,8 @@ function sortControl() {
   });
 }
 
+const tagRowSwitch = () => switchRow(t("Tag row"), t("Your tags under Show and Order"), load(TAG_ROW_KEY, true), (on) => { store(TAG_ROW_KEY, on); renderLibrary(); });
+
 // The library's View button: its layout, here as in Settings, Library.
 function libViewSheet() {
   const note = el("p", { class: "choice-note" }, (LAYOUTS.find((l) => l.value === layout()) || LAYOUTS[0]).note);
@@ -256,7 +258,8 @@ function libViewSheet() {
       }), note)),
     el("div", { class: "group" },
       switchRow(t("Continue reading"), t("Your last clip at the top of the library"), load(CONTINUE_KEY, true), (on) => { store(CONTINUE_KEY, on); renderLibrary(); }),
-      allFolders().some(isSeriesFolder) ? switchRow(t("Series apart"), t("Their own section, under Collections"), load(SERIES_APART_KEY, true), (on) => { store(SERIES_APART_KEY, on); renderLibrary(); if (pinned.matches) renderSide(); }) : null));
+      allFolders().some(isSeriesFolder) ? switchRow(t("Series apart"), t("Their own section, under Collections"), load(SERIES_APART_KEY, true), (on) => { store(SERIES_APART_KEY, on); renderLibrary(); if (pinned.matches) renderSide(); }) : null,
+      allTags().length ? tagRowSwitch() : null));
 }
 
 // Our own dropdown (0.26.0), in place of the system's <select>: a
