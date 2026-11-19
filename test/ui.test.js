@@ -1092,6 +1092,37 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a deleted chapter of a Website sync collection doesn't come back as new, and Keep makes way for the next ones (Daniel's ask)", async () => {
+      const q = await page(browser, 390);
+      q.on("dialog", (d) => d.accept());
+      const all = [0, 1, 2, 3, 4].map((i) => "https://example.com/story/ch" + i);
+      await q.evaluate(async (all) => {
+        const list = [0, 1, 2].map((i) => ({ id: "st" + i, url: all[i], title: "Chapter " + (i + 1), site: "example.com", savedAt: 1000 + i, minutes: 3, mode: "links", at: 0, finished: false, folder: "Story B", folderAt: i, source: "https://example.com/story" }));
+        await window.Waypage.store.writeIndex(list);
+        localStorage.setItem("waypage.newChapters", JSON.stringify({ "story b": { count: 2, at: Date.now(), all } }));
+      }, all);
+      await q.reload();
+      await until(q, () => state.pages.length === 3);
+      assert.strictEqual(await q.evaluate(() => freshCount("Story B")), 2);
+      await q.evaluate(() => deletePage(state.pages.find((p) => p.id === "st2"), "keys"));
+      await until(q, () => !state.pages.some((p) => p.id === "st2"));
+      assert.strictEqual(await q.evaluate(() => freshCount("Story B")), 2, "the deleted chapter counts as new");
+      // Keep 2: the read chapter goes, and the next one after the deleted one is saved.
+      const saved = await q.evaluate(async () => {
+        let got = null;
+        saveAll = async (urls) => { got = urls; };
+        state.pages.find((p) => p.id === "st0").finished = true;
+        setKeepFor("Story B", 2);
+        await keepUp("Story B");
+        return { got, ids: folderPages("Story B").map((p) => p.id) };
+      });
+      assert.deepStrictEqual(saved.ids, ["st1"]);
+      assert.deepStrictEqual(saved.got, [all[3]]);
+      assert.strictEqual(await q.evaluate(() => freshCount("Story B")), 2, "the read chapter that was deleted counts as new");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("the sidebar shows the favourites, Favourites, then Collections and Clips (1.14.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
