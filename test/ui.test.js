@@ -5603,6 +5603,41 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("a comic's Auto-scroll has Hold at the end to go on: half a second's wheel past the end opens the next volume, less does not (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async (a) => {
+        askKeep = async () => false;
+        await openFile(new File([new Uint8Array(a[0])], "v1.cbz"), null, false);
+        await openFile(new File([new Uint8Array(a[1])], "v2.cbz"), null, false);
+      }, [[...mangaBytes(1)], [...mangaBytes(2)]]);
+      await q.evaluate(() => setReading({ comicLayout: "scroll" }));
+      const first = await q.evaluate(() => state.pages.find((x) => x.comic && /Volume 1/.test(x.title)).id);
+      const wheelFor = async (ms) => q.evaluate(async (ms) => {
+        const d = document.getElementById("readerFrame").contentDocument, w = d.defaultView;
+        w.scrollTo(0, d.documentElement.scrollHeight);
+        const end = performance.now() + ms;
+        while (performance.now() < end) { d.dispatchEvent(new WheelEvent("wheel", { deltaY: 40, bubbles: true })); await new Promise((r) => setTimeout(r, 50)); }
+      }, ms);
+      for (const on of [false, true]) {
+        await q.evaluate((on) => { store(PULL_KEY, on); }, on);
+        await q.evaluate((id) => openPage(id), first);
+        await until(q, () => !!C.reader.frameDoc && !!C.reader.frameDoc.querySelector(".co-after"));
+        await q.waitForTimeout(400);
+        await wheelFor(1300);
+        await q.waitForTimeout(500);
+        const now = await q.evaluate(() => state.open.id);
+        assert.strictEqual(now !== first, on, on ? "held half a second: the next volume opens" : "off: it stays");
+      }
+      await q.evaluate((id) => openPage(id), first);
+      await until(q, () => !!C.reader.frameDoc && !!C.reader.frameDoc.querySelector(".co-after"));
+      await q.waitForTimeout(400);
+      await wheelFor(250);
+      await q.waitForTimeout(500);
+      assert.strictEqual(await q.evaluate(() => state.open.id), first, "a short pull does not");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a comic in Pages: a page a screen, a manga turns right to left, a spread in halves, two up on a wide window (1.53.0)", async () => {
       for (const width of [390, 1280]) {
         const q = await page(browser, width);

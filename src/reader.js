@@ -2153,6 +2153,64 @@
     doc.addEventListener("wheel", (e) => { if (!e.ctrlKey) held = false; }, { passive: true });
   }
 
+  // Hold at the end of a comic to go on (2026-11): scrolling down past the
+  // bottom and holding for half a second opens the next chapter, the card's bar
+  // filling as it goes. A touch drag or a wheel / trackpad stream; both
+  // listeners are passive, so ordinary scrolling is untouched. onPullNext()
+  // says whether Settings has it on.
+  let onPullNext = null, pullDone = false, pullRaf = 0;
+  const PULL_MS = 500, PULL_PX = 40, PULL_GAP = 250;
+  function pullInput() {
+    if (!comic) return;
+    const w = frame.contentWindow;
+    const atEnd = () => w.scrollY + w.innerHeight >= doc.documentElement.scrollHeight - 2;
+    const usable = () => !!(onPullNext && onPullNext() && onNext && nextLink && !paged && !pullDone && !pinch);
+    let from = 0, last = 0, edgeY = null;
+    const paint = (v) => {
+      if (!nextLink) return;
+      nextLink.style.setProperty("--pull", String(v));
+      nextLink.classList.toggle("co-pulling", v > 0);
+    };
+    const stop = () => { cancelAnimationFrame(pullRaf); pullRaf = 0; from = 0; edgeY = null; paint(0); };
+    const tick = (now) => {
+      pullRaf = 0;
+      if (!from) return;
+      const v = Math.min(1, (now - from) / PULL_MS);
+      paint(v);
+      if (v >= 1) { pullDone = true; from = 0; onNext(); return; }
+      if (now - last > PULL_GAP && last) { stop(); return; }
+      pullRaf = requestAnimationFrame(tick);
+    };
+    // Touch: past the end by a drag up, then held there; lifting or moving
+    // back cancels. `held` while the finger rests keeps the timer going.
+    let ty = null, touchHold = false;
+    doc.addEventListener("touchstart", (e) => { ty = e.touches.length === 1 ? e.touches[0].clientY : null; edgeY = null; touchHold = false; }, { passive: true });
+    doc.addEventListener("touchmove", (e) => {
+      if (e.touches.length !== 1 || ty == null || !usable()) { if (touchHold) { touchHold = false; stop(); } return; }
+      const y = e.touches[0].clientY;
+      if (!atEnd()) { edgeY = null; if (touchHold) { touchHold = false; stop(); } return; }
+      if (edgeY == null) edgeY = y;
+      if (!touchHold && edgeY - y > PULL_PX) {
+        touchHold = true;
+        from = performance.now();
+        last = 0;
+        pullRaf = requestAnimationFrame(tick);
+      } else if (touchHold && y - (edgeY - PULL_PX) > 20) { touchHold = false; stop(); }
+    }, { passive: true });
+    const lift = () => { ty = null; if (touchHold) { touchHold = false; stop(); } edgeY = null; };
+    doc.addEventListener("touchend", lift, { passive: true });
+    doc.addEventListener("touchcancel", lift, { passive: true });
+    // Wheel and trackpad: a stream of down-scrolls at the end; a gap or an
+    // upward scroll cancels.
+    doc.addEventListener("wheel", (e) => {
+      if (e.ctrlKey) return;
+      if (e.deltaY <= 0 || !atEnd() || !usable()) { if (from && !touchHold) stop(); return; }
+      const now = performance.now();
+      last = now;
+      if (!from) { from = now; pullRaf = requestAnimationFrame(tick); }
+    }, { passive: true });
+  }
+
   // Brightness from the left edge (1.10.0): a touch that starts in the
   // left part of the page and goes up or down is the brightness, not a
   // scroll. onEdge: { start(), move(d) with d the change, -1 to 1, end() }.
@@ -2398,7 +2456,7 @@
   // `next` ({ over, title, go }) adds a link to the next page at the end;
   // `top` () gives the height the bar covers; onImage(info) opens a tapped
   // image.
-  function open(iframe, html, meta, { at = 0, spot: spotAt = "", onPosition, onScroll, next, prev, top, onImage: image, onTap: tap, onMark: mark, onSelect, pages: asPages, turn: turnWay, wide: wideWay, bottom, onKey, onEdge: edge, onPinch: pinchTo, onSwipe: swipeTo, onLink: link, onNote: note, onJump: jumped, spotWords: wordsAt, end } = {}) {
+  function open(iframe, html, meta, { at = 0, spot: spotAt = "", onPosition, onScroll, next, prev, top, onImage: image, onTap: tap, onMark: mark, onSelect, pages: asPages, turn: turnWay, wide: wideWay, bottom, onKey, onEdge: edge, pullNext, onPinch: pinchTo, onSwipe: swipeTo, onLink: link, onNote: note, onJump: jumped, spotWords: wordsAt, end } = {}) {
     // The clip before tells where it was left before this one comes in.
     settle();
     // Not while a big book fills without knowing its blocks' numbers.
@@ -2423,6 +2481,8 @@
     onTap = tap || null;
     onMark = mark || null;
     onEdge = edge || null;
+    onPullNext = pullNext || null;
+    pullDone = false;
     onPinch = pinchTo || null;
     onSwipe = swipeTo || null;
     onLink = link || null;
@@ -2536,6 +2596,7 @@
         pagedInput();
         zoomInput();
         glideInput();
+        pullInput();
         // A pen on the page, the first time it's seen (1.56.0): the app offers Draw.
         doc.addEventListener("pointerdown", (e) => { if (e.pointerType === "pen" && inkHook && inkHook.pen) inkHook.pen(); }, { passive: true });
         edgeInput();
