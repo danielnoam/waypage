@@ -115,6 +115,14 @@ figure .co-placeholder { border-width: 0 0 1.5px; border-radius: 0; }
   background: var(--surface); color: var(--ink); text-decoration: none;
   font-family: var(--sans);
 }
+/* Hold at the end of a comic to go on: the card fills from its start side
+   as the second passes. It is progress, so it stays with animations off. */
+.co-next.co-pulling { position: relative; overflow: hidden; }
+.co-next.co-pulling::after {
+  content: ""; position: absolute; inset-block-end: 0; inset-inline: 0; height: 4px;
+  background: var(--accent); transform: scaleX(var(--pull, 0)); transform-origin: left center;
+}
+html[dir="rtl"] .co-next.co-pulling::after { transform-origin: right center; }
 /* The page before, at the top (1.23.0): the same card, above the title. */
 .co-next.co-before { margin-top: 0; margin-bottom: var(--s-5); }
 .co-next-over { font: 600 var(--fs-meta)/var(--lh-meta) var(--sans); color: var(--muted); }

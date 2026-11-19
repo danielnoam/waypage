@@ -449,6 +449,7 @@ function show(p, html) {
     bottom: () => $("readFoot").offsetHeight,
     onKey: onKeys,
     onEdge: brightEdge,
+    pullNext: () => pictureBook() && !!load(PULL_KEY, false),
     onPinch: textPinch,
     onSwipe: clipSwipe,
     onLink: openLink,
@@ -1325,6 +1326,8 @@ const FOOTNOTES_KEY = "waypage.aloudFootnotes";
 const EDGES_KEY = "waypage.aloudSkipEdges";
 // Read next by itself at the end of a clip (1.6.0), when there's a next.
 const GO_ON_KEY = "waypage.aloudGoOn";
+// A comic: hold past its end to open the next one (2026-11).
+const PULL_KEY = "waypage.comicPullNext";
 const AWAKE_KEY = "waypage.aloudScreenOn";
 const PIP_KEY = "waypage.aloudPip";
 const KEEP_KEY = "waypage.aloudKeepGoing";
@@ -2526,6 +2529,7 @@ function scrollControls() {
       el("div", { class: "stepper" }, speed)),
     state.open && state.open.note ? aloudSwitch(GO_ON_KEY, t("Go on to the next note"), t("At the end, the next note starts scrolling by itself."), false)
       : aloudSwitch(GO_ON_KEY, t("Go on to the next clip"), t("At the end, the next chapter starts scrolling by itself."), false),
+    aloudSwitch(PULL_KEY, t("Hold at the end to go on"), state.open && state.open.note ? t("Scroll down past the end and hold for a second to open the next note.") : t("Scroll down past the end and hold for a second to open the next chapter."), false),
     aloudSwitch(AWAKE_KEY, t("Keep the screen on"), t("While it scrolls, so you can follow along."), false));
 }
 
