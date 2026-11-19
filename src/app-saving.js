@@ -1540,7 +1540,7 @@ async function keepUp(name) {
 async function pickKeep(name, n) {
   if (n) {
     const drop = keepDrops(name);
-    if (drop.length && !confirm(tn(drop.length, "Delete the 1 read chapter of {name}? Read chapters are deleted from now on, and the next ones saved.{alsoSynced}", "Delete the {n} read chapters of {name}? Read chapters are deleted from now on, and the next ones saved.{alsoSynced}", { name: name, alsoSynced: alsoSynced() }))) return;
+    if (drop.length && !confirm(tn(drop.length, "Delete the 1 read chapter of {name}? Read chapters are deleted from now on, and the next ones saved.{alsoSynced}", "Delete the {n} read chapters of {name}? Read chapters are deleted from now on, and the next ones saved.{alsoSynced}", { name: name, alsoSynced: alsoSynced() }))) { if (state.folder && sameTag(state.folder, name)) renderFolder(); return; }
   }
   setKeepFor(name, n);
   if (state.folder && sameTag(state.folder, name)) renderFolder();
@@ -1633,14 +1633,14 @@ function freshCount(name) {
   return Math.max(1, entry.count - since);
 }
 
+// New chapters as one row: how many and when it last looked, with Check.
 function checkRow(list) {
   if (!isSeries(list)) return null;
   const name = state.folder;
   const entry = newFor(name);
   const fresh = freshCount(name);
   const busy = checking.has(String(name).toLowerCase());
-  const note = busy ? t("Looking…") : !entry ? t("Not checked yet")
-    : (fresh ? newCountText(fresh) : t("None yet")) + " · " + t("checked {when}", { when: whenText(entry.at) });
+  const label = busy ? t("Looking…") : !entry ? t("Not checked yet") : fresh ? newCountText(fresh) : t("None yet");
   const btn = el("button", { class: "chip", type: "button", onclick: () => {
     if (!navigator.onLine) { toast(t("You're offline. Try again when you're back online.")); return; }
     checkNew(name, false);
@@ -1648,44 +1648,50 @@ function checkRow(list) {
   btn.disabled = busy;
   // From a linked page, the new ones are saved straight from its list,
   // each at its place among those already saved.
-  const take = entry && entry.all && fresh && !savingInto(name) ? el("button", { class: "chip on save-new", type: "button", onclick: () => {
-    if (!navigator.onLine) { toast(t("You're offline. Try again when you're back online.")); return; }
-    saveAll(chapterLinks(name), name, [], undefined, true, undefined, folderSource(list));
-  } }, t("Save {fresh}", { fresh: fresh })) : null;
-  return el("div", { class: "rc-row check-new" },
-    el("span", { class: "rc-label" }, t("New chapters")),
-    el("div", { class: "chips" },
-      el("span", { class: "check-note" + (fresh ? " accent" : ""), role: "status" }, note), take, btn));
+  const take = entry && entry.all && fresh && !busy && !savingInto(name) ? el("button", { class: "chip on take-new", type: "button",
+    "aria-label": tn(fresh, "Save 1 new chapter", "Save {n} new chapters", { n: fresh >= NEW_MAX ? NEW_MAX + "+" : fresh }),
+    onclick: (e) => saveNewChapters(name, e.currentTarget) }, t("Save")) : null;
+  return el("div", { class: "row check-new", role: "status" },
+    el("span", { class: "choice-text" },
+      el("span", { class: "choice-label" + (fresh && !busy ? " accent" : "") }, label),
+      entry && !busy ? el("span", { class: "choice-note" }, t("Checked {when}", { when: whenText(entry.at) })) : null),
+    take, btn);
 }
 
 // ---- The folder's Website sync panel (0.26.0, was Story page) ----
-// Everything about a series in one place: new chapters, saving earlier
-// or later ones, the site's page it's linked to (any site's contents
-// page, or one of its chapters), and saving the saved
-// ones again.
+// Everything about a series in one place, in Settings' groups (2026-11):
+// new chapters and how many to keep, saving earlier or later ones, and
+// the site's page it's linked to (any site's contents page, or one of
+// its chapters).
 function chaptersPanel(list) {
-  const rows = [checkRow(list), keepRow(list), followControls(list[0], true), followControls(list[list.length - 1])].filter(Boolean);
+  const top = [checkRow(list), keepRow(list)].filter(Boolean);
+  const more = [followControls(list[list.length - 1]), followControls(list[0], true)].filter(Boolean);
   return el("div", { class: "folder-actions chapters-panel" },
-    rows.length ? el("div", { class: "chapter-tools" }, ...rows)
+    top.length ? section(t("New chapters"), null, el("div", { class: "group" }, ...top))
       : el("p", { class: "meta" }, t("These clips don't link to each other, so there's nothing to look for. Link the collection to its website below.")),
+    more.length ? section(t("Save more"), null, el("div", { class: "group follow-group" }, ...more)) : null,
     sourceSection(list));
 }
 
 function keepRow(list) {
   if (!folderSource(list)) return null;
   const name = state.folder;
-  const n = keepFor(name);
-  const chip = (v) => el("button", { class: "chip" + (v === n ? " on" : ""), type: "button", "aria-pressed": String(v === n),
-    "aria-label": v ? t("Keep {n} unread chapters", { n: v }) : t("Keep every chapter"), onclick: () => { if (v !== n) pickKeep(name, v); } }, v ? String(v) : t("All"));
-  return el("div", { class: "rc-row follow keep-row" }, el("span", { class: "rc-label" }, t("Keep")), el("div", { class: "chips" }, ...KEEP_CHOICES.map(chip)));
+  const keepNote = t("Read ones make way for the next");
+  return pickRow({ label: t("Keep on this device"), cls: "keep-pick",
+    options: KEEP_CHOICES.map((n) => (n ? { value: String(n), label: t("{n} unread", { n: n }), note: keepNote } : { value: "0", label: t("Every chapter"), note: t("Nothing is deleted") })),
+    get: () => String(keepFor(name)), set: (v) => pickKeep(name, +v) });
 }
 
 function sourceSection(list) {
   const name = state.folder;
   const src = folderSource(list);
-  const input = el("input", { class: "tag-input source-input", type: "url", inputmode: "url", value: src,
+  const input = el("input", { class: "source-input", type: "url", inputmode: "url", value: src,
     placeholder: t("Its contents page, or any chapter"), "aria-label": t("Page to sync with"), autocapitalize: "off", spellcheck: "false" });
-  const link = el("button", { class: "btn-quiet source-link", type: "button", onclick: async () => {
+  // One button (Daniel's ask): the link in the box is read again, or
+  // linked for the first time; an empty box unlinks.
+  const label = src ? t("Refresh") : t("Link");
+  const link = el("button", { class: "chip source-link", type: "button", onclick: async () => {
+    if (src && !input.value.trim()) { setSource(name, ""); toast(t("Unlinked {name}", { name: name })); return; }
     const u = linkFrom(input.value);
     if (!u) { toast(t("Paste the link to its contents page or a chapter.")); return; }
     if (!navigator.onLine) { toast(t("You're offline. Try again when you're back online.")); return; }
@@ -1700,16 +1706,14 @@ function sourceSection(list) {
     } catch (e) {
       toast(e instanceof C.save.SaveError ? e.message : t("Couldn't read that page. Try again."));
     } finally {
-      if (link.isConnected) { link.disabled = false; link.textContent = src ? t("Change") : t("Link"); }
+      if (link.isConnected) { link.disabled = false; link.textContent = label; }
     }
-  } }, src ? t("Change") : t("Link"));
-  const unlink = src ? el("button", { class: "btn-quiet source-unlink", type: "button", onclick: () => { setSource(name, ""); toast(t("Unlinked {name}", { name: name })); } }, t("Unlink")) : null;
+  } }, label);
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); link.click(); } });
-  return el("section", { class: "settings-section source-section" },
-    el("h2", { class: "overline" }, t("Synced with")),
-    el("div", { class: "source-row" }, input, link, unlink),
+  return section(t("Synced with"), null,
+    el("div", { class: "group" }, el("div", { class: "row source-row" }, input, link)),
     el("p", { class: "footnote" }, t("New chapters are read from its chapter list, which also finds chapters added in between."), " ", t("Chapters you delete don't come back as new."),
-      keepFor(name) ? " " + t("Read chapters are deleted and the next ones saved, {n} unread at a time.", { n: keepFor(name) }) : ""));
+      src ? " " + t("Empty the box and press Refresh to unlink.") : ""));
 }
 
 async function setSource(name, url, cover) {
