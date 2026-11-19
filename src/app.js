@@ -63,6 +63,8 @@ const CONTINUE_KEY = "waypage.continue";
 // Series in a section of their own under Collections (2026-11), or
 // mixed in with them.
 const SERIES_APART_KEY = "waypage.seriesApart";
+// The Library's row of tag chips (2026-11), on unless turned off.
+const TAG_ROW_KEY = "waypage.tagRow";
 // Each place's View options: { library, feeds, newsletters, discover } → search behind the bar's icon (true) or always shown.
 // Settings, Appearance, Animations (1.12.0): false turns every animation off.
 const MOTION_KEY = "waypage.animations";

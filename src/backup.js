@@ -61,6 +61,8 @@
     if (m.turn === "rtl" || m.turn === "ltr") out.turn = m.turn;
     if (typeof m.volume === "number" && Number.isFinite(m.volume)) out.volume = m.volume;
     if (m.cut === true) out.cut = true;
+    // Live (2026-11): updated from the site as it opens, on every device.
+    if (m.live === true) out.live = true;
     if (num(m.archived)) out.archived = num(m.archived);
     if (num(m.editedAt)) out.editedAt = num(m.editedAt);
     if (num(m.published)) out.published = num(m.published);

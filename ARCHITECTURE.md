@@ -142,7 +142,7 @@ keel.config.json, keel.lock.json  the files shared with LifeLog through keel (se
 design/             the design canvas's artboards, for the exact markup
 docs/PROPOSAL.md    the original architecture, storage, legal and store reasoning
 docs/shots/         the README's screenshots
-.github/workflows/  test.yml (every PR), pages.yml (the web copy after the tests, with unreleased/), android.yml and ios.yml (builds, releases, test builds), test-builds.yml (test labels: build on, remove off), worker.yml (deploys worker/ to Cloudflare), discover-check.yml (Discover's list, weekly)
+.github/workflows/  test.yml (every PR), pages.yml (the web copy after the tests, with unreleased/), android.yml and ios.yml (builds, releases, test builds), test-builds.yml (test labels: build on, remove off), worker.yml (deploys worker/ to Cloudflare), discover-check.yml (Discover's list, weekly), auto-merge.yml (turns on auto-merge for Daniel's PRs)
 ```
 
 ## Load order and the one scope
@@ -982,6 +982,8 @@ area.
   phone. GitHub's `notes/<id>/` is left, which is what Recover's Look for
   deleted notes reads. Don't sync a library with Notes from such a build.
 
+- A new field on a clip that should sync goes in three lists: sync.js `SYNCED`, app-saving.js `SYNCED_KEEP`, and backup.js `cleanMeta`. Sync's merge runs every entry through `cleanMeta` first, so a field missing there is dropped on every sync even though `SYNCED` names it (Live, 2026-11).
+- A merge done with the workflow's own `GITHUB_TOKEN` starts no other workflows, so `pages.yml` and the release builds never run. `auto-merge.yml` turns auto-merge on with the `AUTOMERGE_TOKEN` secret (a fine-grained token of Daniel's) for that reason.
 - The books of an audiobook folder added as a series share one `link`, the folder picked. Removing an entry lets go of its `link` only when no other entry still reads from it (`releaseLinks`).
 - A field missing from sync's `SYNCED`, backup's `cleanMeta`, `SYNCED_KEEP` and `AGAIN_KEEP` is dropped on the next sync or update. `folderSeries` and `folderIn` are in all four; a device without them strips them from clips it changes, which `healSeries` repairs while any clip of the series keeps them.
 - A site's tags (`siteTags`, { site, tags }) are read in `readArticle` before Readability runs: Readability takes the `<script>` tags out, and the schema.org keywords with them. A collection's clips carry the story page's tags, never a chapter page's own (`runJob`).

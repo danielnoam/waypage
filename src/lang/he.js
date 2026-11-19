@@ -1889,6 +1889,8 @@ Keel.i18n.strings("he", {
   "Name the new series": "שם הסדרה החדשה",
   "New series": "סדרה חדשה",
   "Series apart": "סדרות בנפרד",
+  "Tag row": "שורת תגיות",
+  "Your tags under Show and Order": "התגיות שלך מתחת להצגה ולסדר",
   "Part of": "שיוך",
   "Collections and series": "אוספים וסדרות",
   "Their own section, under Collections": "באזור משלהן, מתחת לאוספים",

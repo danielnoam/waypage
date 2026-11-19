@@ -5655,6 +5655,14 @@ c("bk1", { at: 0.01 })]);
       assert.strictEqual(await row.locator(".chip").first().textContent(), "Food×", "the picked one comes first");
       await row.locator(".chip", { hasText: "Food" }).click();
       assert.strictEqual(await q.evaluate(() => state.filter), "all");
+      // View options can hide the row, and bring it back.
+      await q.click("#viewBtn");
+      const tagSwitch = q.locator(".lib-view .row", { hasText: "Tag row" }).locator("input");
+      await tagSwitch.click();
+      await until(q, () => $("libTags").hidden && load(TAG_ROW_KEY, true) === false);
+      await tagSwitch.click();
+      await row.waitFor();
+      await q.evaluate(() => closeMenu());
       // A collection counts once in Settings › Tags.
       await row.locator(".chip", { hasText: "Edit tags" }).click();
       await q.locator("#sectionView:not([hidden])").waitFor();
