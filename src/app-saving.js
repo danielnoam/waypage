@@ -53,6 +53,8 @@ async function syncNow(quiet = true) {
       // an open menu and the position timer hold on to them.
       setPages: async (list) => {
         const live = new Map(state.pages.map((p) => [p.id, p]));
+        const kept = new Set(list.map((n) => n.id));
+        noteGone(state.pages.filter((p) => !kept.has(p.id) && !p.link && syncsPage(p)));
         const open = state.open, was = open && placeTime(open), inkWas = open && JSON.stringify(open.ink || null);
         state.pages = list.map((n) => {
           const o = live.get(n.id);
@@ -1441,6 +1443,111 @@ function setNewFor(name, entry) {
   store(NEW_KEY, all);
 }
 
+// Chapters deleted from a series stay deleted (2026-11): they aren't
+// counted as new or saved again with the rest. Kept on this device per
+// collection as { [lower-case name]: [url keys] }; one deleted on another
+// device is noted when sync takes it away here.
+const GONE_KEY = "waypage.chaptersGone";
+const GONE_MAX = 5000;
+const goneFor = (name) => new Set((load(GONE_KEY, {}) || {})[String(name).toLowerCase()] || []);
+function noteGone(list) {
+  const all = load(GONE_KEY, {}) || {};
+  const series = new Map();
+  let changed = false;
+  for (const p of list) {
+    if (!p.folder || !/^https?:/.test(p.url || "")) continue;
+    const key = String(p.folder).toLowerCase();
+    if (!series.has(key)) series.set(key, isSeries(folderPages(p.folder)));
+    if (!series.get(key)) continue;
+    const had = all[key] || [];
+    const u = urlKey(p.url);
+    if (had.includes(u)) continue;
+    all[key] = had.concat(u).slice(-GONE_MAX);
+    changed = true;
+  }
+  if (changed) store(GONE_KEY, all);
+}
+// A linked collection's chapter list as last read, less the deleted ones.
+function chapterLinks(name) {
+  const entry = newFor(name);
+  if (!entry || !entry.all) return [];
+  const gone = goneFor(name);
+  return gone.size ? entry.all.filter((u) => !gone.has(urlKey(u))) : entry.all;
+}
+
+// Keep a set number (2026-11): a linked collection holds `n` unread
+// chapters on this device. Read ones are deleted (and stay deleted, as
+// above) and the next ones in the site's list are saved in their place.
+// { [lower-case name]: n }, this device's own, since it's about its space.
+const CHAPTERS_KEEP_KEY = "waypage.chaptersKeep";
+const KEEP_CHOICES = [0, 3, 5, 10];
+const keepFor = (name) => +((load(CHAPTERS_KEEP_KEY, {}) || {})[String(name).toLowerCase()]) || 0;
+function setKeepFor(name, n) {
+  const all = load(CHAPTERS_KEEP_KEY, {}) || {};
+  if (n) all[String(name).toLowerCase()] = n; else delete all[String(name).toLowerCase()];
+  store(CHAPTERS_KEEP_KEY, all);
+}
+// Moves both with a renamed collection, or drops them with a removed one.
+function moveChapterNotes(old, name) {
+  for (const k of [GONE_KEY, CHAPTERS_KEEP_KEY]) {
+    const all = load(k, {}) || {};
+    const from = String(old).toLowerCase();
+    if (!(from in all)) continue;
+    if (name) all[String(name).toLowerCase()] = all[from];
+    if (!name || from !== String(name).toLowerCase()) delete all[from];
+    store(k, all);
+  }
+}
+// A read chapter with highlights, notes or drawings, a favourite, or
+// the one open is never deleted to make room.
+const keepsAnyway = (p) => p === state.open || p.fav || (p.marks || []).length || (p.ink && Object.keys(p.ink).length);
+const keepDrops = (name) => folderPages(name).filter((p) => p.finished && /^https?:/.test(p.url || "") && !keepsAnyway(p));
+
+const keepingUp = new Set();
+async function keepUp(name) {
+  const n = keepFor(name);
+  const key = String(name).toLowerCase();
+  if (!n || keepingUp.has(key) || !folderSource(folderPages(name))) return;
+  keepingUp.add(key);
+  try {
+    const drop = keepDrops(name);
+    if (drop.length) {
+      noteGone(drop);
+      for (const p of drop) { dropPackFile(p); dropAudioFiles(p); await C.store.removePage(p.id); }
+      state.pages = state.pages.filter((p) => !drop.includes(p));
+      await C.store.writeIndex(state.pages);
+      renderLibrary();
+      if (state.folder) renderFolder();
+      toast(tn(drop.length, "Deleted 1 read chapter of {name}", "Deleted {n} read chapters of {name}", { name: name }));
+    }
+    if (!navigator.onLine || savingInto(name)) return;
+    const list = folderPages(name);
+    const room = n - list.filter((p) => !p.finished).length;
+    const links = chapterLinks(name);
+    if (room <= 0 || !links.length) return;
+    // The next ones: after the last chapter saved or deleted, so earlier
+    // chapters never saved (a story started part way in) stay out.
+    const gone = goneFor(name);
+    let from = -1;
+    const all = newFor(name).all;
+    all.forEach((u, i) => { if (gone.has(urlKey(u)) || savedAs(u)) from = i; });
+    const next = all.slice(from + 1).filter((u) => !savedAs(u) && !savingAs(u)).slice(0, room);
+    if (next.length) saveAll(next, name, [], undefined, true, undefined, folderSource(list));
+  } finally {
+    keepingUp.delete(key);
+  }
+}
+async function pickKeep(name, n) {
+  if (n) {
+    const drop = keepDrops(name);
+    if (drop.length && !confirm(tn(drop.length, "Delete the 1 read chapter of {name}? Read chapters are deleted from now on, and the next ones saved.{alsoSynced}", "Delete the {n} read chapters of {name}? Read chapters are deleted from now on, and the next ones saved.{alsoSynced}", { name: name, alsoSynced: alsoSynced() }))) return;
+  }
+  setKeepFor(name, n);
+  if (state.folder && sameTag(state.folder, name)) renderFolder();
+  if (!n) return;
+  if (navigator.onLine) await checkNew(name, true); else await keepUp(name);
+}
+
 // The story's page a folder is linked to (0.26.0): kept on each of its
 // pages as `source`, so it travels with them in backups. "" when none.
 const folderSource = (list) => (list.find((p) => p.source) || {}).source || "";
@@ -1477,7 +1584,8 @@ async function checkNew(name, quiet) {
       // it isn't saved is new, wherever it sits.
       const found = await C.save.findChapters(source);
       const all = found.links.slice(0, 5000);
-      count = all.filter((u) => !savedAs(u) && !savingAs(u)).length;
+      const gone = goneFor(name);
+      count = all.filter((u) => !savedAs(u) && !savingAs(u) && !gone.has(urlKey(u))).length;
       setNewFor(name, { at: Date.now(), count, all });
       await updateCover(name, found.cover || "");
       await keepStoryTags(name, found.siteTags);
@@ -1487,9 +1595,10 @@ async function checkNew(name, quiet) {
         last.next = url;
         await C.store.writeIndex(state.pages);
         const seen = new Set([last.url]);
+        const gone = goneFor(name);
         while (url && !seen.has(url) && !savedAs(url) && count < NEW_MAX) {
           seen.add(url);
-          count++;
+          if (!gone.has(urlKey(url))) count++;
           if (count === NEW_MAX) break;
           try { url = await C.save.findNext(url); } catch (e) { break; }
         }
@@ -1502,6 +1611,7 @@ async function checkNew(name, quiet) {
   } finally {
     checking.delete(key);
   }
+  if (count != null && keepFor(name)) await keepUp(name);
   if (state.folder && sameTag(state.folder, name)) renderFolder();
   renderLibrary();
   if (!quiet && count === 0) toast(t("No new chapters yet."));
@@ -1515,7 +1625,7 @@ const newCountText = (n) => t("{n} new", { n: n >= NEW_MAX ? NEW_MAX + "+" : Str
 function freshCount(name) {
   const entry = newFor(name);
   if (!entry || !entry.count) return 0;
-  if (entry.all) return entry.all.filter((u) => !savedAs(u) && !savingAs(u)).length;
+  if (entry.all) return chapterLinks(name).filter((u) => !savedAs(u) && !savingAs(u)).length;
   const list = folderPages(name);
   const last = list[list.length - 1];
   if (!last || !last.next || savedAs(last.next)) return 0;
@@ -1540,7 +1650,7 @@ function checkRow(list) {
   // each at its place among those already saved.
   const take = entry && entry.all && fresh && !savingInto(name) ? el("button", { class: "chip on save-new", type: "button", onclick: () => {
     if (!navigator.onLine) { toast(t("You're offline. Try again when you're back online.")); return; }
-    saveAll(entry.all, name, [], undefined, true, undefined, folderSource(list));
+    saveAll(chapterLinks(name), name, [], undefined, true, undefined, folderSource(list));
   } }, t("Save {fresh}", { fresh: fresh })) : null;
   return el("div", { class: "rc-row check-new" },
     el("span", { class: "rc-label" }, t("New chapters")),
@@ -1554,11 +1664,20 @@ function checkRow(list) {
 // page, or one of its chapters), and saving the saved
 // ones again.
 function chaptersPanel(list) {
-  const rows = [checkRow(list), followControls(list[0], true), followControls(list[list.length - 1])].filter(Boolean);
+  const rows = [checkRow(list), keepRow(list), followControls(list[0], true), followControls(list[list.length - 1])].filter(Boolean);
   return el("div", { class: "folder-actions chapters-panel" },
     rows.length ? el("div", { class: "chapter-tools" }, ...rows)
       : el("p", { class: "meta" }, t("These clips don't link to each other, so there's nothing to look for. Link the collection to its website below.")),
     sourceSection(list));
+}
+
+function keepRow(list) {
+  if (!folderSource(list)) return null;
+  const name = state.folder;
+  const n = keepFor(name);
+  const chip = (v) => el("button", { class: "chip" + (v === n ? " on" : ""), type: "button", "aria-pressed": String(v === n),
+    "aria-label": v ? t("Keep {n} unread chapters", { n: v }) : t("Keep every chapter"), onclick: () => { if (v !== n) pickKeep(name, v); } }, v ? String(v) : t("All"));
+  return el("div", { class: "rc-row follow keep-row" }, el("span", { class: "rc-label" }, t("Keep")), el("div", { class: "chips" }, ...KEEP_CHOICES.map(chip)));
 }
 
 function sourceSection(list) {
@@ -1589,7 +1708,8 @@ function sourceSection(list) {
   return el("section", { class: "settings-section source-section" },
     el("h2", { class: "overline" }, t("Synced with")),
     el("div", { class: "source-row" }, input, link, unlink),
-    el("p", { class: "footnote" }, t("New chapters are read from its chapter list, which also finds chapters added in between.")));
+    el("p", { class: "footnote" }, t("New chapters are read from its chapter list, which also finds chapters added in between."), " ", t("Chapters you delete don't come back as new."),
+      keepFor(name) ? " " + t("Read chapters are deleted and the next ones saved, {n} unread at a time.", { n: keepFor(name) }) : ""));
 }
 
 async function setSource(name, url, cover) {
@@ -1676,7 +1796,7 @@ async function dailyCheck(force) {
     for (const name of allFolders()) {
       if (!isSeries(folderPages(name))) continue;
       const entry = newFor(name);
-      if (!force && entry && Date.now() - entry.at < DAY) continue;
+      if (!force && entry && Date.now() - entry.at < DAY) { if (keepFor(name)) await keepUp(name); continue; }
       const n = await checkNew(name, true);
       if (n) found++;
     }
@@ -1699,6 +1819,7 @@ async function renameFolder(raw) {
   for (const f of inside) for (const p of folderPages(f)) p.folderIn = name;
   renameReadingSet(old, name);
   renameFolderLook(old, name);
+  moveChapterNotes(old, name);
   C.platform.widgets.renamed(old, name);
   const entry = newFor(old);
   if (entry && !sameTag(old, name)) { setNewFor(name, entry); setNewFor(old, null); }

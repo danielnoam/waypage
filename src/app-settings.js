@@ -130,7 +130,7 @@ async function getReady() {
     const pictures = fetchPictures();
     const failed = retryAll(state.saving.filter((s) => s.error));
     await dailyCheck(true);
-    for (const name of allFolders()) if (freshCount(name) && !runFor(name)) saveNewChapters(name);
+    for (const name of allFolders()) if (freshCount(name) && !runFor(name) && !keepFor(name)) saveNewChapters(name);
     await Promise.all([checkFeeds(true), pictures, failed]);
   } finally {
     ready.running = false;

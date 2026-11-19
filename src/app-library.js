@@ -662,7 +662,7 @@ function saveNewChapters(name, b) {
   if (!fresh || !list.length) return;
   if (!navigator.onLine) { toast(t("You're offline. Try again when you're back online.")); return; }
   if (runFor(name)) { toast(t("Already saving into {name}. It's in Downloads.", { name: name })); return; }
-  if (entry && entry.all) { saveAll(entry.all, name, [], undefined, true, undefined, folderSource(list)); return; }
+  if (entry && entry.all) { saveAll(chapterLinks(name), name, [], undefined, true, undefined, folderSource(list)); return; }
   const last = list[list.length - 1];
   if (!sizeOk(last, fresh)) return;
   if (b) b.disabled = true;
@@ -1383,6 +1383,7 @@ async function removeFolder(withPages) {
   // Its series stay, in the library's Series.
   for (const f of inside) for (const p of folderPages(f)) delete p.folderIn;
   seriesMemo = null;
+  moveChapterNotes(name, null);
   if (withPages) state.pages = state.pages.filter((p) => !list.includes(p));
   await C.store.writeIndex(state.pages);
   folderMode = "";
@@ -1669,6 +1670,7 @@ async function deletePage(p, where) {
   if (!confirm(p.link ? t("Remove “{title}” from Waypage? {linkedStays}", { title: p.title, linkedStays: linkedStays([p]) })
     : t("Delete “{title}” from {HERE}?{alsoSynced}", { title: p.title, HERE: HERE, alsoSynced: alsoSynced() }))) return;
   forgetWatched([p]);
+  noteGone([p]);
   releaseLinks([p]); dropPackFile(p); dropAudioFiles(p);
   await C.store.removePage(p.id);
   state.pages = state.pages.filter((x) => x.id !== p.id);
@@ -1872,6 +1874,7 @@ async function deletePicked() {
     ? tn(list.length, "Remove 1 file from Waypage? {stays}", "Remove {n} files from Waypage? {stays}", { stays: linkedStays(list) })
     : t("Delete {countLine} from {HERE}?{alsoSynced}{filesNote}", { countLine: countLine(list.length), HERE: HERE, alsoSynced: alsoSynced(), filesNote: filesNote(list) }))) return;
   forgetWatched(list);
+  noteGone(list);
   releaseLinks(list);
   for (const p of list) { dropPackFile(p); dropAudioFiles(p); await C.store.removePage(p.id); }
   state.pages = state.pages.filter((p) => !list.includes(p));
