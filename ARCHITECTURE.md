@@ -286,7 +286,7 @@ A highlight can carry `tags` (2026-11): its own list, never the clips' tags
 (`allMarkTags` in app-library.js, `markTagsEditor` in app-reader.js). A tag
 edit sets the mark's `at`, so sync takes the later edit like a note;
 `backup.cleanMarks` keeps up to 20 clean tags and `marksBody` writes them
-as `#tags`. The Highlights place filters by one (`marksTag`).
+as `#tags`. The Highlights place filters by several at once (`marksTags`): any of them by default, or all, or none (`marksHow`, kept in `waypage.marksMatch`), picked from the filter button at the end of the tag row.
 
 Anything can be drawn on (2026-11). Drawing is part of Highlights: Draw in
 the Highlights sheet and on the selection bar (`app-ink.js inkStart`), and

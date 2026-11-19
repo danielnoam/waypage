@@ -6,13 +6,21 @@
 // title, the clip highlighted in last first, with a search over the
 // words, the notes and the titles, and chips by colour (1.42.0). A tap
 // opens the clip at the highlight.
-let marksQuery = "", marksColor = "", marksTag = "";
+let marksQuery = "", marksColor = "", marksTags = [];
+// How the picked tags match (2026-11): any of them, all of them, or none.
+const TAG_MATCH_KEY = "waypage.marksMatch";
+let marksHow = ["any", "all", "none"].includes(load(TAG_MATCH_KEY, "any")) ? load(TAG_MATCH_KEY, "any") : "any";
+const tagMatches = (m) => {
+  if (!marksTags.length) return true;
+  const has = (x) => (m.tags || []).some((y) => sameTag(x, y));
+  return marksHow === "all" ? marksTags.every(has) : marksHow === "none" ? !marksTags.some(has) : marksTags.some(has);
+};
 let marksHead = null;
 // Highlights come a screen's worth of clips at a time, the rest as the
 // end nears (1.28.4): two thousand at once took the phone two seconds.
 const MARKS_FIRST = 25, MARKS_MORE = 40;
 let marksUpTo = MARKS_FIRST, marksList = "", marksSeen = null;
-const marksMatch = (p, m, q) => (!marksColor || colorOf(m) === marksColor) && (!marksTag || (m.tags || []).some((x) => sameTag(x, marksTag)))
+const marksMatch = (p, m, q) => (!marksColor || colorOf(m) === marksColor) && tagMatches(m)
   && (!q || [m.text, m.note || "", p.title, ...(m.tags || [])].some((t) => t.toLowerCase().includes(q)));
 // Drawings (2026-11) are listed with each clip's highlights; a search
 // finds them by the clip's title, and a colour picked shows highlights alone.
@@ -21,7 +29,7 @@ function marksShown() {
   const q = marksQuery.trim().toLowerCase();
   return state.pages.filter((p) => (p.marks || []).length || hasDrawings(p))
     .map((p) => {
-      const ink = !marksColor && !marksTag && hasDrawings(p) && (!q || p.title.toLowerCase().includes(q)) ? inkGroups(p) : [];
+      const ink = !marksColor && !marksTags.length && hasDrawings(p) && (!q || p.title.toLowerCase().includes(q)) ? inkGroups(p) : [];
       return { p, ink, last: Math.max(p.inkAt || 0, ...(p.marks || []).map((m) => m.at || 0)), list: (p.marks || []).filter((m) => marksMatch(p, m, q)) };
     })
     .filter((c) => c.list.length || c.ink.length)
@@ -35,6 +43,55 @@ function goToMark(p, id) {
   if (state.open === p && !$("readerView").hidden) { if (m) jumpToMark(p, m, true); return; }
   markAfterOpen = id;
   openPage(p.id);
+}
+const MATCH_WORDS = {
+  any: { label: t("Any of these tags"), note: t("Has at least one"), count: t("any of {n} tags") },
+  all: { label: t("All of these tags"), note: t("Has every one"), count: t("all of {n} tags") },
+  none: { label: t("None of these tags"), note: t("Has none of them"), count: t("none of {n} tags") },
+};
+function closeMatchMenu(away) {
+  const pop = $("matchPop"), btn = document.querySelector(".hl-match");
+  removeEventListener("pointerdown", outsideMatch, true);
+  if (!pop) return;
+  pop.removeAttribute("id");
+  pop.style.pointerEvents = "none";
+  if (btn) { btn.setAttribute("aria-expanded", "false"); M.popOut(pop, btn.getBoundingClientRect()).then(() => pop.remove()); } else pop.remove();
+  if (!away && btn) btn.focus();
+}
+function outsideMatch(e) {
+  const pop = $("matchPop"), btn = document.querySelector(".hl-match");
+  if (pop && !pop.contains(e.target) && !(btn && btn.contains(e.target))) closeMatchMenu(true);
+}
+function openMatchMenu() {
+  if ($("matchPop")) { closeMatchMenu(); return; }
+  const btn = document.querySelector(".hl-match");
+  if (!btn || btn.disabled) return;
+  const pop = el("div", { class: "pop-menu", id: "matchPop", role: "menu", "aria-label": t("How tags match") },
+    el("p", { class: "pop-note pop-head" }, t("Show highlights with")),
+    ...Object.entries(MATCH_WORDS).map(([how, w]) => {
+      const on = how === marksHow;
+      const b = el("button", { class: "pop-item", type: "button", role: "menuitemradio", "aria-checked": String(on), tabindex: "-1",
+        onclick: () => { marksHow = how; store(TAG_MATCH_KEY, how); marksUpTo = MARKS_FIRST; closeMatchMenu(); renderHighlights(); } },
+        el("span", { class: "pop-icon", "aria-hidden": "true" }), el("span", { class: "pop-label" }, w.label, el("span", { class: "pop-sub" }, w.note)));
+      if (on) b.firstChild.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+      return b;
+    }));
+  const at = btn.getBoundingClientRect();
+  pop.style.top = at.bottom + 4 + "px";
+  pop.style.right = Math.max(8, innerWidth - at.right) + "px";
+  $("highlights").append(pop);
+  btn.setAttribute("aria-expanded", "true");
+  M.popFrom(pop, at);
+  const items = () => [...pop.querySelectorAll(".pop-item")];
+  (items().find((b) => b.getAttribute("aria-checked") === "true") || items()[0]).focus();
+  pop.addEventListener("keydown", (e) => {
+    const all = items(), i = all.indexOf(document.activeElement);
+    const to = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: all.length - 1 }[e.key];
+    if (to !== undefined) { e.preventDefault(); all[(to + all.length) % all.length].focus(); }
+    else if (e.key === "Escape") { e.preventDefault(); closeMatchMenu(); }
+    else if (e.key === "Tab") closeMatchMenu(true);
+  });
+  setTimeout(() => addEventListener("pointerdown", outsideMatch, true));
 }
 function renderHighlights() {
   const root = $("highlights");
@@ -61,21 +118,31 @@ function renderHighlights() {
   if (marksColor && !everyMark.some((m) => colorOf(m) === marksColor)) marksColor = "";
   const chips = colorChips(everyMark, marksColor, (c) => { marksColor = c; marksUpTo = MARKS_FIRST; renderHighlights(); });
   fill(marksHead.querySelector(".hl-colors"), chips);
-  if (marksTag && !allMarkTags().some((x) => sameTag(x, marksTag))) marksTag = "";
   const usedTags = allMarkTags();
-  fill(marksHead.querySelector(".hl-tags"), usedTags.length ? el("div", { class: "chips mark-filters", role: "group", "aria-label": t("Show highlights by tag") },
-    el("button", { class: "chip" + (!marksTag ? " on" : ""), type: "button", "aria-pressed": String(!marksTag), onclick: () => { marksTag = ""; marksUpTo = MARKS_FIRST; renderHighlights(); } }, t("All tags")),
-    ...usedTags.map((x) => { const on = marksTag && sameTag(x, marksTag);
-      return el("button", { class: "chip" + (on ? " on" : ""), type: "button", "aria-pressed": String(!!on), dir: "auto",
-        onclick: () => { marksTag = on ? "" : x; marksUpTo = MARKS_FIRST; renderHighlights(); } }, "#" + x); })) : null);
+  marksTags = marksTags.filter((x) => usedTags.some((y) => sameTag(x, y)));
+  const pickTag = (x) => {
+    marksTags = marksTags.some((y) => sameTag(x, y)) ? marksTags.filter((y) => !sameTag(x, y)) : [...marksTags, x];
+    marksUpTo = MARKS_FIRST;
+    renderHighlights();
+  };
+  const matchBtn = el("button", { class: "icon-btn hl-match" + (marksHow !== "any" ? " changed" : ""), type: "button", "aria-haspopup": "menu", "aria-expanded": "false",
+    "aria-label": t("How tags match"), onclick: () => openMatchMenu() });
+  matchBtn.disabled = !marksTags.length;
+  matchBtn.append(svgIcon("filter", 22));
+  fill(marksHead.querySelector(".hl-tags"), usedTags.length ? el("div", { class: "hl-tags-row" },
+    el("div", { class: "chips", role: "group", "aria-label": t("Show highlights by tag") },
+      el("button", { class: "chip" + (!marksTags.length ? " on" : ""), type: "button", "aria-pressed": String(!marksTags.length), onclick: () => { marksTags = []; marksUpTo = MARKS_FIRST; renderHighlights(); } }, t("All tags")),
+      ...usedTags.map((x) => { const on = marksTags.some((y) => sameTag(x, y));
+        return el("button", { class: "chip" + (on ? " on" : ""), type: "button", "aria-pressed": String(on), dir: "auto", onclick: () => pickTag(x) }, "#" + x); })),
+    matchBtn) : null);
   const clips = marksShown();
   const shown = clips.reduce((n, c) => n + c.list.length, 0);
   if (marksQuery !== marksList) { marksList = marksQuery; marksUpTo = MARKS_FIRST; }
   const more = clips.length > marksUpTo;
   marksHead.hidden = !total && !drawings;
   const hl = (n) => tn(n, "1 highlight", "{n} highlights");
-  marksHead.querySelector(".hl-count").textContent = marksQuery.trim() || marksColor || marksTag
-    ? t("{hl} found", { hl: hl(shown) })
+  marksHead.querySelector(".hl-count").textContent = marksQuery.trim() || marksColor || marksTags.length
+    ? t("{hl} found", { hl: hl(shown) }) + (marksTags.length && (marksTags.length > 1 || marksHow === "none") ? " · " + MATCH_WORDS[marksHow].count.replace("{n}", marksTags.length) : "")
     : t("{what} in {clips}", { what: [total || !drawings ? hl(total) : null, drawings ? inkWord(drawings) : null].filter(Boolean).join(" · "), clips: countLine(clips.length) });
   marksHead.querySelector(".hl-copy").hidden = !shown;
   const nodes = clips.slice(0, marksUpTo).map(({ p, list, ink }) => {

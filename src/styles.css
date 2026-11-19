@@ -847,6 +847,13 @@ body.aloud-bar-up .library, body.aloud-bar-up .screen-body { padding-bottom: cal
 @media (prefers-reduced-motion: reduce) { .sel-colors .swatch-dot { transition: none; } }
 .chip .swatch-dot { width: 14px; height: 14px; }
 .mark-filters { margin-top: var(--s-2); }
+.hl-tags-row { display: flex; align-items: flex-start; gap: var(--s-2); margin-top: var(--s-2); }
+.hl-tags-row .chips { flex: 1; }
+.hl-match { position: relative; flex-shrink: 0; color: var(--accent); }
+.hl-match:disabled { color: var(--muted); opacity: 0.5; }
+.hl-match.changed::after { content: ""; position: absolute; top: 8px; inset-inline-end: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); box-sizing: content-box; }
+.pop-head { padding: var(--s-2) var(--s-4) var(--s-1); margin: 0; }
+.pop-sub { display: block; color: var(--muted); font-size: var(--fs-meta); }
 .mark-colors { display: flex; gap: var(--s-1); margin: 0 0 var(--s-3); }
 .mark-swatch {
   width: var(--tap); height: var(--tap); padding: 0; border: 0; border-radius: var(--r-full);
@@ -3328,3 +3335,4 @@ body.listen-bar-up .library, body.listen-bar-up .screen-body { padding-bottom: c
 :root[dir="rtl"] svg:has(> path:is([d="M15 5l-7 7 7 7"], [d="M9 5l7 7-7 7"], [d="M6 5v14M18 5l-8 7 8 7"], [d="M6 5h2v14H6zM20 5v14L9.5 12z"])) { transform: scaleX(-1); }
 /* Hebrew has no capitals, and spaced letters read as separate words. */
 :root:lang(he) .overline { letter-spacing: 0; }
+#matchPop .pop-icon { width: 20px; height: 20px; }

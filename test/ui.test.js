@@ -441,10 +441,33 @@ function zipOf(files) {
       await q.click("#sideBtn");
       await q.locator("#sidebar .side-item", { hasText: "Highlights" }).click();
       assert.strictEqual(await q.locator("#highlights .mark-row").count(), 2);
-      await q.locator("#highlights .mark-filters .chip", { hasText: "#quote" }).click();
+      await q.locator("#highlights .hl-tags .chip", { hasText: "#quote" }).click();
       assert.strictEqual(await q.locator("#highlights .mark-row").count(), 1);
       assert.ok(/oceanic/.test(await q.locator("#highlights .mark-row").first().textContent()));
-      await q.locator("#highlights .mark-filters .chip", { hasText: "All tags" }).click();
+      await q.locator("#highlights .hl-tags .chip", { hasText: "All tags" }).click();
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 2);
+      // Several tags at once: any of them by default, then all, then none.
+      await q.evaluate(async () => {
+        for (const p of state.pages) for (const m of p.marks || []) m.tags = /oceanic/.test(m.text) ? ["quote", "idea"] : ["idea"];
+        await window.Waypage.store.writeIndex(state.pages);
+        renderHighlights();
+      });
+      assert.ok(await q.locator("#highlights .hl-match").isDisabled(), "the match button waits for a tag");
+      await q.locator("#highlights .hl-tags .chip", { hasText: "#quote" }).click();
+      await q.locator("#highlights .hl-tags .chip", { hasText: "#idea" }).click();
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 2, "any of the tags");
+      const mode = async (name) => {
+        await q.locator("#highlights .hl-match").click();
+        await q.locator("#matchPop .pop-item", { hasText: name }).click();
+      };
+      await mode("All of these tags");
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 1, "all of the tags");
+      await mode("None of these tags");
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 0, "none of the tags");
+      await q.locator("#highlights .hl-tags .chip", { hasText: "#quote" }).click();
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 0, "idea is on both");
+      assert.strictEqual(await q.evaluate(() => localStorage.getItem("waypage.marksMatch")), '"none"');
+      await mode("Any of these tags");
       assert.strictEqual(await q.locator("#highlights .mark-row").count(), 2);
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
