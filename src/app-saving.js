@@ -1687,7 +1687,11 @@ function sourceSection(list) {
   const src = folderSource(list);
   const input = el("input", { class: "source-input", type: "url", inputmode: "url", value: src,
     placeholder: t("Its contents page, or any chapter"), "aria-label": t("Page to sync with"), autocapitalize: "off", spellcheck: "false" });
+  // One button (Daniel's ask): the link in the box is read again, or
+  // linked for the first time; an empty box unlinks.
+  const label = src ? t("Refresh") : t("Link");
   const link = el("button", { class: "chip source-link", type: "button", onclick: async () => {
+    if (src && !input.value.trim()) { setSource(name, ""); toast(t("Unlinked {name}", { name: name })); return; }
     const u = linkFrom(input.value);
     if (!u) { toast(t("Paste the link to its contents page or a chapter.")); return; }
     if (!navigator.onLine) { toast(t("You're offline. Try again when you're back online.")); return; }
@@ -1702,15 +1706,14 @@ function sourceSection(list) {
     } catch (e) {
       toast(e instanceof C.save.SaveError ? e.message : t("Couldn't read that page. Try again."));
     } finally {
-      if (link.isConnected) { link.disabled = false; link.textContent = src ? t("Change") : t("Link"); }
+      if (link.isConnected) { link.disabled = false; link.textContent = label; }
     }
-  } }, src ? t("Change") : t("Link"));
-  const unlink = src ? el("button", { class: "row source-unlink", type: "button", onclick: () => { setSource(name, ""); toast(t("Unlinked {name}", { name: name })); } },
-    el("span", { class: "row-label" }, t("Unlink"))) : null;
+  } }, label);
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); link.click(); } });
   return section(t("Synced with"), null,
-    el("div", { class: "group" }, el("div", { class: "row source-row" }, input, link), unlink),
-    el("p", { class: "footnote" }, t("New chapters are read from its chapter list, which also finds chapters added in between."), " ", t("Chapters you delete don't come back as new.")));
+    el("div", { class: "group" }, el("div", { class: "row source-row" }, input, link)),
+    el("p", { class: "footnote" }, t("New chapters are read from its chapter list, which also finds chapters added in between."), " ", t("Chapters you delete don't come back as new."),
+      src ? " " + t("Empty the box and press Refresh to unlink.") : ""));
 }
 
 async function setSource(name, url, cover) {

@@ -1905,7 +1905,6 @@ span.update-text { cursor: default; }
 }
 .chapters-panel .source-input:focus-visible { outline: none; }
 .chapters-panel .source-row:focus-within { box-shadow: inset 0 0 0 2px var(--accent); }
-.chapters-panel .source-unlink { color: var(--warn); }
 .folder-actions.cover-panel { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: var(--s-4); }
 /* One row that scrolls sideways, so a long story's chapters stay close
    under it in Edit. */
