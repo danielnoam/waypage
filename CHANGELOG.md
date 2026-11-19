@@ -2,6 +2,22 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.68.0] - 2026-11-19
+
+### Added
+- A comic's Auto-scroll settings have a Hold at the end to go on switch: scroll down past the end and hold for half a second, the next card filling as you do, and the next chapter opens.
+- Tags on highlights. Open a highlight and add tags under its note; they show on its row, and the Highlights place can show just the highlights with one tag. Highlight tags are their own list, apart from your clips' tags, and go with the highlight to your other devices, backups and Copy all.
+- In Highlights you can pick several tags at once. A highlight shows if it has any of them; the filter button at the end of the tag row changes that to all of the tags or none of them.
+- Page view for notes, in the reader's ⋯ menu above Save as PDF: every page of the note in one column, with the page you are on at the top. Tap a page to go to it.
+- Hold a page to select it, tap more to add them, then Copy, Paste (below the last selected page, in this note or another), Delete (with Undo), Share, Save as (PDF or picture) or change the Background to Blank, Lines or Squares. Drawings stay where they are.
+- Settings › Report a problem › Recover Notes and Highlights looks through your library for highlights and drawings an update left behind. It lists them by clip, puts back the ones with a safe place (a highlight that moved, drawings past the end of a clip, a PDF shown as text that has drawings, a note missing its sheets), and lets you open, copy or delete the rest.
+- Recover also has Look for deleted notes. It finds Notes that are gone from your library but still in GitHub sync or on this phone (an older version's sync deletes Notes), shows their sheets and strokes, and brings each back as a new note.
+- A Tag row switch in the Library's View options and Settings › Library hides the row of tag chips under Show and Order, or brings it back.
+
+### Fixed
+- A highlight that spans two paragraphs, or whose text has doubled spaces, is found again when a clip's paragraphs have shifted, instead of showing "Not found in this copy of the clip".
+- A clip set to Live stays Live: the next sync, or restoring a backup, turned it off again.
+
 ## [1.67.0] - 2026-11-18
 
 ### Added

@@ -43,7 +43,7 @@ Each section below shows the computer (left) and the phone (right).
 - Filter by unread, finished or a tag; sort by saved, read, length or site.
 - Search titles, tags and the full text of every clip.
 - Favourites, tags, and a star on a clip's picture.
-- Tags as a row of chips over the library, and Settings › Library › Tags to rename, merge or delete them; a site's own tags offered on each clip.
+- Tags as a row of chips over the library (the Tag row switch in View options hides it), and Settings › Library › Tags to rename, merge or delete them; a site's own tags offered on each clip.
 - Pick several clips to tag, move, mark read, export or delete together; hold or right-click for a clip's menu.
 - Find and replace: find and remove or replace words across many clips and files.
 - Import from Pocket, Instapaper, Omnivore, Raindrop and Wallabag.
@@ -82,6 +82,7 @@ Each section below shows the computer (left) and the phone (right).
 - Opening a PDF offers Make a note beside Keep a copy and Read from where it is, and ⋯ › Make a note from it works on any file: a PDF's own pages, a comic's pictures, anything else set as pages. The file stays as it is. A note's card shows its first sheet.
 - Notes show in their own part of the library, above Files, and Show › All notes (there once you have a note) lists them alone. Aa on a note has only Layout (All notes or This note, margins, brightness slider, theme, Dark note) and Auto-scroll, which goes on to the next note.
 - ⋯ › Try your pen shows what a pen sends and runs the pen test; ⋯ › Save as PDF makes a PDF of the sheets with what is on them.
+- ⋯ › Page view shows every page of a note in one column: pick pages to copy, paste into this note or another, delete, share, save as PDF or pictures, or give a Blank, Lines or Squares background.
 - Settings › GitHub sync › What this device syncs has Notes: each note goes up whole (sheets, strokes, typed text, pictures and the PDF it was made from, up to 50 MB) and comes down on your other devices; what two devices drew is merged stroke by stroke. A bigger note says Not synced, too big. Notes go into backups too, with their own switch in Google Drive's What goes in.
 
 ## Saving
@@ -97,7 +98,7 @@ Each section below shows the computer (left) and the phone (right).
 - Videos as a thumbnail and a link.
 - A link to an EPUB, PDF or CBZ file downloads the file and adds it like one brought in.
 - Web serials: save next, previous or all along a site's next-chapter links, or a contents page as its chapters. Royal Road, AO3, Scribble Hub, FanFiction.net, Blogger, WEBTOON, Tapas, Wattpad, SpaceBattles and Sufficient Velocity (by their threadmarks), and Wikisource.
-- Comics and manga as image chapters, read edge to edge; a page that is a column of pictures is spotted as one, and Save as comic (or Save as article) fixes a clip saved the wrong way. Reading one, Auto-scroll takes Narrate's place, with its own Speed, Go on to the next clip and Keep the screen on. In Pages a comic is one page a screen (two side by side on a wide window), turned like a book; a manga turns right to left, and a two-page spread is read in halves on a phone.
+- Comics and manga as image chapters, read edge to edge; a page that is a column of pictures is spotted as one, and Save as comic (or Save as article) fixes a clip saved the wrong way. Reading one, Auto-scroll takes Narrate's place, with its own Speed, Go on to the next clip, Hold at the end to go on (scroll past the end and hold) and Keep the screen on. In Pages a comic is one page a screen (two side by side on a wide window), turned like a book; a manga turns right to left, and a two-page spread is read in halves on a phone.
 - Pages built by JavaScript, drawn out of sight first; saving signed in to a site; the Internet Archive's copy when a page is gone.
 - Save linked pages from a clip, and Update from the site keeping highlights and your place.
 - Saves keep going with the app put away, wait for Wi-Fi if you like, and show in Downloads.
@@ -149,7 +150,8 @@ Each section below shows the computer (left) and the phone (right).
 
 - Highlights in five colours, with notes: tap Mark on the selection bar for the last colour, hold it for the five (a mouse has the dot beside it, or keys 1 to 5).
 - Draw on any clip or file: Draw on the selection bar, in the Highlights sheet, or D. On words a drawing stays with its paragraph or picture; on a PDF's pages, with the page.
-- The Highlights place: every highlight and drawing, searchable, a colour at a time, Copy all or save as Markdown. Drawings show as small pictures, five per clip, then Show all.
+- Tags on highlights, their own list apart from clips' tags, added under a highlight's note.
+- The Highlights place: every highlight and drawing, searchable, a colour at a time or by tags (any, all or none of them), Copy all or save as Markdown. Drawings show as small pictures, five per clip, then Show all.
 - Highlights and drawings sync, stroke by stroke; on a file read from where it is, they show on another device with the same file.
 - Translate this clip on the device, under the text or instead of it (ML Kit on Android, Chrome's own translator on a computer); translate selected words.
 - Look up words offline in your own StarDict dictionaries.
