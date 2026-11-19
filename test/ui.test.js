@@ -407,6 +407,72 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a highlight takes tags of its own, Highlights shows one tag at a time, and clips' tags stay apart (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ARTICLE);
+      await q.press("#saveUrl", "Enter");
+      await q.locator(".page-card", { hasText: "The Long Haul Flight" }).first().click();
+      await frameText(q).getByText("oceanic track").waitFor();
+      const pick = (words) => q.frameLocator("#readerFrame").locator("p", { hasText: words }).first().evaluate((el, w) => {
+        const t = [...el.childNodes].find((n) => n.nodeType === 3 && n.data.includes(w));
+        const r = el.ownerDocument.createRange();
+        r.setStart(t, t.data.indexOf(w));
+        r.setEnd(t, t.data.indexOf(w) + w.length);
+        const sel = el.ownerDocument.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+      }, words);
+      await pick("oceanic track");
+      await q.locator(".read-here .sel-mark:not([hidden])").click();
+      await q.frameLocator("#readerFrame").locator("mark.co-mark", { hasText: "oceanic" }).first().waitFor();
+      await q.waitForTimeout(700);
+      await pick("marmalade sky");
+      await q.locator(".read-here .sel-mark:not([hidden])").click();
+      await q.frameLocator("#readerFrame").locator("mark.co-mark", { hasText: "marmalade" }).first().waitFor();
+      await q.frameLocator("#readerFrame").locator("mark.co-mark", { hasText: "oceanic" }).first().click();
+      await q.locator("#readingSheet:not([hidden]) .tag-input").fill("quote");
+      await q.press("#readingSheet .tag-input", "Enter");
+      await q.locator("#readingSheet .mark-tags-edit .chip.on", { hasText: "quote" }).waitFor();
+      const kept = await q.evaluate(async () => (await window.Waypage.store.readIndex()).flatMap((p) => p.marks || []).map((m) => m.tags || null));
+      assert.deepStrictEqual(kept.filter(Boolean), [["quote"]]);
+      assert.strictEqual(await q.evaluate(() => allTags().includes("quote")), false, "clip tags stay apart");
+      await q.goBack();
+      await q.goBack();
+      await q.click("#sideBtn");
+      await q.locator("#sidebar .side-item", { hasText: "Highlights" }).click();
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 2);
+      await q.locator("#highlights .hl-tags .chip", { hasText: "#quote" }).click();
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 1);
+      assert.ok(/oceanic/.test(await q.locator("#highlights .mark-row").first().textContent()));
+      await q.locator("#highlights .hl-tags .chip", { hasText: "All tags" }).click();
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 2);
+      // Several tags at once: any of them by default, then all, then none.
+      await q.evaluate(async () => {
+        for (const p of state.pages) for (const m of p.marks || []) m.tags = /oceanic/.test(m.text) ? ["quote", "idea"] : ["idea"];
+        await window.Waypage.store.writeIndex(state.pages);
+        renderHighlights();
+      });
+      assert.ok(await q.locator("#highlights .hl-match").isDisabled(), "the match button waits for a tag");
+      await q.locator("#highlights .hl-tags .chip", { hasText: "#quote" }).click();
+      await q.locator("#highlights .hl-tags .chip", { hasText: "#idea" }).click();
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 2, "any of the tags");
+      const mode = async (name) => {
+        await q.locator("#highlights .hl-match").click();
+        await q.locator("#matchPop .pop-item", { hasText: name }).click();
+      };
+      await mode("All of these tags");
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 1, "all of the tags");
+      await mode("None of these tags");
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 0, "none of the tags");
+      await q.locator("#highlights .hl-tags .chip", { hasText: "#quote" }).click();
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 0, "idea is on both");
+      assert.strictEqual(await q.evaluate(() => localStorage.getItem("waypage.marksMatch")), '"none"');
+      await mode("Any of these tags");
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 2);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("on a touch screen Highlight is one button: a hold opens the colours under the bar, sliding to one and letting go highlights in it; keys 1 to 5 do too", async () => {
       const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: "block" });
       const q = await ctx.newPage();
