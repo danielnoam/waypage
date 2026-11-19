@@ -1739,6 +1739,9 @@ span.update-text { cursor: default; }
 .mark-note { color: var(--muted); font-size: var(--fs-meta); line-height: var(--lh-meta); white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .mark-edit { flex-shrink: 0; color: var(--muted); }
 .marks-copy { flex-shrink: 0; }
+.mark-tags { display: flex; flex-wrap: wrap; gap: var(--s-2); font-size: var(--fs-meta); line-height: var(--lh-meta); }
+.mark-tags-edit { display: flex; flex-direction: column; gap: var(--s-2); margin: var(--s-3) 0; }
+.hl-tags:empty { display: none; }
 .mark-note-field {
   display: block; width: 100%; min-height: 88px; margin-bottom: var(--s-4); padding: var(--s-3);
   border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); color: var(--ink);

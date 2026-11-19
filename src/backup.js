@@ -177,6 +177,14 @@
       ids.add(id);
       if (text(m.note, 4000).trim()) o.note = text(m.note, 4000).trim();
       if (MARK_COLORS.includes(m.color)) o.color = m.color;
+      if (Array.isArray(m.tags)) {
+        const tags = [];
+        for (const x of m.tags.slice(0, 20)) {
+          const s = typeof x === "string" ? x.replace(/\s+/g, " ").trim().slice(0, 32) : "";
+          if (s && !tags.some((y) => y.toLocaleLowerCase() === s.toLocaleLowerCase())) tags.push(s);
+        }
+        if (tags.length) o.tags = tags;
+      }
       out.push(o);
     }
     return out;
@@ -730,7 +738,8 @@
   // hold a drawing, so it says where one is, in the clip's order.
   function marksBody(p) {
     const rows = (p.marks || []).map((m) => ({ at: m.page ? m.page : m.block || 0,
-      text: "> " + mdEscape(m.text) + (m.note ? "\n\n" + m.note.split("\n").map((l) => l.trim()).join("\n") : "") }));
+      text: "> " + mdEscape(m.text) + (m.note ? "\n\n" + m.note.split("\n").map((l) => l.trim()).join("\n") : "")
+      + (m.tags && m.tags.length ? "\n\n" + m.tags.map((x) => "#" + mdEscape(x.replace(/\s+/g, "-"))).join(" ") : "") }));
     if (!p.note && p.ink && typeof p.ink === "object") for (const k of Object.keys(p.ink)) if (Array.isArray(p.ink[k]) && p.ink[k].length) rows.push({ at: Number(k) - 0.5, text: "_Drawing, paragraph " + k + "_" });
     if (!p.note && Array.isArray(p.drawn)) for (const d of p.drawn) if (Array.isArray(d)) rows.push({ at: d[0] + 0.5, text: "_Drawing, page " + d[0] + "_" });
     return rows.sort((a, b) => a.at - b.at).map((r) => r.text).join("\n\n");

@@ -282,6 +282,12 @@ fallback); one made in Show as text is found on the printed pages the
 same way (`findRects`, and `files.findPage` for Go to it). Comics and
 scans have no words, so the reader hides Highlights for them.
 
+A highlight can carry `tags` (2026-11): its own list, never the clips' tags
+(`allMarkTags` in app-library.js, `markTagsEditor` in app-reader.js). A tag
+edit sets the mark's `at`, so sync takes the later edit like a note;
+`backup.cleanMarks` keeps up to 20 clean tags and `marksBody` writes them
+as `#tags`. The Highlights place filters by one (`marksTag`).
+
 Anything can be drawn on (2026-11). Drawing is part of Highlights: Draw in
 the Highlights sheet and on the selection bar (`app-ink.js inkStart`), and
 the reader bar's pen only on notes. `ink.load` picks one of two modes.

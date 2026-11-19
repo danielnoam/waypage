@@ -6,13 +6,14 @@
 // title, the clip highlighted in last first, with a search over the
 // words, the notes and the titles, and chips by colour (1.42.0). A tap
 // opens the clip at the highlight.
-let marksQuery = "", marksColor = "";
+let marksQuery = "", marksColor = "", marksTag = "";
 let marksHead = null;
 // Highlights come a screen's worth of clips at a time, the rest as the
 // end nears (1.28.4): two thousand at once took the phone two seconds.
 const MARKS_FIRST = 25, MARKS_MORE = 40;
 let marksUpTo = MARKS_FIRST, marksList = "", marksSeen = null;
-const marksMatch = (p, m, q) => (!marksColor || colorOf(m) === marksColor) && (!q || [m.text, m.note || "", p.title].some((t) => t.toLowerCase().includes(q)));
+const marksMatch = (p, m, q) => (!marksColor || colorOf(m) === marksColor) && (!marksTag || (m.tags || []).some((x) => sameTag(x, marksTag)))
+  && (!q || [m.text, m.note || "", p.title, ...(m.tags || [])].some((t) => t.toLowerCase().includes(q)));
 // Drawings (2026-11) are listed with each clip's highlights; a search
 // finds them by the clip's title, and a colour picked shows highlights alone.
 const hasDrawings = (p) => !p.note && !!((p.ink && Object.keys(p.ink).length) || (p.drawn && p.drawn.length));
@@ -20,7 +21,7 @@ function marksShown() {
   const q = marksQuery.trim().toLowerCase();
   return state.pages.filter((p) => (p.marks || []).length || hasDrawings(p))
     .map((p) => {
-      const ink = !marksColor && hasDrawings(p) && (!q || p.title.toLowerCase().includes(q)) ? inkGroups(p) : [];
+      const ink = !marksColor && !marksTag && hasDrawings(p) && (!q || p.title.toLowerCase().includes(q)) ? inkGroups(p) : [];
       return { p, ink, last: Math.max(p.inkAt || 0, ...(p.marks || []).map((m) => m.at || 0)), list: (p.marks || []).filter((m) => marksMatch(p, m, q)) };
     })
     .filter((c) => c.list.length || c.ink.length)
@@ -53,19 +54,27 @@ function renderHighlights() {
           const text = marksShown().map((c) => C.backup.marksMarkdown({ ...c.p, marks: c.list })).join("\n");
           copyText(text, t("Highlights copied"));
         } }, t("Copy all"))),
-      el("div", { class: "hl-colors" }));
+      el("div", { class: "hl-colors" }),
+      el("div", { class: "hl-tags" }));
   }
   const everyMark = state.pages.flatMap((p) => p.marks || []);
   if (marksColor && !everyMark.some((m) => colorOf(m) === marksColor)) marksColor = "";
   const chips = colorChips(everyMark, marksColor, (c) => { marksColor = c; marksUpTo = MARKS_FIRST; renderHighlights(); });
   fill(marksHead.querySelector(".hl-colors"), chips);
+  if (marksTag && !allMarkTags().some((x) => sameTag(x, marksTag))) marksTag = "";
+  const usedTags = allMarkTags();
+  fill(marksHead.querySelector(".hl-tags"), usedTags.length ? el("div", { class: "chips mark-filters", role: "group", "aria-label": t("Show highlights by tag") },
+    el("button", { class: "chip" + (!marksTag ? " on" : ""), type: "button", "aria-pressed": String(!marksTag), onclick: () => { marksTag = ""; marksUpTo = MARKS_FIRST; renderHighlights(); } }, t("All tags")),
+    ...usedTags.map((x) => { const on = marksTag && sameTag(x, marksTag);
+      return el("button", { class: "chip" + (on ? " on" : ""), type: "button", "aria-pressed": String(!!on), dir: "auto",
+        onclick: () => { marksTag = on ? "" : x; marksUpTo = MARKS_FIRST; renderHighlights(); } }, "#" + x); })) : null);
   const clips = marksShown();
   const shown = clips.reduce((n, c) => n + c.list.length, 0);
   if (marksQuery !== marksList) { marksList = marksQuery; marksUpTo = MARKS_FIRST; }
   const more = clips.length > marksUpTo;
   marksHead.hidden = !total && !drawings;
   const hl = (n) => tn(n, "1 highlight", "{n} highlights");
-  marksHead.querySelector(".hl-count").textContent = marksQuery.trim() || marksColor
+  marksHead.querySelector(".hl-count").textContent = marksQuery.trim() || marksColor || marksTag
     ? t("{hl} found", { hl: hl(shown) })
     : t("{what} in {clips}", { what: [total || !drawings ? hl(total) : null, drawings ? inkWord(drawings) : null].filter(Boolean).join(" · "), clips: countLine(clips.length) });
   marksHead.querySelector(".hl-copy").hidden = !shown;
@@ -73,7 +82,8 @@ function renderHighlights() {
     const rows = list.map((m) => ({ at: m.page ? m.page : m.block || 0, row: el("li", { class: "mark-item" },
       el("button", { class: "row mark-row", type: "button", "aria-label": t("{slice}, in {title}", { slice: m.text.slice(0, 120), title: p.title }), onclick: () => goToMark(p, m.id) },
         el("span", { class: "mark-quote", "data-c": colorOf(m), dir: "auto" }, m.text),
-        m.note ? el("span", { class: "mark-note", dir: "auto" }, m.note) : null)) }));
+        m.note ? el("span", { class: "mark-note", dir: "auto" }, m.note) : null,
+        markTagsLine(m))) }));
     const all = inkOpen.has(p.id);
     for (const g of all ? ink : ink.slice(0, INK_FIRST)) rows.push({ at: inkOrder(g) + 0.5, row: inkRow(p, g, () => inkGoTo(p, g)) });
     rows.sort((a, b) => a.at - b.at);

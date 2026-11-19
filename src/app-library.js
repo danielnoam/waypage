@@ -17,6 +17,17 @@ function allTags() {
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t);
 }
 
+// Highlight tags (2026-11) are their own list, never the clips' tags: on a
+// highlight's `tags`, most used first.
+function allMarkTags() {
+  const counts = new Map();
+  for (const p of state.pages) for (const m of p.marks || []) for (const t of m.tags || []) {
+    const k = [...counts.keys()].find((x) => sameTag(x, t)) || t;
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t);
+}
+
 // `has` plus `more`, without case-insensitive repeats.
 function withTags(has, more) {
   const out = [...(has || [])];
