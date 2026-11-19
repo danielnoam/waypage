@@ -2112,12 +2112,12 @@
   }
 
   // Hold at the end of a comic to go on (2026-11): scrolling down past the
-  // bottom and holding for a second opens the next chapter, the card's bar
+  // bottom and holding for half a second opens the next chapter, the card's bar
   // filling as it goes. A touch drag or a wheel / trackpad stream; both
   // listeners are passive, so ordinary scrolling is untouched. onPullNext()
   // says whether Settings has it on.
   let onPullNext = null, pullDone = false, pullRaf = 0;
-  const PULL_MS = 1000, PULL_PX = 40, PULL_GAP = 250;
+  const PULL_MS = 500, PULL_PX = 40, PULL_GAP = 250;
   function pullInput() {
     if (!comic) return;
     const w = frame.contentWindow;

@@ -2529,7 +2529,7 @@ function scrollControls() {
       el("div", { class: "stepper" }, speed)),
     state.open && state.open.note ? aloudSwitch(GO_ON_KEY, t("Go on to the next note"), t("At the end, the next note starts scrolling by itself."), false)
       : aloudSwitch(GO_ON_KEY, t("Go on to the next clip"), t("At the end, the next chapter starts scrolling by itself."), false),
-    aloudSwitch(PULL_KEY, t("Hold at the end to go on"), state.open && state.open.note ? t("Scroll down past the end and hold for a second to open the next note.") : t("Scroll down past the end and hold for a second to open the next chapter."), false),
+    aloudSwitch(PULL_KEY, t("Hold at the end to go on"), state.open && state.open.note ? t("Scroll down past the end and hold for half a second to open the next note.") : t("Scroll down past the end and hold for half a second to open the next chapter."), false),
     aloudSwitch(AWAKE_KEY, t("Keep the screen on"), t("While it scrolls, so you can follow along."), false));
 }
 

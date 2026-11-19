@@ -5552,7 +5552,7 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
-    await test("a comic's Auto-scroll has Hold at the end to go on: a second's wheel past the end opens the next volume, less does not (2026-11)", async () => {
+    await test("a comic's Auto-scroll has Hold at the end to go on: half a second's wheel past the end opens the next volume, less does not (2026-11)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async (a) => {
         askKeep = async () => false;
@@ -5575,12 +5575,12 @@ c("bk1", { at: 0.01 })]);
         await wheelFor(1300);
         await q.waitForTimeout(500);
         const now = await q.evaluate(() => state.open.id);
-        assert.strictEqual(now !== first, on, on ? "held a second: the next volume opens" : "off: it stays");
+        assert.strictEqual(now !== first, on, on ? "held half a second: the next volume opens" : "off: it stays");
       }
       await q.evaluate((id) => openPage(id), first);
       await until(q, () => !!C.reader.frameDoc && !!C.reader.frameDoc.querySelector(".co-after"));
       await q.waitForTimeout(400);
-      await wheelFor(400);
+      await wheelFor(250);
       await q.waitForTimeout(500);
       assert.strictEqual(await q.evaluate(() => state.open.id), first, "a short pull does not");
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
