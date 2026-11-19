@@ -109,6 +109,21 @@ const signIn = async (p) => {
   const server = await startServer();
   const browser = await pw.chromium.launch();
   try {
+    await test("with the extension on, the app starts with no error and streaming is ready", async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
+      await ctx.addInitScript(() => localStorage.setItem("waypage.extensions", JSON.stringify({ audiobookshelf: { on: true } })));
+      const p = await ctx.newPage();
+      const errors = [];
+      p.on("pageerror", (e) => errors.push(e.message));
+      for (let i = 0; i < 3; i++) {
+        await p.goto(ROOT);
+        await p.waitForFunction(() => window.Waypage && window.Waypage.abs);
+      }
+      assert.deepStrictEqual(errors, []);
+      assert.ok(await p.evaluate(() => !!REMOTE_AUDIO.audiobookshelf), "app-abs.js gave app-listen.js its stream");
+      await ctx.close();
+    });
+
     await test("signing in keeps the tokens on this device and never the password", async () => {
       const { ctx, p } = await phone(browser);
       await signIn(p);

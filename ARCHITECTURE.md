@@ -1267,6 +1267,9 @@ area.
 - **iOS Translation needs a SwiftUI view:** a `TranslationSession` only
   comes from `translationTask`, so TranslatePlugin keeps a one-point
   SwiftUI view behind the WebView and runs one job at a time in it.
+- An extension's scripts are added as `<script>` tags, which can run before the shell files still being parsed after `app-extensions.js`. So the ones turned on load only at `DOMContentLoaded`: `app-abs.js` set `REMOTE_AUDIO.audiobookshelf` before `app-listen.js` had made `REMOTE_AUDIO`, threw, and streaming had nothing to play through.
+- A row or box that is centred (`justify-content` or `align-items: center`) and can be wider or taller than its screen loses both ends, and the start can't be scrolled to. Use `safe center` (the Draw bar at 320 px, the app lock with a phone on its side). A column that wraps (`flex-wrap: wrap`) is as wide as its widest row, so a panel built from `.folder-actions` needs `nowrap` to stay inside a phone.
+- Words written into `index.html` need `data-t` on them or a wrapper, or they stay English in Hebrew; a button with an icon wraps its word in `<span data-t>`. `i18n.test.js` checks it.
 
 ## The docs
 

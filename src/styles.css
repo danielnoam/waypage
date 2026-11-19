@@ -1670,7 +1670,8 @@ span.update-text { cursor: default; }
   color: var(--accent); font-weight: 600; cursor: pointer;
 }
 .select-act {
-  flex: 1; min-width: 0; max-width: 120px; min-height: 56px; white-space: nowrap;
+  flex: 1 1 auto; min-width: 0; max-width: 120px; min-height: 56px; padding: 0 2px;
+  text-align: center; hyphens: auto;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   border: 0; border-radius: var(--r-md); background: transparent; color: var(--accent);
   font: 500 var(--fs-meta)/var(--lh-meta) var(--sans); cursor: pointer;
@@ -2670,8 +2671,9 @@ button.side-version { align-self: flex-start; min-height: 44px; padding-bottom: 
   .lib-head .meta { margin: 0; flex: 1; min-width: 0; }
   .lib-head .lib-tools { margin: 0 calc(-1 * var(--s-2)) 0 0; align-self: center; gap: var(--s-4); }
   .top { padding-bottom: var(--s-3); }
-  :is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"], [data-place="discover"], [data-place="calibre"], [data-place="catalogs"], [data-place="audiobookshelf"], [data-place="webdav"]) .top { display: block; }
-  :is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"], [data-place="discover"], [data-place="calibre"], [data-place="catalogs"], [data-place="audiobookshelf"], [data-place="webdav"]) :is(.top > :not(.lib-head), .lib-head > :not(.screen-title)) { display: none; }
+  /* Stats and Anki were left out, so a big screen showed them with no name. */
+  :is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"], [data-place="reading"], [data-place="discover"], [data-place="calibre"], [data-place="catalogs"], [data-place="audiobookshelf"], [data-place="webdav"], [data-place="anki"]) .top { display: block; }
+  :is([data-place="feeds"], [data-place="newsletters"], [data-place="highlights"], [data-place="reading"], [data-place="discover"], [data-place="calibre"], [data-place="catalogs"], [data-place="audiobookshelf"], [data-place="webdav"], [data-place="anki"]) :is(.top > :not(.lib-head), .lib-head > :not(.screen-title)) { display: none; }
 
   /* Two columns of clips; Continue reading, collections and section
      heads take the whole width. */
@@ -3091,6 +3093,8 @@ html.locked body > :not(.lock-view):not(script) { visibility: hidden !important;
   background: var(--bg); color: var(--ink); overflow-y: auto;
 }
 .lock-view[hidden] { display: none; }
+/* safe: taller than the screen, it scrolls from its top instead of losing it. */
+.lock-view { align-items: safe center; }
 .lock-box { display: flex; flex-direction: column; align-items: center; gap: var(--s-3); width: 100%; max-width: 20rem; text-align: center; }
 .lock-box > div { display: flex; flex-direction: column; align-items: center; gap: var(--s-3); width: 100%; }
 .lock-box > div[hidden] { display: none; }
@@ -3121,6 +3125,18 @@ html.locked body > :not(.lock-view):not(script) { visibility: hidden !important;
 .lock-foot { display: flex; justify-content: center; gap: var(--s-2); flex-wrap: wrap; }
 .lock-foot .btn-quiet, .lock-erase .btn-quiet { border-color: transparent; color: var(--accent); }
 .lock-erase-go { background: var(--warn); border-color: var(--warn); color: var(--accent-ink); }
+/* A phone on its side: the title, dots and Forgot beside the keys, which
+   didn't fit under them (the title was off the top). */
+@media (max-height: 500px) and (orientation: landscape) {
+  .lock-box { display: grid; max-width: 40rem; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 1fr repeat(5, auto) 1fr; column-gap: var(--s-7); justify-items: center; }
+  .lock-box > #lockPad { display: contents; }
+  .lock-title { grid-area: 2 / 1; }
+  .lock-dots { grid-area: 3 / 1; }
+  .lock-note { grid-area: 4 / 1; }
+  .lock-next { grid-area: 5 / 1; }
+  .lock-foot { grid-area: 6 / 1; }
+  .lock-keys { grid-area: 1 / 2 / -1; margin-top: 0; }
+}
 @media (max-height: 640px) { .lock-keys { grid-template-columns: repeat(3, 60px); gap: var(--s-3) var(--s-4); } .lock-key, .lock-key-gap { width: 60px; height: 60px; } .lock-icon { display: none; } }
 @media (prefers-reduced-motion: reduce) { .lock-dots.shake { animation: none; } .lock-key, .lock-dot { transition: none; } }
 .lock-view:focus { outline: none; }
@@ -3198,6 +3214,14 @@ html.locked body > :not(.lock-view):not(script) { visibility: hidden !important;
 /* Select, Add and your own colours on the Draw bar (app-ink.js). */
 .ink-bar button { flex: 0 1 var(--tap); min-width: 36px; }
 .ink-bar .ink-done { flex: 0 0 auto; padding: 0 var(--s-3); }
+/* At 320 px the tools row was 14 px too wide and lost the pen and Done off
+   its two ends; safe keeps the start in view if a language makes it longer. */
+.ink-row { justify-content: safe center; }
+@media (max-width: 359px) {
+  .ink-bar { max-width: calc(100vw - 2 * var(--s-2)); }
+  .ink-bar .ink-gap { min-width: 0; }
+  .ink-bar .ink-done { padding: 0 var(--s-1); }
+}
 .ink-dot[data-c=""] { background: var(--pen-ink); }
 .ink-pop-styles button .ink-pop-name { text-align: start; }
 .ink-color {

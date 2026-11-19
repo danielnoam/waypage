@@ -6246,6 +6246,40 @@ c("bk1", { at: 0.01 })]);
       await ctx.close();
     });
 
+    // Every screen at every size (the 320 px phone, a phone on its side, a
+    // computer): each of these was cut off or missing before.
+    await test("the picking bar, Draw bar, app lock and Stats fit at 320 px, on a phone's side and at 1280 px", async () => {
+      const q = await page(browser, 320);
+      await q.setViewportSize({ width: 320, height: 568 });
+      await q.fill("#saveUrl", ARTICLE);
+      await q.press("#saveUrl", "Enter");
+      await until(q, () => state.pages.length === 1 && !state.saving.length);
+      await q.evaluate(() => startSelect([state.pages[0].id]));
+      const acts = await q.evaluate(() => [...document.querySelectorAll("#selectBar .select-act")].filter((b) => b.offsetWidth).map((b) => {
+        const r = b.getBoundingClientRect(), w = b.querySelector("span").getBoundingClientRect();
+        return { l: w.left, r: w.right, fits: w.left >= r.left - 1 && w.right <= r.right + 1, text: b.textContent.trim() };
+      }));
+      for (let i = 1; i < acts.length; i++) assert.ok(acts[i].l >= acts[i - 1].r, acts[i - 1].text + " runs into " + acts[i].text);
+      assert.ok(acts.every((a) => a.fits), "a label is wider than its button");
+      await q.evaluate(() => endSelect());
+      await q.evaluate(async () => { const meta = await window.Waypage.notes.create("lines"); state.pages.unshift(meta); await window.Waypage.store.writeIndex(state.pages); openPage(meta.id); });
+      await q.locator(".ink-bar:not([hidden])").waitFor();
+      const rows = await q.evaluate(() => [...document.querySelectorAll(".ink-bar .ink-row")].map((r) => r.scrollWidth - r.clientWidth));
+      assert.ok(rows.every((x) => x <= 0), "the Draw bar is cut off by " + rows.join(", ") + " px");
+      await q.setViewportSize({ width: 844, height: 390 });
+      await q.evaluate(() => { lockShow("unlock"); });
+      await q.locator("#lockView:not([hidden])").waitFor();
+      const lock = await q.evaluate(() => { const r = (id) => document.getElementById(id).getBoundingClientRect(); return { title: r("lockTitle").top, keys: r("lockKeys").bottom, forgot: r("lockForgot").bottom, h: innerHeight }; });
+      assert.ok(lock.title >= 0 && lock.keys <= lock.h && lock.forgot <= lock.h, "the lock doesn't fit on a phone's side: " + JSON.stringify(lock));
+      await q.goto(ROOT);
+      await q.setViewportSize({ width: 1280, height: 800 });
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => goPlace("reading"));
+      await until(q, () => { const h = document.getElementById("placeTitle"); return h.textContent === "Stats" && h.getBoundingClientRect().height > 0; });
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     for (const width of [390, 1280]) {
       for (const theme of THEMES) {
         await test("opens at " + width + " px in " + theme + " with no errors", async () => {

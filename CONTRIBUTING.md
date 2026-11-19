@@ -208,6 +208,7 @@ listed here adds its line in the same pull request.
 - **Something the user stopped says "Stopped.", never "Couldn't …".** (#346)
 - **A login, token or cookie goes only to the origin it was given for** (or the same host moved up to https, never down), whatever link, cover, page or redirect the server's answer points to. (#347)
 - **Before writing a guard or helper, look for the one a sibling area already has.** WebDAV had the login guard Catalogs lacked. (#347)
+- **Code that must run after every shell file waits for `DOMContentLoaded`;** a `<script>` added while the page is still parsing can run first. (#372: Audiobookshelf before `REMOTE_AUDIO`)
 
 **UI**
 
@@ -215,6 +216,8 @@ listed here adds its line in the same pull request.
 - **A looping animation gets its own duration in the reduced-motion block and an Animations off rule,** in the same change. `docs.test.js` checks it. (#348: spinners flickered)
 - **A flex child that holds text or a control gets `min-width: 0`; a title that can hold one long word gets `hyphens: auto` or `overflow-wrap: anywhere`.** (#348)
 - **Every changed screen is checked at 320 px, 390 px and ~1280 px.** 390 px alone hid three breaks. (#348)
+- **A centred row or box that can outgrow its screen uses `safe center`,** and a check on its side (844 x 390) too. (#372: the Draw bar at 320 px, the app lock on a phone's side)
+- **A word written into `index.html` has `data-t` on it or a wrapper** (`<span data-t>` beside an icon). (#372: the picking bar stayed English in Hebrew)
 
 ## Keeping the notes files right
 
