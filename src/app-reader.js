@@ -449,6 +449,7 @@ function show(p, html) {
     bottom: () => $("readFoot").offsetHeight,
     onKey: onKeys,
     onEdge: brightEdge,
+    pullNext: () => pictureBook() && !!load(PULL_KEY, false),
     onPinch: textPinch,
     onSwipe: clipSwipe,
     onLink: openLink,
@@ -1325,6 +1326,8 @@ const FOOTNOTES_KEY = "waypage.aloudFootnotes";
 const EDGES_KEY = "waypage.aloudSkipEdges";
 // Read next by itself at the end of a clip (1.6.0), when there's a next.
 const GO_ON_KEY = "waypage.aloudGoOn";
+// A comic: hold past its end to open the next one (2026-11).
+const PULL_KEY = "waypage.comicPullNext";
 const AWAKE_KEY = "waypage.aloudScreenOn";
 const PIP_KEY = "waypage.aloudPip";
 const KEEP_KEY = "waypage.aloudKeepGoing";
@@ -1756,7 +1759,7 @@ function colorChips(list, current, onpick) {
     chip("", t("All")), ...used.map((c) => chip(c, MARK_NAMES[c])));
 }
 // Kept on the clip's index entry as `marks`, so they sync, back up and
-// export with it: [{ id, block, start, endBlock, end, text, note, at }].
+// export with it: [{ id, block, start, endBlock, end, text, note, tags, at }].
 // One made on a PDF's printed pages (1.56.0) is kept by page instead:
 // { id, page, start, endPage, end, rects, text, note, at }, where start
 // and end are in the page's words and rects are boxes on the page.
@@ -1817,6 +1820,8 @@ async function addMark(color = markColor()) {
   if (color !== "yellow") keep.color = color;
   const notes = over.map((x) => x.note).filter(Boolean);
   if (notes.length) keep.note = notes.join("\n\n");
+  const tags = over.reduce((a, x) => withTags(a, x.tags || []), []);
+  if (tags.length) keep.tags = tags;
   p.marks = [...(p.marks || []).filter((x) => !over.includes(x)), keep].sort(byPlace);
   await saveMarks(p);
   // A hold is found by being told (2026-11): once, on a touch screen.
@@ -1862,6 +1867,36 @@ let sheetColor = "";
 // After opening a clip from its highlights in the library, go to one.
 let markAfterOpen = null;
 
+// A highlight's tags as small #tags under its note, for lists.
+const markTagsLine = (m) => (m.tags && m.tags.length
+  ? el("span", { class: "mark-tags", dir: "auto" }, ...m.tags.map((x) => el("span", { class: "card-tag" }, "#" + x))) : null);
+// The tags on one highlight: its own as chips to remove, a field to add,
+// and the other highlight tags to add with a tap.
+function markTagsEditor(p, m, draw) {
+  const write = (tags) => {
+    if (tags.length) m.tags = tags; else delete m.tags;
+    m.at = Date.now();
+    return saveMarks(p).then(draw);
+  };
+  const add = (raw) => {
+    const x = cleanTag(raw);
+    if (!x) return;
+    write(withTags(m.tags, [allMarkTags().find((y) => sameTag(y, x)) || x]));
+  };
+  const input = el("input", { class: "tag-input", type: "text", placeholder: t("Add a tag"), "aria-label": t("Add a tag"),
+    maxlength: "32", enterkeyhint: "done", autocapitalize: "off", dir: "auto" });
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); add(input.value); } });
+  const mine = m.tags || [];
+  const rest = allMarkTags().filter((x) => !mine.some((y) => sameTag(x, y))).slice(0, 12);
+  return el("div", { class: "mark-tags-edit" },
+    el("p", { class: "overline" }, t("Tags")),
+    mine.length || rest.length ? el("div", { class: "chips" },
+      ...mine.map((x) => el("button", { class: "chip on", type: "button", "aria-label": t("{tag}, remove", { tag: x }),
+        onclick: () => write(mine.filter((y) => !sameTag(x, y))) }, x, el("span", { class: "chip-x", "aria-hidden": "true" }, "×"))),
+      ...rest.map((x) => el("button", { class: "chip some", type: "button", "aria-label": t("{tag}, add", { tag: x }), onclick: () => add(x) }, x))) : null,
+    input);
+}
+
 // The clip's highlights: a list to jump from, or one with its note.
 // `back` (from the clip's sheet) returns to it.
 function marksView(p, back) {
@@ -1888,6 +1923,7 @@ function marksView(p, back) {
         el("button", { class: "row mark-row", type: "button", onclick: go },
           el("span", { class: "mark-quote", "data-c": colorOf(m), dir: "auto" }, m.text),
           m.note ? el("span", { class: "mark-note", dir: "auto" }, m.note) : null,
+          markTagsLine(m),
           lost ? el("span", { class: "meta" }, t("Not found in this copy of the clip")) : null),
         el("button", { class: "icon-btn mark-edit", type: "button", "aria-label": t("Note and more"), onclick: () => { markFocus = m.id; draw(); } },
           svgIcon("rename", 18)));
@@ -1957,6 +1993,7 @@ function marksView(p, back) {
             saveMarks(p).then(draw);
           } }, swatchDot(c)))),
       note,
+      markTagsEditor(p, m, draw),
       el("div", { class: "group" },
         inReader && !lostMarks.has(m.id) ? menuRow(t("Go to it"), () => { keepNote(); markFocus = null; history.back(); setTimeout(() => jumpToMark(p, m, true), 0); }) : null,
         menuRow(t("Copy"), () => copyText(m.text + (m.note ? "\n\n" + m.note : ""), t("Copied"))),
@@ -2526,6 +2563,7 @@ function scrollControls() {
       el("div", { class: "stepper" }, speed)),
     state.open && state.open.note ? aloudSwitch(GO_ON_KEY, t("Go on to the next note"), t("At the end, the next note starts scrolling by itself."), false)
       : aloudSwitch(GO_ON_KEY, t("Go on to the next clip"), t("At the end, the next chapter starts scrolling by itself."), false),
+    aloudSwitch(PULL_KEY, t("Hold at the end to go on"), state.open && state.open.note ? t("Scroll down past the end and hold for half a second to open the next note.") : t("Scroll down past the end and hold for half a second to open the next chapter."), false),
     aloudSwitch(AWAKE_KEY, t("Keep the screen on"), t("While it scrolls, so you can follow along."), false));
 }
 

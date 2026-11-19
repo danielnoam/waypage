@@ -256,11 +256,29 @@ test("highlights merge by id: both sides' new ones stay, a removed one goes, the
   assert.strictEqual(got.find((x) => x.id === "x").note, "mine");
 });
 
+test("a highlight's tags sync like its note: the later edit wins", () => {
+  const m = (more) => ({ id: "x", block: 1, start: 0, endBlock: 1, end: 4, text: "word", at: 10, ...more });
+  const base = lib([page("a1b2", { marks: [m()] })]);
+  const local = lib([page("a1b2", { marks: [m({ tags: ["quote"], at: 30 })] })]);
+  const remote = lib([page("a1b2", { marks: [m({ tags: ["idea"], at: 20 })] })]);
+  assert.deepStrictEqual(S.merge(base, local, remote, NOW).pages[0].marks[0].tags, ["quote"]);
+});
+
 test("removing every highlight on one device removes them everywhere", () => {
   const m = { id: "x", block: 1, start: 0, endBlock: 1, end: 4, text: "word", at: 10 };
   const base = lib([page("a1b2", { marks: [m] })]);
   const r = S.merge(base, lib([page("a1b2", { tags: ["t"] })]), lib([page("a1b2", { marks: [m], at: 0.5, readAt: 5 })]), NOW);
   assert.strictEqual(r.pages[0].marks, undefined);
+});
+
+test("a backup keeps a highlight's clean tags and exports them as #tags", () => {
+  require("../src/backup.js");
+  const B = window.Waypage.backup;
+  const m = { id: "x", block: 1, start: 0, endBlock: 1, end: 4, text: "word", at: 10, tags: [" quote ", "Quote", 5, "", "to check", "x".repeat(50)] };
+  const got = B.cleanMarks([m])[0];
+  assert.deepStrictEqual(got.tags, ["quote", "to check", "x".repeat(32)]);
+  assert.ok(/#quote #to-check/.test(B.marksMarkdown({ title: "T", url: "https://example.com/", marks: [got] })));
+  assert.strictEqual(B.cleanMarks([{ ...m, tags: "nope" }])[0].tags, undefined);
 });
 
 test("a collection's picked cover goes to the other device, and only a name Waypage makes is kept", () => {

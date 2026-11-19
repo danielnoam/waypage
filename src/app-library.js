@@ -17,6 +17,17 @@ function allTags() {
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t);
 }
 
+// Highlight tags (2026-11) are their own list, never the clips' tags: on a
+// highlight's `tags`, most used first.
+function allMarkTags() {
+  const counts = new Map();
+  for (const p of state.pages) for (const m of p.marks || []) for (const t of m.tags || []) {
+    const k = [...counts.keys()].find((x) => sameTag(x, t)) || t;
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t);
+}
+
 // `has` plus `more`, without case-insensitive repeats.
 function withTags(has, more) {
   const out = [...(has || [])];
@@ -1388,6 +1399,7 @@ function neighbour(p, step) {
 }
 
 const ICONS = {
+  filter: '<path d="M4 6h16M7 12h10M10 18h4"/>',
   open: '<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5zM13 4h5.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H13z"/>',
   share: '<path d="M12 15V4M8 8l4-4 4 4M5 12v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/>',
   send: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',

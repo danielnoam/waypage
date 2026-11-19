@@ -407,6 +407,72 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a highlight takes tags of its own, Highlights shows one tag at a time, and clips' tags stay apart (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ARTICLE);
+      await q.press("#saveUrl", "Enter");
+      await q.locator(".page-card", { hasText: "The Long Haul Flight" }).first().click();
+      await frameText(q).getByText("oceanic track").waitFor();
+      const pick = (words) => q.frameLocator("#readerFrame").locator("p", { hasText: words }).first().evaluate((el, w) => {
+        const t = [...el.childNodes].find((n) => n.nodeType === 3 && n.data.includes(w));
+        const r = el.ownerDocument.createRange();
+        r.setStart(t, t.data.indexOf(w));
+        r.setEnd(t, t.data.indexOf(w) + w.length);
+        const sel = el.ownerDocument.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+      }, words);
+      await pick("oceanic track");
+      await q.locator(".read-here .sel-mark:not([hidden])").click();
+      await q.frameLocator("#readerFrame").locator("mark.co-mark", { hasText: "oceanic" }).first().waitFor();
+      await q.waitForTimeout(700);
+      await pick("marmalade sky");
+      await q.locator(".read-here .sel-mark:not([hidden])").click();
+      await q.frameLocator("#readerFrame").locator("mark.co-mark", { hasText: "marmalade" }).first().waitFor();
+      await q.frameLocator("#readerFrame").locator("mark.co-mark", { hasText: "oceanic" }).first().click();
+      await q.locator("#readingSheet:not([hidden]) .tag-input").fill("quote");
+      await q.press("#readingSheet .tag-input", "Enter");
+      await q.locator("#readingSheet .mark-tags-edit .chip.on", { hasText: "quote" }).waitFor();
+      const kept = await q.evaluate(async () => (await window.Waypage.store.readIndex()).flatMap((p) => p.marks || []).map((m) => m.tags || null));
+      assert.deepStrictEqual(kept.filter(Boolean), [["quote"]]);
+      assert.strictEqual(await q.evaluate(() => allTags().includes("quote")), false, "clip tags stay apart");
+      await q.goBack();
+      await q.goBack();
+      await q.click("#sideBtn");
+      await q.locator("#sidebar .side-item", { hasText: "Highlights" }).click();
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 2);
+      await q.locator("#highlights .hl-tags .chip", { hasText: "#quote" }).click();
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 1);
+      assert.ok(/oceanic/.test(await q.locator("#highlights .mark-row").first().textContent()));
+      await q.locator("#highlights .hl-tags .chip", { hasText: "All tags" }).click();
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 2);
+      // Several tags at once: any of them by default, then all, then none.
+      await q.evaluate(async () => {
+        for (const p of state.pages) for (const m of p.marks || []) m.tags = /oceanic/.test(m.text) ? ["quote", "idea"] : ["idea"];
+        await window.Waypage.store.writeIndex(state.pages);
+        renderHighlights();
+      });
+      assert.ok(await q.locator("#highlights .hl-match").isDisabled(), "the match button waits for a tag");
+      await q.locator("#highlights .hl-tags .chip", { hasText: "#quote" }).click();
+      await q.locator("#highlights .hl-tags .chip", { hasText: "#idea" }).click();
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 2, "any of the tags");
+      const mode = async (name) => {
+        await q.locator("#highlights .hl-match").click();
+        await q.locator("#matchPop .pop-item", { hasText: name }).click();
+      };
+      await mode("All of these tags");
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 1, "all of the tags");
+      await mode("None of these tags");
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 0, "none of the tags");
+      await q.locator("#highlights .hl-tags .chip", { hasText: "#quote" }).click();
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 0, "idea is on both");
+      assert.strictEqual(await q.evaluate(() => localStorage.getItem("waypage.marksMatch")), '"none"');
+      await mode("Any of these tags");
+      assert.strictEqual(await q.locator("#highlights .mark-row").count(), 2);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("on a touch screen Highlight is one button: a hold opens the colours under the bar, sliding to one and letting go highlights in it; keys 1 to 5 do too", async () => {
       const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: "block" });
       const q = await ctx.newPage();
@@ -1280,6 +1346,57 @@ function zipOf(files) {
       assert.ok(!/secret/.test(body), "the token was left in");
       const errs = q.errors.filter((e) => !/nothing-here/.test(e));
       assert.deepStrictEqual(errs, [], errs.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Recover Notes and Highlights finds a highlight that moved and puts it back", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const C = window.Waypage;
+        await C.store.writePage("rc1", '<!doctype html><html><body><div class="co-body"><p>First paragraph about foxes.</p><p>Second paragraph about hounds.</p></div></body></html>', {});
+        state.pages.unshift({ id: "rc1", title: "Fox article", url: "https://x.test/a", site: "x.test", bytes: 100, savedAt: Date.now(), marks: [{ id: "m1", block: 0, start: 0, endBlock: 0, end: 6, text: "hounds", at: 1 }] });
+        await C.store.writeIndex(state.pages);
+        renderLibrary();
+      });
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Report a problem" }).click();
+      assert.strictEqual(await q.locator(".recover-item").count(), 0, "it looked before it was asked");
+      await q.locator(".recover-go").click();
+      const item = q.locator(".recover-item", { hasText: "hounds" });
+      await item.waitFor();
+      await item.locator("button", { hasText: "Put it back" }).click();
+      await until(q, () => state.pages.find((p) => p.id === "rc1").marks[0].block === 1);
+      await q.locator(".recover-item").waitFor({ state: "detached" });
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Look for deleted notes finds a note whose entry is gone and brings it back as a new one", async () => {
+      const q = await page(browser, 390);
+      // Its files are here, but no library entry names it.
+      await q.evaluate(async () => {
+        const C = window.Waypage;
+        await C.store.writePage("lost1", '<!doctype html><html><body><header class="co-head"><h1>Debate 1</h1></header><div class="co-body"></div></body></html>', {});
+        await C.store.writeNote("lost1", { v: 1, sheets: [{ bg: "paper" }, { bg: "paper" }, { bg: "paper" }] });
+        await C.store.writeInk("lost1", { v: 1, pages: { 1: [{ id: "s1", t: "p", c: "#000", w: 0.004, p: [0.1, 0.1, 0.5, 0.2, 0.2, 0.5] }] } });
+      });
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Report a problem" }).click();
+      assert.strictEqual(await q.locator(".recover-item").count(), 0, "it looked before it was asked");
+      await q.locator(".recover-look").click();
+      const item = q.locator(".recover-item", { hasText: "Debate 1" });
+      await item.waitFor();
+      assert.ok(/3 sheets/.test(await item.innerText()) && /1 stroke/.test(await item.innerText()), await item.innerText());
+      await item.locator("button", { hasText: "Bring back" }).click();
+      await until(q, () => state.pages.some((p) => p.note && p.title === "Debate 1"));
+      const made = await q.evaluate(async () => {
+        const p = state.pages.find((x) => x.note && x.title === "Debate 1");
+        const note = await window.Waypage.store.readNote(p.id);
+        const ink = await window.Waypage.store.readInk(p.id);
+        return { fresh: p.id !== "lost1", sheets: note.sheets.length, strokes: ink.pages[1].length };
+      });
+      assert.deepStrictEqual(made, { fresh: true, sheets: 3, strokes: 1 });
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });
 
@@ -5548,6 +5665,41 @@ c("bk1", { at: 0.01 })]);
       assert.strictEqual(got.both.files.length, 13, "both volumes, one after the other");
       assert.ok(/<PageCount>12<\/PageCount>/.test(got.both.info), got.both.info);
       assert.deepStrictEqual(got.back, ["Night Ferry", true, 12]);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a comic's Auto-scroll has Hold at the end to go on: half a second's wheel past the end opens the next volume, less does not (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async (a) => {
+        askKeep = async () => false;
+        await openFile(new File([new Uint8Array(a[0])], "v1.cbz"), null, false);
+        await openFile(new File([new Uint8Array(a[1])], "v2.cbz"), null, false);
+      }, [[...mangaBytes(1)], [...mangaBytes(2)]]);
+      await q.evaluate(() => setReading({ comicLayout: "scroll" }));
+      const first = await q.evaluate(() => state.pages.find((x) => x.comic && /Volume 1/.test(x.title)).id);
+      const wheelFor = async (ms) => q.evaluate(async (ms) => {
+        const d = document.getElementById("readerFrame").contentDocument, w = d.defaultView;
+        w.scrollTo(0, d.documentElement.scrollHeight);
+        const end = performance.now() + ms;
+        while (performance.now() < end) { d.dispatchEvent(new WheelEvent("wheel", { deltaY: 40, bubbles: true })); await new Promise((r) => setTimeout(r, 50)); }
+      }, ms);
+      for (const on of [false, true]) {
+        await q.evaluate((on) => { store(PULL_KEY, on); }, on);
+        await q.evaluate((id) => openPage(id), first);
+        await until(q, () => !!C.reader.frameDoc && !!C.reader.frameDoc.querySelector(".co-after"));
+        await q.waitForTimeout(400);
+        await wheelFor(1300);
+        await q.waitForTimeout(500);
+        const now = await q.evaluate(() => state.open.id);
+        assert.strictEqual(now !== first, on, on ? "held half a second: the next volume opens" : "off: it stays");
+      }
+      await q.evaluate((id) => openPage(id), first);
+      await until(q, () => !!C.reader.frameDoc && !!C.reader.frameDoc.querySelector(".co-after"));
+      await q.waitForTimeout(400);
+      await wheelFor(250);
+      await q.waitForTimeout(500);
+      assert.strictEqual(await q.evaluate(() => state.open.id), first, "a short pull does not");
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });
