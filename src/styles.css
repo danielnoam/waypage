@@ -1889,8 +1889,7 @@ span.update-text { cursor: default; }
 .chapters-panel > .settings-section.settings-section { margin: 0; min-width: 0; }
 .chapters-panel .choice-label.accent { color: var(--accent); font-weight: 600; }
 .chapters-panel .row .chip { flex-shrink: 0; }
-.chapters-panel .take-new { color: var(--accent); font-weight: 600; }
-.chapters-panel .take-new .tile-icon { display: inline-flex; flex-shrink: 0; }
+.chapters-panel .check-new { gap: var(--s-2); padding-inline-end: var(--s-3); }
 /* Save next and Save previous: the name, then its buttons across the row. */
 .chapters-panel .follow-group .rc-row.follow { margin: 0; flex-direction: column; align-items: stretch; gap: var(--s-2); padding: var(--s-3) var(--s-4); }
 .chapters-panel .follow-group .rc-row.follow + .rc-row.follow { border-top: 1px solid var(--line); }

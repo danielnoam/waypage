@@ -1646,25 +1646,16 @@ function checkRow(list) {
     checkNew(name, false);
   } }, t("Check"));
   btn.disabled = busy;
+  // From a linked page, the new ones are saved straight from its list,
+  // each at its place among those already saved.
+  const take = entry && entry.all && fresh && !busy && !savingInto(name) ? el("button", { class: "chip on take-new", type: "button",
+    "aria-label": tn(fresh, "Save 1 new chapter", "Save {n} new chapters", { n: fresh >= NEW_MAX ? NEW_MAX + "+" : fresh }),
+    onclick: (e) => saveNewChapters(name, e.currentTarget) }, t("Save")) : null;
   return el("div", { class: "row check-new", role: "status" },
     el("span", { class: "choice-text" },
       el("span", { class: "choice-label" + (fresh && !busy ? " accent" : "") }, label),
       entry && !busy ? el("span", { class: "choice-note" }, t("Checked {when}", { when: whenText(entry.at) })) : null),
-    btn);
-}
-
-// From a linked page, the new ones are saved straight from its list,
-// each at its place among those already saved.
-function takeRow(list) {
-  const name = state.folder;
-  const entry = newFor(name);
-  const fresh = freshCount(name);
-  if (!entry || !entry.all || !fresh || savingInto(name)) return null;
-  const b = el("button", { class: "row take-new", type: "button", onclick: () => saveNewChapters(name, b) },
-    el("span", { class: "tile-icon", "aria-hidden": "true" }),
-    el("span", { class: "row-label" }, tn(fresh, "Save 1 new chapter", "Save {n} new chapters", { n: fresh >= NEW_MAX ? NEW_MAX + "+" : fresh })));
-  b.firstChild.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS.add + "</svg>";
-  return b;
+    take, btn);
 }
 
 // ---- The folder's Website sync panel (0.26.0, was Story page) ----
@@ -1673,7 +1664,7 @@ function takeRow(list) {
 // the site's page it's linked to (any site's contents page, or one of
 // its chapters).
 function chaptersPanel(list) {
-  const top = [checkRow(list), takeRow(list), keepRow(list)].filter(Boolean);
+  const top = [checkRow(list), keepRow(list)].filter(Boolean);
   const more = [followControls(list[list.length - 1]), followControls(list[0], true)].filter(Boolean);
   return el("div", { class: "folder-actions chapters-panel" },
     top.length ? section(t("New chapters"), null, el("div", { class: "group" }, ...top))
