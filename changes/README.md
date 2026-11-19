@@ -12,6 +12,10 @@ file here, named after its branch (`feature/more-sites` →
 - What was wrong, and what happens now.
 ```
 
+A change built for one platform or screen only says so in its line
+("Android only; not built for iOS or the web copy"), as CONTRIBUTING.md's
+"One device only is fine, if it says so" asks.
+
 The headings are `### Added`, `### Changed`, `### Fixed` and `### Removed`.
 Only a release touches CHANGELOG.md: `node tools/release.js x.y.z` folds
 every note here into the new version's entry and deletes the files. Two

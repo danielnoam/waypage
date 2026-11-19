@@ -93,17 +93,26 @@ Use the least access (narrow tokens and scopes). Nothing leaves the device
 unless the user turned it on. Saved content stays sandboxed. Any
 trade-off is stated plainly and added to ARCHITECTURE.md's Trade-offs.
 
-**English and Hebrew.** Every word the app shows goes through `t()` or
+**Every language.** Every new feature works in every language the app
+has (English and Hebrew today), not just English, and is checked in Hebrew
+right to left before it's called done. Every word the app shows goes through `t()` or
 `tn()` with its Hebrew in `src/lang/he.js` in the same change (the test
 fails otherwise), as whole sentences with `{placeholders}`, never glued
 pieces. Layout uses logical CSS (`margin-inline-start`, `inset-inline-end`,
 `text-align: start`) so right to left works. ARCHITECTURE.md, "Languages".
 
-**Every platform.** Everything works on Android and on a computer (the web
-copy), and on iOS later. A feature that can't work somewhere gets that
-platform's nearest equivalent (keys on a computer for the volume buttons,
-say). iOS-only native work goes on the to-do list's iOS release list (or an
-issue).
+**Every platform and screen.** Everything works on Android and on a
+computer (the web copy), and on iOS later, and at every screen size: phone,
+tablet, desktop, portrait and landscape. A feature that can't work
+somewhere gets that platform's nearest equivalent (keys on a computer for
+the volume buttons, say). iOS-only native work goes on the to-do list's
+iOS release list (or an issue).
+
+**One device only is fine, if it says so.** A feature built on purpose for
+one platform or screen ships, but its `changes/` note and its pull request
+say plainly that it was never built for the others ("Android only; not
+built for iOS or the web copy"), so nobody takes it for a bug or thinks
+it's done everywhere.
 
 **Speed.** Anything that touches lists or opening is measured with a big
 library (3,000 clips) on a slowed CPU (6x in Chrome DevTools), before and
