@@ -958,6 +958,34 @@
     return true;
   }
 
+  // The open note's sheets changed (Page view): the slots are made again from
+  // its list, every picture drawn again, the drawings' layers put back as the
+  // pictures come in.
+  function resheet() {
+    const h = held, doc = C.reader.frameDoc;
+    const body = doc && doc.querySelector(".co-body.co-comic");
+    if (!h || !h.note || !body) return false;
+    for (const u of h.urls.values()) URL.revokeObjectURL(u.url || u);
+    h.urls.clear();
+    for (const u of (h.thumbs || new Map()).values()) u.then((x) => x && URL.revokeObjectURL(x));
+    h.thumbs = new Map();
+    const sizes = h.note.handle.sizes;
+    // The drawings' layers went with the slots.
+    C.ink.relayer();
+    body.replaceChildren(...sizes.map((size, i) => {
+      const img = doc.createElement("img");
+      img.setAttribute("alt", "Page " + (i + 1));
+      img.setAttribute("width", size[0]);
+      img.setAttribute("height", size[1]);
+      img.setAttribute("src", blank(size[0], size[1]));
+      img.setAttribute("data-page", i + 1);
+      return img;
+    }));
+    C.reader.placeText();
+    if (h.frame) drawNear(h.frame);
+    return true;
+  }
+
   // Fills the picture slots within a screen and a half of what the reader
   // shows from the book's or comic's file, nearest first, and lets go of
   // those more than six screens away (their slot comes back). A slot
@@ -1756,5 +1784,5 @@
     return native ? { uri: await file.uri(), name } : { blob: new Blob(parts, { type: CBZ_MIME }), name };
   }
 
-  C.files = { bookClips, openZim, zimLink, zimSearch, zimSave, forgetPack, KINDS, LINKABLE, canLink, kindOf, bring, openLinked, openNoteItem, noteSheets, addSheet, printed, drawable, convertible, fingerprint, fingerprintOf, thumbnail, pictureSource, comicExportable, exportComic, CBZ_MIME, drawNear, findPage, heldPdf: () => (held && held.pdf) || null, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
+  C.files = { bookClips, openZim, zimLink, zimSearch, zimSave, forgetPack, KINDS, LINKABLE, canLink, kindOf, bring, openLinked, openNoteItem, noteSheets, addSheet, resheet, printed, drawable, convertible, fingerprint, fingerprintOf, thumbnail, pictureSource, comicExportable, exportComic, CBZ_MIME, drawNear, findPage, noteHeld: () => (held && held.note) || null, heldPdf: () => (held && held.pdf) || null, pageThumb, closeHeld, markdown, plain, FileError, set onCover(f) { onCover = f; } };
 })();

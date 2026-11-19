@@ -95,6 +95,8 @@
       }
       // A picture put on the sheet (width and height in page widths).
       if (s.t === "i") {
+        // A paper of its own is already the sheet's picture here (backKind), unless nothing says so (a Drive copy).
+        if (/^bgp-/.test(String(s.id)) && C.ink.backKind && C.ink.backKind(n)) continue;
         const url = (images && images[s.f]) || C.ink.imageUrl(s.f);
         if (url) { try { const im = await createImageBitmap(await (await fetch(url)).blob()); g.drawImage(im, s.x, s.y, s.w, s.h); im.close(); } catch (e) { /* left out */ } }
         continue;
@@ -112,13 +114,16 @@
     g.setTransform(1, 0, 0, 1, 0, 0);
     return { c, pw, ph, h };
   }
-  async function toPdf(meta, handle, strokesOf, onProgress, images) {
+  // `only`: just those sheets (their numbers), as Share and Save as do from Page view.
+  async function toPdf(meta, handle, strokesOf, onProgress, images, only) {
     const count = handle.count;
     let last = 1;
     for (let n = 1; n <= count; n++) if (strokesOf(n).length || handle.sheets[n - 1].bg === "pdf") last = n;
     const w = 1240, pages = [];
-    for (let n = 1; n <= last; n++) {
-      if (onProgress) onProgress(n - 1, last);
+    const list = only && only.length ? [...only].sort((a, b) => a - b).filter((n) => n >= 1 && n <= count) : Array.from({ length: last }, (_, i) => i + 1);
+    if (only && only.length) last = list.length;
+    for (const [i, n] of list.entries()) {
+      if (onProgress) onProgress(i, last);
       const texts = [];
       const { c, pw, ph, h } = await sheetCanvas(handle, n, w, strokesOf(n), images, texts);
       pages.push({ jpeg: await jpeg(c, 0.9), iw: w, ih: h, texts, w: pw, h: ph });
@@ -126,6 +131,22 @@
     }
     if (onProgress) onProgress(last, last);
     return { blob: C.pptx.writePdf(pages), name: pdfName(meta), sheets: last };
+  }
+  // One sheet as a picture, `w` px wide: "image/png" or "image/jpeg" bytes.
+  async function sheetPicture(handle, n, w, strokes, images, type) {
+    const { c } = await sheetCanvas(handle, n, w, strokes || [], images);
+    if (type !== "image/png") return jpeg(c, 0.8);
+    return new Promise((res, rej) => c.toBlob(async (b) => { c.width = c.height = 0; if (b) res(new Uint8Array(await b.arrayBuffer())); else rej(new Error("no picture")); }, "image/png"));
+  }
+  // The sheets of an open note in a new order (Page view). `order`: one
+  // entry per sheet, { from: n } or { sheet: { bg: ... } }. note.json keeps
+  // its shape (older versions read it), so a sheet is only ever paper or a
+  // page of the PDF. Mutates the open note's list in place, then keeps it.
+  async function arrange(id, data, order) {
+    let next = order.slice(0, MAX_SHEETS).map((o) => o.sheet || data.sheets[o.from - 1]).filter(Boolean).map((s) => (s.bg === "pdf" ? { bg: "pdf", n: s.n } : { bg: "paper" }));
+    if (!next.length) next = [{ bg: "paper" }];
+    data.sheets.splice(0, data.sheets.length, ...next);
+    await keep(id, data);
   }
   // A note's card picture (2026-11): its first sheet as it is now, drawn on.
   async function cover(handle, strokes, images) {
@@ -165,7 +186,8 @@
       onSizes: null,
       draw: (n, width) => {
         const s = sheets[n - 1];
-        return s && s.bg === "pdf" && base ? base.draw(s.n, width) : paper(kind, width);
+        // A sheet given another paper of its own has it first on the sheet (ink.js backKind).
+        return s && s.bg === "pdf" && base ? base.draw(s.n, width) : paper((C.ink && C.ink.backKind(n)) || kind, width);
       },
       text: async () => [],
       outline: async () => [],
@@ -431,5 +453,5 @@
     return { pages, fits: pages <= MAX_SHEETS, parts: parts.filter((p) => p.to > p.from), max: MAX_SHEETS };
   }
 
-  C.notes = { PAPERS, LABELS, paper, toPdf, cover, layout, plan, units, pdfPages, pdfName, MAX_SHEETS, create, bring, fromPdf, open, keep, W, H };
+  C.notes = { PAPERS, LABELS, paper, toPdf, cover, sheetPicture, arrange, layout, plan, units, pdfPages, pdfName, MAX_SHEETS, create, bring, fromPdf, open, keep, W, H };
 })();
