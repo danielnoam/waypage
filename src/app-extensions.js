@@ -98,8 +98,12 @@ C.ext.progress(() => {
 });
 
 // Those turned on have their code loaded as the app starts, so their
-// buttons are there when a clip opens. Off, none of it is fetched.
-for (const x of C.ext.list()) if (C.ext.on(x.id)) C.ext.load(x.id).catch((e) => console.error(e));
+// buttons are there when a clip opens. Off, none of it is fetched. Only once
+// every shell file has run: a script added now can run before the ones after
+// this file, and app-abs.js needs app-listen.js's REMOTE_AUDIO.
+function loadExtensionsOn() { for (const x of C.ext.list()) if (C.ext.on(x.id)) C.ext.load(x.id).catch((e) => console.error(e)); }
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", loadExtensionsOn, { once: true });
+else loadExtensionsOn();
 
 // The Anki place: its code is loaded first, so it draws once it's here.
 async function renderAnki() {
