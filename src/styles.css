@@ -3325,3 +3325,42 @@ body.listen-bar-up .library, body.listen-bar-up .screen-body { padding-bottom: c
 :root[dir="rtl"] svg:has(> path:is([d="M15 5l-7 7 7 7"], [d="M9 5l7 7-7 7"], [d="M6 5v14M18 5l-8 7 8 7"], [d="M6 5h2v14H6zM20 5v14L9.5 12z"])) { transform: scaleX(-1); }
 /* Hebrew has no capitals, and spaced letters read as separate words. */
 :root:lang(he) .overline { letter-spacing: 0; }
+
+/* Page view of a note (2026-11): the open note's sheets in one column, full screen. */
+#readingSheet[data-kind="pageview"], .reader #readingSheet[data-kind="pageview"] {
+  position: absolute; inset: 0; width: auto; max-width: none; height: auto; max-height: none; margin: 0; padding: 0;
+  border: 0; border-radius: 0; box-shadow: none; display: flex; flex-direction: column; background: var(--bg);
+}
+#readingSheet[data-kind="pageview"] .sheet-grip { display: none; }
+#readingSheet[data-kind="pageview"] .sheet-body, .reader #readingSheet[data-kind="pageview"] .sheet-body { flex: 1; min-height: 0; max-height: none; margin: 0; padding: 0; overflow: hidden; gap: 0; }
+.pageview { height: 100%; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; background: var(--bg); }
+.pv-head {
+  position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: var(--s-2);
+  padding: calc(var(--s-2) + env(safe-area-inset-top)) var(--s-3) var(--s-2); background: var(--bg);
+}
+.pv-count { flex: 1; margin: 0; font: 400 var(--fs-title, 1.5rem)/1.2 var(--sans); color: var(--ink); text-align: start; }
+.pv-count strong { font-weight: 700; }
+.pv-of { color: var(--muted); }
+.pv-menu { position: absolute; inset-inline-end: var(--s-3); top: 100%; min-width: 12rem; z-index: 3; box-shadow: 0 8px 24px var(--shadow); background: var(--surface); }
+.pv-list { list-style: none; margin: 0; padding: var(--s-2) var(--s-4) var(--s-5); display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--s-4); justify-items: center; }
+.pv-item { width: min(100%, 22rem); }
+.pv-sheet { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); width: 100%; padding: 0; background: none; border: 0; color: var(--ink); touch-action: pan-y; -webkit-touch-callout: none; user-select: none; }
+.pv-page { position: relative; display: block; width: 100%; border: 1px solid var(--line); border-radius: var(--r-sm, 4px); background: #fdfcf8; overflow: hidden; box-shadow: 0 1px 4px var(--shadow); }
+.pv-thumb { display: block; width: 100%; height: auto; opacity: 0; }
+.pv-thumb.in { opacity: 1; }
+.pv-item.on .pv-page { outline: 3px solid var(--accent); outline-offset: 1px; }
+.pv-sheet[aria-current="true"] .pv-num { color: var(--accent); font-weight: 600; }
+.pv-tick { position: absolute; inset-block-start: var(--s-2); inset-inline-end: var(--s-2); width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--accent); background: var(--surface); display: none; }
+.pv-item.on .pv-tick { display: block; background: var(--accent); }
+.pv-num { font: 400 var(--fs-meta) / var(--lh-meta) var(--sans); color: var(--muted); }
+.pv-bar { position: sticky; bottom: 0; z-index: 2; margin-top: auto; padding: var(--s-2) var(--s-3) calc(var(--s-2) + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); }
+.pv-bar[hidden] { display: none; }
+.pv-tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-1); }
+.pv-tools .tile-btn { min-width: 0; }
+@media (min-width: 560px) { .pv-tools { grid-template-columns: repeat(6, 1fr); } }
+.pv-tools .tile-btn:disabled { opacity: .4; }
+.pv-ask { margin: 0 0 var(--s-2); font-weight: 600; }
+.pv-choices { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.pv-choice { min-height: 44px; padding: 0 var(--s-4); border: 1px solid var(--line); border-radius: var(--r-full); background: var(--bg); color: var(--ink); font: inherit; }
+.pv-choice.quiet { border-color: transparent; color: var(--muted); }
+#readingSheet[data-kind="pageview"][hidden], .reader #readingSheet[data-kind="pageview"][hidden] { display: none; }

@@ -79,6 +79,7 @@ src/listen.js       audiobooks' pure parts: chapters from M4B and MP3 tags, tran
 src/zim.js          Kiwix packs (.zim): the header, entries by path, the title index, clusters stored, xz (its own LZMA2 decoder) or Zstandard (src/vendor/fzstd.mjs); loaded by files.js the first time a pack is opened
 src/pdf.js          PDFs through pdf.js in a locked-down frame
 src/ink.js          drawing over a clip's blocks or a PDF's pages: strokes, layers, undo, what a copy of the PDF is given
+src/app-sheets.js   Page view of a note: its sheets in one column, select, copy, paste, delete, share, save as, background
 src/notes.js        notes: sheets of paper you draw on, opened through the PDF pages pipeline with a stand-in document; any clip laid out as a PDF to make one
 src/pptx.js         PowerPoint decks redrawn on a canvas and written as a PDF (1.49.0)
 src/epub.js         clips as an EPUB 3 book, for e-readers and Send to Kindle
@@ -968,6 +969,8 @@ area.
 - A field missing from sync's `SYNCED`, backup's `cleanMeta`, `SYNCED_KEEP` and `AGAIN_KEEP` is dropped on the next sync or update. `folderSeries` and `folderIn` are in all four; a device without them strips them from clips it changes, which `healSeries` repairs while any clip of the series keeps them.
 - A site's tags (`siteTags`, { site, tags }) are read in `readArticle` before Readability runs: Readability takes the `<script>` tags out, and the schema.org keywords with them. A collection's clips carry the story page's tags, never a chapter page's own (`runJob`).
 - On a big screen the route steps back out of Settings by itself when it lands on the menu with a section open, so leaving Settings from deep inside (`outOfSettings`) waits a moment after each step instead of reading `history.state`: two backs at once leave the app.
+
+- A note's strokes are kept by sheet number, so any change to its sheets (Page view) goes through `ink.js arrange` and `notes.js arrange` together, and the reader's slots are made again by `files.js resheet`; arranging clears undo. Nothing new may be added to `note.json`, to `meta.note` or to a note's file names: older versions strip unknown fields from the first two (`clean`, `backup.cleanNote`) and sync drops and deletes file names that aren't `note.json`, `ink.json`, `base.pdf` or `img-<id>.txt`. A sheet's own paper and a PDF page pasted into another note are therefore picture items in `ink.json` with an id starting `bgp-<paper>-` or `bg-` (older versions show the picture; this one draws real paper for `bgp-` and doesn't select, move, erase or count either).
 
 - The reduced-motion rule in src/styles.css sets every CSS animation to 1 ms. An infinite one (a spinner's breathing) then runs a thousand times a second and flickers, so each gets its own duration back in that same block; a new looping animation does too.
 

@@ -1523,6 +1523,7 @@ function pageSheet(p, where) {
         inReader ? null : menuRow(t("Rename"), () => { renaming = true; draw(); }),
         p.link && p.file && p.file.kind === "pdf" && !p.comic
           ? menuRow(p.view === "text" ? t("Show as printed pages") : t("Show as text"), () => switchView(p, where)) : null,
+        inReader && p.note ? menuRow(t("Page view"), () => back().then(openPageView)) : null,
         inReader && p.note ? menuRow(t("Save as PDF"), () => back().then(() => noteToPdf(p))) : null,
         // A PDF's drawings as ink annotations in a new file (2026-11).
         inReader && !p.note && p.file && (p.drawn || []).length && C.files.heldPdf() && C.files.heldPdf().ink

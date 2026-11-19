@@ -213,4 +213,63 @@ test("a stroke on one page stays as it is; one off every page ends up inside the
   assert.ok(moved[0].s.y + moved[0].s.h <= 1.401, "pulled up: " + moved[0].s.y);
 });
 
-console.log("\n" + passed + " passed");
+
+// ---- Page view: sheets moved about (2026-11) ----
+// Older versions read what this writes, so the shapes must stay what they know.
+const later = [];
+const atest = (name, fn) => later.push(fn().then(() => { passed++; console.log("  ok - " + name); }, (e) => { console.error("  FAIL - " + name); console.error("    " + e.message); process.exitCode = 1; }));
+const pvStroke = (id, y) => ({ id, t: "p", c: "ink", w: 0.004, p: [0.1, y, 0.5, 0.5, y + 0.05, 0.5, 0.9, y, 0.5] });
+const pvBack = (id) => ({ id, t: "i", f: "paper1", x: 0, y: 0, w: 1, h: 1.4151 });
+
+test("a sheet's own paper is a plain picture item an older version keeps as it is", () => {
+  const b = pvBack("bgp-squares-abc123");
+  const c = I.clean(b);
+  assert.deepStrictEqual(c, b);
+  assert.ok(I.isBack(b) && I.isBack(pvBack("bg-xyz")));
+  assert.ok(!I.isBack(pvBack("abc123")) && !I.isBack(pvStroke("bgp-lines-x", 0.1)));
+});
+
+atest("sheets are moved, copied and dropped with their strokes, and back again", async () => {
+  const wrote = [];
+  const C = window.Waypage;
+  C.store = { readInk: async () => ({ v: 1, pages: { 1: [pvStroke("a", 0.1)], 2: [pvBack("bgp-lines-q1"), pvStroke("b", 0.2)] } }), writeInk: async (id, d) => { wrote.push(d); }, readInkImage: async () => null, writeInkImage: async () => {}, removeInkImage: async () => {} };
+  C.files = { printed: () => false };
+  C.reader = { frameDoc: null };
+  await I.load({ id: "n1", note: { paper: "lines" } });
+  assert.strictEqual(I.count(), 2, "the paper isn't a drawing");
+  assert.deepStrictEqual(I.drawn().map((d) => d.page), [1, 2]);
+  const token = I.arrange([{ from: 2 }, { from: 1 }, { strokes: I.sheetCopy(1).strokes, images: {} }]);
+  assert.deepStrictEqual(I.strokes(1).map((s) => s.id), ["bgp-lines-q1", "b"].map((x, i) => (i ? x : I.strokes(1)[0].id)));
+  assert.strictEqual(I.strokes(1)[0].id, "bgp-lines-q1");
+  assert.strictEqual(I.strokes(2)[0].id, "a");
+  assert.notStrictEqual(I.strokes(3)[0].id, "a", "a copy has its own id");
+  assert.ok(I.strokes(3)[0].p.length === 9);
+  I.unarrange(token);
+  assert.deepStrictEqual(I.strokes(1).map((s) => s.id), ["a"]);
+  assert.deepStrictEqual(I.strokes(2).map((s) => s.id), ["bgp-lines-q1", "b"]);
+  // Clearing a page leaves its paper.
+  I.clearPage(2);
+  assert.deepStrictEqual(I.strokes(2).map((s) => s.id), ["bgp-lines-q1"]);
+  I.clearAll();
+  assert.deepStrictEqual(I.strokes(2).map((s) => s.id), ["bgp-lines-q1"]);
+  assert.strictEqual(I.count(), 0);
+  I.unload();
+});
+
+atest("a note's sheet list keeps the shape older versions read", async () => {
+  global.t = (s) => s;
+  global.document = { implementation: {} };
+  require("../src/notes.js");
+  const C = window.Waypage;
+  let kept = null;
+  C.store.writeNote = async (id, d) => { kept = d; };
+  const data = { v: 1, sheets: [{ bg: "paper" }, { bg: "pdf", n: 4 }, { bg: "paper" }] };
+  await C.notes.arrange("n1", data, [{ from: 2 }, { sheet: { bg: "pdf", n: 9, extra: 1, paper: "lines" } }, { from: 1, sheet: { bg: "paper", pic: "x" } }, { sheet: { bg: "?" } }]);
+  assert.deepStrictEqual(kept, { v: 1, sheets: [{ bg: "pdf", n: 4 }, { bg: "pdf", n: 9 }, { bg: "paper" }, { bg: "paper" }] });
+  assert.strictEqual(data.sheets.length, 4, "the open note's own list changes in place");
+  await C.notes.arrange("n1", data, []);
+  assert.deepStrictEqual(kept.sheets, [{ bg: "paper" }], "a note always has a sheet");
+});
+
+
+Promise.all(later).then(() => console.log("\n" + passed + " passed"));

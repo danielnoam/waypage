@@ -154,6 +154,15 @@
   const pathOf = (s) => (s.t === "h" ? linePath(s.p) : penPath(s.p, s.w, s.y));
   // A picture or a line of typed text (2.0.0, notes) is a box, not a stroke.
   const boxy = (s) => s.t === "i" || s.t === "x";
+  // A sheet's own background, kept as a full-page picture item so an older
+  // version, which knows no such thing, still shows it (2026-11). "bgp-<paper>-"
+  // is a paper this version draws itself (the picture is only for older ones);
+  // "bg-" is a page of a PDF pasted into a note, a picture shown as it is.
+  // Neither is picked, moved, erased, cleared or counted as a drawing.
+  const BACK = /^bg(p-(blank|lines|squares))?-/;
+  const isBack = (s) => !!s && s.t === "i" && BACK.test(String(s.id || ""));
+  const isPaperBack = (s) => isBack(s) && s.id.startsWith("bgp-");
+  const mine = (list) => list.filter((s) => !isBack(s));
 
   // Whether a point is on a stroke, to within `slop` (page widths).
   function hits(s, x, y, slop) {
@@ -398,9 +407,9 @@
     return Promise.resolve(write).then(() => { if (edited && onSaved) onSaved(id); }, () => {});
   }
   const strokes = (n) => (clip && clip.pages[n]) || [];
-  const count = () => (clip ? Object.values(clip.pages).reduce((a, l) => a + l.length, 0) : 0);
+  const count = () => (clip ? Object.values(clip.pages).reduce((a, l) => a + mine(l).length, 0) : 0);
   // Pages with drawings, in order, with how many strokes each has.
-  const drawn = () => (clip ? Object.keys(clip.pages).map(Number).filter((n) => clip.pages[n].length).sort((a, b) => a - b).map((n) => ({ page: n, strokes: clip.pages[n].length })) : []);
+  const drawn = () => (clip ? Object.keys(clip.pages).map(Number).filter((n) => mine(clip.pages[n]).length).sort((a, b) => a - b).map((n) => ({ page: n, strokes: mine(clip.pages[n]).length })) : []);
   function put(n, s, at) {
     const list = (clip.pages[n] = clip.pages[n] || []);
     list.splice(at == null ? list.length : Math.min(at, list.length), 0, s);
@@ -578,7 +587,7 @@
   function paint(n) {
     const svg = layers.get(n);
     if (!svg) return;
-    svg.replaceChildren(...strokes(n).map((s) => el(n, s)));
+    svg.replaceChildren(...strokes(n).filter((s) => !isPaperBack(s)).map((s) => el(n, s)));
     padRect(svg);
     selDraw(n);
   }
@@ -860,7 +869,7 @@
   }
   function wipeAt(x, y) {
     for (const s of [...strokes(cur.n)]) {
-      if (boxy(s) || !hits(s, x, y, 0.012)) continue;
+      if (boxy(s) || isBack(s) || !hits(s, x, y, 0.012)) continue;
       const took = take(cur.n, s.id);
       if (!took) continue;
       cur.gone.push({ n: cur.n, ...took });
@@ -1111,12 +1120,12 @@
     if (c.mode === "lasso") {
       if (tap) {
         // A tap on a stroke or a picture takes it, the top one; on nothing, the selection goes.
-        const hit = [...strokes(c.n)].reverse().find((s) => hits(s, c.x0, c.y0, 0.01));
+        const hit = [...strokes(c.n)].reverse().find((s) => !isBack(s) && hits(s, c.x0, c.y0, 0.01));
         if (hit) selSet(c.n, [hit]); else selClear();
         return;
       }
       if (c.pts.length < 3) { selClear(); return; }
-      selSet(c.n, strokes(c.n).filter((s) => within(c.pts, s)));
+      selSet(c.n, strokes(c.n).filter((s) => !isBack(s) && within(c.pts, s)));
       return;
     }
     unlift();
@@ -1357,11 +1366,12 @@
   const undo = () => step(undos, redos, true);
   const redo = () => step(redos, undos, false);
   function clearPage(n) {
-    const list = strokes(n);
+    const all = strokes(n), list = mine(all);
     if (!list.length) return;
-    undos.push({ k: "del", items: list.map((s, i) => ({ n, s, i })).reverse() });
+    undos.push({ k: "del", items: all.map((s, i) => ({ n, s, i })).filter((g) => !isBack(g.s)).reverse() });
     redos = [];
-    delete clip.pages[n];
+    const keep = all.filter(isBack);
+    if (keep.length) clip.pages[n] = keep; else delete clip.pages[n];
     paint(n);
     save();
     changed();
@@ -1381,7 +1391,9 @@
   // Everything on the clip gone, for good (Remove all drawings).
   function clearAll() {
     if (!clip) return;
-    clip.pages = {};
+    const keep = {};
+    for (const [n, list] of Object.entries(clip.pages)) if (list.some(isBack)) keep[n] = list.filter(isBack);
+    clip.pages = keep;
     undos = []; redos = [];
     for (const n of layers.keys()) paint(n);
     save();
@@ -1396,6 +1408,102 @@
     const pr = n ? sum / n : 0.5;
     return (2 * radius(s.w, pr, s.y)) / s.w * (s.y === "fountain" ? 0.7 : s.y === "brush" ? 0.75 : 1);
   }
+
+  // ---- Sheets of a note, moved about (Page view, 2026-11) ----
+  // Strokes are kept by sheet number, so any change to the sheets goes through
+  // here and notes.js arrange together.
+
+  // The paper a sheet was given of its own (blank, lines or squares), or "".
+  function backKind(n) {
+    const b = strokes(n).find(isPaperBack);
+    return b ? b.id.split("-")[1] : "";
+  }
+  const pictureOf = (list) => list.filter((s) => s.t === "i").map((s) => s.f);
+  // A sheet's drawings and the pictures on them, to carry elsewhere.
+  function sheetCopy(n) {
+    const list = copyOf(strokes(n)), images = {};
+    for (const f of pictureOf(list)) if (imgs.has(f)) images[f] = imgs.get(f);
+    return { strokes: list, images };
+  }
+  // A fresh id that keeps a background item's marker.
+  const idLike = (s) => (isBack(s) ? s.id.replace(/-[^-]*$/, "") + "-" : "") + freshId();
+  // `order`: one entry per sheet, in the new order, each { from: n } (the
+  // sheet as it was) or { strokes, images } (a copy: new ids and pictures).
+  // Resolves to what undo needs (unarrange).
+  function arrange(order) {
+    if (!clip) return null;
+    const before = { pages: copyOf(clip.pages), images: {} };
+    for (const list of Object.values(before.pages)) for (const f of pictureOf(list)) if (imgs.has(f)) before.images[f] = imgs.get(f);
+    const old = clip.pages, pages = {};
+    order.forEach((o, i) => {
+      let list;
+      if (o.from) list = copyOf(old[o.from] || []);
+      else {
+        const made = new Map();
+        list = (o.strokes || []).map(clean).filter(Boolean).map((s) => {
+          const c = copyOf(s);
+          c.id = idLike(s);
+          if (c.t === "i") {
+            const url = (o.images && o.images[c.f]) || imgs.get(c.f);
+            if (!made.has(c.f)) {
+              const f = freshId();
+              made.set(c.f, f);
+              if (url) { imgs.set(f, url); C.store.writeInkImage(clip.id, f, url).catch(() => {}); }
+            }
+            c.f = made.get(c.f);
+          }
+          return c;
+        });
+      }
+      if (list.length) pages[i + 1] = list;
+    });
+    clip.pages = pages;
+    undos = []; redos = [];
+    relayer();
+    save();
+    changed();
+    return before;
+  }
+  function unarrange(before) {
+    if (!clip || !before) return;
+    for (const [f, url] of Object.entries(before.images || {})) if (!imgs.has(f)) { imgs.set(f, url); C.store.writeInkImage(clip.id, f, url).catch(() => {}); }
+    clip.pages = copyOf(before.pages);
+    undos = []; redos = [];
+    relayer();
+    save();
+    changed();
+  }
+  // The sheet's own paper: a full-page picture first on the sheet (older
+  // versions show that), or none when it takes the note's paper. `pic` is
+  // the paper's picture as a data: URL, `h` the sheet's height in widths.
+  function setBack(n, kind, pic, h) {
+    if (!clip) return;
+    const list = (clip.pages[n] || []).filter((s) => !isBack(s));
+    if (kind && pic) {
+      const f = freshId();
+      imgs.set(f, pic);
+      C.store.writeInkImage(clip.id, f, pic).catch(() => {});
+      list.unshift({ id: "bgp-" + kind + "-" + freshId(), t: "i", f, x: 0, y: 0, w: 1, h: r5(h) });
+    }
+    if (list.length) clip.pages[n] = list; else delete clip.pages[n];
+  }
+  // A page's picture put under what is drawn (a PDF's page pasted in).
+  function setPicture(n, pic, h) {
+    if (!clip) return;
+    const list = (clip.pages[n] || []).filter((s) => !isBack(s));
+    const f = freshId();
+    imgs.set(f, pic);
+    C.store.writeInkImage(clip.id, f, pic).catch(() => {});
+    list.unshift({ id: "bg-" + freshId(), t: "i", f, x: 0, y: 0, w: 1, h: r5(h) });
+    clip.pages[n] = list;
+  }
+  // Removes the layers; the reader makes them again as the sheets come in.
+  function relayer() {
+    for (const svg of layers.values()) svg.remove();
+    layers.clear();
+    cur = null; sel = null; picker = null;
+  }
+  function backsDone() { save(); changed(); }
 
   // The drawings for a copy of the PDF, to pdf.js inkOf.
   function forPdf() {
@@ -1422,7 +1530,7 @@
     set onStroke(f) { onStroke = f; },
     set onSaved(f) { onSaved = f; },
     set blockStore(f) { blockStore = f; },
-    snapshot, restore,
+    snapshot, restore, backKind, sheetCopy, arrange, unarrange, setBack, setPicture, relayer, backsDone, isBack,
     fromPhone, eraseFrom, get nat() { return nat; },
     get on() { return on; },
     get lastStroke() { return lastStroke; },

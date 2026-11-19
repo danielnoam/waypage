@@ -2776,6 +2776,7 @@ function openSheet(kind, fromHistory) {
   const s = SHEETS[kind];
   $("readingBody").replaceChildren(s.build());
   $("readingSheet").setAttribute("aria-label", s.label);
+  $("readingSheet").dataset.kind = kind;
   if (!fromHistory) history.pushState(readerState(state.open, kind), "");
   if (s.button) $(s.button).setAttribute("aria-expanded", "true");
   $("readerView").classList.remove("bar-away");
