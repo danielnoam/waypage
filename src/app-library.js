@@ -1062,7 +1062,6 @@ function openFolderMenu() {
     item("tag", t("Tags"), () => openMenu("folderTags"), sharedTags(list).length ? { note: String(sharedTags(list).length) } : {}),
     item("select", t("Select"), () => startSelect([])),
     item("send", t("Export"), () => setFolderMode("export")),
-    typeof makeAudiobook === "function" && canVoice() && list.some(voiceable) ? item("listen", t("Make an audiobook"), () => makeAudiobook({ folder: state.folder })) : null,
     sep(),
     item("remove", t("Remove"), () => openMenu("remove"), { warn: true }));
   const more = $("folderMore"), at = more.getBoundingClientRect();
@@ -1503,7 +1502,6 @@ const ICONS = {
   cover: '<rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.5"/><path d="M20 15l-4.5-4.5L6 20"/>',
   history: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   newest: '<path d="M12 4l1.8 4.7L18.5 10.5l-4.7 1.8L12 17l-1.8-4.7L5.5 10.5l4.7-1.8z"/><path d="M19 16v4M17 18h4"/>',
-  listen: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><path d="M4 15h3v5H5a1 1 0 0 1-1-1zM20 15h-3v5h2a1 1 0 0 0 1-1z"/>',
   lookup: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/><path d="M9 8h7M9 11.5h5"/>',
 };
 function svgIcon(name, size) {
@@ -1625,8 +1623,6 @@ function pageSheet(p, where) {
         // Moved here from Highlights (Daniel's ask, 2026-11-13).
         inReader && inkReady() ? menuRow(t("Try your pen"), () => { history.back(); setTimeout(() => openSheet("ink"), 0); }) : null,
         C.files.convertible(p) ? menuRow(t("Make a note from it"), () => back().then(() => makeNoteFrom(p))) : null,
-        // Spoken into an audiobook by the Narrate voice (Android).
-        typeof makeAudiobook === "function" && canVoice() && voiceable(p) ? menuRow(t("Make an audiobook"), () => back().then(() => makeAudiobook({ page: p }))) : null,
         inReader && !p.note && !C.files.printed(p) ? menuRow(t("Find in this clip"), () => back().then(openFind)) : null,
         inReader && !p.note && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow(t("Save linked pages"), () => back().then(() => openSheet("links"))) : null,
         p.note ? null : menuRow(p.finished ? t("Mark as unread") : t("Mark as read"), () => markRead([p], !p.finished).then(draw)),
