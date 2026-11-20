@@ -137,6 +137,7 @@ tools/sherpa-lib.sh   fetches sherpa-onnx's arm64 library (Kokoro voices) into t
 tools/test-build.sh        puts a labelled pull request's build on its test-<branch> pre-release
 tools/packs/build-lang.js  builds Anki's language packs (a StarDict .tar.gz) from Wiktextract data; not shipped, and prints the SHA-256 the catalogue pins
 tools/shots.js      retakes the README's screenshots (tools/shots/demo is the demo library)
+tools/icons.js      renders icons/ and assets/ (icons, light splash) from icon.svg
 tools/check-discover.js  checks every feed, sign-up and serial in Discover's list still answers (weekly, discover-check.yml)
 test/               node test/run-all.js runs every *.test.js
 keel.config.json, keel.lock.json  the files shared with LifeLog through keel (see Versions, cache and updates)
