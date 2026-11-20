@@ -128,6 +128,14 @@ public class SpeechService extends Service {
         @Override public void toQueueItem(long id) {}
     };
 
+    // Narrate reading with Waypage's own engine (Kokoro, Piper), which
+    // Save the narration waits for; ownTurns counts the pieces it asked for.
+    static volatile int ownTurns;
+    static boolean ownBusy() {
+        SpeechService s = running;
+        return s != null && "playing".equals(s.state) && s.getPackageName().equals(s.engine);
+    }
+
     static String stateOf() { return running == null ? "stopped" : running.state; }
     static int indexOf() { return running == null ? -1 : running.index; }
     static String keyOf() { return running == null || running.job == null ? "" : running.job.key; }
@@ -292,6 +300,7 @@ public class SpeechService extends Service {
     private static final int AHEAD_CHARS = 60 * 15, AHEAD_MOST = 8;
     private void makeAhead(int n, int more) {
         if (!getPackageName().equals(engine) || !Kokoro.ready(this)) return;
+        ownTurns++;
         Locale l = job.lang != null && !job.lang.isEmpty() ? Locale.forLanguageTag(job.lang) : Locale.getDefault();
         Kokoro.Pick pick = Kokoro.pick(this, job.voice, l);
         if (pick == null) return;
