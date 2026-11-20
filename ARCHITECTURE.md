@@ -68,7 +68,7 @@ src/app-settings.js Settings (built from data; the search reads the built screen
 src/app-listen.js   audiobooks: bringing one in, the player and its bar, reading along, transcripts written ahead, fixes, Find the book in Discover, Settings › Audiobooks
 src/app-extensions.js Settings › Extensions (a switch each) and the places extensions add to the sidebar, above Stats
 src/app-lock.js     app lock: passcode (PBKDF2 hash), fingerprint or face on Android
-src/app-car.js      Android Auto: the list the car starts from (books, clips cut for Narrate) and where the car got to
+src/app-car.js      Android Auto: the list the car starts from (books, clips cut for Narrate, collections with quick starts) and where the car got to
 src/app-start.js    wiring at launch, what other apps share in, self-update, Test builds, What's new
 src/save.js         link to saved page: fetch, Wikipedia adapter or Readability, allowlist cleaner, picture previews, video cards
 src/reader.js       a saved page in the sandboxed iframe: place, find, highlights, translation, pages mode
@@ -125,7 +125,7 @@ src/vendor/         Readability, pdf.js, foliate-js's MOBI reader, fzstd (Zstand
 assets/             icon and splash sources for the apps
 icons/, icon.svg    app icons
 worker/             the web copy's fetch proxy, a Cloudflare Worker (worker.js, wrangler.toml, README.md has the setup)
-native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Pen, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes), Audiobook (AudiobookService plays with the screen off; Listen writes transcripts with sherpa-onnx's offline recognizer), Car (Android Auto: CarService, Car's one shared media session), Dav (a WebDAV PROPFIND written over a socket, for Files' davList), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
+native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Pen, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes), Audiobook (AudiobookService plays with the screen off; Listen writes transcripts with sherpa-onnx's offline recognizer; Voicing speaks text into an audiobook), Car (Android Auto: CarService, Car's one shared media session), Dav (a WebDAV PROPFIND written over a socket, for Files' davList), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
 tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-build.json
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
 tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
@@ -768,6 +768,21 @@ deletes with the clip; a picked folder's stay. Its Gutenberg book (the
 recording's `url_text_source`) downloads after it and is paired
 through `pairPending`, as Find the book in Discover does.
 
+An audiobook made from text (Make an audiobook, `makeAudiobook`,
+Android only) is spoken by the Narrate voice of each clip's language:
+`AudiobookPlugin.voice` runs `Voicing` on its own thread, each of
+Narrate's pieces through `TextToSpeech.synthesizeToFile` (any engine,
+Kokoro and Piper through `KokoroTtsService`), read back as PCM and
+encoded with MediaCodec into one AAC .m4a (48 kbps mono) of at most 120
+pieces, with each piece's start and end. The files go through
+`keepMade` into Waypage's own files (`audio.ours`), and `audio.voiced`
+(`{ from }`: the clip's id, or `c:` and the collection) marks it. The
+pieces' times are its transcript, written whole (`ranges` covers it, so
+nothing is written ahead; `para` starts each paragraph): a clip's reads
+along with the clip (mode "book"), a collection's with its own
+transcript, a chapter per clip. The run is a Downloads card, so the
+dataSync notification keeps the app up while it's made.
+
 A streamed audiobook (the Audiobookshelf extension) is an entry with
 `remote` (`{ kind, server, item }`) and a `link` of `abs:<server>:<item>`
 that no file has, so it is treated as read from outside: not uploaded
@@ -786,18 +801,29 @@ MediaBrowserService, no androidx) and `automotive_app_desc` in the
 plugin's manifest. Narrate and audiobooks share one MediaSession
 (`Car.session`, never released): the car binds to one token, so each
 player only says it's the one playing (`Car.playing`) and hands it back
-when it stops (`Car.idle`). The car's tabs are Continue, Audiobooks and
-Up next; an audiobook's chapters are the session's queue. Custom
-actions add next and previous clip (`SpeechService.clip`: the clip the
-app queued, else `Car.neighbour` under Up next) and next and previous
-chapter or file (`AudiobookService.chapter`). A clip the car jumps to
-that the app didn't queue isn't followed by the open app's player.
+when it stops (`Car.idle`). The car's tabs are Continue, Audiobooks,
+Up next and Collections (Android Auto shows four at most); an
+audiobook's chapters are the session's queue. Custom actions add next
+and previous clip (`SpeechService.clip`: the clip the app queued, else
+`Car.nextId`: the next in the clip's collection or series, else under
+Up next) and next and previous chapter or file
+(`AudiobookService.chapter`, which past the book's ends goes to the
+collection's next or previous). Their icons are a list with an arrow,
+not the skip arrows: beside the paragraph buttons, look-alikes read as
+previous and next swapped. A clip the car jumps to that the app didn't
+queue isn't followed by the open app's player.
 
 The car starts things with the app closed, so the WebView can't help.
 `app-car.js` writes `car.json` (CarPlugin) when the app is put away and
 a little after it opens, if anything changed: up to 40 books with their
 parts, chapters and place, and the 10 latest unfinished clips with their
-text already cut into Narrate's pieces, voice, engine and speed. A job
+text already cut into Narrate's pieces, voice, engine and speed, and
+the 8 collections or series read or added to last, in their order, with
+quick starts and only some of their clips (the first two, the newest,
+and from just before where it was left to 8 after; `at` gives each
+one's place, so Next never jumps a gap). Those carried only for a
+collection are marked `hide` and stay off the Audiobooks and Up next
+tabs. The car's words come in the app's language (`words`). A job
 the car started is marked `car`; where it got to goes into
 SharedPreferences (`Car.heardBook`, `Car.heardClip`) and `carPlaces`
 takes it back into the library when the app opens. A clip's place there
@@ -998,6 +1024,12 @@ adds a line here.
   so the car can start them with the app closed. Only the car, the
   Assistant, Bluetooth and system apps (by uid, system or from the Play
   Store) may browse it, and with App lock on it lists nothing.
+- Make an audiobook takes as long as the voice does: Google's voices
+  are faster than real time, Kokoro on a phone may be slower, so a long
+  book can take hours, and Android 15 ends a dataSync service after six
+  hours a day. Pausing stops the file in hand and makes it again from its
+  start. A made audiobook is in no backup or sync, like any audiobook;
+  it can be made again from the text.
 
 ## Traps
 
@@ -1013,6 +1045,7 @@ area.
 - A merge done with the workflow's own `GITHUB_TOKEN` starts no other workflows, so `pages.yml` and the release builds never run. `auto-merge.yml` turns auto-merge on with the `AUTOMERGE_TOKEN` secret (a fine-grained token of Daniel's) for that reason.
 - The books of an audiobook folder added as a series share one `link`, the folder picked. Removing an entry lets go of its `link` only when no other entry still reads from it (`releaseLinks`).
 - A field missing from sync's `SYNCED`, backup's `cleanMeta`, `SYNCED_KEEP` and `AGAIN_KEEP` is dropped on the next sync or update. `folderSeries` and `folderIn` are in all four; a device without them strips them from clips it changes, which `healSeries` repairs while any clip of the series keeps them.
+- A story's status (`siteStatus`: completed, ongoing, hiatus, stubbed, dropped, inactive) is read only by site rules (`status` in save.js `SITES`: Royal Road, AO3, FanFiction.net, Scribble Hub) from the story page, kept on every clip of the collection like `siteTags`, and refreshed by Website sync's check. It is device-only like the cover (not in sync or backups): each device reads its own on its next check. A page that stops saying keeps the last word. `statusPick` (Edit's Status row) and `folderNoStatus` (Website sync's "Status from the site" off) are synced marks on every clip like `coverPick`; the site's word shows over the pick unless it's switched off. Chapters saved later take it from their collection mates, or from `seenStatus` (what the last story page read said) on a first save.
 - A site's tags (`siteTags`, { site, tags }) are read in `readArticle` before Readability runs: Readability takes the `<script>` tags out, and the schema.org keywords with them. A collection's clips carry the story page's tags, never a chapter page's own (`runJob`).
 - On a big screen the route steps back out of Settings by itself when it lands on the menu with a section open, so leaving Settings from deep inside (`outOfSettings`) waits a moment after each step instead of reading `history.state`: two backs at once leave the app.
 

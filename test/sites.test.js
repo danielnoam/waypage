@@ -394,6 +394,17 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       await ctx.close();
     });
 
+    // Where a story stands (2026-11): Royal Road's label, AO3's chapter
+    // count (12/? still going), FanFiction.net's "Status: Complete".
+    await test("a story's status: Royal Road, AO3 and FanFiction.net say whether it's finished", async () => {
+      const read = (answers, url) => inPage(browser, answers, (u) => Waypage.save.findChapters(u).then((f) => ({ n: f.links.length, status: f.status })), url).then((r) => r.got);
+      assert.deepStrictEqual(await read([["https://www.royalroad.com/fiction/5", "rr-fiction.html"]], "https://www.royalroad.com/fiction/5/a-long-road"), { n: 2, status: "hiatus" });
+      assert.deepStrictEqual(await read([["https://archiveofourown.org/works/7/navigate", "ao3-navigate.html"], ["https://archiveofourown.org/works/7", "ao3-work.html"]], "https://archiveofourown.org/works/7"), { n: 2, status: "ongoing" });
+      assert.deepStrictEqual(await read([["https://www.fanfiction.net/s/42", "ff-story.html"]], "https://www.fanfiction.net/s/42/1/A-Tale"), { n: 2, status: "completed" });
+      // A site with no rule says nothing.
+      assert.strictEqual((await read([["https://example.com/story", "toc-named.html"]], "https://example.com/story")).status, "");
+    });
+
     // Any page's own tags (2026-11): schema.org keywords first (machine
     // labels and repeats left out), else the post's rel="tag" links but not
     // a sidebar's tag cloud. Kept on the clip as suggestions.

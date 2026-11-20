@@ -393,9 +393,10 @@ public class SpeechService extends Service {
         else play();
     }
 
-    // Next or previous clip from the car (Daniel's ask): on, the clip the
-    // app queued (the collection's next) or the next under Up next; back,
-    // the one before under Up next, else this clip from its start.
+    // Next or previous clip from the car: on, the clip the app queued (the
+    // collection's next); else what comes next in the clip's collection
+    // or series (an audiobook in it too), or under Up next. Back past the
+    // first, this clip from its start.
     private void clip(int d) {
         if (job == null) return;
         Job to = null;
@@ -404,7 +405,13 @@ public class SpeechService extends Service {
             queued = null;
             queuedAfter = null;
         }
-        if (to == null) to = Car.neighbour(this, job.key, d);
+        String id = to == null ? Car.nextId(this, Car.CLIP + job.key, d) : null;
+        if (to == null) to = Car.clipFor(this, id);
+        if (to == null && id != null && id.startsWith(Car.BOOK)) {
+            if (job.car) Car.heardClip(this, job.key, index, through(), false);
+            Car.playId(id);
+            return;
+        }
         if (to == null) { if (d < 0) { move(0); if (!"playing".equals(state)) play(); } return; }
         if (job.car) Car.heardClip(this, job.key, index, through(), false);
         switchTo(to);

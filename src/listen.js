@@ -287,7 +287,7 @@
       const chars = words.reduce((s, w) => s + w.length + 1, 0) || 1;
       let c = 0;
       words.forEach((w, i) => {
-        out.push({ w, t: times ? times[i] : p.t0 + (p.t1 - p.t0) * (c / chars), q: i === 0 ? p.quiet || 0 : 0 });
+        out.push({ w, t: times ? times[i] : p.t0 + (p.t1 - p.t0) * (c / chars), q: i === 0 ? p.quiet || 0 : 0, ...(i === 0 && p.para ? { p: 1 } : {}) });
         c += w.length + 1;
       });
     }
@@ -354,7 +354,8 @@
       }
       const n = para ? para.words.length : 0;
       const prev = para && para.words[n - 1];
-      if (para && ((pauses && x.q >= PAUSE && n >= 12) || (n >= (pauses ? 220 : 110) && prev && end(prev.w)))) para = null;
+      // A paragraph of the text an audiobook was made from starts one here.
+      if (para && (x.p || (pauses && x.q >= PAUSE && n >= 12) || (n >= (pauses ? 220 : 110) && prev && end(prev.w)))) para = null;
       if (!para) { para = { words: [] }; out.push(para); }
       para.words.push(x);
       last = x.t;

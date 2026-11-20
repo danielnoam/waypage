@@ -164,6 +164,7 @@ async function saveWaiting() {
 // A link that turned out to be a contents page opens as a list to check.
 function contentsFound(job) {
   dropFailed(job);
+  noteStatus({ ...job.contents, page: job.url });
   openBatch(job.contents.links.join("\n"), false, folderName(job.contents.title || job.site), job.url, job.contents.siteTags);
   toast(t("That's a list of chapters. Check them, then save."));
 }
@@ -316,7 +317,7 @@ async function saveOnce(job, opts) {
 
 // What a clip saved again keeps from the copy it replaces: where it is,
 // how it's marked and read. The rest comes from the new copy.
-const AGAIN_KEEP = ["requested", "folder", "folderAt", "folderFav", "folderFavAt", "coverPick", "source", "tags", "at", "finished", "readAt", "readOn", "placeAt", "fav", "favAt", "marks", "noShare", "folderNoShare", "folderTagNew", "folderSeries", "folderIn", "movedAt", "live"];
+const AGAIN_KEEP = ["requested", "folder", "folderAt", "folderFav", "folderFavAt", "coverPick", "statusPick", "folderNoStatus", "source", "tags", "at", "finished", "readAt", "readOn", "placeAt", "fav", "favAt", "marks", "noShare", "folderNoShare", "folderTagNew", "folderSeries", "folderIn", "movedAt", "live"];
 
 async function runJob(job) {
   job.started = Date.now();
@@ -369,6 +370,11 @@ async function runJob(job) {
       if (meta.folder) {
         const story = job.siteTags || (folderPages(meta.folder).find((x) => x.siteTags) || {}).siteTags;
         if (story) meta.siteTags = story; else delete meta.siteTags;
+        const status = siteStatusOf(folderPages(meta.folder)) || (job.source && seenStatus.get(urlKey(job.source)));
+        if (status) meta.siteStatus = status;
+        const mates = folderPages(meta.folder), pick = pickedStatus(mates);
+        if (pick) meta.statusPick = pick;
+        if (mates.some((x) => x.folderNoStatus)) meta.folderNoStatus = true;
       } else takeSiteTags(meta);
       if (meta.folder) joinTags(meta, meta.folder, job.tagNew);
       if (meta.folder && job.series) meta.folderSeries = true;

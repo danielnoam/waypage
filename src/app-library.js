@@ -237,6 +237,9 @@ function joinFav(p, name) {
   joinTags(p, name);
   const pick = name ? coverPick(folderPages(name).filter((x) => x !== p)) : "";
   if (pick) p.coverPick = pick; else delete p.coverPick;
+  const status = name ? pickedStatus(folderPages(name).filter((x) => x !== p)) : "";
+  if (status) p.statusPick = status; else delete p.statusPick;
+  if (name && folderPages(name).some((x) => x !== p && x.folderNoStatus)) p.folderNoStatus = true; else delete p.folderNoStatus;
   joinSeries(p, name);
 }
 
@@ -314,6 +317,53 @@ async function keepStoryTags(name, got) {
   for (const p of folderPages(name)) if (JSON.stringify(p.siteTags || null) !== was) { p.siteTags = got; changed = true; }
   if (changed) await C.store.writeIndex(state.pages);
 }
+// Where the story stands on its site (2026-11): "completed", "ongoing",
+// "hiatus", "stubbed", "dropped" or "inactive", kept on each of a
+// collection's clips like its site's tags; Website sync refreshes it. A
+// page that no longer says leaves the last word in place.
+const STORY_STATUS = { completed: () => t("Completed"), ongoing: () => t("Ongoing"), hiatus: () => t("On hiatus"), stubbed: () => t("Stubbed"), dropped: () => t("Dropped"), inactive: () => t("Inactive") };
+// What story pages read lately said, by address, for the chapters a
+// save then files under them.
+const seenStatus = new Map();
+function noteStatus(found) {
+  if (found && found.status && STORY_STATUS[found.status] && found.page) seenStatus.set(urlKey(found.page), found.status);
+  return found;
+}
+async function keepStoryStatus(name, got) {
+  if (!got || !STORY_STATUS[got]) return;
+  let changed = false;
+  for (const p of folderPages(name)) if (p.siteStatus !== got) { p.siteStatus = got; changed = true; }
+  if (changed) await C.store.writeIndex(state.pages);
+}
+// The site's word, unless Website sync's "Status from the site" is off
+// (`folderNoStatus`); else the one picked in Edit (`statusPick`). Both
+// are on every clip, synced like coverPick.
+const siteStatusOf = (list) => { const p = list.find((x) => STORY_STATUS[x.siteStatus]); return p ? p.siteStatus : ""; };
+const pickedStatus = (list) => { const p = list.find((x) => STORY_STATUS[x.statusPick]); return p ? p.statusPick : ""; };
+const siteStatusOn = (list) => !list.some((x) => x.folderNoStatus);
+const siteSays = (list) => (siteStatusOn(list) ? siteStatusOf(list) : "");
+const folderStatus = (list) => siteSays(list) || pickedStatus(list);
+async function setFolderStatus(name, key, value) {
+  for (const p of folderPages(name)) { if (value) p[key] = value; else delete p[key]; }
+  await C.store.writeIndex(state.pages);
+  syncSoon();
+  renderLibrary();
+  renderFolder();
+}
+// Edit's Status row (2026-11, Daniel): picked by hand for a story whose
+// site doesn't say; while the site's word shows, the row says so.
+function statusRow(list) {
+  const site = siteSays(list);
+  const row = pickRow({ label: t("Status"), cls: "status-pick",
+    note: site ? t("From {site}: {status}", { site: siteOf(list[0]) || t("its site"), status: statusName(site) }) : "",
+    options: [{ value: "", label: t("None") }, ...Object.keys(STORY_STATUS).map((s) => ({ value: s, label: statusName(s) }))],
+    get: () => (site || pickedStatus(list)), set: (v) => setFolderStatus(state.folder, "statusPick", v), disabled: !!site });
+  return row;
+}
+const statusName = (s) => (STORY_STATUS[s] ? STORY_STATUS[s]() : "");
+// Read to the end of a story that isn't finished on its site: caught up,
+// not done (Daniel: you can't finish what's still being written).
+const caughtUp = (list) => { const s = folderStatus(list); return !!s && s !== "completed"; };
 async function setFolderTagNew(name, on) {
   for (const p of folderPages(name)) { if (on) p.folderTagNew = true; else delete p.folderTagNew; }
   await C.store.writeIndex(state.pages);
@@ -422,8 +472,9 @@ function folderTile(name) {
   const fresh = freshCount(name);
   const fav = list.some((p) => p.folderFav);
   const series = isSeriesFolder(name), inside = series ? 0 : seriesInside(name).length;
+  const status = statusName(folderStatus(list));
   const tile = el("div", { class: "tile", role: "listitem", "data-ids": list.map((p) => p.id).join(","), "data-name": name },
-    el("button", { class: "card-open", type: "button", "aria-label": [name, fav ? t("favourite") : "", series ? t("series") : t("collection"), inside ? tn(inside, "1 series", "{n} series") : "", holdsLine(list), (allHeard(list) ? t("{n} heard", { n: done }) : t("{n} read", { n: done })), fresh ? tn(fresh, "1 new chapter", "{n} new chapters") : ""].filter(Boolean).join(", "),
+    el("button", { class: "card-open", type: "button", "aria-label": [name, fav ? t("favourite") : "", series ? t("series") : t("collection"), status, inside ? tn(inside, "1 series", "{n} series") : "", holdsLine(list), (allHeard(list) ? t("{n} heard", { n: done }) : t("{n} read", { n: done })), fresh ? tn(fresh, "1 new chapter", "{n} new chapters") : ""].filter(Boolean).join(", "),
       onclick: () => tapPages(list.map((p) => p.id), () => openFolder(name)) }),
     pickMark(),
     el("span", { class: "tile-thumb" + (thumb ? "" : " blank") },
@@ -439,7 +490,7 @@ function folderTile(name) {
           saveNewChapters(name, e.currentTarget);
         } }, "+" + (fresh >= NEW_MAX ? NEW_MAX : fresh)) : null),
     el("span", { class: "tile-name", dir: "auto" }, name),
-    el("span", { class: "tile-meta" }, el("span", { class: "tile-kind" }, series ? t("Series · ") : t("Collection · ")), inside ? tn(inside, "1 series, {clips}", "{n} series, {clips}", { clips: holdsLine(list) }) : (allHeard(list) ? (done === list.length ? t("All heard") : t("{done} of {n} heard", { done: done, n: list.length })) : done === list.length ? t("All read") : t("{done} of {n} read", { done: done, n: list.length })), el("span", { class: "tile-size" }, " · " + formatSize(sizeOf(list)))),
+    el("span", { class: "tile-meta" }, el("span", { class: "tile-kind" }, series ? t("Series · ") : t("Collection · ")), inside ? tn(inside, "1 series, {clips}", "{n} series, {clips}", { clips: holdsLine(list) }) : (allHeard(list) ? (done === list.length ? t("All heard") : t("{done} of {n} heard", { done: done, n: list.length })) : done === list.length ? (caughtUp(list) ? t("Caught up") : t("All read")) : t("{done} of {n} read", { done: done, n: list.length })), status ? el("span", { class: "tile-status-word" }, " · " + status) : null, el("span", { class: "tile-size" }, " · " + formatSize(sizeOf(list)))),
     el("span", { class: "progress thin", "aria-hidden": "true" },
       el("span", { class: "progress-fill", style: "transform: scaleX(" + done / list.length + ")" })));
   // A cover whose file is gone (a restored backup) is read again.
@@ -454,6 +505,8 @@ function folderTile(name) {
   // icon used to sit.
   if (fav) tile.querySelector(".tile-thumb").append(favStar());
   tile.querySelector(".tile-thumb").append(holdsMarks(list));
+  // Where the story stands on its site, a tag at the cover's top.
+  if (status) tile.querySelector(".tile-thumb").append(el("span", { class: "tile-status", "aria-hidden": "true", "data-status": folderStatus(list) }, status));
   return tile;
 }
 
@@ -591,14 +644,14 @@ function bookHead(list, next, done) {
   } else title = el("h2", { class: "book-title", dir: "auto" }, name);
   const left = minutesLeft(list);
   const heard = allHeard(list);
-  const meta = done === n ? (heard ? t("All {n} heard", { n }) : t("All {n} read", { n })) : heard ? t("{done} of {n} heard · {left} left", { done, n, left: minutesText(left) }) : t("{done} of {n} read · {left} left", { done, n, left: minutesText(left) });
+  const meta = done === n ? (heard ? t("All {n} heard", { n }) : caughtUp(list) ? t("Caught up: all {n} read", { n }) : t("All {n} read", { n })) : heard ? t("{done} of {n} heard · {left} left", { done, n, left: minutesText(left) }) : t("{done} of {n} read · {left} left", { done, n, left: minutesText(left) });
   const bar = el("div", { class: "book-progress", role: "progressbar", "aria-label": t("Read"), "aria-valuemin": "0",
     "aria-valuemax": String(n), "aria-valuenow": String(done), "aria-valuetext": heard ? t("{done} of {n} heard", { done, n }) : t("{done} of {n} read", { done, n }) },
     el("span", { class: "book-progress-fill", style: "width: " + (done / n * 100).toFixed(1) + "%" }));
   const head = el("div", { class: "book-head" },
     bookCover(list),
     el("div", { class: "book-facts" },
-      el("p", { class: "book-site" }, [siteOf(list[0]), isSeriesFolder(name) ? t("Series") : t("Collection")].filter(Boolean).join(" · ")),
+      el("p", { class: "book-site" }, [siteOf(list[0]), isSeriesFolder(name) ? t("Series") : t("Collection"), statusName(folderStatus(list))].filter(Boolean).join(" · ")),
       title,
       !renaming && seriesHost(name) ? el("button", { class: "book-saved series-in", type: "button", onclick: () => openFolder(seriesHost(name)) },
         el("span", { class: "accent", dir: "auto" }, t("In {collection}", { collection: seriesHost(name) }))) : null,
@@ -609,6 +662,7 @@ function bookHead(list, next, done) {
   const go = done === n ? t("Read again from the start") : (next.at > 0.02 || done ? t("Continue: {title}", { title: next.title }) : t("Start: {title}", { title: next.title }));
   return [head,
     el("button", { class: "btn-primary folder-go", type: "button", dir: "auto", onclick: () => openPage(done === n ? list[0].id : next.id) }, go),
+    quickStarts(list, done === n ? list[0] : next),
     saveNewButton(list),
     savedLine(list)];
 }
@@ -743,8 +797,8 @@ function renderFolder() {
   // chapters with what they keep, to put in order.
   else if (editing) {
     top = [el("div", { class: "folder-edit" }, ...bookHead(list, next, done),
-      sharing() ? el("div", { class: "group" },
-        switchRow(t("In other apps"), t("Listed in the reading activity that apps you connect to your sync repo can read"), !list.some((p) => p.folderNoShare), (v) => setFolderShare(state.folder, !v))) : null,
+      el("div", { class: "group" }, statusRow(list),
+        sharing() ? switchRow(t("In other apps"), t("Listed in the reading activity that apps you connect to your sync repo can read"), !list.some((p) => p.folderNoShare), (v) => setFolderShare(state.folder, !v)) : null),
       sectionHead(t("Cover")), coverPanel(list),
       sectionHead(listHead(list)),
       savedLine(list),
@@ -1008,11 +1062,16 @@ function openFolderMenu() {
     item("tag", t("Tags"), () => openMenu("folderTags"), sharedTags(list).length ? { note: String(sharedTags(list).length) } : {}),
     item("select", t("Select"), () => startSelect([])),
     item("send", t("Export"), () => setFolderMode("export")),
+    typeof makeAudiobook === "function" && canVoice() && list.some(voiceable) ? item("listen", t("Make an audiobook"), () => makeAudiobook({ folder: state.folder })) : null,
     sep(),
     item("remove", t("Remove"), () => openMenu("remove"), { warn: true }));
   const more = $("folderMore"), at = more.getBoundingClientRect();
   pop.style.top = at.bottom + 4 + "px";
-  pop.style.right = Math.max(8, innerWidth - at.right) + "px";
+  if (document.dir === "rtl") pop.style.left = Math.max(8, at.left) + "px";
+  else pop.style.right = Math.max(8, innerWidth - at.right) + "px";
+  // A phone on its side is shorter than the menu: it scrolls.
+  pop.style.maxHeight = innerHeight - at.bottom - 12 + "px";
+  pop.style.overflowY = "auto";
   $("folderView").append(pop);
   more.setAttribute("aria-expanded", "true");
   M.popFrom(pop, at);
@@ -1026,6 +1085,25 @@ function openFolderMenu() {
     else if (e.key === "Tab") closeFolderMenu(true);
   });
   setTimeout(() => addEventListener("pointerdown", outsideMenu, true));
+}
+
+// Quick starts under Continue (Daniel 2026-11-20): the clip read last
+// and the one added last, unless Continue opens it already.
+function quickStarts(list, main) {
+  const at = (p) => p.folderAt || p.savedAt || 0;
+  const newest = list.reduce((a, p) => (at(p) >= at(a) ? p : a), list[0]);
+  const last = list.reduce((a, p) => ((p.readAt || 0) > ((a && a.readAt) || 0) ? p : a), null);
+  const shown = new Set([main]);
+  const open = (icon, label, p) => {
+    if (!p || shown.has(p)) return null;
+    shown.add(p);
+    const b = el("button", { class: "chip quick-start", type: "button", "aria-label": label + ": " + p.title, onclick: () => openPage(p.id) },
+      el("span", { class: "chip-icon", "aria-hidden": "true" }), el("span", { class: "chip-label" }, label));
+    b.firstChild.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS[icon] + "</svg>";
+    return b;
+  };
+  const chips = [open("history", t("Last read"), last), open("newest", t("Newest"), newest)].filter(Boolean);
+  return chips.length ? el("div", { class: "chips folder-starts", role: "group", "aria-label": t("Quick starts") }, ...chips) : null;
 }
 
 function outsideMenu(e) {
@@ -1378,7 +1456,7 @@ async function removeFolder(withPages) {
   if (withPages) { forgetWatched(list); releaseLinks(list); }
   for (const p of list) {
     if (withPages) { dropPackFile(p); dropAudioFiles(p); await C.store.removePage(p.id); }
-    else { delete p.folder; delete p.folderAt; delete p.folderFav; delete p.folderFavAt; delete p.coverPick; delete p.folderNoShare; delete p.folderTagNew; delete p.folderSeries; delete p.folderIn; }
+    else { delete p.folder; delete p.folderAt; delete p.folderFav; delete p.folderFavAt; delete p.coverPick; delete p.statusPick; delete p.folderNoStatus; delete p.folderNoShare; delete p.folderTagNew; delete p.folderSeries; delete p.folderIn; }
   }
   // Its series stay, in the library's Series.
   for (const f of inside) for (const p of folderPages(f)) delete p.folderIn;
@@ -1423,6 +1501,9 @@ const ICONS = {
   translate: '<path d="M4 5h9M8.5 3v2M11 5c-1 4-3.5 7-7 8.5M6.5 8.5c1.2 2 3 3.5 5 4.5"/><path d="M13 21l4-9 4 9M14.5 18h5"/>',
   grid: '<rect x="4" y="4" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1"/>',
   cover: '<rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.5"/><path d="M20 15l-4.5-4.5L6 20"/>',
+  history: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  newest: '<path d="M12 4l1.8 4.7L18.5 10.5l-4.7 1.8L12 17l-1.8-4.7L5.5 10.5l4.7-1.8z"/><path d="M19 16v4M17 18h4"/>',
+  listen: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><path d="M4 15h3v5H5a1 1 0 0 1-1-1zM20 15h-3v5h2a1 1 0 0 0 1-1z"/>',
   lookup: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/><path d="M9 8h7M9 11.5h5"/>',
 };
 function svgIcon(name, size) {
@@ -1544,6 +1625,8 @@ function pageSheet(p, where) {
         // Moved here from Highlights (Daniel's ask, 2026-11-13).
         inReader && inkReady() ? menuRow(t("Try your pen"), () => { history.back(); setTimeout(() => openSheet("ink"), 0); }) : null,
         C.files.convertible(p) ? menuRow(t("Make a note from it"), () => back().then(() => makeNoteFrom(p))) : null,
+        // Spoken into an audiobook by the Narrate voice (Android).
+        typeof makeAudiobook === "function" && canVoice() && voiceable(p) ? menuRow(t("Make an audiobook"), () => back().then(() => makeAudiobook({ page: p }))) : null,
         inReader && !p.note && !C.files.printed(p) ? menuRow(t("Find in this clip"), () => back().then(openFind)) : null,
         inReader && !p.note && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow(t("Save linked pages"), () => back().then(() => openSheet("links"))) : null,
         p.note ? null : menuRow(p.finished ? t("Mark as unread") : t("Mark as read"), () => markRead([p], !p.finished).then(draw)),
@@ -1808,7 +1891,8 @@ function openSelectMenu() {
     item("up", t("Previous"), pickAbove, !picked().length));
   const more = $("selectMore"), at = more.getBoundingClientRect();
   pop.style.top = at.bottom + 4 + "px";
-  pop.style.right = Math.max(8, innerWidth - at.right) + "px";
+  if (document.dir === "rtl") pop.style.left = Math.max(8, at.left) + "px";
+  else pop.style.right = Math.max(8, innerWidth - at.right) + "px";
   document.body.append(pop);
   more.setAttribute("aria-expanded", "true");
   M.popFrom(pop, at);

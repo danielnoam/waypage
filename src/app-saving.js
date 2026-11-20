@@ -11,7 +11,7 @@
 const PICTURES_KEY = "waypage.syncPictures";
 let syncTimer = null, syncQueue = load(PICTURES_KEY, null) || [], fetchingPictures = false;
 const keepQueue = () => store(PICTURES_KEY, syncQueue.length ? [...new Set(syncQueue)] : null);
-const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "turn", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks", "noShare", "folderNoShare", "folderTagNew", "folderSeries", "folderIn", "live"];
+const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "turn", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "statusPick", "folderNoStatus", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks", "noShare", "folderNoShare", "folderTagNew", "folderSeries", "folderIn", "live"];
 // While a run of saves is on, sync waits longer (1.2.0): each sync is a
 // merge of the whole library, and one after every page landing was a
 // stutter every few seconds.
@@ -1057,11 +1057,10 @@ function neighbours(p) {
 
 // `from` is the page read as a list of chapters, which can still be
 // saved as one page; `siteTags` ({ site, tags }) the tags that page gave it.
-// `series`: the collection is saved as a series (Discover's Save as Series).
-function openBatch(text, fromHistory, folder, from, siteTags, series) {
+function openBatch(text, fromHistory, folder, from, siteTags) {
   if (state.batch) return;
   state.batch = true;
-  renderBatch(linksFrom(text).join("\n"), folder || null, from, siteTags, !!series);
+  renderBatch(linksFrom(text).join("\n"), folder || null, from, siteTags);
   if (!fromHistory) history.pushState({ view: "batch", folder: state.folder || undefined }, "");
   // Set once it shows: a hidden screen keeps its old scroll.
   const shown = pushScreen($("batchView"));
@@ -1082,10 +1081,10 @@ const LONG_LIST = 50;
 const SITE_TAGS_KEY = "waypage.saveSiteTags";
 const TAG_NEW_KEY = "waypage.saveTagNew";
 
-function renderBatch(text, preset, from, siteTags, asSeries) {
+function renderBatch(text, preset, from, siteTags) {
   let folder = preset;
-  // A new collection, or a new series (Discover's Save as Series picks it).
-  let series = !!asSeries;
+  // Saved into a series: an existing one, or New series….
+  let series = false;
   // The page the chapters were read from, kept on the folder (0.26.0).
   let source = from || null;
   let mode = load(IMAGES_KEY, "previews");
@@ -1115,7 +1114,7 @@ function renderBatch(text, preset, from, siteTags, asSeries) {
     finder.disabled = true;
     finder.textContent = t("Finding chapters…");
     try {
-      const found = await C.save.findChapters(url);
+      const found = noteStatus(await C.save.findChapters(url));
       if (found.links.length) {
         source = found.page || url;
         area.value = found.links.join("\n");
@@ -1609,6 +1608,7 @@ async function checkNew(name, quiet) {
       setNewFor(name, { at: Date.now(), count, all });
       await updateCover(name, found.cover || "");
       await keepStoryTags(name, found.siteTags);
+      await keepStoryStatus(name, found.status);
     } else {
       let url = await C.save.findNext(last.url);
       if (url && !savedAs(url)) {
@@ -1722,6 +1722,7 @@ function sourceSection(list) {
       if (!found.links.length) { toast(t("Couldn't find a list of chapters on that page.")); return; }
       setSource(name, found.page || u, found.cover || "");
       keepStoryTags(name, found.siteTags);
+      keepStoryStatus(name, found.status);
       toast(t("Linked to {replace} on {siteName}", { replace: countLine(found.links.length).replace("clip", "chapter"), siteName: C.save.siteName(u) }));
     } catch (e) {
       toast(e instanceof C.save.SaveError ? e.message : t("Couldn't read that page. Try again."));
@@ -1730,8 +1731,12 @@ function sourceSection(list) {
     }
   } }, label);
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); link.click(); } });
+  // Where the story stands, from its page (2026-11); off, Edit's own pick shows.
+  const said = siteStatusOf(list);
+  const statusSwitch = src ? switchRow(t("Status from the site"), said ? t("{site} says {status}", { site: siteOf(list[0]) || C.save.siteName(src), status: statusName(said) }) : t("The site doesn't say"),
+    siteStatusOn(list), (v) => setFolderStatus(name, "folderNoStatus", v ? "" : true)) : null;
   return section(t("Synced with"), null,
-    el("div", { class: "group" }, el("div", { class: "row source-row" }, input, link)),
+    el("div", { class: "group" }, el("div", { class: "row source-row" }, input, link), statusSwitch),
     el("p", { class: "footnote" }, t("New chapters are read from its chapter list, which also finds chapters added in between."), " ", t("Chapters you delete don't come back as new."),
       src ? " " + t("Empty the box and press Refresh to unlink.") : ""));
 }
@@ -2144,7 +2149,7 @@ function updateWidgets(now) {
 }
 
 const clipMeta = (x) => [siteOf(x), readingLine(x)].filter(Boolean).join(" · ");
-const readCount = (list) => { const done = list.filter((x) => x.finished).length; return done === list.length ? t("All read") : t("{done} of {n} read", { done, n: list.length }); };
+const readCount = (list) => { const done = list.filter((x) => x.finished).length; return done === list.length ? (caughtUp(list) ? t("Caught up") : t("All read")) : t("{done} of {n} read", { done, n: list.length }); };
 
 // A widget's tap: the page to keep reading, a post, Feeds or a collection.
 // The app icon's shortcuts (1.14.0) come the same way: Continue reading,

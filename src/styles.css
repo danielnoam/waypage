@@ -574,6 +574,8 @@ html.native .screen-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
   cursor: pointer;
 }
 .choice + .choice, .row + .row { border-top: 1px solid var(--line); }
+/* A hidden row stays hidden: display above would show it (Save in, 2026-11). */
+.choice[hidden], .row[hidden] { display: none; }
 .choice:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
 .choice-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .choice-label { font-weight: 500; }
@@ -2193,6 +2195,9 @@ span.update-text { cursor: default; }
 .book-progress-fill { display: block; height: 100%; background: var(--accent); }
 .book-note { margin-top: calc(-1 * var(--s-2)); margin-bottom: var(--s-4); }
 .folder-go { margin-bottom: var(--s-2); }
+.folder-starts { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: var(--s-3); }
+.folder-starts > :last-child:nth-child(odd) { grid-column: span 2; }
+.quick-start .chip-icon { display: flex; color: var(--accent); }
 .book-new { display: flex; align-items: center; justify-content: center; gap: var(--s-2); width: 100%; margin-bottom: var(--s-2); }
 .book-saved {
   display: block; width: 100%; min-height: var(--tap); margin-bottom: var(--s-3); padding: 0 var(--s-1);
@@ -2265,7 +2270,7 @@ span.update-text { cursor: default; }
 .pop-item:disabled { opacity: 0.5; cursor: default; }
 .pop-icon { display: flex; color: var(--accent); }
 .pop-item.warn, .pop-item.warn .pop-icon { color: var(--warn); }
-.pop-label { flex: 1; }
+.pop-label { flex: 1; min-width: 0; }
 .pop-note { color: var(--muted); font-size: var(--fs-meta); }
 .pop-note.accent { color: var(--accent); font-weight: 600; }
 .pop-sep { height: 1px; margin: var(--s-1) 0; background: var(--line); }
@@ -3423,3 +3428,22 @@ body.listen-bar-up .library, body.listen-bar-up .screen-body { padding-bottom: c
 .pv-choice { min-height: 44px; padding: 0 var(--s-4); border: 1px solid var(--line); border-radius: var(--r-full); background: var(--bg); color: var(--ink); font: inherit; }
 .pv-choice.quiet { border-color: transparent; color: var(--muted); }
 #readingSheet[data-kind="pageview"][hidden], .reader #readingSheet[data-kind="pageview"][hidden] { display: none; }
+
+/* A story's status on its site (2026-11): a tag on the cover's top,
+   across from the new-chapters badge. In one list the cover is too
+   narrow for both, so the word joins the line under the name instead. */
+.tile-status {
+  position: absolute; top: var(--s-1); inset-inline-start: var(--s-1); z-index: 1;
+  max-width: calc(100% - 2 * var(--s-1));
+  padding: 1px 6px; border-radius: var(--r-sm);
+  background: var(--surface); color: var(--ink);
+  font: 600 var(--fs-meta)/var(--lh-meta) var(--sans);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  box-shadow: 0 1px 3px var(--shadow);
+}
+.tile-thumb:has(.tile-new) .tile-status { max-width: calc(100% - 2 * var(--s-1) - 40px); }
+.tile-status[data-status="ongoing"] { color: var(--accent); }
+.tile-status[data-status="hiatus"], .tile-status[data-status="stubbed"], .tile-status[data-status="dropped"], .tile-status[data-status="inactive"] { color: var(--muted); }
+.tile-status-word { display: none; }
+[data-layout="list"] .library > .tile .tile-status { display: none; }
+[data-layout="list"] .library > .tile .tile-status-word { display: inline; }

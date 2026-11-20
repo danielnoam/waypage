@@ -304,13 +304,13 @@ async function dzSaveStory(s, how = { as: "collection" }) {
   if (!navigator.onLine) { toast(t("You're offline. Save it when you're back online.")); return; }
   toast(t("Finding its chapters…"));
   try {
-    const found = s.serial ? await C.discover.serialChapters(s.url) : await C.save.findChapters(s.url);
+    const found = s.serial ? await C.discover.serialChapters(s.url) : noteStatus(await C.save.findChapters(s.url));
     const title = found.title || s.title;
     if (how.as === "file") { dzStoryFile(s, found.links.length ? found.links : [s.url], title, how); return; }
     if (!found.links.length) { savePage(s.url); return; }
     // The story page's own tags; Discover's list row, when it gave none.
     const siteTags = found.siteTags || (s.tags && s.tags.length ? { site: s.serial ? dzHost(s.url) : s.site || "Royal Road", tags: s.tags } : null);
-    openBatch(found.links.join("\n"), false, folderName(title), s.url, siteTags, how.as === "series");
+    openBatch(found.links.join("\n"), false, folderName(title), s.url, siteTags);
   } catch (e) { toast(e instanceof C.save.SaveError ? e.message : t("Couldn't read its chapters. Try again.")); }
 }
 
@@ -322,8 +322,8 @@ const DZ_STORY_AS_KEY = "waypage.discover.storyAs";
 function dzStorySaveSheet() {
   const s = state.menu.page;
   const comic = dzIsComic(s);
-  let as = load(DZ_STORY_AS_KEY, "collection");
-  if (!["collection", "series", "file"].includes(as)) as = "collection";
+  // Clips go into a collection or a series, picked on Save with options.
+  let as = load(DZ_STORY_AS_KEY, "clips") === "file" ? "file" : "clips";
   let where = dzWhere();
   const whereRow = C.platform.native ? dzWhereRow(() => where, (v) => { where = v; }) : null;
   const note = el("p", { class: "footnote dz-add-note" });
@@ -331,12 +331,10 @@ function dzStorySaveSheet() {
     if (whereRow) whereRow.hidden = as !== "file";
     note.textContent = as === "file" ? (comic ? t("Every episode downloads, then they become one CBZ comic in Files. It doesn't follow new episodes.")
       : t("Every chapter downloads, then they become one EPUB book in Files. It doesn't follow new chapters."))
-      : as === "series" ? t("Its chapter list opens to check, then every chapter saves into a series. New chapters join it when they're out.")
-        : t("Its chapter list opens to check, then every chapter saves into a collection. New chapters join it when they're out.");
+      : t("Its chapter list opens to check, with a collection or a series to save it into. New chapters join it when they're out.");
   };
   const asRow = pickRow({ label: t("Save as"), options: [
-    { value: "collection", label: t("Collection"), note: t("A clip for each chapter") },
-    { value: "series", label: t("Series"), note: t("A clip for each chapter, in your Series") },
+    { value: "clips", label: t("Collection or series"), note: t("A clip for each chapter") },
     { value: "file", label: comic ? t("CBZ file") : t("EPUB file"), note: t("One file in Files, no collection") },
   ], get: () => as, set: (v) => { as = v; store(DZ_STORY_AS_KEY, v); paint(); } });
   paint();
