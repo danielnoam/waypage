@@ -1086,36 +1086,23 @@ function openFolderMenu() {
   setTimeout(() => addEventListener("pointerdown", outsideMenu, true));
 }
 
-// Quick starts under Continue (Daniel 2026-11-20), the car's set and
-// the clip read last. One that would open what Continue opens is left
-// out; Narrate reads on from where Continue would.
+// Quick starts under Continue (Daniel 2026-11-20): the clip read last
+// and the one added last, unless Continue opens it already.
 function quickStarts(list, main) {
   const at = (p) => p.folderAt || p.savedAt || 0;
   const newest = list.reduce((a, p) => (at(p) >= at(a) ? p : a), list[0]);
   const last = list.reduce((a, p) => ((p.readAt || 0) > ((a && a.readAt) || 0) ? p : a), null);
   const shown = new Set([main]);
-  const chip = (icon, label, p, onclick, flip) => {
-    const b = el("button", { class: "chip quick-start", type: "button", "aria-label": label + ": " + p.title, onclick },
-      el("span", { class: "chip-icon" + (flip ? " flip" : ""), "aria-hidden": "true" }), el("span", { class: "chip-label" }, label));
+  const open = (icon, label, p) => {
+    if (!p || shown.has(p)) return null;
+    shown.add(p);
+    const b = el("button", { class: "chip quick-start", type: "button", "aria-label": label + ": " + p.title, onclick: () => openPage(p.id) },
+      el("span", { class: "chip-icon", "aria-hidden": "true" }), el("span", { class: "chip-label" }, label));
     b.firstChild.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS[icon] + "</svg>";
     return b;
   };
-  const open = (icon, label, p, flip) => {
-    if (!p || shown.has(p)) return null;
-    shown.add(p);
-    return chip(icon, label, p, () => openPage(p.id), flip);
-  };
-  const chips = [
-    open("history", t("Last read"), last),
-    open("first", t("From the start"), list[0], true),
-    open("newest", t("Newest"), newest),
-    !isAudiobook(main) && !main.note && !main.comic ? chip("narrate", t("Narrate"), main, () => narrateFrom(main)) : null,
-  ].filter(Boolean);
+  const chips = [open("history", t("Last read"), last), open("newest", t("Newest"), newest)].filter(Boolean);
   return chips.length ? el("div", { class: "chips folder-starts", role: "group", "aria-label": t("Quick starts") }, ...chips) : null;
-}
-async function narrateFrom(p) {
-  await openPage(p.id);
-  if (state.open === p && !$("readerView").hidden) startAloud();
 }
 
 function outsideMenu(e) {
@@ -1514,9 +1501,7 @@ const ICONS = {
   grid: '<rect x="4" y="4" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1"/>',
   cover: '<rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.5"/><path d="M20 15l-4.5-4.5L6 20"/>',
   history: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
-  first: '<path d="M6 5v14M18 6l-8 6 8 6z"/>',
   newest: '<path d="M12 4l1.8 4.7L18.5 10.5l-4.7 1.8L12 17l-1.8-4.7L5.5 10.5l4.7-1.8z"/><path d="M19 16v4M17 18h4"/>',
-  narrate: '<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
   lookup: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/><path d="M9 8h7M9 11.5h5"/>',
 };
 function svgIcon(name, size) {

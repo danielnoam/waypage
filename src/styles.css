@@ -2198,7 +2198,6 @@ span.update-text { cursor: default; }
 .folder-starts { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: var(--s-3); }
 .folder-starts > :last-child:nth-child(odd) { grid-column: span 2; }
 .quick-start .chip-icon { display: flex; color: var(--accent); }
-[dir="rtl"] .quick-start .chip-icon.flip svg { transform: scaleX(-1); }
 .book-new { display: flex; align-items: center; justify-content: center; gap: var(--s-2); width: 100%; margin-bottom: var(--s-2); }
 .book-saved {
   display: block; width: 100%; min-height: var(--tap); margin-bottom: var(--s-3); padding: 0 var(--s-1);
