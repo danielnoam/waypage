@@ -1746,6 +1746,47 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    // A site that never says (a blog): picked by hand in Edit, on every
+    // clip so it syncs; a clip joining takes it. Website sync can turn the
+    // site's own word off.
+    await test("a series' status can be picked in Edit, and the site's word turned off in Website sync", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (id, folder) => ({ id, url: "https://blog.example.com/" + id, title: id, site: "blog.example.com", savedAt: 1000, minutes: 1, mode: "links", at: 0, finished: false, folder, folderAt: Number(id.slice(1)), folderSeries: !!folder });
+        const list = [c("k1", "Knight"), c("k2", "Knight"), c("x1")];
+        delete list[2].folder;
+        await S.writeIndex(list);
+        for (const x of list) await S.writePage(x.id, "<!doctype html><html><body><p>" + x.id + "</p></body></html>", x);
+      });
+      await q.reload();
+      await until(q, () => !!document.querySelector('[data-key="series"] .tile[data-name="Knight"]'));
+      await q.evaluate(() => { openFolder("Knight"); });
+      await until(q, () => state.folder === "Knight");
+      await q.evaluate(() => setFolderMode("edit"));
+      await q.locator("#folderBody .status-pick button").first().click();
+      await q.locator(".dropdown-menu [role=option], .dropdown-menu button", { hasText: "Completed" }).first().click();
+      await until(q, () => folderPages("Knight").every((p) => p.statusPick === "completed"));
+      await q.evaluate(() => setFolderMode(""));
+      await until(q, () => /Series · Completed/.test(document.querySelector("#folderBody .book-site").textContent));
+      // A clip joining takes it.
+      await q.evaluate(async () => { const p = state.pages.find((x) => x.id === "x1"); p.folder = "Knight"; joinFav(p, "Knight"); });
+      assert.strictEqual(await q.evaluate(() => state.pages.find((x) => x.id === "x1").statusPick), "completed");
+      // Linked, the site's word shows over the pick, until Website sync turns it off.
+      await q.evaluate(() => { for (const p of folderPages("Knight")) { p.siteStatus = "ongoing"; p.source = "https://blog.example.com/"; } renderFolder(); });
+      await until(q, () => /Series · Ongoing/.test(document.querySelector("#folderBody .book-site").textContent));
+      await q.evaluate(() => setFolderMode("chapters"));
+      const sw = q.locator("#folderBody .row", { hasText: "Status from the site" }).locator("input");
+      assert.ok(await sw.isChecked());
+      await sw.click();
+      await until(q, () => folderPages("Knight").every((p) => p.folderNoStatus));
+      await q.evaluate(() => setFolderMode(""));
+      await until(q, () => /Series · Completed/.test(document.querySelector("#folderBody .book-site").textContent));
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a series has its own section, sits in a collection, and turns back into a collection with nothing lost", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

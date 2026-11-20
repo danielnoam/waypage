@@ -11,7 +11,7 @@
 const PICTURES_KEY = "waypage.syncPictures";
 let syncTimer = null, syncQueue = load(PICTURES_KEY, null) || [], fetchingPictures = false;
 const keepQueue = () => store(PICTURES_KEY, syncQueue.length ? [...new Set(syncQueue)] : null);
-const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "turn", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks", "noShare", "folderNoShare", "folderTagNew", "folderSeries", "folderIn", "live"];
+const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "turn", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "statusPick", "folderNoStatus", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks", "noShare", "folderNoShare", "folderTagNew", "folderSeries", "folderIn", "live"];
 // While a run of saves is on, sync waits longer (1.2.0): each sync is a
 // merge of the whole library, and one after every page landing was a
 // stutter every few seconds.
@@ -1731,8 +1731,12 @@ function sourceSection(list) {
     }
   } }, label);
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); link.click(); } });
+  // Where the story stands, from its page (2026-11); off, Edit's own pick shows.
+  const said = siteStatusOf(list);
+  const statusSwitch = src ? switchRow(t("Status from the site"), said ? t("{site} says {status}", { site: siteOf(list[0]) || C.save.siteName(src), status: statusName(said) }) : t("The site doesn't say"),
+    siteStatusOn(list), (v) => setFolderStatus(name, "folderNoStatus", v ? "" : true)) : null;
   return section(t("Synced with"), null,
-    el("div", { class: "group" }, el("div", { class: "row source-row" }, input, link)),
+    el("div", { class: "group" }, el("div", { class: "row source-row" }, input, link), statusSwitch),
     el("p", { class: "footnote" }, t("New chapters are read from its chapter list, which also finds chapters added in between."), " ", t("Chapters you delete don't come back as new."),
       src ? " " + t("Empty the box and press Refresh to unlink.") : ""));
 }

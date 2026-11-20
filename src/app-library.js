@@ -237,6 +237,9 @@ function joinFav(p, name) {
   joinTags(p, name);
   const pick = name ? coverPick(folderPages(name).filter((x) => x !== p)) : "";
   if (pick) p.coverPick = pick; else delete p.coverPick;
+  const status = name ? pickedStatus(folderPages(name).filter((x) => x !== p)) : "";
+  if (status) p.statusPick = status; else delete p.statusPick;
+  if (name && folderPages(name).some((x) => x !== p && x.folderNoStatus)) p.folderNoStatus = true; else delete p.folderNoStatus;
   joinSeries(p, name);
 }
 
@@ -332,7 +335,31 @@ async function keepStoryStatus(name, got) {
   for (const p of folderPages(name)) if (p.siteStatus !== got) { p.siteStatus = got; changed = true; }
   if (changed) await C.store.writeIndex(state.pages);
 }
-const folderStatus = (list) => { const p = list.find((x) => STORY_STATUS[x.siteStatus]); return p ? p.siteStatus : ""; };
+// The site's word, unless Website sync's "Status from the site" is off
+// (`folderNoStatus`); else the one picked in Edit (`statusPick`). Both
+// are on every clip, synced like coverPick.
+const siteStatusOf = (list) => { const p = list.find((x) => STORY_STATUS[x.siteStatus]); return p ? p.siteStatus : ""; };
+const pickedStatus = (list) => { const p = list.find((x) => STORY_STATUS[x.statusPick]); return p ? p.statusPick : ""; };
+const siteStatusOn = (list) => !list.some((x) => x.folderNoStatus);
+const siteSays = (list) => (siteStatusOn(list) ? siteStatusOf(list) : "");
+const folderStatus = (list) => siteSays(list) || pickedStatus(list);
+async function setFolderStatus(name, key, value) {
+  for (const p of folderPages(name)) { if (value) p[key] = value; else delete p[key]; }
+  await C.store.writeIndex(state.pages);
+  syncSoon();
+  renderLibrary();
+  renderFolder();
+}
+// Edit's Status row (2026-11, Daniel): picked by hand for a story whose
+// site doesn't say; while the site's word shows, the row says so.
+function statusRow(list) {
+  const site = siteSays(list);
+  const row = pickRow({ label: t("Status"), cls: "status-pick",
+    note: site ? t("From {site}: {status}", { site: siteOf(list[0]) || t("its site"), status: statusName(site) }) : "",
+    options: [{ value: "", label: t("None") }, ...Object.keys(STORY_STATUS).map((s) => ({ value: s, label: statusName(s) }))],
+    get: () => (site || pickedStatus(list)), set: (v) => setFolderStatus(state.folder, "statusPick", v), disabled: !!site });
+  return row;
+}
 const statusName = (s) => (STORY_STATUS[s] ? STORY_STATUS[s]() : "");
 // Read to the end of a story that isn't finished on its site: caught up,
 // not done (Daniel: you can't finish what's still being written).
@@ -769,8 +796,8 @@ function renderFolder() {
   // chapters with what they keep, to put in order.
   else if (editing) {
     top = [el("div", { class: "folder-edit" }, ...bookHead(list, next, done),
-      sharing() ? el("div", { class: "group" },
-        switchRow(t("In other apps"), t("Listed in the reading activity that apps you connect to your sync repo can read"), !list.some((p) => p.folderNoShare), (v) => setFolderShare(state.folder, !v))) : null,
+      el("div", { class: "group" }, statusRow(list),
+        sharing() ? switchRow(t("In other apps"), t("Listed in the reading activity that apps you connect to your sync repo can read"), !list.some((p) => p.folderNoShare), (v) => setFolderShare(state.folder, !v)) : null),
       sectionHead(t("Cover")), coverPanel(list),
       sectionHead(listHead(list)),
       savedLine(list),
@@ -1404,7 +1431,7 @@ async function removeFolder(withPages) {
   if (withPages) { forgetWatched(list); releaseLinks(list); }
   for (const p of list) {
     if (withPages) { dropPackFile(p); dropAudioFiles(p); await C.store.removePage(p.id); }
-    else { delete p.folder; delete p.folderAt; delete p.folderFav; delete p.folderFavAt; delete p.coverPick; delete p.folderNoShare; delete p.folderTagNew; delete p.folderSeries; delete p.folderIn; }
+    else { delete p.folder; delete p.folderAt; delete p.folderFav; delete p.folderFavAt; delete p.coverPick; delete p.statusPick; delete p.folderNoStatus; delete p.folderNoShare; delete p.folderTagNew; delete p.folderSeries; delete p.folderIn; }
   }
   // Its series stay, in the library's Series.
   for (const f of inside) for (const p of folderPages(f)) delete p.folderIn;
