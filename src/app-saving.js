@@ -1114,7 +1114,7 @@ function renderBatch(text, preset, from, siteTags) {
     finder.disabled = true;
     finder.textContent = t("Finding chapters…");
     try {
-      const found = await C.save.findChapters(url);
+      const found = noteStatus(await C.save.findChapters(url));
       if (found.links.length) {
         source = found.page || url;
         area.value = found.links.join("\n");
@@ -1608,6 +1608,7 @@ async function checkNew(name, quiet) {
       setNewFor(name, { at: Date.now(), count, all });
       await updateCover(name, found.cover || "");
       await keepStoryTags(name, found.siteTags);
+      await keepStoryStatus(name, found.status);
     } else {
       let url = await C.save.findNext(last.url);
       if (url && !savedAs(url)) {
@@ -1721,6 +1722,7 @@ function sourceSection(list) {
       if (!found.links.length) { toast(t("Couldn't find a list of chapters on that page.")); return; }
       setSource(name, found.page || u, found.cover || "");
       keepStoryTags(name, found.siteTags);
+      keepStoryStatus(name, found.status);
       toast(t("Linked to {replace} on {siteName}", { replace: countLine(found.links.length).replace("clip", "chapter"), siteName: C.save.siteName(u) }));
     } catch (e) {
       toast(e instanceof C.save.SaveError ? e.message : t("Couldn't read that page. Try again."));
@@ -2143,7 +2145,7 @@ function updateWidgets(now) {
 }
 
 const clipMeta = (x) => [siteOf(x), readingLine(x)].filter(Boolean).join(" · ");
-const readCount = (list) => { const done = list.filter((x) => x.finished).length; return done === list.length ? t("All read") : t("{done} of {n} read", { done, n: list.length }); };
+const readCount = (list) => { const done = list.filter((x) => x.finished).length; return done === list.length ? (caughtUp(list) ? t("Caught up") : t("All read")) : t("{done} of {n} read", { done, n: list.length }); };
 
 // A widget's tap: the page to keep reading, a post, Feeds or a collection.
 // The app icon's shortcuts (1.14.0) come the same way: Continue reading,

@@ -314,6 +314,29 @@ async function keepStoryTags(name, got) {
   for (const p of folderPages(name)) if (JSON.stringify(p.siteTags || null) !== was) { p.siteTags = got; changed = true; }
   if (changed) await C.store.writeIndex(state.pages);
 }
+// Where the story stands on its site (2026-11): "completed", "ongoing",
+// "hiatus", "stubbed", "dropped" or "inactive", kept on each of a
+// collection's clips like its site's tags; Website sync refreshes it. A
+// page that no longer says leaves the last word in place.
+const STORY_STATUS = { completed: () => t("Completed"), ongoing: () => t("Ongoing"), hiatus: () => t("On hiatus"), stubbed: () => t("Stubbed"), dropped: () => t("Dropped"), inactive: () => t("Inactive") };
+// What story pages read lately said, by address, for the chapters a
+// save then files under them.
+const seenStatus = new Map();
+function noteStatus(found) {
+  if (found && found.status && STORY_STATUS[found.status] && found.page) seenStatus.set(urlKey(found.page), found.status);
+  return found;
+}
+async function keepStoryStatus(name, got) {
+  if (!got || !STORY_STATUS[got]) return;
+  let changed = false;
+  for (const p of folderPages(name)) if (p.siteStatus !== got) { p.siteStatus = got; changed = true; }
+  if (changed) await C.store.writeIndex(state.pages);
+}
+const folderStatus = (list) => { const p = list.find((x) => STORY_STATUS[x.siteStatus]); return p ? p.siteStatus : ""; };
+const statusName = (s) => (STORY_STATUS[s] ? STORY_STATUS[s]() : "");
+// Read to the end of a story that isn't finished on its site: caught up,
+// not done (Daniel: you can't finish what's still being written).
+const caughtUp = (list) => { const s = folderStatus(list); return !!s && s !== "completed"; };
 async function setFolderTagNew(name, on) {
   for (const p of folderPages(name)) { if (on) p.folderTagNew = true; else delete p.folderTagNew; }
   await C.store.writeIndex(state.pages);
@@ -422,8 +445,9 @@ function folderTile(name) {
   const fresh = freshCount(name);
   const fav = list.some((p) => p.folderFav);
   const series = isSeriesFolder(name), inside = series ? 0 : seriesInside(name).length;
+  const status = statusName(folderStatus(list));
   const tile = el("div", { class: "tile", role: "listitem", "data-ids": list.map((p) => p.id).join(","), "data-name": name },
-    el("button", { class: "card-open", type: "button", "aria-label": [name, fav ? t("favourite") : "", series ? t("series") : t("collection"), inside ? tn(inside, "1 series", "{n} series") : "", holdsLine(list), (allHeard(list) ? t("{n} heard", { n: done }) : t("{n} read", { n: done })), fresh ? tn(fresh, "1 new chapter", "{n} new chapters") : ""].filter(Boolean).join(", "),
+    el("button", { class: "card-open", type: "button", "aria-label": [name, fav ? t("favourite") : "", series ? t("series") : t("collection"), status, inside ? tn(inside, "1 series", "{n} series") : "", holdsLine(list), (allHeard(list) ? t("{n} heard", { n: done }) : t("{n} read", { n: done })), fresh ? tn(fresh, "1 new chapter", "{n} new chapters") : ""].filter(Boolean).join(", "),
       onclick: () => tapPages(list.map((p) => p.id), () => openFolder(name)) }),
     pickMark(),
     el("span", { class: "tile-thumb" + (thumb ? "" : " blank") },
@@ -439,7 +463,7 @@ function folderTile(name) {
           saveNewChapters(name, e.currentTarget);
         } }, "+" + (fresh >= NEW_MAX ? NEW_MAX : fresh)) : null),
     el("span", { class: "tile-name", dir: "auto" }, name),
-    el("span", { class: "tile-meta" }, el("span", { class: "tile-kind" }, series ? t("Series · ") : t("Collection · ")), inside ? tn(inside, "1 series, {clips}", "{n} series, {clips}", { clips: holdsLine(list) }) : (allHeard(list) ? (done === list.length ? t("All heard") : t("{done} of {n} heard", { done: done, n: list.length })) : done === list.length ? t("All read") : t("{done} of {n} read", { done: done, n: list.length })), el("span", { class: "tile-size" }, " · " + formatSize(sizeOf(list)))),
+    el("span", { class: "tile-meta" }, el("span", { class: "tile-kind" }, series ? t("Series · ") : t("Collection · ")), inside ? tn(inside, "1 series, {clips}", "{n} series, {clips}", { clips: holdsLine(list) }) : (allHeard(list) ? (done === list.length ? t("All heard") : t("{done} of {n} heard", { done: done, n: list.length })) : done === list.length ? (caughtUp(list) ? t("Caught up") : t("All read")) : t("{done} of {n} read", { done: done, n: list.length })), status ? el("span", { class: "tile-status-word" }, " · " + status) : null, el("span", { class: "tile-size" }, " · " + formatSize(sizeOf(list)))),
     el("span", { class: "progress thin", "aria-hidden": "true" },
       el("span", { class: "progress-fill", style: "transform: scaleX(" + done / list.length + ")" })));
   // A cover whose file is gone (a restored backup) is read again.
@@ -454,6 +478,8 @@ function folderTile(name) {
   // icon used to sit.
   if (fav) tile.querySelector(".tile-thumb").append(favStar());
   tile.querySelector(".tile-thumb").append(holdsMarks(list));
+  // Where the story stands on its site, a tag at the cover's top.
+  if (status) tile.querySelector(".tile-thumb").append(el("span", { class: "tile-status", "aria-hidden": "true", "data-status": folderStatus(list) }, status));
   return tile;
 }
 
@@ -591,14 +617,14 @@ function bookHead(list, next, done) {
   } else title = el("h2", { class: "book-title", dir: "auto" }, name);
   const left = minutesLeft(list);
   const heard = allHeard(list);
-  const meta = done === n ? (heard ? t("All {n} heard", { n }) : t("All {n} read", { n })) : heard ? t("{done} of {n} heard · {left} left", { done, n, left: minutesText(left) }) : t("{done} of {n} read · {left} left", { done, n, left: minutesText(left) });
+  const meta = done === n ? (heard ? t("All {n} heard", { n }) : caughtUp(list) ? t("Caught up: all {n} read", { n }) : t("All {n} read", { n })) : heard ? t("{done} of {n} heard · {left} left", { done, n, left: minutesText(left) }) : t("{done} of {n} read · {left} left", { done, n, left: minutesText(left) });
   const bar = el("div", { class: "book-progress", role: "progressbar", "aria-label": t("Read"), "aria-valuemin": "0",
     "aria-valuemax": String(n), "aria-valuenow": String(done), "aria-valuetext": heard ? t("{done} of {n} heard", { done, n }) : t("{done} of {n} read", { done, n }) },
     el("span", { class: "book-progress-fill", style: "width: " + (done / n * 100).toFixed(1) + "%" }));
   const head = el("div", { class: "book-head" },
     bookCover(list),
     el("div", { class: "book-facts" },
-      el("p", { class: "book-site" }, [siteOf(list[0]), isSeriesFolder(name) ? t("Series") : t("Collection")].filter(Boolean).join(" · ")),
+      el("p", { class: "book-site" }, [siteOf(list[0]), isSeriesFolder(name) ? t("Series") : t("Collection"), statusName(folderStatus(list))].filter(Boolean).join(" · ")),
       title,
       !renaming && seriesHost(name) ? el("button", { class: "book-saved series-in", type: "button", onclick: () => openFolder(seriesHost(name)) },
         el("span", { class: "accent", dir: "auto" }, t("In {collection}", { collection: seriesHost(name) }))) : null,

@@ -219,7 +219,7 @@ function renderLibrary() {
   const flat = ts.length || (state.filter !== "all" && !status && !favs);
   const folders = flat ? [] : allFolders().filter((f) => favs ? folderFav(f) : !status
     || (state.filter === "unread" ? folderPages(f).some(unread) : folderPages(f).every((x) => x.finished)));
-  const folderSig = (f) => [f, freshCount(f), folderFav(f), isSeriesFolder(f), seriesInside(f).length, ...folderPages(f).map((x) => x.id + readingLine(x) + (x.thumb || "") + (x.cover || "") + (x.coverPick || ""))].join("|");
+  const folderSig = (f) => [f, freshCount(f), folderFav(f), isSeriesFolder(f), seriesInside(f).length, folderStatus(folderPages(f)), ...folderPages(f).map((x) => x.id + readingLine(x) + (x.thumb || "") + (x.cover || "") + (x.coverPick || ""))].join("|");
   if (!ts.length && state.filter === "all" && !state.part) {
     const going = !state.select && load(CONTINUE_KEY, true) && continuePage();
     if (going) {

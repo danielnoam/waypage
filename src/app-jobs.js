@@ -164,6 +164,7 @@ async function saveWaiting() {
 // A link that turned out to be a contents page opens as a list to check.
 function contentsFound(job) {
   dropFailed(job);
+  noteStatus({ ...job.contents, page: job.url });
   openBatch(job.contents.links.join("\n"), false, folderName(job.contents.title || job.site), job.url, job.contents.siteTags);
   toast(t("That's a list of chapters. Check them, then save."));
 }
@@ -369,6 +370,8 @@ async function runJob(job) {
       if (meta.folder) {
         const story = job.siteTags || (folderPages(meta.folder).find((x) => x.siteTags) || {}).siteTags;
         if (story) meta.siteTags = story; else delete meta.siteTags;
+        const status = folderStatus(folderPages(meta.folder)) || (job.source && seenStatus.get(urlKey(job.source)));
+        if (status) meta.siteStatus = status;
       } else takeSiteTags(meta);
       if (meta.folder) joinTags(meta, meta.folder, job.tagNew);
       if (meta.folder && job.series) meta.folderSeries = true;
