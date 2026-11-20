@@ -82,8 +82,8 @@ async function carClip(p) {
 }
 
 // Collections and series (2026-11): the eight read or added to last,
-// in their own order, each with quick starts (Continue or Start, From
-// the start, Newest). A long one carries only its first clips, the
+// in their own order, each with quick starts (Continue or Start, and
+// Newest). A long one carries only its first clips, the
 // newest and the stretch from where it was left, so the list stays
 // small. The car's Next and Previous clip (and an audiobook's chapter
 // buttons past its ends) go through the collection.
@@ -126,11 +126,11 @@ async function carFolderList(f, list, have) {
   if (!items.length) return null;
   const idOf = (p) => p && (carBookOk(p) ? "b:" : "c:") + p.id;
   const started = f.all.some((p) => p.readAt || p.finished || (p.at || 0) > 0.02);
-  const cont = f.cont >= 0 ? idOf(f.all[f.cont]) : null, first = idOf(f.all[0]), newest = idOf(f.all[f.newest]);
+  // All read: Start plays it again from its first.
+  const cont = idOf(f.all[f.cont >= 0 ? f.cont : 0]), newest = idOf(f.all[f.newest]);
   const starts = [];
   const add = (label, id) => { if (id && items.includes(id) && !starts.some((s) => s.id === id)) starts.push({ label, id }); };
-  add(started ? t("Continue") : t("Start"), cont);
-  add(t("From the start"), first);
+  add(started && f.cont >= 0 ? t("Continue") : t("Start"), cont);
   add(t("Newest"), newest);
   const series = isSeriesFolder(f.name);
   return {

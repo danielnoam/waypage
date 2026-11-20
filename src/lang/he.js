@@ -587,7 +587,6 @@ Keel.i18n.strings("he", {
   "Contents, now {section}": "תוכן העניינים, עכשיו {section}",
   "Continue": "המשך",
   "Up next": "הבא בתור",
-  "From the start": "מההתחלה",
   "Newest": "החדש ביותר",
   "Continue reading": "המשך קריאה",
   "Contrast": "ניגודיות",
