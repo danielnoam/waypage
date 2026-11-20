@@ -2829,4 +2829,12 @@ Keel.i18n.strings("he", {
   "{n} chapters couldn't be saved and aren't in the book.": { one: "פרק אחד לא נשמר ואינו בספר.", other: "{n} פרקים לא נשמרו ואינם בספר." },
   "Collection or series": "אוסף או סדרה",
   "{name} · series": "{name} · סדרה",
+  "Completed": "הושלם",
+  "Ongoing": "בכתיבה",
+  "On hiatus": "בהפסקה",
+  "Stubbed": "הוסר ברובו",
+  "Dropped": "ננטש",
+  "Inactive": "לא פעיל",
+  "Caught up": "עדכני",
+  "Caught up: all {n} read": "עדכני: כל ה-{n} נקראו",
 });

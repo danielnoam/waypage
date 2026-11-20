@@ -3423,3 +3423,22 @@ body.listen-bar-up .library, body.listen-bar-up .screen-body { padding-bottom: c
 .pv-choice { min-height: 44px; padding: 0 var(--s-4); border: 1px solid var(--line); border-radius: var(--r-full); background: var(--bg); color: var(--ink); font: inherit; }
 .pv-choice.quiet { border-color: transparent; color: var(--muted); }
 #readingSheet[data-kind="pageview"][hidden], .reader #readingSheet[data-kind="pageview"][hidden] { display: none; }
+
+/* A story's status on its site (2026-11): a tag on the cover's top,
+   across from the new-chapters badge. In one list the cover is too
+   narrow for both, so the word joins the line under the name instead. */
+.tile-status {
+  position: absolute; top: var(--s-1); inset-inline-start: var(--s-1); z-index: 1;
+  max-width: calc(100% - 2 * var(--s-1));
+  padding: 1px 6px; border-radius: var(--r-sm);
+  background: var(--surface); color: var(--ink);
+  font: 600 var(--fs-meta)/var(--lh-meta) var(--sans);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  box-shadow: 0 1px 3px var(--shadow);
+}
+.tile-thumb:has(.tile-new) .tile-status { max-width: calc(100% - 2 * var(--s-1) - 40px); }
+.tile-status[data-status="ongoing"] { color: var(--accent); }
+.tile-status[data-status="hiatus"], .tile-status[data-status="stubbed"], .tile-status[data-status="dropped"], .tile-status[data-status="inactive"] { color: var(--muted); }
+.tile-status-word { display: none; }
+[data-layout="list"] .library > .tile .tile-status { display: none; }
+[data-layout="list"] .library > .tile .tile-status-word { display: inline; }

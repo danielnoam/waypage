@@ -1692,6 +1692,44 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    // A story's status on its site (2026-11, Daniel): a tag on its cover,
+    // "Caught up" rather than done while it's still being written, and
+    // Website sync keeps it current.
+    await test("a series shows its story's status, and caught up isn't finished while it's still going", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (id) => ({ id, url: "https://www.royalroad.com/fiction/5/a/chapter/" + id, title: id, site: "Royal Road", savedAt: 1000, minutes: 1, mode: "links", at: 1, finished: true, folder: "Saga", folderAt: Number(id.slice(1)),
+          folderSeries: true, source: "https://www.royalroad.com/fiction/5/a", siteStatus: "ongoing" });
+        const list = [c("m1"), c("m2")];
+        await S.writeIndex(list);
+        for (const x of list) await S.writePage(x.id, "<!doctype html><html><body><p>" + x.id + "</p></body></html>", x);
+      });
+      await q.reload();
+      const tile = '[data-key="series"] .tile[data-name="Saga"]';
+      await until(q, () => !!document.querySelector('[data-key="series"] .tile[data-name="Saga"] .tile-status'));
+      assert.strictEqual(await q.textContent(tile + " .tile-status"), "Ongoing");
+      assert.ok(/Caught up/.test(await q.textContent(tile + " .tile-meta")) && !/All read/.test(await q.textContent(tile + " .tile-meta")));
+      await q.evaluate(() => openFolder("Saga"));
+      await until(q, () => state.folder === "Saga" && !!document.querySelector("#folderBody .book-site"));
+      assert.strictEqual(await q.textContent("#folderBody .book-site"), "Royal Road · Series · Ongoing");
+      assert.strictEqual(await q.textContent("#folderBody .folder-meta"), "Caught up: all 2 read");
+      // The site says it's done now: Website sync's check takes the word.
+      await q.evaluate(async () => {
+        Waypage.save.findChapters = async (u) => ({ title: "Saga", links: ["https://www.royalroad.com/fiction/5/a/chapter/m1", "https://www.royalroad.com/fiction/5/a/chapter/m2"], cover: "", page: u, siteTags: null, status: "completed" });
+        Object.defineProperty(navigator, "onLine", { get: () => true, configurable: true });
+        await checkNew("Saga", true);
+      });
+      await until(q, () => folderPages("Saga").every((p) => p.siteStatus === "completed"));
+      await until(q, () => /All 2 read/.test(document.querySelector("#folderBody .folder-meta").textContent));
+      await q.evaluate(() => { history.back(); });
+      await until(q, () => !state.folder && document.querySelector('[data-key="series"] .tile[data-name="Saga"] .tile-status')?.textContent === "Completed");
+      assert.ok(/All read/.test(await q.textContent(tile + " .tile-meta")));
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a series has its own section, sits in a collection, and turns back into a collection with nothing lost", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
