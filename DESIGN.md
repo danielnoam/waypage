@@ -8,11 +8,13 @@ and never blocks input. Every rule here is **Now** (in the code) or
 from: https://claude.ai/artifact/5zi1VCs3WcLSTLJCw7iasC, with its
 artboards copied into `design/`.
 
-**The icon (1.0.0):** "Open road", an open book in Paper and `--line`
-whose gutter is a road (a darker blue, Paper dashes) running to a yellow
-sun, on an `--accent` blue tile. `icon.svg` is the source; icons/ and
-assets/ are rendered from it. On Android the glyph sits inside the
-adaptive icon's middle 66%.
+**The icon (1.0.0, redrawn Now):** "Open road", an open book in Paper and
+`--line` with curved pages, a page edge and a dark cover under them, whose
+gutter is a road (a darker blue, Paper dashes that shrink toward the
+horizon) running to a yellow sun rising behind the pages, on an `--accent`
+blue tile with a soft top-to-bottom shade. `icon.svg` is the source;
+`node tools/icons.js` renders icons/ and assets/ from it. On Android the
+glyph is scaled to 66% so the book's corners stay inside a round mask.
 
 ## 1. Color (Now, `src/styles.css`)
 
