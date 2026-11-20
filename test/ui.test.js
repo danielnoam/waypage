@@ -1746,7 +1746,7 @@ function zipOf(files) {
       await q.context().close();
     });
 
-    await test("a collection's ⋯ starts: last read, from the start, newest, and narrate where Continue goes on", async () => {
+    await test("a collection's quick starts under Continue: last read, from the start, newest, and narrate where Continue goes on", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
         const S = window.Waypage.store;
@@ -1759,24 +1759,25 @@ function zipOf(files) {
       await q.reload();
       await until(q, () => state.pages.length === 4);
       await q.evaluate(() => openFolder("Shelf"));
-      await until(q, () => state.folder === "Shelf" && !!document.querySelector("#folderMore"));
+      await until(q, () => !!document.querySelector("#folderBody .folder-starts"));
+      assert.deepStrictEqual(await q.$$eval("#folderBody .folder-starts .chip", (b) => b.map((x) => x.getAttribute("aria-label"))),
+        ["Last read: q2", "From the start: q1", "Newest: q3", "Narrate: q4"]);
       const pick = async (label, id) => {
-        await q.click("#folderMore");
-        await q.locator("#folderPop .pop-item", { hasText: label }).first().click();
+        await q.locator("#folderBody .folder-starts .chip", { hasText: label }).click();
         await until(q, (id) => state.open && state.open.id === id, id);
         await q.evaluate(() => { history.back(); });
-        await until(q, () => state.folder === "Shelf" && $("readerView").hidden);
+        await until(q, () => state.folder === "Shelf" && $("readerView").hidden && !!document.querySelector("#folderBody .folder-starts"));
       };
-      await q.click("#folderMore");
-      assert.deepStrictEqual(await q.$$eval("#folderPop .pop-item", (b) => b.slice(0, 4).map((x) => x.textContent)),
-        ["Last readq2", "From the startq1", "Newestq3", "Narrateq4"]);
-      await q.keyboard.press("Escape");
       await pick("Last read", "q2");
       await pick("From the start", "q1");
       await pick("Newest", "q3");
       await q.evaluate(() => { window.started = 0; startAloud = () => { window.started++; }; });
       await pick("Narrate", "q4");
       assert.strictEqual(await q.evaluate(() => window.started), 1);
+      // One that opens what Continue opens isn't shown twice.
+      await q.evaluate(async () => { const p = state.pages.find((x) => x.id === "q4"); p.readAt = Date.now() + 1e6; await Waypage.store.writeIndex(state.pages); renderFolder(); });
+      assert.deepStrictEqual(await q.$$eval("#folderBody .folder-starts .chip", (b) => b.map((x) => x.getAttribute("aria-label"))),
+        ["From the start: q1", "Newest: q3", "Narrate: q4"]);
       const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
       assert.deepStrictEqual(errors, [], errors.join(" | "));
       await q.context().close();
@@ -1985,7 +1986,7 @@ function zipOf(files) {
       await q.evaluate(() => openFolder("Serial"));
       // Favourite and Edit sit in the bar; the ⋯ menu keeps the rest.
       await q.click("#folderMore");
-      assert.deepStrictEqual(await q.locator("#folderPop .pop-label:not(:has(.pop-sub))").allTextContents(), ["Website sync", "Add clips", "Show as a list", "Make it a series", "Tags", "Select", "Export", "Remove"]);
+      assert.deepStrictEqual(await q.locator("#folderPop .pop-label").allTextContents(), ["Website sync", "Add clips", "Show as a list", "Make it a series", "Tags", "Select", "Export", "Remove"]);
       await q.keyboard.press("Escape");
       await q.click("#folderFav");
       await until(q, () => folderFav("Serial") && document.getElementById("folderFav").getAttribute("aria-pressed") === "true");

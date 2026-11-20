@@ -1260,6 +1260,7 @@ Keel.i18n.strings("he", {
   "Name the new deck": "שם לחפיסה החדשה",
   "Name the new tag": "שם לתגית החדשה",
   "Narrate": "הקראה",
+  "Quick starts": "התחלה מהירה",
   "Narrate (S)": "הקראה (S)",
   "Narrate from here": "הקראה מכאן",
   "Narrate, or auto-scroll a comic": "הקראה, או גלילה אוטומטית בקומיקס",

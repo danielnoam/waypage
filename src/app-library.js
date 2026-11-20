@@ -662,6 +662,7 @@ function bookHead(list, next, done) {
   const go = done === n ? t("Read again from the start") : (next.at > 0.02 || done ? t("Continue: {title}", { title: next.title }) : t("Start: {title}", { title: next.title }));
   return [head,
     el("button", { class: "btn-primary folder-go", type: "button", dir: "auto", onclick: () => openPage(done === n ? list[0].id : next.id) }, go),
+    quickStarts(list, done === n ? list[0] : next),
     saveNewButton(list),
     savedLine(list)];
 }
@@ -1038,17 +1039,14 @@ function openFolderMenu() {
   const item = (icon, label, onclick, opts = {}) => {
     const b = el("button", { class: "pop-item" + (opts.warn ? " warn" : ""), type: "button", role: "menuitem", tabindex: "-1",
       onclick: () => { closeFolderMenu(true); onclick(); } },
-      el("span", { class: "pop-icon" + (opts.flip ? " flip" : ""), "aria-hidden": "true" }),
-      el("span", { class: "pop-label" }, label, opts.sub ? el("span", { class: "pop-sub", dir: "auto" }, opts.sub) : null),
+      el("span", { class: "pop-icon", "aria-hidden": "true" }), el("span", { class: "pop-label" }, label),
       opts.note ? el("span", { class: "pop-note" + (opts.accent ? " accent" : "") }, opts.note) : null);
     b.firstChild.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS[icon] + "</svg>";
     b.disabled = !!opts.disabled;
     return b;
   };
   const sep = () => el("div", { class: "pop-sep", role: "separator" });
-  const starts = quickStarts(list, item);
   const pop = el("div", { class: "pop-menu", id: "folderPop", role: "menu", "aria-label": t("Collection") },
-    ...starts, starts.length ? sep() : null,
     item("book", t("Website sync"), () => setFolderMode("chapters"), fresh ? { note: newCountText(fresh), accent: true } : {}),
     item("add", t("Add clips"), () => openBatch("", false, state.folder)),
     sep(),
@@ -1088,21 +1086,32 @@ function openFolderMenu() {
   setTimeout(() => addEventListener("pointerdown", outsideMenu, true));
 }
 
-// Quick starts at the top of ⋯ (Daniel 2026-11-20), the car's set and
-// the clip read last: each opens a clip, and Narrate reads on from where
-// Continue would.
-function quickStarts(list, item) {
+// Quick starts under Continue (Daniel 2026-11-20), the car's set and
+// the clip read last. One that would open what Continue opens is left
+// out; Narrate reads on from where Continue would.
+function quickStarts(list, main) {
   const at = (p) => p.folderAt || p.savedAt || 0;
   const newest = list.reduce((a, p) => (at(p) >= at(a) ? p : a), list[0]);
   const last = list.reduce((a, p) => ((p.readAt || 0) > ((a && a.readAt) || 0) ? p : a), null);
-  const go = folderNextIndex(list) < 0 ? list[0] : folderNext(list);
-  const talks = !isAudiobook(go) && !go.note && !go.comic;
-  return [
-    last ? item("history", t("Last read"), () => openPage(last.id), { sub: last.title }) : null,
-    item("first", t("From the start"), () => openPage(list[0].id), { sub: list[0].title, flip: true }),
-    list.length > 1 ? item("newest", t("Newest"), () => openPage(newest.id), { sub: newest.title }) : null,
-    talks ? item("narrate", t("Narrate"), () => narrateFrom(go), { sub: go.title }) : null,
+  const shown = new Set([main]);
+  const chip = (icon, label, p, onclick, flip) => {
+    const b = el("button", { class: "chip quick-start", type: "button", "aria-label": label + ": " + p.title, onclick },
+      el("span", { class: "chip-icon" + (flip ? " flip" : ""), "aria-hidden": "true" }), el("span", { class: "chip-label" }, label));
+    b.firstChild.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS[icon] + "</svg>";
+    return b;
+  };
+  const open = (icon, label, p, flip) => {
+    if (!p || shown.has(p)) return null;
+    shown.add(p);
+    return chip(icon, label, p, () => openPage(p.id), flip);
+  };
+  const chips = [
+    open("history", t("Last read"), last),
+    open("first", t("From the start"), list[0], true),
+    open("newest", t("Newest"), newest),
+    !isAudiobook(main) && !main.note && !main.comic ? chip("narrate", t("Narrate"), main, () => narrateFrom(main)) : null,
   ].filter(Boolean);
+  return chips.length ? el("div", { class: "chips folder-starts", role: "group", "aria-label": t("Quick starts") }, ...chips) : null;
 }
 async function narrateFrom(p) {
   await openPage(p.id);
@@ -2177,8 +2186,7 @@ function clipMenu(node, x, y) {
   const item = (icon, label, onclick, opts = {}) => {
     const b = el("button", { class: "pop-item" + (opts.warn ? " warn" : ""), type: "button", role: "menuitem", tabindex: "-1",
       onclick: () => { closeClipMenu(true); onclick(); } },
-      el("span", { class: "pop-icon" + (opts.flip ? " flip" : ""), "aria-hidden": "true" }),
-      el("span", { class: "pop-label" }, label, opts.sub ? el("span", { class: "pop-sub", dir: "auto" }, opts.sub) : null),
+      el("span", { class: "pop-icon", "aria-hidden": "true" }), el("span", { class: "pop-label" }, label),
       opts.key ? el("kbd", { class: "pop-key" }, opts.key) : null);
     b.firstChild.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS[icon] + "</svg>";
     return b;
