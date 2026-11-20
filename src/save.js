@@ -364,8 +364,12 @@
     const status = pageStatus(doc, at);
     if (site) {
       const own = (site.contents && await site.contents(doc, at, res.text)) || null;
-      const links = own ? own.links : site.list ? await site.list(doc, at, res.text) : [];
-      if (links.length) return { title: (own && own.title) || readTitle(doc), links, cover, page: url, siteTags, status };
+      // A site's `list` may answer { links, page, title } rather than just
+      // the links: `page` is the address to read the list from next time
+      // (comix.to's, with the group chosen), so Website sync keeps to it.
+      const listed = own ? own : site.list ? await site.list(doc, at, res.text) : [];
+      const links = Array.isArray(listed) ? listed : listed.links;
+      if (links.length) return { title: (!Array.isArray(listed) && listed.title) || readTitle(doc), links, cover, page: (!Array.isArray(listed) && listed.page) || url, siteTags, status };
       // A site whose chapters are only ever its own kind of link (a
       // Wikisource work's subpages): no guessing from the page's links.
       if (site.ownChapters) return { title: readTitle(doc), links: [], cover, page: url, siteTags, status };
@@ -602,6 +606,84 @@
   }
 
   const uniqueLinks = (links) => { const seen = new Set(); return links.filter((u) => u && !seen.has(u) && seen.add(u)); };
+
+  // comix.to (1.69.0): every chapter is posted by several scan groups, so
+  // a title's list is read for one group only: the group in the address
+  // (?group_id=307), else an official one (Official, or a publisher such as
+  // Tapas) unless it is far behind the newest chapter, else the group
+  // that posted the newest. The site fetches its chapters with a token and
+  // an encrypted answer, so the title page is drawn in the hidden browser,
+  // a page of twenty at a time, and read from what it shows. Nothing is
+  // read without that browser (iOS, the web copy).
+  const COMIX_OFFICIAL = /^(official|tapas|webtoon|line webtoon|tappytoon|lezhin|manta|pocket comics|kakao(page| webtoon)?|piccoma|comikey|azuki|inky ?pen)\b/i;
+  const COMIX_BEHIND = 5;
+  async function comixList(doc, url) {
+    if (!C.platform.canRender) return [];
+    const u = new URL(url);
+    const m = u.pathname.match(/^(\/title\/([a-z0-9]+)-[^/]+)(\/|$)/i);
+    if (!m) return [];
+    const titlePath = m[1], hid = m[2];
+    // A chapter's address leads to its title's page, which names the groups.
+    if (u.pathname.replace(/\/$/, "") !== titlePath) {
+      const res = await get(u.origin + titlePath);
+      doc = parse(res.text, res.url || u.origin + titlePath);
+    }
+    let data = {};
+    try { data = JSON.parse(doc.querySelector("#initial-data").textContent).queries || {}; } catch (e) { /* no groups to choose from */ }
+    const groups = (data[JSON.stringify(["manga", "groups", hid])] || []).filter((g) => g && g.name);
+    const detail = data[JSON.stringify(["manga", "detail", hid])] || {};
+
+    const drawn = new Map();
+    const draw = async (group, n) => {
+      const a = new URL(u.origin + titlePath);
+      if (group != null) a.searchParams.set("group_id", group);
+      a.searchParams.set("page", n);
+      if (!drawn.has(a.href)) {
+        const d = await C.platform.render(a.href, { waitFor: ".mchap-row" });
+        drawn.set(a.href, d ? parse(d.text, d.url || a.href) : null);
+      }
+      return drawn.get(a.href);
+    };
+    const rowsOf = (d) => !d ? [] : [...d.querySelectorAll(".mchap-row")].map((r) => {
+      const a = r.querySelector("a.mchap-row__primary[href]");
+      const g = r.querySelector("a.mchap-row__group[href]");
+      if (!a) return null;
+      return {
+        url: absolute(a.getAttribute("href"), u.origin),
+        // From the address: the link's words go on with the chapter's title.
+        n: parseFloat((a.getAttribute("href").match(/-chapter-(\d+(?:\.\d+)?)/) || [])[1]),
+        group: g ? ((g.getAttribute("href").match(/\/groups\/(\d+)/) || [])[1] || null) : null,
+      };
+    }).filter(Boolean);
+
+    let group = u.searchParams.get("group_id");
+    if (group == null) {
+      const real = groups.filter((g) => g.id !== 0);
+      const official = real.find((g) => /^official$/i.test(g.name)) || real.find((g) => COMIX_OFFICIAL.test(g.name));
+      if (official) {
+        const top = Math.max(0, ...rowsOf(await draw(official.id, 1)).map((r) => r.n).filter(Number.isFinite));
+        if (!(detail.latestChapter - top > COMIX_BEHIND)) group = String(official.id);
+      }
+      if (group == null) {
+        const rows = rowsOf(await draw(null, 1));
+        const first = rows.find((r) => r.group && r.group !== "0") || rows[0];
+        group = first && first.group;
+      }
+      if (group == null) return [];
+    }
+
+    const found = [];
+    for (let n = 1, last = 1; n <= Math.min(last, TOC_PAGES); n++) {
+      const d = await draw(group, n);
+      // A page that ignored the group is no use: only its rows count.
+      const rows = rowsOf(d).filter((r) => r.group == null || r.group === String(group));
+      if (!rows.length) break;
+      found.push(...rows.map((r) => r.url));
+      last = Math.max(last, ...[...d.querySelectorAll(".npager__num")].map((b) => parseInt(text(b), 10)).filter(Number.isFinite));
+    }
+    // The page lists newest first.
+    return { links: uniqueLinks(found).reverse(), title: detail.title || "", page: u.origin + titlePath + "?group_id=" + group };
+  }
 
   const SITES = [
     {
@@ -1097,6 +1179,37 @@
           byline: text(doc.querySelector("#header_author_text a, .wst-header-author a")),
           next: link("#header_forward_text a, .wst-header-forward a"),
           prev: link("#header_backward_text a, .wst-header-back a, .wst-header-backward a"),
+        };
+      },
+    },
+    {
+      name: "comix",
+      host: /(^|\.)comix\.to$/i,
+      ownChapters: true,
+      list: comixList,
+      // A chapter (1.69.0) is a column of panels the site's reader puts in
+      // as it scrolls (`.rpage-page__img`, five at first, the rest as they
+      // near the screen, and kept), so it is drawn and scrolled like any
+      // comic. Its picture hosts turn away any Referer (the reader sends
+      // none), so downloads send none either (`keep`).
+      noReferer: true,
+      comic: (url) => /^\/title\/[^/]+\/\d+-chapter-[^/]+\/?$/.test(new URL(url).pathname),
+      panels(doc, url) {
+        return uniqueLinks([...doc.querySelectorAll(".rpage-page__img[src]")]
+          .map((img) => absolute(img.getAttribute("src"), url))
+          .filter((u) => /^https?:/.test(u)));
+      },
+      chapter(doc, url) {
+        if (!this.comic(url)) return null;
+        // "The Perks of Being an S-Class Heroine · Ch.147"
+        const og = doc.querySelector('meta[property="og:title"]');
+        const [series, chapter] = ((og && og.content) || text(doc.querySelector("title"))).split(/\s+·\s+/);
+        const n = new URL(url).pathname.match(/-chapter-(.+?)\/?$/);
+        return {
+          content: null,
+          title: (chapter || (n ? "Ch." + n[1] : "")).trim(),
+          series: (series || "").trim(),
+          byline: "",
         };
       },
     },
@@ -2820,8 +2933,10 @@
   // than the screen needs is redrawn smaller (store.shrink). Resolves to
   // { rel, bytes } of the file kept.
   // A full image is made smaller too (1.18.0), unless that's turned off.
+  // A site whose picture hosts refuse a Referer (comix.to) gets none.
   async function keep(id, rel, url, mode, page) {
-    const size = await C.store.download(id, rel, url, page);
+    const rule = siteRule(page);
+    const size = await C.store.download(id, rel, url, rule && rule.noReferer ? null : page);
     if (mode !== "full") return C.store.shrink(id, rel, size, PREVIEW_WIDTH);
     return compress ? C.store.squeeze(id, rel, size, FULL_WIDTH) : { rel, bytes: size };
   }

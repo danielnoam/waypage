@@ -300,12 +300,14 @@
   // page never drew.
   // `scroll` (1.17.0): scrolled to the end first, for pictures that fill
   // in as they come into view; a long chapter takes longer.
-  async function render(url, { scroll = false } = {}) {
+  // `waitFor`: a CSS selector the page must show before it counts as drawn,
+  // for a list it fetches after its first screen (comix.to's chapters).
+  async function render(url, { scroll = false, waitFor = "" } = {}) {
     const R = plugin("PageRender");
     if (!R) return null;
     try {
       const wait = scroll ? 50000 : 20000;
-      const res = await deadline(R.render({ url, timeoutMs: wait, scroll }), wait + 10000);
+      const res = await deadline(R.render({ url, timeoutMs: wait, scroll, waitFor }), wait + 10000);
       return res && res.html ? { text: res.html, url: res.url || url } : null;
     } catch (e) {
       return null;
