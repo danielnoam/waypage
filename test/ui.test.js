@@ -6128,7 +6128,7 @@ c("bk1", { at: 0.01 })]);
       await until(q, () => C.files.noteSheets() === 2 && (C.reader.frameDoc || document).querySelectorAll(".co-comic > img").length === 2);
       // Its Aa sheet: Layout and Auto-scroll, in the note's words.
       await q.click("#readerAa");
-      assert.deepStrictEqual(await q.locator(".sheet-tabs label, .sheet-tabs button").allTextContents(), ["Layout", "Auto-scroll"]);
+      assert.deepStrictEqual(await q.locator(".sheet-tabs label, .sheet-tabs button").allTextContents(), ["Layout", "Auto-scroll", "Draw"]);
       await q.locator(".sheet-tabs", { hasText: "Auto-scroll" }).getByText("Auto-scroll").click();
       assert.ok(await q.getByText("Go on to the next note").isVisible(), "the note's own wording");
       // Show as Pages: a sheet at a time, and the pen still draws on it (2026-11).
