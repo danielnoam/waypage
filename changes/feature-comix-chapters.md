@@ -1,0 +1,2 @@
+### Added
+- Find chapters and Website sync read a comix.to title's chapters. Each chapter there is posted by several scan groups, so Waypage reads one group's: the group in the link (`?group_id=`), else an official one, unless it is far behind the newest chapter, then the group with the newest. The collection stays with that group when it checks for new chapters. Android only; not built for iOS or the web copy.

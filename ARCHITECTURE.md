@@ -209,6 +209,18 @@ way); a list over pages followed by its Next link (40 pages at
 most); a chapter's own link led on to its "Table of contents" link; and
 a list of named, unnumbered chapters taken when six or more links of one
 shape share the site's first folder.
+A site rule's `list` may answer `{ links, page, title }`: `page` is the
+address the list is read from next time. comix.to (`comixList`) uses it:
+a title's chapters are posted by several scan groups, so one group's are
+read, the one in the link (`?group_id=`), else an official one (Official,
+or a publisher like Tapas) unless it is more than five chapters behind
+the title's newest, else the group that posted the newest; `page` keeps
+`?group_id=` so Website sync stays with that group. The site hands its
+list over with a token and an encrypted answer, so the title page is
+drawn in the hidden browser (`render` with `waitFor: ".mchap-row"`,
+which makes PageRender count the text only once the rows are there), a
+page of twenty at a time (40 pages at most). Without that browser (iOS,
+the web copy) nothing is read and no links are guessed from the page.
 The same read gives the page's own tags (`pageTags`: a site rule's
 `tags`, else `article:tag` meta, ten at most) as `siteTags`; Save with
 options offers them as one switch, off until turned on, remembered in

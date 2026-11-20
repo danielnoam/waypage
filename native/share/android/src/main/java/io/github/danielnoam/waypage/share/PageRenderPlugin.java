@@ -18,6 +18,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.StringReader;
+import org.json.JSONObject;
 
 /**
  * Pages that build themselves with JavaScript (src/save.js):
@@ -26,6 +27,9 @@ import java.io.StringReader;
  *   render({ url, timeoutMs, scroll: true })   the same once it has also been
  *     scrolled to the end and its pictures stopped filling in (1.17.0), for
  *     comics that swap their pictures in as you scroll
+ *   render({ url, timeoutMs, waitFor: "css selector" })   the same, but the
+ *     text only counts once something matches the selector, for a list a
+ *     page fetches after it has drawn its synopsis (comix.to's chapters)
  *
  * The page runs in its own WebView, out of sight behind the app's: no
  * Capacitor bridge, no JavaScript interfaces, no file access, http(s) only,
@@ -60,7 +64,8 @@ public class PageRenderPlugin extends Plugin {
         }
         long timeout = Math.max(5000, Math.min(60000, call.getData().optLong("timeoutMs", 20000L)));
         boolean scroll = call.getBoolean("scroll", false);
-        new Handler(Looper.getMainLooper()).post(() -> new Job(call, url, timeout, scroll).start());
+        String waitFor = call.getString("waitFor");
+        new Handler(Looper.getMainLooper()).post(() -> new Job(call, url, timeout, scroll, waitFor).start());
     }
 
     private class Job {
@@ -68,6 +73,7 @@ public class PageRenderPlugin extends Plugin {
         final String url;
         final long timeout;
         final boolean scroll;
+        final String measure;
         final Handler main = new Handler(Looper.getMainLooper());
         WebView web;
         boolean done;
@@ -76,8 +82,11 @@ public class PageRenderPlugin extends Plugin {
         int steady;
         int lastCount = -1;
 
-        Job(PluginCall call, String url, long timeout, boolean scroll) {
+        Job(PluginCall call, String url, long timeout, boolean scroll, String waitFor) {
             this.call = call;
+            // The page's text length; with a selector, 0 until it matches.
+            this.measure = waitFor == null || waitFor.isEmpty() ? TEXT_LENGTH
+                : "(document.querySelector(" + JSONObject.quote(waitFor) + ") ? " + TEXT_LENGTH + " : 0)";
             this.url = url;
             this.timeout = timeout;
             this.scroll = scroll;
@@ -128,7 +137,7 @@ public class PageRenderPlugin extends Plugin {
         // empty frame first, then fill it from a request of their own.
         void poll() {
             if (done) return;
-            web.evaluateJavascript(TEXT_LENGTH, (v) -> {
+            web.evaluateJavascript(measure, (v) -> {
                 if (done) return;
                 int n;
                 try { n = Integer.parseInt(v.trim()); } catch (NumberFormatException e) { n = 0; }
