@@ -548,6 +548,7 @@ public class AudiobookService extends Service {
         if (job.chapters.length == 0) {
             if (d < 0 && pos > 3000) seekIn(job.part, 0);
             else if (job.part + d >= 0 && job.part + d < job.parts.length) seekIn(job.part + d, 0);
+            else beside(d);
             return;
         }
         int ch = chapterAt(job.part, pos), to = ch + d;
@@ -555,8 +556,18 @@ public class AudiobookService extends Service {
             Chapter c = job.chapters[ch];
             if (job.part > c.part || pos - c.pos > 3000) to = ch;
         }
-        if (to < 0 || to >= job.chapters.length) return;
+        if ((to < 0 && d < 0) || to >= job.chapters.length) { beside(d); return; }
+        if (to < 0) return;
         seekIn(job.chapters[to].part, job.chapters[to].pos);
+    }
+
+    // Past the first or last chapter (or file): the book or clip before or
+    // after this one in its collection or series, when it has one.
+    private void beside(int d) {
+        String id = Car.nextId(this, Car.BOOK + job.key, d);
+        if (id == null) return;
+        if (job.car) Car.heardBook(this, job.key, job.part, position(), false);
+        Car.playId(id);
     }
 
     private boolean queued;

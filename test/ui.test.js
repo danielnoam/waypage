@@ -6343,6 +6343,32 @@ c("bk1", { at: 0.01 })]);
 
     // Every screen at every size (the 320 px phone, a phone on its side, a
     // computer): each of these was cut off or missing before.
+    await test("the car's collections: quick starts, the clips around where it was left, and no jumping a gap (2026-11-20)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store, all = [];
+        for (let i = 1; i <= 20; i++) {
+          const c = { id: "car" + i, url: "", title: "Part " + i, site: "", savedAt: i, minutes: 1, mode: "full", at: i <= 4 ? 1 : 0, finished: i <= 4, readAt: i <= 4 ? 100 + i : 0, folder: "Serial", folderAt: i };
+          all.push(c);
+        }
+        await S.writeIndex(all);
+        for (const c of all) await S.writePage(c.id, "<!doctype html><html><body><p>The " + c.title + " goes on a while.</p><p>And then it ends.</p></body></html>", c);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await until(q, () => state.pages.length === 20);
+      const got = await q.evaluate(async () => {
+        const list = { books: [], clips: [] };
+        const c = await carFolderList(carFolders()[0], list, new Set());
+        return { c, hidden: list.clips.every((x) => x.hide && x.items.length === 2) };
+      });
+      assert.deepStrictEqual(got.c.starts.map((x) => [x.label, x.id]), [["Continue", "c:car5"], ["From the start", "c:car1"], ["Newest", "c:car20"]]);
+      assert.deepStrictEqual(got.c.at, [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 18, 19]);
+      assert.strictEqual(got.c.items[got.c.at.indexOf(3)], "c:car4");
+      assert.ok(got.hidden);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
     await test("the picking bar, Draw bar, app lock and Stats fit at 320 px, on a phone's side and at 1280 px", async () => {
       const q = await page(browser, 320);
       await q.setViewportSize({ width: 320, height: 568 });
