@@ -24,10 +24,8 @@ function allMarkTags() {
   const count = (t) => { const k = [...counts.keys()].find((x) => sameTag(x, t)) || t; counts.set(k, (counts.get(k) || 0) + 1); };
   for (const p of state.pages) {
     for (const m of p.marks || []) for (const t of m.tags || []) count(t);
-    // A comment bubble's tags are a highlight's (2026-11): by block on the entry, or the open clip's own.
-    const open = state.open === p && typeof inkReady === "function" && inkReady();
-    if (open) for (const n of C.ink.notes()) for (const t of n.tags) count(t);
-    else if (p.ink && typeof p.ink === "object") for (const list of Object.values(p.ink)) for (const s of list) if (s.t === "n") for (const t of s.tags || []) count(t);
+    // A comment bubble's tags are a highlight's (2026-11): one list, most used first.
+    if (typeof inkNotes === "function") for (const n of inkNotes(p)) for (const t of n.tags) count(t);
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t);
 }

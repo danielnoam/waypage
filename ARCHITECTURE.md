@@ -371,10 +371,25 @@ is by id). Tapping a bubble opens its sheet with Draw off (`onNote`, a click on 
 `.note` node, which keeps `pointer-events` on in reader.css); with Draw on, Select
 takes it and the bar's Edit note opens it. Its colours are the highlights' (`MARK_COLORS`)
 and its tags are the highlights' list: `allMarkTags` counts a bubble's tags, and the
-sheet uses `markTagsEditor` with a `put` in place of saving a highlight. Left out
-for now: a copy of the PDF and Save as PDF (`pdf.js inkOf` has no sticky-note
-editor in pdf.js's annotation storage; `forPdf` and `notes.js sheetCanvas` skip it),
-and rows for bubbles in the Highlights list.
+sheet uses `markTagsEditor` with a `put` in place of saving a highlight. A bubble is
+not a drawing: `count`, `drawn`, `clearPage`, `clearAll`, `inkGroups` and a row's
+remove leave it out, and Highlights lists it as what it says (`app-ink.js inkNotes`,
+`noteRow`): in the clip's sheet and the Highlights place, among the highlights in
+the clip's order, through the same colour, tag and word filters, and in Copy all
+as `> 💬 comment #tags`. By block it is read from `ink` on the entry; a note's or
+outside PDF's are summed up on the entry as `noted` (`[{ id, n, text, c, tags }]`,
+this device's own like `drawn`, written by `onSaved` and `outsideDrawn`), so a
+file's bubbles show and count their tags without it being opened; on another
+device a note's show once it has been opened there. Moving: with Select, any
+pointer on a bubble takes it and drags it in the same press (`down`); otherwise a
+press held still for 450 ms (`notePress`, `carry`) picks it up and drags it, Draw
+on or off, and a quick tap opens it (on `pointerup`, as `.note` has
+`touch-action: none`, so no scroll starts on it). A carry is `cur` with
+`select`, `carry` and `mode: "drag"`, so `selMove`, `selUp`, `selDrop` and undo
+are Select's own; after it the selection is cleared when Draw is off, and the
+reader's tap is held back (`click`, `noteAt`). Left out for now: a copy of the
+PDF and Save as PDF (`pdf.js inkOf` has no sticky-note editor in pdf.js's
+annotation storage; `forPdf` and `notes.js sheetCanvas` skip it).
 
 The pages are one surface (1.57.0). A stroke or picture that reaches over
 more than one page is kept on each page it touches, whole, in that page's

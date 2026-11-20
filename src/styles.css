@@ -1745,6 +1745,10 @@ span.update-text { cursor: default; }
 .mark-quote[data-c="blue"] { background: var(--mark-blue); }
 .mark-quote[data-c="pink"] { background: var(--mark-pink); }
 .mark-quote[data-c="purple"] { background: var(--mark-purple); }
+/* A comment bubble's row (2026-11): its words, not a quote, in its colour. */
+.note-quote { font-family: var(--sans); white-space: pre-line; }
+.note-quote svg { width: 15px; height: 15px; vertical-align: -2px; margin-inline-end: var(--s-1); }
+.note-quote.empty { color: var(--muted); }
 .mark-quote.big { display: block; margin: var(--s-2) 0 var(--s-3); padding: var(--s-2) var(--s-3); font-size: var(--fs-body); line-height: var(--lh-body); overflow: visible; }
 .mark-note { color: var(--muted); font-size: var(--fs-meta); line-height: var(--lh-meta); white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .mark-edit { flex-shrink: 0; color: var(--muted); }

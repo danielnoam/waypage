@@ -429,9 +429,13 @@
     return Promise.resolve(write).then(() => { if (edited && onSaved) onSaved(id); }, () => {});
   }
   const strokes = (n) => (clip && clip.pages[n]) || [];
-  const count = () => (clip ? Object.values(clip.pages).reduce((a, l) => a + mine(l).length, 0) : 0);
+  // A comment bubble is a highlight's kind of thing, not a drawing: it isn't
+  // counted, listed or cleared with them (2026-11).
+  const isNote = (s) => !!s && s.t === "n";
+  const drawings = (list) => mine(list).filter((s) => !isNote(s));
+  const count = () => (clip ? Object.values(clip.pages).reduce((a, l) => a + drawings(l).length, 0) : 0);
   // Pages with drawings, in order, with how many strokes each has.
-  const drawn = () => (clip ? Object.keys(clip.pages).map(Number).filter((n) => mine(clip.pages[n]).length).sort((a, b) => a - b).map((n) => ({ page: n, strokes: mine(clip.pages[n]).length })) : []);
+  const drawn = () => (clip ? Object.keys(clip.pages).map(Number).filter((n) => drawings(clip.pages[n]).length).sort((a, b) => a - b).map((n) => ({ page: n, strokes: drawings(clip.pages[n]).length })) : []);
   function put(n, s, at) {
     const list = (clip.pages[n] = clip.pages[n] || []);
     list.splice(at == null ? list.length : Math.min(at, list.length), 0, s);
@@ -603,7 +607,11 @@
       g.setAttribute("tabindex", "0");
       g.setAttribute("aria-label", noteLabel(s.text.trim().slice(0, 40)));
       const open = () => { if (!on && onNote) onNote(s.id); };
-      g.addEventListener("click", open);
+      g.addEventListener("pointerdown", (e) => notePress(e, g, s.id));
+      g.addEventListener("pointermove", (e) => { if (press && press.id === e.pointerId && !press.carried) { if (Math.hypot(e.clientX - press.x0, e.clientY - press.y0) > 8) pressEnd(); else { press.x = e.clientX; press.y = e.clientY; } } });
+      // A tap opens it (a held press carries it instead).
+      g.addEventListener("pointerup", (e) => { if (!press || press.id !== e.pointerId) return; const tap = !press.carried; pressEnd(); noteAt = performance.now(); if (tap) open(); });
+      g.addEventListener("pointercancel", (e) => { if (press && press.id === e.pointerId && !press.carried) pressEnd(); });
       g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
       return g;
     }
@@ -623,6 +631,34 @@
     path.setAttribute("d", pathOf(s));
     path.dataset.id = s.id;
     return path;
+  }
+  // ---- A comment bubble held and moved (2026-11) ----
+  // A press on a bubble: a tap opens it, a hold (450 ms, still) picks it up
+  // and drags it, Draw on or off. While drawing, Select takes it in down();
+  // a pointer that draws here draws.
+  let press = null, noteAt = 0;
+  const HOLD = 450;
+  function notePress(e, g, id) {
+    if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
+    if (on && (tool === "select" || e.pointerType === "pen" || finger)) return;
+    pressEnd();
+    const svg = g.ownerSVGElement;
+    if (!svg) return;
+    e.stopPropagation();
+    press = { id: e.pointerId, kind: e.pointerType, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, carried: false };
+    const mine = press;
+    press.timer = setTimeout(() => { if (press === mine) carry(mine, svg, Number(svg.dataset.page), id); }, HOLD);
+  }
+  function pressEnd() { if (press) clearTimeout(press.timer); press = null; }
+  function carry(pr, svg, n, id) {
+    const it = strokes(n).find((x) => x.id === id);
+    if (!it || cur) { pressEnd(); return; }
+    pr.carried = true;
+    try { svg.setPointerCapture(pr.id); } catch (err) { /* it moves anyway while over the layer */ }
+    const [x, y] = where({ clientX: pr.x, clientY: pr.y }, svg);
+    selSet(n, [it]);
+    cur = { id: pr.id, kind: pr.kind, n, svg, select: true, carry: true, mode: "drag", gone: [], at: performance.now(), x0: x, y0: y, moved: 0 };
+    selLift(cur);
   }
   function paint(n) {
     const svg = layers.get(n);
@@ -807,12 +843,16 @@
     // just before its touch: not every device says "stylus" in the touch.
     // A finger scrolls, unless it draws.
     svg.addEventListener("touchstart", (e) => {
+      // A finger on a bubble with Select drags it; it doesn't scroll.
+      if (on && tool === "select" && e.touches.length === 1 && e.target && e.target.closest && e.target.closest(".note")) { if (e.cancelable) e.preventDefault(); return; }
       if (!on || e.touches.length > 1) return;
       const t = e.changedTouches[0];
       if (penTouch || (t && t.touchType === "stylus") || finger) { if (e.cancelable) e.preventDefault(); }
     }, { passive: false });
-    // The pen's button would open a menu.
-    svg.addEventListener("contextmenu", (e) => { if (on) e.preventDefault(); });
+    // A bubble being carried takes the finger's moves: no scrolling under it.
+    svg.addEventListener("touchmove", (e) => { if (cur && cur.carry && e.cancelable) e.preventDefault(); }, { passive: false });
+    // The pen's button would open a menu, and a held bubble would too.
+    svg.addEventListener("contextmenu", (e) => { if (on || press || (cur && cur.carry) || (e.target && e.target.closest && e.target.closest(".note"))) e.preventDefault(); });
   }
   function down(e) {
     if (!on) return;
@@ -833,7 +873,9 @@
     // A second finger is a pinch: whatever the first one drew is undone.
     if (cur && cur.id !== e.pointerId) { if (cur.kind === "touch") abandon(); return; }
     if (cur) return;
-    if (!pen && !finger) return;
+    // With Select, any pointer takes a comment bubble and drags it at once (2026-11).
+    const noteEl = tool === "select" && e.target && e.target.closest ? e.target.closest(".note") : null;
+    if (!pen && !finger && !noteEl) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if (!e.isPrimary) return;
     // A hand resting beside the pen doesn't write.
@@ -844,7 +886,14 @@
     e.preventDefault();
     try { svg.setPointerCapture(e.pointerId); } catch (err) { /* it draws anyway */ }
     const [x, y] = where(e, svg);
-    if (tool === "select" && !erase) { selDown(e, svg, n, x, y); return; }
+    if (tool === "select" && !erase) {
+      if (noteEl) {
+        const it = strokes(n).find((s) => s.id === noteEl.dataset.id);
+        if (it && !(sel && sel.ids.includes(it.id))) selSet(n, [it]);
+      }
+      selDown(e, svg, n, x, y);
+      return;
+    }
     const hl = !erase && tool === "highlighter";
     cur = { id: e.pointerId, kind: pen ? "pen" : e.pointerType, n, svg, erase, gone: [], at: performance.now() };
     if (erase) { wipe(x, y); return; }
@@ -963,13 +1012,13 @@
     if (c.path) c.path.remove();
     unlift();
     // A drag that was a pinch: the items go back to their pages as they were.
-    if (c.select && c.before) { setPages(c.before); repaintAll(c.touched); selDrawAll(); return; }
+    if (c.select && c.before) { setPages(c.before); repaintAll(c.touched); selDrawAll(); if (c.carry && !on) selClear(); return; }
     for (const g of c.gone) put(g.n, g.s, g.i);
     paint(c.n);
   }
   // The click that follows a stroke isn't a tap on the page.
   function click(e) {
-    return on && performance.now() - lastStroke < 500;
+    return (on && performance.now() - lastStroke < 500) || performance.now() - noteAt < 500;
   }
 
   // ---- Pages, lists and order ----
@@ -1169,8 +1218,10 @@
       return;
     }
     unlift();
-    if (tap) { setPages(c.before); repaintAll(c.touched); selDrawAll(); return; }
-    selDrop(c);
+    if (tap) { setPages(c.before); repaintAll(c.touched); selDrawAll(); }
+    else selDrop(c);
+    // Carried while reading: nothing is left taken.
+    if (c.carry) { pressEnd(); noteAt = performance.now(); if (!on) selClear(); }
   }
   // Let go: the items go to the pages they are over, at the front of each.
   function selDrop(c) {
@@ -1460,11 +1511,11 @@
   const undo = () => step(undos, redos, true);
   const redo = () => step(redos, undos, false);
   function clearPage(n) {
-    const all = strokes(n), list = mine(all);
+    const all = strokes(n), list = drawings(all);
     if (!list.length) return;
-    undos.push({ k: "del", items: all.map((s, i) => ({ n, s, i })).filter((g) => !isBack(g.s)).reverse() });
+    undos.push({ k: "del", items: all.map((s, i) => ({ n, s, i })).filter((g) => !isBack(g.s) && !isNote(g.s)).reverse() });
     redos = [];
-    const keep = all.filter(isBack);
+    const keep = all.filter((s) => isBack(s) || isNote(s));
     if (keep.length) clip.pages[n] = keep; else delete clip.pages[n];
     paint(n);
     save();
@@ -1486,7 +1537,7 @@
   function clearAll() {
     if (!clip) return;
     const keep = {};
-    for (const [n, list] of Object.entries(clip.pages)) if (list.some(isBack)) keep[n] = list.filter(isBack);
+    for (const [n, list] of Object.entries(clip.pages)) if (list.some((s) => isBack(s) || isNote(s))) keep[n] = list.filter((s) => isBack(s) || isNote(s));
     clip.pages = keep;
     undos = []; redos = [];
     for (const n of layers.keys()) paint(n);

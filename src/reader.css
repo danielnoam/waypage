@@ -199,7 +199,8 @@ html[data-co-pen-near] .co-ink[data-on="1"], html[data-co-inking][data-co-pen-ne
 .co-ink .hnd { fill: var(--accent); stroke: #fff; stroke-width: 2px; vector-effect: non-scaling-stroke; }
 .co-ink .pic { pointer-events: none; }
 /* A comment bubble: always tappable, drawing or not. Its colour is a highlight's. */
-.co-ink .note { pointer-events: auto; cursor: pointer; outline: none; }
+.co-ink .note { pointer-events: auto; cursor: pointer; outline: none; touch-action: none; -webkit-touch-callout: none; }
+.co-ink[data-lift] .note .bub { filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .35)); }
 .co-ink .note .hit { fill: transparent; }
 .co-ink .note .bub { stroke: rgba(28, 27, 25, .45); stroke-width: 1px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
 .co-ink .note .bub.c-yellow { fill: #FFD60A; }

@@ -2846,4 +2846,6 @@ Keel.i18n.strings("he", {
   "Write a comment": "כותבים הערה",
   "Note: {text}": "פתק: {text}",
   "Couldn't add a note here. Try again.": "אי אפשר להוסיף כאן פתק. נסו שוב.",
+  "{n} notes": { one: "פתק אחד", other: "{n} פתקים" },
+  "Note: {text}, in {title}": "פתק: {text}, ב-{title}",
 });

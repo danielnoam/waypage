@@ -26,6 +26,14 @@ test("a comment bubble is kept with its colour, words and clean tags, and a bad 
   assert.deepStrictEqual(I.boxOf([n]).map((v) => Math.round(v * 1000) / 1000), [0.294, 0.394, 0.082, 0.082]);
 });
 
+test("bubbles are no drawings: Markdown writes one as its comment with its tags", () => {
+  global.window.Waypage.ink = I;
+  require("../src/backup.js");
+  const md = window.Waypage.backup.marksMarkdown({ title: "T", file: { name: "t.txt" }, ink: { 2: [{ id: "n", t: "n", c: "blue", x: 0, y: 0, w: 0.07, h: 0.07, text: "Check the date", tags: ["history"] }] } });
+  assert.ok(md.includes("> 💬 Check the date") && md.includes("#history"), md);
+  assert.ok(!md.includes("_Drawing"), "a bubble alone isn't a drawing: " + md);
+});
+
 test("a pen stroke is a closed outline that stays round its points, wider where it is pressed harder", () => {
   const w = 0.004;
   const d = I.penPath([0.1, 0.5, 0.1, 0.3, 0.5, 0.1, 0.5, 0.5, 1, 0.7, 0.5, 1], w);
