@@ -383,8 +383,14 @@ file's bubbles show and count their tags without it being opened; on another
 device a note's show once it has been opened there. Moving: with Select, any
 pointer on a bubble takes it and drags it in the same press (`down`); otherwise a
 press held still for 450 ms (`notePress`, `carry`) picks it up and drags it, Draw
-on or off, and a quick tap opens it (on `pointerup`, as `.note` has
-`touch-action: none`, so no scroll starts on it). A carry is `cur` with
+on or off, and a quick tap opens it (on the click that follows, as opening on
+`pointerup` put the sheet under the finger and the click closed it). Chrome ignores `touch-action` on SVG shapes, so a
+finger on a bare bubble starts a pan and the browser sends `pointercancel`, which
+puts a dragged item back: its touch area is an HTML `div.note-hit` (`touch-action:
+none`) in a `foreignObject`, the one thing it honours, and the reader's swipes,
+page turns and brightness skip touches that start on one (`reader.js onBubble`);
+tests for it must use real touch (CDP `Input.dispatchTouchEvent`), not events fired
+at the node. A carry is `cur` with
 `select`, `carry` and `mode: "drag"`, so `selMove`, `selUp`, `selDrop` and undo
 are Select's own; after it the selection is cleared when Draw is off, and the
 reader's tap is held back (`click`, `noteAt`). Left out for now: a copy of the
@@ -1047,6 +1053,12 @@ adds a line here.
 
 Things that broke once and would again. Check here before touching the
 area.
+- Chrome and Android's WebView ignore `touch-action` on SVG shapes. A drag that
+  starts on one (a comment bubble in `ink.js`) is cancelled by the browser's
+  own pan (`pointercancel`), and the item snaps back. Give the shape a real
+  box: an HTML `div` in a `foreignObject` with `touch-action: none`. A test that
+  fires `PointerEvent`s at the node passes anyway; use real touch (CDP
+  `Input.dispatchTouchEvent`), as the Add › Note steps in `test/ui.test.js` do.
 - A build from before Notes (1.57.0 and older, and `test-omri-dev`) drops
   every note when it syncs: `cleanMeta` keeps only entries with an address,
   so the next merge marks them deleted and removes their folders on the

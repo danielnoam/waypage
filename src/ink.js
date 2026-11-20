@@ -598,10 +598,16 @@
       g.setAttribute("class", "note");
       const mk = (tag, o) => { const e = D.createElementNS(NS, tag); for (const [k, v] of Object.entries(o)) e.setAttribute(k, String(v)); g.append(e); return e; };
       const r = s.w / 2, cx = s.x + r, cy = s.y + s.h / 2;
-      mk("circle", { class: "hit", cx: r5(cx), cy: r5(cy), r: r5(r * 1.3) });
       mk("path", { class: "bub c-" + s.c, d: "M" + r5(cx - r * 0.55) + " " + r5(cy + r * 0.8) + "L" + r5(cx - r * 0.75) + " " + r5(cy + r * 1.45) + "L" + r5(cx - r * 0.05) + " " + r5(cy + r * 0.95) + "Z" });
       mk("circle", { class: "bub c-" + s.c, cx: r5(cx), cy: r5(cy), r: r5(r) });
       for (const dy of [-0.3, 0.05, 0.4]) mk("line", { class: "ln", x1: r5(cx - r * 0.5), x2: r5(cx + r * (dy === 0.4 ? 0.1 : 0.5)), y1: r5(cy + r * dy), y2: r5(cy + r * dy) });
+      // The touch area is a real box: Chrome ignores touch-action on SVG shapes, so a
+      // finger on one starts a pan and the drag is cancelled. An HTML div in a
+      // foreignObject, touch-action none, is the one thing it honours.
+      const hit = mk("foreignObject", { class: "hit", x: r5(cx - r * 1.3), y: r5(cy - r * 1.3), width: r5(r * 2.6), height: r5(r * 2.6) });
+      const box = D.createElementNS("http://www.w3.org/1999/xhtml", "div");
+      box.className = "note-hit";
+      hit.append(box);
       g.dataset.id = s.id;
       g.setAttribute("role", "button");
       g.setAttribute("tabindex", "0");
@@ -609,8 +615,10 @@
       const open = () => { if (!on && onNote) onNote(s.id); };
       g.addEventListener("pointerdown", (e) => notePress(e, g, s.id));
       g.addEventListener("pointermove", (e) => { if (press && press.id === e.pointerId && !press.carried) { if (Math.hypot(e.clientX - press.x0, e.clientY - press.y0) > 8) pressEnd(); else { press.x = e.clientX; press.y = e.clientY; } } });
-      // A tap opens it (a held press carries it instead).
-      g.addEventListener("pointerup", (e) => { if (!press || press.id !== e.pointerId) return; const tap = !press.carried; pressEnd(); noteAt = performance.now(); if (tap) open(); });
+      // A tap opens it, on the click that follows (opening on pointerup put the sheet
+      // under the finger, and that click closed it again); a held press carries it instead.
+      g.addEventListener("pointerup", (e) => { if (!press || press.id !== e.pointerId) return; const carried = press.carried; pressEnd(); if (carried) noteAt = performance.now(); });
+      g.addEventListener("click", () => { if (performance.now() - noteAt > 500) open(); });
       g.addEventListener("pointercancel", (e) => { if (press && press.id === e.pointerId && !press.carried) pressEnd(); });
       g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
       return g;
@@ -843,8 +851,6 @@
     // just before its touch: not every device says "stylus" in the touch.
     // A finger scrolls, unless it draws.
     svg.addEventListener("touchstart", (e) => {
-      // A finger on a bubble with Select drags it; it doesn't scroll.
-      if (on && tool === "select" && e.touches.length === 1 && e.target && e.target.closest && e.target.closest(".note")) { if (e.cancelable) e.preventDefault(); return; }
       if (!on || e.touches.length > 1) return;
       const t = e.changedTouches[0];
       if (penTouch || (t && t.touchType === "stylus") || finger) { if (e.cancelable) e.preventDefault(); }
