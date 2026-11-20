@@ -2151,6 +2151,223 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("drawing in Pages keeps the page still, and a pinch zooms it in place", async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      q.errors = [];
+      q.on("pageerror", (e) => q.errors.push(e.message));
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      await q.waitForTimeout(1000);
+      await q.evaluate(async () => { const m = await C.notes.create("lines"); state.pages.unshift(m); await C.store.writeIndex(state.pages); openPage(m.id); });
+      await until(q, () => state.open && C.reader.frameDoc && C.reader.frameDoc.querySelector("img[data-page]"));
+      await q.evaluate(() => setNoteLook({ layout: "pages" }));
+      await until(q, () => C.reader.paged && C.reader.pageInfo());
+      await q.evaluate(() => { inkStart(); C.ink.setting({ finger: true }); });
+      await until(q, () => C.ink.on);
+      // Touches from the page's own document, as the swipe test does.
+      const touch = (steps) => q.evaluate(async (steps) => {
+        const d = C.reader.frameDoc, target = d.querySelector(".co-ink") || d.body;
+        const t = (id, x, y) => new Touch({ identifier: id, target, clientX: x, clientY: y, screenX: x, screenY: y });
+        const fire = (type, list, ch) => target.dispatchEvent(new TouchEvent(type, { touches: list.map((p) => t(...p)), changedTouches: (ch || list).map((p) => t(...p)), bubbles: true, cancelable: true }));
+        for (const [type, list, ch] of steps) { fire(type, list, ch); await new Promise((r) => setTimeout(r, 16)); }
+      }, steps);
+      // A finger drawing: pointer events along `pts` on the page's layer.
+      const stroke = (pts) => q.evaluate(async (pts) => {
+        const d = C.reader.frameDoc, svg = [...d.querySelectorAll(".co-ink")].find((l) => l.getBoundingClientRect().right > 0 && l.getBoundingClientRect().left < 390), P = d.defaultView.PointerEvent;
+        const fire = (type, [x, y]) => svg.dispatchEvent(new P(type, { pointerId: 7, pointerType: "touch", isPrimary: true, clientX: x, clientY: y, button: 0, buttons: type === "pointerup" ? 0 : 1, bubbles: true, cancelable: true }));
+        fire("pointerdown", pts[0]);
+        for (const q of pts.slice(1)) { fire("pointermove", q); await new Promise((r) => setTimeout(r, 16)); }
+        fire("pointerup", pts[pts.length - 1]);
+        await new Promise((r) => setTimeout(r, 100));
+      }, pts);
+      const state_ = () => q.evaluate(() => ({ x: C.reader.frameWin.scrollX, z: C.reader.pageZoom(), viewer: !!document.querySelector(".viewer:not([hidden])") }));
+      // A finger sweeping sideways draws, and neither moves nor turns the page.
+      await stroke(Array.from({ length: 9 }, (_, i) => [100 + i * 25, 400]));
+      assert.deepStrictEqual(await state_(), { x: 0, z: 1, viewer: false });
+      // A pinch zooms the page where it is: no viewer.
+      const pinch = [["touchstart", [[1, 150, 400]]], ["touchstart", [[1, 150, 400], [2, 240, 400]], [[2, 240, 400]]]];
+      for (let i = 1; i <= 8; i++) pinch.push(["touchmove", [[1, 150 - i * 8, 400], [2, 240 + i * 8, 400]]]);
+      pinch.push(["touchend", [], [[1, 86, 400], [2, 304, 400]]]);
+      const spot = () => q.evaluate(() => { const r = C.reader.frameDoc.querySelector("img[data-page]").getBoundingClientRect(); return { l: r.left, t: r.top, w: r.width, h: r.height }; });
+      const r0 = await spot();
+      await touch(pinch);
+      // The spot under the fingers stays under them, as in Scroll.
+      const r1 = await spot(), fx = (195 - r0.l) / r0.w, fy = (400 - r0.t) / r0.h;
+      assert.ok(Math.abs(r1.l + fx * r1.w - 195) < 3 && Math.abs(r1.t + fy * r1.h - 400) < 3, "zoomed about the fingers: " + JSON.stringify([r0, r1]));
+      const z = await state_();
+      assert.ok(z.z > 1.5 && !z.viewer, "zoomed in place: " + JSON.stringify(z));
+      await q.evaluate(() => C.reader.unzoomPage());
+      assert.strictEqual(await q.evaluate(() => C.reader.pageZoom()), 1);
+      // The stroke made a second sheet. A pinch whose first finger lifts first,
+      // the other drifting sideways, neither turns nor shows the next sheet.
+      await until(q, () => C.reader.pageInfo().pages >= 2);
+      const drift = [["touchstart", [[1, 150, 400]]], ["touchstart", [[1, 150, 400], [2, 240, 400]], [[2, 240, 400]]]];
+      for (let i = 1; i <= 8; i++) drift.push(["touchmove", [[1, 150 - i * 8, 400], [2, 240 + i * 8, 400]]]);
+      drift.push(["touchend", [[2, 304, 400]], [[1, 86, 400]]]);
+      for (let i = 1; i <= 6; i++) drift.push(["touchmove", [[2, 304 - i * 15, 400]]]);
+      drift.push(["touchend", [], [[2, 214, 400]]]);
+      await touch(drift);
+      await q.waitForTimeout(500);
+      const kept = await q.evaluate(() => ({ x: C.reader.frameWin.scrollX, page: C.reader.pageInfo().page, z: C.reader.pageZoom(), locked: C.reader.lockedPages() }));
+      assert.ok(kept.x === 0 && kept.page === 1 && kept.z > 1.5, "stays on the page: " + JSON.stringify(kept));
+      // Zoomed, only the locked page shows.
+      assert.strictEqual(await q.evaluate(() => [...C.reader.frameDoc.querySelectorAll("img[data-page]")].filter((i) => getComputedStyle(i).visibility !== "hidden").length), 1);
+      await q.evaluate(() => C.reader.unzoomPage());
+      // Two fingers swept sideways turn the page, and the new one is locked.
+      const swipe2 = [["touchstart", [[1, 250, 400]]], ["touchstart", [[1, 250, 400], [2, 320, 400]], [[2, 320, 400]]]];
+      for (let i = 1; i <= 8; i++) swipe2.push(["touchmove", [[1, 250 - i * 15, 400], [2, 320 - i * 15, 400]]]);
+      swipe2.push(["touchend", [[2, 200, 400]], [[1, 130, 400]]], ["touchend", [], [[2, 200, 400]]]);
+      await touch(swipe2);
+      await until(q, () => C.reader.pageInfo().page === 2 && Math.round(C.reader.frameWin.scrollX) === C.reader.frameWin.innerWidth);
+      assert.strictEqual(await q.evaluate(() => C.reader.pageZoom()), 1);
+      assert.deepStrictEqual(await q.evaluate(() => C.reader.lockedPages().length), 1);
+      // A selection dragged to the edge and held carries over to the next page.
+      await q.evaluate(() => { C.reader.turnSide("left", true); C.ink.setting({ tool: "select" }); });
+      await until(q, () => C.reader.pageInfo().page === 1);
+      const ptr = (seq) => q.evaluate(async (seq) => {
+        const d = C.reader.frameDoc, svg = [...d.querySelectorAll(".co-ink")].find((l) => l.getBoundingClientRect().right > 0 && l.getBoundingClientRect().left < 390), P = d.defaultView.PointerEvent;
+        for (const [type, x, y, wait] of seq) {
+          svg.dispatchEvent(new P(type, { pointerId: 9, pointerType: "touch", isPrimary: true, clientX: x, clientY: y, button: 0, buttons: type === "pointerup" ? 0 : 1, bubbles: true, cancelable: true }));
+          await new Promise((r) => setTimeout(r, wait || 20));
+        }
+      }, seq);
+      await ptr([["pointerdown", 200, 400], ["pointerup", 200, 400, 600]]);
+      assert.strictEqual(await q.evaluate(() => C.ink.state().selected), 1, "the stroke is taken");
+      await ptr([["pointerdown", 200, 400], ["pointermove", 300, 400], ["pointermove", 380, 400], ["pointermove", 382, 400, 400], ["pointerup", 382, 400, 300]]);
+      assert.strictEqual(await q.evaluate(() => C.reader.pageInfo().page), 2, "held at the edge, the page turns");
+      const carried = await q.evaluate(() => { const o = JSON.parse(C.ink.snapshot()); return { one: (o[1] || []).filter((x) => x.t === "p").length, two: (o[2] || []).filter((x) => x.t === "p").length }; });
+      assert.deepStrictEqual(carried, { one: 0, two: 1 }, "the stroke is on the page it was carried to");
+      await q.evaluate(() => C.ink.setting({ tool: "pen" }));
+      // A stroke that runs off the page's edge stays on it, cut at the edge.
+      await stroke(Array.from({ length: 9 }, (_, i) => [300 + i * 30, 300]));
+      const pagesNow = await q.evaluate(() => JSON.parse(C.ink.snapshot()));
+      const last = Object.values(pagesNow).flat().filter((x) => x.t === "p").pop();
+      let max = 0;
+      for (let i = 0; i < last.p.length; i += 3) max = Math.max(max, last.p[i]);
+      assert.ok(max <= 1, "stops at the page's edge: " + max);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await ctx.close();
+    });
+
+    await test("in Scroll, a selection dragged to the bottom edge scrolls the page along with it", async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      q.errors = [];
+      q.on("pageerror", (e) => q.errors.push(e.message));
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      await q.waitForTimeout(1000);
+      await q.evaluate(async () => { const m = await C.notes.create("lines"); state.pages.unshift(m); await C.store.writeIndex(state.pages); openPage(m.id); });
+      await until(q, () => state.open && C.reader.frameDoc && C.reader.frameDoc.querySelector("img[data-page]"));
+      await q.evaluate(() => { inkStart(); C.ink.setting({ finger: true }); });
+      await until(q, () => C.ink.on);
+      const ptr = (seq) => q.evaluate(async (seq) => {
+        const d = C.reader.frameDoc, svg = d.querySelector(".co-ink"), P = d.defaultView.PointerEvent;
+        for (const [type, x, y, wait] of seq) {
+          svg.dispatchEvent(new P(type, { pointerId: 9, pointerType: "touch", isPrimary: true, clientX: x, clientY: y, button: 0, buttons: type === "pointerup" ? 0 : 1, bubbles: true, cancelable: true }));
+          await new Promise((r) => setTimeout(r, wait || 20));
+        }
+      }, seq);
+      await ptr([["pointerdown", 100, 300], ["pointermove", 200, 300], ["pointermove", 300, 300], ["pointerup", 300, 300, 400]]);
+      await until(q, () => C.files.noteSheets() >= 2);
+      await q.evaluate(() => C.ink.setting({ tool: "select" }));
+      await ptr([["pointerdown", 200, 300], ["pointerup", 200, 300, 600]]);
+      const y = () => q.evaluate(() => C.reader.frameWin.scrollY);
+      const y0 = await y();
+      await ptr([["pointerdown", 200, 300], ["pointermove", 200, 600], ["pointermove", 200, 830, 20]]);
+      // Sampled while held at the edge: the speed builds up and the steps stay even.
+      const ys = await q.evaluate(async () => { const out = []; for (let i = 0; i < 12; i++) { out.push(C.reader.frameWin.scrollY); await new Promise((r) => setTimeout(r, 50)); } return out; });
+      await ptr([["pointerup", 200, 831, 200]]);
+      const steps = ys.slice(1).map((v, i) => v - ys[i]);
+      assert.ok(ys[ys.length - 1] > y0 + 20, "it scrolls on: " + ys);
+      assert.ok(ys[ys.length - 1] - y0 < 700, "at an ordinary pace, not a jump: " + ys);
+      assert.ok(steps.every((d, i) => d >= 0 && (i === 0 || d <= steps[i - 1] * 2 + 4)), "smooth steps: " + steps);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await ctx.close();
+    });
+
+    await test("holding the pen still makes a rough line straight and a rough circle round, if the Draw tab's switch is on", async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      q.errors = [];
+      q.on("pageerror", (e) => q.errors.push(e.message));
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      await q.waitForTimeout(1000);
+      await q.evaluate(async () => { const m = await C.notes.create("lines"); state.pages.unshift(m); await C.store.writeIndex(state.pages); openPage(m.id); });
+      await until(q, () => state.open && C.reader.frameDoc && C.reader.frameDoc.querySelector("img[data-page]"));
+      await q.evaluate(() => { inkStart(); C.ink.setting({ finger: true }); });
+      await until(q, () => C.ink.on);
+      const ptr = (seq) => q.evaluate(async (seq) => {
+        const d = C.reader.frameDoc, svg = d.querySelector(".co-ink"), P = d.defaultView.PointerEvent;
+        for (const [type, x, y, wait] of seq) {
+          svg.dispatchEvent(new P(type, { pointerId: 9, pointerType: "touch", isPrimary: true, clientX: x, clientY: y, button: 0, buttons: type === "pointerup" ? 0 : 1, bubbles: true, cancelable: true }));
+          await new Promise((r) => setTimeout(r, wait || 16));
+        }
+      }, seq);
+      const last = () => q.evaluate(() => { const o = JSON.parse(C.ink.snapshot()); const l = Object.values(o).flat().filter((x) => x.t === "p"); return l.length ? { n: l.length, p: l[l.length - 1].p } : { n: 0, p: [] }; });
+      const line = [["pointerdown", 60, 300]];
+      for (let i = 1; i <= 20; i++) line.push(["pointermove", 60 + i * 12, 300 + i * 0.5 + (i % 3) * 3]);
+      // Held still, then lifted: a straight line from the start to the end.
+      await ptr([...line, ["pointermove", 300, 310, 700], ["pointerup", 300, 310]]);
+      let l = await last();
+      assert.strictEqual(l.p.length, 13 * 3, "twelve even steps: " + l.p.length);
+      const dev = Math.max(...Array.from({ length: 13 }, (_, i) => Math.abs(l.p[3 * i + 1] - (l.p[1] + (l.p[37] - l.p[1]) * i / 12))));
+      assert.ok(dev < 0.002, "on one straight line: " + dev);
+      // Not held: kept as drawn.
+      await ptr([...line, ["pointerup", 300, 310]]);
+      l = await last();
+      assert.ok(l.p.length > 13 * 3, "no hold, no change");
+      // Held, then moved on: the end follows the pen.
+      await ptr([...line, ["pointermove", 300, 310, 700], ["pointermove", 320, 380], ["pointerup", 320, 380]]);
+      l = await last();
+      const box = await q.evaluate(() => { const r = C.reader.frameDoc.querySelector(".co-ink").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width }; });
+      assert.ok(Math.abs(box.x + l.p[36] * box.w - 320) < 3 && Math.abs(box.y + l.p[37] * box.w - 380) < 4, "the end followed the pen: " + JSON.stringify([l.p.slice(36), box]));
+      // A rough circle.
+      const ring = [["pointerdown", 280, 380]];
+      for (let i = 1; i <= 40; i++) { const a = (i / 40) * Math.PI * 2, r = 70 + (i % 4) * 2; ring.push(["pointermove", 200 + r * Math.cos(a), 380 + r * Math.sin(a)]); }
+      await ptr([...ring, ["pointermove", 270, 380, 700], ["pointerup", 270, 380]]);
+      l = await last();
+      assert.strictEqual(l.p.length, 65 * 3, "a closed round shape");
+      const mx = l.p.filter((_, i) => i % 3 === 0), my = l.p.filter((_, i) => i % 3 === 1);
+      const cx = (Math.max(...mx) + Math.min(...mx)) / 2, cy = (Math.max(...my) + Math.min(...my)) / 2;
+      const rs = mx.map((x, i) => Math.hypot(x - cx, my[i] - cy));
+      assert.ok(Math.max(...rs) - Math.min(...rs) < 0.004, "all the same distance from the middle");
+      // Held, then dragged on: the circle moves with the pen, the same size.
+      await ptr([...ring, ["pointermove", 270, 380, 700], ["pointermove", 290, 395], ["pointermove", 310, 410], ["pointerup", 310, 410]]);
+      const moved = await last();
+      assert.strictEqual(moved.p.length, 65 * 3, "still the circle");
+      const nx = moved.p.filter((_, i) => i % 3 === 0), ny = moved.p.filter((_, i) => i % 3 === 1);
+      const ncx = (Math.max(...nx) + Math.min(...nx)) / 2, ncy = (Math.max(...ny) + Math.min(...ny)) / 2;
+      const lw = await q.evaluate(() => C.reader.frameDoc.querySelector(".co-ink").getBoundingClientRect().width);
+      assert.ok(Math.abs((ncx - cx) * lw - 40) < 3 && Math.abs((ncy - cy) * lw - 30) < 3, "moved by the pen's drag");
+      assert.ok(Math.abs((Math.max(...nx) - Math.min(...nx)) - (Math.max(...mx) - Math.min(...mx))) < 0.002, "the same size");
+      // Off in the Draw tab: kept as drawn.
+      await q.evaluate(() => inkShapes(false));
+      await ptr([...line, ["pointermove", 300, 310, 700], ["pointerup", 300, 310]]);
+      l = await last();
+      assert.ok(l.p.length > 13 * 3, "switched off, kept as drawn");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await ctx.close();
+    });
+
+    await test("the settings sheet has a Draw tab with the shapes switch, for a note and for a PDF", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => { const m = await C.notes.create("lines"); state.pages.unshift(m); await C.store.writeIndex(state.pages); openPage(m.id); });
+      await until(q, () => state.open && state.open.note && C.reader.frameDoc);
+      const tab = await q.evaluate(() => {
+        const box = readerSettings();
+        const part = box.querySelector('.rc-part[data-part="draw"]'), sw = part && part.querySelector("input.switch");
+        return { has: !!part, on: sw && sw.checked, tabs: [...box.querySelectorAll(".sheet-tabs [role=radio], .sheet-tabs input, .sheet-tabs button")].length };
+      });
+      assert.ok(tab.has && tab.on === true && tab.tabs >= 3, JSON.stringify(tab));
+      await q.evaluate(() => { const sw = readerSettings().querySelector('.rc-part[data-part="draw"] input.switch'); sw.checked = false; sw.dispatchEvent(new Event("change")); });
+      assert.strictEqual(await q.evaluate(() => C.ink.state().shapes), false);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a collection's EPUB carries its cover: a picture of your own, else what the library shows", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
@@ -6048,7 +6265,7 @@ c("bk1", { at: 0.01 })]);
       await until(q, () => C.files.noteSheets() === 2 && (C.reader.frameDoc || document).querySelectorAll(".co-comic > img").length === 2);
       // Its Aa sheet: Layout and Auto-scroll, in the note's words.
       await q.click("#readerAa");
-      assert.deepStrictEqual(await q.locator(".sheet-tabs label, .sheet-tabs button").allTextContents(), ["Layout", "Auto-scroll"]);
+      assert.deepStrictEqual(await q.locator(".sheet-tabs label, .sheet-tabs button").allTextContents(), ["Layout", "Auto-scroll", "Draw"]);
       await q.locator(".sheet-tabs", { hasText: "Auto-scroll" }).getByText("Auto-scroll").click();
       assert.ok(await q.getByText("Go on to the next note").isVisible(), "the note's own wording");
       // Show as Pages: a sheet at a time, and the pen still draws on it (2026-11).

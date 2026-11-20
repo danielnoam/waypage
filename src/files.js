@@ -953,6 +953,8 @@
     img.setAttribute("data-page", n);
     body.append(img);
     C.notes.keep(h.note.id, h.note.data).catch(() => {});
+    // In Pages the new sheet is laid out like the others, a screen of its own.
+    C.reader.repage();
     C.reader.placeText();
     if (h.frame) drawNear(h.frame);
     return true;
@@ -1224,7 +1226,7 @@
           // page), and never past the 2x pdf.js draws at most (pdf.js,
           // drawOne): a zoom asking for more drew the same page again.
           const most = 2 * (Number(img.getAttribute("width")) || 1200);
-          const want = Math.min(2400, most, Math.max(200, Math.round((img.offsetWidth || win.innerWidth || 400) * dpr)));
+          const want = Math.min(2400, most, Math.max(200, Math.round((img.offsetWidth || win.innerWidth || 400) * dpr * (C.reader.pageZoom ? C.reader.pageZoom() : 1))));
           const has = h.urls.get(n);
           if (has && away > tall * 6) {
             URL.revokeObjectURL(has.url);
