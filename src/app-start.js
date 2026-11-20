@@ -156,7 +156,7 @@ $("saveForm").addEventListener("submit", (e) => {
     return;
   }
   if (state.place === "newsletters") {
-    const name = cleanTag($("saveUrl").value);
+    const name = cleanName($("saveUrl").value);
     $("saveUrl").blur();
     makeMailBox(name).then((made) => { if (made) $("saveUrl").value = ""; });
     return;

@@ -74,7 +74,7 @@
     if (typeof m.thumb === "string" && (LOCAL.test(m.thumb) || httpUrl(m.thumb))) out.thumb = m.thumb;
     const tags = Array.isArray(m.tags) ? m.tags.filter((t) => typeof t === "string").map((t) => t.replace(/\s+/g, " ").trim().slice(0, 32)).filter(Boolean) : [];
     if (tags.length) out.tags = [...new Set(tags)].slice(0, 50);
-    const folder = text(m.folder, 32).replace(/\s+/g, " ").trim();
+    const folder = text(m.folder, 200).replace(/\s+/g, " ").trim();
     if (folder) { out.folder = folder; out.folderAt = num(m.folderAt) || out.savedAt; }
     if (num(m.movedAt)) out.movedAt = num(m.movedAt);
     if (folder && m.folderFav === true) { out.folderFav = true; out.folderFavAt = num(m.folderFavAt) || out.savedAt; }
@@ -87,7 +87,7 @@
     // clips too, so without them it's a plain collection.
     if (folder && m.folderSeries === true) {
       out.folderSeries = true;
-      const host = text(m.folderIn, 32).replace(/\s+/g, " ").trim();
+      const host = text(m.folderIn, 200).replace(/\s+/g, " ").trim();
       if (host) out.folderIn = host;
     }
     if (folder && httpUrl(m.source)) out.source = httpUrl(m.source);
@@ -198,7 +198,7 @@
     const out = {
       url: httpUrl(f.url), title: text(f.title, 300) || httpUrl(f.url), link: httpUrl(f.link) || null, icon: httpUrl(f.icon) || null,
       mode: f.mode === "save" ? "save" : "show", images: ["previews", "full", "links"].includes(f.images) ? f.images : "previews",
-      folder: text(f.folder, 32).replace(/\s+/g, " ").trim(), days: [3, 7, 30].includes(f.days) ? f.days : 7,
+      folder: text(f.folder, 200).replace(/\s+/g, " ").trim(), days: [3, 7, 30].includes(f.days) ? f.days : 7,
       addedAt: num(f.addedAt) || Date.now(), checkedAt: 0, error: "",
       items: items.filter((it) => it && httpUrl(it.url)).slice(0, 100).map((it) => {
         const o = { id: text(it.id, 2000) || null, url: httpUrl(it.url), title: text(it.title, 300), date: num(it.date) || null, foundAt: num(it.foundAt) || Date.now() };

@@ -996,11 +996,11 @@ async function changePictures(p, mode, note, redraw) {
 const NEW_PICK = "\u0000new";
 function newField(cls, placeholder, label, then) {
   const input = el("input", { class: "tag-input new-pick " + cls, type: "text", placeholder, "aria-label": label,
-    maxlength: "32", enterkeyhint: "done", autocapitalize: "sentences", hidden: "" });
+    maxlength: String(NAME_MAX), enterkeyhint: "done", autocapitalize: "sentences", hidden: "" });
   input.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
     e.preventDefault();
-    if (cleanTag(input.value)) then(input.value);
+    if (cleanName(input.value)) then(input.value);
   });
   return input;
 }
@@ -1009,7 +1009,7 @@ const NEW_SERIES = "\u0000series";
 function folderRow(p, redraw) {
   let asSeries = false;
   const input = newField("new-collection", t("Name the new collection"), t("New collection"), (v) => {
-    const fresh = !allFolders().some((n) => sameTag(n, cleanTag(v)));
+    const fresh = !allFolders().some((n) => sameTag(n, cleanName(v)));
     return setFolder(p, v).then(async () => {
       if (asSeries && fresh) { markSeries(p.folder, true); await C.store.writeIndex(state.pages); renderLibrary(); }
       redraw();
@@ -1103,7 +1103,7 @@ function renderBatch(text, preset, from, siteTags) {
     el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, t("Skip links already saved")), skipNote), skip));
   const go = el("button", { class: "btn-primary batch-go", type: "submit" });
   const input = el("input", { class: "tag-input", type: "text", placeholder: t("New collection"), "aria-label": t("New collection"),
-    maxlength: "32", enterkeyhint: "done", autocapitalize: "sentences" });
+    maxlength: String(NAME_MAX), enterkeyhint: "done", autocapitalize: "sentences" });
   // One link may be a contents page: its chapters replace it, and the
   // folder takes its name.
   const finder = el("button", { class: "btn-small batch-find", type: "button", onclick: async () => {
@@ -1144,7 +1144,7 @@ function renderBatch(text, preset, from, siteTags) {
     options: [{ value: "", label: t("None") }, ...foldersByUse().map((f) => ({ value: f, label: f })), { value: NEW, label: t("New collection…") }],
     onpick: (v) => {
       input.hidden = v !== NEW;
-      if (v === NEW) { pick(cleanTag(input.value) ? folderName(input.value) : null, true); input.focus(); }
+      if (v === NEW) { pick(cleanName(input.value) ? folderName(input.value) : null, true); input.focus(); }
       else pick(v || null);
     } });
   input.hidden = true;
@@ -1223,7 +1223,7 @@ function renderBatch(text, preset, from, siteTags) {
   };
   drawTagNew();
   area.addEventListener("input", sync);
-  input.addEventListener("input", () => pick(cleanTag(input.value) ? folderName(input.value) : null, true));
+  input.addEventListener("input", () => pick(cleanName(input.value) ? folderName(input.value) : null, true));
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
   const KIND_NOTES = { article: t("The text and its pictures, read as a page."), comic: t("Only the page's pictures, in order, edge to edge. For comics and manga.") };
   const kindNote = el("p", { class: "meta" }, KIND_NOTES[kind]);
@@ -1288,9 +1288,9 @@ function renderBatch(text, preset, from, siteTags) {
 
 // "The Wandering Inn - Chapter 1.01" → "The Wandering Inn".
 function seriesName(p) {
-  if (p.series) return cleanTag(p.series) || p.site;
+  if (p.series) return cleanName(p.series) || p.site;
   const t = p.title.replace(/[\s\-–—:|,·]*(chapter|ch\.?|part|episode|ep\.?|book|vol\.?|פרק|capítulo|chapitre|kapitel)\s*[\d.ivxl]+\b.*$/iu, "").trim();
-  return cleanTag(t && t !== p.title ? t : p.title) || p.site;
+  return cleanName(t && t !== p.title ? t : p.title) || p.site;
 }
 
 // Saves up to `n` pages following `from`'s next links (previous ones
@@ -1813,7 +1813,7 @@ async function dailyCheck(force) {
 // Renamed in place on the book page; the new-chapters entry follows.
 async function renameFolder(raw) {
   const old = state.folder;
-  const name = cleanTag(raw || "");
+  const name = cleanName(raw || "");
   if (!name) { toast(t("Type a name for the collection.")); return false; }
   if (name === old) return true;
   const clash = allFolders().find((n) => sameTag(n, name) && !sameTag(n, old));
@@ -2035,9 +2035,9 @@ function followFeeds(list) {
   let added = 0;
   for (const o of list) {
     if (feeds.some((h) => sameUrl(h.url, o.url))) continue;
-    const title = cleanTag(o.title) || C.feeds.siteOf(o.url);
+    const title = cleanName(o.title) || C.feeds.siteOf(o.url);
     feeds.push({ url: o.url, title, link: "", icon: "", mode: "show", images: feedImages(),
-      folder: cleanTag(o.folder) || title, days: 7, addedAt: Date.now(), checkedAt: 0, error: "", items: [] });
+      folder: cleanName(o.folder) || title, days: 7, addedAt: Date.now(), checkedAt: 0, error: "", items: [] });
     added++;
   }
   if (!added) { toast(list.length ? t("You follow all of those feeds already.") : t("No feeds in that file.")); return; }
@@ -2324,7 +2324,7 @@ function paintPlace() {
   $("saveUrl").inputMode = mailOn ? "text" : "url";
   $("saveUrl").autocapitalize = mailOn ? "sentences" : "off";
   $("saveUrl").enterKeyHint = "go";
-  if (mailOn) $("saveUrl").maxLength = 32; else $("saveUrl").removeAttribute("maxlength");
+  if (mailOn) $("saveUrl").maxLength = NAME_MAX; else $("saveUrl").removeAttribute("maxlength");
   document.querySelector('label[for="saveUrl"]').textContent = feedsOn ? t("Site or feed") : mailOn ? t("New address's name") : t("Page link");
   $("saveForm").querySelector(".btn-primary").textContent = feedsOn ? t("Follow") : mailOn ? t("Make") : t("Save");
   $("severalBtn").hidden = feedsOn || mailOn || findOn || ankiOn || calOn || catOn || absOn || davOn;

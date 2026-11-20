@@ -205,8 +205,8 @@ async function addAudiobookFolder() {
   if (made.length === 1) { arrived(made[0]); return; }
   // Its own series, never into a collection already named so.
   const taken = new Set(allFolders().map((n) => n.toLocaleLowerCase()));
-  let name = String(title).trim().slice(0, 32) || t("Audiobooks");
-  for (let i = 2; taken.has(name.toLocaleLowerCase()); i++) name = String(title).trim().slice(0, 28) + " " + i;
+  let name = String(title).trim().slice(0, NAME_MAX) || t("Audiobooks");
+  for (let i = 2; taken.has(name.toLocaleLowerCase()); i++) name = String(title).trim().slice(0, NAME_MAX - 4) + " " + i;
   const now = Date.now();
   made.forEach((m, i) => { outsideKnown(m); if (!m.folder) { m.folder = name; m.folderAt = now + i; } });
   state.pages.unshift(...made.slice().reverse());

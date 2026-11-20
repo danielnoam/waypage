@@ -872,7 +872,8 @@ body.aloud-bar-up .library, body.aloud-bar-up .screen-body { padding-bottom: cal
   border: 1px solid var(--line); background: var(--bg); color: var(--ink);
   font: 400 var(--fs-label)/var(--lh-label) var(--sans);
 }
-.field-pick .dropdown-face { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: start; }
+.field-pick .dropdown-btn { min-width: 0; }
+.field-pick .dropdown-face { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: start; }
 .field-pick .dropdown-face.unset { color: var(--muted); }
 .field-pick .dropdown-menu { inset-inline: 0; max-height: 50vh; overflow-y: auto; }
 .aloud-player .icon-btn { border-radius: var(--r-full); }
@@ -1579,6 +1580,9 @@ span.update-text { cursor: default; }
 }
 .dropdown-item:hover, .dropdown-item:focus-visible, .dropdown-item:active { background: var(--bar); outline: 0; }
 .dropdown-item[aria-selected="true"] { color: var(--accent); font-weight: 600; }
+/* A long name (a collection's) takes two lines at most, never stretches the menu. */
+.dropdown-item { flex-shrink: 0; padding-block: var(--s-1); }
+.dropdown-text { min-width: 0; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .dropdown-check { display: inline-flex; width: 20px; height: 20px; }
 @media (prefers-reduced-motion: reduce) { .dropdown-caret { transition: none; } }
 .chip-caret { font-size: 11px; opacity: 0.8; }
