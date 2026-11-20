@@ -203,13 +203,13 @@ const PACE_MS = 500;
 // `tagNew`: the collection's later clips take the tags its clips share.
 // `siteTags` ({ site, tags }): the story page's, kept on each of the
 // collection's clips for its Tags sheet to offer.
-async function saveAll(all, folder, tags = [], mode, skipSaved, kind, source, tagNew, siteTags) {
+async function saveAll(all, folder, tags = [], mode, skipSaved, kind, source, tagNew, siteTags, series) {
   const name = folder ? folderName(folder) : null;
   const per = typeof tags === "function" ? tags : () => ({ tags });
   const places = skipSaved && name ? placesBetween(all, name) : new Map();
   if (name && tagNew) for (const p of folderPages(name)) p.folderTagNew = true;
   const urls = skipSaved ? all.filter((u) => !savedAs(u)) : all;
-  const jobs = urls.filter((u) => !savingAs(u)).map((u) => ({ ...newJob(u, name), tags: [], ...per(u), mode, kind, source: name ? source : undefined, tagNew: !!(name && tagNew), siteTags: name ? siteTags : undefined }));
+  const jobs = urls.filter((u) => !savingAs(u)).map((u) => ({ ...newJob(u, name), tags: [], ...per(u), mode, kind, source: name ? source : undefined, tagNew: !!(name && tagNew), siteTags: name ? siteTags : undefined, series: !!(name && series) }));
   state.saving = state.saving.filter((s) => !(s.error && jobs.some((j) => sameUrl(j.url, s.url))));
   const fresh = jobs.filter((j) => !savedAs(j.url));
   fresh.forEach((j) => { if (places.has(j.url)) j.folderAt = places.get(j.url); });
@@ -242,6 +242,8 @@ async function saveAll(all, folder, tags = [], mode, skipSaved, kind, source, ta
     renderLibraryLater();
   }
   endRun(run);
+  // Saved as a series: every clip in it, the ones there before too.
+  if (name && series && folderPages(name).length && !isSeriesFolder(name)) { markSeries(name, true); await C.store.writeIndex(state.pages); syncSoon(); renderLibrary(); }
   if (run) renderLibrary();
   if (name && source) updateCover(name);
   if (!jobs.length) return;
@@ -369,6 +371,7 @@ async function runJob(job) {
         if (story) meta.siteTags = story; else delete meta.siteTags;
       } else takeSiteTags(meta);
       if (meta.folder) joinTags(meta, meta.folder, job.tagNew);
+      if (meta.folder && job.series) meta.folderSeries = true;
       if (job.finished) meta.finished = true;
       state.pages.unshift(meta);
       C.stats.saved();
