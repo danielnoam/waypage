@@ -2061,7 +2061,12 @@ function zipOf(files) {
       const pinch = [["touchstart", [[1, 150, 400]]], ["touchstart", [[1, 150, 400], [2, 240, 400]], [[2, 240, 400]]]];
       for (let i = 1; i <= 8; i++) pinch.push(["touchmove", [[1, 150 - i * 8, 400], [2, 240 + i * 8, 400]]]);
       pinch.push(["touchend", [], [[1, 86, 400], [2, 304, 400]]]);
+      const spot = () => q.evaluate(() => { const r = C.reader.frameDoc.querySelector("img[data-page]").getBoundingClientRect(); return { l: r.left, t: r.top, w: r.width, h: r.height }; });
+      const r0 = await spot();
       await touch(pinch);
+      // The spot under the fingers stays under them, as in Scroll.
+      const r1 = await spot(), fx = (195 - r0.l) / r0.w, fy = (400 - r0.t) / r0.h;
+      assert.ok(Math.abs(r1.l + fx * r1.w - 195) < 3 && Math.abs(r1.t + fy * r1.h - 400) < 3, "zoomed about the fingers: " + JSON.stringify([r0, r1]));
       const z = await state_();
       assert.ok(z.z > 1.5 && !z.viewer, "zoomed in place: " + JSON.stringify(z));
       await q.evaluate(() => C.reader.unzoomPage());
@@ -2101,7 +2106,7 @@ function zipOf(files) {
       }, seq);
       await ptr([["pointerdown", 200, 400], ["pointerup", 200, 400, 600]]);
       assert.strictEqual(await q.evaluate(() => C.ink.state().selected), 1, "the stroke is taken");
-      await ptr([["pointerdown", 200, 400], ["pointermove", 300, 400], ["pointermove", 380, 400], ["pointermove", 382, 400, 900], ["pointerup", 382, 400, 300]]);
+      await ptr([["pointerdown", 200, 400], ["pointermove", 300, 400], ["pointermove", 380, 400], ["pointermove", 382, 400, 400], ["pointerup", 382, 400, 300]]);
       assert.strictEqual(await q.evaluate(() => C.reader.pageInfo().page), 2, "held at the edge, the page turns");
       const carried = await q.evaluate(() => { const o = JSON.parse(C.ink.snapshot()); return { one: (o[1] || []).filter((x) => x.t === "p").length, two: (o[2] || []).filter((x) => x.t === "p").length }; });
       assert.deepStrictEqual(carried, { one: 0, two: 1 }, "the stroke is on the page it was carried to");
@@ -2142,13 +2147,14 @@ function zipOf(files) {
       await ptr([["pointerdown", 200, 300], ["pointerup", 200, 300, 600]]);
       const y = () => q.evaluate(() => C.reader.frameWin.scrollY);
       const y0 = await y();
-      await ptr([["pointerdown", 200, 300], ["pointermove", 200, 600], ["pointermove", 200, 830, 300]]);
-      const y1 = await y();
-      await ptr([["pointermove", 200, 831, 300]]);
-      const y2 = await y();
+      await ptr([["pointerdown", 200, 300], ["pointermove", 200, 600], ["pointermove", 200, 830, 20]]);
+      // Sampled while held at the edge: the speed builds up and the steps stay even.
+      const ys = await q.evaluate(async () => { const out = []; for (let i = 0; i < 12; i++) { out.push(C.reader.frameWin.scrollY); await new Promise((r) => setTimeout(r, 50)); } return out; });
       await ptr([["pointerup", 200, 831, 200]]);
-      assert.ok(y1 > y0 + 10 && y2 > y1 + 10, "it scrolls on: " + [y0, y1, y2]);
-      assert.ok(y1 - y0 < 600, "at an ordinary pace, not a jump: " + [y0, y1]);
+      const steps = ys.slice(1).map((v, i) => v - ys[i]);
+      assert.ok(ys[ys.length - 1] > y0 + 20, "it scrolls on: " + ys);
+      assert.ok(ys[ys.length - 1] - y0 < 700, "at an ordinary pace, not a jump: " + ys);
+      assert.ok(steps.every((d, i) => d >= 0 && (i === 0 || d <= steps[i - 1] * 2 + 4)), "smooth steps: " + steps);
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await ctx.close();
     });

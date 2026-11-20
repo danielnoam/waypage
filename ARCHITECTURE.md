@@ -347,10 +347,10 @@ opening the viewer (`pz`, a transform about the locked page's middle,
 `applyPz`, clamped so the page's edges never leave the screen's, the other
 pages hidden by `co-zoomed`); `drawNear` draws larger by `pageZoom()`. Only
 a turn changes the lock: two fingers swept sideways (zoomed, past the
-page's edge), or a selection dragged to a side and held 0.5 s
+page's edge), or a selection dragged to a side and held a quarter of a second
 (`ink.js edgeWatch`, `carry`), which turns and brings the items onto the
 new page. In Scroll the same drag held at the top or bottom edge scrolls
-the page with it. A pen, or a palm beside it, is not a pinch
+the page with it, its speed easing in and out. The zoom's origin is the locked page's middle (set when a gesture starts, cleared only by `resetPz`), so the spot under the fingers stays under them. A pen, or a palm beside it, is not a pinch
 (`inkHook.penDown`).
 
 Select, a picture and colours of your own (1.57.0), all in `ink.js` and

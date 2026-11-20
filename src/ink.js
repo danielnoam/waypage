@@ -1131,11 +1131,23 @@
       if (cur !== c) return;
       c.raf = 0;
       if (c.mode === "lasso") c.path.setAttribute("d", "M" + c.pts.map((q) => r4(q[0]) + " " + r4(q[1])).join("L") + "z");
-      else { paint(c.n); lift(c.n); }
+      else if (!c.edgeRaf) { paintMoved(c); lift(c.n); }
     });
   }
+  // Only the items being moved are drawn again, not every stroke on the page.
+  function paintMoved(c) {
+    const svg = layers.get(c.n);
+    if (!svg) return;
+    for (const id of c.ids) {
+      const t = strokes(c.n).find((x) => x.id === id);
+      if (!t) continue;
+      const node = el(c.n, t), old = svg.querySelector('[data-id="' + id + '"]');
+      if (old) old.replaceWith(node); else svg.append(node);
+    }
+    selDraw(c.n);
+  }
   // A dragged selection held at the edge of the screen. In Pages, held at the
-  // left or right edge for half a second it carries over to the next page
+  // left or right edge for a quarter of a second it carries over to the next page
   // (and the next, while held); in Scroll, held at the top or bottom it
   // scrolls the page along with it at an ordinary pace, so it can be put on
   // another page.
@@ -1149,27 +1161,34 @@
       if (c.edgeT && c.edgeSide === side) return;
       clearTimeout(c.edgeT);
       c.edgeSide = side;
-      const fire = () => { c.edgeT = 0; if (cur !== c) return; if (carry(c, side)) c.edgeT = setTimeout(fire, 700); };
-      c.edgeT = setTimeout(fire, 500);
+      const fire = () => { c.edgeT = 0; if (cur !== c) return; if (carry(c, side)) c.edgeT = setTimeout(fire, 350); };
+      c.edgeT = setTimeout(fire, 250);
       return;
     }
     const top = parseFloat(W.getComputedStyle(D.documentElement).getPropertyValue("--co-top")) || 0, zone = 64, vh = W.innerHeight;
-    if (c.cy > vh - zone) c.edgeV = 150 + 550 * Math.min(1, (c.cy - (vh - zone)) / zone);
-    else if (c.cy < top + zone) c.edgeV = -(150 + 550 * Math.min(1, (top + zone - c.cy) / zone));
-    else c.edgeV = 0;
-    if (!c.edgeV || c.edgeRaf) return;
+    // Where the finger is sets the speed to glide toward: deeper in the zone, faster.
+    if (c.cy > vh - zone) c.edgeTarget = 120 + 480 * Math.min(1, (c.cy - (vh - zone)) / zone);
+    else if (c.cy < top + zone) c.edgeTarget = -(120 + 480 * Math.min(1, (top + zone - c.cy) / zone));
+    else c.edgeTarget = 0;
+    if (!c.edgeTarget || c.edgeRaf) return;
     let last = performance.now();
-    c.edgeAcc = 0;
+    c.edgeV = 0;
+    c.edgeY = W.scrollY;
     const step = (t) => {
-      if (cur !== c || !c.edgeV) { c.edgeRaf = 0; return; }
-      c.edgeAcc += c.edgeV * Math.min(0.05, (t - last) / 1000);
+      if (cur !== c) { c.edgeRaf = 0; return; }
+      const dt = Math.min(1 / 30, Math.max(0, (t - last) / 1000));
       last = t;
-      const whole = Math.trunc(c.edgeAcc);
-      if (whole) { c.edgeAcc -= whole; W.scrollBy(0, whole); }
+      // The speed eases in and out, and the position is a float: no jumps.
+      c.edgeV += (c.edgeTarget - c.edgeV) * Math.min(1, dt * 6);
+      if (!c.edgeTarget && Math.abs(c.edgeV) < 5) { c.edgeV = 0; c.edgeRaf = 0; return; }
+      if (Math.abs(W.scrollY - c.edgeY) > 2) c.edgeY = W.scrollY;
+      const max = Math.max(0, D.documentElement.scrollHeight - W.innerHeight);
+      c.edgeY = Math.min(max, Math.max(0, c.edgeY + c.edgeV * dt));
+      W.scrollTo(W.scrollX, c.edgeY);
       // The page moved under the finger: the item keeps up with it.
       const [x, y] = where({ clientX: c.cx, clientY: c.cy }, c.svg);
       selStep(c, x, y);
-      paint(c.n);
+      paintMoved(c);
       lift(c.n);
       c.edgeRaf = W.requestAnimationFrame(step);
     };
@@ -1179,7 +1198,7 @@
     if (!c) return;
     clearTimeout(c.edgeT);
     c.edgeT = 0;
-    c.edgeV = 0;
+    c.edgeTarget = 0;
   }
   // In Pages: turn toward `side` and bring the dragged items with it, where
   // they are on screen, onto the page now shown under the finger.

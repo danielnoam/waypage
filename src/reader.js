@@ -2061,7 +2061,9 @@
   function applyPz() {
     const root = doc && doc.querySelector(".co-comic");
     if (!root) return;
-    if (pz.s === 1 || !pzBox) { root.style.transform = ""; root.style.transformOrigin = ""; return; }
+    // Only the transform goes at 1: the origin is the locked page's middle, set
+    // at the start of the gesture (resetPz clears it).
+    if (pz.s === 1 || !pzBox) { root.style.transform = ""; return; }
     const w = frame.contentWindow, b = pzBox, s = pz.s;
     // The page's edges never come in from the screen's (or, when it's the
     // smaller, never go out): the zoom can't show what's beside it.
@@ -2173,8 +2175,11 @@
         const cx = (a.clientX + b.clientX) / 2, cy = (a.clientY + b.clientY) / 2, w = frame.contentWindow;
         // The spot under the fingers' start stays under their midpoint.
         pz.s = pzPinch.from * f;
-        pz.x = (cx - w.innerWidth / 2) - f * (pzPinch.mx - w.innerWidth / 2 - pzPinch.x0);
-        pz.y = (cy - w.innerHeight / 2) - f * (pzPinch.my - w.innerHeight / 2 - pzPinch.y0);
+        // About the scale's origin, the locked page's middle: the spot that was
+        // under the fingers' start stays under their midpoint.
+        const ox = (pzBox.l + pzBox.r) / 2, oy = (pzBox.t + pzBox.b) / 2;
+        pz.x = (cx - ox) - f * (pzPinch.mx - ox - pzPinch.x0);
+        pz.y = (cy - oy) - f * (pzPinch.my - oy - pzPinch.y0);
         pzPinch.cx = cx; pzPinch.cy = cy;
         pzPinch.ratio = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / pzPinch.d;
         applyPz();
@@ -2231,8 +2236,9 @@
         e.preventDefault();
         const w = frame.contentWindow, f = Math.min(ZOOM_MAX, Math.max(1, pz.s * Math.exp(-e.deltaY / 300))) / pz.s;
         if (pz.s === 1) setPzOrigin();
-        pz.x = (e.clientX - w.innerWidth / 2) - f * (e.clientX - w.innerWidth / 2 - pz.x);
-        pz.y = (e.clientY - w.innerHeight / 2) - f * (e.clientY - w.innerHeight / 2 - pz.y);
+        const ox = (pzBox.l + pzBox.r) / 2, oy = (pzBox.t + pzBox.b) / 2;
+        pz.x = (e.clientX - ox) - f * (e.clientX - ox - pz.x);
+        pz.y = (e.clientY - oy) - f * (e.clientY - oy - pz.y);
         pz.s *= f;
         applyPz();
         clearTimeout(pz.t);
