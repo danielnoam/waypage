@@ -6255,6 +6255,60 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("Make an audiobook speaks a clip into one that reads along with it, and a collection into one with a chapter per clip", async () => {
+      const q = await page(browser, 390);
+      for (const f of ["article.html", "chapters.html"]) {
+        await q.fill("#saveUrl", ROOT + "test/fixtures/" + f);
+        await q.press("#saveUrl", "Enter");
+        await until(q, (n) => state.pages.length >= n, f === "article.html" ? 1 : 2);
+      }
+      await q.evaluate(async () => {
+        const A = window.Waypage.platform.audio;
+        Object.defineProperty(A, "canVoice", { get: () => true, configurable: true });
+        window.asked = [];
+        A.voice = async (o) => {
+          asked.push(o);
+          if (voiceStep) voiceStep({ n: o.items.length, of: o.items.length });
+          return { uri: "file:///cache/" + o.name + ".m4a", dur: o.items.length * 5, size: 100, t0: o.items.map((_, i) => i * 5), t1: o.items.map((_, i) => i * 5 + 4) };
+        };
+        A.stopVoicing = () => {};
+        window.Waypage.platform.keepMade = async (from, name) => "file:///data/Files/" + name;
+        state.pages.forEach((x, i) => { x.folder = "Flights"; x.folderAt = 1000 - i; });
+        await window.Waypage.store.writeIndex(state.pages);
+      });
+      const clip = await q.evaluate(() => state.pages.find((x) => /Long Haul/.test(x.title)).id);
+      await q.evaluate((id) => makeAudiobook({ page: state.pages.find((x) => x.id === id) }), clip);
+      const one = await q.evaluate(async (id) => {
+        const a = state.pages.find((x) => x.audio && x.audio.voiced && x.audio.voiced.from === id);
+        const data = await window.Waypage.store.readListen(a.id);
+        return { mode: a.listen.mode, book: a.listen.book.id, ours: a.audio.ours, chapters: a.audio.chapters.length, dur: a.audio.dur,
+          words: data.pieces.map((x) => x.text).join(" "), covered: data.ranges, redirect: listenRedirect(a), along: audioFor(state.pages.find((x) => x.id === id)) === a };
+      }, clip);
+      assert.strictEqual(one.mode, "book");
+      assert.strictEqual(one.book, clip);
+      assert.ok(one.ours && one.along && one.redirect === clip, JSON.stringify(one));
+      assert.ok(/oceanic track/.test(one.words), "the transcript is the clip's text");
+      assert.deepStrictEqual(one.covered, [[0, one.dur]]);
+      // The start and its two headings are its chapters; made again, it's there already.
+      assert.strictEqual(one.chapters, 3);
+      await q.evaluate((id) => makeAudiobook({ page: state.pages.find((x) => x.id === id) }), clip);
+      assert.strictEqual(await q.evaluate(() => state.pages.filter((x) => x.audio && x.audio.voiced).length), 1);
+      // A collection: a chapter per clip, read along with its own transcript.
+      const n = await q.evaluate(() => asked.length);
+      await q.evaluate(() => makeAudiobook({ folder: "Flights" }));
+      const all = await q.evaluate(async () => {
+        const a = state.pages.find((x) => x.audio && x.audio.voiced && x.audio.voiced.from === "c:flights");
+        return { mode: a.listen.mode, titles: a.audio.chapters.map((c) => c.title), page: (await window.Waypage.store.readPage(a.id)).includes("Somewhere over the Atlantic") };
+      });
+      assert.strictEqual(all.mode, "transcript");
+      assert.strictEqual(all.titles.length, 2, JSON.stringify(all.titles));
+      assert.ok(all.page, "the transcript page holds the text");
+      // Each file goes to the voice of its clip's language.
+      assert.ok(await q.evaluate((k) => asked.slice(k).every((o) => "engine" in o && "voice" in o && o.items.length), n));
+      assert.deepStrictEqual(q.errors.filter((e) => !/waypage-fetch/.test(e)), []);
+      await q.context().close();
+    });
+
     await test("an audiobook's dot drags along the chapter and seeks once, on letting go (1.58.2)", async () => {
       const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
       const q = await ctx.newPage();
@@ -6395,7 +6449,7 @@ c("bk1", { at: 0.01 })]);
         const c = await carFolderList(carFolders()[0], list, new Set());
         return { c, hidden: list.clips.every((x) => x.hide && x.items.length === 2) };
       });
-      assert.deepStrictEqual(got.c.starts.map((x) => [x.label, x.id]), [["Continue", "c:car5"], ["From the start", "c:car1"], ["Newest", "c:car20"]]);
+      assert.deepStrictEqual(got.c.starts.map((x) => [x.label, x.id]), [["Continue", "c:car5"], ["Newest", "c:car20"]]);
       assert.deepStrictEqual(got.c.at, [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 18, 19]);
       assert.strictEqual(got.c.items[got.c.at.indexOf(3)], "c:car4");
       assert.ok(got.hidden);

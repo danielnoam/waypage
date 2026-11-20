@@ -1,5 +1,5 @@
 ### Added
-- Android Auto: a Collections tab. Your 8 latest collections and series, each opening with quick starts (Continue, or Start for a new one, From the start, Newest), then its clips and audiobooks in order. A long series brings its first two, the newest and the stretch from where you left off, not all of it. Android only.
+- Android Auto: a Collections tab. Your 8 latest collections and series, each opening with quick starts (Continue, or Start for a new or finished one, and Newest), then its clips and audiobooks in order. A long series brings its first two, the newest and the stretch from where you left off, not all of it. Android only.
 - Android Auto: Next clip and Previous clip now go through the clip's collection or series in order, also when the car started it with the app closed (they used to go to the next under Up next). An audiobook's Next chapter after its last chapter goes on to the next book in its series, and Previous before the first goes back. Android only.
 
 ### Fixed
