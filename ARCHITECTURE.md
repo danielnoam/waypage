@@ -125,7 +125,7 @@ src/vendor/         Readability, pdf.js, foliate-js's MOBI reader, fzstd (Zstand
 assets/             icon and splash sources for the apps
 icons/, icon.svg    app icons
 worker/             the web copy's fetch proxy, a Cloudflare Worker (worker.js, wrangler.toml, README.md has the setup)
-native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Pen, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes), Audiobook (AudiobookService plays with the screen off; Listen writes transcripts with sherpa-onnx's offline recognizer; Voicing speaks text into an audiobook), Car (Android Auto: CarService, Car's one shared media session), Dav (a WebDAV PROPFIND written over a socket, for Files' davList), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
+native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Pen, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes), Audiobook (AudiobookService plays with the screen off; Listen writes transcripts with sherpa-onnx's offline recognizer), Car (Android Auto: CarService, Car's one shared media session), Dav (a WebDAV PROPFIND written over a socket, for Files' davList), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
 tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-build.json
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
 tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
@@ -749,21 +749,6 @@ deletes with the clip; a picked folder's stay. Its Gutenberg book (the
 recording's `url_text_source`) downloads after it and is paired
 through `pairPending`, as Find the book in Discover does.
 
-An audiobook made from text (Make an audiobook, `makeAudiobook`,
-Android only) is spoken by the Narrate voice of each clip's language:
-`AudiobookPlugin.voice` runs `Voicing` on its own thread, each of
-Narrate's pieces through `TextToSpeech.synthesizeToFile` (any engine,
-Kokoro and Piper through `KokoroTtsService`), read back as PCM and
-encoded with MediaCodec into one AAC .m4a (48 kbps mono) of at most 120
-pieces, with each piece's start and end. The files go through
-`keepMade` into Waypage's own files (`audio.ours`), and `audio.voiced`
-(`{ from }`: the clip's id, or `c:` and the collection) marks it. The
-pieces' times are its transcript, written whole (`ranges` covers it, so
-nothing is written ahead; `para` starts each paragraph): a clip's reads
-along with the clip (mode "book"), a collection's with its own
-transcript, a chapter per clip. The run is a Downloads card, so the
-dataSync notification keeps the app up while it's made.
-
 A streamed audiobook (the Audiobookshelf extension) is an entry with
 `remote` (`{ kind, server, item }`) and a `link` of `abs:<server>:<item>`
 that no file has, so it is treated as read from outside: not uploaded
@@ -1005,12 +990,6 @@ adds a line here.
   so the car can start them with the app closed. Only the car, the
   Assistant, Bluetooth and system apps (by uid, system or from the Play
   Store) may browse it, and with App lock on it lists nothing.
-- Make an audiobook takes as long as the voice does: Google's voices
-  are faster than real time, Kokoro on a phone may be slower, so a long
-  book can take hours, and Android 15 ends a dataSync service after six
-  hours a day. Pausing stops the file in hand and makes it again from its
-  start. A made audiobook is in no backup or sync, like any audiobook;
-  it can be made again from the text.
 
 ## Traps
 

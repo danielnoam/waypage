@@ -170,7 +170,7 @@ function paintDownloads() {
     return;
   }
   const one = active.length === 1 && !singles.length ? active[0] : null;
-  const title = drive && units === 1 ? (driveRun.restore ? t("Restoring from Google Drive") : t("Backing up to Google Drive")) : app && units === 1 ? t("Downloading Waypage {version}", { version: upd.latest }) : one ? (one.voicing ? t("Making “{label}” into an audiobook", { label: one.label }) : one.files ? t("Adding {label}", { label: one.label }) : one.folder ? (one.again ? t("Saving again in {folder}", { folder: one.folder }) : t("Saving into {folder}", { folder: one.folder })) : (one.again ? t("Saving again in your library") : t("Saving into your library")))
+  const title = drive && units === 1 ? (driveRun.restore ? t("Restoring from Google Drive") : t("Backing up to Google Drive")) : app && units === 1 ? t("Downloading Waypage {version}", { version: upd.latest }) : one ? (one.files ? t("Adding {label}", { label: one.label }) : one.folder ? (one.again ? t("Saving again in {folder}", { folder: one.folder }) : t("Saving into {folder}", { folder: one.folder })) : (one.again ? t("Saving again in your library") : t("Saving into your library")))
     : !active.length && singles.length === 1 ? t("Saving a clip from {site}", { site: singles[0].site }) : tn(Math.round(units), "Saving 1 clip", "Saving {n} clips");
   const text = drive && units === 1 ? driveStatusText() : app && units === 1 ? t("{pct}% done", { pct: upd.pct }) : one ? (one.total ? t("{done} of {total} done", { done: one.saved + one.failed, total: one.total }) : t("{clips} saved", { clips: countLine(one.saved) })) + (one.paused ? " · " + t("Paused") : "")
     : t("{pct}% done", { pct: Math.round(share * 100) });

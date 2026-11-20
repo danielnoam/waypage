@@ -257,12 +257,6 @@ test("bookmarks: kept clean, and merged by id in sync", () => {
   assert.strictEqual(S.mergeListen(base, { t: 1, tAt: 2 }, { t: 1, tAt: 3, bookmarks: [{ id: "gone0001", t: 20, at: 1 }] }).bookmarks, undefined);
 });
 
-test("a made audiobook's paragraphs are its text's, however short", () => {
-  const words = L.timedWords([{ t0: 0, t1: 1, text: "Waypoints", para: 1 }, { t0: 1.2, t1: 4, text: "Each waypoint has a name.", para: 1 }, { t0: 4.1, t1: 6, text: "Some are jokes." }]);
-  const parts = L.paragraphs(words, { pauses: true });
-  assert.deepStrictEqual(parts.map((x) => x.words.map((w) => w.w).join(" ")), ["Waypoints", "Each waypoint has a name. Some are jokes."]);
-});
-
 test("times and lengths as words", () => {
   assert.strictEqual(L.timeText(42), "0:42");
   assert.strictEqual(L.timeText(3725), "1:02:05");

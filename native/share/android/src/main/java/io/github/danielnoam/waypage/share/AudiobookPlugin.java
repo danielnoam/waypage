@@ -22,7 +22,6 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.k2fsa.sherpa.onnx.OfflineRecognizer;
-import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -54,11 +53,6 @@ import org.json.JSONObject;
  *                                (0 to 1) how far its bar is at this stretch's start and end,
  *                                or rejects "battery", "hot", "busy", "stopped" or "model"
  *   stopTranscribing()
- *   voice({ items, blocks, lang, voice, engine, name })   text made into one sound file
- *                                (Make audiobook): { uri, dur, size, t0: [], t1: [] } in seconds, a "voiced"
- *                                event { n, of } after each piece, or rejects "busy", "engine", "stopped"
- *                                or "silent"; the .m4a is in the cache for files to move
- *   stopVoicing()
  *
  * a "state" event { key, part, pos, dur, state } about twice a second while
  * it plays and as it changes ("loading", "playing", "paused", "ended",
@@ -463,67 +457,6 @@ public class AudiobookPlugin extends Plugin {
             else b.setProgress(0, 0, true);
             nm.notify(WRITING_NOTE, b.build());
         } catch (Exception e) { /* no notifications allowed */ }
-    }
-
-    // ---- Text made into an audiobook
-
-    private static final ExecutorService voicer = Executors.newSingleThreadExecutor((r) -> new Thread(r, "voicing"));
-    private static volatile boolean voicing;
-
-    @PluginMethod
-    public void voice(PluginCall call) {
-        if (voicing) { call.reject("busy"); return; }
-        JSONArray list = call.getArray("items");
-        if (list == null || list.length() == 0) { call.reject("silent"); return; }
-        final String[] items = new String[list.length()];
-        for (int i = 0; i < items.length; i++) items[i] = list.optString(i, "");
-        JSONArray b = call.getArray("blocks");
-        final int[] blocks = new int[items.length];
-        for (int i = 0; i < items.length; i++) blocks[i] = b != null ? b.optInt(i, i) : i;
-        final String engine = call.getString("engine", ""), voice = call.getString("voice", ""), lang = call.getString("lang", "");
-        String name = call.getString("name", "part").replaceAll("[^A-Za-z0-9._-]+", "_");
-        final Context c = getContext().getApplicationContext();
-        File dir = new File(c.getCacheDir(), "voicebook");
-        dir.mkdirs();
-        final File out = new File(dir, name + ".m4a");
-        voicing = true;
-        Voicing.stop = false;
-        voicer.execute(() -> {
-            try {
-                Voicing.Out o = Voicing.render(c, engine, voice, lang, items, blocks, out, (n, of) -> {
-                    JSObject e = new JSObject();
-                    e.put("n", n);
-                    e.put("of", of);
-                    notifyListeners("voiced", e);
-                });
-                JSObject res = new JSObject();
-                res.put("uri", Uri.fromFile(o.file).toString());
-                res.put("dur", o.dur);
-                res.put("size", o.file.length());
-                JSONArray t0 = new JSONArray(), t1 = new JSONArray();
-                for (int i = 0; i < o.t0.length; i++) {
-                    t0.put(Math.round(o.t0[i] * 100) / 100.0);
-                    t1.put(Math.round(o.t1[i] * 100) / 100.0);
-                }
-                res.put("t0", t0);
-                res.put("t1", t1);
-                call.resolve(res);
-            } catch (Throwable e) {
-                out.delete();
-                String why = String.valueOf(e.getMessage());
-                call.reject(Voicing.stop ? "stopped" : "engine".equals(why) || "silent".equals(why) ? why : "Couldn't make the sound.");
-            } finally {
-                voicing = false;
-            }
-        });
-    }
-
-    @PluginMethod
-    public void stopVoicing(PluginCall call) {
-        Voicing.stop = true;
-        // Between chapters, or at the end: the engine is let go too.
-        if (!voicing) voicer.execute(Voicing::release);
-        call.resolve();
     }
 
     @PluginMethod
