@@ -350,7 +350,7 @@ a turn changes the lock: two fingers swept sideways (zoomed, past the
 page's edge), or a selection dragged to a side and held a quarter of a second
 (`ink.js edgeWatch`, `carry`), which turns and brings the items onto the
 new page. In Scroll the same drag held at the top or bottom edge scrolls
-the page with it, its speed easing in and out. The zoom's origin is the locked page's middle (set when a gesture starts, cleared only by `resetPz`), so the spot under the fingers stays under them. A pen, or a palm beside it, is not a pinch
+the page with it, its speed easing in and out. Straight lines and clean circles (`ink.js holdArm`, `snapShape`, `lineTo`): a pen or highlighter stroke held still 500 ms (the pointer within 6 px) is checked against a line (every point within 8% of its length) and an ellipse (closed, within 25% of the bounds' ring); a line's end then follows the pen, a circle is fixed. The switch is `shapes`, kept in `waypage.ink` and set from the reader settings' Draw tab (`app-reader.js drawPart`, shown for a note and for anything drawn on). The zoom's origin is the locked page's middle (set when a gesture starts, cleared only by `resetPz`), so the spot under the fingers stays under them. A pen, or a palm beside it, is not a pinch
 (`inkHook.penDown`).
 
 Select, a picture and colours of your own (1.57.0), all in `ink.js` and

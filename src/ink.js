@@ -641,6 +641,7 @@
   let size = 2;           // 0 to 4
   let style = "ball";     // how the pen writes
   let finger = false;     // whether a finger or mouse draws, not only a pen
+  let shapes = true;      // a line or circle held still for a moment becomes straight or round
   let cur = null;         // the stroke being drawn, or the eraser's pass
   let lastStroke = 0;
   let penTouch = false;   // a pen's touch is down: its touchstart must not scroll
@@ -668,9 +669,10 @@
     if (o.size != null) size = Math.max(0, Math.min(4, Math.round(Number(o.size)) || 0));
     if (STYLES.includes(o.style)) style = o.style;
     if (o.finger != null) finger = !!o.finger;
+    if (o.shapes != null) shapes = !!o.shapes;
     changed();
   }
-  const state = () => ({ on, tool, color: color[tool === "highlighter" ? "highlighter" : "pen"], colors: { ...color }, size, style, finger, selected: sel ? sel.ids.length : 0, canPaste: !!board, count: count(), canUndo: !!undos.length, canRedo: !!redos.length });
+  const state = () => ({ on, tool, color: color[tool === "highlighter" ? "highlighter" : "pen"], colors: { ...color }, size, style, finger, shapes, selected: sel ? sel.ids.length : 0, canPaste: !!board, count: count(), canUndo: !!undos.length, canRedo: !!redos.length });
 
   // Pages (a PDF or a note) with Draw on is locked to the screen shown
   // (reader.js lockedPages): drawing, erasing and dropping stay on its pages.
@@ -747,6 +749,7 @@
   // What a stroke being drawn becomes when the button is pressed: what it
   // drew so far is dropped, and it erases from here.
   function toEraser() {
+    clearTimeout(cur.holdT);
     if (cur.path) cur.path.remove();
     cur.path = null;
     cur.s = null;
@@ -829,6 +832,7 @@
     cur.path = el(n, s);
     cur.path.setAttribute("d", pathOf(s));
     svg.append(cur.path);
+    holdArm(cur, e.clientX, e.clientY);
     // Over the next page too, if the line goes on to it.
     lift(n);
   }
@@ -854,14 +858,77 @@
     for (const c of events) {
       if (cur.erase) { eraseAtClient(c.clientX, c.clientY, svg); continue; }
       const [x, y] = where(c, svg);
+      // A snapped line's end follows the pen; a circle stays as it is.
+      if (cur.snapped) { if (cur.snapped === "line") lineTo(cur, x, y); continue; }
       add(c, svg, x, y);
     }
     if (cur.erase) return;
+    // Holding the pen still starts the count again from wherever it is.
+    if (!cur.snapped) {
+      const e0 = events[events.length - 1];
+      if (!cur.hold || Math.hypot(e0.clientX - cur.hold.x, e0.clientY - cur.hold.y) > 6) holdArm(cur, e0.clientX, e0.clientY);
+    }
     if (!cur.raf) cur.raf = requestAnimationFrame(() => {
       if (!cur) return;
       cur.raf = 0;
       cur.path.setAttribute("d", pathOf(cur.s));
     });
+  }
+  // ---- Straight lines and clean circles ----
+  // A stroke held still for half a second, close to a line or a circle, is
+  // made one: the line from where it began to where the pen is (and its end
+  // follows the pen), or a round shape through the same bounds.
+  function holdArm(c, x, y) {
+    clearTimeout(c.holdT);
+    c.hold = { x, y };
+    if (!shapes || c.erase || c.snapped) return;
+    c.holdT = setTimeout(() => { if (cur === c && !c.erase && !c.snapped) snapShape(c); }, 500);
+  }
+  const clampPt = (c, x, y) => (c.hmax ? [Math.min(1, Math.max(0, x)), Math.min(c.hmax, Math.max(0, y))] : [x, y]);
+  // The line from the stroke's start to (x, y), in even steps.
+  function lineTo(c, x, y) {
+    const [ex, ey] = clampPt(c, x, y), p = [], n = 12;
+    for (let i = 0; i <= n; i++) p.push(r4(c.from[0] + (ex - c.from[0]) * i / n), r4(c.from[1] + (ey - c.from[1]) * i / n), c.pr);
+    c.s.p = p;
+  }
+  function snapShape(c) {
+    const p = c.s.p, n = Math.floor(p.length / 3);
+    if (n < 6) return;
+    const pts = [], prs = [];
+    for (let i = 0; i < n; i++) { pts.push([p[3 * i], p[3 * i + 1]]); prs.push(p[3 * i + 2]); }
+    const pr = prs.slice().sort((a, b) => a - b)[n >> 1];
+    const A = pts[0], B = pts[n - 1], len = Math.hypot(B[0] - A[0], B[1] - A[1]);
+    let kind = "";
+    if (len > 0.03) {
+      let worst = 0;
+      for (const q of pts) worst = Math.max(worst, Math.abs((B[0] - A[0]) * (A[1] - q[1]) - (A[0] - q[0]) * (B[1] - A[1])) / len);
+      if (worst <= Math.max(0.012, 0.08 * len)) kind = "line";
+    }
+    if (kind === "line") {
+      c.from = A; c.pr = pr;
+      lineTo(c, B[0], B[1]);
+    } else {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const q of pts) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); y0 = Math.min(y0, q[1]); y1 = Math.max(y1, q[1]); }
+      const w = x1 - x0, h = y1 - y0, big = Math.max(w, h);
+      if (big < 0.03 || Math.min(w, h) < 0.015 || Math.hypot(B[0] - A[0], B[1] - A[1]) > 0.25 * big) return;
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+      let rx = w / 2, ry = h / 2, off = 0;
+      for (const q of pts) off += Math.abs(((q[0] - cx) / rx) ** 2 + ((q[1] - cy) / ry) ** 2 - 1);
+      if (off / n > 0.25) return;
+      if (Math.abs(rx - ry) / big < 0.15) rx = ry = (rx + ry) / 2;
+      const a0 = Math.atan2((A[1] - cy) / ry, (A[0] - cx) / rx), q = [];
+      for (let i = 0; i <= 64; i++) {
+        const [x, y] = clampPt(c, cx + rx * Math.cos(a0 + (Math.PI * 2 * i) / 64), cy + ry * Math.sin(a0 + (Math.PI * 2 * i) / 64));
+        q.push(r4(x), r4(y), pr);
+      }
+      c.s.p = q;
+      kind = "round";
+    }
+    c.snapped = kind;
+    c.press = false;
+    if (c.path) c.path.setAttribute("d", pathOf(c.s));
+    try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) { /* none */ }
   }
   // The eraser follows the pointer over from one page to the next.
   function eraseAtClient(cx, cy, svg) {
@@ -901,6 +968,7 @@
     if (!cur || cur.id !== e.pointerId) return;
     const c = cur;
     cur = null;
+    clearTimeout(c.holdT);
     if (c.raf) cancelAnimationFrame(c.raf);
     lastStroke = performance.now();
     if (c.select) { selUp(c, e); return; }
@@ -932,6 +1000,7 @@
     const c = cur;
     cur = null;
     if (!c) return;
+    clearTimeout(c.holdT);
     stopEdge(c);
     if (c.path) c.path.remove();
     unlift();

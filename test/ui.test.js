@@ -2159,6 +2159,78 @@ function zipOf(files) {
       await ctx.close();
     });
 
+    await test("holding the pen still makes a rough line straight and a rough circle round, if the Draw tab's switch is on", async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      q.errors = [];
+      q.on("pageerror", (e) => q.errors.push(e.message));
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      await q.waitForTimeout(1000);
+      await q.evaluate(async () => { const m = await C.notes.create("lines"); state.pages.unshift(m); await C.store.writeIndex(state.pages); openPage(m.id); });
+      await until(q, () => state.open && C.reader.frameDoc && C.reader.frameDoc.querySelector("img[data-page]"));
+      await q.evaluate(() => { inkStart(); C.ink.setting({ finger: true }); });
+      await until(q, () => C.ink.on);
+      const ptr = (seq) => q.evaluate(async (seq) => {
+        const d = C.reader.frameDoc, svg = d.querySelector(".co-ink"), P = d.defaultView.PointerEvent;
+        for (const [type, x, y, wait] of seq) {
+          svg.dispatchEvent(new P(type, { pointerId: 9, pointerType: "touch", isPrimary: true, clientX: x, clientY: y, button: 0, buttons: type === "pointerup" ? 0 : 1, bubbles: true, cancelable: true }));
+          await new Promise((r) => setTimeout(r, wait || 16));
+        }
+      }, seq);
+      const last = () => q.evaluate(() => { const o = JSON.parse(C.ink.snapshot()); const l = Object.values(o).flat().filter((x) => x.t === "p"); return l.length ? { n: l.length, p: l[l.length - 1].p } : { n: 0, p: [] }; });
+      const line = [["pointerdown", 60, 300]];
+      for (let i = 1; i <= 20; i++) line.push(["pointermove", 60 + i * 12, 300 + i * 0.5 + (i % 3) * 3]);
+      // Held still, then lifted: a straight line from the start to the end.
+      await ptr([...line, ["pointermove", 300, 310, 700], ["pointerup", 300, 310]]);
+      let l = await last();
+      assert.strictEqual(l.p.length, 13 * 3, "twelve even steps: " + l.p.length);
+      const dev = Math.max(...Array.from({ length: 13 }, (_, i) => Math.abs(l.p[3 * i + 1] - (l.p[1] + (l.p[37] - l.p[1]) * i / 12))));
+      assert.ok(dev < 0.002, "on one straight line: " + dev);
+      // Not held: kept as drawn.
+      await ptr([...line, ["pointerup", 300, 310]]);
+      l = await last();
+      assert.ok(l.p.length > 13 * 3, "no hold, no change");
+      // Held, then moved on: the end follows the pen.
+      await ptr([...line, ["pointermove", 300, 310, 700], ["pointermove", 320, 380], ["pointerup", 320, 380]]);
+      l = await last();
+      const box = await q.evaluate(() => { const r = C.reader.frameDoc.querySelector(".co-ink").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width }; });
+      assert.ok(Math.abs(box.x + l.p[36] * box.w - 320) < 3 && Math.abs(box.y + l.p[37] * box.w - 380) < 4, "the end followed the pen: " + JSON.stringify([l.p.slice(36), box]));
+      // A rough circle.
+      const ring = [["pointerdown", 280, 500]];
+      for (let i = 1; i <= 40; i++) { const a = (i / 40) * Math.PI * 2, r = 70 + (i % 4) * 2; ring.push(["pointermove", 200 + r * Math.cos(a), 500 + r * Math.sin(a)]); }
+      await ptr([...ring, ["pointermove", 270, 500, 700], ["pointerup", 270, 500]]);
+      l = await last();
+      assert.strictEqual(l.p.length, 65 * 3, "a closed round shape");
+      const mx = l.p.filter((_, i) => i % 3 === 0), my = l.p.filter((_, i) => i % 3 === 1);
+      const cx = (Math.max(...mx) + Math.min(...mx)) / 2, cy = (Math.max(...my) + Math.min(...my)) / 2;
+      const rs = mx.map((x, i) => Math.hypot(x - cx, my[i] - cy));
+      assert.ok(Math.max(...rs) - Math.min(...rs) < 0.004, "all the same distance from the middle");
+      // Off in the Draw tab: kept as drawn.
+      await q.evaluate(() => inkShapes(false));
+      await ptr([...line, ["pointermove", 300, 310, 700], ["pointerup", 300, 310]]);
+      l = await last();
+      assert.ok(l.p.length > 13 * 3, "switched off, kept as drawn");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await ctx.close();
+    });
+
+    await test("the settings sheet has a Draw tab with the shapes switch, for a note and for a PDF", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => { const m = await C.notes.create("lines"); state.pages.unshift(m); await C.store.writeIndex(state.pages); openPage(m.id); });
+      await until(q, () => state.open && state.open.note && C.reader.frameDoc);
+      const tab = await q.evaluate(() => {
+        const box = readerSettings();
+        const part = box.querySelector('.rc-part[data-part="draw"]'), sw = part && part.querySelector("input.switch");
+        return { has: !!part, on: sw && sw.checked, tabs: [...box.querySelectorAll(".sheet-tabs [role=radio], .sheet-tabs input, .sheet-tabs button")].length };
+      });
+      assert.ok(tab.has && tab.on === true && tab.tabs >= 3, JSON.stringify(tab));
+      await q.evaluate(() => { const sw = readerSettings().querySelector('.rc-part[data-part="draw"] input.switch'); sw.checked = false; sw.dispatchEvent(new Event("change")); });
+      assert.strictEqual(await q.evaluate(() => C.ink.state().shapes), false);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a collection's EPUB carries its cover: a picture of your own, else what the library shows", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

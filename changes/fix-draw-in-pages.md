@@ -7,3 +7,4 @@
 
 ### Added
 - In Scroll, dragging a selected drawing or picture to the top or bottom edge scrolls the page along with it, so you can put it on another page. The scroll builds up and eases off smoothly.
+- Hold the pen still for half a second at the end of a rough line or circle to make it a straight line or a clean circle. A line's end follows the pen until you lift it. Turn it on or off in the reader's settings, under Draw.
