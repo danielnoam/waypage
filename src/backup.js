@@ -92,6 +92,8 @@
     }
     if (folder && httpUrl(m.source)) out.source = httpUrl(m.source);
     if (folder && typeof m.coverPick === "string" && (COVER_FILE.test(m.coverPick) || /^clip:[a-z0-9]{4,24}$/.test(m.coverPick))) out.coverPick = m.coverPick;
+    if (folder && /^(completed|ongoing|hiatus|stubbed|dropped|inactive)$/.test(m.statusPick || "")) out.statusPick = m.statusPick;
+    if (folder && m.folderNoStatus === true) out.folderNoStatus = true;
     if (text(m.series, 200)) out.series = text(m.series, 200);
     if (file) out.file = file;
     if (note) out.note = note;

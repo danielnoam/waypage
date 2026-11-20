@@ -2835,4 +2835,10 @@ Keel.i18n.strings("he", {
   "Caught up": "עדכני",
   "Caught up: all {n} read": "עדכני: כל ה-{n} נקראו",
   "Its chapter list opens to check, with a collection or a series to save it into. New chapters join it when they're out.": "רשימת הפרקים נפתחת לבדיקה, עם אוסף או סדרה לשמור אליהם. פרקים חדשים מצטרפים כשהם יוצאים.",
+  "Status": "מצב",
+  "Status from the site": "מצב מהאתר",
+  "{site} says {status}": "לפי {site}: {status}",
+  "The site doesn't say": "האתר לא מציין",
+  "From {site}: {status}": "מ-{site}: {status}",
+  "its site": "האתר שלו",
 });
