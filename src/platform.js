@@ -828,12 +828,15 @@
     keeping = run.catch(() => {});
     return run;
   }
+  // "Folder/file.mp3" keeps a file in a folder of its own (an audiobook's parts).
+  const keepName = (name) => {
+    const clean = (x) => String(x || "").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
+    return String(name || "file").split("/").map(clean).filter(Boolean).slice(-2).join("/") || "file";
+  };
   async function keepOne(url, name, where, onProgress, tree) {
     const FS = plugin("Filesystem");
     if (!FS || !native) return null;
-    // "Folder/file.mp3" keeps a file in a folder of its own (an audiobook's parts).
-    const clean = (x) => String(x || "").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
-    const safe = String(name || "file").split("/").map(clean).filter(Boolean).slice(-2).join("/") || "file";
+    const safe = keepName(name);
     const temp = "keep-" + safe.replace(/[^\w.-]+/g, "_");
     const D = plugin("Downloads");
     let from = null;
@@ -849,6 +852,18 @@
       finally { if (listener && listener.remove) listener.remove(); }
       from = (await FS.getUri({ path: temp, directory: "CACHE" })).uri;
     }
+    return placeKept(FS, from, temp, safe, where, tree);
+  }
+  // A file the app made in its cache (a story made into a book) kept the
+  // same way, moved out of the cache.
+  async function keepMade(from, name, where, tree) {
+    const FS = plugin("Filesystem");
+    if (!FS || !native) return null;
+    const run = keeping.then(() => placeKept(FS, from, null, keepName(name), where, tree));
+    keeping = run.catch(() => {});
+    return run;
+  }
+  async function placeKept(FS, from, temp, safe, where, tree) {
     if (where === "folder" && tree) {
       const F = plugin("Files");
       await F.folderMoveIn({ tree, path: safe, from });
@@ -866,7 +881,10 @@
       path = to.dir + safe.replace(/(\.[a-z0-9]+)?$/i, (ext) => " (" + n + ")" + ext);
     }
     await folderFor(FS, path, to.directory);
-    try { await FS.rename({ from: temp, directory: "CACHE", to: path, toDirectory: to.directory }); }
+    if (!temp) {
+      await FS.copy({ from, to: path, toDirectory: to.directory });
+      await FS.deleteFile({ path: from }).catch(() => {});
+    } else try { await FS.rename({ from: temp, directory: "CACHE", to: path, toDirectory: to.directory }); }
     catch (e) {
       await FS.copy({ from: temp, directory: "CACHE", to: path, toDirectory: to.directory });
       await FS.deleteFile({ path: temp, directory: "CACHE" }).catch(() => {});
@@ -1415,7 +1433,7 @@
     onBack,
     exitApp,
     download,
-    downloadUpdate, keepFile, dropKept, pauseKeep: () => pauseUpdate(),
+    downloadUpdate, keepFile, keepMade, dropKept, pauseKeep: () => pauseUpdate(),
     pauseUpdate,
     openInstaller,
     clearOldUpdates,
