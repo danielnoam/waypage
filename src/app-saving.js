@@ -194,8 +194,11 @@ async function outsideDrawn(p, got) {
   }
   const keys = Object.keys(pages).filter((n) => pages[n].length);
   await C.store.writeInk(p.id, keys.length ? { v: 1, size: p.file.size || 0, pages } : null);
-  const d = keys.map((n) => [Number(n), new Set(pages[n].map((x) => x.id)).size]).sort((a, b) => a[0] - b[0]);
+  const d = keys.map((n) => [Number(n), new Set(pages[n].filter((x) => x.t !== "n").map((x) => x.id)).size]).filter((x) => x[1]).sort((a, b) => a[0] - b[0]);
   if (d.length) p.drawn = d; else delete p.drawn;
+  // Its comment bubbles' summary, for Highlights (2026-11).
+  const noted = keys.flatMap((n) => pages[n].filter((x) => x.t === "n").map((x) => ({ id: x.id, n: Number(n), text: String(x.text || "").slice(0, 4000), c: x.c, ...(x.tags && x.tags.length ? { tags: x.tags } : {}) }))).slice(0, 500);
+  if (noted.length) p.noted = noted; else delete p.noted;
   return true;
 
 }

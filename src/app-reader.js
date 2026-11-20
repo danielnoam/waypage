@@ -1875,8 +1875,10 @@ const markTagsLine = (m) => (m.tags && m.tags.length
   ? el("span", { class: "mark-tags", dir: "auto" }, ...m.tags.map((x) => el("span", { class: "card-tag" }, "#" + x))) : null);
 // The tags on one highlight: its own as chips to remove, a field to add,
 // and the other highlight tags to add with a tap.
-function markTagsEditor(p, m, draw) {
+// `put(tags)`, when given, keeps them in place of saving a highlight (a comment bubble's).
+function markTagsEditor(p, m, draw, put) {
   const write = (tags) => {
+    if (put) { put(tags); if (tags.length) m.tags = tags; else delete m.tags; draw(); return; }
     if (tags.length) m.tags = tags; else delete m.tags;
     m.at = Date.now();
     return saveMarks(p).then(draw);
@@ -1912,7 +1914,7 @@ function marksView(p, back) {
   };
   const markList = (p, back, draw) => {
     const all = p.marks || [];
-    if (sheetColor && !all.some((m) => colorOf(m) === sheetColor)) sheetColor = "";
+    if (sheetColor && !all.some((m) => colorOf(m) === sheetColor) && !inkNotes(p).some((nt) => nt.c === sheetColor)) sheetColor = "";
     const list = sheetColor ? all.filter((m) => colorOf(m) === sheetColor) : all;
     const rows = list.map((m) => {
       const lost = inReader && lostMarks.has(m.id);
@@ -1946,9 +1948,15 @@ function marksView(p, back) {
       if (lost) row.querySelector(".ink-row-text").append(el("span", { class: "meta" }, t("Not found in this copy of the clip")));
       rows.push({ at: inkOrder(g) + 0.5, row });
     }
+    // Comment bubbles (2026-11) are listed as what they say, with the highlights.
+    const notes = inkNotes(p).filter((nt) => !sheetColor || nt.c === sheetColor);
+    for (const nt of notes) {
+      const go = () => inkBack().then(() => inkNoteGo(p, nt));
+      rows.push({ at: inkOrder(nt) + 0.25, row: noteRow(p, nt, go, go) });
+    }
     rows.sort((a, b) => a.at - b.at);
     const drawings = groups.reduce((a, g) => a + inkGroupCount(g), 0);
-    const title = [list.length || !drawings ? tn(list.length, "1 highlight", "{n} highlights") : null, drawings ? inkWord(drawings) : null].filter(Boolean).join(" · ");
+    const title = [list.length || (!drawings && !notes.length) ? tn(list.length, "1 highlight", "{n} highlights") : null, notes.length ? noteWord(notes.length) : null, drawings ? inkWord(drawings) : null].filter(Boolean).join(" · ");
     const canDraw = inReader && inkReady();
     return el("div", { class: "marks-list" },
       el("div", { class: "export-top" },
@@ -1958,7 +1966,7 @@ function marksView(p, back) {
       // A note has its pen in the reader bar already.
       canDraw && !p.note ? el("button", { class: "row ink-start", type: "button", onclick: inkStart },
         inkIcon("pen"), el("span", { class: "row-label" }, p.file ? t("Draw on this file") : t("Draw on this clip"))) : null,
-      colorChips(all, sheetColor, (c) => { sheetColor = c; draw(); }),
+      colorChips([...all, ...inkNotes(p)], sheetColor, (c) => { sheetColor = c; draw(); }),
       rows.length ? el("ol", { class: "group marks-rows" }, ...rows.map((r) => r.row))
         : el("p", { class: "footnote" }, t("{x} Highlights and drawings go with the clip to your other devices.", { x: pictureBook() && state.open === p ? (p.file ? t("Tap Draw on this file to draw on its pictures.") : t("Tap Draw on this clip to draw on its pictures."))
           : t("Select words in the text and tap Mark or Draw.") })),

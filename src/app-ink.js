@@ -18,6 +18,7 @@ const INK_ICONS = {
   select: '<path d="M12 4c4.4 0 8 1.8 8 4s-3.6 4-8 4-8-1.8-8-4 3.6-4 8-4z" stroke-dasharray="3 3"></path><path d="M9 12.5c-.6 2.2.4 4 2 5.2 1.1.8 1.2 2.3-.2 3.3"></path>',
   add: '<path d="M12 5v14"></path><path d="M5 12h14"></path>',
   text: '<path d="M5 7V4h14v3"></path><path d="M12 4v16"></path><path d="M9 20h6"></path>',
+  note: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"></path><path d="M8.5 11h7"></path><path d="M8.5 14.5h4"></path>',
   image: '<rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="9" cy="10" r="1.6"></circle><path d="M21 16l-5-5-9 9"></path>',
   cut: '<circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M8.1 8.1L20 20"></path><path d="M20 4L8.1 15.9"></path>',
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V6a2 2 0 0 1 2-2h8"></path>',
@@ -228,6 +229,7 @@ function inkBuild() {
     if (act === "front") { C.ink.front(); return; }
     if (act === "back") { C.ink.back(); return; }
     if (act === "edittext") { const t = C.ink.selectedText(); if (t) inkText(t); return; }
+    if (act === "editnote") { const n = C.ink.selectedNote(); if (n) inkNote(n.id); return; }
     inkPopClose();
     if (act === "tool") C.ink.setting({ tool: arg });
     else if (act === "color") C.ink.setting({ color: arg });
@@ -325,7 +327,9 @@ function inkPopMenu(kind) {
       // A picture stays on this device, so a clip's drawings, which sync, take none.
       C.ink.blocks ? null : el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkFile.click(); } }, inkIcon("image"), el("span", { class: "ink-pop-name" }, t("Image"))),
       // Typed text goes on a note (2.0.0).
-      el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkText(null); } }, inkIcon("text"), el("span", { class: "ink-pop-name" }, t("Text"))));
+      el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkText(null); } }, inkIcon("text"), el("span", { class: "ink-pop-name" }, t("Text"))),
+      // A comment bubble: colour and tags are a highlight's own (2026-11).
+      el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkAddNote(); } }, inkIcon("note"), el("span", { class: "ink-pop-name" }, t("Note"))));
   }
   return el("div", { class: "ink-pop ink-pop-styles", role: "menu", "aria-label": t("Pen style") },
     ...INK_STYLES.map(([y, name]) => el("button", { type: "button", role: "menuitemradio", "aria-checked": String(s.style === y), "aria-pressed": String(s.style === y), onclick: () => pick({ style: y }) },
@@ -408,7 +412,7 @@ function inkPaint() {
       el("span", { class: "ink-dot", "data-c": mine ? "" : c, "data-t": hl ? "h" : "p", ...(mine ? { style: "background:" + c } : {}) }));
   });
   const act = (label, icon, a, on) => el("button", { type: "button", "aria-label": label, title: label, "data-act": a, ...(on ? {} : { disabled: "" }) }, inkIcon(icon));
-  const editRow = s.tool === "select" ? [...(C.ink.selectedText() ? [act(t("Edit text"), "text", "edittext", true)] : []), act(t("Cut"), "cut", "cut", s.selected), act(t("Copy"), "copy", "copy", s.selected), act(t("Paste"), "paste", "paste", s.canPaste), act(t("Delete"), "trash", "delete", s.selected), act(t("Move to top"), "front", "front", s.selected), act(t("Move to bottom"), "back", "back", s.selected)] : [];
+  const editRow = s.tool === "select" ? [...(C.ink.selectedText() ? [act(t("Edit text"), "text", "edittext", true)] : []), ...(C.ink.selectedNote() ? [act(t("Edit note"), "note", "editnote", true)] : []), act(t("Cut"), "cut", "cut", s.selected), act(t("Copy"), "copy", "copy", s.selected), act(t("Paste"), "paste", "paste", s.canPaste), act(t("Delete"), "trash", "delete", s.selected), act(t("Move to top"), "front", "front", s.selected), act(t("Move to bottom"), "back", "back", s.selected)] : [];
   const sizeBtn = s.tool === "eraser" || s.tool === "select" ? null : el("button", { type: "button", "aria-label": t("Size {n} of 5", { n: s.size + 1 }), title: t("Size"), "aria-haspopup": "menu", "aria-expanded": String(!!inkPop && inkPop.kind === "size"), "data-act": "size" },
     el("span", { class: "ink-size", style: "width:" + INK_DOTS[s.size] + "px;height:" + INK_DOTS[s.size] + "px" }));
   const styleBtn = s.tool !== "pen" ? null : el("button", { type: "button", "aria-label": t("Pen style: {inkStyleName}", { inkStyleName: inkStyleName(s.style) }), title: t("Pen style"), "aria-haspopup": "menu", "aria-expanded": String(!!inkPop && inkPop.kind === "style"), "data-act": "style" },
@@ -429,10 +433,18 @@ C.ink.onChange = () => {
 C.ink.onSaved = (id) => {
   const p = state.pages.find((x) => x.id === id);
   if (!p) return;
-  if (p.note) { p.editedAt = Date.now(); if (C.ink.strokes(1).length || p.thumb) noteCoverSoon(p, 2000); }
+  // A sheet's or page's comment bubbles are summed up on the entry too
+  // (`noted`), so Highlights lists them and their tags without opening the file.
+  const keepNoted = () => {
+    if (C.ink.blocks || state.open !== p) return;
+    const list = C.ink.notes().slice(0, 500).map((x) => ({ id: x.id, n: x.n, text: x.text.slice(0, 4000), c: x.c, ...(x.tags.length ? { tags: x.tags } : {}) }));
+    if (list.length) p.noted = list; else delete p.noted;
+  };
+  if (p.note) { p.editedAt = Date.now(); keepNoted(); if (C.ink.strokes(1).length || p.thumb) noteCoverSoon(p, 2000); }
   else if (!C.ink.blocks && C.ink.state && state.open === p) {
-    const d = C.ink.drawn().map((x) => [x.page, new Set(C.ink.strokes(x.page).map((s) => s.id)).size]);
+    const d = C.ink.drawn().map((x) => [x.page, new Set(C.ink.strokes(x.page).filter((s) => s.t !== "n").map((s) => s.id)).size]);
     if (d.length) p.drawn = d; else delete p.drawn;
+    keepNoted();
     p.inkAt = Date.now();
   } else return;
   indexSoon();
@@ -716,6 +728,54 @@ function noteTextSheet() {
       el("button", { class: "row", type: "button", onclick: () => back() }, el("span", { class: "row-label" }, i18n.t("Cancel")))));
 }
 
+// ---- A comment bubble (2026-11) ----
+
+// Add > Note: a bubble on the page in view, taken, and its sheet open to write in.
+function inkAddNote() {
+  inkSelect();
+  const id = C.ink.addNote(markColor());
+  if (id) inkNote(id); else toast(t("Couldn't add a note here. Try again."));
+}
+let inkNoteId = null;
+function inkNote(id) { inkNoteId = id; openMenu("inkNote"); }
+C.ink.onNote = (id) => inkNote(id);
+C.ink.noteLabel = (x) => (x ? t("Note: {text}", { text: x }) : t("Note"));
+// What a note holds, laid out like a highlight's sheet: colour, comment, tags.
+function inkNoteSheet() {
+  const id = inkNoteId;
+  const box = el("div", { class: "mark-one" });
+  let timer = 0, area = null;
+  const keep = () => {
+    clearTimeout(timer);
+    if (!area) return;
+    const n = C.ink.noteOf(id), v = area.value.slice(0, 4000);
+    if (n && n.text !== v) C.ink.editNote(id, { text: v });
+  };
+  const draw = () => {
+    const n = C.ink.noteOf(id);
+    if (!n) { back(); return; }
+    area = el("textarea", { class: "mark-note-field", rows: "4", placeholder: t("Write a comment"), "aria-label": t("Note"), maxlength: "4000", dir: "auto" });
+    area.value = n.text;
+    area.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(keep, 800); });
+    area.addEventListener("blur", keep);
+    const m = { tags: n.tags };
+    fill(box,
+      el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, t("Note"))),
+      el("div", { class: "mark-colors", role: "radiogroup", "aria-label": t("Colour") },
+        ...MARK_COLORS.map((c) => el("button", { class: "mark-swatch", type: "button", role: "radio", "aria-checked": String(n.c === c),
+          "aria-label": MARK_NAMES[c], title: MARK_NAMES[c], onclick: () => { keep(); store(MARK_COLOR_KEY, c); C.ink.editNote(id, { c }); draw(); } }, swatchDot(c)))),
+      area,
+      markTagsEditor(null, m, draw, (tags) => { keep(); C.ink.editNote(id, { tags }); }),
+      el("div", { class: "group" },
+        menuRow(t("Copy"), () => { keep(); const x = C.ink.noteOf(id); if (x) copyText(x.text, t("Copied")); }),
+        menuRow(t("Delete note"), () => { clearTimeout(timer); area = null; back().then(() => C.ink.removeNote(id)); }, "warn"),
+        menuRow(t("Done"), () => { keep(); const x = C.ink.noteOf(id); back().then(() => { if (x && !x.text.trim() && !x.tags.length) C.ink.removeNote(id); }); }, "accent")));
+    if (!n.text) setTimeout(() => area && area.focus(), 80);
+  };
+  draw();
+  return box;
+}
+
 // ---- Drawings in Highlights (2026-11) ----
 // Drawing is part of highlights: the Highlights sheet and place list what
 // was drawn, one row per paragraph (or picture) of a clip, or per page of a
@@ -724,23 +784,60 @@ function noteTextSheet() {
 // from the summary an outside file's entry keeps of its pages (`drawn`).
 function inkGroups(p) {
   if (!p || p.note) return [];
+  // Comment bubbles aren't drawings: they have rows of their own (inkNotes).
+  const strokesOf = (list) => (list || []).filter((s) => s && s.t !== "n");
   if (state.open === p && inkReady()) {
-    if (C.ink.blocks) return C.ink.drawn().map((d) => ({ n: d.page, page: false, strokes: C.ink.strokes(d.page) }));
-    return C.ink.drawn().map((d) => ({ n: d.page, page: true, strokes: C.ink.strokes(d.page) }));
+    if (C.ink.blocks) return C.ink.drawn().map((d) => ({ n: d.page, page: false, strokes: strokesOf(C.ink.strokes(d.page)) }));
+    return C.ink.drawn().map((d) => ({ n: d.page, page: true, strokes: strokesOf(C.ink.strokes(d.page)) }));
   }
   if (p.ink && typeof p.ink === "object") {
-    return Object.keys(p.ink).map(Number).filter((n) => Array.isArray(p.ink[n]) && p.ink[n].length).sort((a, b) => a - b)
-      .map((n) => ({ n, page: false, strokes: p.ink[n] }));
+    return Object.keys(p.ink).map(Number).filter((n) => Array.isArray(p.ink[n]) && strokesOf(p.ink[n]).length).sort((a, b) => a - b)
+      .map((n) => ({ n, page: false, strokes: strokesOf(p.ink[n]) }));
   }
   if (Array.isArray(p.drawn)) return p.drawn.filter((d) => Array.isArray(d) && d[0] >= 1).map(([n, k]) => ({ n, page: true, strokes: null, count: k }));
   return [];
 }
 const inkGroupCount = (g) => (g.strokes ? new Set(g.strokes.map((s) => s.id)).size : g.count || 0);
 const inkTotal = (p) => inkGroups(p).reduce((a, g) => a + inkGroupCount(g), 0);
+// A clip's comment bubbles (2026-11), listed among its highlights as what they
+// say: [{ id, n, page, text, c, tags }], from the open clip, the entry's
+// drawings by block, or the summary a file's entry keeps (`noted`).
+function inkNotes(p) {
+  if (!p) return [];
+  const one = (x, n, page) => { const c = MARK_COLORS.includes(x.c) ? x.c : "yellow"; return { id: x.id, n: Number(n), page, text: String(x.text || ""), c, color: c, tags: Array.isArray(x.tags) ? x.tags : [] }; };
+  if (state.open === p && inkReady()) return C.ink.notes().map((x) => one(x, x.n, !C.ink.blocks));
+  const out = [];
+  if (p.ink && typeof p.ink === "object") for (const [n, list] of Object.entries(p.ink)) for (const x of Array.isArray(list) ? list : []) if (x && x.t === "n") out.push(one(x, n, false));
+  if (Array.isArray(p.noted)) for (const x of p.noted) if (x && x.id) out.push(one(x, x.n, true));
+  return out.sort((a, b) => a.n - b.n);
+}
+// A bubble's row, laid out as a highlight's: the comment in its colour, its tags,
+// and the pencil to its sheet.
+function noteRow(p, nt, onGo, onEdit, title) {
+  const words = nt.text.trim();
+  return el("li", { class: "mark-item note-item" },
+    el("button", { class: "row mark-row", type: "button", "aria-label": words ? (title ? t("Note: {text}, in {title}", { text: words.slice(0, 120), title }) : t("Note: {text}", { text: words.slice(0, 120) })) : t("Note"), onclick: onGo },
+      el("span", { class: "mark-quote note-quote" + (words ? "" : " empty"), "data-c": nt.c, dir: "auto" }, inkIcon("note"), words || t("Note")),
+      markTagsLine(nt)),
+    onEdit ? el("button", { class: "icon-btn mark-edit", type: "button", "aria-label": t("Edit note"), title: t("Edit note"), onclick: onEdit }, svgIcon("rename", 18)) : null);
+}
+// To a bubble: there in the clip, with its sheet open.
+async function inkNoteGo(p, nt) {
+  await inkGoTo(p, nt);
+  const t0 = Date.now();
+  const open = () => {
+    if (state.open !== p || Date.now() - t0 > 5000) return;
+    if (!inkReady() || !C.ink.noteOf(nt.id)) { setTimeout(open, 150); return; }
+    inkNote(nt.id);
+  };
+  setTimeout(open, 250);
+}
+
 // Where a row goes among the highlights: by block (highlights count blocks
 // from 0) or by page.
 const inkOrder = (g) => (g.page ? g.n : g.n - 1);
 const inkWord = (n) => tn(n, "1 drawing", "{n} drawings");
+const noteWord = (n) => tn(n, "1 note", "{n} notes");
 function inkLabel(p, g) {
   if (g.page) return (p.note ? "Sheet " : "Page ") + g.n;
   const w = state.open === p ? C.reader.inkBlockWords(g.n) : null;
@@ -784,7 +881,8 @@ async function inkGoTo(p, g) {
 async function inkRemoveGroup(p, g) {
   if (state.open === p && inkReady()) { C.ink.clearPage(g.n); await C.ink.flush(); return; }
   if (p.ink && p.ink[g.n]) {
-    delete p.ink[g.n];
+    const notes = p.ink[g.n].filter((s) => s && s.t === "n");
+    if (notes.length) p.ink[g.n] = notes; else delete p.ink[g.n];
     if (!Object.keys(p.ink).length) delete p.ink;
     p.inkAt = Date.now();
     await C.store.writeIndex(state.pages);

@@ -21,9 +21,11 @@ function allTags() {
 // highlight's `tags`, most used first.
 function allMarkTags() {
   const counts = new Map();
-  for (const p of state.pages) for (const m of p.marks || []) for (const t of m.tags || []) {
-    const k = [...counts.keys()].find((x) => sameTag(x, t)) || t;
-    counts.set(k, (counts.get(k) || 0) + 1);
+  const count = (t) => { const k = [...counts.keys()].find((x) => sameTag(x, t)) || t; counts.set(k, (counts.get(k) || 0) + 1); };
+  for (const p of state.pages) {
+    for (const m of p.marks || []) for (const t of m.tags || []) count(t);
+    // A comment bubble's tags are a highlight's (2026-11): one list, most used first.
+    if (typeof inkNotes === "function") for (const n of inkNotes(p)) for (const t of n.tags) count(t);
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t);
 }
@@ -1994,6 +1996,7 @@ const MENUS = {
   send: { label: t("Saving a page"), build: () => sendSheet() },
   newNote: { label: t("New note"), build: () => newNoteSheet() },
   noteText: { label: t("Text"), build: () => noteTextSheet() },
+  inkNote: { label: t("Note"), build: () => inkNoteSheet() },
   noteParts: { label: t("Make a note"), build: () => notePartsSheet() },
   statsGone: { label: t("Deleted"), build: () => statsGoneSheet(state.menu.page) },
 };

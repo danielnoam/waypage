@@ -25,14 +25,17 @@ const marksMatch = (p, m, q) => (!marksColor || colorOf(m) === marksColor) && ta
 // Drawings (2026-11) are listed with each clip's highlights; a search
 // finds them by the clip's title, and a colour picked shows highlights alone.
 const hasDrawings = (p) => !p.note && !!((p.ink && Object.keys(p.ink).length) || (p.drawn && p.drawn.length));
+// Comment bubbles (2026-11) go through the same colour, tag and word filters as highlights.
+const hasNotes = (p) => !!((p.noted && p.noted.length) || (p.ink && Object.values(p.ink).some((l) => Array.isArray(l) && l.some((s) => s && s.t === "n"))) || (state.open === p && inkReady() && C.ink.notes().length));
 function marksShown() {
   const q = marksQuery.trim().toLowerCase();
-  return state.pages.filter((p) => (p.marks || []).length || hasDrawings(p))
+  return state.pages.filter((p) => (p.marks || []).length || hasDrawings(p) || hasNotes(p))
     .map((p) => {
       const ink = !marksColor && !marksTags.length && hasDrawings(p) && (!q || p.title.toLowerCase().includes(q)) ? inkGroups(p) : [];
-      return { p, ink, last: Math.max(p.inkAt || 0, ...(p.marks || []).map((m) => m.at || 0)), list: (p.marks || []).filter((m) => marksMatch(p, m, q)) };
+      const notes = hasNotes(p) ? inkNotes(p).filter((m) => marksMatch(p, m, q)) : [];
+      return { p, ink, notes, last: Math.max(p.inkAt || 0, ...(p.marks || []).map((m) => m.at || 0)), list: (p.marks || []).filter((m) => marksMatch(p, m, q)) };
     })
-    .filter((c) => c.list.length || c.ink.length)
+    .filter((c) => c.list.length || c.ink.length || c.notes.length)
     .sort((a, b) => b.last - a.last);
 }
 // Past five drawings, a clip's list stops with Show all (a PDF can have hundreds of pages drawn on).
@@ -99,6 +102,7 @@ function renderHighlights() {
   const total = state.pages.reduce((n, p) => n + (p.marks || []).length, 0);
   const drawnIn = state.pages.filter(hasDrawings);
   const drawings = drawnIn.reduce((n, p) => n + inkTotal(p), 0);
+  const everyNote = state.pages.filter(hasNotes).flatMap((p) => inkNotes(p));
   if (!marksHead) {
     const input = el("input", { type: "search", placeholder: t("Search your highlights"), "aria-label": t("Search your highlights"),
       autocomplete: "off", spellcheck: "false", enterkeyhint: "search", dir: "auto" });
@@ -109,13 +113,13 @@ function renderHighlights() {
       el("div", { class: "hl-line" },
         el("p", { class: "meta hl-count", role: "status" }),
         el("button", { class: "btn-text hl-copy", type: "button", onclick: () => {
-          const text = marksShown().map((c) => C.backup.marksMarkdown({ ...c.p, marks: c.list })).join("\n");
+          const text = marksShown().map((c) => C.backup.marksMarkdown({ ...c.p, marks: c.list }, c.notes)).join("\n");
           copyText(text, t("Highlights copied"));
         } }, t("Copy all"))),
       el("div", { class: "hl-colors" }),
       el("div", { class: "hl-tags" }));
   }
-  const everyMark = state.pages.flatMap((p) => p.marks || []);
+  const everyMark = [...state.pages.flatMap((p) => p.marks || []), ...everyNote];
   if (marksColor && !everyMark.some((m) => colorOf(m) === marksColor)) marksColor = "";
   const chips = colorChips(everyMark, marksColor, (c) => { marksColor = c; marksUpTo = MARKS_FIRST; renderHighlights(); });
   fill(marksHead.querySelector(".hl-colors"), chips);
@@ -137,22 +141,23 @@ function renderHighlights() {
         return el("button", { class: "chip" + (on ? " on" : ""), type: "button", "aria-pressed": String(on), dir: "auto", onclick: () => pickTag(x) }, "#" + x); })),
     matchBtn) : null);
   const clips = marksShown();
-  const shown = clips.reduce((n, c) => n + c.list.length, 0);
+  const shown = clips.reduce((n, c) => n + c.list.length, 0), shownNotes = clips.reduce((n, c) => n + c.notes.length, 0);
   if (marksQuery !== marksList) { marksList = marksQuery; marksUpTo = MARKS_FIRST; }
   const more = clips.length > marksUpTo;
-  marksHead.hidden = !total && !drawings;
+  marksHead.hidden = !total && !drawings && !everyNote.length;
   const hl = (n) => tn(n, "1 highlight", "{n} highlights");
   marksHead.querySelector(".hl-count").textContent = marksQuery.trim() || marksColor || marksTags.length
-    ? t("{hl} found", { hl: hl(shown) }) + (marksTags.length && (marksTags.length > 1 || marksHow === "none") ? " · " + MATCH_WORDS[marksHow].count.replace("{n}", marksTags.length) : "")
-    : t("{what} in {clips}", { what: [total || !drawings ? hl(total) : null, drawings ? inkWord(drawings) : null].filter(Boolean).join(" · "), clips: countLine(clips.length) });
-  marksHead.querySelector(".hl-copy").hidden = !shown;
-  const nodes = clips.slice(0, marksUpTo).map(({ p, list, ink }) => {
+    ? t("{hl} found", { hl: [shown || !shownNotes ? hl(shown) : null, shownNotes ? noteWord(shownNotes) : null].filter(Boolean).join(" · ") }) + (marksTags.length && (marksTags.length > 1 || marksHow === "none") ? " · " + MATCH_WORDS[marksHow].count.replace("{n}", marksTags.length) : "")
+    : t("{what} in {clips}", { what: [total || (!drawings && !everyNote.length) ? hl(total) : null, everyNote.length ? noteWord(everyNote.length) : null, drawings ? inkWord(drawings) : null].filter(Boolean).join(" · "), clips: countLine(clips.length) });
+  marksHead.querySelector(".hl-copy").hidden = !shown && !shownNotes;
+  const nodes = clips.slice(0, marksUpTo).map(({ p, list, ink, notes }) => {
     const rows = list.map((m) => ({ at: m.page ? m.page : m.block || 0, row: el("li", { class: "mark-item" },
       el("button", { class: "row mark-row", type: "button", "aria-label": t("{slice}, in {title}", { slice: m.text.slice(0, 120), title: p.title }), onclick: () => goToMark(p, m.id) },
         el("span", { class: "mark-quote", "data-c": colorOf(m), dir: "auto" }, m.text),
         m.note ? el("span", { class: "mark-note", dir: "auto" }, m.note) : null,
         markTagsLine(m))) }));
     const all = inkOpen.has(p.id);
+    for (const nt of notes) rows.push({ at: inkOrder(nt) + 0.25, row: noteRow(p, nt, () => inkNoteGo(p, nt), () => inkNoteGo(p, nt), p.title) });
     for (const g of all ? ink : ink.slice(0, INK_FIRST)) rows.push({ at: inkOrder(g) + 0.5, row: inkRow(p, g, () => inkGoTo(p, g)) });
     rows.sort((a, b) => a.at - b.at);
     const more = !all && ink.length > INK_FIRST
@@ -165,7 +170,7 @@ function renderHighlights() {
         el("span", { class: "meta" }, siteOf(p))),
       el("ol", { class: "group marks-rows" }, ...rows.map((r) => r.row), more));
   });
-  if (!total && !drawings) {
+  if (!total && !drawings && !everyNote.length) {
     nodes.push(el("div", { class: "empty" },
       el("h2", { class: "empty-title" }, t("No highlights yet")),
       el("p", { class: "empty-text" }, t("Select words in a clip and tap Mark, or Draw. Every highlight and drawing in your library gathers here."))));
