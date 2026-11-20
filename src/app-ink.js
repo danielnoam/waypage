@@ -18,6 +18,7 @@ const INK_ICONS = {
   select: '<path d="M12 4c4.4 0 8 1.8 8 4s-3.6 4-8 4-8-1.8-8-4 3.6-4 8-4z" stroke-dasharray="3 3"></path><path d="M9 12.5c-.6 2.2.4 4 2 5.2 1.1.8 1.2 2.3-.2 3.3"></path>',
   add: '<path d="M12 5v14"></path><path d="M5 12h14"></path>',
   text: '<path d="M5 7V4h14v3"></path><path d="M12 4v16"></path><path d="M9 20h6"></path>',
+  note: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"></path><path d="M8.5 11h7"></path><path d="M8.5 14.5h4"></path>',
   image: '<rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="9" cy="10" r="1.6"></circle><path d="M21 16l-5-5-9 9"></path>',
   cut: '<circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M8.1 8.1L20 20"></path><path d="M20 4L8.1 15.9"></path>',
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V6a2 2 0 0 1 2-2h8"></path>',
@@ -228,6 +229,7 @@ function inkBuild() {
     if (act === "front") { C.ink.front(); return; }
     if (act === "back") { C.ink.back(); return; }
     if (act === "edittext") { const t = C.ink.selectedText(); if (t) inkText(t); return; }
+    if (act === "editnote") { const n = C.ink.selectedNote(); if (n) inkNote(n.id); return; }
     inkPopClose();
     if (act === "tool") C.ink.setting({ tool: arg });
     else if (act === "color") C.ink.setting({ color: arg });
@@ -325,7 +327,9 @@ function inkPopMenu(kind) {
       // A picture stays on this device, so a clip's drawings, which sync, take none.
       C.ink.blocks ? null : el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkFile.click(); } }, inkIcon("image"), el("span", { class: "ink-pop-name" }, t("Image"))),
       // Typed text goes on a note (2.0.0).
-      el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkText(null); } }, inkIcon("text"), el("span", { class: "ink-pop-name" }, t("Text"))));
+      el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkText(null); } }, inkIcon("text"), el("span", { class: "ink-pop-name" }, t("Text"))),
+      // A comment bubble: colour and tags are a highlight's own (2026-11).
+      el("button", { type: "button", role: "menuitem", onclick: () => { inkPopClose(); inkAddNote(); } }, inkIcon("note"), el("span", { class: "ink-pop-name" }, t("Note"))));
   }
   return el("div", { class: "ink-pop ink-pop-styles", role: "menu", "aria-label": t("Pen style") },
     ...INK_STYLES.map(([y, name]) => el("button", { type: "button", role: "menuitemradio", "aria-checked": String(s.style === y), "aria-pressed": String(s.style === y), onclick: () => pick({ style: y }) },
@@ -408,7 +412,7 @@ function inkPaint() {
       el("span", { class: "ink-dot", "data-c": mine ? "" : c, "data-t": hl ? "h" : "p", ...(mine ? { style: "background:" + c } : {}) }));
   });
   const act = (label, icon, a, on) => el("button", { type: "button", "aria-label": label, title: label, "data-act": a, ...(on ? {} : { disabled: "" }) }, inkIcon(icon));
-  const editRow = s.tool === "select" ? [...(C.ink.selectedText() ? [act(t("Edit text"), "text", "edittext", true)] : []), act(t("Cut"), "cut", "cut", s.selected), act(t("Copy"), "copy", "copy", s.selected), act(t("Paste"), "paste", "paste", s.canPaste), act(t("Delete"), "trash", "delete", s.selected), act(t("Move to top"), "front", "front", s.selected), act(t("Move to bottom"), "back", "back", s.selected)] : [];
+  const editRow = s.tool === "select" ? [...(C.ink.selectedText() ? [act(t("Edit text"), "text", "edittext", true)] : []), ...(C.ink.selectedNote() ? [act(t("Edit note"), "note", "editnote", true)] : []), act(t("Cut"), "cut", "cut", s.selected), act(t("Copy"), "copy", "copy", s.selected), act(t("Paste"), "paste", "paste", s.canPaste), act(t("Delete"), "trash", "delete", s.selected), act(t("Move to top"), "front", "front", s.selected), act(t("Move to bottom"), "back", "back", s.selected)] : [];
   const sizeBtn = s.tool === "eraser" || s.tool === "select" ? null : el("button", { type: "button", "aria-label": t("Size {n} of 5", { n: s.size + 1 }), title: t("Size"), "aria-haspopup": "menu", "aria-expanded": String(!!inkPop && inkPop.kind === "size"), "data-act": "size" },
     el("span", { class: "ink-size", style: "width:" + INK_DOTS[s.size] + "px;height:" + INK_DOTS[s.size] + "px" }));
   const styleBtn = s.tool !== "pen" ? null : el("button", { type: "button", "aria-label": t("Pen style: {inkStyleName}", { inkStyleName: inkStyleName(s.style) }), title: t("Pen style"), "aria-haspopup": "menu", "aria-expanded": String(!!inkPop && inkPop.kind === "style"), "data-act": "style" },
@@ -714,6 +718,54 @@ function noteTextSheet() {
     el("div", { class: "group" },
       el("button", { class: "row", type: "button", onclick: done }, el("span", { class: "row-label accent" }, i18n.t("Done"))),
       el("button", { class: "row", type: "button", onclick: () => back() }, el("span", { class: "row-label" }, i18n.t("Cancel")))));
+}
+
+// ---- A comment bubble (2026-11) ----
+
+// Add > Note: a bubble on the page in view, taken, and its sheet open to write in.
+function inkAddNote() {
+  inkSelect();
+  const id = C.ink.addNote(markColor());
+  if (id) inkNote(id); else toast(t("Couldn't add a note here. Try again."));
+}
+let inkNoteId = null;
+function inkNote(id) { inkNoteId = id; openMenu("inkNote"); }
+C.ink.onNote = (id) => inkNote(id);
+C.ink.noteLabel = (x) => (x ? t("Note: {text}", { text: x }) : t("Note"));
+// What a note holds, laid out like a highlight's sheet: colour, comment, tags.
+function inkNoteSheet() {
+  const id = inkNoteId;
+  const box = el("div", { class: "mark-one" });
+  let timer = 0, area = null;
+  const keep = () => {
+    clearTimeout(timer);
+    if (!area) return;
+    const n = C.ink.noteOf(id), v = area.value.slice(0, 4000);
+    if (n && n.text !== v) C.ink.editNote(id, { text: v });
+  };
+  const draw = () => {
+    const n = C.ink.noteOf(id);
+    if (!n) { back(); return; }
+    area = el("textarea", { class: "mark-note-field", rows: "4", placeholder: t("Write a comment"), "aria-label": t("Note"), maxlength: "4000", dir: "auto" });
+    area.value = n.text;
+    area.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(keep, 800); });
+    area.addEventListener("blur", keep);
+    const m = { tags: n.tags };
+    fill(box,
+      el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, t("Note"))),
+      el("div", { class: "mark-colors", role: "radiogroup", "aria-label": t("Colour") },
+        ...MARK_COLORS.map((c) => el("button", { class: "mark-swatch", type: "button", role: "radio", "aria-checked": String(n.c === c),
+          "aria-label": MARK_NAMES[c], title: MARK_NAMES[c], onclick: () => { keep(); store(MARK_COLOR_KEY, c); C.ink.editNote(id, { c }); draw(); } }, swatchDot(c)))),
+      area,
+      markTagsEditor(null, m, draw, (tags) => { keep(); C.ink.editNote(id, { tags }); }),
+      el("div", { class: "group" },
+        menuRow(t("Copy"), () => { keep(); const x = C.ink.noteOf(id); if (x) copyText(x.text, t("Copied")); }),
+        menuRow(t("Delete note"), () => { clearTimeout(timer); area = null; back().then(() => C.ink.removeNote(id)); }, "warn"),
+        menuRow(t("Done"), () => { keep(); const x = C.ink.noteOf(id); back().then(() => { if (x && !x.text.trim() && !x.tags.length) C.ink.removeNote(id); }); }, "accent")));
+    if (!n.text) setTimeout(() => area && area.focus(), 80);
+  };
+  draw();
+  return box;
 }
 
 // ---- Drawings in Highlights (2026-11) ----

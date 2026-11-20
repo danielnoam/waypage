@@ -2841,4 +2841,9 @@ Keel.i18n.strings("he", {
   "The site doesn't say": "האתר לא מציין",
   "From {site}: {status}": "מ-{site}: {status}",
   "its site": "האתר שלו",
+  "Edit note": "עריכת פתק",
+  "Delete note": "מחיקת הפתק",
+  "Write a comment": "כותבים הערה",
+  "Note: {text}": "פתק: {text}",
+  "Couldn't add a note here. Try again.": "אי אפשר להוסיף כאן פתק. נסו שוב.",
 });

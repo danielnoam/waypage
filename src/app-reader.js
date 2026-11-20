@@ -1875,8 +1875,10 @@ const markTagsLine = (m) => (m.tags && m.tags.length
   ? el("span", { class: "mark-tags", dir: "auto" }, ...m.tags.map((x) => el("span", { class: "card-tag" }, "#" + x))) : null);
 // The tags on one highlight: its own as chips to remove, a field to add,
 // and the other highlight tags to add with a tap.
-function markTagsEditor(p, m, draw) {
+// `put(tags)`, when given, keeps them in place of saving a highlight (a comment bubble's).
+function markTagsEditor(p, m, draw, put) {
   const write = (tags) => {
+    if (put) { put(tags); if (tags.length) m.tags = tags; else delete m.tags; draw(); return; }
     if (tags.length) m.tags = tags; else delete m.tags;
     m.at = Date.now();
     return saveMarks(p).then(draw);

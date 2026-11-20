@@ -27,6 +27,18 @@
   // a line's height in sizes.
   const TEXT_SIZES = [0.018, 0.026, 0.038], TEXT_LINE = 1.25, MAX_TEXT = 4000;
   const TEXT_FONT = "Instrument Sans, system-ui, sans-serif";
+  // A comment bubble (2026-11): a box of one size in page widths, in a
+  // highlight's colour, with the comment and tags it carries.
+  const NOTE_W = 0.07, NOTE_COLORS = ["yellow", "green", "blue", "pink", "purple"];
+  const cleanNoteTags = (v) => {
+    const out = [];
+    for (const x of Array.isArray(v) ? v : []) {
+      const t = typeof x === "string" ? x.replace(/\s+/g, " ").trim().slice(0, 32) : "";
+      if (t && !out.some((y) => y.toLowerCase() === t.toLowerCase())) out.push(t);
+      if (out.length >= 20) break;
+    }
+    return out;
+  };
 
   // A colour of your own is "#rrggbb" in place of a name (the colour picker).
   const isHex = (c) => typeof c === "string" && /^#[0-9a-f]{6}$/.test(c);
@@ -153,7 +165,7 @@
 
   const pathOf = (s) => (s.t === "h" ? linePath(s.p) : penPath(s.p, s.w, s.y));
   // A picture or a line of typed text (2.0.0, notes) is a box, not a stroke.
-  const boxy = (s) => s.t === "i" || s.t === "x";
+  const boxy = (s) => s.t === "i" || s.t === "x" || s.t === "n";
   // A sheet's own background, kept as a full-page picture item so an older
   // version, which knows no such thing, still shows it (2026-11). "bgp-<paper>-"
   // is a paper this version draws itself (the picture is only for older ones);
@@ -288,7 +300,8 @@
   let sel = null;           // the selection: { n, ids }
   let board = null;         // Copy and Cut: { items, n, k, imgs }
   let picker = null;        // the eyedropper waits: the next tap on a page goes to it
-  let onChange = null, onPen = null, onProbe = null, onDraw = null, onStroke = null, onSaved = null;
+  let onChange = null, onPen = null, onProbe = null, onDraw = null, onStroke = null, onSaved = null, onNote = null;
+  let noteLabel = (x) => "Note" + (x ? ": " + x : "");
   // Something changed since the last write: a note then counts as edited (sync).
   let dirty = false;
   const layers = new Map(); // page -> svg
@@ -305,6 +318,15 @@
       if (!(n[4] >= 0.005 && n[4] <= 0.2 && n[2] > 0 && n[2] <= 3 && n[3] > 0 && n[3] <= 4 && n[0] > -2 && n[0] < 3 && n[1] > -2 && n[1] < 20)) return null;
       if (!okColor("pen", s.c)) return null;
       return { id: String(s.id || "").slice(0, 40) || freshId(), t: "x", c: s.c, x: n[0], y: n[1], w: n[2], h: n[3], z: n[4], text: s.text };
+    }
+    if (s && typeof s === "object" && s.t === "n") {
+      const n = [s.x, s.y, s.w, s.h].map(Number);
+      if (typeof s.text !== "string" || s.text.length > MAX_TEXT || !n.every(Number.isFinite)) return null;
+      if (!(n[2] > 0 && n[2] <= 0.5 && n[3] > 0 && n[3] <= 0.5 && n[0] > -2 && n[0] < 3 && n[1] > -2 && n[1] < 20)) return null;
+      const o = { id: String(s.id || "").slice(0, 40) || freshId(), t: "n", c: NOTE_COLORS.includes(s.c) ? s.c : "yellow", x: n[0], y: n[1], w: n[2], h: n[3], text: s.text };
+      const tags = cleanNoteTags(s.tags);
+      if (tags.length) o.tags = tags;
+      return o;
     }
     if (s && typeof s === "object" && s.t === "i") {
       const n = [s.x, s.y, s.w, s.h].map(Number);
@@ -566,6 +588,24 @@
       });
       t.dataset.id = s.id;
       return t;
+    }
+    if (s.t === "n") {
+      const g = D.createElementNS(NS, "g");
+      g.setAttribute("class", "note");
+      const mk = (tag, o) => { const e = D.createElementNS(NS, tag); for (const [k, v] of Object.entries(o)) e.setAttribute(k, String(v)); g.append(e); return e; };
+      const r = s.w / 2, cx = s.x + r, cy = s.y + s.h / 2;
+      mk("circle", { class: "hit", cx: r5(cx), cy: r5(cy), r: r5(r * 1.3) });
+      mk("path", { class: "bub c-" + s.c, d: "M" + r5(cx - r * 0.55) + " " + r5(cy + r * 0.8) + "L" + r5(cx - r * 0.75) + " " + r5(cy + r * 1.45) + "L" + r5(cx - r * 0.05) + " " + r5(cy + r * 0.95) + "Z" });
+      mk("circle", { class: "bub c-" + s.c, cx: r5(cx), cy: r5(cy), r: r5(r) });
+      for (const dy of [-0.3, 0.05, 0.4]) mk("line", { class: "ln", x1: r5(cx - r * 0.5), x2: r5(cx + r * (dy === 0.4 ? 0.1 : 0.5)), y1: r5(cy + r * dy), y2: r5(cy + r * dy) });
+      g.dataset.id = s.id;
+      g.setAttribute("role", "button");
+      g.setAttribute("tabindex", "0");
+      g.setAttribute("aria-label", noteLabel(s.text.trim().slice(0, 40)));
+      const open = () => { if (!on && onNote) onNote(s.id); };
+      g.addEventListener("click", open);
+      g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+      return g;
     }
     if (s.t === "i") {
       const im = D.createElementNS(NS, "image");
@@ -1191,7 +1231,7 @@
       const c = copyOf(it);
       c.id = C.save.newId();
       if (c.t === "i") { c.x += off; c.y += off; if (!imgs.has(c.f) && board.imgs[c.f]) { imgs.set(c.f, board.imgs[c.f]); C.store.writeInkImage(clip.id, c.f, board.imgs[c.f]).catch(() => {}); } }
-      else if (c.t === "x") { c.x += off; c.y += off; }
+      else if (c.t === "x" || c.t === "n") { c.x += off; c.y += off; }
       else for (let i = 0; i + 2 < c.p.length; i += 3) { c.p[i] = r4(c.p[i] + off); c.p[i + 1] = r4(c.p[i + 1] + off); }
       return c;
     });
@@ -1284,6 +1324,60 @@
     save();
     changed();
     return true;
+  }
+  // A note on the page most in view, taken, empty: { id, ... } or null.
+  function addNote(c) {
+    const v = viewPage();
+    if (!v || !clip) return null;
+    const s = { id: C.save.newId(), t: "n", c: NOTE_COLORS.includes(c) ? c : "yellow", x: r4(Math.max(0, 0.5 - NOTE_W / 2)), y: r4(Math.max(0, Math.min(v.height - NOTE_W, v.mid - NOTE_W / 2))), w: NOTE_W, h: NOTE_W, text: "" };
+    commitPlaced([{ n: v.n, s }]);
+    selSet(v.n, [s]);
+    save();
+    return s.id;
+  }
+  // A note's comment, colour or tags changed, as one step to undo. Only what is
+  // given changes.
+  function editNote(id, o) {
+    const all = copiesOf([id]).filter((g) => g.s.t === "n");
+    if (!all.length || !clip) return false;
+    const ns = [...new Set(all.map((g) => g.n))], before = snap(ns);
+    for (const g of all) {
+      if (typeof o.text === "string") g.s.text = o.text.replace(/\r/g, "").slice(0, MAX_TEXT);
+      if (NOTE_COLORS.includes(o.c)) g.s.c = o.c;
+      if (o.tags) { const tags = cleanNoteTags(o.tags); if (tags.length) g.s.tags = tags; else delete g.s.tags; }
+    }
+    undos.push({ k: "pages", before, after: snap(ns) });
+    redos = [];
+    repaintAll(ns);
+    selDrawAll();
+    save();
+    changed();
+    return true;
+  }
+  // A note taken off, as one step to undo.
+  function removeNote(id) {
+    const all = copiesOf([id]).filter((g) => g.s.t === "n");
+    if (!all.length || !clip) return false;
+    selSet(all[0].n, [all[0].s]);
+    selDelete();
+    return true;
+  }
+  // One note by id: { id, text, c, tags }, or null.
+  function noteOf(id) {
+    const g = copiesOf([id]).find((x) => x.s.t === "n");
+    return g ? { id: g.s.id, text: g.s.text, c: g.s.c, tags: (g.s.tags || []).slice() } : null;
+  }
+  // The one note that is taken, or null.
+  function selectedNote() {
+    const items = sel ? selItems() : [];
+    const t = items.length && items.every((g) => g.s.id === items[0].s.id) && items[0].s.t === "n" ? items[0].s : null;
+    return t ? noteOf(t.id) : null;
+  }
+  // Every note on the open clip: [{ id, n, text, c, tags }].
+  function notes() {
+    const out = [];
+    for (const [n, list] of Object.entries(clip ? clip.pages : {})) for (const s of list) if (s.t === "n") out.push({ id: s.id, n: Number(n), text: s.text, c: s.c, tags: (s.tags || []).slice() });
+    return out;
   }
   // The one text item that is taken, to edit: { id, text, z, c }, or null.
   function selectedText() {
@@ -1511,6 +1605,7 @@
     for (const [n, list] of Object.entries(clip ? clip.pages : {})) {
       out[n] = list.map((s) => {
         if (s.t === "x") return { img: "" };
+        if (s.t === "n") return { img: "" };
         if (s.t === "i") return { img: imgs.get(s.f) || "", x: s.x, y: s.y, w: s.w, h: s.h };
         return { pts: s.p, w: s.w, rgb: rgbOf(s), a: s.t === "h" ? 0.4 : 1, k: s.t === "h" ? 1 : exportWidth(s) };
       }).filter((s) => !("img" in s) || s.img);
@@ -1519,7 +1614,7 @@
   }
 
   C.ink = {
-    PEN, HIGHLIGHT, SIZES, STYLES, penPath, linePath, rgbOf, imageUrl: (f) => imgs.get(f) || "", TEXT_SIZES, TEXT_LINE, TEXT_FONT, textSize, addText, editText, selectedText, hits, clean, inside, within, boxOf, isHex, hexRgb, rgbHex, hsvRgb, rgbHsv,
+    PEN, HIGHLIGHT, SIZES, STYLES, penPath, linePath, rgbOf, imageUrl: (f) => imgs.get(f) || "", TEXT_SIZES, TEXT_LINE, TEXT_FONT, textSize, addText, editText, selectedText, addNote, editNote, removeNote, noteOf, selectedNote, notes, NOTE_COLORS, hits, clean, inside, within, boxOf, isHex, hexRgb, rgbHex, hsvRgb, rgbHsv,
     cut: selCut, copy: selCopy, paste: selPaste, del: selDelete, front: () => reorder(true), back: () => reorder(false), convertItem, clampInto, placeOn, addImage, viewPage, pick, colorAt, clearSelection: selClear,
     get blocks() { return blocks; },
     load, unload, flush, strokesFrom, setOn, setting, state, undo, redo, clearPage, clearAll, forPdf, count, drawn, strokes, shown,
@@ -1529,6 +1624,8 @@
     set onDraw(f) { onDraw = f; },
     set onStroke(f) { onStroke = f; },
     set onSaved(f) { onSaved = f; },
+    set onNote(f) { onNote = f; },
+    set noteLabel(f) { noteLabel = f; },
     set blockStore(f) { blockStore = f; },
     snapshot, restore, backKind, sheetCopy, arrange, unarrange, setBack, setPicture, relayer, backsDone, isBack,
     fromPhone, eraseFrom, get nat() { return nat; },

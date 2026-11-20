@@ -14,6 +14,18 @@ function test(name, fn) {
 }
 const nums = (d) => (d.match(/-?\d*\.?\d+/g) || []).map(Number);
 
+test("a comment bubble is kept with its colour, words and clean tags, and a bad one is dropped", () => {
+  const n = I.clean({ id: "n1", t: "n", c: "blue", x: 0.3, y: 0.4, w: 0.07, h: 0.07, text: "Check the date", tags: [" history ", "History", "", "exam"] });
+  assert.deepStrictEqual(n, { id: "n1", t: "n", c: "blue", x: 0.3, y: 0.4, w: 0.07, h: 0.07, text: "Check the date", tags: ["history", "exam"] });
+  assert.strictEqual(I.clean({ t: "n", c: "ink", x: 0, y: 0, w: 0.07, h: 0.07, text: "" }).c, "yellow", "a colour that isn't a highlight's falls back");
+  assert.strictEqual(I.clean({ t: "n", c: "pink", x: 0, y: 0, w: 0.07, h: 0.07, text: "" }).tags, undefined);
+  assert.strictEqual(I.clean({ t: "n", c: "pink", x: 0, y: 0, w: 0.07, h: 0.07, text: 5 }), null);
+  assert.strictEqual(I.clean({ t: "n", c: "pink", x: NaN, y: 0, w: 0.07, h: 0.07, text: "a" }), null);
+  assert.strictEqual(I.clean({ t: "n", c: "pink", x: 0, y: 0, w: 4, h: 0.07, text: "a" }), null, "a bubble isn't bigger than half a page");
+  assert.ok(I.hits(n, 0.32, 0.42, 0) && !I.hits(n, 0.6, 0.9, 0), "a tap lands on its box");
+  assert.deepStrictEqual(I.boxOf([n]).map((v) => Math.round(v * 1000) / 1000), [0.294, 0.394, 0.082, 0.082]);
+});
+
 test("a pen stroke is a closed outline that stays round its points, wider where it is pressed harder", () => {
   const w = 0.004;
   const d = I.penPath([0.1, 0.5, 0.1, 0.3, 0.5, 0.1, 0.5, 0.5, 1, 0.7, 0.5, 1], w);

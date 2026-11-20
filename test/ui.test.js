@@ -3953,6 +3953,21 @@ c("bk1", { at: 0.01 })]);
       assert.ok(moved.some((x) => Math.abs(x - x0 - 0.2) < 0.01), "the stroke moved 0.2 right: " + JSON.stringify([x0, moved]));
       await q.locator('.ink-bar [data-act="delete"]').click();
       assert.strictEqual(await q.evaluate(() => Waypage.ink.count()) < 3, true);
+      // Add > Note: a comment bubble, written in its sheet, in a highlight's colour with tags that highlights share.
+      const before = await q.evaluate(() => Waypage.ink.count());
+      await q.locator('.ink-bar [data-act="add"]').click();
+      await q.locator(".ink-pop button", { hasText: "Note" }).click();
+      await q.locator(".mark-note-field").fill("Check the date");
+      await q.locator(".mark-swatch").nth(2).click();
+      await q.locator(".tag-input").fill("history");
+      await q.locator(".tag-input").press("Enter");
+      const note = await q.evaluate(() => Waypage.ink.notes()[0]);
+      assert.deepStrictEqual([note.text, note.c, note.tags], ["Check the date", "blue", ["history"]]);
+      assert.strictEqual(await q.evaluate(() => allMarkTags().includes("history")), true, "highlights offer a note's tags");
+      await q.locator("button.row", { hasText: /^Done$/ }).click();
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-ink .note .bub.c-blue").length > 0), true, "the bubble is on the page");
+      await q.evaluate((id) => Waypage.ink.removeNote(id), note.id);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), before, "taking the note off leaves the drawings as they were");
       // Add > Image puts a picture on the page, taken, kept and saved in a copy.
       const png = await q.evaluate(() => { const c = document.createElement("canvas"); c.width = 40; c.height = 20; const g = c.getContext("2d"); g.fillStyle = "#c33"; g.fillRect(0, 0, 40, 20); return c.toDataURL("image/png"); });
       await q.locator('.ink-bar [data-act="add"]').click();

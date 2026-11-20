@@ -360,6 +360,22 @@ kept (`.custom`). The bar's colours are slots (`inkSlots`, kept in
 the colour sheet for one; its eyedropper (`ink.pick`, `colorAt`) takes the
 colour of the stroke tapped, else the pixel of the page's picture there.
 
+A comment bubble (2026-11, `ink.js` `t: "n"`) is a third box item beside text
+and pictures: `{ id, t: "n", c, x, y, w, h, text, tags? }`, `w` and `h` one fixed
+size in page widths (`NOTE_W`), `c` one of the five highlight colours, up to 20
+tags. Draw's Add › Note drops one on the page in view (`addNote`) and opens its
+sheet (`app-ink.js inkNoteSheet`, laid out like a highlight's: colours, comment,
+tags); `editNote` and `removeNote` are undo steps. It works in both modes, so a
+clip's bubbles ride `ink` by block through sync and backup unchanged (`mergeInk`
+is by id). Tapping a bubble opens its sheet with Draw off (`onNote`, a click on the
+`.note` node, which keeps `pointer-events` on in reader.css); with Draw on, Select
+takes it and the bar's Edit note opens it. Its colours are the highlights' (`MARK_COLORS`)
+and its tags are the highlights' list: `allMarkTags` counts a bubble's tags, and the
+sheet uses `markTagsEditor` with a `put` in place of saving a highlight. Left out
+for now: a copy of the PDF and Save as PDF (`pdf.js inkOf` has no sticky-note
+editor in pdf.js's annotation storage; `forPdf` and `notes.js sheetCanvas` skip it),
+and rows for bubbles in the Highlights list.
+
 The pages are one surface (1.57.0). A stroke or picture that reaches over
 more than one page is kept on each page it touches, whole, in that page's
 own widths, with the same `id` (`ink.js placeOn`, `convertItem`; each layer

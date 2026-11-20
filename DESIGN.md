@@ -836,6 +836,13 @@ rule, the tool's colours (the one being changed ringed in `--accent`) and
 the eyedropper, then Cancel and Done. The eyedropper hides the card until
 a page is tapped.
 
+**Note (2026-11).** The + menu also has Note: a round comment bubble on the
+page, 7% of its width, in one of the five highlight colours with a `--line`-weight
+ring and three short lines, a small tail at its foot. Tap it (Draw on or off) and
+the usual sheet opens, laid out as a highlight's: Colour swatches, the comment,
+Tags (chips and Add a tag), then Copy, Delete note and Done. With Select, a taken
+bubble adds Edit note to the second row.
+
 Select's second row also has Move to top (arrow up) and Move to bottom
 (arrow down) after Delete, dim until something is taken. A line drawn
 across two pages, or an item dragged from one to the next, shows over both
