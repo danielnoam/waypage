@@ -149,7 +149,7 @@ async function phone(browser) {
       await ctx.close();
     });
 
-    await test("a story's Save asks: a collection, a series, or one EPUB file that's in no collection", async () => {
+    await test("a story's Save asks: a collection or series (picked on Save with options), or one EPUB file that's in no collection", async () => {
       const { ctx, p } = await phone(browser);
       p.errors = [];
       p.on("pageerror", (e) => p.errors.push(e.message));
@@ -173,14 +173,13 @@ async function phone(browser) {
       };
       await openSave();
       const pick = p.locator("#menuSheet .pick-row", { hasText: "Save as" }).locator(".dropdown-btn");
-      assert.match(await pick.textContent(), /Collection/, "a collection at first");
+      assert.match(await pick.textContent(), /Collection or series/, "clips at first");
       await pick.click();
-      assert.deepStrictEqual((await p.locator('[role="option"]').allTextContents()).map((x) => x.trim()), ["Collection", "Series", "EPUB file"]);
-      await p.locator('[role="option"]', { hasText: /^Series$/ }).last().click();
+      assert.deepStrictEqual((await p.locator('[role="option"]').allTextContents()).map((x) => x.trim()), ["Collection or series", "EPUB file"]);
+      await p.locator('[role="option"]', { hasText: /^Collection or series$/ }).last().click();
       await p.locator("#menuSheet .btn-primary", { hasText: /^Save$/ }).click();
       await p.locator("#batchView .batch-links").waitFor();
-      assert.strictEqual(await p.locator("#batchView .settings-section .overline", { hasText: /^Series$/ }).count(), 1);
-      assert.strictEqual(await p.locator("#batchView .batch-folder .dropdown-btn").textContent(), "New series…");
+      assert.strictEqual(await p.locator("#batchView .batch-folder .dropdown-btn").textContent(), "New collection…");
       await p.locator("#batchView .batch-folder .dropdown-btn").click();
       const opts = (await p.locator('[role="option"]').allTextContents()).map((x) => x.trim());
       assert.deepStrictEqual(opts.slice(-2), ["New collection…", "New series…"], opts.join(", "));
