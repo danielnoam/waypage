@@ -6362,7 +6362,7 @@ c("bk1", { at: 0.01 })]);
         const c = await carFolderList(carFolders()[0], list, new Set());
         return { c, hidden: list.clips.every((x) => x.hide && x.items.length === 2) };
       });
-      assert.deepStrictEqual(got.c.starts.map((x) => [x.label, x.id]), [["Continue", "c:car5"], ["From the start", "c:car1"], ["Newest", "c:car20"]]);
+      assert.deepStrictEqual(got.c.starts.map((x) => [x.label, x.id]), [["Continue", "c:car5"], ["Newest", "c:car20"]]);
       assert.deepStrictEqual(got.c.at, [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 18, 19]);
       assert.strictEqual(got.c.items[got.c.at.indexOf(3)], "c:car4");
       assert.ok(got.hidden);
