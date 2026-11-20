@@ -858,8 +858,8 @@
     for (const c of events) {
       if (cur.erase) { eraseAtClient(c.clientX, c.clientY, svg); continue; }
       const [x, y] = where(c, svg);
-      // A snapped line's end follows the pen; a circle stays as it is.
-      if (cur.snapped) { if (cur.snapped === "line") lineTo(cur, x, y); continue; }
+      // A snapped line's end follows the pen; a circle moves with it.
+      if (cur.snapped) { if (cur.snapped === "line") lineTo(cur, x, y); else moveRound(cur, x, y); continue; }
       add(c, svg, x, y);
     }
     if (cur.erase) return;
@@ -889,6 +889,21 @@
   function lineTo(c, x, y) {
     const [ex, ey] = clampPt(c, x, y), p = [], n = 12;
     for (let i = 0; i <= n; i++) p.push(r4(c.from[0] + (ex - c.from[0]) * i / n), r4(c.from[1] + (ey - c.from[1]) * i / n), c.pr);
+    c.s.p = p;
+  }
+  // The snapped circle moved along with the pen; in Pages it slides along the
+  // page's edges rather than leaving the page.
+  function moveRound(c, x, y) {
+    const b = c.base;
+    let dx = x - c.grab[0], dy = y - c.grab[1];
+    if (c.hmax) {
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (let i = 0; i + 2 < b.length; i += 3) { x0 = Math.min(x0, b[i]); x1 = Math.max(x1, b[i]); y0 = Math.min(y0, b[i + 1]); y1 = Math.max(y1, b[i + 1]); }
+      dx = Math.min(1 - x1, Math.max(-x0, dx));
+      dy = Math.min(c.hmax - y1, Math.max(-y0, dy));
+    }
+    const p = b.slice();
+    for (let i = 0; i + 2 < p.length; i += 3) { p[i] = r4(b[i] + dx); p[i + 1] = r4(b[i + 1] + dy); }
     c.s.p = p;
   }
   function snapShape(c) {
@@ -923,6 +938,8 @@
         q.push(r4(x), r4(y), pr);
       }
       c.s.p = q;
+      c.base = q.slice();
+      c.grab = B;
       kind = "round";
     }
     c.snapped = kind;

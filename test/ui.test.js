@@ -2197,15 +2197,24 @@ function zipOf(files) {
       const box = await q.evaluate(() => { const r = C.reader.frameDoc.querySelector(".co-ink").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width }; });
       assert.ok(Math.abs(box.x + l.p[36] * box.w - 320) < 3 && Math.abs(box.y + l.p[37] * box.w - 380) < 4, "the end followed the pen: " + JSON.stringify([l.p.slice(36), box]));
       // A rough circle.
-      const ring = [["pointerdown", 280, 500]];
-      for (let i = 1; i <= 40; i++) { const a = (i / 40) * Math.PI * 2, r = 70 + (i % 4) * 2; ring.push(["pointermove", 200 + r * Math.cos(a), 500 + r * Math.sin(a)]); }
-      await ptr([...ring, ["pointermove", 270, 500, 700], ["pointerup", 270, 500]]);
+      const ring = [["pointerdown", 280, 380]];
+      for (let i = 1; i <= 40; i++) { const a = (i / 40) * Math.PI * 2, r = 70 + (i % 4) * 2; ring.push(["pointermove", 200 + r * Math.cos(a), 380 + r * Math.sin(a)]); }
+      await ptr([...ring, ["pointermove", 270, 380, 700], ["pointerup", 270, 380]]);
       l = await last();
       assert.strictEqual(l.p.length, 65 * 3, "a closed round shape");
       const mx = l.p.filter((_, i) => i % 3 === 0), my = l.p.filter((_, i) => i % 3 === 1);
       const cx = (Math.max(...mx) + Math.min(...mx)) / 2, cy = (Math.max(...my) + Math.min(...my)) / 2;
       const rs = mx.map((x, i) => Math.hypot(x - cx, my[i] - cy));
       assert.ok(Math.max(...rs) - Math.min(...rs) < 0.004, "all the same distance from the middle");
+      // Held, then dragged on: the circle moves with the pen, the same size.
+      await ptr([...ring, ["pointermove", 270, 380, 700], ["pointermove", 290, 395], ["pointermove", 310, 410], ["pointerup", 310, 410]]);
+      const moved = await last();
+      assert.strictEqual(moved.p.length, 65 * 3, "still the circle");
+      const nx = moved.p.filter((_, i) => i % 3 === 0), ny = moved.p.filter((_, i) => i % 3 === 1);
+      const ncx = (Math.max(...nx) + Math.min(...nx)) / 2, ncy = (Math.max(...ny) + Math.min(...ny)) / 2;
+      const lw = await q.evaluate(() => C.reader.frameDoc.querySelector(".co-ink").getBoundingClientRect().width);
+      assert.ok(Math.abs((ncx - cx) * lw - 40) < 3 && Math.abs((ncy - cy) * lw - 30) < 3, "moved by the pen's drag");
+      assert.ok(Math.abs((Math.max(...nx) - Math.min(...nx)) - (Math.max(...mx) - Math.min(...mx))) < 0.002, "the same size");
       // Off in the Draw tab: kept as drawn.
       await q.evaluate(() => inkShapes(false));
       await ptr([...line, ["pointermove", 300, 310, 700], ["pointerup", 300, 310]]);
