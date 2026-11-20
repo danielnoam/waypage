@@ -2318,7 +2318,8 @@ document.addEventListener("visibilitychange", async () => {
 });
 
 $("readerAloud").hidden = !speech.available;
-$("readerAloud").addEventListener("click", () => (aloudOn() && aloudHere() ? stopAloud() : startAloud()));
+// A clip with its own made sound plays that instead (app-listen.js).
+$("readerAloud").addEventListener("click", () => (aloudOn() && aloudHere() ? stopAloud() : voicedSound(state.open) ? voicedPlay() : startAloud()));
 $("readerScroll").addEventListener("click", () => (glide.on ? stopGlide() : startGlide()));
 $("aloudPlay").addEventListener("click", () => {
   if (aloud.state === "playing") { setAloud("paused", aloud.index); speech.pause(); }

@@ -30,7 +30,7 @@
   };
   const round2 = (n) => Math.round(Math.max(0, Math.min(1, n || 0)) * 100) / 100;
   const mins = (ms) => Math.round((ms || 0) / 60000);
-  const audiobook = (p) => !!(p.audio && p.audio.parts && !p.audio.overlay);
+  const audiobook = (p) => !!(p.audio && p.audio.parts && !p.audio.overlay && !p.audio.voiced);
   const ext = (p) => String((p.file && (p.file.ext || p.file.kind)) || "").toLowerCase();
   // A short, stable name for a story's page.
   const hash = (t) => { let h = 2166136261; for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619); return (h >>> 0).toString(36); };

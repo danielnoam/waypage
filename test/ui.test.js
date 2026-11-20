@@ -6255,6 +6255,77 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("Save the narration gives a clip its own sound, which plays in place of Narrate and never syncs; a collection gives each clip one", async () => {
+      const q = await page(browser, 390);
+      for (const f of ["article.html", "chapters.html"]) {
+        await q.fill("#saveUrl", ROOT + "test/fixtures/" + f);
+        await q.press("#saveUrl", "Enter");
+        await until(q, (n) => state.pages.length >= n, f === "article.html" ? 1 : 2);
+      }
+      await q.evaluate(async () => {
+        const A = window.Waypage.platform.audio;
+        Object.defineProperty(A, "canVoice", { get: () => true, configurable: true });
+        window.asked = [];
+        window.played = [];
+        A.voice = async (o) => {
+          asked.push(o);
+          if (voiceStep) voiceStep({ n: o.items.length, of: o.items.length });
+          return { uri: "file:///cache/" + o.name + ".m4a", dur: o.items.length * 5, size: 100, t0: o.items.map((_, i) => i * 5), t1: o.items.map((_, i) => i * 5 + 4) };
+        };
+        A.stopVoicing = () => {};
+        A.play = async (o) => { played.push(o); };
+        window.Waypage.platform.keepMade = async (from, name) => "file:///data/Files/" + name;
+        state.pages.forEach((x, i) => { x.folder = "Flights"; x.folderAt = 1000 - i; });
+        await window.Waypage.store.writeIndex(state.pages);
+      });
+      const clip = await q.evaluate(() => state.pages.find((x) => /Long Haul/.test(x.title)).id);
+      await q.evaluate((id) => makeAudiobook({ page: state.pages.find((x) => x.id === id) }), clip);
+      const one = await q.evaluate(async (id) => {
+        const p = state.pages.find((x) => x.id === id);
+        const data = await window.Waypage.store.readListen(id);
+        return { count: state.pages.length, own: audioFor(p) === p, audiobook: isAudiobook(p), mode: modeOf(p), ours: p.audio.ours, chapters: p.audio.chapters.length, dur: p.audio.dur,
+          words: data.pieces.map((x) => x.text).join(" "), covered: data.ranges, synced: JSON.stringify(window.Waypage.backup.cleanMeta(p, p.id)), car: carBookOk(p) && !carClipOk(p) };
+      }, clip);
+      // No new entry: the clip itself has the sound, reads along with itself, and isn't an audiobook of its own.
+      assert.strictEqual(one.count, 2);
+      assert.ok(one.own && !one.audiobook && one.mode === "book" && one.ours && one.car, JSON.stringify(one));
+      assert.ok(/oceanic track/.test(one.words), "the words to read along with are the clip's text");
+      assert.deepStrictEqual(one.covered, [[0, one.dur]]);
+      // The start and its two headings are its chapters.
+      assert.strictEqual(one.chapters, 3);
+      // The sound's files stay on this device: not in what syncs or is backed up.
+      assert.ok(!/file:\/\/\/data|"audio"/.test(one.synced), one.synced);
+      // Narrate's button plays the sound, with no speaking.
+      await q.evaluate((id) => openPage(id), clip);
+      await q.locator("#readerView:not([hidden])").waitFor();
+      await q.evaluate(() => { window.spoke = 0; const S = window.Waypage.platform.speech; S.play = async () => { spoke++; }; });
+      await q.click("#readerAloud");
+      await until(q, () => played.length === 1);
+      assert.strictEqual(await q.evaluate(() => spoke), 0);
+      assert.ok(await q.evaluate((id) => played[0].key === id && played[0].parts.length === state.pages.find((x) => x.id === id).audio.parts.length, clip), "plays the made files");
+      await q.evaluate(() => { listenStop(); closeReader(); });
+      // A collection: each clip without a sound gets its own; the one made already is left.
+      const n = await q.evaluate(() => asked.length);
+      await q.evaluate(() => makeAudiobook({ folder: "Flights" }));
+      const all = await q.evaluate((k) => ({ voiced: folderPages("Flights").filter(voicedSound).length, count: state.pages.length,
+        engines: asked.slice(k).every((o) => "engine" in o && "voice" in o && o.items.length) }), n);
+      assert.deepStrictEqual(all, { voiced: 2, count: 2, engines: true });
+      // Storage removes every saved narration at once, to make room.
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Storage" }).click();
+      const room = q.locator(".room-narrations");
+      await room.waitFor();
+      assert.ok(/2 clips with a saved narration/.test(await room.innerText()), await room.innerText());
+      await q.evaluate(() => { window.confirm = () => true; });
+      await room.click();
+      await until(q, () => !document.querySelector(".room-narrations"));
+      assert.strictEqual(await q.evaluate(() => state.pages.filter(voicedSound).length), 0);
+      // Narrate reads it again once it's removed.
+      assert.ok(await q.evaluate((id) => { const p = state.pages.find((x) => x.id === id); return !p.audio && !audioFor(p); }, clip));
+      assert.deepStrictEqual(q.errors.filter((e) => !/waypage-fetch/.test(e)), []);
+      await q.context().close();
+    });
+
     await test("an audiobook's dot drags along the chapter and seeks once, on letting go (1.58.2)", async () => {
       const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
       const q = await ctx.newPage();

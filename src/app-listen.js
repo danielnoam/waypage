@@ -30,13 +30,16 @@ let trackDrag = null;
 const lis = { key: "", state: "stopped", part: 0, t: 0, data: null, dataFor: "", sync: null, syncFor: "", said: -1, savedAt: 0, writing: false, note: "", seen: 0 };
 // An audiobook of its own; hasSound also takes an EPUB with narration.
 const hasSound = (p) => !!(p && p.audio && p.audio.parts);
-const isAudiobook = (p) => hasSound(p) && !p.audio.overlay;
+// A book's own narration (overlay) or a clip's made sound (voiced)
+// plays on the clip itself: it isn't an audiobook of its own.
+const ownSound = (p) => !!(p && p.audio && (p.audio.overlay || p.audio.voiced));
+const isAudiobook = (p) => hasSound(p) && !ownSound(p);
 const listenPage = () => state.pages.find((p) => p.id === lis.key) || null;
 // The book the player in the reader is for: the one playing if it is
 // this page's, else this page's own.
 const playerBook = () => { const a = listenPage(), here = audioFor(state.open); return here && !(a && shownFor(a) === state.open) ? here : a || here; };
 const listening = () => lis.state === "playing" || lis.state === "paused" || lis.state === "loading";
-const modeOf = (a) => (a && a.listen && a.listen.mode) || (a && a.audio && a.audio.overlay ? "book" : "listen");
+const modeOf = (a) => (ownSound(a) ? "book" : (a && a.listen && a.listen.mode) || "listen");
 const speedOf = (a) => (a && a.listen && a.listen.speed) || 1;
 const placeOf = (a) => (a && a.listen && a.listen.t) || 0;
 const durOf = (a) => (a && a.audio && a.audio.dur) || (a && a.listen && a.listen.dur) || 0;
@@ -45,7 +48,7 @@ const chaptersOf = (a) => (a && a.audio && a.audio.chapters) || [];
 // The book an audiobook reads along with: by its id, else the same file
 // (another device's copy), else the same address.
 function bookOf(a) {
-  if (a && a.audio && a.audio.overlay) return a;
+  if (ownSound(a)) return a;
   const b = a && a.listen && a.listen.book;
   if (!b) return null;
   return state.pages.find((p) => p.id === b.id && !isAudiobook(p))
@@ -60,7 +63,7 @@ const audioFor = (p) => (!p ? null : hasSound(p) ? p
   : state.pages.find((a) => isAudiobook(a) && modeOf(a) === "book" && bookOf(a) === p) || null);
 // Opening an audiobook that reads along with a book opens the book.
 function listenRedirect(p) {
-  if (!isAudiobook(p) || p.audio.overlay) return null;
+  if (!isAudiobook(p)) return null;
   const b = modeOf(p) === "book" ? bookOf(p) : null;
   return b ? b.id : null;
 }
@@ -583,14 +586,14 @@ function paintListen() {
   const open = state.open;
   const mine = open && (a ? shownFor(a) === open : !!audioFor(open));
   const here = audioFor(open);
-  if (here && isAudiobook(open) && !open.audio.overlay) $("readerAloud").hidden = true;
+  if (here && isAudiobook(open)) $("readerAloud").hidden = true;
   // No words on the page yet: nothing to highlight, draw on or translate.
   if (audioWordless(open)) {
     for (const id of ["readerMarks", "readerTranslate", "readerInk"]) $(id).hidden = true;
     coverIn(open);
   }
   const show = !!here;
-  if (here && !here.audio.overlay && modeOf(here) === "transcript" && state.open === here && chapterNow(here, placeNow(here)) !== pageCh[here.id]) turnPage(here);
+  if (here && !ownSound(here) && modeOf(here) === "transcript" && state.open === here && chapterNow(here, placeNow(here)) !== pageCh[here.id]) turnPage(here);
   $("readerChapters").hidden = !here || (chaptersOf(playerBook()).length < 2 && !bookmarksOf(playerBook()).length);
   const box = $("listenPlayer");
   const was = box.hidden;
@@ -771,7 +774,8 @@ async function syncFor(a, page) {
     } else {
       const words = ci == null ? heardWords(a, data) : inChapter(a, heardWords(a, data), ci);
       if (!words.length) return null;
-      const html = page === a ? await C.store.readPage(a.id) : page.link ? await C.files.openLinked(page) : await C.store.readPage(page.id);
+      // An audiobook's own page is its transcript; a clip with its own sound reads along with itself.
+      const html = page.link && !(page === a && isAudiobook(a)) ? await C.files.openLinked(page) : await C.store.readPage(page.id);
       const texts = C.reader.readableIn(html, READ_OPTS);
       const book = L.bookWords(texts);
       sync = L.syncOf(book, L.align(words, book));
@@ -849,7 +853,7 @@ const readyPack = () => {
   const ready = (packs.packs || []).filter((p) => p.ready);
   return ready.find((p) => p.id === want) || ready.find((p) => p.id === "better") || ready[0] || null;
 };
-const wantsWords = (a) => !!a && !a.audio.overlay && (modeOf(a) === "transcript" || modeOf(a) === "book");
+const wantsWords = (a) => !!a && !ownSound(a) && (modeOf(a) === "transcript" || modeOf(a) === "book");
 
 // The first stretch from `t` that isn't written yet, or null when the
 // next AHEAD seconds are.
@@ -1018,7 +1022,7 @@ function listenMode(a, mode, book) {
 // one this book is read along with.
 function listenAlongRows(p) {
   const a = audioFor(p);
-  if (!a || a.audio.overlay) return null;
+  if (!a || ownSound(a)) return null;
   const head = el("h3", { class: "overline" }, t("Read along"));
   if (!A.canTranscribe) return [head, el("p", { class: "meta" }, t("Reading along with a book or a transcript is in the Android app, which writes the transcript on the phone."))];
   const row = (label, note, act, accent) => el("button", { class: "row", type: "button", onclick: act },
@@ -1453,6 +1457,196 @@ async function lookForNarration(p) {
   if (found && state.open === p) { paintListen(); toast(t("This book has its own narration. Press play to read along."), t("Play"), () => listenPlay(p)); }
 }
 
+// ---- Made from text (2026-11) ----
+// A clip or book spoken by its Narrate voice into sound files (Android:
+// AudiobookPlugin.voice, one .m4a at a time, in Waypage's own files) that
+// the clip itself then plays, reading along with its words, in place of
+// Narrate: `audio` on the clip with `voiced`, like a book's own narration.
+// The files are this device's (`audio` never syncs and is in no backup).
+// A collection gives each of its clips its own. Each piece's times come
+// with the sound, so the words to read along with are written whole.
+const VOICE_FILE = 120;
+let voicingRun = null;
+const voicedSound = (p) => !!(p && p.audio && p.audio.voiced && p.audio.parts);
+const canVoice = () => A.canVoice;
+// What has text to speak: not a sound, a picture book or printed pages.
+const voiceable = (p) => !!p && !p.preview && !p.remote && !p.comic && !p.zim && !(hasSound(p) && !voicedSound(p)) && !(p.file && p.file.kind === "audio") && !C.files.printed(p);
+
+async function voiceTextsOf(p) {
+  let html = null;
+  try { html = p.link ? await C.files.openLinked(p) : await C.store.readPage(p.id); } catch (e) { html = null; }
+  return html ? C.reader.readableRanks(html, READ_OPTS) : { texts: [], ranks: [] };
+}
+// A clip's chapters: its top headings (the clip's title alone doesn't
+// count), each with the text under it; a heading with nothing under it
+// joins the next.
+function voiceChapters(p, texts, ranks) {
+  const count = (r) => ranks.filter((x) => x > 0 && x <= r).length;
+  const level = count(1) >= 2 ? 1 : count(2) >= 2 ? 2 : count(3) >= 2 ? 3 : 0;
+  const out = [];
+  texts.forEach((text, b) => {
+    const head = level && ranks[b] > 0 && ranks[b] <= level;
+    const last = out[out.length - 1];
+    if (!last || (head && last.blocks.some((x) => ranks[x] === 0))) out.push({ title: head ? text : p.title, blocks: [] });
+    out[out.length - 1].blocks.push(b);
+  });
+  return out.map((c) => ({ ...c, texts: c.blocks.map((b) => texts[b]) }));
+}
+// The pieces Narrate would speak, cut into files of at most VOICE_FILE.
+function voiceFiles(chapters) {
+  const files = [];
+  chapters.forEach((c, ci) => {
+    const { items, map } = pieces(c.texts.map((text, block) => ({ text, block })));
+    for (let i = 0; i < items.length; i += VOICE_FILE) files.push({ ci, first: i === 0, items: items.slice(i, i + VOICE_FILE), blocks: map.slice(i, i + VOICE_FILE) });
+  });
+  return files;
+}
+
+// One clip's sound, made and put on it. Throws "stopped", "engine",
+// "silent" or another reason. `step(share)` hears how far it got.
+async function voiceClip(p, run, step) {
+  const { texts, ranks } = await voiceTextsOf(p);
+  if (!texts.length) throw new Error("silent");
+  const chapters = voiceChapters(p, texts, ranks);
+  const files = voiceFiles(chapters);
+  const total = files.reduce((s, f) => s + f.items.length, 0);
+  if (!total) throw new Error("silent");
+  const folder = String(p.title).replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 70) + " (" + p.id + ")";
+  const parts = [], marks = [], data = { pieces: [], ranges: [], pack: "voice" }, kept = [];
+  let at = 0, done = 0;
+  try {
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      let got = null;
+      while (!got) {
+        if (!(await gate(run))) throw new Error("stopped");
+        voiceStep = (e) => {
+          step(Math.min(1, (done + (e.n || 0)) / total));
+          if (run.paused || run.stopped) A.stopVoicing();
+        };
+        try {
+          got = await A.voice({ items: f.items, blocks: f.blocks, lang: p.lang || "", voice: voiceFor(p), engine: engineFor(p), name: "v" + run.id + "-" + i });
+        } catch (e) {
+          const why = String((e && e.message) || e);
+          if (why === "silent") { got = { skip: true }; break; }
+          // Paused: this file again from its start on Resume.
+          if (why === "stopped" && run.paused && !run.stopped) continue;
+          throw new Error(why);
+        } finally { voiceStep = null; }
+      }
+      done += f.items.length;
+      if (got.skip || !got.dur) continue;
+      const ref = await C.platform.keepMade(got.uri, folder + "/" + String(i + 1).padStart(3, "0") + ".m4a", "app");
+      if (!ref) throw new Error("not kept");
+      kept.push(ref);
+      if (f.first) marks.push({ t: at, title: chapters[f.ci].title });
+      f.items.forEach((text, k) => {
+        if (got.t1[k] > got.t0[k]) data.pieces.push({ t0: at + got.t0[k], t1: at + got.t1[k], text, ...(k === 0 || f.blocks[k] !== f.blocks[k - 1] ? { para: 1 } : {}) });
+      });
+      parts.push({ ref, name: String(i + 1).padStart(3, "0") + ".m4a", size: got.size || 0, dur: got.dur });
+      at += got.dur;
+    }
+    if (!parts.length) throw new Error("silent");
+  } catch (e) {
+    for (const ref of kept) C.platform.dropKept(ref);
+    throw e;
+  }
+  data.ranges = [[0, at]];
+  // A sound made before goes, with its files.
+  if (voicedSound(p)) dropAudioFiles(p);
+  if (lis.key === p.id) listenStop();
+  p.audio = { parts, chapters: marks.length > 1 ? marks : [], dur: at, ours: true, voiced: { at: Date.now(), of: p.editedAt || p.savedAt || 0 } };
+  p.listen = { ...(p.listen || {}), t: 0, tAt: Date.now(), dur: Math.round(at) };
+  delete p.listen.mode;
+  delete p.listen.book;
+  await C.store.writeListen(p.id, data);
+  if (lis.dataFor === p.id) { lis.data = null; lis.dataFor = ""; }
+  lis.sync = null; lis.syncFor = "";
+}
+
+// what: { page } or { folder }.
+async function makeAudiobook(what) {
+  if (!canVoice()) { toast(t("Saving the narration is in the Android app.")); return; }
+  if (voicingRun) { toast(t("A narration is being saved already. It's in Downloads.")); return; }
+  const list = (what.folder ? folderPages(what.folder).filter((p) => !voicedSound(p)) : [what.page]).filter(voiceable);
+  const title = what.folder || what.page.title;
+  if (!list.length) { toast(what.folder && folderPages(what.folder).some(voicedSound) ? t("Every clip here has its narration saved already.") : t("There's no text here to narrate.")); return; }
+  const run = Object.assign(startRun(null, t("Saving the narration"), 1), { label: title, files: true, keep: true, voicing: true, now: t("Starting"), part: 0 });
+  voicingRun = run;
+  runChanged();
+  toast(t("Saving the narration of “{title}”. It's in Downloads.", { title }));
+  let made = 0, why = "";
+  try {
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i];
+      if (!state.pages.includes(p)) continue;
+      run.now = list.length > 1 ? t("Clip {n} of {all}", { n: i + 1, all: list.length }) : t("Starting");
+      updateRunCard(run);
+      try {
+        await voiceClip(p, run, (share) => {
+          run.part = (i + share) / list.length;
+          if (list.length === 1) run.now = t("{pct}% done", { pct: Math.round(share * 100) });
+          updateRunCard(run);
+        });
+        made++;
+        await C.store.writeIndex(state.pages);
+        if (state.open === p) listenOpened(p);
+      } catch (e) {
+        why = String((e && e.message) || e);
+        // One clip with nothing to say doesn't stop the rest.
+        if (why !== "silent" || list.length === 1) throw e;
+      }
+    }
+    renderLibrary();
+    if (state.folder) renderFolder();
+    if (!made) throw new Error(why || "silent");
+    const one = list.length === 1 ? list[0] : null;
+    toast(one ? t("“{title}” plays its saved narration now.", { title }) : tn(made, "1 clip in “{title}” plays its saved narration now.", "{n} clips in “{title}” play their saved narration now.", { title }),
+      one && state.open !== one ? t("Open") : null, one && state.open !== one ? () => openPage(one.id) : null);
+  } catch (e) {
+    why = String((e && e.message) || e);
+    toast(run.stopped || why === "stopped" ? (made ? t("Stopped. The clips already saved keep their narration.") : t("Stopped. Nothing was kept."))
+      : why === "engine" ? t("Couldn't start the speech engine. Check the phone's text-to-speech settings.")
+        : why === "silent" ? t("The voice made no sound for this text. Try another voice in Narrate.")
+          : t("Couldn't save the narration. Try again, or pick another voice in Narrate."));
+  } finally {
+    A.stopVoicing();
+    voicingRun = null;
+    run.now = null;
+    runs.delete(run);
+    runChanged();
+  }
+}
+// The made sound taken off a clip: it narrates again.
+async function dropVoiced(p, quiet) {
+  if (!voicedSound(p)) return;
+  if (lis.key === p.id) listenStop();
+  dropAudioFiles(p);
+  delete p.audio;
+  delete p.listen;
+  await C.store.writeListen(p.id, null).catch(() => {});
+  lis.sync = null; lis.syncFor = "";
+  if (lis.dataFor === p.id) { lis.data = null; lis.dataFor = ""; }
+  if (state.open === p) listenOpened(p);
+  if (quiet) return;
+  await C.store.writeIndex(state.pages);
+  renderLibrary();
+  toast(t("The saved narration is gone. Narrate reads it live again."));
+}
+// Narrate's button on a clip with its own sound: from the reading line,
+// or pause and go on as the player's button does.
+async function voicedPlay() {
+  const p = state.open;
+  if (lis.key === p.id) { listenToggle(); return; }
+  C.reader.readable(READ_OPTS);
+  const at = C.reader.firstShown();
+  const s = await syncFor(p, p).catch(() => null);
+  const t = s && (at.index > 0 || at.offset > 0) ? L.timeAt(s, at.index, at.offset) : null;
+  listenPlay(p, t == null ? undefined : t);
+}
+let voiceStep = null;
+A.onVoiced((e) => { if (voiceStep) voiceStep(e); });
+
 // ---- The card and the library ----
 
 // An audiobook's line on its card: what's left to hear.
@@ -1467,7 +1661,7 @@ function listenLine(p) {
 const listenDone = (p) => (durOf(p) ? Math.min(1, placeOf(p) / durOf(p)) : 0);
 // The headphones on an audiobook's cover.
 function listenBadge(p, thumb) {
-  if (!isAudiobook(p) || p.audio.overlay) return thumb;
+  if (!isAudiobook(p)) return thumb;
   const mark = el("span", { class: "listen-badge", "aria-hidden": "true" });
   mark.innerHTML = ICON_HEAD;
   if (thumb.tagName !== "IMG") { thumb.classList.add("has-listen"); thumb.append(mark); return thumb; }

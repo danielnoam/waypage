@@ -750,7 +750,7 @@ function roomRows() {
   const list = roomFor();
   const known = list.reduce((n, p) => n + (p.imageBytes || 0), 0);
   if (list.some((p) => p.imageBytes == null)) measureSizes(list, remeasured);
-  if (!list.length && !squeezable().length) return [];
+  if (!list.length && !squeezable().length) return [narrationsRow()];
   const go = el("button", { class: "row room-go", type: "button", ...(list.length && !makingRoom ? {} : { disabled: "" }), onclick: () => dropPictures(list, go) },
     el("span", { class: "choice-text" },
       el("span", { class: "choice-label" + (list.length ? " accent" : "") }, makingRoom ? t("Making room…") : t("Keep only the text of finished clips")),
@@ -766,7 +766,35 @@ function roomRows() {
       el("span", { class: "choice-label accent" }, makingRoom ? t("Making room…") : t("Make pictures smaller")),
       el("span", { class: "choice-note" }, fullBytes ? t("{clips} with full pictures, about {size}", { clips: countLine(full.length), size: formatSize(fullBytes) }) : t("{clips} with full pictures", { clips: countLine(full.length) }))),
     fullBytes ? el("span", { class: "row-value" }, formatSize(fullBytes)) : null) : null;
-  return [squeezeBtn, go];
+  return [squeezeBtn, go, narrationsRow()];
+}
+// Saved narrations (made with Save the narration) never sync, so removing
+// them only frees this phone; Narrate reads those clips live again.
+const narrationBytes = (p) => (p.audio.parts || []).reduce((n, x) => n + (x.size || 0), 0);
+function narrationsRow() {
+  const list = typeof voicedSound === "function" ? state.pages.filter(voicedSound) : [];
+  if (!list.length) return null;
+  const size = list.reduce((n, p) => n + narrationBytes(p), 0);
+  const btn = el("button", { class: "row room-narrations", type: "button", ...(makingRoom ? { disabled: "" } : {}), onclick: () => dropNarrations(list, size, btn) },
+    el("span", { class: "choice-text" },
+      el("span", { class: "choice-label accent" }, makingRoom ? t("Making room…") : t("Remove saved narrations")),
+      el("span", { class: "choice-note" }, t("{clips} with a saved narration. Narrate reads them live again.", { clips: countLine(list.length) }))),
+    size ? el("span", { class: "row-value" }, formatSize(size)) : null);
+  return btn;
+}
+async function dropNarrations(list, size, btn) {
+  if (makingRoom) return;
+  if (!confirm(size
+    ? t("Remove the saved narration of {clips}? It frees {size}; you can save it again.", { clips: countLine(list.length), size: formatSize(size) })
+    : t("Remove the saved narration of {clips}? You can save it again.", { clips: countLine(list.length) }))) return;
+  makingRoom = true;
+  btn.disabled = true;
+  for (const p of list) await dropVoiced(p, true).catch(() => {});
+  await C.store.writeIndex(state.pages);
+  makingRoom = false;
+  renderLibrary();
+  toast(size ? t("Made {formatSize} of room.", { formatSize: formatSize(size) }) : t("The saved narrations are gone."));
+  if (state.section === "storage") renderSection();
 }
 const squeezable = () => !C.platform.native ? [] : state.pages.filter((p) => !p.link && (p.mode === "full" || p.comic) && p.images && !(p.squeezed >= 1));
 async function squeezePictures(list, btn) {
