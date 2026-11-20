@@ -1018,7 +1018,7 @@
   }
   // The click that follows a stroke isn't a tap on the page.
   function click(e) {
-    return (on && performance.now() - lastStroke < 500) || performance.now() - noteAt < 500;
+    return (on && performance.now() - lastStroke < 500) || (noteAt > 0 && performance.now() - noteAt < 500);
   }
 
   // ---- Pages, lists and order ----
