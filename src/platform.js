@@ -1318,7 +1318,7 @@
       onPiece(fn) { if (A()) A().addListener("piece", fn); },
       // Stop pressed on the "Writing the transcript" notification.
       onWritingStopped(fn) { if (A()) A().addListener("writingStopped", fn); },
-      // Text made into an audiobook (Android): one sound file per call,
+      // The narration saved as sound (Android): one sound file per call,
       // { uri, dur, size, t0, t1 }, with fn({ n, of }) heard after each piece.
       get canVoice() { return !!A() && os === "android"; },
       voice: (o) => A().voice(o),

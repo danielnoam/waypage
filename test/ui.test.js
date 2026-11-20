@@ -6222,7 +6222,7 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
-    await test("Make an audiobook gives a clip its own sound, which plays in place of Narrate and never syncs; a collection gives each clip one", async () => {
+    await test("Save the narration gives a clip its own sound, which plays in place of Narrate and never syncs; a collection gives each clip one", async () => {
       const q = await page(browser, 390);
       for (const f of ["article.html", "chapters.html"]) {
         await q.fill("#saveUrl", ROOT + "test/fixtures/" + f);

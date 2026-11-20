@@ -1566,15 +1566,15 @@ async function voiceClip(p, run, step) {
 
 // what: { page } or { folder }.
 async function makeAudiobook(what) {
-  if (!canVoice()) { toast(t("Making an audiobook is in the Android app.")); return; }
-  if (voicingRun) { toast(t("An audiobook is being made already. It's in Downloads.")); return; }
+  if (!canVoice()) { toast(t("Saving the narration is in the Android app.")); return; }
+  if (voicingRun) { toast(t("A narration is being saved already. It's in Downloads.")); return; }
   const list = (what.folder ? folderPages(what.folder).filter((p) => !voicedSound(p)) : [what.page]).filter(voiceable);
   const title = what.folder || what.page.title;
-  if (!list.length) { toast(what.folder && folderPages(what.folder).some(voicedSound) ? t("Every clip here has its audiobook already.") : t("There's no text here to make into an audiobook.")); return; }
-  const run = Object.assign(startRun(null, t("Making an audiobook"), 1), { label: title, files: true, keep: true, voicing: true, now: t("Starting"), part: 0 });
+  if (!list.length) { toast(what.folder && folderPages(what.folder).some(voicedSound) ? t("Every clip here has its narration saved already.") : t("There's no text here to narrate.")); return; }
+  const run = Object.assign(startRun(null, t("Saving the narration"), 1), { label: title, files: true, keep: true, voicing: true, now: t("Starting"), part: 0 });
   voicingRun = run;
   runChanged();
-  toast(t("Making “{title}” into an audiobook. It's in Downloads.", { title }));
+  toast(t("Saving the narration of “{title}”. It's in Downloads.", { title }));
   let made = 0, why = "";
   try {
     for (let i = 0; i < list.length; i++) {
@@ -1601,14 +1601,14 @@ async function makeAudiobook(what) {
     if (state.folder) renderFolder();
     if (!made) throw new Error(why || "silent");
     const one = list.length === 1 ? list[0] : null;
-    toast(one ? t("“{title}” plays as an audiobook now.", { title }) : tn(made, "1 clip in “{title}” plays as an audiobook now.", "{n} clips in “{title}” play as an audiobook now.", { title }),
+    toast(one ? t("“{title}” plays its saved narration now.", { title }) : tn(made, "1 clip in “{title}” plays its saved narration now.", "{n} clips in “{title}” play their saved narration now.", { title }),
       one && state.open !== one ? t("Open") : null, one && state.open !== one ? () => openPage(one.id) : null);
   } catch (e) {
     why = String((e && e.message) || e);
-    toast(run.stopped || why === "stopped" ? (made ? t("Stopped. The clips already made keep their sound.") : t("Stopped. Nothing was kept."))
+    toast(run.stopped || why === "stopped" ? (made ? t("Stopped. The clips already saved keep their narration.") : t("Stopped. Nothing was kept."))
       : why === "engine" ? t("Couldn't start the speech engine. Check the phone's text-to-speech settings.")
         : why === "silent" ? t("The voice made no sound for this text. Try another voice in Narrate.")
-          : t("Couldn't make the audiobook. Try again, or pick another voice in Narrate."));
+          : t("Couldn't save the narration. Try again, or pick another voice in Narrate."));
   } finally {
     A.stopVoicing();
     voicingRun = null;
@@ -1630,7 +1630,7 @@ async function dropVoiced(p) {
   await C.store.writeIndex(state.pages);
   if (state.open === p) listenOpened(p);
   renderLibrary();
-  toast(t("Its audiobook is gone. Narrate reads it again."));
+  toast(t("The saved narration is gone. Narrate reads it live again."));
 }
 // Narrate's button on a clip with its own sound: from the reading line,
 // or pause and go on as the player's button does.

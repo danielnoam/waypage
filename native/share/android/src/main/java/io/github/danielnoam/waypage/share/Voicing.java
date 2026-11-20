@@ -20,7 +20,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Text made into an audiobook (Make audiobook, app-listen.js): each piece
+ * The narration saved as sound (Save the narration, app-listen.js): each piece
  * of a chapter spoken into a file by the phone's speech engine (any of
  * them, Kokoro and Piper too, through Android's synthesizeToFile), read
  * back as PCM and encoded into one AAC .m4a for the chapter, with where

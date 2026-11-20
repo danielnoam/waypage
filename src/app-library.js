@@ -1061,7 +1061,7 @@ function openFolderMenu() {
     item("tag", t("Tags"), () => openMenu("folderTags"), sharedTags(list).length ? { note: String(sharedTags(list).length) } : {}),
     item("select", t("Select"), () => startSelect([])),
     item("send", t("Export"), () => setFolderMode("export")),
-    typeof makeAudiobook === "function" && canVoice() && list.some(voiceable) ? item("listen", t("Make an audiobook"), () => makeAudiobook({ folder: state.folder })) : null,
+    typeof makeAudiobook === "function" && canVoice() && list.some(voiceable) ? item("listen", t("Save the narration"), () => makeAudiobook({ folder: state.folder })) : null,
     sep(),
     item("remove", t("Remove"), () => openMenu("remove"), { warn: true }));
   const more = $("folderMore"), at = more.getBoundingClientRect();
@@ -1599,9 +1599,9 @@ function pageSheet(p, where) {
         // Moved here from Highlights (Daniel's ask, 2026-11-13).
         inReader && inkReady() ? menuRow(t("Try your pen"), () => { history.back(); setTimeout(() => openSheet("ink"), 0); }) : null,
         C.files.convertible(p) ? menuRow(t("Make a note from it"), () => back().then(() => makeNoteFrom(p))) : null,
-        // Spoken into an audiobook by the Narrate voice (Android).
-        typeof makeAudiobook === "function" && canVoice() && voiceable(p) ? menuRow(voicedSound(p) ? t("Make its audiobook again") : t("Make an audiobook"), () => back().then(() => makeAudiobook({ page: p }))) : null,
-        typeof makeAudiobook === "function" && voicedSound(p) ? menuRow(t("Remove its audiobook"), () => back().then(() => dropVoiced(p))) : null,
+        // Save the narration: the Narrate voice kept as sound on the clip (Android).
+        typeof makeAudiobook === "function" && canVoice() && voiceable(p) ? menuRow(voicedSound(p) ? t("Save the narration again") : t("Save the narration"), () => back().then(() => makeAudiobook({ page: p }))) : null,
+        typeof makeAudiobook === "function" && voicedSound(p) ? menuRow(t("Remove the saved narration"), () => back().then(() => dropVoiced(p))) : null,
         inReader && !p.note && !C.files.printed(p) ? menuRow(t("Find in this clip"), () => back().then(openFind)) : null,
         inReader && !p.note && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow(t("Save linked pages"), () => back().then(() => openSheet("links"))) : null,
         p.note ? null : menuRow(p.finished ? t("Mark as unread") : t("Mark as read"), () => markRead([p], !p.finished).then(draw)),

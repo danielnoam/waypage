@@ -749,7 +749,7 @@ deletes with the clip; a picked folder's stay. Its Gutenberg book (the
 recording's `url_text_source`) downloads after it and is paired
 through `pairPending`, as Find the book in Discover does.
 
-A clip's own sound made from its text (Make an audiobook,
+A clip's own sound made from its text (Save the narration,
 `makeAudiobook`, Android only) is spoken by the Narrate voice of the
 clip's language: `AudiobookPlugin.voice` runs `Voicing` on its own
 thread, each of Narrate's pieces through `TextToSpeech.synthesizeToFile`
@@ -1008,7 +1008,7 @@ adds a line here.
   so the car can start them with the app closed. Only the car, the
   Assistant, Bluetooth and system apps (by uid, system or from the Play
   Store) may browse it, and with App lock on it lists nothing.
-- Make an audiobook takes as long as the voice does: Google's voices
+- Save the narration takes as long as the voice does: Google's voices
   are faster than real time, Kokoro on a phone may be slower, so a long
   book can take hours, and Android 15 ends a dataSync service after six
   hours a day. Pausing stops the file in hand and makes it again from its
