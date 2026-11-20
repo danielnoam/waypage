@@ -2044,12 +2044,18 @@ function zipOf(files) {
         const fire = (type, list, ch) => target.dispatchEvent(new TouchEvent(type, { touches: list.map((p) => t(...p)), changedTouches: (ch || list).map((p) => t(...p)), bubbles: true, cancelable: true }));
         for (const [type, list, ch] of steps) { fire(type, list, ch); await new Promise((r) => setTimeout(r, 16)); }
       }, steps);
+      // A finger drawing: pointer events along `pts` on the page's layer.
+      const stroke = (pts) => q.evaluate(async (pts) => {
+        const d = C.reader.frameDoc, svg = [...d.querySelectorAll(".co-ink")].find((l) => l.getBoundingClientRect().right > 0 && l.getBoundingClientRect().left < 390), P = d.defaultView.PointerEvent;
+        const fire = (type, [x, y]) => svg.dispatchEvent(new P(type, { pointerId: 7, pointerType: "touch", isPrimary: true, clientX: x, clientY: y, button: 0, buttons: type === "pointerup" ? 0 : 1, bubbles: true, cancelable: true }));
+        fire("pointerdown", pts[0]);
+        for (const q of pts.slice(1)) { fire("pointermove", q); await new Promise((r) => setTimeout(r, 16)); }
+        fire("pointerup", pts[pts.length - 1]);
+        await new Promise((r) => setTimeout(r, 100));
+      }, pts);
       const state_ = () => q.evaluate(() => ({ x: C.reader.frameWin.scrollX, z: C.reader.pageZoom(), viewer: !!document.querySelector(".viewer:not([hidden])") }));
       // A finger sweeping sideways draws, and neither moves nor turns the page.
-      const sweep = [["touchstart", [[1, 100, 400]]]];
-      for (let i = 1; i <= 8; i++) sweep.push(["touchmove", [[1, 100 + i * 25, 400]]]);
-      sweep.push(["touchend", [], [[1, 300, 400]]]);
-      await touch(sweep);
+      await stroke(Array.from({ length: 9 }, (_, i) => [100 + i * 25, 400]));
       assert.deepStrictEqual(await state_(), { x: 0, z: 1, viewer: false });
       // A pinch zooms the page where it is: no viewer.
       const pinch = [["touchstart", [[1, 150, 400]]], ["touchstart", [[1, 150, 400], [2, 240, 400]], [[2, 240, 400]]]];
@@ -2060,6 +2066,89 @@ function zipOf(files) {
       assert.ok(z.z > 1.5 && !z.viewer, "zoomed in place: " + JSON.stringify(z));
       await q.evaluate(() => C.reader.unzoomPage());
       assert.strictEqual(await q.evaluate(() => C.reader.pageZoom()), 1);
+      // The stroke made a second sheet. A pinch whose first finger lifts first,
+      // the other drifting sideways, neither turns nor shows the next sheet.
+      await until(q, () => C.reader.pageInfo().pages >= 2);
+      const drift = [["touchstart", [[1, 150, 400]]], ["touchstart", [[1, 150, 400], [2, 240, 400]], [[2, 240, 400]]]];
+      for (let i = 1; i <= 8; i++) drift.push(["touchmove", [[1, 150 - i * 8, 400], [2, 240 + i * 8, 400]]]);
+      drift.push(["touchend", [[2, 304, 400]], [[1, 86, 400]]]);
+      for (let i = 1; i <= 6; i++) drift.push(["touchmove", [[2, 304 - i * 15, 400]]]);
+      drift.push(["touchend", [], [[2, 214, 400]]]);
+      await touch(drift);
+      await q.waitForTimeout(500);
+      const kept = await q.evaluate(() => ({ x: C.reader.frameWin.scrollX, page: C.reader.pageInfo().page, z: C.reader.pageZoom(), locked: C.reader.lockedPages() }));
+      assert.ok(kept.x === 0 && kept.page === 1 && kept.z > 1.5, "stays on the page: " + JSON.stringify(kept));
+      // Zoomed, only the locked page shows.
+      assert.strictEqual(await q.evaluate(() => [...C.reader.frameDoc.querySelectorAll("img[data-page]")].filter((i) => getComputedStyle(i).visibility !== "hidden").length), 1);
+      await q.evaluate(() => C.reader.unzoomPage());
+      // Two fingers swept sideways turn the page, and the new one is locked.
+      const swipe2 = [["touchstart", [[1, 250, 400]]], ["touchstart", [[1, 250, 400], [2, 320, 400]], [[2, 320, 400]]]];
+      for (let i = 1; i <= 8; i++) swipe2.push(["touchmove", [[1, 250 - i * 15, 400], [2, 320 - i * 15, 400]]]);
+      swipe2.push(["touchend", [[2, 200, 400]], [[1, 130, 400]]], ["touchend", [], [[2, 200, 400]]]);
+      await touch(swipe2);
+      await until(q, () => C.reader.pageInfo().page === 2 && Math.round(C.reader.frameWin.scrollX) === C.reader.frameWin.innerWidth);
+      assert.strictEqual(await q.evaluate(() => C.reader.pageZoom()), 1);
+      assert.deepStrictEqual(await q.evaluate(() => C.reader.lockedPages().length), 1);
+      // A selection dragged to the edge and held carries over to the next page.
+      await q.evaluate(() => { C.reader.turnSide("left", true); C.ink.setting({ tool: "select" }); });
+      await until(q, () => C.reader.pageInfo().page === 1);
+      const ptr = (seq) => q.evaluate(async (seq) => {
+        const d = C.reader.frameDoc, svg = [...d.querySelectorAll(".co-ink")].find((l) => l.getBoundingClientRect().right > 0 && l.getBoundingClientRect().left < 390), P = d.defaultView.PointerEvent;
+        for (const [type, x, y, wait] of seq) {
+          svg.dispatchEvent(new P(type, { pointerId: 9, pointerType: "touch", isPrimary: true, clientX: x, clientY: y, button: 0, buttons: type === "pointerup" ? 0 : 1, bubbles: true, cancelable: true }));
+          await new Promise((r) => setTimeout(r, wait || 20));
+        }
+      }, seq);
+      await ptr([["pointerdown", 200, 400], ["pointerup", 200, 400, 600]]);
+      assert.strictEqual(await q.evaluate(() => C.ink.state().selected), 1, "the stroke is taken");
+      await ptr([["pointerdown", 200, 400], ["pointermove", 300, 400], ["pointermove", 380, 400], ["pointermove", 382, 400, 900], ["pointerup", 382, 400, 300]]);
+      assert.strictEqual(await q.evaluate(() => C.reader.pageInfo().page), 2, "held at the edge, the page turns");
+      const carried = await q.evaluate(() => { const o = JSON.parse(C.ink.snapshot()); return { one: (o[1] || []).filter((x) => x.t === "p").length, two: (o[2] || []).filter((x) => x.t === "p").length }; });
+      assert.deepStrictEqual(carried, { one: 0, two: 1 }, "the stroke is on the page it was carried to");
+      await q.evaluate(() => C.ink.setting({ tool: "pen" }));
+      // A stroke that runs off the page's edge stays on it, cut at the edge.
+      await stroke(Array.from({ length: 9 }, (_, i) => [300 + i * 30, 300]));
+      const pagesNow = await q.evaluate(() => JSON.parse(C.ink.snapshot()));
+      const last = Object.values(pagesNow).flat().filter((x) => x.t === "p").pop();
+      let max = 0;
+      for (let i = 0; i < last.p.length; i += 3) max = Math.max(max, last.p[i]);
+      assert.ok(max <= 1, "stops at the page's edge: " + max);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await ctx.close();
+    });
+
+    await test("in Scroll, a selection dragged to the bottom edge scrolls the page along with it", async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      q.errors = [];
+      q.on("pageerror", (e) => q.errors.push(e.message));
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      await q.waitForTimeout(1000);
+      await q.evaluate(async () => { const m = await C.notes.create("lines"); state.pages.unshift(m); await C.store.writeIndex(state.pages); openPage(m.id); });
+      await until(q, () => state.open && C.reader.frameDoc && C.reader.frameDoc.querySelector("img[data-page]"));
+      await q.evaluate(() => { inkStart(); C.ink.setting({ finger: true }); });
+      await until(q, () => C.ink.on);
+      const ptr = (seq) => q.evaluate(async (seq) => {
+        const d = C.reader.frameDoc, svg = d.querySelector(".co-ink"), P = d.defaultView.PointerEvent;
+        for (const [type, x, y, wait] of seq) {
+          svg.dispatchEvent(new P(type, { pointerId: 9, pointerType: "touch", isPrimary: true, clientX: x, clientY: y, button: 0, buttons: type === "pointerup" ? 0 : 1, bubbles: true, cancelable: true }));
+          await new Promise((r) => setTimeout(r, wait || 20));
+        }
+      }, seq);
+      await ptr([["pointerdown", 100, 300], ["pointermove", 200, 300], ["pointermove", 300, 300], ["pointerup", 300, 300, 400]]);
+      await until(q, () => C.files.noteSheets() >= 2);
+      await q.evaluate(() => C.ink.setting({ tool: "select" }));
+      await ptr([["pointerdown", 200, 300], ["pointerup", 200, 300, 600]]);
+      const y = () => q.evaluate(() => C.reader.frameWin.scrollY);
+      const y0 = await y();
+      await ptr([["pointerdown", 200, 300], ["pointermove", 200, 600], ["pointermove", 200, 830, 300]]);
+      const y1 = await y();
+      await ptr([["pointermove", 200, 831, 300]]);
+      const y2 = await y();
+      await ptr([["pointerup", 200, 831, 200]]);
+      assert.ok(y1 > y0 + 10 && y2 > y1 + 10, "it scrolls on: " + [y0, y1, y2]);
+      assert.ok(y1 - y0 < 600, "at an ordinary pace, not a jump: " + [y0, y1]);
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await ctx.close();
     });

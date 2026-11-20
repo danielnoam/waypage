@@ -953,6 +953,8 @@
     img.setAttribute("data-page", n);
     body.append(img);
     C.notes.keep(h.note.id, h.note.data).catch(() => {});
+    // In Pages the new sheet is laid out like the others, a screen of its own.
+    C.reader.repage();
     C.reader.placeText();
     if (h.frame) drawNear(h.frame);
     return true;

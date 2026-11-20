@@ -617,7 +617,8 @@
   function show(n) {
     if (strokes(n).length || on) ensure(n);
   }
-  function hide(n) { drop(n); }
+  // A selection being carried keeps its page's layer, wherever the page scrolls.
+  function hide(n) { if (cur && cur.select && cur.n === n) return; drop(n); }
   function placeAll() { for (const svg of layers.values()) place(svg); }
   function reset() { layers.clear(); cur = null; }
   // The pages drawn now: every page that has its picture.
@@ -671,6 +672,10 @@
   }
   const state = () => ({ on, tool, color: color[tool === "highlighter" ? "highlighter" : "pen"], colors: { ...color }, size, style, finger, selected: sel ? sel.ids.length : 0, canPaste: !!board, count: count(), canUndo: !!undos.length, canRedo: !!redos.length });
 
+  // Pages (a PDF or a note) with Draw on is locked to the screen shown
+  // (reader.js lockedPages): drawing, erasing and dropping stay on its pages.
+  // null elsewhere.
+  const lockOf = () => { const l = C.reader && C.reader.lockedPages && C.reader.lockedPages(); return l ? new Set(l) : null; };
   const where = (e, svg) => {
     const r = svg.getBoundingClientRect();
     return [(e.clientX - r.left) / (r.width || 1), (e.clientY - r.top) / (r.width || 1)];
@@ -717,7 +722,9 @@
     const D = frameDoc();
     if (!D) return;
     // The page under the point.
-    const under = layerAt(px, py);
+    let under = layerAt(px, py);
+    const lk = lockOf();
+    if (under && lk && !lk.has(under.n)) under = null;
     if (phase === "down") {
       if (cur) cur = null;
       cur = { id: -1, kind: "phone", n: 0, svg: null, erase: true, gone: [], at: performance.now() };
@@ -799,6 +806,8 @@
     // A hand resting beside the pen doesn't write.
     if (e.pointerType === "touch" && performance.now() - penAt < 1000) return;
     const n = Number(svg.dataset.page);
+    const lk = lockOf();
+    if (lk && !lk.has(n)) return;
     // The pen's own eraser end, or its button held, whatever the tool.
     const erase = tool === "eraser" || penErases(e) || (pen && nat.eraser);
     e.preventDefault();
@@ -807,6 +816,8 @@
     if (tool === "select" && !erase) { selDown(e, svg, n, x, y); return; }
     const hl = !erase && tool === "highlighter";
     cur = { id: e.pointerId, kind: pen ? "pen" : e.pointerType, n, svg, erase, gone: [], at: performance.now() };
+    // A stroke stays on the page: its points stop at the page's edges.
+    if (lk) { const r = svg.getBoundingClientRect(); cur.hmax = r.height / (r.width || 1); }
     if (erase) { wipe(x, y); return; }
     const kind = hl ? "highlighter" : "pen";
     const s = { id: C.save.newId(), t: hl ? "h" : "p", c: color[kind], w: SIZES[kind][size], p: [] };
@@ -824,6 +835,7 @@
   function add(e, svg, x, y) {
     const s = cur.s;
     if (s.p.length >= MAX_POINTS * 3) return;
+    if (cur.hmax) { x = Math.min(1, Math.max(0, x)); y = Math.min(cur.hmax, Math.max(0, y)); }
     const pr = cur.press ? Math.min(1, Math.max(0.05, e.pressure || 0.5)) : 0.5;
     s.p.push(r4(x), r4(y), Math.round(pr * 100) / 100);
   }
@@ -853,8 +865,8 @@
   }
   // The eraser follows the pointer over from one page to the next.
   function eraseAtClient(cx, cy, svg) {
-    const L = layerAt(cx, cy);
-    if (!L) { cur.last = null; return; }
+    const L = layerAt(cx, cy), lk = lockOf();
+    if (!L || (lk && !lk.has(L.n))) { cur.last = null; return; }
     if (L.n !== cur.n) { cur.last = null; cur.n = L.n; cur.svg = L.svg; }
     wipe((cx - L.r.left) / (L.r.width || 1), (cy - L.r.top) / (L.r.width || 1));
   }
@@ -900,7 +912,7 @@
     }
     if (!clip || !c.s.p.length) { if (c.path) c.path.remove(); return; }
     // On the pages it reaches, a copy on each; on one, as it was drawn.
-    const placed = placeOn(c.s, c.n, pagesOf());
+    const placed = placeOn(c.s, c.n, onLocked(pagesOf(), c.n));
     if (placed.length === 1 && placed[0].n === c.n && placed[0].s === c.s) {
       // A stroke of one point is a dot; the path is drawn as it ends.
       c.path.setAttribute("d", pathOf(c.s));
@@ -920,6 +932,7 @@
     const c = cur;
     cur = null;
     if (!c) return;
+    stopEdge(c);
     if (c.path) c.path.remove();
     unlift();
     // A drag that was a pinch: the items go back to their pages as they were.
@@ -953,6 +966,8 @@
     }
     return side;
   }
+  // In Pages a stroke or item belongs to the page it's on, not its neighbours.
+  const onLocked = (pages, n) => (lockOf() ? pages.filter((p) => p.n === n) : pages);
   // The lists of some pages as they are (to undo to), and put back.
   function snap(ns) {
     const out = {};
@@ -968,7 +983,7 @@
   const repaintAll = (ns) => { for (const n of ns) { if (layers.has(n)) paint(n); else if (on) show(n); } };
   // While a stroke is drawn or an item dragged its page's layer is lifted
   // above the others and isn't clipped, so it shows over the next page.
-  const lift = (n) => { const svg = layers.get(n); if (svg) svg.dataset.lift = "1"; };
+  const lift = (n) => { if (lockOf()) return; const svg = layers.get(n); if (svg) svg.dataset.lift = "1"; };
   const unlift = () => { for (const svg of layers.values()) delete svg.dataset.lift; };
   // Items put on their pages, at the front, as one step to undo.
   function commitPlaced(placed, more) {
@@ -1086,25 +1101,31 @@
     repaintAll(c.touched);
     lift(c.n);
   }
+  // One pointer position of a drag, lasso or resize, in widths of c's page.
+  function selStep(c, x, y) {
+    c.moved = Math.max(c.moved, Math.hypot(x - c.x0, y - c.y0));
+    if (c.mode === "lasso") { c.pts.push([x, y]); return; }
+    const dx = x - c.x0, dy = y - c.y0;
+    for (const o of c.orig) {
+      const t = strokes(c.n).find((s) => s.id === o.id);
+      if (!t) continue;
+      if (c.mode === "resize") {
+        // Keeps the picture's shape: the width follows the corner.
+        const w = Math.max(0.03, Math.min(2, o.w + dx)), k = w / o.w;
+        t.w = w; t.h = o.h * k;
+      } else if (boxy(t)) { t.x = o.x + dx; t.y = o.y + dy; }
+      else for (let i = 0; i + 2 < o.p.length; i += 3) { t.p[i] = r4(o.p[i] + dx); t.p[i + 1] = r4(o.p[i + 1] + dy); }
+    }
+  }
   function selMove(e) {
     const c = cur, svg = c.svg;
     const list = (e.getCoalescedEvents && e.getCoalescedEvents()) || [];
+    c.cx = e.clientX; c.cy = e.clientY;
     for (const ev of list.length ? list : [e]) {
       const [x, y] = where(ev, svg);
-      c.moved = Math.max(c.moved, Math.hypot(x - c.x0, y - c.y0));
-      if (c.mode === "lasso") { c.pts.push([x, y]); continue; }
-      const dx = x - c.x0, dy = y - c.y0;
-      for (const o of c.orig) {
-        const t = strokes(c.n).find((s) => s.id === o.id);
-        if (!t) continue;
-        if (c.mode === "resize") {
-          // Keeps the picture's shape: the width follows the corner.
-          const w = Math.max(0.03, Math.min(2, o.w + dx)), k = w / o.w;
-          t.w = w; t.h = o.h * k;
-        } else if (boxy(t)) { t.x = o.x + dx; t.y = o.y + dy; }
-        else for (let i = 0; i + 2 < o.p.length; i += 3) { t.p[i] = r4(o.p[i] + dx); t.p[i + 1] = r4(o.p[i + 1] + dy); }
-      }
+      selStep(c, x, y);
     }
+    if (c.mode === "drag") edgeWatch(c);
     if (c.raf) return;
     c.raf = requestAnimationFrame(() => {
       if (cur !== c) return;
@@ -1113,7 +1134,85 @@
       else { paint(c.n); lift(c.n); }
     });
   }
+  // A dragged selection held at the edge of the screen. In Pages, held at the
+  // left or right edge for half a second it carries over to the next page
+  // (and the next, while held); in Scroll, held at the top or bottom it
+  // scrolls the page along with it at an ordinary pace, so it can be put on
+  // another page.
+  function edgeWatch(c) {
+    const D = frameDoc(), W = D && D.defaultView;
+    if (!W) return;
+    if (lockOf()) {
+      const near = c.cx < 36 || c.cx > W.innerWidth - 36;
+      if (!near) { clearTimeout(c.edgeT); c.edgeT = 0; c.edgeSide = null; return; }
+      const side = c.cx > W.innerWidth / 2 ? "right" : "left";
+      if (c.edgeT && c.edgeSide === side) return;
+      clearTimeout(c.edgeT);
+      c.edgeSide = side;
+      const fire = () => { c.edgeT = 0; if (cur !== c) return; if (carry(c, side)) c.edgeT = setTimeout(fire, 700); };
+      c.edgeT = setTimeout(fire, 500);
+      return;
+    }
+    const top = parseFloat(W.getComputedStyle(D.documentElement).getPropertyValue("--co-top")) || 0, zone = 64, vh = W.innerHeight;
+    if (c.cy > vh - zone) c.edgeV = 150 + 550 * Math.min(1, (c.cy - (vh - zone)) / zone);
+    else if (c.cy < top + zone) c.edgeV = -(150 + 550 * Math.min(1, (top + zone - c.cy) / zone));
+    else c.edgeV = 0;
+    if (!c.edgeV || c.edgeRaf) return;
+    let last = performance.now();
+    c.edgeAcc = 0;
+    const step = (t) => {
+      if (cur !== c || !c.edgeV) { c.edgeRaf = 0; return; }
+      c.edgeAcc += c.edgeV * Math.min(0.05, (t - last) / 1000);
+      last = t;
+      const whole = Math.trunc(c.edgeAcc);
+      if (whole) { c.edgeAcc -= whole; W.scrollBy(0, whole); }
+      // The page moved under the finger: the item keeps up with it.
+      const [x, y] = where({ clientX: c.cx, clientY: c.cy }, c.svg);
+      selStep(c, x, y);
+      paint(c.n);
+      lift(c.n);
+      c.edgeRaf = W.requestAnimationFrame(step);
+    };
+    c.edgeRaf = W.requestAnimationFrame(step);
+  }
+  function stopEdge(c) {
+    if (!c) return;
+    clearTimeout(c.edgeT);
+    c.edgeT = 0;
+    c.edgeV = 0;
+  }
+  // In Pages: turn toward `side` and bring the dragged items with it, where
+  // they are on screen, onto the page now shown under the finger.
+  function carry(c, side) {
+    const r0 = c.svg.getBoundingClientRect();
+    const from = { left: r0.left, top: r0.top, width: r0.width, height: r0.height };
+    if (!C.reader.turnSide(side, true)) return false;
+    let best = null, gap = Infinity;
+    for (const n of lockOf() || []) {
+      const svg = layers.get(n) || ensure(n);
+      if (!svg) continue;
+      const r = svg.getBoundingClientRect(), d = Math.abs((r.left + r.right) / 2 - c.cx);
+      if (d < gap) { gap = d; best = { n, svg, r }; }
+    }
+    if (!best || best.n === c.n) return true;
+    const to = { left: best.r.left, top: best.r.top, width: best.r.width, height: best.r.height };
+    if (!(best.n in c.before)) c.before[best.n] = copyOf(strokes(best.n));
+    const items = strokes(c.n).filter((s) => c.ids.includes(s.id));
+    for (const s of items) take(c.n, s.id);
+    const moved = items.map((s) => convertItem(s, from, to));
+    for (const s of moved) put(best.n, s);
+    const old = c.n;
+    c.touched = [...new Set([...c.touched, best.n])];
+    c.n = best.n;
+    c.svg = best.svg;
+    c.orig = moved.map(copyOf);
+    const [x, y] = where({ clientX: c.cx, clientY: c.cy }, c.svg);
+    c.x0 = x; c.y0 = y;
+    repaintAll([old, best.n]);
+    return true;
+  }
   function selUp(c, e) {
+    stopEdge(c);
     if (c.raf) cancelAnimationFrame(c.raf);
     if (c.path) c.path.remove();
     const tap = c.moved < 0.006;
@@ -1136,7 +1235,7 @@
   function selDrop(c) {
     const items = strokes(c.n).filter((s) => c.ids.includes(s.id));
     for (const s of items) take(c.n, s.id);
-    const pages = pagesOf();
+    const pages = onLocked(pagesOf(), c.n);
     const placed = items.flatMap((s) => placeOn(s, c.n, pages));
     const before = { ...c.before };
     for (const g of placed) if (!(g.n in before)) before[g.n] = copyOf(strokes(g.n));
@@ -1207,7 +1306,9 @@
     const D = frameDoc();
     const vh = (D && D.defaultView && D.defaultView.innerHeight) || 800;
     let best = null, most = 0;
+    const lk = lockOf();
     for (const [n, svg] of layers) {
+      if (lk && !lk.has(n)) continue;
       const r = svg.getBoundingClientRect();
       const seen = Math.min(r.bottom, vh) - Math.max(r.top, 0);
       if (seen > most) { most = seen; best = { n, mid: ((Math.min(r.bottom, vh) + Math.max(r.top, 0)) / 2 - r.top) / (r.width || 1), height: r.height / (r.width || 1) }; }

@@ -337,13 +337,21 @@ fountain pen thin along a 45° nib and thick across it, brush a strong
 response with tapered ends); a saved size from the three-step bar maps 0, 1, 2
 to 0, 2, 4 on the five (`waypage.ink` has `v: 2` from then on).
 
-Draw on in Pages: a touch that draws never turns or drags the page
-(`pagedInput` checks `e.defaultPrevented` and `inkHook.drawing()`), and a
-pinch zooms the row in place (`reader.js pz`, a transform about the screen's
-centre, `applyPz`) instead of opening the viewer; one finger pans it when
-Finger is off, and `drawNear` draws the pages larger by `pageZoom()`. A
-turn, a new layout or Draw off sets it back to 1. A pen, or a palm beside
-it, is not a pinch (`inkHook.penDown`).
+Draw on in Pages is locked to the screen shown (`reader.js lock`,
+`lockedPages()`; ink.js `lockOf()`). A touch that draws never turns or
+drags the page (`pagedInput` checks `e.defaultPrevented` and
+`inkHook.drawing()`), and a scroll the frame didn't ask for is put back.
+Strokes, the eraser, drops and Paste stay on the locked page(s) (a stroke's
+points stop at its edges). A pinch zooms the row in place instead of
+opening the viewer (`pz`, a transform about the locked page's middle,
+`applyPz`, clamped so the page's edges never leave the screen's, the other
+pages hidden by `co-zoomed`); `drawNear` draws larger by `pageZoom()`. Only
+a turn changes the lock: two fingers swept sideways (zoomed, past the
+page's edge), or a selection dragged to a side and held 0.5 s
+(`ink.js edgeWatch`, `carry`), which turns and brings the items onto the
+new page. In Scroll the same drag held at the top or bottom edge scrolls
+the page with it. A pen, or a palm beside it, is not a pinch
+(`inkHook.penDown`).
 
 Select, a picture and colours of your own (1.57.0), all in `ink.js` and
 `app-ink.js`. Select is a fourth tool: a loop (`inside`, even-odd) takes the
