@@ -174,6 +174,7 @@ async function phone(browser) {
       await openSave();
       const pick = p.locator("#menuSheet .pick-row", { hasText: "Save as" }).locator(".dropdown-btn");
       assert.match(await pick.textContent(), /Collection or series/, "clips at first");
+      assert.strictEqual(await p.evaluate(() => { const r = dzWhereRow(() => "app", () => {}); r.hidden = true; document.body.append(r); const d = getComputedStyle(r).display; r.remove(); return d; }), "none", "a hidden Save in row doesn't show");
       await pick.click();
       assert.deepStrictEqual((await p.locator('[role="option"]').allTextContents()).map((x) => x.trim()), ["Collection or series", "EPUB file"]);
       await p.locator('[role="option"]', { hasText: /^Collection or series$/ }).last().click();

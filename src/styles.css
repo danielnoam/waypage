@@ -574,6 +574,8 @@ html.native .screen-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
   cursor: pointer;
 }
 .choice + .choice, .row + .row { border-top: 1px solid var(--line); }
+/* A hidden row stays hidden: display above would show it (Save in, 2026-11). */
+.choice[hidden], .row[hidden] { display: none; }
 .choice:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
 .choice-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .choice-label { font-weight: 500; }

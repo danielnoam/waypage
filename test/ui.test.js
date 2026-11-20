@@ -1695,6 +1695,22 @@ function zipOf(files) {
     // A story's status on its site (2026-11, Daniel): a tag on its cover,
     // "Caught up" rather than done while it's still being written, and
     // Website sync keeps it current.
+    // A sheet on its way down doesn't take the keyboard back: the search
+    // tapped as it closes keeps what's typed (Audiobookshelf's sign-in).
+    await test("a field in the library takes focus while a sheet is still closing", async () => {
+      const q = await page(browser, 390);
+      const got = await q.evaluate(async () => {
+        openMenu("addFeed");
+        await new Promise((r) => setTimeout(r, 400));
+        closeMenu();
+        const input = document.querySelector("#sideBtn");
+        input.focus();
+        return { menu: !!state.menu, sheetUp: !$("menuSheet").hidden, focused: document.activeElement === input };
+      });
+      assert.deepStrictEqual(got, { menu: false, sheetUp: true, focused: true });
+      await q.context().close();
+    });
+
     await test("a series shows its story's status, and caught up isn't finished while it's still going", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
