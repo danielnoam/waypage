@@ -2812,7 +2812,6 @@ Keel.i18n.strings("he", {
   "Making the pictures…": "יוצר את התמונות…",
   "Couldn't make the pictures. Try again.": "לא הצלחנו ליצור את התמונות. נסו שוב.",
   "A clip for each chapter": "קליפ לכל פרק",
-  "A clip for each chapter, in your Series": "קליפ לכל פרק, בסדרות שלך",
   "A text in parts saves as a collection, a series or one EPUB book; a short one saves as one clip.": "טקסט בחלקים נשמר כאוסף, כסדרה או כספר EPUB אחד; טקסט קצר נשמר כקליפ אחד.",
   "CBZ file": "קובץ CBZ",
   "Clips in a series keep the order of the links. It shows under Series in your Library.": "קליפים בסדרה שומרים על סדר הקישורים. היא מופיעה תחת סדרות בספרייה.",
@@ -2820,8 +2819,6 @@ Keel.i18n.strings("he", {
   "Episode {done} of {total}": "פרק {done} מתוך {total}",
   "Every chapter downloads, then they become one EPUB book in Files. It doesn't follow new chapters.": "כל הפרקים יורדים, ואז הופכים לספר EPUB אחד בקבצים. פרקים חדשים לא מצטרפים אליו.",
   "Every episode downloads, then they become one CBZ comic in Files. It doesn't follow new episodes.": "כל הפרקים יורדים, ואז הופכים לקומיקס CBZ אחד בקבצים. פרקים חדשים לא מצטרפים אליו.",
-  "Its chapter list opens to check, then every chapter saves into a collection. New chapters join it when they're out.": "רשימת הפרקים נפתחת לבדיקה, ואז כל פרק נשמר לאוסף. פרקים חדשים מצטרפים אליו כשהם יוצאים.",
-  "Its chapter list opens to check, then every chapter saves into a series. New chapters join it when they're out.": "רשימת הפרקים נפתחת לבדיקה, ואז כל פרק נשמר לסדרה. פרקים חדשים מצטרפים אליה כשהם יוצאים.",
   "Making a book": "יוצר ספר",
   "Making a comic": "יוצר קומיקס",
   "One file in Files, no collection": "קובץ אחד בקבצים, בלי אוסף",
@@ -2829,4 +2826,5 @@ Keel.i18n.strings("he", {
   "{n} chapters couldn't be saved and aren't in the book.": { one: "פרק אחד לא נשמר ואינו בספר.", other: "{n} פרקים לא נשמרו ואינם בספר." },
   "Collection or series": "אוסף או סדרה",
   "{name} · series": "{name} · סדרה",
+  "Its chapter list opens to check, with a collection or a series to save it into. New chapters join it when they're out.": "רשימת הפרקים נפתחת לבדיקה, עם אוסף או סדרה לשמור אליהם. פרקים חדשים מצטרפים כשהם יוצאים.",
 });

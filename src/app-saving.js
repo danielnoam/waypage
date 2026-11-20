@@ -1057,11 +1057,10 @@ function neighbours(p) {
 
 // `from` is the page read as a list of chapters, which can still be
 // saved as one page; `siteTags` ({ site, tags }) the tags that page gave it.
-// `series`: the collection is saved as a series (Discover's Save as Series).
-function openBatch(text, fromHistory, folder, from, siteTags, series) {
+function openBatch(text, fromHistory, folder, from, siteTags) {
   if (state.batch) return;
   state.batch = true;
-  renderBatch(linksFrom(text).join("\n"), folder || null, from, siteTags, !!series);
+  renderBatch(linksFrom(text).join("\n"), folder || null, from, siteTags);
   if (!fromHistory) history.pushState({ view: "batch", folder: state.folder || undefined }, "");
   // Set once it shows: a hidden screen keeps its old scroll.
   const shown = pushScreen($("batchView"));
@@ -1082,10 +1081,10 @@ const LONG_LIST = 50;
 const SITE_TAGS_KEY = "waypage.saveSiteTags";
 const TAG_NEW_KEY = "waypage.saveTagNew";
 
-function renderBatch(text, preset, from, siteTags, asSeries) {
+function renderBatch(text, preset, from, siteTags) {
   let folder = preset;
-  // A new collection, or a new series (Discover's Save as Series picks it).
-  let series = !!asSeries;
+  // Saved into a series: an existing one, or New series….
+  let series = false;
   // The page the chapters were read from, kept on the folder (0.26.0).
   let source = from || null;
   let mode = load(IMAGES_KEY, "previews");
