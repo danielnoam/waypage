@@ -1746,6 +1746,39 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a collection's quick starts under Continue: last read and newest, unless Continue opens them", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (id, at, folderAt, readAt) => ({ id, url: "https://blog.example.com/" + id, title: id, site: "blog.example.com", savedAt: 1000, minutes: 1, mode: "links",
+          at, finished: at === 1, readAt, folder: "Shelf", folderAt });
+        const list = [c("q1", 1, 1, 50), c("q2", 1, 2, 90), c("q3", 0, 4, 0), c("q4", 0.3, 3, 10)];
+        await S.writeIndex(list);
+        for (const x of list) await S.writePage(x.id, "<!doctype html><html><body><p>Words in " + x.id + ".</p></body></html>", x);
+      });
+      await q.reload();
+      await until(q, () => state.pages.length === 4);
+      await q.evaluate(() => openFolder("Shelf"));
+      await until(q, () => !!document.querySelector("#folderBody .folder-starts"));
+      const labels = () => q.$$eval("#folderBody .folder-starts .chip", (b) => b.map((x) => x.getAttribute("aria-label")));
+      assert.deepStrictEqual(await labels(), ["Last read: q2", "Newest: q3"]);
+      const pick = async (label, id) => {
+        await q.locator("#folderBody .folder-starts .chip", { hasText: label }).click();
+        await until(q, (id) => state.open && state.open.id === id, id);
+        await q.evaluate(() => { history.back(); });
+        await until(q, () => state.folder === "Shelf" && $("readerView").hidden);
+      };
+      await pick("Newest", "q3");
+      await q.evaluate(async () => { const p = state.pages.find((x) => x.id === "q2"); p.readAt = Date.now() + 1e6; await Waypage.store.writeIndex(state.pages); renderFolder(); });
+      await pick("Last read", "q2");
+      // Continue opens the clip read last while it's unfinished: no Last read then.
+      await q.evaluate(async () => { const p = state.pages.find((x) => x.id === "q4"); p.readAt = Date.now() + 2e6; await Waypage.store.writeIndex(state.pages); renderFolder(); });
+      assert.deepStrictEqual(await labels(), ["Newest: q3"]);
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
     // A site that never says (a blog): picked by hand in Edit, on every
     // clip so it syncs; a clip joining takes it. Website sync can turn the
     // site's own word off.
