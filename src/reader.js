@@ -2571,7 +2571,7 @@
           if (foot && /^Opened from /.test(foot.textContent)) foot.remove();
         }
         // An audiobook says what it is in the player under it (1.58.2).
-        if (meta && meta.audio && !meta.audio.overlay) {
+        if (meta && meta.audio && !meta.audio.overlay && !meta.audio.voiced) {
           const foot = doc.querySelector(".co-licence");
           if (foot && /^Opened from /.test(foot.textContent)) foot.remove();
         }

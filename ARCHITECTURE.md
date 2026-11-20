@@ -749,20 +749,23 @@ deletes with the clip; a picked folder's stay. Its Gutenberg book (the
 recording's `url_text_source`) downloads after it and is paired
 through `pairPending`, as Find the book in Discover does.
 
-An audiobook made from text (Make an audiobook, `makeAudiobook`,
-Android only) is spoken by the Narrate voice of each clip's language:
-`AudiobookPlugin.voice` runs `Voicing` on its own thread, each of
-Narrate's pieces through `TextToSpeech.synthesizeToFile` (any engine,
-Kokoro and Piper through `KokoroTtsService`), read back as PCM and
-encoded with MediaCodec into one AAC .m4a (48 kbps mono) of at most 120
-pieces, with each piece's start and end. The files go through
-`keepMade` into Waypage's own files (`audio.ours`), and `audio.voiced`
-(`{ from }`: the clip's id, or `c:` and the collection) marks it. The
-pieces' times are its transcript, written whole (`ranges` covers it, so
-nothing is written ahead; `para` starts each paragraph): a clip's reads
-along with the clip (mode "book"), a collection's with its own
-transcript, a chapter per clip. The run is a Downloads card, so the
-dataSync notification keeps the app up while it's made.
+A clip's own sound made from its text (Make an audiobook,
+`makeAudiobook`, Android only) is spoken by the Narrate voice of the
+clip's language: `AudiobookPlugin.voice` runs `Voicing` on its own
+thread, each of Narrate's pieces through `TextToSpeech.synthesizeToFile`
+(any engine, Kokoro and Piper through `KokoroTtsService`), read back as
+PCM and encoded with MediaCodec into one AAC .m4a (48 kbps mono) of at
+most 120 pieces, with each piece's start and end. The files go through
+`keepMade` into Waypage's own files and become the clip's own `audio`
+(`ours`, `voiced`), like an EPUB's narration: the clip is no audiobook of
+its own (`ownSound`), it reads along with itself, Narrate's button plays
+it (`voicedPlay`), and the car lists it with the audiobooks. `audio`
+never syncs and is in no backup (`backup.cleanMeta` leaves it out), so
+the files stay on the phone. The pieces' times are written whole into
+listen.json (`ranges` covers it, so nothing is written ahead; `para`
+starts each paragraph). A collection makes one for each clip without.
+The run is a Downloads card, so the dataSync notification keeps the
+app up while it's made.
 
 A streamed audiobook (the Audiobookshelf extension) is an entry with
 `remote` (`{ kind, server, item }`) and a `link` of `abs:<server>:<item>`
@@ -1009,8 +1012,8 @@ adds a line here.
   are faster than real time, Kokoro on a phone may be slower, so a long
   book can take hours, and Android 15 ends a dataSync service after six
   hours a day. Pausing stops the file in hand and makes it again from its
-  start. A made audiobook is in no backup or sync, like any audiobook;
-  it can be made again from the text.
+  start. A clip's made sound is in no backup or sync: another phone
+  narrates the clip, or makes its own.
 
 ## Traps
 

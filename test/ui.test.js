@@ -6222,7 +6222,7 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
-    await test("Make an audiobook speaks a clip into one that reads along with it, and a collection into one with a chapter per clip", async () => {
+    await test("Make an audiobook gives a clip its own sound, which plays in place of Narrate and never syncs; a collection gives each clip one", async () => {
       const q = await page(browser, 390);
       for (const f of ["article.html", "chapters.html"]) {
         await q.fill("#saveUrl", ROOT + "test/fixtures/" + f);
@@ -6233,12 +6233,14 @@ c("bk1", { at: 0.01 })]);
         const A = window.Waypage.platform.audio;
         Object.defineProperty(A, "canVoice", { get: () => true, configurable: true });
         window.asked = [];
+        window.played = [];
         A.voice = async (o) => {
           asked.push(o);
           if (voiceStep) voiceStep({ n: o.items.length, of: o.items.length });
           return { uri: "file:///cache/" + o.name + ".m4a", dur: o.items.length * 5, size: 100, t0: o.items.map((_, i) => i * 5), t1: o.items.map((_, i) => i * 5 + 4) };
         };
         A.stopVoicing = () => {};
+        A.play = async (o) => { played.push(o); };
         window.Waypage.platform.keepMade = async (from, name) => "file:///data/Files/" + name;
         state.pages.forEach((x, i) => { x.folder = "Flights"; x.folderAt = 1000 - i; });
         await window.Waypage.store.writeIndex(state.pages);
@@ -6246,32 +6248,38 @@ c("bk1", { at: 0.01 })]);
       const clip = await q.evaluate(() => state.pages.find((x) => /Long Haul/.test(x.title)).id);
       await q.evaluate((id) => makeAudiobook({ page: state.pages.find((x) => x.id === id) }), clip);
       const one = await q.evaluate(async (id) => {
-        const a = state.pages.find((x) => x.audio && x.audio.voiced && x.audio.voiced.from === id);
-        const data = await window.Waypage.store.readListen(a.id);
-        return { mode: a.listen.mode, book: a.listen.book.id, ours: a.audio.ours, chapters: a.audio.chapters.length, dur: a.audio.dur,
-          words: data.pieces.map((x) => x.text).join(" "), covered: data.ranges, redirect: listenRedirect(a), along: audioFor(state.pages.find((x) => x.id === id)) === a };
+        const p = state.pages.find((x) => x.id === id);
+        const data = await window.Waypage.store.readListen(id);
+        return { count: state.pages.length, own: audioFor(p) === p, audiobook: isAudiobook(p), mode: modeOf(p), ours: p.audio.ours, chapters: p.audio.chapters.length, dur: p.audio.dur,
+          words: data.pieces.map((x) => x.text).join(" "), covered: data.ranges, synced: JSON.stringify(window.Waypage.backup.cleanMeta(p, p.id)), car: carBookOk(p) && !carClipOk(p) };
       }, clip);
-      assert.strictEqual(one.mode, "book");
-      assert.strictEqual(one.book, clip);
-      assert.ok(one.ours && one.along && one.redirect === clip, JSON.stringify(one));
-      assert.ok(/oceanic track/.test(one.words), "the transcript is the clip's text");
+      // No new entry: the clip itself has the sound, reads along with itself, and isn't an audiobook of its own.
+      assert.strictEqual(one.count, 2);
+      assert.ok(one.own && !one.audiobook && one.mode === "book" && one.ours && one.car, JSON.stringify(one));
+      assert.ok(/oceanic track/.test(one.words), "the words to read along with are the clip's text");
       assert.deepStrictEqual(one.covered, [[0, one.dur]]);
-      // The start and its two headings are its chapters; made again, it's there already.
+      // The start and its two headings are its chapters.
       assert.strictEqual(one.chapters, 3);
-      await q.evaluate((id) => makeAudiobook({ page: state.pages.find((x) => x.id === id) }), clip);
-      assert.strictEqual(await q.evaluate(() => state.pages.filter((x) => x.audio && x.audio.voiced).length), 1);
-      // A collection: a chapter per clip, read along with its own transcript.
+      // The sound's files stay on this device: not in what syncs or is backed up.
+      assert.ok(!/file:\/\/\/data|"audio"/.test(one.synced), one.synced);
+      // Narrate's button plays the sound, with no speaking.
+      await q.evaluate((id) => openPage(id), clip);
+      await q.locator("#readerView:not([hidden])").waitFor();
+      await q.evaluate(() => { window.spoke = 0; const S = window.Waypage.platform.speech; S.play = async () => { spoke++; }; });
+      await q.click("#readerAloud");
+      await until(q, () => played.length === 1);
+      assert.strictEqual(await q.evaluate(() => spoke), 0);
+      assert.ok(await q.evaluate((id) => played[0].key === id && played[0].parts.length === state.pages.find((x) => x.id === id).audio.parts.length, clip), "plays the made files");
+      await q.evaluate(() => { listenStop(); closeReader(); });
+      // A collection: each clip without a sound gets its own; the one made already is left.
       const n = await q.evaluate(() => asked.length);
       await q.evaluate(() => makeAudiobook({ folder: "Flights" }));
-      const all = await q.evaluate(async () => {
-        const a = state.pages.find((x) => x.audio && x.audio.voiced && x.audio.voiced.from === "c:flights");
-        return { mode: a.listen.mode, titles: a.audio.chapters.map((c) => c.title), page: (await window.Waypage.store.readPage(a.id)).includes("Somewhere over the Atlantic") };
-      });
-      assert.strictEqual(all.mode, "transcript");
-      assert.strictEqual(all.titles.length, 2, JSON.stringify(all.titles));
-      assert.ok(all.page, "the transcript page holds the text");
-      // Each file goes to the voice of its clip's language.
-      assert.ok(await q.evaluate((k) => asked.slice(k).every((o) => "engine" in o && "voice" in o && o.items.length), n));
+      const all = await q.evaluate((k) => ({ voiced: folderPages("Flights").filter(voicedSound).length, count: state.pages.length,
+        engines: asked.slice(k).every((o) => "engine" in o && "voice" in o && o.items.length) }), n);
+      assert.deepStrictEqual(all, { voiced: 2, count: 2, engines: true });
+      // Removing it: Narrate reads it again.
+      await q.evaluate((id) => dropVoiced(state.pages.find((x) => x.id === id)), clip);
+      assert.ok(await q.evaluate((id) => { const p = state.pages.find((x) => x.id === id); return !p.audio && !audioFor(p); }, clip));
       assert.deepStrictEqual(q.errors.filter((e) => !/waypage-fetch/.test(e)), []);
       await q.context().close();
     });

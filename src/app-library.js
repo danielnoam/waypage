@@ -436,7 +436,7 @@ async function setFolder(p, name) {
 // 2 files". A copy made from a file is a clip, as in the library.
 // A list of only files says Files, and of only audiobooks, heard for read.
 const allFiles = (list) => list.length > 0 && list.every((p) => p.file);
-const allHeard = (list) => list.length > 0 && list.every((p) => p.audio && p.audio.parts && !p.audio.overlay);
+const allHeard = (list) => list.length > 0 && list.every(isAudiobook);
 const listHead = (list) => (allFiles(list) ? t("Files") : isSeries(list) ? t("Chapters") : t("Clips")) + " · " + list.length;
 const HOLDS = [["note", (n) => tn(n, "1 note", "{n} notes")], ["audio", (n) => tn(n, "1 audiobook", "{n} audiobooks")], ["file", (n) => tn(n, "1 file", "{n} files")], ["clip", (n) => tn(n, "1 clip", "{n} clips")]];
 const holdKind = (p) => (p.note ? "note" : isAudiobook(p) ? "audio" : p.link ? "file" : "clip");
@@ -1600,7 +1600,8 @@ function pageSheet(p, where) {
         inReader && inkReady() ? menuRow(t("Try your pen"), () => { history.back(); setTimeout(() => openSheet("ink"), 0); }) : null,
         C.files.convertible(p) ? menuRow(t("Make a note from it"), () => back().then(() => makeNoteFrom(p))) : null,
         // Spoken into an audiobook by the Narrate voice (Android).
-        typeof makeAudiobook === "function" && canVoice() && voiceable(p) ? menuRow(t("Make an audiobook"), () => back().then(() => makeAudiobook({ page: p }))) : null,
+        typeof makeAudiobook === "function" && canVoice() && voiceable(p) ? menuRow(voicedSound(p) ? t("Make its audiobook again") : t("Make an audiobook"), () => back().then(() => makeAudiobook({ page: p }))) : null,
+        typeof makeAudiobook === "function" && voicedSound(p) ? menuRow(t("Remove its audiobook"), () => back().then(() => dropVoiced(p))) : null,
         inReader && !p.note && !C.files.printed(p) ? menuRow(t("Find in this clip"), () => back().then(openFind)) : null,
         inReader && !p.note && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow(t("Save linked pages"), () => back().then(() => openSheet("links"))) : null,
         p.note ? null : menuRow(p.finished ? t("Mark as unread") : t("Mark as read"), () => markRead([p], !p.finished).then(draw)),
