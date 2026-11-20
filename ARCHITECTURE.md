@@ -221,6 +221,13 @@ drawn in the hidden browser (`render` with `waitFor: ".mchap-row"`,
 which makes PageRender count the text only once the rows are there), a
 page of twenty at a time (40 pages at most). Without that browser (iOS,
 the web copy) nothing is read and no links are guessed from the page.
+A comix.to chapter is a comic by its address (`comic`): drawn and scrolled
+in the hidden browser, whose reader puts in `.rpage-page__img` as it
+scrolls and keeps them, and read by the rule's `panels`. Trap: its picture
+hosts refuse any Referer (the reader sends none), so the rule has
+`noReferer`, which makes `keep` download with no page, for the first save,
+Retry and Save full images alike. Saved before this, a chapter has only
+its first few panels and must be saved again.
 The same read gives the page's own tags (`pageTags`: a site rule's
 `tags`, else `article:tag` meta, ten at most) as `siteTags`; Save with
 options offers them as one switch, off until turned on, remembered in

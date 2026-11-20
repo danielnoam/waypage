@@ -1150,6 +1150,31 @@
       host: /(^|\.)comix\.to$/i,
       ownChapters: true,
       list: comixList,
+      // A chapter (1.69.0) is a column of panels the site's reader puts in
+      // as it scrolls (`.rpage-page__img`, five at first, the rest as they
+      // near the screen, and kept), so it is drawn and scrolled like any
+      // comic. Its picture hosts turn away any Referer (the reader sends
+      // none), so downloads send none either (`keep`).
+      noReferer: true,
+      comic: (url) => /^\/title\/[^/]+\/\d+-chapter-[^/]+\/?$/.test(new URL(url).pathname),
+      panels(doc, url) {
+        return uniqueLinks([...doc.querySelectorAll(".rpage-page__img[src]")]
+          .map((img) => absolute(img.getAttribute("src"), url))
+          .filter((u) => /^https?:/.test(u)));
+      },
+      chapter(doc, url) {
+        if (!this.comic(url)) return null;
+        // "The Perks of Being an S-Class Heroine · Ch.147"
+        const og = doc.querySelector('meta[property="og:title"]');
+        const [series, chapter] = ((og && og.content) || text(doc.querySelector("title"))).split(/\s+·\s+/);
+        const n = new URL(url).pathname.match(/-chapter-(.+?)\/?$/);
+        return {
+          content: null,
+          title: (chapter || (n ? "Ch." + n[1] : "")).trim(),
+          series: (series || "").trim(),
+          byline: "",
+        };
+      },
     },
     {
       name: "Bluesky",
@@ -2871,8 +2896,10 @@
   // than the screen needs is redrawn smaller (store.shrink). Resolves to
   // { rel, bytes } of the file kept.
   // A full image is made smaller too (1.18.0), unless that's turned off.
+  // A site whose picture hosts refuse a Referer (comix.to) gets none.
   async function keep(id, rel, url, mode, page) {
-    const size = await C.store.download(id, rel, url, page);
+    const rule = siteRule(page);
+    const size = await C.store.download(id, rel, url, rule && rule.noReferer ? null : page);
     if (mode !== "full") return C.store.shrink(id, rel, size, PREVIEW_WIDTH);
     return compress ? C.store.squeeze(id, rel, size, FULL_WIDTH) : { rel, bytes: size };
   }

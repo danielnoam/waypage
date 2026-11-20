@@ -511,6 +511,46 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       assert.strictEqual(got.drawn.length, 0);
     });
 
+    // A comix.to chapter: drawn and scrolled in the hidden browser, whose
+    // reader has put in `.rpage-page__img` for each page by the end.
+    await test("comix.to: a chapter is drawn scrolled, and every panel is kept in order", async () => {
+      const { got } = await inPage(browser, [["https://comix.to/title/1w0v-the-perks", "comix-chapter.html"]], async () => {
+        Object.defineProperty(Waypage.platform, "canRender", { get: () => true, configurable: true });
+        const calls = [];
+        Waypage.platform.render = async (u, opts) => {
+          calls.push(opts);
+          const pages = Array.from({ length: 12 }, (_, i) => '<div class="rpage-page" data-page="' + (i + 1) + '"><img class="rpage-page__img" width="800" height="1500" src="https://wyr.host' + (i % 3) + '.site/hi/p' + (i + 1) + '"></div>').join("");
+          return { url: u, text: '<html><head><meta property="og:title" content="The Perks of Being an S-Class Heroine · Ch.7"><title>x</title></head><body><div class="rpage">' + pages + '<a class="rpage-chap-ending__title" href="/title/1w0v-the-perks">The Perks</a></div></body></html>' };
+        };
+        const meta = await Waypage.save.save("https://comix.to/title/1w0v-the-perks/1234-chapter-7");
+        const html = await Waypage.store.readPage(meta.id);
+        return { calls, meta, srcs: [...html.matchAll(/<img[^>]*\ssrc="([^"]+)"/g)].map((m) => m[1]) };
+      });
+      assert.strictEqual(got.calls.length, 1);
+      assert.strictEqual(got.calls[0].scroll, true, "scrolled to the end, so the reader puts every picture in");
+      assert.deepStrictEqual(got.srcs.filter((s) => /\/hi\/p/.test(s)), Array.from({ length: 12 }, (_, i) => "https://wyr.host" + (i % 3) + ".site/hi/p" + (i + 1)));
+      assert.strictEqual(got.meta.title, "Ch.7");
+      assert.strictEqual(got.meta.series, "The Perks of Being an S-Class Heroine");
+    });
+
+    await test("comix.to: its pictures are downloaded without a Referer, other sites' with one", async () => {
+      const { got } = await inPage(browser, [], async () => {
+        const S = Waypage.store, sent = [];
+        S.readPage = async () => '<html><body><img class="co-missing" data-full="https://wyr.host0.site/hi/p1"><img class="co-missing" data-full="https://img.example/p.jpg"></body></html>';
+        S.writePage = async () => 0;
+        S.download = async (id, rel, url, page) => { sent.push([url, page]); return 10; };
+        S.squeeze = async (id, rel, size) => ({ rel, bytes: size });
+        S.shrink = async (id, rel, size) => ({ rel, bytes: size });
+        await Waypage.save.retryMissing({ id: "x", mode: "full", url: "https://comix.to/title/1w0v-the-perks/1234-chapter-7" });
+        await Waypage.save.retryMissing({ id: "y", mode: "full", url: "https://other.example/comic/1" });
+        return sent;
+      });
+      assert.deepStrictEqual(got, [
+        ["https://wyr.host0.site/hi/p1", null], ["https://img.example/p.jpg", null],
+        ["https://wyr.host0.site/hi/p1", "https://other.example/comic/1"], ["https://img.example/p.jpg", "https://other.example/comic/1"],
+      ]);
+    });
+
     await test("Website sync: a chapter's own link finds its contents page", async () => {
       const { got } = await inPage(browser, [
         ["https://wanderinginn.example/table-of-contents/", "toc-divs.html"],
