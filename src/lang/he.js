@@ -2859,6 +2859,11 @@ Keel.i18n.strings("he", {
   "{n} clips in “{title}” play their saved narration now.": { one: "קטע אחד ב„{title}” מנגן עכשיו את ההקראה השמורה.", other: "{n} קטעים ב„{title}” מנגנים עכשיו את ההקראה השמורה." },
   "Stopped. The clips already saved keep their narration.": "נעצר. הקטעים שכבר נשמרו שומרים את ההקראה שלהם.",
   "Save the narration again": "שמירת ההקראה מחדש",
+  "Remove saved narrations": "הסרת ההקראות השמורות",
+  "{clips} with a saved narration. Narrate reads them live again.": "{clips} עם הקראה שמורה. ההקראה תקריא אותם בזמן אמת שוב.",
+  "Remove the saved narration of {clips}? It frees {size}; you can save it again.": "להסיר את ההקראה השמורה של {clips}? זה יפנה {size}; אפשר לשמור אותה שוב.",
+  "Remove the saved narration of {clips}? You can save it again.": "להסיר את ההקראה השמורה של {clips}? אפשר לשמור אותה שוב.",
+  "The saved narrations are gone.": "ההקראות השמורות הוסרו.",
   "Remove the saved narration": "הסרת ההקראה השמורה",
   "The saved narration is gone. Narrate reads it live again.": "ההקראה השמורה הוסרה. ההקראה תקרא אותו שוב בזמן אמת.",
 });

@@ -6277,8 +6277,17 @@ c("bk1", { at: 0.01 })]);
       const all = await q.evaluate((k) => ({ voiced: folderPages("Flights").filter(voicedSound).length, count: state.pages.length,
         engines: asked.slice(k).every((o) => "engine" in o && "voice" in o && o.items.length) }), n);
       assert.deepStrictEqual(all, { voiced: 2, count: 2, engines: true });
-      // Removing it: Narrate reads it again.
-      await q.evaluate((id) => dropVoiced(state.pages.find((x) => x.id === id)), clip);
+      // Storage removes every saved narration at once, to make room.
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Storage" }).click();
+      const room = q.locator(".room-narrations");
+      await room.waitFor();
+      assert.ok(/2 clips with a saved narration/.test(await room.innerText()), await room.innerText());
+      await q.evaluate(() => { window.confirm = () => true; });
+      await room.click();
+      await until(q, () => !document.querySelector(".room-narrations"));
+      assert.strictEqual(await q.evaluate(() => state.pages.filter(voicedSound).length), 0);
+      // Narrate reads it again once it's removed.
       assert.ok(await q.evaluate((id) => { const p = state.pages.find((x) => x.id === id); return !p.audio && !audioFor(p); }, clip));
       assert.deepStrictEqual(q.errors.filter((e) => !/waypage-fetch/.test(e)), []);
       await q.context().close();

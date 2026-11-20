@@ -1618,7 +1618,7 @@ async function makeAudiobook(what) {
   }
 }
 // The made sound taken off a clip: it narrates again.
-async function dropVoiced(p) {
+async function dropVoiced(p, quiet) {
   if (!voicedSound(p)) return;
   if (lis.key === p.id) listenStop();
   dropAudioFiles(p);
@@ -1627,8 +1627,9 @@ async function dropVoiced(p) {
   await C.store.writeListen(p.id, null).catch(() => {});
   lis.sync = null; lis.syncFor = "";
   if (lis.dataFor === p.id) { lis.data = null; lis.dataFor = ""; }
-  await C.store.writeIndex(state.pages);
   if (state.open === p) listenOpened(p);
+  if (quiet) return;
+  await C.store.writeIndex(state.pages);
   renderLibrary();
   toast(t("The saved narration is gone. Narrate reads it live again."));
 }
