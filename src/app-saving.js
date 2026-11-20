@@ -1057,10 +1057,11 @@ function neighbours(p) {
 
 // `from` is the page read as a list of chapters, which can still be
 // saved as one page; `siteTags` ({ site, tags }) the tags that page gave it.
-function openBatch(text, fromHistory, folder, from, siteTags) {
+// `series`: the collection is saved as a series (Discover's Save as Series).
+function openBatch(text, fromHistory, folder, from, siteTags, series) {
   if (state.batch) return;
   state.batch = true;
-  renderBatch(linksFrom(text).join("\n"), folder || null, from, siteTags);
+  renderBatch(linksFrom(text).join("\n"), folder || null, from, siteTags, !!series);
   if (!fromHistory) history.pushState({ view: "batch", folder: state.folder || undefined }, "");
   // Set once it shows: a hidden screen keeps its old scroll.
   const shown = pushScreen($("batchView"));
@@ -1081,8 +1082,10 @@ const LONG_LIST = 50;
 const SITE_TAGS_KEY = "waypage.saveSiteTags";
 const TAG_NEW_KEY = "waypage.saveTagNew";
 
-function renderBatch(text, preset, from, siteTags) {
+function renderBatch(text, preset, from, siteTags, asSeries) {
   let folder = preset;
+  // A new collection, or a new series (Discover's Save as Series picks it).
+  let series = !!asSeries;
   // The page the chapters were read from, kept on the folder (0.26.0).
   let source = from || null;
   let mode = load(IMAGES_KEY, "previews");
@@ -1139,18 +1142,35 @@ function renderBatch(text, preset, from, siteTags) {
   };
   const pick = (f, typed) => { folder = f; if (!typed) input.value = ""; sync(); };
   // The collection: None, one already there, or a new one typed in.
-  const NEW = "\u0000new";
-  const folderPick = dropdown({ label: t("Collection"), cls: "field-pick batch-folder", value: "",
-    options: [{ value: "", label: t("None") }, ...foldersByUse().map((f) => ({ value: f, label: f })), { value: NEW, label: t("New collection…") }],
+  const NEW = "\u0000new", NEW_SERIES = "\u0000series";
+  const folderHead = el("h2", { class: "overline" });
+  const folderNote = el("p", { class: "meta" });
+  const paintKind = () => {
+    folderHead.textContent = series ? t("Series") : t("Collection");
+    folderNote.textContent = series ? t("Clips in a series keep the order of the links. It shows under Series in your Library.") : t("Clips in a collection keep the order of the links.");
+    input.placeholder = series ? t("New series") : t("New collection");
+    input.setAttribute("aria-label", input.placeholder);
+  };
+  // None, the collections and series there are, or a new one of either.
+  const folderPick = dropdown({ label: t("Collection or series"), cls: "field-pick batch-folder", value: "",
+    options: [{ value: "", label: t("None") },
+      ...foldersByUse().map((f) => ({ value: f, label: isSeriesFolder(f) ? t("{name} · series", { name: f }) : f })),
+      { value: NEW, label: t("New collection…") }, { value: NEW_SERIES, label: t("New series…") }],
     onpick: (v) => {
-      input.hidden = v !== NEW;
-      if (v === NEW) { pick(cleanTag(input.value) ? folderName(input.value) : null, true); input.focus(); }
+      const fresh = v === NEW || v === NEW_SERIES;
+      input.hidden = !fresh;
+      series = fresh ? v === NEW_SERIES : isSeriesFolder(v);
+      paintKind();
+      if (fresh) { pick(cleanTag(input.value) ? folderName(input.value) : null, true); input.focus(); }
       else pick(v || null);
     } });
   input.hidden = true;
+  paintKind();
   const choose = (name) => {
     const had = name && allFolders().find((f) => sameTag(f, name));
-    folderPick.set(had || (name ? NEW : ""));
+    if (had) series = series || isSeriesFolder(had);
+    paintKind();
+    folderPick.set(had || (name ? (series ? NEW_SERIES : NEW) : ""));
     input.hidden = !name || !!had;
     if (had) pick(had);
     else { input.value = name || ""; pick(name || null, true); }
@@ -1261,9 +1281,9 @@ function renderBatch(text, preset, from, siteTags) {
       kindNote),
     images ? el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Images")), images,
       el("p", { class: "meta" }, t("Full images for comics, maps and diagrams. Settings picks the usual choice."))) : null,
-    el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Collection")),
+    el("section", { class: "settings-section" }, folderHead,
       el("div", { class: "tag-edit" }, folderPick, input),
-      el("p", { class: "meta" }, t("Clips in a collection keep the order of the links."))),
+      folderNote),
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Tags")), siteBox, tagBox, tagNewBox),
     go);
   form.addEventListener("submit", (e) => {
@@ -1274,7 +1294,7 @@ function renderBatch(text, preset, from, siteTags) {
     if (!urls.length) return;
     if (urls.length > LONG_LIST && !confirm(t("Save {n} clips? They save one at a time, so a list this long takes a while. Pause and Stop are on its card.", { n: urls.length }))) return;
     history.back();
-    saveAll(skipSaved ? all : urls, folder, tags, mode, skipSaved, kind, source, !!(folder && tags.length && tagNew), siteTags || undefined);
+    saveAll(skipSaved ? all : urls, folder, tags, mode, skipSaved, kind, source, !!(folder && tags.length && tagNew), siteTags || undefined, series && !!folder);
   });
   $("batchBody").replaceChildren(form);
   if (folder) choose(folder);
