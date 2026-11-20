@@ -68,7 +68,7 @@ src/app-settings.js Settings (built from data; the search reads the built screen
 src/app-listen.js   audiobooks: bringing one in, the player and its bar, reading along, transcripts written ahead, fixes, Find the book in Discover, Settings › Audiobooks
 src/app-extensions.js Settings › Extensions (a switch each) and the places extensions add to the sidebar, above Stats
 src/app-lock.js     app lock: passcode (PBKDF2 hash), fingerprint or face on Android
-src/app-car.js      Android Auto: the list the car starts from (books, clips cut for Narrate) and where the car got to
+src/app-car.js      Android Auto: the list the car starts from (books, clips cut for Narrate, collections with quick starts) and where the car got to
 src/app-start.js    wiring at launch, what other apps share in, self-update, Test builds, What's new
 src/save.js         link to saved page: fetch, Wikipedia adapter or Readability, allowlist cleaner, picture previews, video cards
 src/reader.js       a saved page in the sandboxed iframe: place, find, highlights, translation, pages mode
@@ -767,18 +767,29 @@ MediaBrowserService, no androidx) and `automotive_app_desc` in the
 plugin's manifest. Narrate and audiobooks share one MediaSession
 (`Car.session`, never released): the car binds to one token, so each
 player only says it's the one playing (`Car.playing`) and hands it back
-when it stops (`Car.idle`). The car's tabs are Continue, Audiobooks and
-Up next; an audiobook's chapters are the session's queue. Custom
-actions add next and previous clip (`SpeechService.clip`: the clip the
-app queued, else `Car.neighbour` under Up next) and next and previous
-chapter or file (`AudiobookService.chapter`). A clip the car jumps to
-that the app didn't queue isn't followed by the open app's player.
+when it stops (`Car.idle`). The car's tabs are Continue, Audiobooks,
+Up next and Collections (Android Auto shows four at most); an
+audiobook's chapters are the session's queue. Custom actions add next
+and previous clip (`SpeechService.clip`: the clip the app queued, else
+`Car.nextId`: the next in the clip's collection or series, else under
+Up next) and next and previous chapter or file
+(`AudiobookService.chapter`, which past the book's ends goes to the
+collection's next or previous). Their icons are a list with an arrow,
+not the skip arrows: beside the paragraph buttons, look-alikes read as
+previous and next swapped. A clip the car jumps to that the app didn't
+queue isn't followed by the open app's player.
 
 The car starts things with the app closed, so the WebView can't help.
 `app-car.js` writes `car.json` (CarPlugin) when the app is put away and
 a little after it opens, if anything changed: up to 40 books with their
 parts, chapters and place, and the 10 latest unfinished clips with their
-text already cut into Narrate's pieces, voice, engine and speed. A job
+text already cut into Narrate's pieces, voice, engine and speed, and
+the 8 collections or series read or added to last, in their order, with
+quick starts and only some of their clips (the first two, the newest,
+and from just before where it was left to 8 after; `at` gives each
+one's place, so Next never jumps a gap). Those carried only for a
+collection are marked `hide` and stay off the Audiobooks and Up next
+tabs. The car's words come in the app's language (`words`). A job
 the car started is marked `car`; where it got to goes into
 SharedPreferences (`Car.heardBook`, `Car.heardClip`) and `carPlaces`
 takes it back into the library when the app opens. A clip's place there
