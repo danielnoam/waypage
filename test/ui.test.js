@@ -2023,6 +2023,47 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("drawing in Pages keeps the page still, and a pinch zooms it in place", async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      q.errors = [];
+      q.on("pageerror", (e) => q.errors.push(e.message));
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      await q.waitForTimeout(1000);
+      await q.evaluate(async () => { const m = await C.notes.create("lines"); state.pages.unshift(m); await C.store.writeIndex(state.pages); openPage(m.id); });
+      await until(q, () => state.open && C.reader.frameDoc && C.reader.frameDoc.querySelector("img[data-page]"));
+      await q.evaluate(() => setNoteLook({ layout: "pages" }));
+      await until(q, () => C.reader.paged && C.reader.pageInfo());
+      await q.evaluate(() => { inkStart(); C.ink.setting({ finger: true }); });
+      await until(q, () => C.ink.on);
+      // Touches from the page's own document, as the swipe test does.
+      const touch = (steps) => q.evaluate(async (steps) => {
+        const d = C.reader.frameDoc, target = d.querySelector(".co-ink") || d.body;
+        const t = (id, x, y) => new Touch({ identifier: id, target, clientX: x, clientY: y, screenX: x, screenY: y });
+        const fire = (type, list, ch) => target.dispatchEvent(new TouchEvent(type, { touches: list.map((p) => t(...p)), changedTouches: (ch || list).map((p) => t(...p)), bubbles: true, cancelable: true }));
+        for (const [type, list, ch] of steps) { fire(type, list, ch); await new Promise((r) => setTimeout(r, 16)); }
+      }, steps);
+      const state_ = () => q.evaluate(() => ({ x: C.reader.frameWin.scrollX, z: C.reader.pageZoom(), viewer: !!document.querySelector(".viewer:not([hidden])") }));
+      // A finger sweeping sideways draws, and neither moves nor turns the page.
+      const sweep = [["touchstart", [[1, 100, 400]]]];
+      for (let i = 1; i <= 8; i++) sweep.push(["touchmove", [[1, 100 + i * 25, 400]]]);
+      sweep.push(["touchend", [], [[1, 300, 400]]]);
+      await touch(sweep);
+      assert.deepStrictEqual(await state_(), { x: 0, z: 1, viewer: false });
+      // A pinch zooms the page where it is: no viewer.
+      const pinch = [["touchstart", [[1, 150, 400]]], ["touchstart", [[1, 150, 400], [2, 240, 400]], [[2, 240, 400]]]];
+      for (let i = 1; i <= 8; i++) pinch.push(["touchmove", [[1, 150 - i * 8, 400], [2, 240 + i * 8, 400]]]);
+      pinch.push(["touchend", [], [[1, 86, 400], [2, 304, 400]]]);
+      await touch(pinch);
+      const z = await state_();
+      assert.ok(z.z > 1.5 && !z.viewer, "zoomed in place: " + JSON.stringify(z));
+      await q.evaluate(() => C.reader.unzoomPage());
+      assert.strictEqual(await q.evaluate(() => C.reader.pageZoom()), 1);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await ctx.close();
+    });
+
     await test("a collection's EPUB carries its cover: a picture of your own, else what the library shows", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

@@ -337,6 +337,14 @@ fountain pen thin along a 45° nib and thick across it, brush a strong
 response with tapered ends); a saved size from the three-step bar maps 0, 1, 2
 to 0, 2, 4 on the five (`waypage.ink` has `v: 2` from then on).
 
+Draw on in Pages: a touch that draws never turns or drags the page
+(`pagedInput` checks `e.defaultPrevented` and `inkHook.drawing()`), and a
+pinch zooms the row in place (`reader.js pz`, a transform about the screen's
+centre, `applyPz`) instead of opening the viewer; one finger pans it when
+Finger is off, and `drawNear` draws the pages larger by `pageZoom()`. A
+turn, a new layout or Draw off sets it back to 1. A pen, or a palm beside
+it, is not a pinch (`inkHook.penDown`).
+
 Select, a picture and colours of your own (1.57.0), all in `ink.js` and
 `app-ink.js`. Select is a fourth tool: a loop (`inside`, even-odd) takes the
 strokes with half their points in it and the pictures whose middle is in
@@ -984,6 +992,9 @@ adds a line here.
 
 Things that broke once and would again. Check here before touching the
 area.
+- Pages mode scrolls by hand (`pagedInput`), so ink's `preventDefault` on a
+  touch doesn't stop it. A new document-level touch gesture has to check
+  `e.defaultPrevented` and `inkHook.drawing()`, or the page moves under the pen.
 - A build from before Notes (1.57.0 and older, and `test-omri-dev`) drops
   every note when it syncs: `cleanMeta` keeps only entries with an address,
   so the next merge marks them deleted and removes their folders on the

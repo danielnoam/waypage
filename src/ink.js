@@ -651,7 +651,7 @@
 
   function setOn(v) {
     on = !!v;
-    if (!on) { cur = null; picker = null; selClear(); away(); }
+    if (!on) { cur = null; picker = null; selClear(); away(); if (C.reader && C.reader.unzoomPage) C.reader.unzoomPage(); }
     const D = frameDoc();
     if (D) D.documentElement.toggleAttribute("data-co-inking", on);
     if (on) for (const n of shown()) ensure(n);
@@ -1535,5 +1535,5 @@
     get on() { return on; },
     get lastStroke() { return lastStroke; },
   };
-  if (C.reader) C.reader.inkHook = { show, hide, place: placeAll, reset, click, pen: () => { if (onPen) onPen(); } };
+  if (C.reader) C.reader.inkHook = { show, hide, place: placeAll, reset, click, drawing: () => on && (!!cur || penTouch), penDown: () => penTouch, pen: () => { if (onPen) onPen(); } };
 })();

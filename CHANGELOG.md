@@ -2,6 +2,25 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.68.1] - 2026-11-20
+
+### Added
+- Website sync › Keep (All, 3, 5 or 10): a collection keeps that many unread chapters on the device. Read chapters are deleted and the next ones saved in their place, when it checks for new chapters. Highlighted, noted, drawn-on and favourite chapters are never deleted.
+
+### Changed
+- Website sync looks like Settings now: New chapters (the count with Save and Check, and Keep on this device), Save more and Synced with (one Refresh button: it reads the link again, or unlinks when the box is empty) each sit in their own group, one row each. Keep is a drop-down (Every chapter, 3, 5 or 10 unread). While chapters save, Save next shows only Pause and Stop.
+
+### Fixed
+- A chapter you deleted from a Website sync collection (or any series) came back as a new chapter, and Save new saved it again. Deleted chapters now stay deleted, also when they were deleted on another device.
+- Website sync no longer runs off the right edge on a phone; Unlink and the note under the link were cut off.
+- Drawing in Pages on a PDF or a note no longer moves or turns the page under your pen or finger.
+- With Draw on in Pages, pinching zooms the page where it is and you can keep drawing on it, instead of opening the picture viewer. Turning the page, or switching Draw off, zooms back out.
+- On a small phone (320 px), the picking bar's Collection and Mark read ran into each other, and the Draw bar cut off the pen and Done at its ends.
+- With the phone on its side, the app lock's title and Forgot passcode were off the screen. They now sit beside the keys.
+- On a tablet or computer, Stats and Anki had no name at the top of the screen.
+- In Hebrew, the picking bar's Tags, Collection, Edit and Delete, the reader's Back to where you were, Read next and Shortcuts, and the Offline pill stayed in English.
+- With Audiobookshelf turned on, the app could start with it half loaded, so a book from your server might not play until the app was restarted.
+
 ## [1.68.0] - 2026-11-19
 
 ### Added
