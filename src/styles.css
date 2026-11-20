@@ -2266,8 +2266,11 @@ span.update-text { cursor: default; }
 .pop-item:hover:not(:disabled), .pop-item:focus-visible { background: var(--press); outline: none; }
 .pop-item:disabled { opacity: 0.5; cursor: default; }
 .pop-icon { display: flex; color: var(--accent); }
+[dir="rtl"] .pop-icon.flip svg { transform: scaleX(-1); }
 .pop-item.warn, .pop-item.warn .pop-icon { color: var(--warn); }
-.pop-label { flex: 1; }
+.pop-label { flex: 1; min-width: 0; }
+#folderPop .pop-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#folderPop .pop-item:has(.pop-sub) { padding-block: var(--s-1); }
 .pop-note { color: var(--muted); font-size: var(--fs-meta); }
 .pop-note.accent { color: var(--accent); font-weight: 600; }
 .pop-sep { height: 1px; margin: var(--s-1) 0; background: var(--line); }

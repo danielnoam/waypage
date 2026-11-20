@@ -1038,14 +1038,17 @@ function openFolderMenu() {
   const item = (icon, label, onclick, opts = {}) => {
     const b = el("button", { class: "pop-item" + (opts.warn ? " warn" : ""), type: "button", role: "menuitem", tabindex: "-1",
       onclick: () => { closeFolderMenu(true); onclick(); } },
-      el("span", { class: "pop-icon", "aria-hidden": "true" }), el("span", { class: "pop-label" }, label),
+      el("span", { class: "pop-icon" + (opts.flip ? " flip" : ""), "aria-hidden": "true" }),
+      el("span", { class: "pop-label" }, label, opts.sub ? el("span", { class: "pop-sub", dir: "auto" }, opts.sub) : null),
       opts.note ? el("span", { class: "pop-note" + (opts.accent ? " accent" : "") }, opts.note) : null);
     b.firstChild.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS[icon] + "</svg>";
     b.disabled = !!opts.disabled;
     return b;
   };
   const sep = () => el("div", { class: "pop-sep", role: "separator" });
+  const starts = quickStarts(list, item);
   const pop = el("div", { class: "pop-menu", id: "folderPop", role: "menu", "aria-label": t("Collection") },
+    ...starts, starts.length ? sep() : null,
     item("book", t("Website sync"), () => setFolderMode("chapters"), fresh ? { note: newCountText(fresh), accent: true } : {}),
     item("add", t("Add clips"), () => openBatch("", false, state.folder)),
     sep(),
@@ -1065,7 +1068,11 @@ function openFolderMenu() {
     item("remove", t("Remove"), () => openMenu("remove"), { warn: true }));
   const more = $("folderMore"), at = more.getBoundingClientRect();
   pop.style.top = at.bottom + 4 + "px";
-  pop.style.right = Math.max(8, innerWidth - at.right) + "px";
+  if (document.dir === "rtl") pop.style.left = Math.max(8, at.left) + "px";
+  else pop.style.right = Math.max(8, innerWidth - at.right) + "px";
+  // A phone on its side is shorter than the menu: it scrolls.
+  pop.style.maxHeight = innerHeight - at.bottom - 12 + "px";
+  pop.style.overflowY = "auto";
   $("folderView").append(pop);
   more.setAttribute("aria-expanded", "true");
   M.popFrom(pop, at);
@@ -1079,6 +1086,27 @@ function openFolderMenu() {
     else if (e.key === "Tab") closeFolderMenu(true);
   });
   setTimeout(() => addEventListener("pointerdown", outsideMenu, true));
+}
+
+// Quick starts at the top of ⋯ (Daniel 2026-11-20), the car's set and
+// the clip read last: each opens a clip, and Narrate reads on from where
+// Continue would.
+function quickStarts(list, item) {
+  const at = (p) => p.folderAt || p.savedAt || 0;
+  const newest = list.reduce((a, p) => (at(p) >= at(a) ? p : a), list[0]);
+  const last = list.reduce((a, p) => ((p.readAt || 0) > ((a && a.readAt) || 0) ? p : a), null);
+  const go = folderNextIndex(list) < 0 ? list[0] : folderNext(list);
+  const talks = !isAudiobook(go) && !go.note && !go.comic;
+  return [
+    last ? item("history", t("Last read"), () => openPage(last.id), { sub: last.title }) : null,
+    item("first", t("From the start"), () => openPage(list[0].id), { sub: list[0].title, flip: true }),
+    list.length > 1 ? item("newest", t("Newest"), () => openPage(newest.id), { sub: newest.title }) : null,
+    talks ? item("narrate", t("Narrate"), () => narrateFrom(go), { sub: go.title }) : null,
+  ].filter(Boolean);
+}
+async function narrateFrom(p) {
+  await openPage(p.id);
+  if (state.open === p && !$("readerView").hidden) startAloud();
 }
 
 function outsideMenu(e) {
@@ -1476,6 +1504,10 @@ const ICONS = {
   translate: '<path d="M4 5h9M8.5 3v2M11 5c-1 4-3.5 7-7 8.5M6.5 8.5c1.2 2 3 3.5 5 4.5"/><path d="M13 21l4-9 4 9M14.5 18h5"/>',
   grid: '<rect x="4" y="4" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1"/>',
   cover: '<rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.5"/><path d="M20 15l-4.5-4.5L6 20"/>',
+  history: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  first: '<path d="M6 5v14M18 6l-8 6 8 6z"/>',
+  newest: '<path d="M12 4l1.8 4.7L18.5 10.5l-4.7 1.8L12 17l-1.8-4.7L5.5 10.5l4.7-1.8z"/><path d="M19 16v4M17 18h4"/>',
+  narrate: '<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
   lookup: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/><path d="M9 8h7M9 11.5h5"/>',
 };
 function svgIcon(name, size) {
@@ -1861,7 +1893,8 @@ function openSelectMenu() {
     item("up", t("Previous"), pickAbove, !picked().length));
   const more = $("selectMore"), at = more.getBoundingClientRect();
   pop.style.top = at.bottom + 4 + "px";
-  pop.style.right = Math.max(8, innerWidth - at.right) + "px";
+  if (document.dir === "rtl") pop.style.left = Math.max(8, at.left) + "px";
+  else pop.style.right = Math.max(8, innerWidth - at.right) + "px";
   document.body.append(pop);
   more.setAttribute("aria-expanded", "true");
   M.popFrom(pop, at);
@@ -2144,7 +2177,8 @@ function clipMenu(node, x, y) {
   const item = (icon, label, onclick, opts = {}) => {
     const b = el("button", { class: "pop-item" + (opts.warn ? " warn" : ""), type: "button", role: "menuitem", tabindex: "-1",
       onclick: () => { closeClipMenu(true); onclick(); } },
-      el("span", { class: "pop-icon", "aria-hidden": "true" }), el("span", { class: "pop-label" }, label),
+      el("span", { class: "pop-icon" + (opts.flip ? " flip" : ""), "aria-hidden": "true" }),
+      el("span", { class: "pop-label" }, label, opts.sub ? el("span", { class: "pop-sub", dir: "auto" }, opts.sub) : null),
       opts.key ? el("kbd", { class: "pop-key" }, opts.key) : null);
     b.firstChild.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS[icon] + "</svg>";
     return b;

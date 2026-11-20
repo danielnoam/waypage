@@ -1746,6 +1746,42 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a collection's ⋯ starts: last read, from the start, newest, and narrate where Continue goes on", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (id, at, folderAt, readAt) => ({ id, url: "https://blog.example.com/" + id, title: id, site: "blog.example.com", savedAt: 1000, minutes: 1, mode: "links",
+          at, finished: at === 1, readAt, folder: "Shelf", folderAt });
+        const list = [c("q1", 1, 1, 50), c("q2", 1, 2, 90), c("q3", 0, 4, 0), c("q4", 0.3, 3, 10)];
+        await S.writeIndex(list);
+        for (const x of list) await S.writePage(x.id, "<!doctype html><html><body><p>Words in " + x.id + ".</p></body></html>", x);
+      });
+      await q.reload();
+      await until(q, () => state.pages.length === 4);
+      await q.evaluate(() => openFolder("Shelf"));
+      await until(q, () => state.folder === "Shelf" && !!document.querySelector("#folderMore"));
+      const pick = async (label, id) => {
+        await q.click("#folderMore");
+        await q.locator("#folderPop .pop-item", { hasText: label }).first().click();
+        await until(q, (id) => state.open && state.open.id === id, id);
+        await q.evaluate(() => { history.back(); });
+        await until(q, () => state.folder === "Shelf" && $("readerView").hidden);
+      };
+      await q.click("#folderMore");
+      assert.deepStrictEqual(await q.$$eval("#folderPop .pop-item", (b) => b.slice(0, 4).map((x) => x.textContent)),
+        ["Last readq2", "From the startq1", "Newestq3", "Narrateq4"]);
+      await q.keyboard.press("Escape");
+      await pick("Last read", "q2");
+      await pick("From the start", "q1");
+      await pick("Newest", "q3");
+      await q.evaluate(() => { window.started = 0; startAloud = () => { window.started++; }; });
+      await pick("Narrate", "q4");
+      assert.strictEqual(await q.evaluate(() => window.started), 1);
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
     // A site that never says (a blog): picked by hand in Edit, on every
     // clip so it syncs; a clip joining takes it. Website sync can turn the
     // site's own word off.
@@ -1949,7 +1985,7 @@ function zipOf(files) {
       await q.evaluate(() => openFolder("Serial"));
       // Favourite and Edit sit in the bar; the ⋯ menu keeps the rest.
       await q.click("#folderMore");
-      assert.deepStrictEqual(await q.locator("#folderPop .pop-label").allTextContents(), ["Website sync", "Add clips", "Show as a list", "Make it a series", "Tags", "Select", "Export", "Remove"]);
+      assert.deepStrictEqual(await q.locator("#folderPop .pop-label:not(:has(.pop-sub))").allTextContents(), ["Website sync", "Add clips", "Show as a list", "Make it a series", "Tags", "Select", "Export", "Remove"]);
       await q.keyboard.press("Escape");
       await q.click("#folderFav");
       await until(q, () => folderFav("Serial") && document.getElementById("folderFav").getAttribute("aria-pressed") === "true");
