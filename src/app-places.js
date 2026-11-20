@@ -81,7 +81,8 @@ function openMatchMenu() {
     }));
   const at = btn.getBoundingClientRect();
   pop.style.top = at.bottom + 4 + "px";
-  pop.style.right = Math.max(8, innerWidth - at.right) + "px";
+  if (document.dir === "rtl") pop.style.left = Math.max(8, at.left) + "px";
+  else pop.style.right = Math.max(8, innerWidth - at.right) + "px";
   $("highlights").append(pop);
   btn.setAttribute("aria-expanded", "true");
   M.popFrom(pop, at);

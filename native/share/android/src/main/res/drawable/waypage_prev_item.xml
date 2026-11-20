@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android Auto and the lock screen: the previous clip or chapter. -->
+<!-- Android Auto and the lock screen: the previous clip or chapter (a list and a back arrow, not the paragraph skip's look). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path
-        android:pathData="M6,6h2v12H6zM9.5,12L18,18V6z"
+        android:pathData="M5,5h17v2H5zM5,9h17v2H5zM9,13h13v2H9zM7,13v6l-5,-3z"
         android:fillColor="#FFFFFFFF" />
 </vector>

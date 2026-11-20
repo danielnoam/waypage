@@ -664,6 +664,7 @@ function bookHead(list, next, done) {
   const go = done === n ? t("Read again from the start") : (next.at > 0.02 || done ? t("Continue: {title}", { title: next.title }) : t("Start: {title}", { title: next.title }));
   return [head,
     el("button", { class: "btn-primary folder-go", type: "button", dir: "auto", onclick: () => openPage(done === n ? list[0].id : next.id) }, go),
+    quickStarts(list, done === n ? list[0] : next),
     saveNewButton(list),
     savedLine(list)];
 }
@@ -1063,11 +1064,16 @@ function openFolderMenu() {
     item("tag", t("Tags"), () => openMenu("folderTags"), sharedTags(list).length ? { note: String(sharedTags(list).length) } : {}),
     item("select", t("Select"), () => startSelect([])),
     item("send", t("Export"), () => setFolderMode("export")),
+    typeof makeAudiobook === "function" && canVoice() && list.some(voiceable) ? item("listen", t("Make an audiobook"), () => makeAudiobook({ folder: state.folder })) : null,
     sep(),
     item("remove", t("Remove"), () => openMenu("remove"), { warn: true }));
   const more = $("folderMore"), at = more.getBoundingClientRect();
   pop.style.top = at.bottom + 4 + "px";
-  pop.style.right = Math.max(8, innerWidth - at.right) + "px";
+  if (document.dir === "rtl") pop.style.left = Math.max(8, at.left) + "px";
+  else pop.style.right = Math.max(8, innerWidth - at.right) + "px";
+  // A phone on its side is shorter than the menu: it scrolls.
+  pop.style.maxHeight = innerHeight - at.bottom - 12 + "px";
+  pop.style.overflowY = "auto";
   $("folderView").append(pop);
   more.setAttribute("aria-expanded", "true");
   M.popFrom(pop, at);
@@ -1081,6 +1087,25 @@ function openFolderMenu() {
     else if (e.key === "Tab") closeFolderMenu(true);
   });
   setTimeout(() => addEventListener("pointerdown", outsideMenu, true));
+}
+
+// Quick starts under Continue (Daniel 2026-11-20): the clip read last
+// and the one added last, unless Continue opens it already.
+function quickStarts(list, main) {
+  const at = (p) => p.folderAt || p.savedAt || 0;
+  const newest = list.reduce((a, p) => (at(p) >= at(a) ? p : a), list[0]);
+  const last = list.reduce((a, p) => ((p.readAt || 0) > ((a && a.readAt) || 0) ? p : a), null);
+  const shown = new Set([main]);
+  const open = (icon, label, p) => {
+    if (!p || shown.has(p)) return null;
+    shown.add(p);
+    const b = el("button", { class: "chip quick-start", type: "button", "aria-label": label + ": " + p.title, onclick: () => openPage(p.id) },
+      el("span", { class: "chip-icon", "aria-hidden": "true" }), el("span", { class: "chip-label" }, label));
+    b.firstChild.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS[icon] + "</svg>";
+    return b;
+  };
+  const chips = [open("history", t("Last read"), last), open("newest", t("Newest"), newest)].filter(Boolean);
+  return chips.length ? el("div", { class: "chips folder-starts", role: "group", "aria-label": t("Quick starts") }, ...chips) : null;
 }
 
 function outsideMenu(e) {
@@ -1478,6 +1503,9 @@ const ICONS = {
   translate: '<path d="M4 5h9M8.5 3v2M11 5c-1 4-3.5 7-7 8.5M6.5 8.5c1.2 2 3 3.5 5 4.5"/><path d="M13 21l4-9 4 9M14.5 18h5"/>',
   grid: '<rect x="4" y="4" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1"/>',
   cover: '<rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.5"/><path d="M20 15l-4.5-4.5L6 20"/>',
+  history: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  newest: '<path d="M12 4l1.8 4.7L18.5 10.5l-4.7 1.8L12 17l-1.8-4.7L5.5 10.5l4.7-1.8z"/><path d="M19 16v4M17 18h4"/>',
+  listen: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><path d="M4 15h3v5H5a1 1 0 0 1-1-1zM20 15h-3v5h2a1 1 0 0 0 1-1z"/>',
   lookup: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/><path d="M9 8h7M9 11.5h5"/>',
 };
 function svgIcon(name, size) {
@@ -1599,6 +1627,8 @@ function pageSheet(p, where) {
         // Moved here from Highlights (Daniel's ask, 2026-11-13).
         inReader && inkReady() ? menuRow(t("Try your pen"), () => { history.back(); setTimeout(() => openSheet("ink"), 0); }) : null,
         C.files.convertible(p) ? menuRow(t("Make a note from it"), () => back().then(() => makeNoteFrom(p))) : null,
+        // Spoken into an audiobook by the Narrate voice (Android).
+        typeof makeAudiobook === "function" && canVoice() && voiceable(p) ? menuRow(t("Make an audiobook"), () => back().then(() => makeAudiobook({ page: p }))) : null,
         inReader && !p.note && !C.files.printed(p) ? menuRow(t("Find in this clip"), () => back().then(openFind)) : null,
         inReader && !p.note && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow(t("Save linked pages"), () => back().then(() => openSheet("links"))) : null,
         p.note ? null : menuRow(p.finished ? t("Mark as unread") : t("Mark as read"), () => markRead([p], !p.finished).then(draw)),
@@ -1863,7 +1893,8 @@ function openSelectMenu() {
     item("up", t("Previous"), pickAbove, !picked().length));
   const more = $("selectMore"), at = more.getBoundingClientRect();
   pop.style.top = at.bottom + 4 + "px";
-  pop.style.right = Math.max(8, innerWidth - at.right) + "px";
+  if (document.dir === "rtl") pop.style.left = Math.max(8, at.left) + "px";
+  else pop.style.right = Math.max(8, innerWidth - at.right) + "px";
   document.body.append(pop);
   more.setAttribute("aria-expanded", "true");
   M.popFrom(pop, at);

@@ -2199,6 +2199,9 @@ span.update-text { cursor: default; }
 .book-progress-fill { display: block; height: 100%; background: var(--accent); }
 .book-note { margin-top: calc(-1 * var(--s-2)); margin-bottom: var(--s-4); }
 .folder-go { margin-bottom: var(--s-2); }
+.folder-starts { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: var(--s-3); }
+.folder-starts > :last-child:nth-child(odd) { grid-column: span 2; }
+.quick-start .chip-icon { display: flex; color: var(--accent); }
 .book-new { display: flex; align-items: center; justify-content: center; gap: var(--s-2); width: 100%; margin-bottom: var(--s-2); }
 .book-saved {
   display: block; width: 100%; min-height: var(--tap); margin-bottom: var(--s-3); padding: 0 var(--s-1);
@@ -2271,7 +2274,7 @@ span.update-text { cursor: default; }
 .pop-item:disabled { opacity: 0.5; cursor: default; }
 .pop-icon { display: flex; color: var(--accent); }
 .pop-item.warn, .pop-item.warn .pop-icon { color: var(--warn); }
-.pop-label { flex: 1; }
+.pop-label { flex: 1; min-width: 0; }
 .pop-note { color: var(--muted); font-size: var(--fs-meta); }
 .pop-note.accent { color: var(--accent); font-weight: 600; }
 .pop-sep { height: 1px; margin: var(--s-1) 0; background: var(--line); }
