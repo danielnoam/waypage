@@ -117,12 +117,16 @@
     if (num(v.dur) > 0) out.dur = num(v.dur);
     if (num(v.speed) >= 0.5 && num(v.speed) <= 3) out.speed = Math.round(num(v.speed) * 100) / 100;
     if (["transcript", "book", "listen"].includes(v.mode)) out.mode = v.mode;
-    if (v.book && typeof v.book === "object") {
+    // The book read along with, and the one it was until the transcript
+    // took over (2026-11, was), to go back to.
+    for (const k of ["book", "was"]) {
+      const x = v[k];
+      if (!x || typeof x !== "object") continue;
       const b = {};
-      if (typeof v.book.id === "string" && /^[a-z0-9]{4,24}$/.test(v.book.id)) b.id = v.book.id;
-      if (typeof v.book.fp === "string" && /^[0-9a-f]{32}$/.test(v.book.fp)) b.fp = v.book.fp;
-      if (typeof v.book.url === "string" && /^https?:\/\//i.test(v.book.url)) b.url = v.book.url.slice(0, 2000);
-      if (b.id || b.fp || b.url) out.book = b;
+      if (typeof x.id === "string" && /^[a-z0-9]{4,24}$/.test(x.id)) b.id = x.id;
+      if (typeof x.fp === "string" && /^[0-9a-f]{32}$/.test(x.fp)) b.fp = x.fp;
+      if (typeof x.url === "string" && /^https?:\/\//i.test(x.url)) b.url = x.url.slice(0, 2000);
+      if (b.id || b.fp || b.url) out[k] = b;
     }
     const fixes = Array.isArray(v.fixes) ? v.fixes.slice(0, 500).filter((f) => f && typeof f.from === "string" && typeof f.to === "string" && f.from.trim() && f.to.trim())
       .map((f) => ({ from: f.from.replace(/\s+/g, " ").trim().slice(0, 100), to: f.to.replace(/\s+/g, " ").trim().slice(0, 100), at: num(f.at) })) : [];

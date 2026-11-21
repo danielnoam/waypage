@@ -469,6 +469,7 @@
         tags: (b.bookshelves || []).map((t) => String(t).replace(/^(Browsing|Category):\s*/i, "")).filter((t) => t && !/Best Books|Listings|^Reading Lists?$/i.test(t)).slice(0, 3),
         chapters: 0, followers: 0, rating: 0, stat: b.download_count ? short(b.download_count) + " downloads" : "",
         by: (b.authors || []).map((a) => personName(a && a.name)).filter(Boolean).slice(0, 2).join(", "),
+        tr: (b.translators || []).map((a) => personName(a && a.name)).filter(Boolean).slice(0, 2).join(", "),
         about: String((b.summaries || [])[0] || "").replace(/\s*\(This is an automatically generated summary\.\)\s*$/i, "").slice(0, 600),
       };
     });
@@ -491,6 +492,9 @@
   const SE_SUBJECTS = ["fiction", "nonfiction", "adventure", "science-fiction", "fantasy", "horror", "mystery", "comedy", "drama", "poetry", "shorts", "philosophy", "travel", "childrens"]
     .map((t) => ({ key: t, label: t === "childrens" ? "Children's" : t === "shorts" ? "Short stories" : t[0].toUpperCase() + t.slice(1).replace("-", " ") }));
   const SE_BOOK = /^\/ebooks\/([a-z0-9-]+(?:\/[a-z0-9_-]+){1,3})\/?$/;
+  // A translation's path names its translator third: author/title/translator.
+  const seTranslator = (path) => (path.split("/")[2] || "").split("_").filter(Boolean).slice(0, 2)
+    .map((n) => n.split("-").filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(" ")).join(", ");
   const seEpub = (path) => SE + "/ebooks/" + path + "/downloads/" + path.replace(/\//g, "_") + ".epub";
   function parseSE(html, base) {
     const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
@@ -512,7 +516,7 @@
       out.push({
         id: "se" + path, url: SE + "/ebooks/" + path, site: "Standard Ebooks", book: true, epub: seEpub(path), title: title.slice(0, 120),
         cover: img ? httpUrl(new URL(img.getAttribute("src") || "", base || SE).href) : "",
-        tags: [], chapters: 0, followers: 0, rating: 0, stat: "", by: author, about: "",
+        tags: [], chapters: 0, followers: 0, rating: 0, stat: "", by: author, about: "", tr: seTranslator(path),
       });
       if (out.length >= MAX) break;
     }

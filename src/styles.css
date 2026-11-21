@@ -2302,6 +2302,24 @@ span.update-text { cursor: default; }
 /* The Kokoro voices screen fills in once the phone answers. */
 .kokoro-slot { display: contents; }
 /* An audiobook chapter's transcript, written so far. */
+/* Find the book (2026-11): each book found, with how it fits the
+   narrator on the right. */
+.listen-found-row { align-items: center; gap: var(--s-3); }
+.listen-fit { flex: none; }
+.listen-fit.same { color: var(--accent); border-color: var(--accent); }
+.listen-heard { font-style: italic; }
+/* The narrator away from the book (2026-11): over the player, in the
+   toast's colours, with its two things to do. */
+.listen-lost {
+  position: fixed; left: var(--gutter); right: var(--gutter); z-index: 21;
+  max-width: 560px; margin: 0 auto;
+  padding: var(--s-3) var(--s-4); border-radius: var(--r-md);
+  background: var(--ink); color: var(--bg); box-shadow: 0 6px 24px var(--shadow);
+}
+.listen-lost[hidden] { display: none; }
+.listen-lost-title { margin: 0; font: 600 var(--fs-label)/var(--lh-label) var(--sans); }
+.listen-lost-note { margin: var(--s-1) 0 0; font-size: var(--fs-meta); line-height: var(--lh-meta); opacity: 0.8; }
+.listen-lost-acts { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-1); margin-inline-start: calc(-1 * var(--s-3)); }
 .listen-ch-tr { display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-2); font: var(--fs-meta)/var(--lh-meta) var(--sans); color: var(--muted); }
 .listen-ch-bar { flex: 1; height: 4px; border-radius: 999px; background: color-mix(in srgb, var(--line) 70%, transparent); overflow: hidden; }
 .listen-ch-fill { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--accent); transition: width var(--spring-control-ms, 300ms) var(--spring-control, ease-out); }

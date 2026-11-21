@@ -426,6 +426,7 @@ async function phone(browser) {
       assert.deepStrictEqual(got.se.map((b) => [b.title, b.by]), [["Pride and Prejudice", "Jane Austen"], ["War and Peace", "Leo Tolstoy"]]);
       assert.strictEqual(got.se[0].epub, "https://standardebooks.org/ebooks/jane-austen/pride-and-prejudice/downloads/jane-austen_pride-and-prejudice.epub");
       assert.strictEqual(got.se[1].epub, "https://standardebooks.org/ebooks/leo-tolstoy/war-and-peace/louise-maude_aylmer-maude/downloads/leo-tolstoy_war-and-peace_louise-maude_aylmer-maude.epub");
+      assert.strictEqual(got.se[1].tr, "Louise Maude, Aylmer Maude", "a translation names its translators");
       assert.strictEqual(got.se[0].cover, "https://standardebooks.org/images/covers/pride-cover-thumbnail.jpg");
       assert.deepStrictEqual(got.ws.items.map((t) => t.title), ["The Time Machine (Wells)", "A Modest Proposal"], "categories inside a category are left out");
       assert.strictEqual(got.ws.next, "page|4b49|123");

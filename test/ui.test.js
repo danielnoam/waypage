@@ -6326,6 +6326,105 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("Find the book checks each book against a minute of the narrator, the one that fits first (2026-11)", async () => {
+      const q = await page(browser, 390);
+      const id = await q.evaluate(async () => {
+        const C = window.Waypage, A = C.platform.audio;
+        Object.defineProperty(A, "canTranscribe", { get: () => true, configurable: true });
+        A.models = async () => ({ supported: true, packs: [{ id: "better", title: "Better", note: "", size: 1, bytes: 1, ready: true }] });
+        await listenModels();
+        const book = "On an exceptionally hot evening early in July a young man came out of the garret in which he lodged in S. Place and walked slowly, as though in hesitation, towards K. bridge. He had successfully avoided meeting his landlady on the staircase, and each time the student Raskolnikov passed he thought of Petersburg and of the old woman Alyona Ivanovna.";
+        const other = "One evening at the very beginning of July a youth left the little room he rented and went towards the bridge, and the student Raskolnikov remembered Petersburg and the pawnbroker Alyona Ivanovna with dread.";
+        const filler = Array.from({ length: 20 }, () => "Lighthouses were once kept by families who lived beside the lamp all year, trimming wicks and polishing lenses through the long winters.");
+        window.foundBooks = { pg1: [other, ...filler], pg2: [book, ...filler], se1: filler };
+        foundTexts = async (s) => foundBooks[s.id];
+        const src = (key) => C.discover.sources.find((x) => x.key === key);
+        src("pg").search = async () => [{ id: "pg1", title: "Crime and Punishment", by: "Fyodor Dostoyevsky", tr: "Frederick Whishaw", epub: "https://example.org/1.epub", url: "https://example.org/1" },
+          { id: "pg2", title: "Crime and Punishment", by: "Fyodor Dostoyevsky", tr: "Constance Garnett", epub: "https://example.org/2.epub", url: "https://example.org/2" }];
+        src("se").search = async () => [{ id: "se1", title: "Lighthouses", by: "Someone", epub: "https://example.org/3.epub", url: "https://example.org/3" }];
+        src("ws").search = async () => [];
+        const m = await newAudiobook({ title: "Crime and Punishment (Unabridged)", byline: "Fyodor Dostoyevsky", file: { name: "c.mp3", kind: "audio", ext: "mp3", size: 10 }, link: "x",
+          audio: { parts: [{ ref: "x", name: "c.mp3", size: 10, dur: 600 }], chapters: [], dur: 600 } }, null);
+        arrived(m);
+        const words = book.split(" ");
+        await C.store.writeListen(m.id, { pieces: [{ t0: 0, t1: words.length * 0.4, text: book }], ranges: [[0, 60]] });
+        return m.id;
+      });
+      await q.evaluate((i) => { openPage(i); }, id);
+      await until(q, () => state.open && state.open.id !== undefined);
+      // A new file's first sheet can come up as it opens.
+      await until(q, () => { if (state.sheet !== "listenFind") { if (state.sheet) closeSheet(true); openSheet("listenFind"); } return document.querySelectorAll(".listen-found-row").length > 0; });
+      await until(q, () => document.querySelectorAll(".listen-found-row").length === 3 && document.querySelector(".listen-heard") && ![...document.querySelectorAll(".listen-fit")].some((b) => /Testing/.test(b.textContent)), null, 15000);
+      const rows = await q.evaluate(() => [...document.querySelectorAll(".listen-found-row")].map((r) => r.querySelector(".choice-note").textContent + " | " + ((r.querySelector(".listen-fit") || {}).textContent || "")));
+      assert.deepStrictEqual(rows, ["Translated by Constance Garnett · Project Gutenberg | Same words",
+        "Translated by Frederick Whishaw · Project Gutenberg | Another translation",
+        "Someone · Standard Ebooks | Doesn't match"]);
+      assert.ok(/Heard: “On an exceptionally hot/.test(await q.evaluate(() => document.querySelector(".listen-heard").textContent)));
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a zip of sound files is one audiobook, played from inside the zip (2026-11)", async () => {
+      const q = await page(browser, 390);
+      const got = await q.evaluate(async () => {
+        const C = window.Waypage, A = C.platform.audio, F = C.platform.files;
+        Object.defineProperty(A, "native", { get: () => true, configurable: true });
+        window.probed = [];
+        A.probe = async (ref, offset, length) => { probed.push([ref, offset, length]); return { duration: 30000 }; };
+        window.released = [];
+        F.release = async (ref) => { released.push(ref); };
+        const make = async (files) => {
+          const parts = [];
+          const z = C.backup.zipWriter((b) => { parts.push(b); });
+          for (const [name, text] of files) await z.add(name, new TextEncoder().encode(text));
+          await z.finish();
+          return new File(parts, "The Road.zip", { type: "application/zip" });
+        };
+        const file = await make([["The Road/02 Two.mp3", "second part"], ["The Road/01 One.mp3", "first part!"], ["__MACOSX/The Road/._01 One.mp3", "junk"], ["notes.txt", "hi"]]);
+        const kind = await C.files.kindOf(file);
+        const took = await addAudiobookZip(file, "content://zip");
+        const p = state.pages.find((x) => x.title === "The Road");
+        const inside = [];
+        for (const part of p.audio.parts) inside.push(await file.slice(part.offset, part.offset + part.length).text());
+        const none = await addAudiobookZip(await make([["a.txt", "no sound"]]), "content://other");
+        return { kind, took, none, zip: p.audio.zip, link: p.link, names: p.audio.parts.map((x) => x.name), inside, chapters: p.audio.chapters.map((c) => c.title + "@" + c.t),
+          play: (await partsToPlay(p)).map((x) => x.uri + ":" + (x.offset > 0) + ":" + x.length), probed: probed.length };
+      });
+      assert.strictEqual(got.kind, "zip");
+      assert.ok(got.took && !got.none);
+      assert.strictEqual(got.zip, true);
+      assert.strictEqual(got.link, "content://zip");
+      assert.deepStrictEqual(got.names, ["01 One.mp3", "02 Two.mp3"]);
+      assert.deepStrictEqual(got.inside, ["first part!", "second part"]);
+      assert.deepStrictEqual(got.chapters, ["01 One@0", "02 Two@30"]);
+      assert.deepStrictEqual(got.play, ["content://zip:true:11", "content://zip:true:11"]);
+      assert.strictEqual(got.probed, 2);
+      await q.context().close();
+    });
+
+    await test("the narrator away from the book: a card offers the transcript or another book (2026-11)", async () => {
+      const q = await page(browser, 390);
+      const id = await q.evaluate(async () => {
+        const m = await newAudiobook({ title: "Away", byline: "", file: { name: "w.mp3", kind: "audio", ext: "mp3", size: 10 }, link: "x",
+          audio: { parts: [{ ref: "x", name: "w.mp3", size: 10, dur: 600 }], chapters: [], dur: 600 } }, null);
+        arrived(m);
+        listenMode(m, "book", { id: "bookaway1", url: "https://example.org/away" });
+        showLost(m, 250);
+        return m.id;
+      });
+      const card = await q.evaluate(() => document.getElementById("listenLost").textContent);
+      assert.ok(/The narrator left the book 4 minutes ago/.test(card), card);
+      assert.ok(/Show the transcript/.test(card) && /Find another book/.test(card));
+      await q.evaluate(() => [...document.querySelectorAll("#listenLost button")].find((b) => /Show the transcript/.test(b.textContent)).click());
+      await until(q, () => document.getElementById("listenLost").hidden);
+      const l = await q.evaluate((i) => state.pages.find((p) => p.id === i).listen, id);
+      assert.strictEqual(l.mode, "transcript");
+      assert.ok(!l.book && l.was && l.was.id === "bookaway1", JSON.stringify(l));
+      assert.deepStrictEqual(await q.evaluate((i) => window.Waypage.backup.cleanListen(state.pages.find((p) => p.id === i).listen).was, id), { id: "bookaway1", url: "https://example.org/away" });
+      await q.context().close();
+    });
+
     await test("an audiobook's dot drags along the chapter and seeks once, on letting go (1.58.2)", async () => {
       const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
       const q = await ctx.newPage();
