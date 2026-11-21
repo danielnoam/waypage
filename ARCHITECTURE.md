@@ -65,7 +65,7 @@ src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestur
 src/app-kiwix.js    Kiwix packs and books kept as files: the + sheet's downloads (where they're kept, Wi-Fi wait), a pack's articles in the reader (links, Back, Search this pack, Save this article), a book as a collection of clips
 src/app-discover.js the Discover place: Wikipedia today, the list, its search, the Sites grid (stories, books, texts), the story and sign-up sheets
 src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
-src/app-listen.js   audiobooks: bringing one in, the player and its bar, reading along, transcripts written ahead, fixes, Find the book in Discover, Settings › Audiobooks
+src/app-listen.js   audiobooks: bringing one in, the player and its bar, reading along, transcripts written ahead, fixes, Find the book (each found book checked against the narrator), the narrator-left-the-book card, Settings › Audiobooks
 src/app-extensions.js Settings › Extensions (a switch each) and the places extensions add to the sidebar, above Stats
 src/app-lock.js     app lock: passcode (PBKDF2 hash), fingerprint or face on Android
 src/app-car.js      Android Auto: the list the car starts from (books, clips cut for Narrate, collections with quick starts) and where the car got to
@@ -75,7 +75,7 @@ src/reader.js       a saved page in the sandboxed iframe: place, find, highlight
 src/store.js        one directory per clip and library.json; IndexedDB in a browser
 src/platform.js     browser vs app: native fetch, plugins, downloads, speech, opening links
 src/files.js        EPUB, Kindle (MOBI/AZW3), FB2, CBZ, Markdown, text and HTML files
-src/listen.js       audiobooks' pure parts: chapters from M4B and MP3 tags, transcripts as paragraphs, fixes, heard words matched to a book's, EPUB Media Overlays
+src/listen.js       audiobooks' pure parts: chapters from M4B and MP3 tags, transcripts as paragraphs, fixes, heard words matched to a book's, how a minute fits a found book (`fit`), how long the narration has been away from the book (`lostFor`), transcripts merged across devices, EPUB Media Overlays
 src/zim.js          Kiwix packs (.zim): the header, entries by path, the title index, clusters stored, xz (its own LZMA2 decoder) or Zstandard (src/vendor/fzstd.mjs); loaded by files.js the first time a pack is opened
 src/pdf.js          PDFs through pdf.js in a locked-down frame
 src/ink.js          drawing over a clip's blocks or a PDF's pages: strokes, layers, undo, what a copy of the PDF is given
@@ -755,7 +755,34 @@ so another phone that downloads the same recording picks up the place.
 `audio.ours` marks parts in Waypage's own places, which `dropAudioFiles`
 deletes with the clip; a picked folder's stay. Its Gutenberg book (the
 recording's `url_text_source`) downloads after it and is paired
-through `pairPending`, as Find the book in Discover does.
+through `pairPending`, as Find the book does.
+
+Find the book (2026-11) searches Discover's book sites and Wikisource.
+With a transcript model it takes a minute of the narrator from where you
+are (the transcript there, else `heardSample` writes it now, holding
+`writeAhead` off with `lis.testing`), downloads the first five found
+(EPUBs, or the Wikisource page through its API) and `listen.fit` says
+"same" (a fifth of the heard runs of five words are in the book),
+"other" (the names heard mid-sentence are the book's: another
+translation) or "no". A Wikisource text is saved as one EPUB book
+(Discover's Save as an EPUB file) and paired when it arrives. While
+reading along, `checkLost` asks `listen.lostFor` every ten seconds; four
+minutes heard and not in the book brings the `#listenLost` card. Going
+to the transcript keeps the book as `listen.was`, so The book in the
+Read along drop-down goes back to it.
+
+A zip of sound files (Add a file) is one book (`addAudiobookZip`,
+`audio.zip`): its parts are stretches of the zip (`offset`, `length`),
+played and transcribed from there like an EPUB's narration
+(`partSource`). Only files stored as they are; a zip whose sound files
+are compressed is turned away with a word to unzip it.
+
+Transcripts sync (2026-11, `what.transcripts`, on by default) as
+`transcripts/<fingerprint>.json` (`listen.shareTranscript`: pieces,
+ranges, pack). `syncTranscripts` brings GitHub's into this device's
+through `C.listenTake` (`listen.mergeTranscript`: what's written here
+stays, theirs fills the gaps), into the same object any writing under way
+holds, and sends this device's when it has changed.
 
 A clip's own sound made from its text (Save the narration,
 `makeAudiobook`, Android only) is spoken by the Narrate voice of the

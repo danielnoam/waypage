@@ -3011,6 +3011,11 @@ async function openFile(file, btn, open, ref, forced) {
       await addAudiobook(file, ref);
       return;
     }
+    // A zip of sound files is one audiobook (2026-11).
+    if (kind === "zip" && await addAudiobookZip(file, ref)) {
+      if (btn) { btn.disabled = false; say(t("Restore")); }
+      return;
+    }
     // Already here from the watched folder (1.1.3), copy or not.
     const inFolder = C.files.KINDS[kind] && state.pages.find((p) => p.watched && p.file && p.file.name === file.name && p.file.size === file.size);
     if (inFolder) {
