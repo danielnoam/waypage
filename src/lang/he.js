@@ -781,6 +781,8 @@ Keel.i18n.strings("he", {
   "Drag it to your bookmarks bar": "גוררים אותו לסרגל הסימניות",
   "Drag it to your bookmarks bar.": "גוררים אותו לסרגל הסימניות.",
   "Draw": "ציור",
+  "Straighten lines and circles": "ישר קווים ועיגולים",
+  "Draw a line or circle and hold the pen still for a moment": "ציירו קו או עיגול והשאירו את העט במקום לרגע",
   "Draw (D)": "ציור (D)",
   "Draw a line on the pad with the pen.": "מציירים קו על המשטח עם העט.",
   "Draw here with your pen?": "לצייר כאן עם העט?",
