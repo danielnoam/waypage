@@ -769,17 +769,16 @@
   }
 
   // ---- updating the app in place (0.2.0, from LifeLog's 0.179.0) ----
-  // Downloads the release's APK into the app's cache, reporting progress, and
-  // hands it to Android's installer: no browser tab, no Downloads folder.
-  // Android asks once whether Waypage may install apps, then to install.
-  // Signed with the same key (alias waypage), it installs over the top and
-  // keeps every saved page. The download names the tag, not `latest`, so a
-  // release published mid-download can't swap the file. Resolves to the
-  // file's uri so a dismissed installer can be reopened without downloading
-  // again; null where there's no in-app installer (iOS, a browser).
-  const APK_MIME = "application/vnd.android.package-archive";
+  // keel's update.js (0.15.0) downloads the release's APK into the app's
+  // cache, reporting progress, and hands it to Android's installer: no
+  // browser tab, no Downloads folder. Android asks once whether Waypage may
+  // install apps, then to install. Signed with the same key (alias
+  // waypage), it installs over the top and keeps every saved page. The
+  // download names the tag, not `latest`, so a release published
+  // mid-download can't swap the file. Resolves to the file's uri so a
+  // dismissed installer can be reopened without downloading again; null
+  // where there's no in-app installer (iOS, a browser).
   const repo = () => (K.build && K.build.repo) || null;
-  // `file` is the release's APK: Waypage.apk once Waypage is Waypage (0.36.0).
   // Since 1.23.0 it comes through Downloads' own fetch, which goes on
   // with the app put away and can pause and pick up where it stopped: a
   // pause rejects with code "PAUSED". Older builds use Filesystem.
@@ -787,33 +786,27 @@
   // and `version` is then its file's name part (test-<branch>-<sha>).
   // An unreleased build (2026-11-18) passes its own `url` (the site's
   // unreleased/Waypage.apk), and `version` is unreleased-<sha>.
-  async function downloadUpdate(version, onProgress, file = "Waypage.apk", tag = "app-v" + version, url = null) {
-    const FS = plugin("Filesystem");
-    if (os !== "android" || !FS || !plugin("FileOpener") || !repo()) return null;
-    url = url || "https://github.com/" + repo() + "/releases/download/" + tag + "/" + file;
-    const path = file.replace(/\.apk$/, "") + "-" + version + ".apk";
+  async function viaDownloads(url, path, onProgress) {
     const D = plugin("Downloads");
-    if (D && typeof D.fetch === "function") {
-      const heard = await D.addListener("fetched", (p) => {
-        if (onProgress && p && p.path === path) onProgress(p.total > 0 ? Math.min(1, p.bytes / p.total) : 0, p.bytes, p.total);
-      });
-      try {
-        return (await D.fetch({ url, path })).uri;
-      } catch (e) {
-        if (!(e && e.code === "UNIMPLEMENTED") && !/not implemented/i.test(String((e && e.message) || e))) throw e;
-      } finally {
-        if (heard && heard.remove) heard.remove();
-      }
-    }
-    const listener = await FS.addListener("progress", (p) => {
-      if (onProgress && p && p.contentLength > 0) onProgress(Math.min(1, p.bytes / p.contentLength));
+    if (!D || typeof D.fetch !== "function") return null;
+    const heard = await D.addListener("fetched", (p) => {
+      if (onProgress && p && p.path === path) onProgress(p.total > 0 ? Math.min(1, p.bytes / p.total) : 0, p.bytes, p.total);
     });
     try {
-      await FS.downloadFile({ url, path, directory: "CACHE", progress: true });
+      return (await D.fetch({ url, path })).uri;
+    } catch (e) {
+      if (!(e && e.code === "UNIMPLEMENTED") && !/not implemented/i.test(String((e && e.message) || e))) throw e;
+      return null;
     } finally {
-      if (listener && listener.remove) listener.remove();
+      if (heard && heard.remove) heard.remove();
     }
-    return (await FS.getUri({ path, directory: "CACHE" })).uri;
+  }
+  // A preview's APK stays until this is that preview: a paused download
+  // of another one picks up where it stopped.
+  let updater = null;
+  const U = () => updater || (updater = window.Keel.update.create({ name: "Waypage", platform: K, fetch: viaDownloads, keepBuilds: true }));
+  function downloadUpdate(version, onProgress, file = "Waypage.apk", tag, url = null) {
+    return U().download({ version, key: version, tag: tag || undefined, url: url || undefined }, onProgress);
   }
   // A file kept where the person picked (2026-11: a Kiwix pack, a book
   // kept as a file): downloaded into the cache natively, resumable (the
@@ -903,25 +896,10 @@
     const D = plugin("Downloads");
     return D && typeof D.pauseFetch === "function" ? D.pauseFetch().then(() => true, () => false) : Promise.resolve(false);
   }
-  function openInstaller(uri) {
-    return plugin("FileOpener").openFile({ path: uri, mimeType: APK_MIME });
-  }
+  const openInstaller = (uri) => U().install(uri);
   // APKs for versions already installed have done their job, and so has
   // a preview's once this is that preview.
-  async function clearOldUpdates(currentVersion, isNewer) {
-    const FS = plugin("Filesystem");
-    if (!FS) return;
-    const here = K.build && K.build.sha ? String(K.build.sha).slice(0, 7) : null;
-    try {
-      const { files } = await FS.readdir({ path: "", directory: "CACHE" });
-      for (const f of files || []) {
-        const name = typeof f === "string" ? f : f.name;
-        const m = /^Waypage-(\d+\.\d+\.\d+)\.apk(\.part)?$/.exec(name || "");
-        const p = /^Waypage-(?:test|preview|unreleased)-(?:.*-)?([0-9a-f]{7})\.apk(\.part)?$/.exec(name || "");
-        if ((m && !isNewer(m[1], currentVersion)) || (p && p[1] === here)) await FS.deleteFile({ path: name, directory: "CACHE" });
-      }
-    } catch (e) { /* nothing to tidy */ }
-  }
+  const clearOldUpdates = (currentVersion) => U().clearOld({ version: currentVersion, sha: K.build && K.build.sha });
 
   // Reading a QR code (0.30.1, sync's setup code), with
   // @capacitor-mlkit/barcode-scanning as LifeLog does. On Android that's
