@@ -1,5 +1,0 @@
-### Added
-- Find the book checks what it finds against the narrator: with a transcript model, a minute of the audiobook from where you are is tested against the first five books found, and each says Same words, Another translation or Doesn't match, the best first. Each shows its translator where the site names one. It searches Wikisource too; a Wikisource text comes in as one EPUB book to read along with. Android only, like transcripts.
-- When the narrator leaves the book for four minutes while you read along (another translation, or a part this edition leaves out), a card over the player offers Show the transcript or Find another book. The book is remembered, so The book under ⋯ › Read along goes back to it.
-- A zip of MP3s (or other sound files) added with Add a file becomes one audiobook, its files in name order as chapters, played from inside the zip. Only zips whose sound files are stored as they are; a compressed one says to unzip it and add the folder.
-- Sync transcripts, in Settings › Audiobooks: an audiobook's transcript syncs with the book, so another phone reads along without writing it again. On by default when Sync is on.

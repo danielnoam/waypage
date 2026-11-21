@@ -1,5 +1,0 @@
-### Added
-- Save the narration: a clip or book spoken by its Narrate voice (Kokoro and Piper too) into sound files kept on the phone, which the clip then plays. Narrate's button plays the saved sound, with the audiobook player's speed, chapters and sleep timer, and the words light up as they're heard. A collection's ⋯ saves one for each of its clips, and the car plays them too. ⋯ › More has Save the narration again and Remove the saved narration, and Settings › Storage removes every saved narration at once to make room. It's saved in the background with a card in Downloads (Pause, Stop); with Kokoro or Piper it waits while Narrate reads something else, since both share the engine. The sound files stay on the phone: they never sync and aren't in any backup. Android only; not built for iOS or the web copy (a browser can't record its own speech).
-
-### Changed
-- Narrate with Kokoro or Piper makes up to about a minute ahead, not just the next paragraph, so a long paragraph after a short one no longer starts with a pause.
