@@ -172,11 +172,20 @@ function inkPrefs() {
   }
   return { tool: ["pen", "highlighter", "eraser", "select"].includes(saved.tool) ? saved.tool : "pen", colors: saved.colors || {}, size: [0, 1, 2, 3, 4].includes(size) ? size : 2,
     style: C.ink.STYLES.includes(saved.style) ? saved.style : "ball",
-    finger: typeof saved.finger === "boolean" ? saved.finger : !matchMedia("(pointer: coarse)").matches };
+    finger: typeof saved.finger === "boolean" ? saved.finger : !matchMedia("(pointer: coarse)").matches,
+    shapes: saved.shapes !== false };
 }
 function inkKeep() {
   const s = C.ink.state();
-  store(INK_KEY, { v: 2, tool: s.tool, colors: s.colors, slots: inkSlots || undefined, size: s.size, style: s.style, finger: s.finger });
+  store(INK_KEY, { v: 2, tool: s.tool, colors: s.colors, slots: inkSlots || undefined, size: s.size, style: s.style, finger: s.finger, shapes: s.shapes });
+}
+// Whether a held line or circle is made straight or round (the Draw tab's switch).
+const inkShapesOn = () => ((load(INK_KEY, {}) || {}).shapes !== false);
+function inkShapes(on) {
+  C.ink.setting({ shapes: !!on });
+  const o = load(INK_KEY, {}) || {};
+  o.shapes = !!on;
+  store(INK_KEY, o);
 }
 
 function inkSet(on) {

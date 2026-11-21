@@ -395,12 +395,13 @@
       if (!S || os !== "android") return false;
       try { await S.moreVoices(engine ? { engine } : {}); return true; } catch (e) { return false; }
     },
-    // Kokoro voices (Android, arm64): Waypage's own speech engine, from a
-    // download in Settings. null where there's no such plugin or phone.
-    // action: download / use / remove (with the pack's id), or cancel.
+    // Kokoro and Piper voices (Android, arm64; iOS): Waypage's own speech
+    // engine, from a download in Settings. null where there's no such
+    // plugin or phone. action: download / use / remove (with the pack's
+    // id), or cancel.
     async kokoro(action, id) {
       const K = plugin("Kokoro");
-      if (!K || os !== "android") return null;
+      if (!K) return null;
       if (action) { await K[action](id ? { id } : {}); return null; }
       try { const s = await K.status(); return s && s.supported ? s : null; } catch (e) { return null; }
     },
@@ -1318,7 +1319,7 @@
       onPiece(fn) { if (A()) A().addListener("piece", fn); },
       // Stop pressed on the "Writing the transcript" notification.
       onWritingStopped(fn) { if (A()) A().addListener("writingStopped", fn); },
-      // Text made into an audiobook (Android): one sound file per call,
+      // The narration saved as sound (Android): one sound file per call,
       // { uri, dur, size, t0, t1 }, with fn({ n, of }) heard after each piece.
       get canVoice() { return !!A() && os === "android"; },
       voice: (o) => A().voice(o),

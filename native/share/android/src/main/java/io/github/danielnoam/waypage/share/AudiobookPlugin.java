@@ -55,7 +55,7 @@ import org.json.JSONObject;
  *                                or rejects "battery", "hot", "busy", "stopped" or "model"
  *   stopTranscribing()
  *   voice({ items, blocks, lang, voice, engine, name })   text made into one sound file
- *                                (Make audiobook): { uri, dur, size, t0: [], t1: [] } in seconds, a "voiced"
+ *                                (Save the narration): { uri, dur, size, t0: [], t1: [] } in seconds, a "voiced"
  *                                event { n, of } after each piece, or rejects "busy", "engine", "stopped"
  *                                or "silent"; the .m4a is in the cache for files to move
  *   stopVoicing()
@@ -465,7 +465,7 @@ public class AudiobookPlugin extends Plugin {
         } catch (Exception e) { /* no notifications allowed */ }
     }
 
-    // ---- Text made into an audiobook
+    // ---- The narration saved as sound
 
     private static final ExecutorService voicer = Executors.newSingleThreadExecutor((r) -> new Thread(r, "voicing"));
     private static volatile boolean voicing;

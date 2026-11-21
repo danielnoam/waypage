@@ -254,8 +254,8 @@
         if (onImage) onImage(imageInfo(picsAt(x) || img));
         return;
       }
-      if (x < w * 0.3) { turn(rtl() ? 1 : -1); return; }
-      if (x > w * 0.7) { turn(rtl() ? -1 : 1); return; }
+      if (pz.s === 1 && x < w * 0.3) { turn(rtl() ? 1 : -1); return; }
+      if (pz.s === 1 && x > w * 0.7) { turn(rtl() ? -1 : 1); return; }
       tapTimer = setTimeout(() => { tapTimer = 0; if (onTap) onTap(); }, 280);
       return;
     }
@@ -1861,9 +1861,14 @@
   // Critically damped, so the next page never overshoots into the one
   // after; quicker on a desktop. A flick hands it its speed (v, px/ms).
   let turning = null;
+  // Pages with Draw on is locked to the screen shown (`lock`, a page number
+  // from 0); only a turn changes it. -1: not set yet, it's the page in view.
+  let lock = -1, pagedDrag = false;
   function goPage(n, now, v = 0) {
     const w = frame.contentWindow;
+    if (pz.s > 1) resetPz();
     const to = Math.max(0, Math.min(pages() - 1, n));
+    lock = to;
     const x = to * width() * (rtl() ? -1 : 1);
     if (turning) w.cancelAnimationFrame(turning.raf);
     turning = null;
@@ -1883,11 +1888,21 @@
     me.raf = w.requestAnimationFrame(step);
     turning = me;
   }
-  function turn(d) {
-    if (!isPaged()) return;
+  function turn(d, now) {
+    if (!isPaged()) return false;
     const n = page() + d;
-    if (n < 0 || n >= pages()) return;
-    goPage(n);
+    if (n < 0 || n >= pages()) return false;
+    goPage(n, now);
+    return true;
+  }
+  // Which side of the screen the next page is on is the reading direction's.
+  const turnSide = (side, now) => turn((side === "right") !== rtl() ? 1 : -1, now);
+  // The printed pages on the locked screen (data-page numbers), or null
+  // when this isn't a PDF or note in Pages.
+  function lockedPages() {
+    if (!doc || !picsPaged()) return null;
+    if (lock < 0) lock = page();
+    return printed().filter((img) => pageOf(img) === lock).map((img) => Number(img.getAttribute("data-page")));
   }
 
   // Two pages side by side on a wide window (1.5.0): "one", "two", or
@@ -2050,8 +2065,102 @@
     } else w.scrollTo(ox + (px - ox) * q - mx, oy + (py - oy) * q - my);
     placeText();
   }
+  // Zoom in Pages while Draw is on (the viewer can't be drawn in): the whole
+  // row is scaled about the screen's centre and shifted, kept so the page in
+  // view still covers the screen. Layers follow, as they read their own rects.
+  let pz = { s: 1, x: 0, y: 0 }, pzPinch = null, pzPan = null;
+  const inking = () => !!doc && doc.documentElement.hasAttribute("data-co-inking");
+  const drawingNow = () => !!(inkHook && inkHook.drawing && inkHook.drawing());
+  // The locked page's rect on screen at zoom 1.
+  let pzBox = null;
+  function applyPz() {
+    const root = doc && doc.querySelector(".co-comic");
+    if (!root) return;
+    // Only the transform goes at 1: the origin is the locked page's middle, set
+    // at the start of the gesture (resetPz clears it).
+    if (pz.s === 1 || !pzBox) { root.style.transform = ""; return; }
+    const w = frame.contentWindow, b = pzBox, s = pz.s;
+    // The page's edges never come in from the screen's (or, when it's the
+    // smaller, never go out): the zoom can't show what's beside it.
+    const bound = (lo, hi, c, len, v) => {
+      const a = -c - s * (lo - c), z = len - c - s * (hi - c);
+      return Math.max(Math.min(a, z), Math.min(Math.max(a, z), v));
+    };
+    const cx = (b.l + b.r) / 2, cy = (b.t + b.b) / 2;
+    const rx = pz.x, ry = pz.y;
+    pz.x = bound(b.l, b.r, cx, w.innerWidth, rx);
+    pz.y = bound(b.t, b.b, cy, w.innerHeight, ry);
+    pz.pushX = rx - pz.x;
+    root.style.transform = "translate(" + pz.x + "px," + pz.y + "px) scale(" + s + ")";
+  }
+  // At the start of a gesture: the locked page's rect, the origin of the
+  // scale (its middle), and every other page out of sight while zoomed.
+  function setPzOrigin() {
+    const root = doc.querySelector(".co-comic"), w = frame.contentWindow;
+    root.style.transform = "";
+    const r = root.getBoundingClientRect(), keep = new Set(lockedPages() || []);
+    let l = Infinity, t = Infinity, rt = -Infinity, bt = -Infinity;
+    for (const img of printed()) {
+      if (!keep.has(Number(img.getAttribute("data-page")))) continue;
+      const q = img.getBoundingClientRect(), k = pageBox(img);
+      const left = q.left + (k.left - img.offsetLeft), top = q.top + (k.top - img.offsetTop);
+      l = Math.min(l, left); t = Math.min(t, top); rt = Math.max(rt, left + k.width); bt = Math.max(bt, top + k.height);
+    }
+    pzBox = isFinite(l) ? { l, t, r: rt, b: bt } : { l: 0, t: 0, r: w.innerWidth, b: w.innerHeight };
+    root.style.transformOrigin = ((pzBox.l + pzBox.r) / 2 - r.left) + "px " + ((pzBox.t + pzBox.b) / 2 - r.top) + "px";
+    root.style.willChange = "transform";
+    doc.documentElement.classList.add("co-zoomed");
+    for (const el of doc.querySelectorAll(".co-comic > [data-page]")) el.toggleAttribute("data-co-lock", keep.has(Number(el.getAttribute("data-page"))));
+    applyPz();
+  }
+  // Fingers up: a zoom near 1 goes back to 1; the pages are drawn at the new size.
+  function endPz() {
+    const root = doc && doc.querySelector(".co-comic");
+    if (pz.s < 1.05) { resetPz(); placeText(); if (C.files && C.files.drawNear && frame) C.files.drawNear(frame); return; }
+    applyPz();
+    if (root) root.style.willChange = "";
+    placeText();
+    if (C.files && C.files.drawNear && frame) C.files.drawNear(frame);
+  }
+  function resetPz() {
+    pz = { s: 1, x: 0, y: 0 };
+    pzPinch = null;
+    pzPan = null;
+    pzBox = null;
+    const root = doc && doc.querySelector(".co-comic");
+    if (root) { root.style.transform = ""; root.style.transformOrigin = ""; root.style.willChange = ""; }
+    if (doc) {
+      doc.documentElement.classList.remove("co-zoomed");
+      for (const el of doc.querySelectorAll("[data-co-lock]")) el.removeAttribute("data-co-lock");
+    }
+  }
   function zoomInput() {
+    // Pages with Draw on stays on its screen: whatever moved the frame
+    // (a pinch, a leftover drag) is put back unless a turn is under way.
+    doc.defaultView.addEventListener("scroll", () => {
+      if (!picsPaged() || !inking() || turning || pagedDrag || !frame) return;
+      const w = frame.contentWindow, x = lock * width() * (rtl() ? -1 : 1);
+      if (lock >= 0 && Math.abs(w.scrollX - x) > 1) w.scrollTo(x, w.scrollY);
+    }, { passive: true });
     doc.addEventListener("touchstart", (e) => {
+      // Draw on in Pages: a pinch zooms the page where it is. A pen, or a
+      // palm beside it, is not a pinch.
+      if (picsPaged() && inking()) {
+        if (e.touches.length === 2) {
+          const [a, b] = e.touches;
+          if (a.touchType === "stylus" || b.touchType === "stylus" || (inkHook && inkHook.penDown && inkHook.penDown())) { pzPan = null; return; }
+          setPzOrigin();
+          pzPinch = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1, from: pz.s, x0: pz.x, y0: pz.y, mx: (a.clientX + b.clientX) / 2, my: (a.clientY + b.clientY) / 2, cx: 0, cy: 0, ratio: 1, push: 0 };
+          pzPinch.cx = pzPinch.mx; pzPinch.cy = pzPinch.my;
+          pzPan = null;
+          if (tapTimer) { clearTimeout(tapTimer); tapTimer = 0; }
+          e.preventDefault();
+          return;
+        }
+        pzPinch = null;
+        pzPan = e.touches.length === 1 && pz.s > 1 && !e.defaultPrevented && !drawingNow() ? { x: e.touches[0].clientX, y: e.touches[0].clientY, x0: pz.x, y0: pz.y } : null;
+        return;
+      }
       // In Pages the page is opened in the viewer to zoom, as a double tap does.
       if (e.touches.length === 2 && picsPaged()) {
         const [a, b] = e.touches;
@@ -2075,6 +2184,31 @@
       e.preventDefault();
     }, { passive: false });
     doc.addEventListener("touchmove", (e) => {
+      if (pzPinch && e.touches.length === 2) {
+        const [a, b] = e.touches;
+        const f = Math.min(ZOOM_MAX, Math.max(1, pzPinch.from * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / pzPinch.d)) / pzPinch.from;
+        const cx = (a.clientX + b.clientX) / 2, cy = (a.clientY + b.clientY) / 2, w = frame.contentWindow;
+        // The spot under the fingers' start stays under their midpoint.
+        pz.s = pzPinch.from * f;
+        // About the scale's origin, the locked page's middle: the spot that was
+        // under the fingers' start stays under their midpoint.
+        const ox = (pzBox.l + pzBox.r) / 2, oy = (pzBox.t + pzBox.b) / 2;
+        pz.x = (cx - ox) - f * (pzPinch.mx - ox - pzPinch.x0);
+        pz.y = (cy - oy) - f * (pzPinch.my - oy - pzPinch.y0);
+        pzPinch.cx = cx; pzPinch.cy = cy;
+        pzPinch.ratio = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / pzPinch.d;
+        applyPz();
+        pzPinch.push = pz.pushX || 0;
+        if (e.cancelable) e.preventDefault();
+        return;
+      }
+      if (pzPan && e.touches.length === 1 && !drawingNow()) {
+        pz.x = pzPan.x0 + e.touches[0].clientX - pzPan.x;
+        pz.y = pzPan.y0 + e.touches[0].clientY - pzPan.y;
+        applyPz();
+        if (e.cancelable) e.preventDefault();
+        return;
+      }
       if (!pinch || e.touches.length !== 2) return;
       const [a, b] = e.touches;
       const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
@@ -2089,6 +2223,22 @@
       if (e.cancelable) e.preventDefault();
     }, { passive: false });
     const done = (e) => {
+      if (pzPinch && e.touches.length < 2) {
+        const g = pzPinch, dx = g.cx - g.mx, dy = g.cy - g.my;
+        pzPinch = null;
+        // Two fingers swept sideways turn the page: on the page as it is, the
+        // sweep itself; zoomed, what the page's edge held back.
+        const still = Math.abs(g.ratio - 1) < 0.15;
+        const along = g.from === 1 && pz.s < 1.2 ? dx : g.push;
+        if (still && Math.abs(along) > 60 && (g.from > 1 || Math.abs(along) > 1.5 * Math.abs(dy))) {
+          const side = along < 0 ? "right" : "left";
+          resetPz();
+          if (turnSide(side)) { placeText(); return; }
+        }
+        endPz();
+        return;
+      }
+      if (pzPan && e.touches.length === 0) { pzPan = null; endPz(); return; }
       if (!pinch || e.touches.length >= 2) return;
       const p = pinch;
       pinch = null;
@@ -2097,6 +2247,19 @@
     doc.addEventListener("touchend", done);
     doc.addEventListener("touchcancel", done);
     doc.addEventListener("wheel", (e) => {
+      if (e.ctrlKey && picsPaged() && inking()) {
+        e.preventDefault();
+        const w = frame.contentWindow, f = Math.min(ZOOM_MAX, Math.max(1, pz.s * Math.exp(-e.deltaY / 300))) / pz.s;
+        if (pz.s === 1) setPzOrigin();
+        const ox = (pzBox.l + pzBox.r) / 2, oy = (pzBox.t + pzBox.b) / 2;
+        pz.x = (e.clientX - ox) - f * (e.clientX - ox - pz.x);
+        pz.y = (e.clientY - oy) - f * (e.clientY - oy - pz.y);
+        pz.s *= f;
+        applyPz();
+        clearTimeout(pz.t);
+        pz.t = setTimeout(endPz, 150);
+        return;
+      }
       if (!e.ctrlKey || !comicRoot()) return;
       e.preventDefault();
       setZoom(zoom * Math.exp(-e.deltaY / 300), e.clientX, e.clientY);
@@ -2275,7 +2438,7 @@
   // onSwipe: { on(), move(dx, d), end(dx, d, far) }, d 1 for the next clip.
   let onSwipe = null;
   const SWIPE_EDGE = 24;
-  const swipeFree = () => !!onSwipe && onSwipe.on() && !pinch && zoom === 1 && !edging
+  const swipeFree = () => !!onSwipe && onSwipe.on() && !pinch && zoom === 1 && pz.s === 1 && !edging
     && !doc.documentElement.hasAttribute("data-co-inking")
     && !(frame.contentWindow.getSelection() && !frame.contentWindow.getSelection().isCollapsed);
   function sideways(node) {
@@ -2372,17 +2535,25 @@
     const w = () => frame.contentWindow;
     doc.addEventListener("touchstart", (e) => {
       const t0 = e.touches[0];
-      start = e.touches.length === 1 && isPaged() && !onBubble(e) ? { x: t0.clientX, y: t0.clientY, sx: t0.screenX, on: false, n: page(), last: [{ x: t0.clientX, t: e.timeStamp }] } : null;
+      // A second finger ends a drag that had begun: the page goes back.
+      if (e.touches.length > 1 && start && start.on) { goPage(start.n, true); pagedDrag = false; }
+      // A touch that draws, or a zoomed page, is not a page turn: this scrolls by
+      // hand, so ink's preventDefault doesn't stop it.
+      const mine = e.defaultPrevented || pz.s > 1 || (inkHook && inkHook.drawing && inkHook.drawing());
+      start = !mine && e.touches.length === 1 && isPaged() && !onBubble(e) ? { x: t0.clientX, y: t0.clientY, sx: t0.screenX, on: false, n: page(), last: [{ x: t0.clientX, t: e.timeStamp }] } : null;
       // Not from the screen's edges, the phone's own Back; a page still turns from there.
       if (start && (t0.clientX < SWIPE_EDGE || t0.clientX > frame.contentWindow.innerWidth - SWIPE_EDGE)) start.give = true;
     }, { passive: true });
     doc.addEventListener("touchmove", (e) => {
       if (!start || e.touches.length !== 1) return;
+      // A stroke that began after this touch (a pen seen late): the page stays.
+      if (inkHook && inkHook.drawing && inkHook.drawing()) { if (start.on) goPage(start.n, true); start = null; return; }
       const t = e.touches[0], dx = t.clientX - start.x, dy = t.clientY - start.y;
       if (!start.on) {
         if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { start = null; return; }
         if (Math.abs(dx) < 10) return;
         start.on = true;
+        pagedDrag = true;
         if (turning) { w().cancelAnimationFrame(turning.raf); turning = null; }
       }
       const fwd = (dx < 0) !== rtl(), next = start.n + (fwd ? 1 : -1);
@@ -2402,7 +2573,10 @@
       if (start.last.length > 5) start.last.shift();
     }, { passive: true });
     doc.addEventListener("touchend", (e) => {
+      pagedDrag = false;
+      if (e.touches.length > 0) { start = null; return; }
       if (!start || !isPaged()) { start = null; return; }
+      if (inkHook && inkHook.drawing && inkHook.drawing()) { if (start.on) goPage(start.n, true); start = null; return; }
       const t = e.changedTouches[0], dx = t.clientX - start.x, dy = t.clientY - start.y;
       const s = start;
       start = null;
@@ -2417,7 +2591,7 @@
       const d = far ? ((dx < 0) !== rtl() ? 1 : -1) : 0;
       goPage(s.n + d, false, d ? -v : 0);
     }, { passive: true });
-    doc.addEventListener("touchcancel", () => { if (start && start.clip) onSwipe.end(0, 1, false); start = null; }, { passive: true });
+    doc.addEventListener("touchcancel", () => { pagedDrag = false; if (start && start.clip) onSwipe.end(0, 1, false); start = null; }, { passive: true });
     doc.addEventListener("keydown", (e) => {
       if (!isPaged() || e.altKey || e.ctrlKey || e.metaKey) return;
       const fwd = { ArrowRight: !rtl(), ArrowLeft: rtl(), PageDown: true, " ": !e.shiftKey }[e.key];
@@ -2488,6 +2662,9 @@
     wideMode = wideWay === "whole" ? "whole" : "split";
     zoom = 1;
     pinch = null;
+    lock = -1;
+    pz = { s: 1, x: 0, y: 0 };
+    pzPinch = null;
     blocks = [];
     anchors = [];
     spans = [];
@@ -2574,7 +2751,7 @@
           if (foot && /^Opened from /.test(foot.textContent)) foot.remove();
         }
         // An audiobook says what it is in the player under it (1.58.2).
-        if (meta && meta.audio && !meta.audio.overlay) {
+        if (meta && meta.audio && !meta.audio.overlay && !meta.audio.voiced) {
           const foot = doc.querySelector(".co-licence");
           if (foot && /^Opened from /.test(foot.textContent)) foot.remove();
         }
@@ -2799,5 +2976,5 @@
       return line;
     }));
   }
-  C.reader = { get filling() { return !!rest; }, whole: () => wholeP, shown: () => shownP, say, spotOfId, blockCount, pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, set hideFar(v) { hideFar = !!v; }, set note(f) { noteHook = f; }, geometry, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, readableRanks, locateIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionContext, selectionMark, selectionMarks, paintMarks, locate, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, inkRoot, inkBlock, inkBlocks, inkBlockBox, inkBlockAt, inkBlocksNear, inkBlockWords, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide };
+  C.reader = { get filling() { return !!rest; }, whole: () => wholeP, shown: () => shownP, say, spotOfId, blockCount, pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, set hideFar(v) { hideFar = !!v; }, set note(f) { noteHook = f; }, geometry, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, readableRanks, locateIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionContext, selectionMark, selectionMarks, paintMarks, locate, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, inkRoot, inkBlock, inkBlocks, inkBlockBox, inkBlockAt, inkBlocksNear, inkBlockWords, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide, turnSide, lockedPages, repage() { if (doc && picsPaged()) picsLayout(); }, pageZoom: () => pz.s, unzoomPage() { if (pz.s > 1) { resetPz(); placeText(); } } };
 })();

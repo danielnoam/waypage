@@ -2326,7 +2326,8 @@ document.addEventListener("visibilitychange", async () => {
 });
 
 $("readerAloud").hidden = !speech.available;
-$("readerAloud").addEventListener("click", () => (aloudOn() && aloudHere() ? stopAloud() : startAloud()));
+// A clip with its own made sound plays that instead (app-listen.js).
+$("readerAloud").addEventListener("click", () => (aloudOn() && aloudHere() ? stopAloud() : voicedSound(state.open) ? voicedPlay() : startAloud()));
 $("readerScroll").addEventListener("click", () => (glide.on ? stopGlide() : startGlide()));
 $("aloudPlay").addEventListener("click", () => {
   if (aloud.state === "playing") { setAloud("paused", aloud.index); speech.pause(); }
@@ -2781,7 +2782,8 @@ function readerSettings() {
     box.append(a);
     parts.push(a);
   }
-  const names = { layout: t("Layout"), text: t("Text"), aloud: audio ? t("Audiobook") : comic ? "Auto-scroll" : t("Narrate") };
+  if (state.open && C.files.drawable(state.open)) { const d = drawPart(); box.append(d); parts.push(d); }
+  const names = { layout: t("Layout"), text: t("Text"), aloud: audio ? t("Audiobook") : comic ? "Auto-scroll" : t("Narrate"), draw: t("Draw") };
   let tab = load(SHEET_TAB_KEY, "text");
   if (!parts.some((x) => x.dataset.part === tab)) tab = "text";
   const show = (v) => {
@@ -3787,6 +3789,16 @@ $("viewerNext").addEventListener("click", () => stepImage(1));
 $("viewerZoomIn").addEventListener("click", () => zoomStep(1));
 $("viewerZoomOut").addEventListener("click", () => zoomStep(-1));
 
+// The Draw tab of the settings sheet: for a note and for anything drawn on.
+function drawPart() {
+  const part = el("div", { class: "rc-part", "data-part": "draw" }, el("h2", { class: "overline" }, t("Draw")),
+    el("label", { class: "rc-row switch-row" },
+      el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, t("Straighten lines and circles")),
+        el("span", { class: "choice-note" }, t("Draw a line or circle and hold the pen still for a moment"))),
+      el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "inkShapes", checked: inkShapesOn(), onchange: (e) => inkShapes(e.target.checked) })));
+  return part;
+}
+
 // A note's own settings (2.0.0): only Layout (where they apply, Scroll or
 // Pages, margins, brightness slider, theme, dark note) and Auto-scroll. A
 // note is sheets, so it has no text to set.
@@ -3814,8 +3826,9 @@ function noteSettings() {
   a.classList.add("rc-part");
   a.dataset.part = "aloud";
   a.prepend(el("h2", { class: "overline" }, t("Auto-scroll")));
-  const parts = [layout, a];
-  const names = { layout: t("Layout"), aloud: "Auto-scroll" };
+  const d = drawPart();
+  const parts = [layout, a, d];
+  const names = { layout: t("Layout"), aloud: "Auto-scroll", draw: t("Draw") };
   let tab = load(SHEET_TAB_KEY, "layout");
   if (!names[tab]) tab = "layout";
   const show = (v) => { tab = v; store(SHEET_TAB_KEY, v); for (const x of parts) x.hidden = x.dataset.part !== v; };

@@ -1269,7 +1269,7 @@ function renderBatch(text, preset, from, siteTags) {
       C.platform.files.canPickFolder ? el("button", { class: "row", type: "button", onclick: () => back().then(addAudiobookFolder) },
         el("span", { class: "row-label accent" }, t("Add an audiobook folder"))) : null,
       newNoteRow),
-    el("p", { class: "meta" }, t("An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3{x}). A folder's files are each added on their own, in a collection named after their folder. It stays {ON_HERE}.", { x: C.platform.files.canPickFolder ? t(", or a folder of them") : "", ON_HERE: ON_HERE })));
+    el("p", { class: "meta" }, t("An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3, a zip of them{x}). A folder's files are each added on their own, in a collection named after their folder. It stays {ON_HERE}.", { x: C.platform.files.canPickFolder ? t(", or a folder of them") : "", ON_HERE: ON_HERE })));
   const form = el("form", { class: "batch-form" }, asPage, fromFile,
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Links")), area, count, finder, skipRow),
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Save as")),

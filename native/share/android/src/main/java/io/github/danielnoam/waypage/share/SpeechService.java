@@ -128,6 +128,14 @@ public class SpeechService extends Service {
         @Override public void toQueueItem(long id) {}
     };
 
+    // Narrate reading with Waypage's own engine (Kokoro, Piper), which
+    // Save the narration waits for; ownTurns counts the pieces it asked for.
+    static volatile int ownTurns;
+    static boolean ownBusy() {
+        SpeechService s = running;
+        return s != null && "playing".equals(s.state) && s.getPackageName().equals(s.engine);
+    }
+
     static String stateOf() { return running == null ? "stopped" : running.state; }
     static int indexOf() { return running == null ? -1 : running.index; }
     static String keyOf() { return running == null || running.job == null ? "" : running.job.key; }
@@ -284,11 +292,25 @@ public class SpeechService extends Service {
 
     // Waypage's own engine (Kokoro and Piper voices) makes a piece as soon as it's asked for
     // here, not when Android hands it over (Kokoro.take).
-    private void makeAhead(int n) {
+    private void makeAhead(int n) { makeAhead(n, 0); }
+
+    // With more after it, it keeps going past n until about a minute of
+    // sound is asked for, so a long paragraph after a short one is
+    // already made when it comes (the engine makes them in order).
+    private static final int AHEAD_CHARS = 60 * 15, AHEAD_MOST = 8;
+    private void makeAhead(int n, int more) {
         if (!getPackageName().equals(engine) || !Kokoro.ready(this)) return;
+        ownTurns++;
         Locale l = job.lang != null && !job.lang.isEmpty() ? Locale.forLanguageTag(job.lang) : Locale.getDefault();
         Kokoro.Pick pick = Kokoro.pick(this, job.voice, l);
-        if (pick != null) Kokoro.take(this, job.items[n], pick, Kokoro.speedOf((int) (job.rate * 100)));
+        if (pick == null) return;
+        float speed = Kokoro.speedOf((int) (job.rate * 100));
+        Kokoro.take(this, job.items[n], pick, speed);
+        int chars = 0, budget = (int) (AHEAD_CHARS * Math.max(1f, job.rate));
+        for (int i = n + 1; i <= n + more && i < job.items.length && chars < budget; i++) {
+            Kokoro.take(this, job.items[i], pick, speed);
+            chars += job.items[i].length();
+        }
     }
 
     // The next piece goes to the engine while this one plays, so it's
@@ -298,7 +320,7 @@ public class SpeechService extends Service {
         int n = index + 1;
         ahead = -1;
         if (job == null || n >= job.items.length) return;
-        makeAhead(n);
+        makeAhead(n, AHEAD_MOST);
         if (tts.speak(job.items[n], TextToSpeech.QUEUE_ADD, params(), generation + ":" + n) == TextToSpeech.SUCCESS) ahead = n;
     }
 
