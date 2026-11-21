@@ -125,7 +125,7 @@ src/vendor/         Readability, pdf.js, foliate-js's MOBI reader, fzstd (Zstand
 assets/             icon and splash sources for the apps
 icons/, icon.svg    app icons
 worker/             the web copy's fetch proxy, a Cloudflare Worker (worker.js, wrangler.toml, README.md has the setup)
-native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Pen, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes; on iOS KokoroVoice plays them for SpeechPlugin, and ios/Sherpa/bz2 is libbz2's module map for unpacking), Audiobook (AudiobookService plays with the screen off; Listen writes transcripts with sherpa-onnx's offline recognizer; Voicing speaks text into an audiobook), Car (Android Auto: CarService, Car's one shared media session), Dav (a WebDAV PROPFIND written over a socket, for Files' davList), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
+native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Pen, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes; on iOS KokoroVoice plays them for SpeechPlugin, and ios/Sherpa/bz2 is libbz2's module map for unpacking), Audiobook (AudiobookService plays with the screen off, AVPlayer on iOS; Listen writes transcripts with sherpa-onnx's offline recognizer; Voicing speaks text into an audiobook), Car (Android Auto: CarService, Car's one shared media session), Dav (a WebDAV PROPFIND written over a socket, for Files' davList), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
 tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-build.json
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
 tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
@@ -731,7 +731,10 @@ fixes from both). `audio` (`{ parts, chapters, dur }`, each part a sound
 file's ref) is this device's own. A folder is one book; its fingerprint
 is its files' names and sizes. Playing is AudiobookService (a foreground
 mediaPlayback service, one MediaPlayer, parts played in turn, a stretch
-of a zip by fd offset for an EPUB's narration); a browser uses <audio>.
+of a zip by fd offset for an EPUB's narration); on iOS AudiobookPlugin.swift
+(one AVPlayer, a zip's stretch copied out to the cache first, as AVPlayer
+plays only whole files, with Listen.swift for transcripts); a browser
+uses <audio>.
 
 Reading along needs words with times. The phone writes a transcript a
 little ahead of where you are (`writeAhead`, three minutes at a time,
