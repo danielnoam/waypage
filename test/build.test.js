@@ -222,8 +222,13 @@ test("the updater downloads the asset the workflow publishes", () => {
   const yml = fs.readFileSync(path.join(ROOT, ".github", "workflows", "android.yml"), "utf8");
   const platform = fs.readFileSync(path.join(ROOT, "src", "platform.js"), "utf8");
   assert.ok(/gh release create "app-v\$V" Waypage\.apk/.test(yml));
-  assert.ok(platform.includes('"/releases/download/" + tag + "/" + file'));
-  assert.ok(platform.includes('file = "Waypage.apk", tag = "app-v" + version'));
+  // The download itself is keel's update.js (0.15.0), made with Waypage's name.
+  assert.ok(platform.includes('window.Keel.update.create({ name: "Waypage"'));
+  const vm = require("vm");
+  const box = { window: {} };
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "src", "keel", "update.js"), "utf8"), box);
+  const U = box.window.Keel.update.create({ name: "Waypage", platform: { build: { repo: "o/r" } } });
+  assert.strictEqual(U.apkUrl({ version: "1.2.3" }), "https://github.com/o/r/releases/download/app-v1.2.3/Waypage.apk");
 });
 
 // Test builds (1.48.0): a branch's APK goes on test-<branch>, a
