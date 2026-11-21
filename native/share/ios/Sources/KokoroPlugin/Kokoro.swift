@@ -34,9 +34,13 @@ enum Kokoro {
     static let prefix = "kokoro-"
     static let piperPrefix = "piper-"
 
-    private static func piper(_ id: String, _ speaker: String? = nil, _ gender: String, _ sha256: String, _ bytes: Int64) -> KokoroPack {
+    private static func piper(_ id: String, _ gender: String, _ sha256: String, _ bytes: Int64) -> KokoroPack {
+        piper(id, String(id.split(separator: "-")[1]), gender, sha256, bytes)
+    }
+
+    // speaker: the name of the model's speaker 0, when its own name isn't one.
+    private static func piper(_ id: String, _ who: String, _ gender: String, _ sha256: String, _ bytes: Int64) -> KokoroPack {
         let parts = id.split(separator: "-").map(String.init)
-        let who = speaker ?? parts[1]
         let p = KokoroPack(id, who, "", "vits-piper-\(id).tar.bz2", sha256, bytes, "", [who])
         p.lang = parts[0].replacingOccurrences(of: "_", with: "-")
         p.speaker = who
@@ -553,6 +557,8 @@ final class KokoroEngine {
     let sampleRate: Int
     #if canImport(SherpaOnnxC)
     private let tts: OpaquePointer
+    #else
+    private init() { pack = Kokoro.packs[0]; sampleRate = 0 }
     #endif
 
     #if canImport(SherpaOnnxC)
