@@ -18,6 +18,11 @@ import UIKit
 //
 // What's left of the page is queued in the synthesizer at once, so it reads
 // on between paragraphs while the app is suspended.
+//
+// Kokoro and Piper voices (KokoroPlugin) read through KokoroVoice instead:
+// a voice of theirs picked by name (kokoro-af_heart, piper-m_thorsten), or
+// none with `engine` the app's own, as Narrate keeps it once they're in.
+// voices() lists them with the phone's.
 @objc(SpeechPlugin)
 public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDelegate {
     public let identifier = "SpeechPlugin"
@@ -50,6 +55,7 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
     private var key = ""
     private var lang = ""
     private var voice = ""
+    private var engine = ""
     private var rate: Float = 1
     private var title = ""
     private var subtitle = ""
@@ -68,6 +74,24 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
     // The clip to go on to when the one with key `nextAfter` ends.
     private var next: [String: Any]?
     private var nextAfter = ""
+    // Reading with a Kokoro or Piper voice; `ownLive` while it has the
+    // rest of the reading queued (a skip while paused drops it).
+    private var own: Kokoro.Pick?
+    private var ownLive = false
+    private lazy var ownVoice: KokoroVoice = {
+        let v = KokoroVoice()
+        v.onStart = { [weak self] i in
+            guard let self = self, self.own != nil, self.state == "playing" else { return }
+            self.index = i
+            if self.sleepDue() { self.sleepNow(); return }
+            self.report()
+        }
+        v.onEnd = { [weak self] in
+            guard let self = self, self.own != nil, self.state == "playing" else { return }
+            if !self.goOn() { self.finish("ended") }
+        }
+        return v
+    }()
 
     override public func load() {
         synth.delegate = self
@@ -81,7 +105,7 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
             let gender = v.gender == .female ? "female" : v.gender == .male ? "male" : ""
             return ["id": v.identifier, "name": v.name, "lang": v.language, "online": false, "quality": quality, "gender": gender]
         }
-        call.resolve(["voices": list])
+        call.resolve(["voices": list + Kokoro.voiceList()])
     }
 
     @objc func play(_ call: CAPPluginCall) {
@@ -95,6 +119,7 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
             self.key = call.getString("key") ?? ""
             self.lang = call.getString("lang") ?? ""
             self.voice = call.getString("voice") ?? ""
+            self.engine = call.getString("engine") ?? ""
             self.rate = Float(call.getDouble("rate") ?? 1)
             self.title = call.getString("title") ?? "Narrate"
             self.mix = call.getBool("mix") ?? false
@@ -169,7 +194,8 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
         var job: [String: Any]?
         if !list.isEmpty {
             job = ["items": list, "start": call.getInt("start") ?? 0, "lang": call.getString("lang") ?? "",
-                   "voice": call.getString("voice") ?? "", "title": call.getString("title") ?? "Narrate",
+                   "voice": call.getString("voice") ?? "", "engine": call.getString("engine") ?? "",
+                   "title": call.getString("title") ?? "Narrate",
                    "subtitle": call.getString("subtitle") ?? "", "key": call.getString("key") ?? ""]
         }
         let after = call.getString("after") ?? ""
@@ -228,6 +254,7 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
         key = job["key"] as? String ?? ""
         lang = job["lang"] as? String ?? ""
         voice = job["voice"] as? String ?? ""
+        engine = job["engine"] as? String ?? ""
         title = job["title"] as? String ?? "Narrate"
         subtitle = job["subtitle"] as? String ?? ""
         held = []
@@ -249,12 +276,22 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
         return u
     }
 
-    // Everything from `from` to the end, in the synthesizer's own queue.
+    // Everything from `from` to the end, in the synthesizer's own queue,
+    // or KokoroVoice's.
     private func queue(from: Int) {
         queued = [:]
         if synth.isSpeaking || synth.isPaused { synth.stopSpeaking(at: .immediate) }
         index = from
         state = "playing"
+        let l = lang.isEmpty ? (Locale.preferredLanguages.first ?? "en") : lang
+        if let pick = Kokoro.pick(voice: voice, lang: l, ours: engine == KokoroPlugin.engineName) {
+            own = pick
+            ownLive = true
+            ownVoice.start(items: items, from: from, pick: pick, speed: rate, volume: volume)
+            report()
+            return
+        }
+        stopOwn()
         for i in from..<items.count {
             let u = utterance(items[i])
             queued[ObjectIdentifier(u)] = i
@@ -264,8 +301,21 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
         report()
     }
 
+    private func stopOwn() {
+        guard own != nil else { return }
+        ownVoice.stop()
+        own = nil
+        ownLive = false
+    }
+
     private func pauseNow() {
         guard state == "playing" else { return }
+        if own != nil {
+            ownVoice.pause()
+            state = "paused"
+            report()
+            return
+        }
         synth.pauseSpeaking(at: .word)
         state = "paused"
         report()
@@ -274,7 +324,8 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
     private func resumeNow() {
         guard state == "paused", !items.isEmpty else { return }
         startSession()
-        if synth.isPaused { synth.continueSpeaking(); state = "playing"; report() }
+        if own != nil && ownLive { ownVoice.resume(); state = "playing"; report() }
+        else if own == nil && synth.isPaused { synth.continueSpeaking(); state = "playing"; report() }
         else { queue(from: index) }
     }
 
@@ -285,6 +336,7 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
         else {
             queued = [:]
             if synth.isSpeaking || synth.isPaused { synth.stopSpeaking(at: .immediate) }
+            if own != nil { ownVoice.stop(); ownLive = false }
             index = i
             report()
         }
@@ -294,6 +346,7 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
         if sleepAt != 0 { setSleep(0) }
         queued = [:]
         if synth.isSpeaking || synth.isPaused { synth.stopSpeaking(at: .immediate) }
+        stopOwn()
         state = how
         report()
         items = []

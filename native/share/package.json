@@ -2,7 +2,7 @@
   "name": "waypage-share",
   "version": "1.0.0",
   "private": true,
-  "description": "Waypage's native pieces as a local Capacitor plugin (the same shape as LifeLog's native/widgets). No JavaScript: the app calls them as Capacitor.Plugins.<name>. Android and iOS: ShareTarget, PageRender, Print, FileSave, Files, Speech, Downloads, SignIn, Brightness, Feeds, Widgets, Translate and AppLock; iOS also Connection. Android only: VolumeKeys, Pen, Drive, Kokoro, Audiobook, Look and Car.",
+  "description": "Waypage's native pieces as a local Capacitor plugin (the same shape as LifeLog's native/widgets). No JavaScript: the app calls them as Capacitor.Plugins.<name>. Android and iOS: ShareTarget, PageRender, Print, FileSave, Files, Speech, Downloads, SignIn, Brightness, Feeds, Widgets, Translate, AppLock and Kokoro; iOS also Connection. Android only: VolumeKeys, Pen, Drive, Audiobook, Look and Car.",
   "capacitor": {
     "android": {
       "src": "android"

@@ -65,6 +65,11 @@ jobs:
 
       - run: npm ci
 
+      # Kokoro and Piper voices' engine (sherpa-onnx), pinned and checked,
+      # before pod install reads the podspec.
+      - name: Fetch sherpa-onnx
+        run: bash tools/sherpa-ios.sh
+
       - name: Bundle the web app
         run: node tools/build-www.js
 

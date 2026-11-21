@@ -301,7 +301,7 @@ function aloudGroup() {
     el("div", { class: "group" }, el("div", { class: "rc-list" }, aloudControls())));
 }
 
-// Kokoro voices (Android, arm64): downloads that become Waypage's own
+// Kokoro voices (Android, arm64; iOS): downloads that become Waypage's own
 // speech engine, picked for English when the first is in. Three to pick
 // from on their own screen (Daniel's ask), one in use at a time. Asked
 // again about once a second while one downloads or unpacks.
@@ -383,7 +383,7 @@ async function fillKokoro(slot) {
     phoneSection.push(section(t("Phone's voices"), null, el("div", { class: "group" },
       el("div", { class: "row" }, el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, t("Personal Voice")), note), allow))));
   }
-  if (!s) { slot.replaceChildren(...phoneSection, el("p", { class: "footnote" }, t("Kokoro voices need an Android phone with a 64-bit processor."))); return; }
+  if (!s) { slot.replaceChildren(...phoneSection, el("p", { class: "footnote" }, t("Kokoro voices need an iPhone, or an Android phone with a 64-bit processor."))); return; }
   kokoroArrived(s);
   piperArrived(s);
   const busy = kokoroBusy(s);
@@ -1524,7 +1524,7 @@ const CREDITS = {
     { name: "Capacitor", by: "Ionic", licence: "MIT", url: "https://capacitorjs.com", note: t("Wraps the app for Android and iOS") },
     { name: "Capacitor File Opener", by: "Capawesome", licence: "MIT", url: "https://github.com/capawesome-team/capacitor-plugins", note: t("Opens the downloaded update") },
     { name: "Capacitor ML Kit Barcode Scanning", by: "Capawesome", licence: "Apache 2.0", url: "https://github.com/capawesome-team/capacitor-mlkit", note: t("Scans the sync setup code") },
-    { name: "sherpa-onnx", by: "k2-fsa", licence: "Apache 2.0", url: "https://github.com/k2-fsa/sherpa-onnx", note: t("Runs the Kokoro and Piper voices, and audiobook transcripts, on Android") },
+    { name: "sherpa-onnx", by: "k2-fsa", licence: "Apache 2.0", url: "https://github.com/k2-fsa/sherpa-onnx", note: t("Runs the Kokoro and Piper voices, and audiobook transcripts on Android") },
     { name: "Kokoro", by: "hexgrad", licence: "Apache 2.0", url: "https://huggingface.co/hexgrad/Kokoro-82M", note: t("Voices for Narrate, downloaded") },
     { name: "Parakeet TDT 0.6B v3", by: "NVIDIA", licence: "CC BY 4.0", url: "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3", note: t("Better transcripts of audiobooks, downloaded") },
     { name: "Moonshine", by: "Useful Sensors", licence: "MIT", url: "https://github.com/usefulsensors/moonshine", note: t("Fast transcripts of audiobooks, downloaded") },

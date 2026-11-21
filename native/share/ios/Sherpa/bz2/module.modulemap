@@ -1,0 +1,5 @@
+module WaypageBZ2 {
+  header "bz2.h"
+  link "bz2"
+  export *
+}
