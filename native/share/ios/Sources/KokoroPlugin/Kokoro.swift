@@ -300,11 +300,11 @@ enum Kokoro {
         step = "downloading"
         done = 0
         total = p.bytes
-        KokoroDownloads.shared.start(URL(string: base + p.file)!)
+        PackDownloads.shared.start(URL(string: base + p.file)!)
     }
 
     static func cancel() {
-        KokoroDownloads.shared.cancel()
+        PackDownloads.shared.cancel()
         defaults.removeObject(forKey: packKey)
         try? FileManager.default.removeItem(at: archive)
         if step == "downloading" || step == "downloaded" || step == "failed" { step = "" }
@@ -343,7 +343,7 @@ enum Kokoro {
         return true
     }
 
-    private static func sha256(of url: URL) throws -> String {
+    static func sha256(of url: URL) throws -> String {
         let h = try FileHandle(forReadingFrom: url)
         defer { try? h.close() }
         var ctx = CC_SHA256_CTX()
@@ -361,7 +361,7 @@ enum Kokoro {
     // A .tar.bz2, read as it's decompressed: the archive's own top folder
     // (kokoro-int8-en-v0_19/) is dropped, links are skipped, and nothing
     // may land outside `dest`. `read` hears how far into the archive it is.
-    private static func untarBz2(_ src: URL, into dest: URL, read: (Int64) -> Void) throws {
+    static func untarBz2(_ src: URL, into dest: URL, keep: (String) -> Bool = { _ in true }, read: (Int64) -> Void) throws {
         enum Bad: Error { case bz2, tar }
         let input = try FileHandle(forReadingFrom: src)
         defer { try? input.close() }
@@ -468,7 +468,7 @@ enum Kokoro {
                 _ = try take(padded)
                 continue
             }
-            guard isFile, inside else {
+            guard isFile, inside, keep(name) else {
                 var left = padded
                 while left > 0 { let n = min(left, 1 << 20); _ = try take(n); left -= n }
                 continue
@@ -488,13 +488,26 @@ enum Kokoro {
     }
 }
 
-// The one download, on a background session: it goes on with the app put
-// away, and iOS wakes the app to hand it over.
-final class KokoroDownloads: NSObject, URLSessionDownloadDelegate {
-    static let shared = KokoroDownloads()
-    static let id = "waypage.kokoro"
+// One download at a time per kind (Kokoro's voices, Listen's models), on a
+// background session: it goes on with the app put away, and iOS wakes the
+// app to hand it over.
+final class PackDownloads: NSObject, URLSessionDownloadDelegate {
+    static let shared = PackDownloads("waypage.kokoro", archive: { Kokoro.archive }, busy: { Kokoro.downloading() != nil },
+                                      step: { Kokoro.step = $0 }, progress: { Kokoro.done = $0; if $1 > 0 { Kokoro.total = $1 } })
+
+    private let id: String
+    private let archive: () -> URL
+    private let busy: () -> Bool
+    private let step: (String) -> Void
+    private let progress: (Int64, Int64) -> Void
+
+    init(_ id: String, archive: @escaping () -> URL, busy: @escaping () -> Bool, step: @escaping (String) -> Void,
+         progress: @escaping (Int64, Int64) -> Void) {
+        self.id = id; self.archive = archive; self.busy = busy; self.step = step; self.progress = progress
+    }
+
     private lazy var session: URLSession = {
-        let c = URLSessionConfiguration.background(withIdentifier: KokoroDownloads.id)
+        let c = URLSessionConfiguration.background(withIdentifier: id)
         c.isDiscretionary = false
         c.sessionSendsLaunchEvents = true
         return URLSession(configuration: c, delegate: self, delegateQueue: nil)
@@ -505,7 +518,7 @@ final class KokoroDownloads: NSObject, URLSessionDownloadDelegate {
     func reconnect() {
         session.getAllTasks { tasks in
             self.task = tasks.compactMap { $0 as? URLSessionDownloadTask }.first { $0.state == .running }
-            if self.task != nil, Kokoro.downloading() != nil { Kokoro.step = "downloading" }
+            if self.task != nil, self.busy() { self.step("downloading") }
         }
     }
 
@@ -522,20 +535,19 @@ final class KokoroDownloads: NSObject, URLSessionDownloadDelegate {
 
     func urlSession(_ s: URLSession, downloadTask: URLSessionDownloadTask, didWriteData _: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         guard downloadTask == task || task == nil else { return }
-        Kokoro.done = totalBytesWritten
-        if totalBytesExpectedToWrite > 0 { Kokoro.total = totalBytesExpectedToWrite }
+        progress(totalBytesWritten, totalBytesExpectedToWrite)
     }
 
     func urlSession(_ s: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         // The file is gone once this returns: moved now.
         let ok = (downloadTask.response as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? false
-        guard ok, Kokoro.downloading() != nil else { Kokoro.step = "failed"; return }
-        try? FileManager.default.removeItem(at: Kokoro.archive)
+        guard ok, busy() else { step("failed"); return }
+        try? FileManager.default.removeItem(at: archive())
         do {
-            try FileManager.default.moveItem(at: location, to: Kokoro.archive)
-            Kokoro.step = "downloaded"
+            try FileManager.default.moveItem(at: location, to: archive())
+            step("downloaded")
         } catch {
-            Kokoro.step = "failed"
+            step("failed")
         }
     }
 
@@ -543,7 +555,7 @@ final class KokoroDownloads: NSObject, URLSessionDownloadDelegate {
         if t == task { task = nil }
         guard let e = error as NSError? else { return }
         if e.code == NSURLErrorCancelled { return }
-        if Kokoro.downloading() != nil { Kokoro.step = "failed" }
+        if busy() { step("failed") }
     }
 }
 

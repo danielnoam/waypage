@@ -375,24 +375,19 @@ public class SpeechPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDeleg
         guard !commandsSet else { return }
         commandsSet = true
         let c = MPRemoteCommandCenter.shared()
-        c.playCommand.addTarget { [weak self] _ in self?.resumeNow(); return .success }
-        c.pauseCommand.addTarget { [weak self] _ in self?.pauseNow(); return .success }
-        c.togglePlayPauseCommand.addTarget { [weak self] _ in
-            guard let self = self else { return .commandFailed }
-            if self.state == "playing" { self.pauseNow() } else { self.resumeNow() }
+        // The audiobook player (AudiobookPlugin) has its own targets on the
+        // same buttons: each answers only while it's the one playing.
+        let mine = { [weak self] (f: (SpeechPlugin) -> Void) -> MPRemoteCommandHandlerStatus in
+            guard let self = self, self.state == "playing" || self.state == "paused" else { return .noActionableNowPlayingItem }
+            f(self)
             return .success
         }
-        c.nextTrackCommand.addTarget { [weak self] _ in
-            guard let self = self else { return .commandFailed }
-            self.move(to: self.index + 1)
-            return .success
-        }
-        c.previousTrackCommand.addTarget { [weak self] _ in
-            guard let self = self else { return .commandFailed }
-            self.move(to: self.index - 1)
-            return .success
-        }
-        c.stopCommand.addTarget { [weak self] _ in self?.finish("stopped"); return .success }
+        c.playCommand.addTarget { _ in mine { $0.resumeNow() } }
+        c.pauseCommand.addTarget { _ in mine { $0.pauseNow() } }
+        c.togglePlayPauseCommand.addTarget { _ in mine { s in if s.state == "playing" { s.pauseNow() } else { s.resumeNow() } } }
+        c.nextTrackCommand.addTarget { _ in mine { $0.move(to: $0.index + 1) } }
+        c.previousTrackCommand.addTarget { _ in mine { $0.move(to: $0.index - 1) } }
+        c.stopCommand.addTarget { _ in mine { $0.finish("stopped") } }
     }
 
     public func speechSynthesizer(_ s: AVSpeechSynthesizer, didStart u: AVSpeechUtterance) {

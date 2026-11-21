@@ -34,7 +34,7 @@ public class KokoroPlugin: CAPPlugin, CAPBridgedPlugin {
     static var engineName: String { Bundle.main.bundleIdentifier ?? "waypage" }
 
     override public func load() {
-        if Kokoro.supported { KokoroDownloads.shared.reconnect() }
+        if Kokoro.supported { PackDownloads.shared.reconnect() }
     }
 
     @objc func status(_ call: CAPPluginCall) {

@@ -207,6 +207,17 @@ test("iOS fetches the Kokoro engine pinned and checked, and pins the same downlo
   assert.ok(/CC_SHA256_Final/.test(swift) && /hasPrefix\(destPath\)/.test(swift), "iOS checks each download and keeps files inside the voices folder");
 });
 
+// iOS transcripts: the same models as Android's, at the same SHA-256.
+test("iOS transcripts pin the same models as Android", () => {
+  const dir = path.join(ROOT, "native", "share");
+  const java = fs.readFileSync(path.join(dir, "android", "src", "main", "java", "io", "github", "danielnoam", "waypage", "share", "Listen.java"), "utf8");
+  const swift = fs.readFileSync(path.join(dir, "ios", "Sources", "AudiobookPlugin", "Listen.swift"), "utf8");
+  const shas = (src) => (src.match(/"[0-9a-f]{64}"/g) || []).sort();
+  assert.strictEqual(shas(java).length, 3);
+  assert.deepStrictEqual(shas(swift), shas(java), "Listen.swift and Listen.java pin different models");
+  assert.ok(/Kokoro\.sha256\(of: archive\) == p\.sha256/.test(swift), "iOS checks each model before unpacking");
+});
+
 test("the updater downloads the asset the workflow publishes", () => {
   const yml = fs.readFileSync(path.join(ROOT, ".github", "workflows", "android.yml"), "utf8");
   const platform = fs.readFileSync(path.join(ROOT, "src", "platform.js"), "utf8");

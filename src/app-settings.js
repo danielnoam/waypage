@@ -1524,7 +1524,7 @@ const CREDITS = {
     { name: "Capacitor", by: "Ionic", licence: "MIT", url: "https://capacitorjs.com", note: t("Wraps the app for Android and iOS") },
     { name: "Capacitor File Opener", by: "Capawesome", licence: "MIT", url: "https://github.com/capawesome-team/capacitor-plugins", note: t("Opens the downloaded update") },
     { name: "Capacitor ML Kit Barcode Scanning", by: "Capawesome", licence: "Apache 2.0", url: "https://github.com/capawesome-team/capacitor-mlkit", note: t("Scans the sync setup code") },
-    { name: "sherpa-onnx", by: "k2-fsa", licence: "Apache 2.0", url: "https://github.com/k2-fsa/sherpa-onnx", note: t("Runs the Kokoro and Piper voices, and audiobook transcripts on Android") },
+    { name: "sherpa-onnx", by: "k2-fsa", licence: "Apache 2.0", url: "https://github.com/k2-fsa/sherpa-onnx", note: t("Runs the Kokoro and Piper voices, and audiobook transcripts") },
     { name: "Kokoro", by: "hexgrad", licence: "Apache 2.0", url: "https://huggingface.co/hexgrad/Kokoro-82M", note: t("Voices for Narrate, downloaded") },
     { name: "Parakeet TDT 0.6B v3", by: "NVIDIA", licence: "CC BY 4.0", url: "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3", note: t("Better transcripts of audiobooks, downloaded") },
     { name: "Moonshine", by: "Useful Sensors", licence: "MIT", url: "https://github.com/usefulsensors/moonshine", note: t("Fast transcripts of audiobooks, downloaded") },

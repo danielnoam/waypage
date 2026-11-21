@@ -1686,7 +1686,7 @@ function listeningGroup(title = t("Listening")) {
     switchRow(t("Keep playing when you leave the book"), t("Off: it stops when you go back or open another clip"), prefs.keep, (on) => setListenPref("keep", on)),
     A.native ? switchRow(t("Allow mixing"), t("Music or a podcast in another app keeps playing under the book. Off: they pause while it plays"), prefs.mix, (on) => { setListenPref("mix", on); volRow.hidden = !on; }) : null,
     volRow,
-    A.native ? switchRow(t("Small window outside the app"), t("Going home, the book stays in a window you can move, with back, play and forward"), prefs.pip, (on) => setListenPref("pip", on)) : null));
+    A.native && C.platform.android ? switchRow(t("Small window outside the app"), t("Going home, the book stays in a window you can move, with back, play and forward"), prefs.pip, (on) => setListenPref("pip", on)) : null));
 }
 // The reader sheet's tab for an audiobook, in Narrate's place.
 function listenSheetPart() {
@@ -1709,7 +1709,7 @@ async function fillTranscripts(slot) {
   const s = await listenModels();
   if (!slot.isConnected && slot.dataset.drawn) return;
   slot.dataset.drawn = "1";
-  if (!s || !s.supported) { slot.replaceChildren(el("p", { class: "footnote" }, t("Transcripts need an Android phone with a 64-bit processor."))); return; }
+  if (!s || !s.supported) { slot.replaceChildren(el("p", { class: "footnote" }, t("Transcripts need an iPhone, or an Android phone with a 64-bit processor."))); return; }
   const busy = s.step === "downloading" || s.step === "checking" || s.step === "unpacking";
   const again = () => fillTranscripts(slot);
   const act = (fn) => async () => { try { await fn(); } catch (e) { toast((e && e.message) || t("Couldn't do that. Try again.")); } again(); };
