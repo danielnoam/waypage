@@ -655,10 +655,10 @@
     e.stopPropagation();
     press = { id: e.pointerId, kind: e.pointerType, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, carried: false };
     const mine = press;
-    press.timer = setTimeout(() => { if (press === mine) carry(mine, svg, Number(svg.dataset.page), id); }, HOLD);
+    press.timer = setTimeout(() => { if (press === mine) carryBubble(mine, svg, Number(svg.dataset.page), id); }, HOLD);
   }
   function pressEnd() { if (press) clearTimeout(press.timer); press = null; }
-  function carry(pr, svg, n, id) {
+  function carryBubble(pr, svg, n, id) {
     const it = strokes(n).find((x) => x.id === id);
     if (!it || cur) { pressEnd(); return; }
     pr.carried = true;
