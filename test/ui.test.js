@@ -1692,6 +1692,134 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    // A story's status on its site (2026-11, Daniel): a tag on its cover,
+    // "Caught up" rather than done while it's still being written, and
+    // Website sync keeps it current.
+    // A sheet on its way down doesn't take the keyboard back: the search
+    // tapped as it closes keeps what's typed (Audiobookshelf's sign-in).
+    await test("a field in the library takes focus while a sheet is still closing", async () => {
+      const q = await page(browser, 390);
+      const got = await q.evaluate(async () => {
+        openMenu("addFeed");
+        await new Promise((r) => setTimeout(r, 400));
+        closeMenu();
+        const input = document.querySelector("#sideBtn");
+        input.focus();
+        return { menu: !!state.menu, sheetUp: !$("menuSheet").hidden, focused: document.activeElement === input };
+      });
+      assert.deepStrictEqual(got, { menu: false, sheetUp: true, focused: true });
+      await q.context().close();
+    });
+
+    await test("a series shows its story's status, and caught up isn't finished while it's still going", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (id) => ({ id, url: "https://www.royalroad.com/fiction/5/a/chapter/" + id, title: id, site: "Royal Road", savedAt: 1000, minutes: 1, mode: "links", at: 1, finished: true, folder: "Saga", folderAt: Number(id.slice(1)),
+          folderSeries: true, source: "https://www.royalroad.com/fiction/5/a", siteStatus: "ongoing" });
+        const list = [c("m1"), c("m2")];
+        await S.writeIndex(list);
+        for (const x of list) await S.writePage(x.id, "<!doctype html><html><body><p>" + x.id + "</p></body></html>", x);
+      });
+      await q.reload();
+      const tile = '[data-key="series"] .tile[data-name="Saga"]';
+      await until(q, () => !!document.querySelector('[data-key="series"] .tile[data-name="Saga"] .tile-status'));
+      assert.strictEqual(await q.textContent(tile + " .tile-status"), "Ongoing");
+      assert.ok(/Caught up/.test(await q.textContent(tile + " .tile-meta")) && !/All read/.test(await q.textContent(tile + " .tile-meta")));
+      await q.evaluate(() => openFolder("Saga"));
+      await until(q, () => state.folder === "Saga" && !!document.querySelector("#folderBody .book-site"));
+      assert.strictEqual(await q.textContent("#folderBody .book-site"), "Royal Road · Series · Ongoing");
+      assert.strictEqual(await q.textContent("#folderBody .folder-meta"), "Caught up: all 2 read");
+      // The site says it's done now: Website sync's check takes the word.
+      await q.evaluate(async () => {
+        Waypage.save.findChapters = async (u) => ({ title: "Saga", links: ["https://www.royalroad.com/fiction/5/a/chapter/m1", "https://www.royalroad.com/fiction/5/a/chapter/m2"], cover: "", page: u, siteTags: null, status: "completed" });
+        Object.defineProperty(navigator, "onLine", { get: () => true, configurable: true });
+        await checkNew("Saga", true);
+      });
+      await until(q, () => folderPages("Saga").every((p) => p.siteStatus === "completed"));
+      await until(q, () => /All 2 read/.test(document.querySelector("#folderBody .folder-meta").textContent));
+      await q.evaluate(() => { history.back(); });
+      await until(q, () => !state.folder && document.querySelector('[data-key="series"] .tile[data-name="Saga"] .tile-status')?.textContent === "Completed");
+      assert.ok(/All read/.test(await q.textContent(tile + " .tile-meta")));
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a collection's quick starts under Continue: last read and newest, unless Continue opens them", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (id, at, folderAt, readAt) => ({ id, url: "https://blog.example.com/" + id, title: id, site: "blog.example.com", savedAt: 1000, minutes: 1, mode: "links",
+          at, finished: at === 1, readAt, folder: "Shelf", folderAt });
+        const list = [c("q1", 1, 1, 50), c("q2", 1, 2, 90), c("q3", 0, 4, 0), c("q4", 0.3, 3, 10)];
+        await S.writeIndex(list);
+        for (const x of list) await S.writePage(x.id, "<!doctype html><html><body><p>Words in " + x.id + ".</p></body></html>", x);
+      });
+      await q.reload();
+      await until(q, () => state.pages.length === 4);
+      await q.evaluate(() => openFolder("Shelf"));
+      await until(q, () => !!document.querySelector("#folderBody .folder-starts"));
+      const labels = () => q.$$eval("#folderBody .folder-starts .chip", (b) => b.map((x) => x.getAttribute("aria-label")));
+      assert.deepStrictEqual(await labels(), ["Last read: q2", "Newest: q3"]);
+      const pick = async (label, id) => {
+        await q.locator("#folderBody .folder-starts .chip", { hasText: label }).click();
+        await until(q, (id) => state.open && state.open.id === id, id);
+        await q.evaluate(() => { history.back(); });
+        await until(q, () => state.folder === "Shelf" && $("readerView").hidden);
+      };
+      await pick("Newest", "q3");
+      await q.evaluate(async () => { const p = state.pages.find((x) => x.id === "q2"); p.readAt = Date.now() + 1e6; await Waypage.store.writeIndex(state.pages); renderFolder(); });
+      await pick("Last read", "q2");
+      // Continue opens the clip read last while it's unfinished: no Last read then.
+      await q.evaluate(async () => { const p = state.pages.find((x) => x.id === "q4"); p.readAt = Date.now() + 2e6; await Waypage.store.writeIndex(state.pages); renderFolder(); });
+      assert.deepStrictEqual(await labels(), ["Newest: q3"]);
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
+    // A site that never says (a blog): picked by hand in Edit, on every
+    // clip so it syncs; a clip joining takes it. Website sync can turn the
+    // site's own word off.
+    await test("a series' status can be picked in Edit, and the site's word turned off in Website sync", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (id, folder) => ({ id, url: "https://blog.example.com/" + id, title: id, site: "blog.example.com", savedAt: 1000, minutes: 1, mode: "links", at: 0, finished: false, folder, folderAt: Number(id.slice(1)), folderSeries: !!folder });
+        const list = [c("k1", "Knight"), c("k2", "Knight"), c("x1")];
+        delete list[2].folder;
+        await S.writeIndex(list);
+        for (const x of list) await S.writePage(x.id, "<!doctype html><html><body><p>" + x.id + "</p></body></html>", x);
+      });
+      await q.reload();
+      await until(q, () => !!document.querySelector('[data-key="series"] .tile[data-name="Knight"]'));
+      await q.evaluate(() => { openFolder("Knight"); });
+      await until(q, () => state.folder === "Knight");
+      await q.evaluate(() => setFolderMode("edit"));
+      await q.locator("#folderBody .status-pick button").first().click();
+      await q.locator(".dropdown-menu [role=option], .dropdown-menu button", { hasText: "Completed" }).first().click();
+      await until(q, () => folderPages("Knight").every((p) => p.statusPick === "completed"));
+      await q.evaluate(() => setFolderMode(""));
+      await until(q, () => /Series · Completed/.test(document.querySelector("#folderBody .book-site").textContent));
+      // A clip joining takes it.
+      await q.evaluate(async () => { const p = state.pages.find((x) => x.id === "x1"); p.folder = "Knight"; joinFav(p, "Knight"); });
+      assert.strictEqual(await q.evaluate(() => state.pages.find((x) => x.id === "x1").statusPick), "completed");
+      // Linked, the site's word shows over the pick, until Website sync turns it off.
+      await q.evaluate(() => { for (const p of folderPages("Knight")) { p.siteStatus = "ongoing"; p.source = "https://blog.example.com/"; } renderFolder(); });
+      await until(q, () => /Series · Ongoing/.test(document.querySelector("#folderBody .book-site").textContent));
+      await q.evaluate(() => setFolderMode("chapters"));
+      const sw = q.locator("#folderBody .row", { hasText: "Status from the site" }).locator("input");
+      assert.ok(await sw.isChecked());
+      await sw.click();
+      await until(q, () => folderPages("Knight").every((p) => p.folderNoStatus));
+      await q.evaluate(() => setFolderMode(""));
+      await until(q, () => /Series · Completed/.test(document.querySelector("#folderBody .book-site").textContent));
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a series has its own section, sits in a collection, and turns back into a collection with nothing lost", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
@@ -6344,6 +6472,176 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("Save the narration gives a clip its own sound, which plays in place of Narrate and never syncs; a collection gives each clip one", async () => {
+      const q = await page(browser, 390);
+      for (const f of ["article.html", "chapters.html"]) {
+        await q.fill("#saveUrl", ROOT + "test/fixtures/" + f);
+        await q.press("#saveUrl", "Enter");
+        await until(q, (n) => state.pages.length >= n, f === "article.html" ? 1 : 2);
+      }
+      await q.evaluate(async () => {
+        const A = window.Waypage.platform.audio;
+        Object.defineProperty(A, "canVoice", { get: () => true, configurable: true });
+        window.asked = [];
+        window.played = [];
+        A.voice = async (o) => {
+          asked.push(o);
+          if (voiceStep) voiceStep({ n: o.items.length, of: o.items.length });
+          return { uri: "file:///cache/" + o.name + ".m4a", dur: o.items.length * 5, size: 100, t0: o.items.map((_, i) => i * 5), t1: o.items.map((_, i) => i * 5 + 4) };
+        };
+        A.stopVoicing = () => {};
+        A.play = async (o) => { played.push(o); };
+        window.Waypage.platform.keepMade = async (from, name) => "file:///data/Files/" + name;
+        state.pages.forEach((x, i) => { x.folder = "Flights"; x.folderAt = 1000 - i; });
+        await window.Waypage.store.writeIndex(state.pages);
+      });
+      const clip = await q.evaluate(() => state.pages.find((x) => /Long Haul/.test(x.title)).id);
+      await q.evaluate((id) => makeAudiobook({ page: state.pages.find((x) => x.id === id) }), clip);
+      const one = await q.evaluate(async (id) => {
+        const p = state.pages.find((x) => x.id === id);
+        const data = await window.Waypage.store.readListen(id);
+        return { count: state.pages.length, own: audioFor(p) === p, audiobook: isAudiobook(p), mode: modeOf(p), ours: p.audio.ours, chapters: p.audio.chapters.length, dur: p.audio.dur,
+          words: data.pieces.map((x) => x.text).join(" "), covered: data.ranges, synced: JSON.stringify(window.Waypage.backup.cleanMeta(p, p.id)), car: carBookOk(p) && !carClipOk(p) };
+      }, clip);
+      // No new entry: the clip itself has the sound, reads along with itself, and isn't an audiobook of its own.
+      assert.strictEqual(one.count, 2);
+      assert.ok(one.own && !one.audiobook && one.mode === "book" && one.ours && one.car, JSON.stringify(one));
+      assert.ok(/oceanic track/.test(one.words), "the words to read along with are the clip's text");
+      assert.deepStrictEqual(one.covered, [[0, one.dur]]);
+      // The start and its two headings are its chapters.
+      assert.strictEqual(one.chapters, 3);
+      // The sound's files stay on this device: not in what syncs or is backed up.
+      assert.ok(!/file:\/\/\/data|"audio"/.test(one.synced), one.synced);
+      // Narrate's button plays the sound, with no speaking.
+      await q.evaluate((id) => openPage(id), clip);
+      await q.locator("#readerView:not([hidden])").waitFor();
+      await q.evaluate(() => { window.spoke = 0; const S = window.Waypage.platform.speech; S.play = async () => { spoke++; }; });
+      await q.click("#readerAloud");
+      await until(q, () => played.length === 1);
+      assert.strictEqual(await q.evaluate(() => spoke), 0);
+      assert.ok(await q.evaluate((id) => played[0].key === id && played[0].parts.length === state.pages.find((x) => x.id === id).audio.parts.length, clip), "plays the made files");
+      await q.evaluate(() => { listenStop(); closeReader(); });
+      // A collection: each clip without a sound gets its own; the one made already is left.
+      const n = await q.evaluate(() => asked.length);
+      await q.evaluate(() => makeAudiobook({ folder: "Flights" }));
+      const all = await q.evaluate((k) => ({ voiced: folderPages("Flights").filter(voicedSound).length, count: state.pages.length,
+        engines: asked.slice(k).every((o) => "engine" in o && "voice" in o && o.items.length) }), n);
+      assert.deepStrictEqual(all, { voiced: 2, count: 2, engines: true });
+      // Storage removes every saved narration at once, to make room.
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Storage" }).click();
+      const room = q.locator(".room-narrations");
+      await room.waitFor();
+      assert.ok(/2 clips with a saved narration/.test(await room.innerText()), await room.innerText());
+      await q.evaluate(() => { window.confirm = () => true; });
+      await room.click();
+      await until(q, () => !document.querySelector(".room-narrations"));
+      assert.strictEqual(await q.evaluate(() => state.pages.filter(voicedSound).length), 0);
+      // Narrate reads it again once it's removed.
+      assert.ok(await q.evaluate((id) => { const p = state.pages.find((x) => x.id === id); return !p.audio && !audioFor(p); }, clip));
+      assert.deepStrictEqual(q.errors.filter((e) => !/waypage-fetch/.test(e)), []);
+      await q.context().close();
+    });
+
+    await test("Find the book checks each book against a minute of the narrator, the one that fits first (2026-11)", async () => {
+      const q = await page(browser, 390);
+      const id = await q.evaluate(async () => {
+        const C = window.Waypage, A = C.platform.audio;
+        Object.defineProperty(A, "canTranscribe", { get: () => true, configurable: true });
+        A.models = async () => ({ supported: true, packs: [{ id: "better", title: "Better", note: "", size: 1, bytes: 1, ready: true }] });
+        await listenModels();
+        const book = "On an exceptionally hot evening early in July a young man came out of the garret in which he lodged in S. Place and walked slowly, as though in hesitation, towards K. bridge. He had successfully avoided meeting his landlady on the staircase, and each time the student Raskolnikov passed he thought of Petersburg and of the old woman Alyona Ivanovna.";
+        const other = "One evening at the very beginning of July a youth left the little room he rented and went towards the bridge, and the student Raskolnikov remembered Petersburg and the pawnbroker Alyona Ivanovna with dread.";
+        const filler = Array.from({ length: 20 }, () => "Lighthouses were once kept by families who lived beside the lamp all year, trimming wicks and polishing lenses through the long winters.");
+        window.foundBooks = { pg1: [other, ...filler], pg2: [book, ...filler], se1: filler };
+        foundTexts = async (s) => foundBooks[s.id];
+        const src = (key) => C.discover.sources.find((x) => x.key === key);
+        src("pg").search = async () => [{ id: "pg1", title: "Crime and Punishment", by: "Fyodor Dostoyevsky", tr: "Frederick Whishaw", epub: "https://example.org/1.epub", url: "https://example.org/1" },
+          { id: "pg2", title: "Crime and Punishment", by: "Fyodor Dostoyevsky", tr: "Constance Garnett", epub: "https://example.org/2.epub", url: "https://example.org/2" }];
+        src("se").search = async () => [{ id: "se1", title: "Lighthouses", by: "Someone", epub: "https://example.org/3.epub", url: "https://example.org/3" }];
+        src("ws").search = async () => [];
+        const m = await newAudiobook({ title: "Crime and Punishment (Unabridged)", byline: "Fyodor Dostoyevsky", file: { name: "c.mp3", kind: "audio", ext: "mp3", size: 10 }, link: "x",
+          audio: { parts: [{ ref: "x", name: "c.mp3", size: 10, dur: 600 }], chapters: [], dur: 600 } }, null);
+        arrived(m);
+        const words = book.split(" ");
+        await C.store.writeListen(m.id, { pieces: [{ t0: 0, t1: words.length * 0.4, text: book }], ranges: [[0, 60]] });
+        return m.id;
+      });
+      await q.evaluate((i) => { openPage(i); }, id);
+      await until(q, () => state.open && state.open.id !== undefined);
+      // A new file's first sheet can come up as it opens.
+      await until(q, () => { if (state.sheet !== "listenFind") { if (state.sheet) closeSheet(true); openSheet("listenFind"); } return document.querySelectorAll(".listen-found-row").length > 0; });
+      await until(q, () => document.querySelectorAll(".listen-found-row").length === 3 && document.querySelector(".listen-heard") && ![...document.querySelectorAll(".listen-fit")].some((b) => /Testing/.test(b.textContent)), null, 15000);
+      const rows = await q.evaluate(() => [...document.querySelectorAll(".listen-found-row")].map((r) => r.querySelector(".choice-note").textContent + " | " + ((r.querySelector(".listen-fit") || {}).textContent || "")));
+      assert.deepStrictEqual(rows, ["Translated by Constance Garnett · Project Gutenberg | Same words",
+        "Translated by Frederick Whishaw · Project Gutenberg | Another translation",
+        "Someone · Standard Ebooks | Doesn't match"]);
+      assert.ok(/Heard: “On an exceptionally hot/.test(await q.evaluate(() => document.querySelector(".listen-heard").textContent)));
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a zip of sound files is one audiobook, played from inside the zip (2026-11)", async () => {
+      const q = await page(browser, 390);
+      const got = await q.evaluate(async () => {
+        const C = window.Waypage, A = C.platform.audio, F = C.platform.files;
+        Object.defineProperty(A, "native", { get: () => true, configurable: true });
+        window.probed = [];
+        A.probe = async (ref, offset, length) => { probed.push([ref, offset, length]); return { duration: 30000 }; };
+        window.released = [];
+        F.release = async (ref) => { released.push(ref); };
+        const make = async (files) => {
+          const parts = [];
+          const z = C.backup.zipWriter((b) => { parts.push(b); });
+          for (const [name, text] of files) await z.add(name, new TextEncoder().encode(text));
+          await z.finish();
+          return new File(parts, "The Road.zip", { type: "application/zip" });
+        };
+        const file = await make([["The Road/02 Two.mp3", "second part"], ["The Road/01 One.mp3", "first part!"], ["__MACOSX/The Road/._01 One.mp3", "junk"], ["notes.txt", "hi"]]);
+        const kind = await C.files.kindOf(file);
+        const took = await addAudiobookZip(file, "content://zip");
+        const p = state.pages.find((x) => x.title === "The Road");
+        const inside = [];
+        for (const part of p.audio.parts) inside.push(await file.slice(part.offset, part.offset + part.length).text());
+        const none = await addAudiobookZip(await make([["a.txt", "no sound"]]), "content://other");
+        return { kind, took, none, zip: p.audio.zip, link: p.link, names: p.audio.parts.map((x) => x.name), inside, chapters: p.audio.chapters.map((c) => c.title + "@" + c.t),
+          play: (await partsToPlay(p)).map((x) => x.uri + ":" + (x.offset > 0) + ":" + x.length), probed: probed.length };
+      });
+      assert.strictEqual(got.kind, "zip");
+      assert.ok(got.took && !got.none);
+      assert.strictEqual(got.zip, true);
+      assert.strictEqual(got.link, "content://zip");
+      assert.deepStrictEqual(got.names, ["01 One.mp3", "02 Two.mp3"]);
+      assert.deepStrictEqual(got.inside, ["first part!", "second part"]);
+      assert.deepStrictEqual(got.chapters, ["01 One@0", "02 Two@30"]);
+      assert.deepStrictEqual(got.play, ["content://zip:true:11", "content://zip:true:11"]);
+      assert.strictEqual(got.probed, 2);
+      await q.context().close();
+    });
+
+    await test("the narrator away from the book: a card offers the transcript or another book (2026-11)", async () => {
+      const q = await page(browser, 390);
+      const id = await q.evaluate(async () => {
+        const m = await newAudiobook({ title: "Away", byline: "", file: { name: "w.mp3", kind: "audio", ext: "mp3", size: 10 }, link: "x",
+          audio: { parts: [{ ref: "x", name: "w.mp3", size: 10, dur: 600 }], chapters: [], dur: 600 } }, null);
+        arrived(m);
+        listenMode(m, "book", { id: "bookaway1", url: "https://example.org/away" });
+        showLost(m, 250);
+        return m.id;
+      });
+      const card = await q.evaluate(() => document.getElementById("listenLost").textContent);
+      assert.ok(/The narrator left the book 4 minutes ago/.test(card), card);
+      assert.ok(/Show the transcript/.test(card) && /Find another book/.test(card));
+      await q.evaluate(() => [...document.querySelectorAll("#listenLost button")].find((b) => /Show the transcript/.test(b.textContent)).click());
+      await until(q, () => document.getElementById("listenLost").hidden);
+      const l = await q.evaluate((i) => state.pages.find((p) => p.id === i).listen, id);
+      assert.strictEqual(l.mode, "transcript");
+      assert.ok(!l.book && l.was && l.was.id === "bookaway1", JSON.stringify(l));
+      assert.deepStrictEqual(await q.evaluate((i) => window.Waypage.backup.cleanListen(state.pages.find((p) => p.id === i).listen).was, id), { id: "bookaway1", url: "https://example.org/away" });
+      await q.context().close();
+    });
+
     await test("an audiobook's dot drags along the chapter and seeks once, on letting go (1.58.2)", async () => {
       const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
       const q = await ctx.newPage();
@@ -6465,6 +6763,32 @@ c("bk1", { at: 0.01 })]);
 
     // Every screen at every size (the 320 px phone, a phone on its side, a
     // computer): each of these was cut off or missing before.
+    await test("the car's collections: quick starts, the clips around where it was left, and no jumping a gap (2026-11-20)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store, all = [];
+        for (let i = 1; i <= 20; i++) {
+          const c = { id: "car" + i, url: "", title: "Part " + i, site: "", savedAt: i, minutes: 1, mode: "full", at: i <= 4 ? 1 : 0, finished: i <= 4, readAt: i <= 4 ? 100 + i : 0, folder: "Serial", folderAt: i };
+          all.push(c);
+        }
+        await S.writeIndex(all);
+        for (const c of all) await S.writePage(c.id, "<!doctype html><html><body><p>The " + c.title + " goes on a while.</p><p>And then it ends.</p></body></html>", c);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await until(q, () => state.pages.length === 20);
+      const got = await q.evaluate(async () => {
+        const list = { books: [], clips: [] };
+        const c = await carFolderList(carFolders()[0], list, new Set());
+        return { c, hidden: list.clips.every((x) => x.hide && x.items.length === 2) };
+      });
+      assert.deepStrictEqual(got.c.starts.map((x) => [x.label, x.id]), [["Continue", "c:car5"], ["Newest", "c:car20"]]);
+      assert.deepStrictEqual(got.c.at, [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 18, 19]);
+      assert.strictEqual(got.c.items[got.c.at.indexOf(3)], "c:car4");
+      assert.ok(got.hidden);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
     await test("the picking bar, Draw bar, app lock and Stats fit at 320 px, on a phone's side and at 1280 px", async () => {
       const q = await page(browser, 320);
       await q.setViewportSize({ width: 320, height: 568 });

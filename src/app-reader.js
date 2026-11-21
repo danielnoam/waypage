@@ -39,6 +39,9 @@ document.addEventListener("focusin", (e) => {
   if (!e.target.closest || !e.target.closest("[data-covered]")) return;
   const tops = [...document.querySelectorAll(".screen:not([hidden]):not([data-covered]), #sidebar:not([hidden]):not([data-covered]), #menuSheet:not([hidden])")];
   const top = tops[tops.length - 1];
+  // A sheet on its way down (state.menu already gone) gives focus back
+  // at once: a tap in the screen it uncovers isn't sent into its fields.
+  if (top && top.id === "menuSheet" && !state.menu) return;
   const first = top && [...top.querySelectorAll("button:not(:disabled), [href], input:not(:disabled), [tabindex]:not([tabindex=\"-1\"])")].find((n) => n.getClientRects().length);
   if (first) first.focus({ preventScroll: true }); else e.target.blur();
 });
@@ -2315,7 +2318,8 @@ document.addEventListener("visibilitychange", async () => {
 });
 
 $("readerAloud").hidden = !speech.available;
-$("readerAloud").addEventListener("click", () => (aloudOn() && aloudHere() ? stopAloud() : startAloud()));
+// A clip with its own made sound plays that instead (app-listen.js).
+$("readerAloud").addEventListener("click", () => (aloudOn() && aloudHere() ? stopAloud() : voicedSound(state.open) ? voicedPlay() : startAloud()));
 $("readerScroll").addEventListener("click", () => (glide.on ? stopGlide() : startGlide()));
 $("aloudPlay").addEventListener("click", () => {
   if (aloud.state === "playing") { setAloud("paused", aloud.index); speech.pause(); }

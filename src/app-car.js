@@ -1,5 +1,5 @@
 // ---- Android Auto (2026-11) ----
-// The car lists Continue, Audiobooks and Up next, and starts them with the
+// The car lists Continue, Audiobooks, Up next and Collections, and starts them with the
 // app closed, so the app hands the phone everything that takes: a book's
 // parts, chapters and place, and a clip's text already cut into Narrate's
 // pieces with its voice. Written when the app is put away and a little
@@ -13,8 +13,9 @@ let carSig = "", carWriting = false, carTimer = 0;
 // A clip's pieces by id and save time, so the text is cut once.
 const carText = new Map();
 
-const carClipOk = (p) => p && !p.file && !p.link && !p.preview && !p.note && !p.finished && (p.at || 0) < 0.97;
-const carBookOk = (a) => isAudiobook(a) && !(a.audio.overlay && a.audio.parts.some((x) => !x.stored));
+const carClipOk = (p) => p && !voicedSound(p) && !p.file && !p.link && !p.preview && !p.note && !p.finished && (p.at || 0) < 0.97;
+// A clip with its made sound plays that in the car too.
+const carBookOk = (a) => (isAudiobook(a) && !(a.audio.overlay && a.audio.parts.some((x) => !x.stored))) || voicedSound(a);
 
 function carBooks() {
   const at = (a) => (a.listen && a.listen.tAt) || a.readAt || a.savedAt || 0;
@@ -81,22 +82,84 @@ async function carClip(p) {
   };
 }
 
+// Collections and series (2026-11): the eight read or added to last,
+// in their own order, each with quick starts (Continue or Start, and
+// Newest). A long one carries only its first clips, the
+// newest and the stretch from where it was left, so the list stays
+// small. The car's Next and Previous clip (and an audiobook's chapter
+// buttons past its ends) go through the collection.
+const CAR_FOLDERS = 8, CAR_AHEAD = 8;
+const carTextOk = (p) => p && !p.file && !p.link && !p.preview && !p.note;
+const carOk = (p) => carBookOk(p) || carTextOk(p);
+const carAt = (p) => Math.max(p.readAt || 0, p.folderAt || p.savedAt || 0, (p.listen && p.listen.tAt) || 0);
+function carFolders() {
+  return allFolders().map((name) => ({ name, all: folderPages(name).filter(carOk) }))
+    .filter((f) => f.all.length)
+    .map((f) => ({ ...f, at: Math.max(...f.all.map(carAt)) }))
+    .sort((x, y) => y.at - x.at).slice(0, CAR_FOLDERS)
+    .map((f) => {
+      const { all } = f, cont = folderNextIndex(all);
+      let newest = 0;
+      all.forEach((p, k) => { if ((p.folderAt || p.savedAt || 0) >= (all[newest].folderAt || all[newest].savedAt || 0)) newest = k; });
+      const keep = new Set([0, 1, newest - 1, newest]);
+      for (let k = Math.max(0, cont - 1); cont >= 0 && k < cont + CAR_AHEAD; k++) keep.add(k);
+      return { name: f.name, all, cont, newest, pick: all.filter((p, k) => keep.has(k)) };
+    });
+}
+const carSigOf = (p) => carBookOk(p) ? [p.id, p.title, placeOf(p), speedOf(p), p.thumb || ""] : [p.id, p.title, p.at || 0, p.finished ? 1 : 0, p.editedAt || p.savedAt, p.thumb || ""];
+
+async function carFolderList(f, list, have) {
+  // `at`: each one's place in the whole collection, so Next and Previous
+  // never jump a gap.
+  const items = [], at = [];
+  for (const p of f.pick) {
+    const book = carBookOk(p), id = (book ? "b:" : "c:") + p.id;
+    if (!have.has(id)) {
+      const got = book ? await carBook(p) : await carClip(p);
+      if (!got) continue;
+      got.hide = true;
+      (book ? list.books : list.clips).push(got);
+      have.add(id);
+    }
+    items.push(id);
+    at.push(f.all.indexOf(p));
+  }
+  if (!items.length) return null;
+  const idOf = (p) => p && (carBookOk(p) ? "b:" : "c:") + p.id;
+  const started = f.all.some((p) => p.readAt || p.finished || (p.at || 0) > 0.02);
+  // All read: Start plays it again from its first.
+  const cont = idOf(f.all[f.cont >= 0 ? f.cont : 0]), newest = idOf(f.all[f.newest]);
+  const starts = [];
+  const add = (label, id) => { if (id && items.includes(id) && !starts.some((s) => s.id === id)) starts.push({ label, id }); };
+  add(started && f.cont >= 0 ? t("Continue") : t("Start"), cont);
+  add(t("Newest"), newest);
+  const series = isSeriesFolder(f.name);
+  return {
+    name: f.name, by: (series ? t("Series") + " · " : "") + readCount(f.all),
+    cover: shownCover(folderPages(f.name)) || "", items, at, starts,
+  };
+}
+
 async function carWrite() {
   if (!CAR.on || carWriting) return;
   carWriting = true;
   try {
     const locked = !!lockCfg();
-    const books = locked ? [] : carBooks(), clips = locked ? [] : carClips();
+    const books = locked ? [] : carBooks(), clips = locked ? [] : carClips(), folders = locked ? [] : carFolders();
     const sig = JSON.stringify([locked, load(GO_ON_KEY, false), load(RATE_KEY, 1), load(VOICE_KEY, {}), enginePicks(), load(MIX_KEY, false), aloudVolume(),
-      books.map((a) => [a.id, a.title, placeOf(a), speedOf(a), a.thumb || ""]), clips.map((p) => [p.id, p.title, p.at || 0, p.editedAt || p.savedAt, p.thumb || ""])]);
+      books.map((a) => [a.id, a.title, placeOf(a), speedOf(a), a.thumb || ""]), clips.map((p) => [p.id, p.title, p.at || 0, p.editedAt || p.savedAt, p.thumb || ""]),
+      folders.map((f) => [f.name, isSeriesFolder(f.name), f.cont, f.newest, f.all.length, f.pick.map(carSigOf)]), i18n.lang]);
     if (sig === carSig) return;
-    const list = { locked, goOn: !!load(GO_ON_KEY, false), books: [], clips: [], continue: [] };
+    const list = { locked, goOn: !!load(GO_ON_KEY, false), books: [], clips: [], continue: [], collections: [],
+      words: { continue: t("Continue"), books: t("Audiobooks"), clips: t("Up next"), collections: t("Collections") } };
     for (const a of books) list.books.push(await carBook(a));
     for (const p of clips) { const c = await carClip(p); if (c) list.clips.push(c); }
     // The book and the clip last listened to or read, the latest first.
     const book = list.books[0], clip = list.clips.find((c) => c.id === aloud.key) || list.clips.find((c) => c.at > 0);
     const two = [book && { id: "b:" + book.id, at: book.at }, clip && { id: "c:" + clip.id, at: clip.id === aloud.key ? Date.now() : clip.at }].filter(Boolean);
     list.continue = two.sort((x, y) => y.at - x.at).map((x) => x.id);
+    const have = new Set([...list.books.map((b) => "b:" + b.id), ...list.clips.map((c) => "c:" + c.id)]);
+    for (const f of folders) { const c = await carFolderList(f, list, have); if (c) list.collections.push(c); }
     if (await CAR.list(list)) carSig = sig;
   } finally {
     carWriting = false;

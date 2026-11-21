@@ -65,17 +65,17 @@ src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestur
 src/app-kiwix.js    Kiwix packs and books kept as files: the + sheet's downloads (where they're kept, Wi-Fi wait), a pack's articles in the reader (links, Back, Search this pack, Save this article), a book as a collection of clips
 src/app-discover.js the Discover place: Wikipedia today, the list, its search, the Sites grid (stories, books, texts), the story and sign-up sheets
 src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
-src/app-listen.js   audiobooks: bringing one in, the player and its bar, reading along, transcripts written ahead, fixes, Find the book in Discover, Settings › Audiobooks
+src/app-listen.js   audiobooks: bringing one in, the player and its bar, reading along, transcripts written ahead, fixes, Find the book (each found book checked against the narrator), the narrator-left-the-book card, Settings › Audiobooks
 src/app-extensions.js Settings › Extensions (a switch each) and the places extensions add to the sidebar, above Stats
 src/app-lock.js     app lock: passcode (PBKDF2 hash), fingerprint or face on Android
-src/app-car.js      Android Auto: the list the car starts from (books, clips cut for Narrate) and where the car got to
+src/app-car.js      Android Auto: the list the car starts from (books, clips cut for Narrate, collections with quick starts) and where the car got to
 src/app-start.js    wiring at launch, what other apps share in, self-update, Test builds, What's new
 src/save.js         link to saved page: fetch, Wikipedia adapter or Readability, allowlist cleaner, picture previews, video cards
 src/reader.js       a saved page in the sandboxed iframe: place, find, highlights, translation, pages mode
 src/store.js        one directory per clip and library.json; IndexedDB in a browser
 src/platform.js     browser vs app: native fetch, plugins, downloads, speech, opening links
 src/files.js        EPUB, Kindle (MOBI/AZW3), FB2, CBZ, Markdown, text and HTML files
-src/listen.js       audiobooks' pure parts: chapters from M4B and MP3 tags, transcripts as paragraphs, fixes, heard words matched to a book's, EPUB Media Overlays
+src/listen.js       audiobooks' pure parts: chapters from M4B and MP3 tags, transcripts as paragraphs, fixes, heard words matched to a book's, how a minute fits a found book (`fit`), how long the narration has been away from the book (`lostFor`), transcripts merged across devices, EPUB Media Overlays
 src/zim.js          Kiwix packs (.zim): the header, entries by path, the title index, clusters stored, xz (its own LZMA2 decoder) or Zstandard (src/vendor/fzstd.mjs); loaded by files.js the first time a pack is opened
 src/pdf.js          PDFs through pdf.js in a locked-down frame
 src/ink.js          drawing over a clip's blocks or a PDF's pages: strokes, layers, undo, what a copy of the PDF is given
@@ -125,7 +125,7 @@ src/vendor/         Readability, pdf.js, foliate-js's MOBI reader, fzstd (Zstand
 assets/             icon and splash sources for the apps
 icons/, icon.svg    app icons
 worker/             the web copy's fetch proxy, a Cloudflare Worker (worker.js, wrangler.toml, README.md has the setup)
-native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Pen, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes), Audiobook (AudiobookService plays with the screen off; Listen writes transcripts with sherpa-onnx's offline recognizer), Car (Android Auto: CarService, Car's one shared media session), Dav (a WebDAV PROPFIND written over a socket, for Files' davList), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
+native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Pen, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes; on iOS KokoroVoice plays them for SpeechPlugin, and ios/Sherpa/bz2 is libbz2's module map for unpacking), Audiobook (AudiobookService plays with the screen off, AVPlayer on iOS; Listen writes transcripts with sherpa-onnx's offline recognizer; Voicing speaks text into an audiobook), Car (Android Auto: CarService, Car's one shared media session), Dav (a WebDAV PROPFIND written over a socket, for Files' davList), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
 tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-build.json
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
 tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
@@ -134,9 +134,11 @@ tools/keel-checks.js  contrast and CSP checks the tests use (from keel, below)
 tools/unreleased.js  the unreleased channel's files: a note beside main's APK, then the Pages deploy puts the newest under unreleased/ (from keel)
 tools/sign-apk.sh   signs the APK with the release key in CI
 tools/sherpa-lib.sh   fetches sherpa-onnx's arm64 library (Kokoro voices) into the Android build, pinned and checked
+tools/sherpa-ios.sh   fetches sherpa-onnx's and onnxruntime's iOS xcframeworks (Kokoro and Piper voices) into the iOS build, pinned and checked, with the module map Swift needs
 tools/test-build.sh        puts a labelled pull request's build on its test-<branch> pre-release
 tools/packs/build-lang.js  builds Anki's language packs (a StarDict .tar.gz) from Wiktextract data; not shipped, and prints the SHA-256 the catalogue pins
 tools/shots.js      retakes the README's screenshots (tools/shots/demo is the demo library)
+tools/icons.js      renders icons/ and assets/ (icons, light splash) from icon.svg
 tools/check-discover.js  checks every feed, sign-up and serial in Discover's list still answers (weekly, discover-check.yml)
 test/               node test/run-all.js runs every *.test.js
 keel.config.json, keel.lock.json  the files shared with LifeLog through keel (see Versions, cache and updates)
@@ -657,6 +659,12 @@ The files listed in `keel.lock.json` (`server.js`, `src/keel/qr.js`,
 `keel.test.js` fails. Change them in keel, tag a release there, then run
 `node tools/keel-sync.js v<version>` in a PR here.
 
+The app's home is index.html's `keel-site` and `keel-repo` metas: where
+installed copies look for unreleased builds and the web address they
+link to. Before moving the repo to an organization or a custom domain,
+change both and ship a release; GitHub redirects the repo, not its Pages
+address (keel README, "Moving an app").
+
 ## The phone apps
 
 - **Android:** `.github/workflows/android.yml` generates the Capacitor
@@ -739,7 +747,10 @@ fixes from both). `audio` (`{ parts, chapters, dur }`, each part a sound
 file's ref) is this device's own. A folder is one book; its fingerprint
 is its files' names and sizes. Playing is AudiobookService (a foreground
 mediaPlayback service, one MediaPlayer, parts played in turn, a stretch
-of a zip by fd offset for an EPUB's narration); a browser uses <audio>.
+of a zip by fd offset for an EPUB's narration); on iOS AudiobookPlugin.swift
+(one AVPlayer, a zip's stretch copied out to the cache first, as AVPlayer
+plays only whole files, with Listen.swift for transcripts); a browser
+uses <audio>.
 
 Reading along needs words with times. The phone writes a transcript a
 little ahead of where you are (`writeAhead`, three minutes at a time,
@@ -763,7 +774,52 @@ so another phone that downloads the same recording picks up the place.
 `audio.ours` marks parts in Waypage's own places, which `dropAudioFiles`
 deletes with the clip; a picked folder's stay. Its Gutenberg book (the
 recording's `url_text_source`) downloads after it and is paired
-through `pairPending`, as Find the book in Discover does.
+through `pairPending`, as Find the book does.
+
+Find the book (2026-11) searches Discover's book sites and Wikisource.
+With a transcript model it takes a minute of the narrator from where you
+are (the transcript there, else `heardSample` writes it now, holding
+`writeAhead` off with `lis.testing`), downloads the first five found
+(EPUBs, or the Wikisource page through its API) and `listen.fit` says
+"same" (a fifth of the heard runs of five words are in the book),
+"other" (the names heard mid-sentence are the book's: another
+translation) or "no". A Wikisource text is saved as one EPUB book
+(Discover's Save as an EPUB file) and paired when it arrives. While
+reading along, `checkLost` asks `listen.lostFor` every ten seconds; four
+minutes heard and not in the book brings the `#listenLost` card. Going
+to the transcript keeps the book as `listen.was`, so The book in the
+Read along drop-down goes back to it.
+
+A zip of sound files (Add a file) is one book (`addAudiobookZip`,
+`audio.zip`): its parts are stretches of the zip (`offset`, `length`),
+played and transcribed from there like an EPUB's narration
+(`partSource`). Only files stored as they are; a zip whose sound files
+are compressed is turned away with a word to unzip it.
+
+Transcripts sync (2026-11, `what.transcripts`, on by default) as
+`transcripts/<fingerprint>.json` (`listen.shareTranscript`: pieces,
+ranges, pack). `syncTranscripts` brings GitHub's into this device's
+through `C.listenTake` (`listen.mergeTranscript`: what's written here
+stays, theirs fills the gaps), into the same object any writing under way
+holds, and sends this device's when it has changed.
+
+A clip's own sound made from its text (Save the narration,
+`makeAudiobook`, Android only) is spoken by the Narrate voice of the
+clip's language: `AudiobookPlugin.voice` runs `Voicing` on its own
+thread, each of Narrate's pieces through `TextToSpeech.synthesizeToFile`
+(any engine, Kokoro and Piper through `KokoroTtsService`), read back as
+PCM and encoded with MediaCodec into one AAC .m4a (48 kbps mono) of at
+most 120 pieces, with each piece's start and end. The files go through
+`keepMade` into Waypage's own files and become the clip's own `audio`
+(`ours`, `voiced`), like an EPUB's narration: the clip is no audiobook of
+its own (`ownSound`), it reads along with itself, Narrate's button plays
+it (`voicedPlay`), and the car lists it with the audiobooks. `audio`
+never syncs and is in no backup (`backup.cleanMeta` leaves it out), so
+the files stay on the phone. The pieces' times are written whole into
+listen.json (`ranges` covers it, so nothing is written ahead; `para`
+starts each paragraph). A collection makes one for each clip without.
+The run is a Downloads card, so the dataSync notification keeps the
+app up while it's made.
 
 A streamed audiobook (the Audiobookshelf extension) is an entry with
 `remote` (`{ kind, server, item }`) and a `link` of `abs:<server>:<item>`
@@ -783,18 +839,29 @@ MediaBrowserService, no androidx) and `automotive_app_desc` in the
 plugin's manifest. Narrate and audiobooks share one MediaSession
 (`Car.session`, never released): the car binds to one token, so each
 player only says it's the one playing (`Car.playing`) and hands it back
-when it stops (`Car.idle`). The car's tabs are Continue, Audiobooks and
-Up next; an audiobook's chapters are the session's queue. Custom
-actions add next and previous clip (`SpeechService.clip`: the clip the
-app queued, else `Car.neighbour` under Up next) and next and previous
-chapter or file (`AudiobookService.chapter`). A clip the car jumps to
-that the app didn't queue isn't followed by the open app's player.
+when it stops (`Car.idle`). The car's tabs are Continue, Audiobooks,
+Up next and Collections (Android Auto shows four at most); an
+audiobook's chapters are the session's queue. Custom actions add next
+and previous clip (`SpeechService.clip`: the clip the app queued, else
+`Car.nextId`: the next in the clip's collection or series, else under
+Up next) and next and previous chapter or file
+(`AudiobookService.chapter`, which past the book's ends goes to the
+collection's next or previous). Their icons are a list with an arrow,
+not the skip arrows: beside the paragraph buttons, look-alikes read as
+previous and next swapped. A clip the car jumps to that the app didn't
+queue isn't followed by the open app's player.
 
 The car starts things with the app closed, so the WebView can't help.
 `app-car.js` writes `car.json` (CarPlugin) when the app is put away and
 a little after it opens, if anything changed: up to 40 books with their
 parts, chapters and place, and the 10 latest unfinished clips with their
-text already cut into Narrate's pieces, voice, engine and speed. A job
+text already cut into Narrate's pieces, voice, engine and speed, and
+the 8 collections or series read or added to last, in their order, with
+quick starts and only some of their clips (the first two, the newest,
+and from just before where it was left to 8 after; `at` gives each
+one's place, so Next never jumps a gap). Those carried only for a
+collection are marked `hide` and stay off the Audiobooks and Up next
+tabs. The car's words come in the app's language (`words`). A job
 the car started is marked `car`; where it got to goes into
 SharedPreferences (`Car.heardBook`, `Car.heardClip`) and `carPlaces`
 takes it back into the library when the app opens. A clip's place there
@@ -894,7 +961,12 @@ adds a line here.
   file in; only the model is downloaded, and checked against its SHA-256
   before unpacking. It is a real Android speech engine (`KokoroTtsService`),
   so the lock screen, PiP and sleep timer work unchanged, but other apps
-  can use it too. 32-bit and x86 phones, iOS and the web copy get none.
+  can use it too. 32-bit and x86 phones and the web copy get none.
+  iOS has them too (sherpa-onnx's static xcframework, linked into the app,
+  about 25 MB): iOS lets no app add voices to the phone's list, so only
+  Narrate speaks them, through SpeechPlugin playing KokoroVoice's audio on
+  an AVAudioEngine. Its archive lags Android's (pinned to the newest with
+  an iOS build); the models are the same files.
   Piper voices (one per language) are more downloads for the same engine
   and library; one model is in memory at a time, so switching between a
   Kokoro and a Piper language reloads (a second or two).
@@ -995,6 +1067,12 @@ adds a line here.
   so the car can start them with the app closed. Only the car, the
   Assistant, Bluetooth and system apps (by uid, system or from the Play
   Store) may browse it, and with App lock on it lists nothing.
+- Save the narration takes as long as the voice does: Google's voices
+  are faster than real time, Kokoro on a phone may be slower, so a long
+  book can take hours, and Android 15 ends a dataSync service after six
+  hours a day. Pausing stops the file in hand and makes it again from its
+  start. A clip's made sound is in no backup or sync: another phone
+  narrates the clip, or makes its own.
 
 ## Traps
 
@@ -1013,6 +1091,7 @@ area.
 - A merge done with the workflow's own `GITHUB_TOKEN` starts no other workflows, so `pages.yml` and the release builds never run. `auto-merge.yml` turns auto-merge on with the `AUTOMERGE_TOKEN` secret (a fine-grained token of Daniel's) for that reason.
 - The books of an audiobook folder added as a series share one `link`, the folder picked. Removing an entry lets go of its `link` only when no other entry still reads from it (`releaseLinks`).
 - A field missing from sync's `SYNCED`, backup's `cleanMeta`, `SYNCED_KEEP` and `AGAIN_KEEP` is dropped on the next sync or update. `folderSeries` and `folderIn` are in all four; a device without them strips them from clips it changes, which `healSeries` repairs while any clip of the series keeps them.
+- A story's status (`siteStatus`: completed, ongoing, hiatus, stubbed, dropped, inactive) is read only by site rules (`status` in save.js `SITES`: Royal Road, AO3, FanFiction.net, Scribble Hub) from the story page, kept on every clip of the collection like `siteTags`, and refreshed by Website sync's check. It is device-only like the cover (not in sync or backups): each device reads its own on its next check. A page that stops saying keeps the last word. `statusPick` (Edit's Status row) and `folderNoStatus` (Website sync's "Status from the site" off) are synced marks on every clip like `coverPick`; the site's word shows over the pick unless it's switched off. Chapters saved later take it from their collection mates, or from `seenStatus` (what the last story page read said) on a first save.
 - A site's tags (`siteTags`, { site, tags }) are read in `readArticle` before Readability runs: Readability takes the `<script>` tags out, and the schema.org keywords with them. A collection's clips carry the story page's tags, never a chapter page's own (`runJob`).
 - On a big screen the route steps back out of Settings by itself when it lands on the menu with a section open, so leaving Settings from deep inside (`outOfSettings`) waits a moment after each step instead of reading `history.state`: two backs at once leave the app.
 

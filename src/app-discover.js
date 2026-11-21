@@ -286,28 +286,129 @@ function dzGrid() {
 function dzSerialRow(e) {
   const on = allFolders().some((n) => { const src = folderSource(folderPages(n)); return src && sameUrl(src, e.url); });
   return el("div", { class: "post dz-row", "data-key": "dz:" + e.url },
-    el("button", { class: "post-open", type: "button", "aria-label": e.name, onclick: () => dzSaveStory({ url: e.url, title: e.name, serial: true }) }),
+    el("button", { class: "post-open", type: "button", "aria-label": e.name, onclick: () => openMenu("saveStory", { url: e.url, title: e.name, serial: true, tags: [] }) }),
     feedMark({ url: e.url, link: e.url, title: e.name }),
     el("span", { class: "post-body" },
       el("span", { class: "post-title", dir: "auto" }, e.name),
       e.about ? el("span", { class: "dz-about", dir: "auto" }, e.about) : null,
       el("span", { class: "post-meta" }, dzHost(e.url))),
     on ? el("span", { class: "post-saved dz-on" }, dzIcon("check"), t("Saved"))
-      : el("button", { class: "post-act post-save", type: "button", "aria-label": t("Save {name}", { name: e.name }), onclick: () => dzSaveStory({ url: e.url, title: e.name, serial: true }) }, dzIcon("plus")));
+      : el("button", { class: "post-act post-save", type: "button", "aria-label": t("Save {name}", { name: e.name }), onclick: () => openMenu("saveStory", { url: e.url, title: e.name, serial: true, tags: [] }) }, dzIcon("plus")));
 }
 
-// A story to the library: its chapter list, to check and save as a
-// collection, which then follows its new chapters.
-async function dzSaveStory(s) {
+// A story to the library, as the Save sheet picked (2026-11, Daniel:
+// not always a collection): `as` "collection" or "series" opens its
+// chapter list to check, then saves it into one that follows its new
+// chapters; "file" makes one book of it (dzStoryFile), with no collection.
+async function dzSaveStory(s, how = { as: "collection" }) {
   if (!navigator.onLine) { toast(t("You're offline. Save it when you're back online.")); return; }
   toast(t("Finding its chapters…"));
   try {
-    const found = s.serial ? await C.discover.serialChapters(s.url) : await C.save.findChapters(s.url);
+    const found = s.serial ? await C.discover.serialChapters(s.url) : noteStatus(await C.save.findChapters(s.url));
+    const title = found.title || s.title;
+    if (how.as === "file") { dzStoryFile(s, found.links.length ? found.links : [s.url], title, how); return; }
     if (!found.links.length) { savePage(s.url); return; }
     // The story page's own tags; Discover's list row, when it gave none.
     const siteTags = found.siteTags || (s.tags && s.tags.length ? { site: s.serial ? dzHost(s.url) : s.site || "Royal Road", tags: s.tags } : null);
-    openBatch(found.links.join("\n"), false, folderName(found.title || s.title), s.url, siteTags);
+    openBatch(found.links.join("\n"), false, folderName(title), s.url, siteTags);
   } catch (e) { toast(e instanceof C.save.SaveError ? e.message : t("Couldn't read its chapters. Try again.")); }
+}
+
+const dzIsComic = (s) => C.discover.sources.some((x) => x.comics && x.label === s.site);
+
+// The Save sheet: a collection, a series, or one book file. The pick and
+// the file's place are remembered.
+const DZ_STORY_AS_KEY = "waypage.discover.storyAs";
+function dzStorySaveSheet() {
+  const s = state.menu.page;
+  const comic = dzIsComic(s);
+  // Clips go into a collection or a series, picked on Save with options.
+  let as = load(DZ_STORY_AS_KEY, "clips") === "file" ? "file" : "clips";
+  let where = dzWhere();
+  const whereRow = C.platform.native ? dzWhereRow(() => where, (v) => { where = v; }) : null;
+  const note = el("p", { class: "footnote dz-add-note" });
+  const paint = () => {
+    if (whereRow) whereRow.hidden = as !== "file";
+    note.textContent = as === "file" ? (comic ? t("Every episode downloads, then they become one CBZ comic in Files. It doesn't follow new episodes.")
+      : t("Every chapter downloads, then they become one EPUB book in Files. It doesn't follow new chapters."))
+      : t("Its chapter list opens to check, with a collection or a series to save it into. New chapters join it when they're out.");
+  };
+  const asRow = pickRow({ label: t("Save as"), options: [
+    { value: "clips", label: t("Collection or series"), note: t("A clip for each chapter") },
+    { value: "file", label: comic ? t("CBZ file") : t("EPUB file"), note: t("One file in Files, no collection") },
+  ], get: () => as, set: (v) => { as = v; store(DZ_STORY_AS_KEY, v); paint(); } });
+  paint();
+  const site = s.serial ? dzHost(s.url) : s.site || "Royal Road";
+  return el("div", { class: "page-controls dz-add" },
+    el("div", { class: "menu-head" },
+      el("p", { class: "menu-title", dir: "auto" }, s.title),
+      el("p", { class: "meta" }, site)),
+    el("div", { class: "group" }, asRow, whereRow),
+    note,
+    el("button", { class: "btn-primary", type: "button", onclick: async () => { await back(); dzSaveStory(s, { as, where }); } }, t("Save")));
+}
+MENUS.saveStory = { label: t("Save"), build: () => dzStorySaveSheet() };
+
+// A story made into one book: every chapter is saved out of sight (never
+// in the Library), made into an EPUB (a CBZ for comics) as Export does,
+// then the saved chapters go and the book is added like a file brought in,
+// kept where Save in says. The card in Downloads has Pause and Stop.
+async function dzStoryFile(s, links, title, how) {
+  if (!C.platform.canReadPages) { toast(t("This browser can't download from that site. Add it in Waypage on your phone.")); return; }
+  const comic = dzIsComic(s);
+  const tree = await pickedTree(how);
+  if (tree === false) return;
+  const k = keepRun(comic ? t("Making a comic") : t("Making a book"), title);
+  const made = [];
+  const say = (part, now) => { k.run.part = part; k.run.now = now; updateRunCard(k.run); };
+  let failed = 0;
+  try {
+    for (const [i, url] of links.entries()) {
+      if (!(await gate(k.run))) throw new Error("stopped");
+      await wifiGate();
+      say(0.8 * i / links.length, comic ? t("Episode {done} of {total}", { done: i + 1, total: links.length }) : t("Chapter {done} of {total}", { done: i + 1, total: links.length }));
+      if (i) await new Promise((go) => setTimeout(go, PACE_MS));
+      try { made.push(await saveOnce({ url, site: s.site }, { mode: comic ? "full" : load(IMAGES_KEY, "previews"), kind: comic ? "comic" : "article" })); }
+      catch (e) { failed++; }
+    }
+    if (!made.length) throw new Error("none saved");
+    if (!(await gate(k.run))) throw new Error("stopped");
+    const by = s.by || made[0].byline || "";
+    const name = dzBookName({ title, by, kind: comic ? "cbz" : "epub" });
+    const cover = comic ? null : await dzCoverBytes(s);
+    const packing = (done, total, pack) => say(0.8 + 0.2 * (pack ? done / total : 0), pack ? t("Packing the book…") : comic ? t("Making the comic…") : t("Making the book…"));
+    const out = comic ? await C.files.exportComic(made, title, packing)
+      : await C.epub.exportBook(made, title, cover, packing, { heads: true, author: by || made[0].site || "" });
+    const mime = comic ? "application/vnd.comicbook+zip" : "application/epub+zip";
+    say(1, t("Opening"));
+    let file, ref = null;
+    if (out.uri) {
+      ref = await C.platform.keepMade(out.uri, name, how.where, tree);
+      file = await C.platform.files.blob(ref, 0);
+    } else {
+      file = new File([out.blob], name, { type: mime });
+      const kept = await C.platform.saveLinked(file, name, mime).catch(() => ({ saved: null, ref: null }));
+      if (kept.saved === false) throw new Error("stopped");
+      ref = kept.ref || null;
+    }
+    k.done();
+    const siteTags = s.tags && s.tags.length ? { site: s.serial ? dzHost(s.url) : s.site || "Royal Road", tags: s.tags } : undefined;
+    await openFile(file, null, false, ref, { ...(ref ? { ref } : {}), siteTags });
+    if (failed) toast(tn(failed, "1 chapter couldn't be saved and isn't in the book.", "{n} chapters couldn't be saved and aren't in the book."));
+  } catch (e) {
+    k.done();
+    if (!(e instanceof C.save.SaveError)) console.error(e);
+    toast(k.run.stopped || (e && e.message === "stopped") ? t("Stopped.") : made.length ? t("Couldn't make the book. Try again.") : t("Couldn't save its chapters. Try again."));
+  } finally {
+    for (const m of made) C.store.removePage(m.id).catch(() => {});
+    if (state.place === "discover") renderDiscover();
+  }
+}
+
+// The story's cover from its site, for the book's own.
+async function dzCoverBytes(s) {
+  if (!s.cover) return null;
+  try { return new Uint8Array(await (await C.platform.fetchBytes(s.cover, "cover")).blob.arrayBuffer()); } catch (e) { return null; }
 }
 
 // The next page of the grid's list, added under what's there.
@@ -336,10 +437,23 @@ async function dzMore() {
   if (state.place === "discover") renderDiscover();
 }
 
+// A story's cover, and under it a card of its own for when there's no
+// picture (AO3, the forums and most of FictionPress have none): its site,
+// title and author on a colour picked from the story, the same each time.
+function dzCoverCard(s, cls) {
+  let h = 0;
+  for (const c of String(s.id || s.url || s.title)) h = (h * 31 + c.codePointAt(0)) % 360;
+  const site = s.serial ? dzHost(s.url) : s.site || "Royal Road";
+  return el("span", { class: "dz-cover" + (cls ? " " + cls : ""), "aria-hidden": "true", style: "--dz-hue:" + h },
+    el("span", { class: "dz-cover-s" }, el("bdi", {}, site)),
+    el("span", { class: "dz-cover-t", dir: "auto" }, s.title),
+    s.by ? el("span", { class: "dz-cover-by", dir: "auto" }, s.by) : null);
+}
+
 function dzCovers(items, grid, sites) {
   return el("div", { class: grid ? "dz-covers dz-grid" : "dz-covers", role: "list" }, ...items.map((s) => {
     const saved = dzSavedStory(s);
-    const art = el("span", { class: "dz-cover", "aria-hidden": "true" }, el("span", { class: "dz-cover-t", dir: "auto" }, s.title));
+    const art = dzCoverCard(s);
     if (s.cover) {
       const img = el("img", { src: s.cover, alt: "", loading: "lazy", referrerpolicy: "no-referrer" });
       img.addEventListener("load", () => art.classList.add("has-img"));
@@ -452,7 +566,7 @@ function storySheet() {
   const s = state.menu.page;
   if (s.audiobook) return dzAudioSheet(s);
   const saved = dzSavedStory(s);
-  const cover = el("span", { class: "dz-cover dz-sheet-cover", "aria-hidden": "true" }, el("span", { class: "dz-cover-t", dir: "auto" }, s.title));
+  const cover = dzCoverCard(s, "dz-sheet-cover");
   if (s.cover) {
     const img = el("img", { src: s.cover, alt: "", referrerpolicy: "no-referrer" });
     img.addEventListener("load", () => cover.classList.add("has-img"));
@@ -466,8 +580,8 @@ function storySheet() {
   const kind = (s.kind || "epub").toUpperCase();
   const save = s.book
     ? el("button", { class: "btn-primary", type: "button", ...(saved ? { disabled: "" } : {}), onclick: async () => { await back(); if (s.catalog) dzSaveBook(s); else openMenu("addBook", s); } }, saved ? t("In your library") : t("Add the book"))
-    : el("button", { class: "btn-primary", type: "button", onclick: async () => { await back(); dzSaveStory(s); } },
-      saved ? t("Save it again") : s.texts ? t("Save it") : t("Save as a collection"));
+    : el("button", { class: "btn-primary", type: "button", onclick: async () => { await back(); openMenu("saveStory", s); } },
+      saved ? t("Save it again") : t("Save"));
   return el("div", { class: "page-controls dz-story" },
     el("div", { class: "dz-sheethead" }, cover,
       el("div", { class: "dz-sheet-text" },
@@ -480,8 +594,8 @@ function storySheet() {
     save,
     el("p", { class: "footnote" }, s.catalog ? t("Its {kind} downloads and joins your Library, to read offline.", { kind })
       : s.book ? t("Its EPUB downloads and joins your Library, to read offline. It's in the public domain.")
-      : s.texts ? t("A text in parts saves as a collection, its parts checked first; a short one saves as one clip.")
-        : t("Its chapter list opens to check, then every chapter saves for reading offline. New chapters join the collection when they're out.")),
+      : s.texts ? t("A text in parts saves as a collection, a series or one EPUB book; a short one saves as one clip.")
+        : t("Save it as a collection or a series that gets its new chapters, or as one EPUB book.")),
     s.catalog && s.url === s.epub ? null : el("button", { class: "btn-quiet", type: "button", onclick: () => C.platform.openOutside(s.url) }, dzIcon("out", 16), t("Open on {site}", { site: site })));
 }
 
@@ -492,7 +606,7 @@ function storySheet() {
 function dzAudioSheet(s) {
   const saved = dzSavedStory(s);
   const can = canGetAudiobooks();
-  const cover = el("span", { class: "dz-cover dz-sheet-cover", "aria-hidden": "true" }, el("span", { class: "dz-cover-t", dir: "auto" }, s.title));
+  const cover = dzCoverCard(s, "dz-sheet-cover");
   if (s.cover) {
     const img = el("img", { src: s.cover, alt: "", referrerpolicy: "no-referrer" });
     img.addEventListener("load", () => cover.classList.add("has-img"));

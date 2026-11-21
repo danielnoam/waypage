@@ -361,13 +361,14 @@
     const doc = parse(res.text, at);
     const cover = pageImage(doc, at);
     const siteTags = pageTags(doc, at);
+    const status = pageStatus(doc, at);
     if (site) {
       const own = (site.contents && await site.contents(doc, at, res.text)) || null;
       const links = own ? own.links : site.list ? await site.list(doc, at, res.text) : [];
-      if (links.length) return { title: (own && own.title) || readTitle(doc), links, cover, page: url, siteTags };
+      if (links.length) return { title: (own && own.title) || readTitle(doc), links, cover, page: url, siteTags, status };
       // A site whose chapters are only ever its own kind of link (a
       // Wikisource work's subpages): no guessing from the page's links.
-      if (site.ownChapters) return { title: readTitle(doc), links: [], cover, page: url, siteTags };
+      if (site.ownChapters) return { title: readTitle(doc), links: [], cover, page: url, siteTags, status };
     }
     let links = widen(pickChapters(linkGroups(doc, at)), doc, at);
     if (links.length) links = await laterPages(doc, at, links);
@@ -381,7 +382,18 @@
       }
     }
     if (!links.length) links = namedChapters(doc, at);
-    return { title: readTitle(doc), links: links.map((l) => l.url), cover, page: url, siteTags };
+    return { title: readTitle(doc), links: links.map((l) => l.url), cover, page: url, siteTags, status };
+  }
+
+  // Where a story stands, as its site says: "completed", "ongoing",
+  // "hiatus", "stubbed", "dropped" or "inactive", or "" when the site
+  // doesn't say (only sites with a rule do).
+  const STATUS_WORDS = { completed: "completed", complete: "completed", finished: "completed", ongoing: "ongoing", "in progress": "ongoing", "in-progress": "ongoing",
+    hiatus: "hiatus", "on hiatus": "hiatus", stub: "stubbed", stubbed: "stubbed", dropped: "dropped", abandoned: "dropped", inactive: "inactive" };
+  const statusWord = (s) => STATUS_WORDS[String(s || "").replace(/\s+/g, " ").trim().toLowerCase()] || "";
+  function pageStatus(doc, url) {
+    const rule = siteRule(url);
+    try { return (rule && rule.status && rule.status(doc)) || ""; } catch (e) { return ""; }
   }
 
   // The tags a page gives itself: a site rule's (Royal Road's genres and
@@ -607,6 +619,9 @@
         return links.length ? { title: text(doc.querySelector(".fic-header h1")) || (og && og.content.trim()) || "", links } : null;
       },
       tags: (doc) => [...doc.querySelectorAll(".tags a.fiction-tag, span.tags a[href*='tagsAdd=']")].map(text),
+      // Labels beside the tags: ORIGINAL, then ONGOING, COMPLETED, HIATUS,
+      // STUB, DROPPED or INACTIVE.
+      status: (doc) => [...doc.querySelectorAll("span.label")].map((n) => statusWord(text(n))).find(Boolean) || "",
       chapter(doc) {
         removeHidden(doc);
         const inner = doc.querySelector(".chapter-inner.chapter-content, .chapter-inner");
@@ -657,6 +672,13 @@
       },
       // Its fandom first, then the freeform tags the author gave it.
       tags: (doc) => [...doc.querySelectorAll("dd.fandom.tags a.tag, dd.freeform.tags a.tag")].map(text),
+      // The work page's stats: "Chapters: 12/12" is done, "12/?" or
+      // "12/40" still going.
+      status(doc) {
+        const m = /^(\d+)\s*\/\s*(\d+|\?)$/.exec(text(doc.querySelector("dl.stats dd.chapters")));
+        if (!m) return "";
+        return m[2] !== "?" && +m[1] >= +m[2] ? "completed" : "ongoing";
+      },
       chapter(doc) {
         const box = doc.querySelector("#chapters");
         const body = box && (box.querySelector(".userstuff.module, [role='article'].userstuff") || box.querySelector(".userstuff"));
@@ -699,6 +721,15 @@
         return links.length ? { title: text(doc.querySelector("div.fic_title")), links } : null;
       },
       tags: (doc) => [...doc.querySelectorAll(".wi_fic_genre a.fic_genre, .wi_fic_showtags a.stag")].map(text),
+      // "Ongoing - 2 chapters a week", "Completed", "Hiatus" in the
+      // series page's side list.
+      status(doc) {
+        for (const n of doc.querySelectorAll(".widget_fic_similar li, .fic_stats li, .copyright li")) {
+          const m = /^\s*(completed|ongoing|hiatus|dropped)\b/i.exec(n.textContent);
+          if (m) return statusWord(m[1]);
+        }
+        return "";
+      },
       chapter(doc) {
         const raw = doc.querySelector("#chp_raw");
         if (!raw) return null;
@@ -726,6 +757,12 @@
     {
       name: "FanFiction.net",
       host: /(^|\.)(fanfiction\.net|fictionpress\.com)$/i,
+      // "Status: Complete" in the story's grey line; no word there means
+      // it is still going.
+      status(doc) {
+        const line = doc.querySelector("#profile_top span.xgray, #profile_top .xgray");
+        return line ? (/\bStatus:\s*Complete\b/i.test(text(line)) ? "completed" : "ongoing") : "";
+      },
       // Chapters are a <select>; its onchange builds each one's address.
       list(doc, url) {
         const sel = doc.querySelector("select#chap_select");
@@ -2459,7 +2496,7 @@
     if (site && site.contents && !comic && !asPage) {
       const doc = parse(res.text, finalUrl);
       const own = await site.contents(doc, finalUrl, res.text);
-      if (own && own.links.length) throw new ContentsPage({ ...own, siteTags: pageTags(doc, finalUrl) });
+      if (own && own.links.length) throw new ContentsPage({ ...own, siteTags: pageTags(doc, finalUrl), status: pageStatus(doc, finalUrl) });
     }
     let got = readArticle(res.text, finalUrl, comic, site, asPage);
     let html = res.text;
@@ -2490,7 +2527,7 @@
       }
     }
     if (got && got.check) throw new SaveError(t("The site asked for a browser check, so Waypage can't save it yet."), true);
-    if (got && got.contents) throw new ContentsPage({ ...got.contents, siteTags: pageTags(parse(html, finalUrl), finalUrl) });
+    if (got && got.contents) { const d = parse(html, finalUrl); throw new ContentsPage({ ...got.contents, siteTags: pageTags(d, finalUrl), status: pageStatus(d, finalUrl) }); }
     if (!got && comic) throw new SaveError(t("Waypage couldn't find the pictures on this page."));
     if (!got) {
       throw new SaveError(C.platform.canRender
@@ -2886,7 +2923,7 @@
     const foot = out.createElement("footer");
     foot.className = "co-licence";
     // A file of your own (0.31.0) has no address to go back to.
-    if (meta.file && meta.link && !(meta.audio && !meta.audio.overlay)) foot.append("Opened from " + meta.file.name + (on ? " on " + on : "") + ".");
+    if (meta.file && meta.link && !(meta.audio && !meta.audio.overlay && !meta.audio.voiced)) foot.append("Opened from " + meta.file.name + (on ? " on " + on : "") + ".");
     const link = out.createElement("a");
     link.href = meta.url;
     link.textContent = "Read the original";

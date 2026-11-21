@@ -395,12 +395,13 @@
       if (!S || os !== "android") return false;
       try { await S.moreVoices(engine ? { engine } : {}); return true; } catch (e) { return false; }
     },
-    // Kokoro voices (Android, arm64): Waypage's own speech engine, from a
-    // download in Settings. null where there's no such plugin or phone.
-    // action: download / use / remove (with the pack's id), or cancel.
+    // Kokoro and Piper voices (Android, arm64; iOS): Waypage's own speech
+    // engine, from a download in Settings. null where there's no such
+    // plugin or phone. action: download / use / remove (with the pack's
+    // id), or cancel.
     async kokoro(action, id) {
       const K = plugin("Kokoro");
-      if (!K || os !== "android") return null;
+      if (!K) return null;
       if (action) { await K[action](id ? { id } : {}); return null; }
       try { const s = await K.status(); return s && s.supported ? s : null; } catch (e) { return null; }
     },
@@ -828,12 +829,15 @@
     keeping = run.catch(() => {});
     return run;
   }
+  // "Folder/file.mp3" keeps a file in a folder of its own (an audiobook's parts).
+  const keepName = (name) => {
+    const clean = (x) => String(x || "").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
+    return String(name || "file").split("/").map(clean).filter(Boolean).slice(-2).join("/") || "file";
+  };
   async function keepOne(url, name, where, onProgress, tree) {
     const FS = plugin("Filesystem");
     if (!FS || !native) return null;
-    // "Folder/file.mp3" keeps a file in a folder of its own (an audiobook's parts).
-    const clean = (x) => String(x || "").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
-    const safe = String(name || "file").split("/").map(clean).filter(Boolean).slice(-2).join("/") || "file";
+    const safe = keepName(name);
     const temp = "keep-" + safe.replace(/[^\w.-]+/g, "_");
     const D = plugin("Downloads");
     let from = null;
@@ -849,6 +853,18 @@
       finally { if (listener && listener.remove) listener.remove(); }
       from = (await FS.getUri({ path: temp, directory: "CACHE" })).uri;
     }
+    return placeKept(FS, from, temp, safe, where, tree);
+  }
+  // A file the app made in its cache (a story made into a book) kept the
+  // same way, moved out of the cache.
+  async function keepMade(from, name, where, tree) {
+    const FS = plugin("Filesystem");
+    if (!FS || !native) return null;
+    const run = keeping.then(() => placeKept(FS, from, null, keepName(name), where, tree));
+    keeping = run.catch(() => {});
+    return run;
+  }
+  async function placeKept(FS, from, temp, safe, where, tree) {
     if (where === "folder" && tree) {
       const F = plugin("Files");
       await F.folderMoveIn({ tree, path: safe, from });
@@ -866,7 +882,10 @@
       path = to.dir + safe.replace(/(\.[a-z0-9]+)?$/i, (ext) => " (" + n + ")" + ext);
     }
     await folderFor(FS, path, to.directory);
-    try { await FS.rename({ from: temp, directory: "CACHE", to: path, toDirectory: to.directory }); }
+    if (!temp) {
+      await FS.copy({ from, to: path, toDirectory: to.directory });
+      await FS.deleteFile({ path: from }).catch(() => {});
+    } else try { await FS.rename({ from: temp, directory: "CACHE", to: path, toDirectory: to.directory }); }
     catch (e) {
       await FS.copy({ from: temp, directory: "CACHE", to: path, toDirectory: to.directory });
       await FS.deleteFile({ path: temp, directory: "CACHE" }).catch(() => {});
@@ -1300,6 +1319,12 @@
       onPiece(fn) { if (A()) A().addListener("piece", fn); },
       // Stop pressed on the "Writing the transcript" notification.
       onWritingStopped(fn) { if (A()) A().addListener("writingStopped", fn); },
+      // The narration saved as sound (Android): one sound file per call,
+      // { uri, dur, size, t0, t1 }, with fn({ n, of }) heard after each piece.
+      get canVoice() { return !!A() && os === "android"; },
+      voice: (o) => A().voice(o),
+      stopVoicing: () => (A() ? A().stopVoicing().catch(() => {}) : null),
+      onVoiced(fn) { if (A()) A().addListener("voiced", fn); },
     };
   })();
 
@@ -1415,7 +1440,7 @@
     onBack,
     exitApp,
     download,
-    downloadUpdate, keepFile, dropKept, pauseKeep: () => pauseUpdate(),
+    downloadUpdate, keepFile, keepMade, dropKept, pauseKeep: () => pauseUpdate(),
     pauseUpdate,
     openInstaller,
     clearOldUpdates,

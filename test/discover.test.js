@@ -145,7 +145,59 @@ async function phone(browser) {
       await p.locator('#menuSheet[data-kind="story"]:not([hidden])').waitFor();
       const sheet = await p.locator("#menuSheet").textContent();
       assert.match(sheet, /212 chapters/);
-      assert.match(sheet, /Save as a collection/);
+      assert.doesNotMatch(sheet, /Save as a collection/);
+      await ctx.close();
+    });
+
+    await test("a story's Save asks: a collection or series (picked on Save with options), or one EPUB file that's in no collection", async () => {
+      const { ctx, p } = await phone(browser);
+      p.errors = [];
+      p.on("pageerror", (e) => p.errors.push(e.message));
+      await p.evaluate(() => {
+        const S = Waypage.save;
+        S.findChapters = async (url) => ({ title: "The Ninth Lantern", links: [1, 2, 3].map((n) => url.replace(/\/?$/, "/chapter/" + n + "/c" + n)) });
+        S.save = async (url) => {
+          const n = /chapter\/(\d+)/.exec(url)[1], id = "ch" + n + "-" + Math.random().toString(36).slice(2, 7);
+          const meta = { id, url, title: "Chapter " + n, site: "Royal Road", savedAt: Date.now(), words: 3 };
+          await Waypage.store.writePage(id, '<!doctype html><html lang="en"><body><div class="co-body"><p>Chapter ' + n + " text.</p></div></body></html>", meta);
+          return meta;
+        };
+        Waypage.platform.saveLinked = async () => ({ saved: null, ref: null });
+        goPlace("discover");
+      });
+      const openSave = async () => {
+        await p.locator('#discover .dz-book:has-text("The Ninth Lantern")').click();
+        await p.locator('#menuSheet[data-kind="story"]:not([hidden])').waitFor();
+        await p.locator("#menuSheet .btn-primary", { hasText: /^Save$/ }).click();
+        await p.locator('#menuSheet[data-kind="saveStory"]:not([hidden])').waitFor();
+      };
+      await openSave();
+      const pick = p.locator("#menuSheet .pick-row", { hasText: "Save as" }).locator(".dropdown-btn");
+      assert.match(await pick.textContent(), /Collection or series/, "clips at first");
+      assert.strictEqual(await p.evaluate(() => { const r = dzWhereRow(() => "app", () => {}); r.hidden = true; document.body.append(r); const d = getComputedStyle(r).display; r.remove(); return d; }), "none", "a hidden Save in row doesn't show");
+      await pick.click();
+      assert.deepStrictEqual((await p.locator('[role="option"]').allTextContents()).map((x) => x.trim()), ["Collection or series", "EPUB file"]);
+      await p.locator('[role="option"]', { hasText: /^Collection or series$/ }).last().click();
+      await p.locator("#menuSheet .btn-primary", { hasText: /^Save$/ }).click();
+      await p.locator("#batchView .batch-links").waitFor();
+      assert.strictEqual(await p.locator("#batchView .batch-folder .dropdown-btn").textContent(), "New collection…");
+      await p.locator("#batchView .batch-folder .dropdown-btn").click();
+      const opts = (await p.locator('[role="option"]').allTextContents()).map((x) => x.trim());
+      assert.deepStrictEqual(opts.slice(-2), ["New collection…", "New series…"], opts.join(", "));
+      await p.locator('[role="option"]', { hasText: /^New series…$/ }).last().click();
+      await p.locator("#batchView .batch-go").click();
+      await p.waitForFunction(() => state.pages.filter((x) => x.folder === "The Ninth Lantern").length === 3 && isSeriesFolder("The Ninth Lantern"), null, { timeout: 15000 });
+      // As one book: nothing in a collection, one EPUB file in Files.
+      await p.evaluate(() => { state.pages.length = 0; goPlace("discover"); });
+      await openSave();
+      await pick.click();
+      await p.locator('[role="option"]', { hasText: /^EPUB file$/ }).last().click();
+      await p.locator("#menuSheet .btn-primary", { hasText: /^Save$/ }).click();
+      await p.waitForFunction(() => state.pages.length === 1, null, { timeout: 20000 });
+      const got = await p.evaluate(() => ({ kind: state.pages[0].file && state.pages[0].file.name, folder: state.pages[0].folder || null, title: state.pages[0].title }));
+      assert.match(got.kind || "", /\.epub$/, JSON.stringify(got));
+      assert.strictEqual(got.folder, null, "in no collection");
+      assert.deepStrictEqual(p.errors, [], p.errors.join(" | "));
       await ctx.close();
     });
 
@@ -374,6 +426,7 @@ async function phone(browser) {
       assert.deepStrictEqual(got.se.map((b) => [b.title, b.by]), [["Pride and Prejudice", "Jane Austen"], ["War and Peace", "Leo Tolstoy"]]);
       assert.strictEqual(got.se[0].epub, "https://standardebooks.org/ebooks/jane-austen/pride-and-prejudice/downloads/jane-austen_pride-and-prejudice.epub");
       assert.strictEqual(got.se[1].epub, "https://standardebooks.org/ebooks/leo-tolstoy/war-and-peace/louise-maude_aylmer-maude/downloads/leo-tolstoy_war-and-peace_louise-maude_aylmer-maude.epub");
+      assert.strictEqual(got.se[1].tr, "Louise Maude, Aylmer Maude", "a translation names its translators");
       assert.strictEqual(got.se[0].cover, "https://standardebooks.org/images/covers/pride-cover-thumbnail.jpg");
       assert.deepStrictEqual(got.ws.items.map((t) => t.title), ["The Time Machine (Wells)", "A Modest Proposal"], "categories inside a category are left out");
       assert.strictEqual(got.ws.next, "page|4b49|123");

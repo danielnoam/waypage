@@ -26,6 +26,7 @@
   const ABS_KEY = "waypage.syncAbs"; // { sha: audiobookshelf.json as last seen, sent: hash of what GitHub has }
   const CAT_KEY = "waypage.syncCatalogs"; // { sha: catalogs.json as last seen, sent: hash of what GitHub has }
   const DAV_KEY = "waypage.syncWebdav"; // the same for webdav.json
+  const TR_KEY = "waypage.syncTranscripts"; // { fingerprint: { sha: as last seen, sent: hash of what GitHub has } }
   const ACT_KEY = "waypage.syncActivity"; // { sig } of the reading activity this device last wrote
   const ACT_PATH = "activity/reading.json";
   const DAY = 24 * 3600 * 1000;
@@ -46,7 +47,7 @@
   // Every field an index entry can carry through a backup or sync
   // (backup.cleanMeta); anything else on a page stays on its device.
   const SYNCED = new Set(["id", "url", "title", "site", "byline", "licence", "savedAt", "minutes", "lang", "dir", "mode", "images",
-    "at", "finished", "readAt", "readOn", "placeAt", "spot", "comic", "manga", "volume", "turn", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "file", "marks", "ink", "inkAt", "cut", "archived", "editedAt", "note", "published",
+    "at", "finished", "readAt", "readOn", "placeAt", "spot", "comic", "manga", "volume", "turn", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "statusPick", "folderNoStatus", "file", "marks", "ink", "inkAt", "cut", "archived", "editedAt", "note", "published",
     "noShare", "folderNoShare", "folderTagNew", "folderSeries", "folderIn", "movedAt", "live"]);
   // Where the reader is, which goes with whichever device moved it last:
   // placeAt (1.30.2), or readAt on entries from before it. Opening a clip
@@ -663,6 +664,7 @@
     keep(CAT_KEY, null);
     keep(DAV_KEY, null);
     keep(ABS_KEY, null);
+    keep(TR_KEY, null);
   }
 
   // ---- A page's text going up and coming down ----
@@ -1431,6 +1433,7 @@
       try { await syncWebdav(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
       try { await syncAbs(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
       try { await syncActivity(getPages()); } catch (e) { if (e instanceof Paused) throw e; }
+      if (what.transcripts) try { await syncTranscripts(getPages()); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
     };
     // Feeds the same way as clips: one changed here while this ran keeps
     // this device's version, which goes up next time. Those not synced
@@ -1800,6 +1803,49 @@
     keep(ACT_KEY, { sig });
   }
 
+  // Audiobooks' transcripts (2026-11): transcripts/<fingerprint>.json, one
+  // a book, so another device reads along without writing it again. What
+  // GitHub has comes into this device's (listen.js mergeTranscript, through
+  // C.listenTake), and goes back up when this one has more. Only books
+  // with a fingerprint; never a device's timings for a book.
+  const books = (pages) => pages.filter((p) => p.audio && p.audio.parts && !p.audio.overlay && !p.audio.voiced && p.file && /^[0-9a-f]{32}$/.test(p.file.fp || ""));
+  async function syncTranscripts(pages) {
+    if (!C.listen || !C.listenTake) return;
+    const list = books(pages);
+    if (!list.length) return;
+    halt();
+    const r = await call(contents("transcripts") + "?ref=" + encodeURIComponent(cfg.branch));
+    if (!r.ok && r.status !== 404) throw await fail(r);
+    const files = r.ok ? await r.json() : [];
+    const there = new Map((Array.isArray(files) ? files : []).map((f) => [String((f && f.name) || "").replace(/\.json$/, ""), f.sha]));
+    const known = load(TR_KEY, {}) || {};
+    for (const p of list) {
+      const fp = p.file.fp, k = known[fp] || {};
+      for (let tries = 0; ; tries++) {
+        halt();
+        let sha = there.get(fp) || null;
+        if (sha && sha !== k.sha) {
+          const got = await readJson("transcripts/" + fp + ".json").catch((e) => { if (e instanceof Paused || !(e instanceof SyntaxError)) throw e; return null; });
+          if (got) { await C.listenTake(p.id, got.data); sha = got.sha; } else sha = null;
+          k.sha = sha;
+        }
+        const mine = await C.store.readListen(p.id);
+        if (!mine || !(mine.pieces || []).length) break;
+        const text = JSON.stringify(C.listen.shareTranscript(mine)), h = hashOf(text);
+        if (sha && k.sent === h) break;
+        halt();
+        try { k.sha = await write("transcripts/" + fp + ".json", text, sha, "Transcript of " + String(p.title || "").slice(0, 80)); k.sent = h; there.set(fp, k.sha); break; }
+        catch (e) {
+          if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e;
+          k.sha = null;
+          there.set(fp, "stale");
+        }
+      }
+      known[fp] = k;
+      keep(TR_KEY, known);
+    }
+  }
+
   // Pictures picked as collections' covers: covers/<name>, written once
   // by the device that picked it (a name is never used for another), and
   // brought down by the others. The one picture that syncs: it has no
@@ -1884,7 +1930,7 @@
     get progress() { return progress; },
     get links() { return !!(cfg && cfg.links); },
     // What this device syncs (1.47.0): clips, feeds, newsletters, stats, Anki.
-    get what() { return { clips: true, notes: true, feeds: true, newsletters: true, stats: true, anki: true, activity: false, ...((cfg && cfg.what) || {}) }; },
+    get what() { return { clips: true, notes: true, feeds: true, newsletters: true, stats: true, anki: true, activity: false, transcripts: true, ...((cfg && cfg.what) || {}) }; },
     setWhat(k, v) {
       if (!cfg) return;
       cfg.what = { ...this.what, [k]: !!v };

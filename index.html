@@ -3,20 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob: 'sha256-+wsKiv417zc1/Pxv7rrtC2oJJN3S186Osc5YbjX8Q6A='; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; media-src 'self' https: data: blob:; font-src 'self' data:; connect-src 'self' https: data: blob:; worker-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'self' https: http:; form-action 'none'">
+  <!-- The app's home (keel releases.js). Change both before a move to an organization or a custom domain, and ship a release. -->
+  <meta name="keel-site" content="https://danielnoam.github.io/waypage/">
+  <meta name="keel-repo" content="danielnoam/waypage">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#F7F4EE">
   <title>Waypage</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <script src="src/keel/errlog.js?v=1.68.1" data-key="waypage.log" data-keep="60" data-console></script>
-  <script src="src/boot.js?v=1.68.1"></script>
-  <script src="src/keel/i18n.js?v=1.68.1"></script>
-  <script src="src/language.js?v=1.68.1"></script>
+  <script src="src/keel/errlog.js?v=1.68.0" data-key="waypage.log" data-keep="60" data-console></script>
+  <script src="src/boot.js?v=1.68.0"></script>
+  <script src="src/keel/i18n.js?v=1.68.0"></script>
+  <script src="src/language.js?v=1.68.0"></script>
   <link rel="preload" href="src/fonts/InstrumentSans.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="src/fonts/SourceSerif4.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="src/fonts.css?v=1.68.1">
-  <link rel="stylesheet" href="src/styles.css?v=1.68.1">
+  <link rel="stylesheet" href="src/fonts.css?v=1.68.0">
+  <link rel="stylesheet" href="src/styles.css?v=1.68.0">
 </head>
 <body>
   <div class="app" id="libraryView">
@@ -444,58 +447,58 @@
     </div>
   </section>
 
-  <script src="src/keel/platform.js?v=1.68.1"></script>
-  <script src="src/platform.js?v=1.68.1"></script>
-  <script src="src/keel/motion.js?v=1.68.1"></script>
-  <script src="src/motion.js?v=1.68.1"></script>
-  <script src="src/vendor/Readability.js?v=1.68.1"></script>
-  <script src="src/store.js?v=1.68.1"></script>
-  <script src="src/save.js?v=1.68.1"></script>
-  <script src="src/feeds.js?v=1.68.1"></script>
-  <script src="src/discover-list.js?v=1.68.1"></script>
-  <script src="src/discover.js?v=1.68.1"></script>
-  <script src="src/backup.js?v=1.68.1"></script>
-  <script src="src/imports.js?v=1.68.1"></script>
-  <script src="src/dict.js?v=1.68.1"></script>
-  <script src="src/extensions.js?v=1.68.1"></script>
-  <script src="src/keel/github.js?v=1.68.1"></script>
-  <script src="src/sync.js?v=1.68.1"></script>
-  <script src="src/keel/drive.js?v=1.68.1"></script>
-  <script src="src/keel/releases.js?v=1.68.1"></script>
-  <script src="src/drive.js?v=1.68.1"></script>
-  <script src="src/keel/qr.js?v=1.68.1"></script>
-  <script src="src/stats.js?v=1.68.1"></script>
-  <script src="src/activity.js?v=1.68.1"></script>
-  <script src="src/epub.js?v=1.68.1"></script>
-  <script src="src/files.js?v=1.68.1"></script>
-  <script src="src/listen.js?v=1.68.1"></script>
-  <script src="src/pdf.js?v=1.68.1"></script>
-  <script src="src/pptx.js?v=1.68.1"></script>
-  <script src="src/reader.js?v=1.68.1"></script>
-  <script src="src/ink.js?v=1.68.1"></script>
-  <script src="src/notes.js?v=1.68.1"></script>
-  <script src="src/recover.js?v=1.68.1"></script>
-  <script src="src/app.js?v=1.68.1"></script>
-  <script src="src/app-reading.js?v=1.68.1"></script>
-  <script src="src/app-cards.js?v=1.68.1"></script>
-  <script src="src/app-downloads.js?v=1.68.1"></script>
-  <script src="src/app-search.js?v=1.68.1"></script>
-  <script src="src/app-draw.js?v=1.68.1"></script>
-  <script src="src/app-jobs.js?v=1.68.1"></script>
-  <script src="src/app-reader.js?v=1.68.1"></script>
-  <script src="src/app-ink.js?v=1.68.1"></script>
-  <script src="src/app-sheets.js?v=1.68.1"></script>
-  <script src="src/app-pentest.js?v=1.68.1"></script>
-  <script src="src/app-library.js?v=1.68.1"></script>
-  <script src="src/app-saving.js?v=1.68.1"></script>
-  <script src="src/app-places.js?v=1.68.1"></script>
-  <script src="src/app-discover.js?v=1.68.1"></script>
-  <script src="src/app-kiwix.js?v=1.68.1"></script>
-  <script src="src/app-settings.js?v=1.68.1"></script>
-  <script src="src/app-extensions.js?v=1.68.1"></script>
-  <script src="src/app-listen.js?v=1.68.1"></script>
-  <script src="src/app-lock.js?v=1.68.1"></script>
-  <script src="src/app-car.js?v=1.68.1"></script>
-  <script src="src/app-start.js?v=1.68.1"></script>
+  <script src="src/keel/platform.js?v=1.68.0"></script>
+  <script src="src/platform.js?v=1.68.0"></script>
+  <script src="src/keel/motion.js?v=1.68.0"></script>
+  <script src="src/motion.js?v=1.68.0"></script>
+  <script src="src/vendor/Readability.js?v=1.68.0"></script>
+  <script src="src/store.js?v=1.68.0"></script>
+  <script src="src/save.js?v=1.68.0"></script>
+  <script src="src/feeds.js?v=1.68.0"></script>
+  <script src="src/discover-list.js?v=1.68.0"></script>
+  <script src="src/discover.js?v=1.68.0"></script>
+  <script src="src/backup.js?v=1.68.0"></script>
+  <script src="src/imports.js?v=1.68.0"></script>
+  <script src="src/dict.js?v=1.68.0"></script>
+  <script src="src/extensions.js?v=1.68.0"></script>
+  <script src="src/keel/github.js?v=1.68.0"></script>
+  <script src="src/sync.js?v=1.68.0"></script>
+  <script src="src/keel/drive.js?v=1.68.0"></script>
+  <script src="src/keel/releases.js?v=1.68.0"></script>
+  <script src="src/drive.js?v=1.68.0"></script>
+  <script src="src/keel/qr.js?v=1.68.0"></script>
+  <script src="src/stats.js?v=1.68.0"></script>
+  <script src="src/activity.js?v=1.68.0"></script>
+  <script src="src/epub.js?v=1.68.0"></script>
+  <script src="src/files.js?v=1.68.0"></script>
+  <script src="src/listen.js?v=1.68.0"></script>
+  <script src="src/pdf.js?v=1.68.0"></script>
+  <script src="src/pptx.js?v=1.68.0"></script>
+  <script src="src/reader.js?v=1.68.0"></script>
+  <script src="src/ink.js?v=1.68.0"></script>
+  <script src="src/notes.js?v=1.68.0"></script>
+  <script src="src/recover.js?v=1.68.0"></script>
+  <script src="src/app.js?v=1.68.0"></script>
+  <script src="src/app-reading.js?v=1.68.0"></script>
+  <script src="src/app-cards.js?v=1.68.0"></script>
+  <script src="src/app-downloads.js?v=1.68.0"></script>
+  <script src="src/app-search.js?v=1.68.0"></script>
+  <script src="src/app-draw.js?v=1.68.0"></script>
+  <script src="src/app-jobs.js?v=1.68.0"></script>
+  <script src="src/app-reader.js?v=1.68.0"></script>
+  <script src="src/app-ink.js?v=1.68.0"></script>
+  <script src="src/app-sheets.js?v=1.68.0"></script>
+  <script src="src/app-pentest.js?v=1.68.0"></script>
+  <script src="src/app-library.js?v=1.68.0"></script>
+  <script src="src/app-saving.js?v=1.68.0"></script>
+  <script src="src/app-places.js?v=1.68.0"></script>
+  <script src="src/app-discover.js?v=1.68.0"></script>
+  <script src="src/app-kiwix.js?v=1.68.0"></script>
+  <script src="src/app-settings.js?v=1.68.0"></script>
+  <script src="src/app-extensions.js?v=1.68.0"></script>
+  <script src="src/app-listen.js?v=1.68.0"></script>
+  <script src="src/app-lock.js?v=1.68.0"></script>
+  <script src="src/app-car.js?v=1.68.0"></script>
+  <script src="src/app-start.js?v=1.68.0"></script>
 </body>
 </html>

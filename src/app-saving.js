@@ -11,7 +11,7 @@
 const PICTURES_KEY = "waypage.syncPictures";
 let syncTimer = null, syncQueue = load(PICTURES_KEY, null) || [], fetchingPictures = false;
 const keepQueue = () => store(PICTURES_KEY, syncQueue.length ? [...new Set(syncQueue)] : null);
-const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "turn", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks", "noShare", "folderNoShare", "folderTagNew", "folderSeries", "folderIn", "live"];
+const SYNCED_KEEP = ["savedAt", "title", "requested", "tags", "folder", "folderAt", "source", "series", "turn", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "statusPick", "folderNoStatus", "at", "finished", "readAt", "readOn", "placeAt", "spot", "marks", "noShare", "folderNoShare", "folderTagNew", "folderSeries", "folderIn", "live"];
 // While a run of saves is on, sync waits longer (1.2.0): each sync is a
 // merge of the whole library, and one after every page landing was a
 // stutter every few seconds.
@@ -1083,6 +1083,8 @@ const TAG_NEW_KEY = "waypage.saveTagNew";
 
 function renderBatch(text, preset, from, siteTags) {
   let folder = preset;
+  // Saved into a series: an existing one, or New series….
+  let series = false;
   // The page the chapters were read from, kept on the folder (0.26.0).
   let source = from || null;
   let mode = load(IMAGES_KEY, "previews");
@@ -1112,7 +1114,7 @@ function renderBatch(text, preset, from, siteTags) {
     finder.disabled = true;
     finder.textContent = t("Finding chapters…");
     try {
-      const found = await C.save.findChapters(url);
+      const found = noteStatus(await C.save.findChapters(url));
       if (found.links.length) {
         source = found.page || url;
         area.value = found.links.join("\n");
@@ -1139,18 +1141,35 @@ function renderBatch(text, preset, from, siteTags) {
   };
   const pick = (f, typed) => { folder = f; if (!typed) input.value = ""; sync(); };
   // The collection: None, one already there, or a new one typed in.
-  const NEW = "\u0000new";
-  const folderPick = dropdown({ label: t("Collection"), cls: "field-pick batch-folder", value: "",
-    options: [{ value: "", label: t("None") }, ...foldersByUse().map((f) => ({ value: f, label: f })), { value: NEW, label: t("New collection…") }],
+  const NEW = "\u0000new", NEW_SERIES = "\u0000series";
+  const folderHead = el("h2", { class: "overline" });
+  const folderNote = el("p", { class: "meta" });
+  const paintKind = () => {
+    folderHead.textContent = series ? t("Series") : t("Collection");
+    folderNote.textContent = series ? t("Clips in a series keep the order of the links. It shows under Series in your Library.") : t("Clips in a collection keep the order of the links.");
+    input.placeholder = series ? t("New series") : t("New collection");
+    input.setAttribute("aria-label", input.placeholder);
+  };
+  // None, the collections and series there are, or a new one of either.
+  const folderPick = dropdown({ label: t("Collection or series"), cls: "field-pick batch-folder", value: "",
+    options: [{ value: "", label: t("None") },
+      ...foldersByUse().map((f) => ({ value: f, label: isSeriesFolder(f) ? t("{name} · series", { name: f }) : f })),
+      { value: NEW, label: t("New collection…") }, { value: NEW_SERIES, label: t("New series…") }],
     onpick: (v) => {
-      input.hidden = v !== NEW;
-      if (v === NEW) { pick(cleanTag(input.value) ? folderName(input.value) : null, true); input.focus(); }
+      const fresh = v === NEW || v === NEW_SERIES;
+      input.hidden = !fresh;
+      series = fresh ? v === NEW_SERIES : isSeriesFolder(v);
+      paintKind();
+      if (fresh) { pick(cleanTag(input.value) ? folderName(input.value) : null, true); input.focus(); }
       else pick(v || null);
     } });
   input.hidden = true;
+  paintKind();
   const choose = (name) => {
     const had = name && allFolders().find((f) => sameTag(f, name));
-    folderPick.set(had || (name ? NEW : ""));
+    if (had) series = series || isSeriesFolder(had);
+    paintKind();
+    folderPick.set(had || (name ? (series ? NEW_SERIES : NEW) : ""));
     input.hidden = !name || !!had;
     if (had) pick(had);
     else { input.value = name || ""; pick(name || null, true); }
@@ -1247,7 +1266,7 @@ function renderBatch(text, preset, from, siteTags) {
       C.platform.files.canPickFolder ? el("button", { class: "row", type: "button", onclick: () => back().then(addAudiobookFolder) },
         el("span", { class: "row-label accent" }, t("Add an audiobook folder"))) : null,
       newNoteRow),
-    el("p", { class: "meta" }, t("An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3{x}). A folder's files are each added on their own, in a collection named after their folder. It stays {ON_HERE}.", { x: C.platform.files.canPickFolder ? t(", or a folder of them") : "", ON_HERE: ON_HERE })));
+    el("p", { class: "meta" }, t("An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3, a zip of them{x}). A folder's files are each added on their own, in a collection named after their folder. It stays {ON_HERE}.", { x: C.platform.files.canPickFolder ? t(", or a folder of them") : "", ON_HERE: ON_HERE })));
   const form = el("form", { class: "batch-form" }, asPage, fromFile,
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Links")), area, count, finder, skipRow),
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Save as")),
@@ -1261,9 +1280,9 @@ function renderBatch(text, preset, from, siteTags) {
       kindNote),
     images ? el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Images")), images,
       el("p", { class: "meta" }, t("Full images for comics, maps and diagrams. Settings picks the usual choice."))) : null,
-    el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Collection")),
+    el("section", { class: "settings-section" }, folderHead,
       el("div", { class: "tag-edit" }, folderPick, input),
-      el("p", { class: "meta" }, t("Clips in a collection keep the order of the links."))),
+      folderNote),
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Tags")), siteBox, tagBox, tagNewBox),
     go);
   form.addEventListener("submit", (e) => {
@@ -1274,7 +1293,7 @@ function renderBatch(text, preset, from, siteTags) {
     if (!urls.length) return;
     if (urls.length > LONG_LIST && !confirm(t("Save {n} clips? They save one at a time, so a list this long takes a while. Pause and Stop are on its card.", { n: urls.length }))) return;
     history.back();
-    saveAll(skipSaved ? all : urls, folder, tags, mode, skipSaved, kind, source, !!(folder && tags.length && tagNew), siteTags || undefined);
+    saveAll(skipSaved ? all : urls, folder, tags, mode, skipSaved, kind, source, !!(folder && tags.length && tagNew), siteTags || undefined, series && !!folder);
   });
   $("batchBody").replaceChildren(form);
   if (folder) choose(folder);
@@ -1589,6 +1608,7 @@ async function checkNew(name, quiet) {
       setNewFor(name, { at: Date.now(), count, all });
       await updateCover(name, found.cover || "");
       await keepStoryTags(name, found.siteTags);
+      await keepStoryStatus(name, found.status);
     } else {
       let url = await C.save.findNext(last.url);
       if (url && !savedAs(url)) {
@@ -1702,6 +1722,7 @@ function sourceSection(list) {
       if (!found.links.length) { toast(t("Couldn't find a list of chapters on that page.")); return; }
       setSource(name, found.page || u, found.cover || "");
       keepStoryTags(name, found.siteTags);
+      keepStoryStatus(name, found.status);
       toast(t("Linked to {replace} on {siteName}", { replace: countLine(found.links.length).replace("clip", "chapter"), siteName: C.save.siteName(u) }));
     } catch (e) {
       toast(e instanceof C.save.SaveError ? e.message : t("Couldn't read that page. Try again."));
@@ -1710,8 +1731,12 @@ function sourceSection(list) {
     }
   } }, label);
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); link.click(); } });
+  // Where the story stands, from its page (2026-11); off, Edit's own pick shows.
+  const said = siteStatusOf(list);
+  const statusSwitch = src ? switchRow(t("Status from the site"), said ? t("{site} says {status}", { site: siteOf(list[0]) || C.save.siteName(src), status: statusName(said) }) : t("The site doesn't say"),
+    siteStatusOn(list), (v) => setFolderStatus(name, "folderNoStatus", v ? "" : true)) : null;
   return section(t("Synced with"), null,
-    el("div", { class: "group" }, el("div", { class: "row source-row" }, input, link)),
+    el("div", { class: "group" }, el("div", { class: "row source-row" }, input, link), statusSwitch),
     el("p", { class: "footnote" }, t("New chapters are read from its chapter list, which also finds chapters added in between."), " ", t("Chapters you delete don't come back as new."),
       src ? " " + t("Empty the box and press Refresh to unlink.") : ""));
 }
@@ -2124,7 +2149,7 @@ function updateWidgets(now) {
 }
 
 const clipMeta = (x) => [siteOf(x), readingLine(x)].filter(Boolean).join(" · ");
-const readCount = (list) => { const done = list.filter((x) => x.finished).length; return done === list.length ? t("All read") : t("{done} of {n} read", { done, n: list.length }); };
+const readCount = (list) => { const done = list.filter((x) => x.finished).length; return done === list.length ? (caughtUp(list) ? t("Caught up") : t("All read")) : t("{done} of {n} read", { done, n: list.length }); };
 
 // A widget's tap: the page to keep reading, a post, Feeds or a collection.
 // The app icon's shortcuts (1.14.0) come the same way: Continue reading,
