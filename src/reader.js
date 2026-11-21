@@ -2393,11 +2393,14 @@
   // left part of the page and goes up or down is the brightness, not a
   // scroll. onEdge: { start(), move(d) with d the change, -1 to 1, end() }.
   let onEdge = null, edging = false;
+  // A touch that starts on a comment bubble is the bubble's (held, it is carried): the
+  // reader's own swipes, page turns and brightness leave it alone.
+  const onBubble = (e) => !!(e.target && e.target.closest && e.target.closest(".co-ink .note"));
   function edgeInput() {
     let e0 = null;
     doc.addEventListener("touchstart", (e) => {
       e0 = null;
-      if (!onEdge || !onEdge.on() || e.touches.length !== 1 || pinch) return;
+      if (!onEdge || !onEdge.on() || e.touches.length !== 1 || pinch || onBubble(e)) return;
       const t = e.touches[0], w = frame.contentWindow;
       const x = onEdge.side && onEdge.side() === "right" ? w.innerWidth - t.clientX : t.clientX;
       if (x > Math.max(56, w.innerWidth * 0.18)) return;
@@ -2453,7 +2456,7 @@
     // screenX: the frame moves with the finger, so its own clientX would too.
     doc.addEventListener("touchstart", (e) => {
       s = null;
-      if (isPaged() || e.touches.length !== 1 || !swipeFree()) return;
+      if (isPaged() || e.touches.length !== 1 || !swipeFree() || onBubble(e)) return;
       const t = e.touches[0], W = frame.contentWindow.innerWidth;
       if (t.clientX < SWIPE_EDGE || t.clientX > W - SWIPE_EDGE || sideways(e.target)) return;
       s = { x: t.screenX, y: t.screenY, at: e.timeStamp, on: false, dx: 0, last: [{ x: t.screenX, t: e.timeStamp }] };
@@ -2537,7 +2540,7 @@
       // A touch that draws, or a zoomed page, is not a page turn: this scrolls by
       // hand, so ink's preventDefault doesn't stop it.
       const mine = e.defaultPrevented || pz.s > 1 || (inkHook && inkHook.drawing && inkHook.drawing());
-      start = !mine && e.touches.length === 1 && isPaged() ? { x: t0.clientX, y: t0.clientY, sx: t0.screenX, on: false, n: page(), last: [{ x: t0.clientX, t: e.timeStamp }] } : null;
+      start = !mine && e.touches.length === 1 && isPaged() && !onBubble(e) ? { x: t0.clientX, y: t0.clientY, sx: t0.screenX, on: false, n: page(), last: [{ x: t0.clientX, t: e.timeStamp }] } : null;
       // Not from the screen's edges, the phone's own Back; a page still turns from there.
       if (start && (t0.clientX < SWIPE_EDGE || t0.clientX > frame.contentWindow.innerWidth - SWIPE_EDGE)) start.give = true;
     }, { passive: true });

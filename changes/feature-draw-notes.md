@@ -1,0 +1,2 @@
+### Added
+- Draw › Add › Note: drop a comment bubble anywhere on a clip, note or PDF, tap it to write a comment, and pick its colour and tags. The colours and tags are the highlights' own: a note's tag is offered on highlights and filters Highlights too. In Highlights a note shows as its comment, in its colour with its tags, beside the highlights (not as a drawing), and Copy all includes it. Hold a bubble to move it, or drag it with Select. Bubbles sync with a clip's drawings. They are not in a copy of a PDF, or Save as PDF, yet.

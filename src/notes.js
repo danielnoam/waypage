@@ -93,6 +93,8 @@
         g.restore();
         continue;
       }
+      // A comment bubble stays in the app; the sheet is left as it is.
+      if (s.t === "n") continue;
       // A picture put on the sheet (width and height in page widths).
       if (s.t === "i") {
         // A paper of its own is already the sheet's picture here (backKind), unless nothing says so (a Drive copy).

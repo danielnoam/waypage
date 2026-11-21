@@ -378,6 +378,43 @@ kept (`.custom`). The bar's colours are slots (`inkSlots`, kept in
 the colour sheet for one; its eyedropper (`ink.pick`, `colorAt`) takes the
 colour of the stroke tapped, else the pixel of the page's picture there.
 
+A comment bubble (2026-11, `ink.js` `t: "n"`) is a third box item beside text
+and pictures: `{ id, t: "n", c, x, y, w, h, text, tags? }`, `w` and `h` one fixed
+size in page widths (`NOTE_W`), `c` one of the five highlight colours, up to 20
+tags. Draw's Add › Note drops one on the page in view (`addNote`) and opens its
+sheet (`app-ink.js inkNoteSheet`, laid out like a highlight's: colours, comment,
+tags); `editNote` and `removeNote` are undo steps. It works in both modes, so a
+clip's bubbles ride `ink` by block through sync and backup unchanged (`mergeInk`
+is by id). Tapping a bubble opens its sheet with Draw off (`onNote`, a click on the
+`.note` node, which keeps `pointer-events` on in reader.css); with Draw on, Select
+takes it and the bar's Edit note opens it. Its colours are the highlights' (`MARK_COLORS`)
+and its tags are the highlights' list: `allMarkTags` counts a bubble's tags, and the
+sheet uses `markTagsEditor` with a `put` in place of saving a highlight. A bubble is
+not a drawing: `count`, `drawn`, `clearPage`, `clearAll`, `inkGroups` and a row's
+remove leave it out, and Highlights lists it as what it says (`app-ink.js inkNotes`,
+`noteRow`): in the clip's sheet and the Highlights place, among the highlights in
+the clip's order, through the same colour, tag and word filters, and in Copy all
+as `> 💬 comment #tags`. By block it is read from `ink` on the entry; a note's or
+outside PDF's are summed up on the entry as `noted` (`[{ id, n, text, c, tags }]`,
+this device's own like `drawn`, written by `onSaved` and `outsideDrawn`), so a
+file's bubbles show and count their tags without it being opened; on another
+device a note's show once it has been opened there. Moving: with Select, any
+pointer on a bubble takes it and drags it in the same press (`down`); otherwise a
+press held still for 450 ms (`notePress`, `carry`) picks it up and drags it, Draw
+on or off, and a quick tap opens it (on the click that follows, as opening on
+`pointerup` put the sheet under the finger and the click closed it). Chrome ignores `touch-action` on SVG shapes, so a
+finger on a bare bubble starts a pan and the browser sends `pointercancel`, which
+puts a dragged item back: its touch area is an HTML `div.note-hit` (`touch-action:
+none`) in a `foreignObject`, the one thing it honours, and the reader's swipes,
+page turns and brightness skip touches that start on one (`reader.js onBubble`);
+tests for it must use real touch (CDP `Input.dispatchTouchEvent`), not events fired
+at the node. A carry is `cur` with
+`select`, `carry` and `mode: "drag"`, so `selMove`, `selUp`, `selDrop` and undo
+are Select's own; after it the selection is cleared when Draw is off, and the
+reader's tap is held back (`click`, `noteAt`). Left out for now: a copy of the
+PDF and Save as PDF (`pdf.js inkOf` has no sticky-note editor in pdf.js's
+annotation storage; `forPdf` and `notes.js sheetCanvas` skip it).
+
 The pages are one surface (1.57.0). A stroke or picture that reaches over
 more than one page is kept on each page it touches, whole, in that page's
 own widths, with the same `id` (`ink.js placeOn`, `convertItem`; each layer
@@ -1078,6 +1115,12 @@ adds a line here.
 
 Things that broke once and would again. Check here before touching the
 area.
+- Chrome and Android's WebView ignore `touch-action` on SVG shapes. A drag that
+  starts on one (a comment bubble in `ink.js`) is cancelled by the browser's
+  own pan (`pointercancel`), and the item snaps back. Give the shape a real
+  box: an HTML `div` in a `foreignObject` with `touch-action: none`. A test that
+  fires `PointerEvent`s at the node passes anyway; use real touch (CDP
+  `Input.dispatchTouchEvent`), as the Add › Note steps in `test/ui.test.js` do.
 - Pages mode scrolls by hand (`pagedInput`), so ink's `preventDefault` on a
   touch doesn't stop it. A new document-level touch gesture has to check
   `e.defaultPrevented` and `inkHook.drawing()`, or the page moves under the pen.

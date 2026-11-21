@@ -4203,6 +4203,85 @@ c("bk1", { at: 0.01 })]);
       assert.ok(moved.some((x) => Math.abs(x - x0 - 0.2) < 0.01), "the stroke moved 0.2 right: " + JSON.stringify([x0, moved]));
       await q.locator('.ink-bar [data-act="delete"]').click();
       assert.strictEqual(await q.evaluate(() => Waypage.ink.count()) < 3, true);
+      // Add > Note: a comment bubble, written in its sheet, in a highlight's colour with tags that highlights share.
+      const before = await q.evaluate(() => Waypage.ink.count());
+      await q.locator('.ink-bar [data-act="add"]').click();
+      await q.locator(".ink-pop button", { hasText: "Note" }).click();
+      await q.locator(".mark-note-field").fill("Check the date");
+      await q.locator(".mark-swatch").nth(2).click();
+      await q.locator(".tag-input").fill("history");
+      await q.locator(".tag-input").press("Enter");
+      const note = await q.evaluate(() => Waypage.ink.notes()[0]);
+      assert.deepStrictEqual([note.text, note.c, note.tags], ["Check the date", "blue", ["history"]]);
+      assert.strictEqual(await q.evaluate(() => allMarkTags().includes("history")), true, "highlights offer a note's tags");
+      await q.locator("button.row", { hasText: /^Done$/ }).click();
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-ink .note .bub.c-blue").length > 0), true, "the bubble is on the page");
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), before, "a bubble isn't counted as a drawing");
+      // In Highlights it is the comment itself, in its colour with its tags, not a drawing.
+      const listed = await q.evaluate(() => { const v = marksView(state.open); const r = v.querySelector(".note-item .mark-quote"); return { text: r && r.textContent, c: r && r.dataset.c, tags: v.querySelector(".note-item") && v.querySelector(".note-item").textContent.includes("#history") }; });
+      assert.deepStrictEqual(listed, { text: "Check the date", c: "blue", tags: true });
+      // The Highlights place lists it with the highlights, through the same colour, tag and word filters.
+      const place = await q.evaluate(() => {
+        const has = () => !!document.querySelector("#highlights .note-item .note-quote[data-c='blue']");
+        const out = {};
+        renderHighlights(); out.all = has();
+        marksTags = ["history"]; renderHighlights(); out.tag = has();
+        // (a colour nothing has is dropped when drawn, so the list is asked directly)
+        marksTags = []; marksColor = "pink"; out.pink = marksShown().some((c) => c.notes.length);
+        marksColor = ""; marksQuery = "the date"; renderHighlights(); out.words = has();
+        marksQuery = "nothing like it"; renderHighlights(); out.none = has();
+        marksQuery = ""; renderHighlights();
+        return out;
+      });
+      assert.deepStrictEqual(place, { all: true, tag: true, pink: false, words: true, none: false });
+      // Moving it, with real touch (Chrome decides at touch-down whether a finger may scroll, and
+      // ignores touch-action on SVG shapes: events fired at the node would pass either way).
+      const bubbleAt = () => q.evaluate(() => { const fr = document.getElementById("readerFrame"), fb = fr.getBoundingClientRect(), g = fr.contentDocument.querySelector(".co-ink .note"), r = g.querySelector("circle.bub").getBoundingClientRect(), w = g.ownerSVGElement.getBoundingClientRect().width; return { x: fb.left + r.left + r.width / 2, y: fb.top + r.top + r.height / 2, w }; });
+      // The sheet the bubble was written in has closed and gone, so nothing is over the page.
+      await until(q, () => document.getElementById("menuSheet").hidden);
+      const cdp = await ctx.newCDPSession(q);
+      const touch = (type, x, y) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x, y }] });
+      const press = async (at, holdMs, dx) => {
+        await touch("touchStart", at.x, at.y);
+        await q.waitForTimeout(holdMs);
+        for (let i = 1; i <= 8; i++) { await touch("touchMove", at.x + dx * i / 8, at.y + dx * i / 16); await q.waitForTimeout(16); }
+        await touch("touchEnd");
+        await q.waitForTimeout(350);
+      };
+      const xOf = () => q.evaluate((id) => Waypage.ink.strokes(1).find((s) => s.id === id).x, note.id);
+      // With Select, a finger takes it and drags it in one go (Finger off).
+      const fingerWas = await q.evaluate(() => Waypage.ink.state().finger);
+      await q.evaluate(() => Waypage.ink.setting({ tool: "select", finger: false }));
+      let x1 = await xOf(), at = await bubbleAt();
+      await press(at, 50, at.w * 0.2);
+      assert.ok(Math.abs((await xOf()) - x1 - 0.2) < 0.02, "Select drags it: " + [x1, await xOf()]);
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      assert.ok(Math.abs((await xOf()) - x1) < 0.001, "Undo puts it back");
+      // Held still, a finger that doesn't draw picks it up and carries it; no sheet opens.
+      await q.evaluate(() => Waypage.ink.setting({ tool: "pen" }));
+      x1 = await xOf(); at = await bubbleAt();
+      await press(at, 700, at.w * 0.15);
+      assert.ok(Math.abs((await xOf()) - x1 - 0.15) < 0.02, "a hold carries it: " + [x1, await xOf()]);
+      assert.strictEqual(await q.locator(".mark-note-field:visible").count(), 0, "carrying doesn't open it");
+      // A quick tap opens it.
+      await q.evaluate(() => Waypage.ink.setOn(false));
+      await q.waitForTimeout(300);
+      // With Draw off a hold carries it too, and the page and clip stay as they were.
+      const open0 = await q.evaluate(() => state.open.id);
+      x1 = await xOf(); at = await bubbleAt();
+      await press(at, 700, at.w * 0.1);
+      assert.ok(Math.abs((await xOf()) - x1 - 0.1) < 0.02, "a hold carries it with Draw off: " + [x1, await xOf()]);
+      assert.strictEqual(await q.evaluate(() => state.open.id), open0);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.state().selected), 0, "nothing is left taken");
+      await press(await bubbleAt(), 60, 0);
+      await q.locator(".mark-note-field:visible").waitFor();
+      assert.strictEqual(await q.locator(".mark-note-field:visible").inputValue(), "Check the date");
+      await q.locator("button.row:visible", { hasText: /^Done$/ }).click();
+      await until(q, () => document.getElementById("menuSheet").hidden);
+      await q.evaluate(() => Waypage.ink.setOn(true));
+      await q.evaluate((f) => Waypage.ink.setting({ tool: "select", finger: f }), fingerWas);
+      await q.evaluate((id) => Waypage.ink.removeNote(id), note.id);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), before, "taking the note off leaves the drawings as they were");
       // Add > Image puts a picture on the page, taken, kept and saved in a copy.
       const png = await q.evaluate(() => { const c = document.createElement("canvas"); c.width = 40; c.height = 20; const g = c.getContext("2d"); g.fillStyle = "#c33"; g.fillRect(0, 0, 40, 20); return c.toDataURL("image/png"); });
       await q.locator('.ink-bar [data-act="add"]').click();
