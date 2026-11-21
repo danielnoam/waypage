@@ -114,6 +114,7 @@ src/keel/github.js  the GitHub requests sync.js makes: reading, writing and comm
 src/keel/errlog.js  the errors this device hit, for Report a problem; loaded first, set up by its tag in index.html (from keel, below)
 src/keel/platform.js  where it runs (phone, browser), app-build.json, links out to the phone's browser (from keel, below); src/platform.js builds on it
 src/keel/releases.js  the app's releases on GitHub: the update check, the Test builds list, opening one in the browser (from keel, below)
+src/keel/update.js    the APK download and Android's installer behind platform.js's downloadUpdate (from keel, below)
 src/keel/motion.js  the motion engine: springs sampled into CSS linear(), every move, reduced motion and Animations off (from keel, below); src/motion.js gives it Waypage's springs
 src/keel/sw-preview.js  sw.js's half of a test build in the browser (from keel, below)
 src/keel/i18n.js    translations: t() and tn() with plurals, dir, dates and numbers in the chosen language (from keel, below)
@@ -689,7 +690,7 @@ offers any version higher than its own. A merge without a bump only
 refreshes the web copy. CONTRIBUTING.md has the steps.
 
 The files listed in `keel.lock.json` (`server.js`, `src/keel/qr.js`,
-`src/keel/github.js`, `src/keel/drive.js`, `src/keel/errlog.js`, `src/keel/platform.js`, `src/keel/releases.js`, `src/keel/sw-preview.js`, `src/keel/i18n.js`,
+`src/keel/github.js`, `src/keel/drive.js`, `src/keel/errlog.js`, `src/keel/platform.js`, `src/keel/releases.js`, `src/keel/update.js`, `src/keel/sw-preview.js`, `src/keel/i18n.js`,
 `tools/release.js`, `tools/android-version.js`, `tools/keel-sync.js`, `tools/keel-checks.js`, `tools/unreleased.js`,
 `test/keel.test.js`, the github-pages skill) come from keel
 (danielnoam/keel), shared with LifeLog. Don't edit them here:
