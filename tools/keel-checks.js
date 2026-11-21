@@ -11,7 +11,9 @@
 //
 // csp: the page's Content-Security-Policy and what it needs of the code:
 // scripts from the app's own files, no inline script, handler or style
-// attribute, no eval.
+// attribute, no eval. A keel-site meta (releases.js) must be an https
+// address whose origin connect-src allows, since an installed copy fetches
+// its unreleased builds from there; a keel-repo meta must be owner/name.
 //
 //   csp.check(html, files) // → problems, [] when all pass
 //
@@ -23,6 +25,15 @@
 //
 //   const keys = i18n.keys([...jsFiles, "index.html"]);
 //   i18n.check(keys, i18n.table("src/lang/he.js")) // → { missing, stale, broken }
+//
+// i18n.literals: UI text set straight from an English string literal,
+// which no table can translate: toast("..."), confirm/alert("..."),
+// .textContent/.innerText/.placeholder/.title/.ariaLabel = "...", and
+// setAttribute("aria-label"|"title"|"placeholder"|"alt", "..."). Text that
+// stays English on purpose (a brand, a version) says so on its line with
+// `// en-only: <why>`.
+//
+//   i18n.literals(jsFiles) // → [{ file, line, text }]
 //
 // motion: RULES.md's motion rules in the app's CSS. Curves are tokens (no
 // literal cubic-bezier() or easing keyword outside a custom property, a
@@ -135,6 +146,16 @@ function cspCheck(html, files = []) {
   for (const m of html.matchAll(/\s(on[a-z]+)="/g)) out.push("inline " + m[1] + "= handler in index.html");
   if (/\sstyle="/.test(html)) out.push("style= attribute in index.html");
   if (/href="javascript:/i.test(html)) out.push("javascript: link in index.html");
+  const metaOf = (n) => { const m = html.match(new RegExp('<meta name="keel-' + n + '" content="([^"]*)"', "i")); return m ? m[1].trim() : null; };
+  const site = metaOf("site"), repo = metaOf("repo");
+  if (site !== null) {
+    let origin = null;
+    try { const u = new URL(site); if (u.protocol === "https:") origin = u.origin; } catch (e) { /* reported below */ }
+    const connect = (/(?:^|;)\s*connect-src([^;]*)/.exec(policy) || [])[1] || "";
+    if (!origin) out.push("keel-site should be an https address: " + site);
+    else if (!connect.split(/\s+/).some((x) => x === origin || x === "https:" || x === "*")) out.push("connect-src doesn't allow keel-site's " + origin);
+  }
+  if (repo !== null && !/^[\w.-]+\/[\w.-]+$/.test(repo)) out.push("keel-repo should be owner/name: " + repo);
   for (const f of files) {
     const src = fs.readFileSync(f, "utf8").replace(/^\s*\/\/.*$/gm, ""); // comments may name eval
     const name = f.split(/[\\/]/).slice(-2).join("/");
@@ -214,6 +235,19 @@ function i18nCheck(used, tbl) {
   return { missing, stale, broken };
 }
 
+const LITERAL = new RegExp(String.raw`(?:(?<![\w$.])(?:toast|confirm|alert)\(\s*|\.(?:textContent|innerText|placeholder|title|ariaLabel)\s*=\s*|setAttribute\(\s*["'](?:aria-label|title|placeholder|alt)["']\s*,\s*)(["'\`])([A-Za-z][^"'\`\n]*)`, "g");
+
+function literals(files) {
+  const out = [];
+  for (const file of files) {
+    fs.readFileSync(file, "utf8").split("\n").forEach((l, i) => {
+      if (/^\s*(\/\/|\*)/.test(l) || /\/\/\s*en-only:/.test(l)) return;
+      for (const m of l.matchAll(LITERAL)) out.push({ file, line: i + 1, text: m[2] });
+    });
+  }
+  return out;
+}
+
 // ---- motion ----
 
 const RELAYOUT = /^(font-size|line-height|letter-spacing|padding(-[a-z-]+)?|margin(-[a-z-]+)?)$/;
@@ -273,7 +307,7 @@ function waitsFind(files, min = 1000) {
 module.exports = {
   contrast: { themes, block, resolve, parse, ratio, check },
   csp: { policyOf, check: cspCheck },
-  i18n: { keys, table, check: i18nCheck },
+  i18n: { keys, table, check: i18nCheck, literals },
   motion: { check: motionCheck },
   waits: { find: waitsFind },
 };

@@ -642,6 +642,12 @@ The files listed in `keel.lock.json` (`server.js`, `src/keel/qr.js`,
 `keel.test.js` fails. Change them in keel, tag a release there, then run
 `node tools/keel-sync.js v<version>` in a PR here.
 
+The app's home is index.html's `keel-site` and `keel-repo` metas: where
+installed copies look for unreleased builds and the web address they
+link to. Before moving the repo to an organization or a custom domain,
+change both and ship a release; GitHub redirects the repo, not its Pages
+address (keel README, "Moving an app").
+
 ## The phone apps
 
 - **Android:** `.github/workflows/android.yml` generates the Capacitor
