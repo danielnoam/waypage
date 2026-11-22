@@ -463,7 +463,7 @@ function show(p, html) {
     brightOpen();
     volumeWatch();
     paintMarks(p);
-    loadTranslation(p);
+    loadTranslation(p).then(() => autoTranslate(p));
     inkSync(p);
     paintNote();
     $("readerContents").hidden = C.reader.headings().length < 2;
@@ -2996,17 +2996,29 @@ async function keepTranslation(p, data) {
   if (state.open === p) translateButton(p);
   if (state.open === p) C.reader.paintTranslation(trMode(data) !== "off" ? data.blocks : null, data && data.to, trMode(data));
 }
-async function startTranslate(p, to, redraw) {
+// A chapter of a collection set to translate its chapters (2026-11)
+// starts on its own when it opens, quietly, unless it's done already.
+function autoTranslate(p) {
+  const want = p && p.folder ? chaptersTranslateFor(p.folder) : null;
+  if (!want || state.open !== p || translating || !C.platform.translator.available) return;
+  const tr = translationOf(p);
+  if (tr && tr.to === want.to && tr.blocks.length >= C.reader.translatable().length) return;
+  startTranslate(p, want.to, () => {}, { mode: want.mode, quiet: true });
+}
+// opts: mode, the way to show it ("under" or "replace"); quiet, no word
+// when it's done or there's nothing to do (a chapter that translates
+// itself).
+async function startTranslate(p, to, redraw, opts = {}) {
   const T = C.platform.translator;
   if (state.open !== p || translating) return;
   const blocks = C.reader.translatable();
-  if (!blocks.length) { toast(t("There's no text in this clip to translate.")); return; }
+  if (!blocks.length) { if (!opts.quiet) toast(t("There's no text in this clip to translate.")); return; }
   const job = translating = { id: p.id, to, from: primary(p.lang), stop: false, line: t("Getting ready…") };
   redraw();
   try {
     if (!job.from) job.from = primary(await T.detect(blocks.slice(0, 30).map((b) => b.text).join(" ")));
     if (!job.from) { toast(t("Couldn't tell what language this clip is in.")); return; }
-    if (job.from === to) { toast(t("This clip is in {langName} already.", { langName: langName(to) })); return; }
+    if (job.from === to) { if (!opts.quiet) toast(t("This clip is in {langName} already.", { langName: langName(to) })); return; }
     const can = await T.ready(job.from, to);
     if (can === "unavailable") { toast(t("Translating {langName} into {langName2} isn't possible here.", { langName: langName(job.from), langName2: langName(to) })); return; }
     if (can === "downloadable") {
@@ -3020,7 +3032,7 @@ async function startTranslate(p, to, redraw) {
     const done = new Map(same.map((b) => [b.i + "|" + b.print, b]));
     const kept = blocks.filter((b) => done.has(b.i + "|" + b.print)).map((b) => done.get(b.i + "|" + b.print));
     const todo = blocks.filter((b) => !done.has(b.i + "|" + b.print));
-    const data = { from: job.from, to, at: Date.now(), mode: trMode(was) === "replace" ? "replace" : "under", blocks: kept };
+    const data = { from: job.from, to, at: Date.now(), mode: opts.mode || (trMode(was) === "replace" ? "replace" : "under"), blocks: kept };
     for (let k = 0; k < todo.length && !job.stop; k += TR_BATCH) {
       const part = todo.slice(k, k + TR_BATCH);
       const got = await T.translate(part.map((b) => b.text.slice(0, 5000)), job.from, to);
@@ -3032,7 +3044,7 @@ async function startTranslate(p, to, redraw) {
     }
     data.blocks.sort((a, b) => a.i - b.i);
     await keepTranslation(p, data);
-    toast(job.stop ? t("Stopped. What's translated is kept.") : t("Translated into {langName}", { langName: langName(to) }));
+    if (!opts.quiet || job.stop) toast(job.stop ? t("Stopped. What's translated is kept.") : t("Translated into {langName}", { langName: langName(to) }));
   } catch (e) {
     toast(t("Couldn't translate this clip{x}", { x: e && e.message ? ": " + String(e.message).slice(0, 80) : "." }));
   } finally {

@@ -325,6 +325,7 @@ Promise.all([C.platform.ready, firstIndex]).then(([, [pages]]) => {
   setTimeout(() => checkFeeds(false), 3000);
   // Feeds followed before 0.28.4 are handed over once, with the ask.
   if (feeds.length && !load(FEEDS_ASKED_KEY, false)) { store(FEEDS_ASKED_KEY, true); askToNotify = true; }
+  if (allFolders().some((n) => folderSource(folderPages(n)))) askChapterAlerts();
   watchFeeds();
   takeFeedNews();
   C.platform.feedChecks.onOpen(takeFeedNews);

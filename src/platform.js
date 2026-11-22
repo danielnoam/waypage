@@ -553,17 +553,21 @@
   const feedChecks = {
     // [{ url, title, known }]: the feeds and the post ids they have.
     // notes (1.30.0): { style: "each" | "together" | "off", quiet: [url] }.
-    watch(feeds, ask, notes) {
+    // stories (2026-11): linked collections to look at for new chapters,
+    // [{ name, url, host, prefix, depths, known }]; `wifi` keeps those
+    // checks off mobile data.
+    watch(feeds, ask, notes, stories, wifi) {
       const F = plugin("Feeds");
-      if (F) F.watch({ feeds, ask: !!ask, notes }).catch(() => {});
+      if (F) F.watch({ feeds, ask: !!ask, notes, stories: stories || [], wifi: !!wifi }).catch(() => {});
     },
-    // { feeds: [url], open, feed, save }: feeds with new posts since,
-    // whether a notification opened the app, the feed it was for and the
-    // post its Save asked for.
+    // { feeds: [url], open, feed, save, stories: [name], story }: feeds
+    // with new posts since, whether a notification opened the app, the
+    // feed it was for and the post its Save asked for; collections with
+    // new chapters since, and the one a notification opened.
     async news() {
       const F = plugin("Feeds");
       if (F) { try { return await F.news(); } catch (e) { /* none */ } }
-      return { feeds: [], open: false };
+      return { feeds: [], open: false, stories: [] };
     },
     // Whether the phone lets Waypage notify; null where it can't tell.
     async allowed() {

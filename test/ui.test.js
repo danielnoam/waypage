@@ -569,6 +569,53 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    // Translate chapters (2026-11): a linked collection's chapter
+    // translates itself as it opens, the way Website sync was set to show it.
+    await test("Website sync's Translate chapters translates a chapter as it opens", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (id, i) => ({ id, url: "https://example.com/story/" + id, title: "Chapter " + i, site: "example.com", savedAt: 1000 + i, minutes: 1, mode: "links", at: 0, finished: false,
+          folder: "Far Tale", folderAt: i, source: "https://example.com/story/", lang: "ja" });
+        const list = [c("ft1", 1), c("ft2", 2)];
+        localStorage.setItem("waypage.checkDaily", "false");
+        await S.writeIndex(list);
+        for (const x of list) await S.writePage(x.id, "<!doctype html><html lang=\"ja\"><body><p>First words of " + x.id + " in the story.</p><p>Second words of " + x.id + " here.</p></body></html>", x);
+      });
+      await q.reload();
+      const fake = () => {
+        const T = window.Waypage.platform.translator;
+        window.__prepared = [];
+        Object.defineProperty(T, "available", { get: () => true, configurable: true });
+        T.detect = async () => "ja";
+        T.ready = async () => "downloadable";
+        T.prepare = async (from, to, on) => { window.__prepared.push(from + ">" + to); if (on) on(1); };
+        T.translate = async (texts) => texts.map((t) => "[en] " + t);
+      };
+      await q.evaluate(fake);
+      await until(q, () => state.pages.length === 2);
+      await q.evaluate(() => { openFolder("Far Tale"); setFolderMode("chapters"); });
+      await q.locator("#folderBody .translate-pick button").first().click();
+      await q.getByRole("option", { name: "English" }).click();
+      await until(q, () => chaptersTranslateFor("Far Tale") && chaptersTranslateFor("Far Tale").to === "en");
+      await until(q, () => window.__prepared.includes("ja>en"));
+      await until(q, () => !document.querySelector(".dropdown-menu"));
+      await q.locator("#folderBody .translate-show button").first().click();
+      await q.getByRole("option", { name: "Instead of the text" }).click();
+      await until(q, () => chaptersTranslateFor("Far Tale").mode === "replace");
+      await q.evaluate(() => { setFolderMode(""); openPage("ft2"); });
+      const tr = q.frameLocator("#readerFrame").locator(".co-tr");
+      await tr.first().waitFor();
+      assert.strictEqual(await tr.count(), 2);
+      assert.match(await tr.first().textContent(), /^\[en\] First words of ft2/);
+      await until(q, () => document.getElementById("readerFrame").contentDocument.documentElement.classList.contains("co-replace"));
+      // A clip in no such collection doesn't.
+      assert.strictEqual(await q.evaluate(() => chaptersTranslateFor("Elsewhere")), null);
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("the Highlights button lists them, and words already highlighted can be unhighlighted", async () => {
       await p.locator(".page-card", { hasText: "The Long Haul Flight" }).first().click();
       const marks = p.frameLocator("#readerFrame").locator("mark.co-mark");

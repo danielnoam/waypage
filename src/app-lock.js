@@ -210,7 +210,7 @@ async function eraseAll() {
   } catch (e) { /* what's left is cleared with the storage below */ }
   state.pages = [];
   feeds = [];
-  try { C.platform.feedChecks.watch([], false, { style: "off", quiet: [] }); } catch (e) { /* no feeds */ }
+  try { C.platform.feedChecks.watch([], false, { style: "off", quiet: [] }, []); } catch (e) { /* no feeds */ }
   try { updateWidgets(); } catch (e) { /* no widgets */ }
   C.platform.lock.hideRecents(false);
   try {
