@@ -658,7 +658,8 @@ function notesSections() {
         options: [
           { value: "each", label: t("Each post on its own"), note: t("Its title and first words, with Save") },
           { value: "together", label: t("All together"), note: t("One saying how many, and from where") },
-        ] }) : null),
+        ] }) : null,
+      n.on && C.platform.android ? sw(t("New chapters"), t("When a linked collection's site has chapters you haven't got, checked every few hours"), n.chapters, (on) => setNotes({ chapters: on })) : null),
     phone)];
   if (!n.on) return out;
   // Feeds and newsletter addresses each in their own section (1.48.3).
@@ -683,7 +684,7 @@ function libraryGroup() {
           el("span", { class: "choice-label" }, t("Continue reading")),
           el("span", { class: "choice-note" }, t("Your last clip at the top of the library"))),
         input),
-      switchRow(t("Check for new chapters"), t("Once a day, when you're online"), load(DAILY_KEY, true), (on) => store(DAILY_KEY, on))));
+      switchRow(t("Check for new chapters"), t("Once a day, when you're online"), load(DAILY_KEY, true), (on) => { store(DAILY_KEY, on); watchFeeds(); })));
 }
 
 // Folders first, biggest first, then the pages in no folder as one

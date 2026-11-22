@@ -1,6 +1,11 @@
 // Hebrew. Keys are the English text; a missing key shows in English.
 // Plurals: one, two (optional), other. Keep {placeholders} and edge spaces.
 Keel.i18n.strings("he", {
+  "Translate chapters": "תרגום פרקים",
+  "Each chapter in its own words": "כל פרק בשפה שלו",
+  "Each chapter as it opens, on this device": "כל פרק כשהוא נפתח, במכשיר הזה",
+  "Downloading {langName} and {langName2}, once, so chapters translate offline.": "מוריד את {langName} ואת {langName2}, פעם אחת, כדי שפרקים יתורגמו גם בלי חיבור.",
+  "When a linked collection's site has chapters you haven't got, checked every few hours": "כשבאתר של אוסף מקושר יש פרקים שעוד אין לך, נבדק כל כמה שעות",
   "Releases on GitHub · last one {when}": "גרסאות ב-GitHub · האחרונה {when}",
   "Releases on GitHub · none yet": "גרסאות ב-GitHub · עוד אין",
   "{n} added": "{n} נוספו",

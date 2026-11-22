@@ -755,6 +755,57 @@
       },
     },
     {
+      name: "Syosetu",
+      host: /(^|\.)ncode\.syosetu\.com$/i,
+      // A serial's page (/n1234ab/) lists its episodes 100 to a page, the
+      // next page behind the pager's next link (?p=2); the layout before
+      // 2023 listed them all as dd.subtitle. A one-shot story's page is
+      // its text, so it has no list. Markup from Syosetu's 2023 layout as
+      // known, not seen from here.
+      async contents(doc, url) {
+        if (!/^\/n\d+[a-z]+\/?$/i.test(new URL(url).pathname)) return null;
+        const read = (d, at) => [...d.querySelectorAll("a.p-eplist__subtitle[href], dl.novel_sublist2 dd.subtitle a[href], .index_box dd.subtitle a[href]")]
+          .map((a) => absolute(a.getAttribute("href"), at));
+        let links = read(doc, url);
+        let d = doc, at = url;
+        for (let page = 2; page <= 100; page++) {
+          const next = d.querySelector("a.c-pager__item--next[href]");
+          if (!next) break;
+          const res = await get(absolute(next.getAttribute("href"), at));
+          at = res.url || absolute(next.getAttribute("href"), at);
+          d = parse(res.text, at);
+          const more = read(d, at);
+          if (!more.length) break;
+          links = links.concat(more);
+        }
+        links = uniqueLinks(links);
+        return links.length ? { title: text(doc.querySelector("h1.p-novel__title, p.novel_title")), links } : null;
+      },
+      // 完結済 (finished) or 連載中 (still being written), where the page
+      // says it.
+      status(doc) {
+        const said = text(doc.querySelector(".p-novel__info, .c-announce-box, .c-announce, #noveltype, #noveltype_notend"));
+        return /完結/.test(said) ? "completed" : /連載中/.test(said) ? "ongoing" : "";
+      },
+      chapter(doc) {
+        const main = doc.querySelector(".p-novel__body .p-novel__text:not(.p-novel__text--preface):not(.p-novel__text--afterword), #novel_honbun");
+        if (!main) return null;
+        const content = doc.createElement("div");
+        const before = doc.querySelector(".p-novel__text--preface, #novel_p");
+        const after = doc.querySelector(".p-novel__text--afterword, #novel_a");
+        if (before && text(before)) content.append(noteBlock(doc, "Author's note", before));
+        content.append(main.cloneNode(true));
+        if (after && text(after)) content.append(noteBlock(doc, "Author's note", after));
+        const og = doc.querySelector('meta[property="og:title"]');
+        return {
+          content,
+          title: text(doc.querySelector("h1.p-novel__title, p.novel_subtitle")),
+          series: text(doc.querySelector(".c-announce a[href], .contents1 a[href]")) || (og && og.content.trim()) || "",
+          byline: text(doc.querySelector(".p-novel__author a, .contents1 a[href*='mypage']")),
+        };
+      },
+    },
+    {
       name: "FanFiction.net",
       host: /(^|\.)(fanfiction\.net|fictionpress\.com)$/i,
       // "Status: Complete" in the story's grey line; no word there means
