@@ -2509,6 +2509,7 @@ Keel.i18n.strings("he", {
   "You have the latest version": "יש לך את הגרסה האחרונה",
   "You have the latest version.": "יש לך את הגרסה האחרונה.",
   "You have this": "זה כבר מותקן",
+  "Not released yet": "עוד לא שוחרר",
   "You're offline. Add it when you're back online.": "אין חיבור. אפשר להוסיף כשיחזור החיבור.",
   "You're offline. Check again when you're back online.": "אין חיבור. אפשר לבדוק שוב כשיחזור החיבור.",
   "You're offline. Connect to put the library back.": "אין חיבור. צריך להתחבר כדי להחזיר את הספרייה.",
