@@ -1052,11 +1052,11 @@
       } catch (e) { return null; }
     },
     // The folder a file sits in, opened in the phone's Files app (1.27.2,
-    // Android). { opened, where }, where its path ("Download/Books").
-    get canReveal() { return os === "android" && !!plugin("Files"); },
+    // Android; iOS too). { opened, where }, where its path ("Download/Books").
+    get canReveal() { return (os === "android" || os === "ios") && !!plugin("Files"); },
     async reveal(ref, tree) {
       const F = plugin("Files");
-      if (!F || os !== "android") return { opened: false, where: "" };
+      if (!F || !(os === "android" || os === "ios")) return { opened: false, where: "" };
       try {
         const got = await F.reveal(tree ? { uri: ref, tree } : { uri: ref });
         return { opened: !!got.opened, where: got.where || "" };
@@ -1297,9 +1297,9 @@
       onPiece(fn) { if (A()) A().addListener("piece", fn); },
       // Stop pressed on the "Writing the transcript" notification.
       onWritingStopped(fn) { if (A()) A().addListener("writingStopped", fn); },
-      // The narration saved as sound (Android): one sound file per call,
+      // The narration saved as sound: one sound file per call,
       // { uri, dur, size, t0, t1 }, with fn({ n, of }) heard after each piece.
-      get canVoice() { return !!A() && os === "android"; },
+      get canVoice() { return !!A(); },
       voice: (o) => A().voice(o),
       stopVoicing: () => (A() ? A().stopVoicing().catch(() => {}) : null),
       onVoiced(fn) { if (A()) A().addListener("voiced", fn); },
@@ -1331,7 +1331,7 @@
       return !!c && /^(cellular|wimax|bluetooth)$/.test(c.type || "");
     },
     // The theme's background and whether it's dark, for the phone's bars
-    // and, through native/share's Look plugin (Android), for the window
+    // and, through native/share's Look plugin, for the window
     // and WebView at the next start, before the page paints. SystemBars
     // first: it also repaints the window, which Look then puts right.
     // keep is false for a reader's own theme: the next start opens on the library.

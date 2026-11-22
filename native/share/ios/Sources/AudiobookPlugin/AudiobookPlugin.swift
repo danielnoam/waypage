@@ -19,6 +19,8 @@ import UIKit
 //   probe({ uri, offset, length })  { duration (ms), title, artist, album, cover (base64) }
 //   models() download({ id }) cancel() remove({ id })
 //   transcribe({ uri, offset, length, from, to, pack, lang }) stopTranscribing()
+//   voice({ items, blocks, lang, voice, engine, name })   { uri, dur, size, t0, t1 }
+//                                and "voiced" events { n, of }; stopVoicing()
 //
 // A "state" event { key, part, pos, dur, state } about twice a second while
 // it plays and as it changes, a "sleep" event { at }, and "piece" events
@@ -739,8 +741,51 @@ public class AudiobookPlugin: CAPPlugin, CAPBridgedPlugin {
         call.resolve()
     }
 
-    // Saving the narration as sound is Android's for now (platform.js asks
-    // canVoice first).
-    @objc func voice(_ call: CAPPluginCall) { call.reject("engine") }
-    @objc func stopVoicing(_ call: CAPPluginCall) { call.resolve() }
+    // ---- The narration saved as sound (Voicing.swift)
+
+    private static let voicer = DispatchQueue(label: "waypage.voicing", qos: .utility)
+    private static let voiceLock = NSLock()
+    private static var voicing = false
+
+    @objc func voice(_ call: CAPPluginCall) {
+        let items = (call.getArray("items") ?? []).map { ($0 as? String) ?? "" }
+        if items.isEmpty { call.reject("silent"); return }
+        let given = call.getArray("blocks") ?? []
+        let blocks = items.indices.map { i in i < given.count ? ((given[i] as? NSNumber)?.intValue ?? i) : i }
+        let lang = call.getString("lang") ?? "", voice = call.getString("voice") ?? "", engine = call.getString("engine") ?? ""
+        let raw = call.getString("name") ?? "part"
+        let name = String(raw.unicodeScalars.map { CharacterSet.alphanumerics.contains($0) || "._-".unicodeScalars.contains($0) ? Character($0) : "_" })
+        Self.voiceLock.lock()
+        if Self.voicing { Self.voiceLock.unlock(); call.reject("busy"); return }
+        Self.voicing = true
+        Self.voiceLock.unlock()
+        Voicing.stop = false
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("voicebook", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let out = dir.appendingPathComponent(name + ".m4a")
+        Self.voicer.async {
+            defer { Self.voiceLock.lock(); Self.voicing = false; Self.voiceLock.unlock() }
+            do {
+                let o = try Voicing.render(items: items, blocks: blocks, lang: lang, voice: voice, engine: engine, to: out) { n, of in
+                    self.notifyListeners("voiced", data: ["n": n, "of": of])
+                }
+                let size = (try? out.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                let r = { (x: Double) in (x * 100).rounded() / 100 }
+                call.resolve(["uri": o.url.absoluteString, "dur": o.dur, "size": size, "t0": o.t0.map(r), "t1": o.t1.map(r)])
+            } catch Voicing.Fail.stopped {
+                call.reject("stopped")
+            } catch Voicing.Fail.engine {
+                call.reject("engine")
+            } catch Voicing.Fail.silent {
+                call.reject("silent")
+            } catch {
+                call.reject(Voicing.stop ? "stopped" : "Couldn't make the sound.")
+            }
+        }
+    }
+
+    @objc func stopVoicing(_ call: CAPPluginCall) {
+        Voicing.stop = true
+        call.resolve()
+    }
 }
