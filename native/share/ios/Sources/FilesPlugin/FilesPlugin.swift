@@ -27,6 +27,9 @@ import UniformTypeIdentifiers
 //                                one library to another off the WebView's
 //                                thread; from and to are { tree } or { dir };
 //                                "copied" { done, total } as it goes
+//   reveal({ uri })              the folder a file sits in, opened in the
+//                                Files app: { opened, where }, where its
+//                                folder ("On My iPhone/Books")
 @objc(FilesPlugin)
 public class FilesPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDelegate {
     public let identifier = "FilesPlugin"
@@ -45,7 +48,8 @@ public class FilesPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDelegate 
         CAPPluginMethod(name: "folderList", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "folderDelete", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "folderScan", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "copyFiles", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "copyFiles", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "reveal", returnType: CAPPluginReturnPromise)
     ]
 
     private var pending: CAPPluginCall?
@@ -191,6 +195,37 @@ public class FilesPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDelegate 
             out["ok"] = FileManager.default.isReadableFile(atPath: at.path)
             out["path"] = at.path
             call.resolve(out)
+        }
+    }
+
+    // The Files app opens a folder from its shareddocuments: address: one
+    // in the app's own Documents, iCloud Drive or On My iPhone. A folder of
+    // another app's (Dropbox and the like) may not open, and then `where`
+    // says where it is.
+    @objc func reveal(_ call: CAPPluginCall) {
+        guard let r = ref(call) else { return }
+        work.async {
+            guard let url = FilesPlugin.resolve(r)?.standardizedFileURL, url.isFileURL else {
+                call.resolve(["opened": false, "where": ""])
+                return
+            }
+            let folder = url.deletingLastPathComponent()
+            let names = [folder.deletingLastPathComponent(), folder].map { u in
+                (try? u.resourceValues(forKeys: [.localizedNameKey]).localizedName) ?? u.lastPathComponent
+            }
+            let place = names.filter { !$0.isEmpty && $0 != "/" }.joined(separator: "/")
+            var allowed = CharacterSet.urlPathAllowed
+            allowed.remove(charactersIn: "?#")
+            guard let path = folder.path.addingPercentEncoding(withAllowedCharacters: allowed),
+                  let open = URL(string: "shareddocuments://" + path) else {
+                call.resolve(["opened": false, "where": place])
+                return
+            }
+            DispatchQueue.main.async {
+                UIApplication.shared.open(open, options: [:]) { ok in
+                    call.resolve(["opened": ok, "where": place])
+                }
+            }
         }
     }
 

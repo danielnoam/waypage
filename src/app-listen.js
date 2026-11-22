@@ -1137,7 +1137,7 @@ function listenAlongRows(p) {
   const a = audioFor(p);
   if (!a || ownSound(a)) return null;
   const head = el("h3", { class: "overline" }, t("Read along"));
-  if (!A.canTranscribe) return [head, el("p", { class: "meta" }, t("Reading along with a book or a transcript is in the Android app, which writes the transcript on the phone."))];
+  if (!A.canTranscribe) return [head, el("p", { class: "meta" }, t("Reading along with a book or a transcript is in the Android and iPhone apps, which write the transcript on the phone."))];
   const row = (label, note, act, accent) => el("button", { class: "row", type: "button", onclick: act },
     el("span", { class: "choice-text" }, el("span", { class: "choice-label" + (accent ? " accent" : "") }, label), note ? el("span", { class: "choice-note" }, note) : null));
   // The drop-down picks what it reads along with; under it, only what
@@ -1798,7 +1798,7 @@ async function voiceClip(p, run, step) {
 
 // what: { page } or { folder }.
 async function makeAudiobook(what) {
-  if (!canVoice()) { toast(t("Saving the narration is in the Android app.")); return; }
+  if (!canVoice()) { toast(t("Saving the narration is in the Android and iPhone apps.")); return; }
   if (voicingRun) { toast(t("A narration is being saved already. It's in Downloads.")); return; }
   const list = (what.folder ? folderPages(what.folder).filter((p) => !voicedSound(p)) : [what.page]).filter(voiceable);
   const title = what.folder || what.page.title;
@@ -1932,7 +1932,7 @@ function listenSheetPart() {
 }
 function audiobookSections() {
   const adding = el("p", { class: "footnote" }, t("Add an M4B, an MP3 or a zip of them with Add a file{x}. It's played from where it is, and shows under Files.", { x: C.platform.files.canPickFolder ? t(", or a folder of them with Add an audiobook folder") : "" }));
-  if (!A.canTranscribe) return [listeningGroup(), adding, el("p", { class: "footnote" }, t("Reading along with a book or a transcript is in the Android app."))];
+  if (!A.canTranscribe) return [listeningGroup(), adding, el("p", { class: "footnote" }, t("Reading along with a book or a transcript is in the Android and iPhone apps."))];
   const slot = el("div", { class: "kokoro-slot" }, el("p", { class: "footnote" }, t("Looking…")));
   fillTranscripts(slot);
   return [listeningGroup(), slot, adding];

@@ -564,6 +564,7 @@ final class PackDownloads: NSObject, URLSessionDownloadDelegate {
 final class KokoroEngine {
     private static let lock = NSLock()
     private static var current: KokoroEngine?
+    private static let speaking = NSLock()
 
     let pack: KokoroPack
     let sampleRate: Int
@@ -648,6 +649,9 @@ final class KokoroEngine {
     @discardableResult
     func generate(_ text: String, sid: Int, speed: Float, lang: String, chunk: @escaping ([Float]) -> Bool) -> Bool {
         #if canImport(SherpaOnnxC)
+        // Narrate and Save the narration take turns, a piece at a time.
+        Self.speaking.lock()
+        defer { Self.speaking.unlock() }
         let box = Unmanaged.passRetained(Box(chunk))
         defer { box.release() }
         var g = SherpaOnnxGenerationConfig()
