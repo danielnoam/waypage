@@ -93,6 +93,9 @@ function build(out = OUT, root = ROOT) {
     const to = path.join(out, rel);
     fs.mkdirSync(path.dirname(to), { recursive: true });
     if (rel === "index.html") fs.writeFileSync(to, appIndexHtml(fs.readFileSync(from, "utf8")));
+    // What's merged since the last release, on top as "## [Unreleased]",
+    // so a build of main says what it has beyond its version.
+    else if (rel === "CHANGELOG.md") fs.writeFileSync(to, require("./release.js").withPending(root));
     else fs.copyFileSync(from, to);
   }
   const repo = repoSlug();

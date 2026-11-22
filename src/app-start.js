@@ -788,8 +788,12 @@ function readChangelog() {
 
 function changelogView() {
   if (!changelog && !(changelogLoad && changelogLoad.settled)) return [el("p", { class: "meta" }, t("Loading…"))];
-  return changelog && changelog.length ? changelog.map((e) => el("section", { class: "news-entry" + (e.version === APP_VERSION ? " now" : "") },
-    el("h2", { class: "news-version" }, e.version, e.version === APP_VERSION ? el("span", { class: "news-you" }, t("You have this")) : null),
+  // A build of main ships "## [Unreleased]" on top (keel's withPending):
+  // what it has beyond its version, so the badge goes there.
+  const ahead = !!(changelog && changelog.length && changelog[0].version === "Unreleased");
+  const mine = (e) => (ahead ? e.version === "Unreleased" : e.version === APP_VERSION);
+  return changelog && changelog.length ? changelog.map((e) => el("section", { class: "news-entry" + (mine(e) ? " now" : "") },
+    el("h2", { class: "news-version" }, e.version === "Unreleased" ? t("Not released yet") : e.version, mine(e) ? el("span", { class: "news-you" }, t("You have this")) : null),
     e.date ? el("p", { class: "meta" }, formatDay(e.date)) : null,
     ...notesView([e]))) : [el("p", { class: "empty-text" }, t("The list of changes didn't load."))];
 }
