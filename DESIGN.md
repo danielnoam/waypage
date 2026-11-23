@@ -505,10 +505,17 @@ picture viewer's fallback only, never for a menu, bar or dialog.
   the lifted row takes the soft shadow and the others slide aside on the
   control spring (none with reduced motion).
 - **Website sync (Now, was Story page, and the Chapters panel before
-  that):** over the
-  chapters: the check row with "Save N" when there are new chapters,
-  Save previous and Save next, then "Synced with" (a 44 px link field,
-  Link or Change, Unlink).
+  that):** Edit's second tab (2026-11), no longer in the ⋯ menu: "Synced
+  with" first (the link field with Refresh, Status from the site), then
+  the check row with "Save N" when there are new chapters, Keep and
+  Translate, then Save previous and Save next.
+- **Edit's Collection tab (2026-11):** the tabs on top, the name field the
+  full width (no cover, no progress), Cover's choices (Automatic, Your
+  picture, Mosaic, Stacked, Side by side, each clip's picture), Status
+  (hidden while the site sets it), then the chapters' card with Sort by
+  as its first row: a drop-down whose face carries ↑ or ↓ after the
+  sort's name, and in the menu after the ticked one; picking it again
+  turns it round; any other order reads "Your order".
 - **What's saved (Now, 0.27.11):** a bordered `--surface` box: "What's
   saved" and the size, an 8 px bar of pictures (accent) and text (accent
   mixed 40% into `--line`), then a legend of 8 px keys: pictures kept and

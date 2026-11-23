@@ -1935,6 +1935,7 @@ span.update-text { cursor: default; }
 .cover-mosaic { display: grid; width: 100%; height: 100%; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
 .cover-mosaic img { min-width: 0; min-height: 0; }
 .cover-mosaic.n2 > *, .cover-mosaic.n3 > :first-child { grid-column: 1 / -1; }
+.cover-mosaic.side { grid-template-rows: 1fr; }
 .cover-choice-pic .folder-icon, .cover-choice-pic .book-icon { color: var(--accent); }
 .cover-choice[aria-pressed="true"] .cover-choice-pic { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .paper-row { gap: var(--s-4); }
@@ -2239,11 +2240,14 @@ span.update-text { cursor: default; }
 .folder-covers .item-fav:hover { background: none; }
 .selecting .item-fav { display: none; }
 
-.order-hint { display: flex; align-items: center; gap: var(--s-3); margin: 0 var(--s-1) var(--s-3); }
-.order-hint { flex-wrap: wrap; }
-.order-hint .meta { flex: 1; margin: 0; }
-.sort-chips { flex-basis: 100%; }
-.sort-chips .meta { flex: none; }
+/* Edit (2026-11): its two tabs, the facts after the cover, and Sort by
+   as the top row of the chapters' card. */
+.edit-tabs { margin-bottom: var(--s-4); }
+.folder-edit .folder-facts { margin-top: var(--s-4); }
+.sort-head { border-end-start-radius: 0; border-end-end-radius: 0; border-bottom: 0; }
+.sort-head + .folder-list { border-start-start-radius: 0; border-start-end-radius: 0; }
+.sort-head .sort-row { cursor: default; }
+.sort-dir { display: inline-flex; vertical-align: -3px; margin-inline-start: var(--s-1); }
 .folder-list.ordering .row { min-height: 56px; cursor: default; }
 .folder-list.ordering li { background: var(--surface); }
 .folder-list.dragging li { transition: transform var(--spring-control-ms, 300ms) var(--spring-control, ease-out); }

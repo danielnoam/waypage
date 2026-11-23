@@ -123,12 +123,11 @@ $("folderEdit").addEventListener("click", () => setFolderMode("edit"));
 $("folderFav").addEventListener("click", () => favFolder(state.folder, !folderFav(state.folder)));
 $("folderCancel").addEventListener("click", () => setFolderMode(""));
 $("folderDone").addEventListener("click", async () => {
-  if (folderMode === "edit" && folderDraft != null && !(await renameFolder(folderDraft))) return;
+  if (editMode() && folderDraft != null && !(await renameFolder(folderDraft))) return;
   setFolderMode("");
 });
 $("folderBody").addEventListener("scroll", paintFolderTitle, { passive: true });
-// Escape steps out of Edit (dropping a typed name), Website sync or
-// Export.
+// Escape steps out of Edit (either tab, dropping a typed name) or Export.
 $("folderView").addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !e.defaultPrevented && folderMode && !state.menu && !state.select) { e.preventDefault(); setFolderMode(""); }
 });

@@ -1744,17 +1744,17 @@ function checkRow(list) {
 
 // ---- The folder's Website sync panel (0.26.0, was Story page) ----
 // Everything about a series in one place, in Settings' groups (2026-11):
-// new chapters and how many to keep, saving earlier or later ones, and
 // the site's page it's linked to (any site's contents page, or one of
-// its chapters).
+// its chapters), first (Daniel 2026-11-23), then new chapters and how
+// many to keep, and saving earlier or later ones. Edit's second tab.
 function chaptersPanel(list) {
   const top = [checkRow(list), keepRow(list), ...translateRows(list)].filter(Boolean);
   const more = [followControls(list[list.length - 1]), followControls(list[0], true)].filter(Boolean);
   return el("div", { class: "folder-actions chapters-panel" },
+    sourceSection(list),
     top.length ? section(t("New chapters"), null, el("div", { class: "group" }, ...top))
-      : el("p", { class: "meta" }, t("These clips don't link to each other, so there's nothing to look for. Link the collection to its website below.")),
-    more.length ? section(t("Save more"), null, el("div", { class: "group follow-group" }, ...more)) : null,
-    sourceSection(list));
+      : el("p", { class: "meta" }, t("These clips don't link to each other, so there's nothing to look for. Link the collection to its website above.")),
+    more.length ? section(t("Save more"), null, el("div", { class: "group follow-group" }, ...more)) : null);
 }
 
 function keepRow(list) {

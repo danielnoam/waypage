@@ -177,6 +177,8 @@ function renderLibrary() {
   // The same for All notes once the last note is gone (2.0.0).
   if (loaded && state.filter === "notes" && !state.pages.some((p) => p.note)) { state.filter = "all"; store(FILTER_KEY, "all"); }
   renderTools();
+  // A mosaic cover whose clips changed is drawn again (2026-11).
+  if (loaded) watchMosaics();
   // Until the library is read nothing is said (1.2.0): the empty state
   // showed for the second it took, as if there were no clips.
   $("libraryMeta").textContent = n ? pagesLine(n) : loaded ? t("Nothing saved yet") : "";
