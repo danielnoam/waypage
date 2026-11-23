@@ -1855,7 +1855,12 @@ function zipOf(files) {
       // Linked, the site's word shows over the pick, until Website sync turns it off.
       await q.evaluate(() => { for (const p of folderPages("Knight")) { p.siteStatus = "ongoing"; p.source = "https://blog.example.com/"; } renderFolder(); });
       await until(q, () => /Series · Ongoing/.test(document.querySelector("#folderBody .book-site").textContent));
-      await q.evaluate(() => setFolderMode("chapters"));
+      // While the site sets it, Edit has no Status row (Daniel 2026-11-23).
+      await q.evaluate(() => setFolderMode("edit"));
+      assert.strictEqual(await q.locator("#folderBody .status-pick").count(), 0);
+      // Website sync is Edit's second tab, its link on top.
+      await q.locator("#folderBody .edit-tabs .rs-tab", { hasText: "Website sync" }).click();
+      await until(q, () => folderMode === "chapters" && document.querySelector("#folderBody .chapters-panel > .settings-section .source-input"));
       const sw = q.locator("#folderBody .row", { hasText: "Status from the site" }).locator("input");
       assert.ok(await sw.isChecked());
       await sw.click();
@@ -2029,7 +2034,7 @@ function zipOf(files) {
       await q.evaluate(() => openFolder("Serial"));
       // Favourite and Edit sit in the bar; the ⋯ menu keeps the rest.
       await q.click("#folderMore");
-      assert.deepStrictEqual(await q.locator("#folderPop .pop-label").allTextContents(), ["Website sync", "Add clips", "Show as a list", "Make it a series", "Tags", "Select", "Export", "Remove"]);
+      assert.deepStrictEqual(await q.locator("#folderPop .pop-label").allTextContents(), ["Add clips", "Show as a list", "Make it a series", "Tags", "Select", "Export", "Remove"]);
       await q.keyboard.press("Escape");
       await q.click("#folderFav");
       await until(q, () => folderFav("Serial") && document.getElementById("folderFav").getAttribute("aria-pressed") === "true");
@@ -2041,16 +2046,28 @@ function zipOf(files) {
       assert.strictEqual(await q.locator("#folderBody .item-fav").count(), 0);
       // A name typed in Edit stays while the order changes under it.
       await q.fill("#folderBody .book-title-input", "Serial two");
+      // Edit shows no cover or progress at the top: the cover's choices are below.
+      assert.strictEqual(await q.locator("#folderBody .book-head .book-cover, #folderBody .book-head .book-progress, #folderBody .book-head .folder-meta").count(), 0);
       const order = () => q.evaluate(() => folderPages("Serial").map((p) => p.id).join());
-      await q.locator('[data-sort="released"]').click();
+      // Sort by is a drop-down on top of the chapters; picking the same
+      // sort again turns it round, and the face carries ↑ or ↓.
+      const sortBy = async (label) => {
+        await q.locator("#folderBody .sort-row .dropdown-btn").click();
+        await q.locator(".dropdown-menu .dropdown-item", { hasText: label }).click();
+      };
+      const face = () => q.evaluate(() => { const b = document.querySelector("#folderBody .sort-row .dropdown-btn"); return b && b.getAttribute("aria-label"); });
+      await sortBy("Release date");
       await until(q, () => folderPages("Serial")[0].id === "rr100");
       assert.strictEqual(await order(), "rr100,rr300,rr500");
-      await q.locator('[data-sort="released"]').click();
+      await until(q, () => !!document.querySelector("#folderBody .sort-row .dropdown-face .sort-dir"));
+      assert.ok(/Release date$/.test(await face()), await face());
+      await sortBy("Release date");
       await until(q, () => folderPages("Serial")[0].id === "rr500");
-      await q.locator('[data-sort="title"]').click();
+      await until(q, () => /Release date, Reversed$/.test(document.querySelector("#folderBody .sort-row .dropdown-btn").getAttribute("aria-label")));
+      await sortBy("Title");
       await until(q, () => folderPages("Serial")[0].id === "rr300");
       assert.strictEqual(await order(), "rr300,rr100,rr500");
-      await q.locator('[data-sort="added"]').click();
+      await sortBy("Date added");
       await until(q, () => folderPages("Serial")[0].id === "rr100");
       assert.strictEqual(await order(), "rr100,rr300,rr500");
       // No arrow buttons: the handle takes the arrow keys.
@@ -2061,7 +2078,15 @@ function zipOf(files) {
       await until(q, () => folderPages("Serial")[1].id === "rr100" && !!document.activeElement.closest("li"));
       assert.strictEqual(await order(), "rr300,rr100,rr500");
       assert.strictEqual(await q.evaluate(() => document.activeElement.closest("li").dataset.id), "rr100");
+      // A move into an order it knows shows that one; any other is your own.
+      await until(q, () => /Title$/.test(document.querySelector("#folderBody .sort-row .dropdown-btn").getAttribute("aria-label")));
+      assert.strictEqual(await q.evaluate(() => { const l = folderPages("Serial"); return folderSortNow([l[1], l[2], l[0]].map((p, i) => ({ ...p, title: ["b", "c", "a"][i], savedAt: [3, 1, 2][i], published: null, url: "https://x.example/" + i }))); }), null);
       assert.strictEqual(await q.locator("#folderBody .book-title-input").inputValue(), "Serial two");
+      // A chapter's line sits on its title's side, in Hebrew too.
+      assert.strictEqual(await q.locator('#folderBody .folder-list .choice-text:not([dir="auto"])').count(), 0);
+      // The typed name is kept on Website sync's tab, and Done there renames.
+      await q.locator("#folderBody .edit-tabs .rs-tab", { hasText: "Website sync" }).click();
+      await until(q, () => folderMode === "chapters");
       await q.click("#folderDone");
       await until(q, () => state.folder === "Serial two" && !folderMode);
       await q.evaluate(async () => {
@@ -2070,7 +2095,19 @@ function zipOf(files) {
         setFolderMode("edit");
       });
       await q.locator('.cover-choice[aria-label="Mosaic of the first 3 pictures"]').click();
-      await until(q, () => /^ux[a-z0-9]+\.jpg$/.test(coverPick(folderPages("Serial"))) && document.querySelector('.cover-choice[aria-pressed="true"] .cover-choice-name').textContent === "Mosaic");
+      await until(q, () => /^uym[a-z0-9]+\.jpg$/.test(coverPick(folderPages("Serial"))) && document.querySelector('.cover-choice[aria-pressed="true"] .cover-choice-name').textContent === "Mosaic");
+      // A mosaic follows its clips: one moved out, it's drawn again from
+      // what's left (it kept showing a deleted clip, Daniel 2026-11-23).
+      const drawn = await q.evaluate(() => coverPick(folderPages("Serial")));
+      await q.evaluate(async () => { await setFolder(folderPages("Serial")[0], ""); });
+      await until(q, (was) => { const now = coverPick(folderPages("Serial")); return /^uym/.test(now) && now !== was; }, drawn);
+      assert.strictEqual(await q.evaluate(() => coverPick(folderPages("Serial")) === mosaicName("m", folderPages("Serial").filter(thumbUrl))), true);
+      // Two pictures side by side, and back to Automatic with fewer than two.
+      await q.locator('.cover-choice[aria-label="The first two pictures, side by side"]').click();
+      await until(q, () => /^uyv/.test(coverPick(folderPages("Serial"))));
+      await q.evaluate(async () => { await setFolder(folderPages("Serial")[0], ""); });
+      await until(q, () => !coverPick(folderPages("Serial")));
+      await q.evaluate(async () => { for (const p of state.pages.filter((x) => /^rr/.test(x.id) && !x.folder)) await setFolder(p, "Serial"); });
       // What's saved counts files and audiobooks by kind, not as pictures.
       const kept = await q.evaluate(() => {
         const book = { id: "fb1", title: "Book", bytes: 900000, images: 22, imageBytes: 0, mode: "full", file: { kind: "epub", ext: "epub" }, link: "x" };

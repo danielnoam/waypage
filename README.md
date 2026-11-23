@@ -62,8 +62,8 @@ Each section below shows the computer (left) and the phone (right).
 <p><img src="docs/shots/collections-desktop.jpg" width="74%" alt="A collection on a computer"> <img src="docs/shots/collections-phone.jpg" width="21%" alt="A collection on a phone"></p>
 
 - Collections are ordered folders: chapters in order, "2 of 4 read", Continue. Star a collection, or any clip in it, from its own screen.
-- Sort a collection by chapter, release date, date added or title, or show it as covers instead of a list. Its cover shows a mark for each kind it holds (clips, files, audiobooks, notes).
-- Website sync: a collection linked to a site's contents page (any site, or one of its chapters) finds new chapters and shows a "+N" to save them.
+- Sort a collection by chapter, release date, date added or title (pick it again to turn it round), or show it as covers instead of a list. Its cover shows a mark for each kind it holds (clips, files, audiobooks, notes), and can be its site's picture, your own, a clip's, or a mosaic of the first pictures (four, or two stacked or side by side) that keeps up as clips change.
+- Website sync (Edit's second tab): a collection linked to a site's contents page (any site, or one of its chapters) finds new chapters and shows a "+N" to save them.
 - Files: EPUB, PDF, MOBI, AZW3, FB2, CBZ, Markdown, text and HTML, copied in (a clip like any other) or read from where they are. Books keep their own contents.
 - PDFs mixing Hebrew or Arabic with English keep each line's words in order.
 - Big PDFs are read a piece at a time, never whole in memory.

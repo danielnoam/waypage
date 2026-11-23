@@ -1189,9 +1189,15 @@ area.
   `onDestroy`: the car holds that token.
 
 - A collection's mosaic cover is a picture of your own whose name starts
-  "ux" (`MOSAIC_FILE`); own pictures start with a base-36 time ("um…"
-  until the 2050s). Change how either is named and the Cover choices
-  show the wrong one as picked.
+  "uy", then its kind (m mosaic, s stacked, v side by side) and a hash of
+  the clips it shows (`mosaicName`); "ux" is a mosaic from before, drawn
+  again once. Own pictures start with a base-36 time ("um…" until the
+  2050s). Change how either is named and the Cover choices show the wrong
+  one as picked. A mosaic is a drawn picture, so it went stale when its
+  clips changed (it showed a deleted one): `watchMosaics` (after each
+  library draw) draws it again when the hash no longer matches. Which
+  clips it shows depends on `thumb`, which is this device's own; two
+  devices that disagree would each draw their own, once a session.
 - The small window outside the app (picture in picture) is one setting
   on the activity that Narrate and audiobooks share, and Android keeps it
   armed until told otherwise. Only `PipWindow.java` sets it, and it arms

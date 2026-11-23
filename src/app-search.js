@@ -279,9 +279,11 @@ function dropdown(o) {
     const at = o.options.find((x) => !x.head && x.value === value) || (o.placeholder ? { label: o.placeholder } : o.options[0]);
     const empty = !!o.placeholder && at.label === o.placeholder;
     face.textContent = at.label;
+    // A mark after the words (a sort's ↑ or ↓), and what it means to a screen reader.
+    if (at.mark) face.append(at.mark.cloneNode(true));
     face.style.cssText = at.style || "";
     face.classList.toggle("unset", empty);
-    btn.setAttribute("aria-label", empty ? o.label : o.label + ": " + at.label);
+    btn.setAttribute("aria-label", empty ? o.label : o.label + ": " + at.label + (at.markLabel ? ", " + at.markLabel : ""));
   };
   let menu = null;
   const outside = (e) => { if (!wrap.contains(e.target)) close(false); };
@@ -351,9 +353,10 @@ function dropdown(o) {
           // The new choice pops into the face (1.48.0).
           if (changed) { face.classList.remove("changed"); void face.offsetWidth; face.classList.add("changed"); }
           close(true);
-          if (changed) o.onpick(x.value);
+          // `again`: picking the chosen one again counts too (a sort turns round).
+          if (changed || o.again) o.onpick(x.value);
         } },
-        el("span", { class: "dropdown-text", dir: "auto", style: x.style || null }, x.label, x.sample || null), check);
+        el("span", { class: "dropdown-text", dir: "auto", style: x.style || null }, x.label, x.sample || null, x.mark ? x.mark.cloneNode(true) : null), check);
     });
     const items = nodes.filter((x) => x.tagName === "BUTTON");
     menu = el("div", { class: "dropdown-menu", role: "listbox", "aria-label": o.label }, ...nodes);
