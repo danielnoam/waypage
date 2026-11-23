@@ -2855,8 +2855,6 @@ Keel.i18n.strings("he", {
   "Status from the site": "מצב מהאתר",
   "{site} says {status}": "לפי {site}: {status}",
   "The site doesn't say": "האתר לא מציין",
-  "From {site}: {status}": "מ-{site}: {status}",
-  "its site": "האתר שלו",
   "Edit note": "עריכת פתק",
   "Delete note": "מחיקת הפתק",
   "Write a comment": "כותבים הערה",
