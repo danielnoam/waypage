@@ -1245,6 +1245,10 @@
       // none), so downloads send none either (`keep`).
       noReferer: true,
       comic: (url) => /^\/title\/[^/]+\/\d+-chapter-[^/]+\/?$/.test(new URL(url).pathname),
+      // The reader makes a slot (`.rpage-page`) for every panel at once but
+      // puts a picture in only the ones the scroll has reached, so it is
+      // scrolled until each slot has its picture (PageRender `expect`/`ready`).
+      slots: { expect: ".rpage-page", ready: ".rpage-page__img[src^=http]" },
       panels(doc, url) {
         return uniqueLinks([...doc.querySelectorAll(".rpage-page__img[src]")]
           .map((img) => absolute(img.getAttribute("src"), url))
@@ -2671,7 +2675,17 @@
     // saved copy is the same script-free HTML as any other page's.
     if ((!got || got.check) && C.platform.canRender) {
       if (onDrawing) onDrawing();
-      const drawn = await C.platform.render(finalUrl, { scroll: comic });
+      let drawn = await C.platform.render(finalUrl, { scroll: comic, ...(comic && site && site.slots) });
+      // A site that names its picture slots (comix.to) says how many there
+      // were and how many came: a chapter that came up short is drawn once
+      // more, then fails to be tried again, never kept half done.
+      if (comic && site && site.slots) {
+        const short = (d) => d && d.expected !== undefined && !(d.expected > 0 && d.ready >= d.expected);
+        if (short(drawn)) drawn = await C.platform.render(finalUrl, { scroll: true, ...site.slots });
+        if (short(drawn)) throw new SaveError(drawn.expected > 0
+          ? t("Only {got} of {total} pictures loaded. Try again.", { got: drawn.ready, total: drawn.expected })
+          : t("The pictures didn't load. Try again."), true);
+      }
       if (drawn) {
         finalUrl = drawn.url;
         html = drawn.text;

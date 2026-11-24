@@ -548,7 +548,7 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
         Waypage.platform.render = async (u, opts) => {
           calls.push(opts);
           const pages = Array.from({ length: 12 }, (_, i) => '<div class="rpage-page" data-page="' + (i + 1) + '"><img class="rpage-page__img" width="800" height="1500" src="https://wyr.host' + (i % 3) + '.site/hi/p' + (i + 1) + '"></div>').join("");
-          return { url: u, text: '<html><head><meta property="og:title" content="The Perks of Being an S-Class Heroine · Ch.7"><title>x</title></head><body><div class="rpage">' + pages + '<a class="rpage-chap-ending__title" href="/title/1w0v-the-perks">The Perks</a></div></body></html>' };
+          return { url: u, expected: 12, ready: 12, text: '<html><head><meta property="og:title" content="The Perks of Being an S-Class Heroine · Ch.7"><title>x</title></head><body><div class="rpage">' + pages + '<a class="rpage-chap-ending__title" href="/title/1w0v-the-perks">The Perks</a></div></body></html>' };
         };
         const meta = await Waypage.save.save("https://comix.to/title/1w0v-the-perks/1234-chapter-7");
         const html = await Waypage.store.readPage(meta.id);
@@ -556,9 +556,46 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       });
       assert.strictEqual(got.calls.length, 1);
       assert.strictEqual(got.calls[0].scroll, true, "scrolled to the end, so the reader puts every picture in");
+      assert.strictEqual(got.calls[0].expect, ".rpage-page", "until every slot has its picture");
+      assert.strictEqual(got.calls[0].ready, ".rpage-page__img[src^=http]");
       assert.deepStrictEqual(got.srcs.filter((s) => /\/hi\/p/.test(s)), Array.from({ length: 12 }, (_, i) => "https://wyr.host" + (i % 3) + ".site/hi/p" + (i + 1)));
       assert.strictEqual(got.meta.title, "Ch.7");
       assert.strictEqual(got.meta.series, "The Perks of Being an S-Class Heroine");
+    });
+
+    // The reader makes a slot for every panel and fills only the ones the
+    // scroll has reached; a render that ran out of time comes back short.
+    const comixDraw = (answers) => inPage(browser, [["https://comix.to/title/1w0v-the-perks", "comix-chapter.html"]], async (answers) => {
+      Object.defineProperty(Waypage.platform, "canRender", { get: () => true, configurable: true });
+      let n = 0;
+      Waypage.platform.render = async (u, opts) => {
+        const a = answers[Math.min(n++, answers.length - 1)];
+        const pages = Array.from({ length: a.ready }, (_, i) => '<div class="rpage-page"><img class="rpage-page__img" src="https://wyr.host0.site/hi/p' + (i + 1) + '"></div>').join("");
+        return { url: u, expected: a.expected, ready: a.ready, text: '<html><head><meta property="og:title" content="Series · Ch.7"><title>x</title></head><body><div class="rpage">' + pages + '</div></body></html>' };
+      };
+      let error = null, meta = null;
+      try { meta = await Waypage.save.save("https://comix.to/title/1w0v-the-perks/1234-chapter-7"); } catch (e) { error = { message: e.message, again: e.again }; }
+      return { error, saved: !!meta, draws: n };
+    }, answers);
+
+    await test("comix.to: a chapter drawn short is drawn once more, and kept when that is whole", async () => {
+      const { got } = await comixDraw([{ expected: 12, ready: 5 }, { expected: 12, ready: 12 }]);
+      assert.strictEqual(got.draws, 2);
+      assert.strictEqual(got.saved, true);
+    });
+
+    await test("comix.to: a chapter still short fails to be tried again, never saved half done", async () => {
+      const { got } = await comixDraw([{ expected: 12, ready: 5 }]);
+      assert.strictEqual(got.draws, 2);
+      assert.strictEqual(got.saved, false);
+      assert.strictEqual(got.error.again, true);
+      assert.ok(/Only 5 of 12/.test(got.error.message), got.error.message);
+    });
+
+    await test("comix.to: a chapter whose slots never appeared fails to be tried again", async () => {
+      const { got } = await comixDraw([{ expected: 0, ready: 0 }]);
+      assert.strictEqual(got.saved, false);
+      assert.strictEqual(got.error.again, true);
     });
 
     await test("comix.to: its pictures are downloaded without a Referer, other sites' with one", async () => {

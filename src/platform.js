@@ -302,13 +302,18 @@
   // in as they come into view; a long chapter takes longer.
   // `waitFor`: a CSS selector the page must show before it counts as drawn,
   // for a list it fetches after its first screen (comix.to's chapters).
-  async function render(url, { scroll = false, waitFor = "" } = {}) {
+  // `expect` and `ready` (with `scroll`): selectors for a chapter's picture
+  // slots and for a slot that is filled in. It is scrolled until every slot is
+  // filled (not merely until the page stops changing), and the answer has
+  // `expected` and `ready`, the counts when it was taken, so a chapter the
+  // time ran out on is known to be short (comix.to's panels).
+  async function render(url, { scroll = false, waitFor = "", expect = "", ready = "" } = {}) {
     const R = plugin("PageRender");
     if (!R) return null;
     try {
       const wait = scroll ? 50000 : 20000;
-      const res = await deadline(R.render({ url, timeoutMs: wait, scroll, waitFor }), wait + 10000);
-      return res && res.html ? { text: res.html, url: res.url || url } : null;
+      const res = await deadline(R.render({ url, timeoutMs: wait, scroll, waitFor, expect, ready }), wait + 10000);
+      return res && res.html ? { text: res.html, url: res.url || url, expected: res.expected, ready: res.ready } : null;
     } catch (e) {
       return null;
     }

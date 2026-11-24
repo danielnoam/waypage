@@ -30,6 +30,11 @@ import org.json.JSONObject;
  *   render({ url, timeoutMs, waitFor: "css selector" })   the same, but the
  *     text only counts once something matches the selector, for a list a
  *     page fetches after it has drawn its synopsis (comix.to's chapters)
+ *   render({ url, timeoutMs, scroll: true, expect: "sel", ready: "sel" })   scrolled
+ *     until every element matching `expect` (a chapter's picture slots) has a
+ *     match of `ready` (the slot filled in): the page is taken then, not when
+ *     the page merely stops changing. Answers `expected` and `ready`, the
+ *     counts at the end, so a chapter cut short by the timeout can be told.
  *
  * The page runs in its own WebView, out of sight behind the app's: no
  * Capacitor bridge, no JavaScript interfaces, no file access, http(s) only,
@@ -65,7 +70,9 @@ public class PageRenderPlugin extends Plugin {
         long timeout = Math.max(5000, Math.min(60000, call.getData().optLong("timeoutMs", 20000L)));
         boolean scroll = call.getBoolean("scroll", false);
         String waitFor = call.getString("waitFor");
-        new Handler(Looper.getMainLooper()).post(() -> new Job(call, url, timeout, scroll, waitFor).start());
+        String expect = call.getString("expect");
+        String ready = call.getString("ready");
+        new Handler(Looper.getMainLooper()).post(() -> new Job(call, url, timeout, scroll, waitFor, expect, ready).start());
     }
 
     private class Job {
@@ -74,6 +81,11 @@ public class PageRenderPlugin extends Plugin {
         final long timeout;
         final boolean scroll;
         final String measure;
+        // With `expect` and `ready`: counts "slots:filled:atEnd" instead of
+        // the picture count, and the page is taken when they match.
+        final String slots;
+        int expected = -1;
+        int filled = -1;
         final Handler main = new Handler(Looper.getMainLooper());
         WebView web;
         boolean done;
@@ -82,8 +94,15 @@ public class PageRenderPlugin extends Plugin {
         int steady;
         int lastCount = -1;
 
-        Job(PluginCall call, String url, long timeout, boolean scroll, String waitFor) {
+        Job(PluginCall call, String url, long timeout, boolean scroll, String waitFor, String expect, String ready) {
             this.call = call;
+            this.slots = scroll && expect != null && !expect.isEmpty() && ready != null && !ready.isEmpty()
+                ? "(function(){var h=document.documentElement,b=document.body;"
+                    + "var end=Math.max(h.scrollHeight,b?b.scrollHeight:0)-2,at=window.scrollY+innerHeight>=end;"
+                    + "if(!at)window.scrollBy(0,innerHeight);"
+                    + "return document.querySelectorAll(" + JSONObject.quote(expect) + ").length+':'"
+                    + "+document.querySelectorAll(" + JSONObject.quote(ready) + ").length+':'+(at?'1':'0');})()"
+                : null;
             // The page's text length; with a selector, 0 until it matches.
             this.measure = waitFor == null || waitFor.isEmpty() ? TEXT_LENGTH
                 : "(document.querySelector(" + JSONObject.quote(waitFor) + ") ? " + TEXT_LENGTH + " : 0)";
@@ -152,6 +171,7 @@ public class PageRenderPlugin extends Plugin {
         // stop filling in (three steps the same), then takes the page.
         void step() {
             if (done) return;
+            if (slots != null) { stepSlots(); return; }
             web.evaluateJavascript(SCROLL_STEP, (v) -> {
                 if (done) return;
                 String r = decode(v);
@@ -162,6 +182,29 @@ public class PageRenderPlugin extends Plugin {
                 lastCount = n;
                 if (steady >= 3) take();
                 else main.postDelayed(this::step, SCROLL_MS);
+            });
+        }
+
+        // A chapter's pictures arrive only for the slots the scroll has
+        // reached, and the slots appear after the page's own request. So
+        // nothing is taken while there are no slots, or any is empty; two
+        // steps with every slot filled and none more, then the page. The
+        // timeout takes whatever there is, and says how many were missing.
+        void stepSlots() {
+            web.evaluateJavascript(slots, (v) -> {
+                if (done) return;
+                String r = decode(v);
+                int total = 0, got = 0;
+                try {
+                    String[] p = r.split(":");
+                    total = Integer.parseInt(p[0]);
+                    got = Integer.parseInt(p[1]);
+                } catch (Exception e) { /* no slots yet */ }
+                expected = total;
+                steady = total > 0 && got >= total && got == filled ? steady + 1 : 0;
+                filled = got;
+                if (steady >= 2) take();
+                else main.postDelayed(this::stepSlots, SCROLL_MS);
             });
         }
 
@@ -178,6 +221,7 @@ public class PageRenderPlugin extends Plugin {
                 }
                 JSObject out = new JSObject();
                 out.put("html", html);
+                if (slots != null) { out.put("expected", Math.max(expected, 0)); out.put("ready", Math.max(filled, 0)); }
                 out.put("url", at != null && Uri.parse(at).getScheme() != null ? at : url);
                 call.resolve(out);
             });

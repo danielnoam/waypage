@@ -231,6 +231,15 @@ hosts refuse any Referer (the reader sends none), so the rule has
 `noReferer`, which makes `keep` download with no page, for the first save,
 Retry and Save full images alike. Saved before this, a chapter has only
 its first few panels and must be saved again.
+Trap: the reader makes a slot (`.rpage-page`) for every panel at once
+but puts a picture in only the slots the scroll has reached, and only
+after its own request has answered. PageRender used to take the page once
+it was at the bottom with the picture count unchanged for 750 ms, which a
+slow answer or a short page met with none or a few panels. The rule's
+`slots` (`expect`, `ready`) make PageRender scroll until every slot is
+filled, two steps running, and answer `expected` and `ready`; a chapter
+that came up short is drawn once more, then fails with Try again (never
+kept half done).
 The same read gives the page's own tags (`pageTags`: a site rule's
 `tags`, else `article:tag` meta, ten at most) as `siteTags`; Save with
 options offers them as one switch, off until turned on, remembered in

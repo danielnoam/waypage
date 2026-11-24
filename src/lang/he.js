@@ -2455,6 +2455,8 @@ Keel.i18n.strings("he", {
   "Waypage can't read this PDF.": "Waypage לא יכולה לקרוא את ה-PDF הזה.",
   "Waypage couldn't find the article on this page, even after letting it draw itself.": "Waypage לא מצאה את המאמר בדף הזה, גם אחרי שנתנה לו לצייר את עצמו.",
   "Waypage couldn't find the pictures on this page.": "Waypage לא מצאה את התמונות בדף הזה.",
+  "Only {got} of {total} pictures loaded. Try again.": "נטענו רק {got} מתוך {total} תמונות. נסו שוב.",
+  "The pictures didn't load. Try again.": "התמונות לא נטענו. נסו שוב.",
   "Waypage couldn't read this {kind} file. It may be damaged.": "Waypage לא הצליחה לקרוא את קובץ ה-{kind} הזה. ייתכן שהוא פגום.",
   "Waypage couldn't read this PDF. It may be damaged.": "Waypage לא הצליחה לקרוא את ה-PDF הזה. ייתכן שהוא פגום.",
   "Waypage got nothing from {name}. If it's in a cloud folder, make it available offline and try again.": "Waypage לא קיבלה כלום מ-{name}. אם הוא בתיקייה בענן, צריך להפוך אותו לזמין בלי חיבור ולנסות שוב.",
