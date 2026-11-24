@@ -311,7 +311,8 @@
     const R = plugin("PageRender");
     if (!R) return null;
     try {
-      const wait = scroll ? 50000 : 20000;
+      // A chapter filled slot by slot takes the longest PageRender allows.
+      const wait = scroll ? (expect ? 60000 : 50000) : 20000;
       const res = await deadline(R.render({ url, timeoutMs: wait, scroll, waitFor, expect, ready }), wait + 10000);
       return res && res.html ? { text: res.html, url: res.url || url, expected: res.expected, ready: res.ready } : null;
     } catch (e) {

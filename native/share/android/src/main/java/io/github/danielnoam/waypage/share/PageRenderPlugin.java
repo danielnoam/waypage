@@ -81,8 +81,8 @@ public class PageRenderPlugin extends Plugin {
         final long timeout;
         final boolean scroll;
         final String measure;
-        // With `expect` and `ready`: counts "slots:filled:atEnd" instead of
-        // the picture count, and the page is taken when they match.
+        // With `expect` and `ready`: counts "slots:filled" instead of the
+        // picture count, and the page is taken when they match.
         final String slots;
         int expected = -1;
         int filled = -1;
@@ -97,11 +97,15 @@ public class PageRenderPlugin extends Plugin {
         Job(PluginCall call, String url, long timeout, boolean scroll, String waitFor, String expect, String ready) {
             this.call = call;
             this.slots = scroll && expect != null && !expect.isEmpty() && ready != null && !ready.isEmpty()
-                ? "(function(){var h=document.documentElement,b=document.body;"
-                    + "var end=Math.max(h.scrollHeight,b?b.scrollHeight:0)-2,at=window.scrollY+innerHeight>=end;"
-                    + "if(!at)window.scrollBy(0,innerHeight);"
-                    + "return document.querySelectorAll(" + JSONObject.quote(expect) + ").length+':'"
-                    + "+document.querySelectorAll(" + JSONObject.quote(ready) + ").length+':'+(at?'1':'0');})()"
+                ? "(function(){var s=document.querySelectorAll(" + JSONObject.quote(expect) + "),got=0,first=null;"
+                    + "for(var i=0;i<s.length;i++){if(s[i].querySelector(" + JSONObject.quote(ready) + "))got++;else if(!first)first=s[i];}"
+                    + "var h=document.documentElement,b=document.body,"
+                    + "end=Math.max(h.scrollHeight,b?b.scrollHeight:0)-2,at=window.scrollY+innerHeight>=end,r=window.__wpDwell||0;"
+                    // At the end, or already on an empty slot: stay on it (up to
+                    // ~4 s) so the page fills it; otherwise one screen down.
+                    + "if(first&&(at||r>0)){first.scrollIntoView();window.__wpDwell=r>=16?0:r+1;}"
+                    + "else{window.__wpDwell=0;if(!at)window.scrollBy(0,innerHeight);}"
+                    + "return s.length+':'+got;})()"
                 : null;
             // The page's text length; with a selector, 0 until it matches.
             this.measure = waitFor == null || waitFor.isEmpty() ? TEXT_LENGTH
@@ -186,10 +190,12 @@ public class PageRenderPlugin extends Plugin {
         }
 
         // A chapter's pictures arrive only for the slots the scroll has
-        // reached, and the slots appear after the page's own request. So
-        // nothing is taken while there are no slots, or any is empty; two
-        // steps with every slot filled and none more, then the page. The
-        // timeout takes whatever there is, and says how many were missing.
+        // reached, and the slots appear after the page's own request. A
+        // scroll of a whole window can jump past some of them, so at the end
+        // it goes back to the first empty slot and waits on it. Nothing is
+        // taken while there are no slots, or any is empty; two steps with
+        // every slot filled and none more, then the page. The timeout takes
+        // whatever there is, and says how many were missing.
         void stepSlots() {
             web.evaluateJavascript(slots, (v) -> {
                 if (done) return;
