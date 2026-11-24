@@ -117,12 +117,16 @@
     if (num(v.dur) > 0) out.dur = num(v.dur);
     if (num(v.speed) >= 0.5 && num(v.speed) <= 3) out.speed = Math.round(num(v.speed) * 100) / 100;
     if (["transcript", "book", "listen"].includes(v.mode)) out.mode = v.mode;
-    if (v.book && typeof v.book === "object") {
+    // The book read along with, and the one it was until the transcript
+    // took over (2026-11, was), to go back to.
+    for (const k of ["book", "was"]) {
+      const x = v[k];
+      if (!x || typeof x !== "object") continue;
       const b = {};
-      if (typeof v.book.id === "string" && /^[a-z0-9]{4,24}$/.test(v.book.id)) b.id = v.book.id;
-      if (typeof v.book.fp === "string" && /^[0-9a-f]{32}$/.test(v.book.fp)) b.fp = v.book.fp;
-      if (typeof v.book.url === "string" && /^https?:\/\//i.test(v.book.url)) b.url = v.book.url.slice(0, 2000);
-      if (b.id || b.fp || b.url) out.book = b;
+      if (typeof x.id === "string" && /^[a-z0-9]{4,24}$/.test(x.id)) b.id = x.id;
+      if (typeof x.fp === "string" && /^[0-9a-f]{32}$/.test(x.fp)) b.fp = x.fp;
+      if (typeof x.url === "string" && /^https?:\/\//i.test(x.url)) b.url = x.url.slice(0, 2000);
+      if (b.id || b.fp || b.url) out[k] = b;
     }
     const fixes = Array.isArray(v.fixes) ? v.fixes.slice(0, 500).filter((f) => f && typeof f.from === "string" && typeof f.to === "string" && f.from.trim() && f.to.trim())
       .map((f) => ({ from: f.from.replace(/\s+/g, " ").trim().slice(0, 100), to: f.to.replace(/\s+/g, " ").trim().slice(0, 100), at: num(f.at) })) : [];
@@ -730,7 +734,7 @@
     }
     const licence = doc.querySelector(".co-licence");
     const foot = licence ? "---\n\n" + mdInline(licence).trim() : "";
-    const marks = (p.marks || []).length || (p.ink && Object.keys(p.ink).length) ? "## Highlights\n\n" + marksBody(p) : "";
+    const marks = (p.marks || []).length || (p.ink && Object.keys(p.ink).length) || (p.noted || []).length ? "## Highlights\n\n" + marksBody(p) : "";
     const text = [...head, ...out, marks, foot].filter(Boolean).join("\n\n").replace(/\n{3,}/g, "\n\n") + "\n";
     return { name: pageSlug(p.title) + ".md", text };
   }
@@ -738,17 +742,27 @@
   // A clip's highlights as Markdown (1.7.0): each a quote, its note under it.
   // Highlights, and where something was drawn (2026-11): Markdown can't
   // hold a drawing, so it says where one is, in the clip's order.
-  function marksBody(p) {
+  // `notes`: comment bubbles (2026-11), each as a quote marked 💬 with its tags;
+  // by default the clip's own, by block or from its summary (`noted`).
+  const notesOf = (p) => {
+    const out = [];
+    if (p.ink && typeof p.ink === "object") for (const [k, l] of Object.entries(p.ink)) for (const s of Array.isArray(l) ? l : []) if (s && s.t === "n") out.push({ n: Number(k), page: false, text: s.text, tags: s.tags || [] });
+    if (Array.isArray(p.noted)) for (const s of p.noted) if (s) out.push({ n: s.n, page: true, text: s.text, tags: s.tags || [] });
+    return out;
+  };
+  function marksBody(p, notes) {
     const rows = (p.marks || []).map((m) => ({ at: m.page ? m.page : m.block || 0,
       text: "> " + mdEscape(m.text) + (m.note ? "\n\n" + m.note.split("\n").map((l) => l.trim()).join("\n") : "")
       + (m.tags && m.tags.length ? "\n\n" + m.tags.map((x) => "#" + mdEscape(x.replace(/\s+/g, "-"))).join(" ") : "") }));
-    if (!p.note && p.ink && typeof p.ink === "object") for (const k of Object.keys(p.ink)) if (Array.isArray(p.ink[k]) && p.ink[k].length) rows.push({ at: Number(k) - 0.5, text: "_Drawing, paragraph " + k + "_" });
+    for (const nt of notes || notesOf(p)) if (String(nt.text || "").trim() || (nt.tags || []).length) rows.push({ at: nt.page ? nt.n + 0.25 : nt.n - 0.75,
+      text: "> 💬 " + mdEscape(String(nt.text || "").trim()).split("\n").join("\n> ") + ((nt.tags || []).length ? "\n\n" + nt.tags.map((x) => "#" + mdEscape(x.replace(/\s+/g, "-"))).join(" ") : "") });
+    if (!p.note && p.ink && typeof p.ink === "object") for (const k of Object.keys(p.ink)) if (Array.isArray(p.ink[k]) && p.ink[k].some((s) => s && s.t !== "n")) rows.push({ at: Number(k) - 0.5, text: "_Drawing, paragraph " + k + "_" });
     if (!p.note && Array.isArray(p.drawn)) for (const d of p.drawn) if (Array.isArray(d)) rows.push({ at: d[0] + 0.5, text: "_Drawing, page " + d[0] + "_" });
     return rows.sort((a, b) => a.at - b.at).map((r) => r.text).join("\n\n");
   }
-  function marksMarkdown(p) {
+  function marksMarkdown(p, notes) {
     const link = p.file ? "" : "[" + mdEscape(p.site || p.url) + "](" + webUrl(p.url) + ")";
-    return ["# " + mdEscape(p.title), link, marksBody(p)].filter(Boolean).join("\n\n") + "\n";
+    return ["# " + mdEscape(p.title), link, marksBody(p, notes)].filter(Boolean).join("\n\n") + "\n";
   }
 
   // A folder as one file (0.26.0): its pages in order, each with its own

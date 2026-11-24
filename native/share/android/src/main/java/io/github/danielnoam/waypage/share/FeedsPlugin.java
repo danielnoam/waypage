@@ -26,9 +26,14 @@ import org.json.JSONObject;
  *                 the feeds to read and the posts the app has; none stops
  *                 the checks. `ask` asks to notify (Android 13), once a run.
  *                 `notes` is how to notify, see FeedCheckJob (1.30.0).
- *   news()        { feeds: [url], open, feed, save } once: the feeds with
- *                 new posts since, whether a notification opened the app,
- *                 the feed it was for and the post its Save asked for.
+ *                 `stories` (2026-11): linked collections to look at for
+ *                 new chapters, [{ name, url, host, prefix, depths, known }];
+ *                 `wifi` keeps those off mobile data.
+ *   news()        { feeds: [url], open, feed, save, stories: [name], story }
+ *                 once: the feeds with new posts since, whether a
+ *                 notification opened the app, the feed it was for and the
+ *                 post its Save asked for; the collections with new
+ *                 chapters and the one a notification was for.
  *                 Takes the notifications away.
  *   allowed()     { allowed }: whether the phone lets Waypage notify.
  *   settings()    opens the phone's notification settings for Waypage.
@@ -39,7 +44,7 @@ import org.json.JSONObject;
 public class FeedsPlugin extends Plugin {
 
     private boolean asked, opened;
-    private String feed, save;
+    private String feed, save, story;
 
     @Override
     public void load() {
@@ -58,6 +63,7 @@ public class FeedsPlugin extends Plugin {
         opened = true;
         feed = intent.getStringExtra(FeedCheckJob.FEED);
         save = intent.getStringExtra(FeedCheckJob.SAVE);
+        story = intent.getStringExtra(FeedCheckJob.STORY);
         // A Save button doesn't take its notification away by itself.
         int note = intent.getIntExtra(FeedCheckJob.NOTE_ID, 0);
         if (save != null && note != 0) {
@@ -66,6 +72,7 @@ public class FeedsPlugin extends Plugin {
         }
         intent.removeExtra(FeedCheckJob.FEED);
         intent.removeExtra(FeedCheckJob.SAVE);
+        intent.removeExtra(FeedCheckJob.STORY);
         intent.removeExtra(FeedCheckJob.NOTE_ID);
         return true;
     }
@@ -73,15 +80,19 @@ public class FeedsPlugin extends Plugin {
     @PluginMethod
     public void watch(PluginCall call) {
         JSArray feeds = call.getArray("feeds", new JSArray());
+        JSArray stories = call.getArray("stories", new JSArray());
         try {
             FeedCheckJob.writeJson(new File(getContext().getFilesDir(), FeedCheckJob.WATCH), feeds.toString());
+            FeedCheckJob.writeJson(new File(getContext().getFilesDir(), FeedCheckJob.STORIES), stories.toString());
         } catch (Exception e) {
             call.reject("Couldn't keep the feeds");
             return;
         }
+        SharedPreferences.Editor edit = getContext().getSharedPreferences(FeedCheckJob.PREFS, Context.MODE_PRIVATE).edit();
         JSObject notes = call.getObject("notes");
-        if (notes != null) getContext().getSharedPreferences(FeedCheckJob.PREFS, Context.MODE_PRIVATE).edit().putString("notes", notes.toString()).apply();
-        FeedCheckJob.schedule(getContext(), feeds.length() > 0);
+        if (notes != null) edit.putString("notes", notes.toString());
+        edit.putBoolean("storiesWifi", call.getBoolean("wifi", false)).apply();
+        FeedCheckJob.schedule(getContext(), feeds.length() > 0 || stories.length() > 0);
         if (call.getBoolean("ask", false)) askToNotify();
         call.resolve();
     }
@@ -94,14 +105,21 @@ public class FeedsPlugin extends Plugin {
             JSONObject waiting = new JSONObject(prefs.getString("waiting", "{}"));
             for (Iterator<String> it = waiting.keys(); it.hasNext(); ) urls.put(it.next());
         } catch (Exception e) { /* nothing waiting */ }
+        JSArray names = new JSArray();
+        try {
+            JSONObject waiting = new JSONObject(prefs.getString("storiesWaiting", "{}"));
+            for (Iterator<String> it = waiting.keys(); it.hasNext(); ) names.put(it.next());
+        } catch (Exception e) { /* none waiting */ }
         FeedCheckJob.clear(getContext());
         JSObject out = new JSObject();
         out.put("feeds", urls);
+        out.put("stories", names);
+        if (story != null) out.put("story", story);
         out.put("open", opened);
         if (feed != null) out.put("feed", feed);
         if (save != null) out.put("save", save);
         opened = false;
-        feed = save = null;
+        feed = save = story = null;
         call.resolve(out);
     }
 

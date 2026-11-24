@@ -13,8 +13,9 @@ let carSig = "", carWriting = false, carTimer = 0;
 // A clip's pieces by id and save time, so the text is cut once.
 const carText = new Map();
 
-const carClipOk = (p) => p && !p.file && !p.link && !p.preview && !p.note && !p.finished && (p.at || 0) < 0.97;
-const carBookOk = (a) => isAudiobook(a) && !(a.audio.overlay && a.audio.parts.some((x) => !x.stored));
+const carClipOk = (p) => p && !voicedSound(p) && !p.file && !p.link && !p.preview && !p.note && !p.finished && (p.at || 0) < 0.97;
+// A clip with its made sound plays that in the car too.
+const carBookOk = (a) => (isAudiobook(a) && !(a.audio.overlay && a.audio.parts.some((x) => !x.stored))) || voicedSound(a);
 
 function carBooks() {
   const at = (a) => (a.listen && a.listen.tAt) || a.readAt || a.savedAt || 0;
@@ -105,7 +106,7 @@ function carFolders() {
       return { name: f.name, all, cont, newest, pick: all.filter((p, k) => keep.has(k)) };
     });
 }
-const carSigOf = (p) => isAudiobook(p) ? [p.id, p.title, placeOf(p), speedOf(p), p.thumb || ""] : [p.id, p.title, p.at || 0, p.finished ? 1 : 0, p.editedAt || p.savedAt, p.thumb || ""];
+const carSigOf = (p) => carBookOk(p) ? [p.id, p.title, placeOf(p), speedOf(p), p.thumb || ""] : [p.id, p.title, p.at || 0, p.finished ? 1 : 0, p.editedAt || p.savedAt, p.thumb || ""];
 
 async function carFolderList(f, list, have) {
   // `at`: each one's place in the whole collection, so Next and Previous

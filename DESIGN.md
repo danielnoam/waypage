@@ -8,11 +8,13 @@ and never blocks input. Every rule here is **Now** (in the code) or
 from: https://claude.ai/artifact/5zi1VCs3WcLSTLJCw7iasC, with its
 artboards copied into `design/`.
 
-**The icon (1.0.0):** "Open road", an open book in Paper and `--line`
-whose gutter is a road (a darker blue, Paper dashes) running to a yellow
-sun, on an `--accent` blue tile. `icon.svg` is the source; icons/ and
-assets/ are rendered from it. On Android the glyph sits inside the
-adaptive icon's middle 66%.
+**The icon (1.0.0, redrawn Now):** "Open road", an open book in Paper and
+`--line` with curved pages, a page edge and a dark cover under them, whose
+gutter is a wide road (a darker blue, Paper dashes that shrink toward the
+horizon) running to a yellow sun rising behind the pages, on an `--accent`
+blue tile with a soft top-to-bottom shade. `icon.svg` is the source;
+`node tools/icons.js` renders icons/ and assets/ from it. On Android the
+glyph is scaled to 66% so the book's corners stay inside a round mask.
 
 ## 1. Color (Now, `src/styles.css`)
 
@@ -503,10 +505,17 @@ picture viewer's fallback only, never for a menu, bar or dialog.
   the lifted row takes the soft shadow and the others slide aside on the
   control spring (none with reduced motion).
 - **Website sync (Now, was Story page, and the Chapters panel before
-  that):** over the
-  chapters: the check row with "Save N" when there are new chapters,
-  Save previous and Save next, then "Synced with" (a 44 px link field,
-  Link or Change, Unlink).
+  that):** Edit's second tab (2026-11), no longer in the ⋯ menu: "Synced
+  with" first (the link field with Refresh, Status from the site), then
+  the check row with "Save N" when there are new chapters, Keep and
+  Translate, then Save previous and Save next.
+- **Edit's Collection tab (2026-11):** the tabs on top, the name field the
+  full width (no cover, no progress), Cover's choices (Automatic, Your
+  picture, Mosaic, Stacked, Side by side, each clip's picture), Status
+  (hidden while the site sets it), then the chapters' card with Sort by
+  as its first row: a drop-down whose face carries ↑ or ↓ after the
+  sort's name, and in the menu after the ticked one; picking it again
+  turns it round; any other order reads "Your order".
 - **What's saved (Now, 0.27.11):** a bordered `--surface` box: "What's
   saved" and the size, an 8 px bar of pictures (accent) and text (accent
   mixed 40% into `--line`), then a legend of 8 px keys: pictures kept and
@@ -835,6 +844,17 @@ halves of one swatch, Hex / Red / Green / Blue to type into, a dotted
 rule, the tool's colours (the one being changed ringed in `--accent`) and
 the eyedropper, then Cancel and Done. The eyedropper hides the card until
 a page is tapped.
+
+**Note (2026-11).** The + menu also has Note: a round comment bubble on the
+page, 7% of its width, in one of the five highlight colours with a `--line`-weight
+ring and three short lines, a small tail at its foot. Tap it (Draw on or off) and
+the usual sheet opens, laid out as a highlight's: Colour swatches, the comment,
+Tags (chips and Add a tag), then Copy, Delete note and Done. With Select, a taken
+bubble adds Edit note to the second row, and a press on it drags it; anywhere
+else, hold a bubble still for a moment and it lifts (a soft shadow) to be moved.
+In Highlights a bubble is a row like a highlight's: its comment (in Instrument
+Sans, after a small note icon, not a quote) on its colour, its tags under it,
+and the pencil to its sheet.
 
 Select's second row also has Move to top (arrow up) and Move to bottom
 (arrow down) after Delete, dim until something is taken. A line drawn

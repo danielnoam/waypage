@@ -123,12 +123,11 @@ $("folderEdit").addEventListener("click", () => setFolderMode("edit"));
 $("folderFav").addEventListener("click", () => favFolder(state.folder, !folderFav(state.folder)));
 $("folderCancel").addEventListener("click", () => setFolderMode(""));
 $("folderDone").addEventListener("click", async () => {
-  if (folderMode === "edit" && folderDraft != null && !(await renameFolder(folderDraft))) return;
+  if (editMode() && folderDraft != null && !(await renameFolder(folderDraft))) return;
   setFolderMode("");
 });
 $("folderBody").addEventListener("scroll", paintFolderTitle, { passive: true });
-// Escape steps out of Edit (dropping a typed name), Website sync or
-// Export.
+// Escape steps out of Edit (either tab, dropping a typed name) or Export.
 $("folderView").addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !e.defaultPrevented && folderMode && !state.menu && !state.select) { e.preventDefault(); setFolderMode(""); }
 });
@@ -325,6 +324,7 @@ Promise.all([C.platform.ready, firstIndex]).then(([, [pages]]) => {
   setTimeout(() => checkFeeds(false), 3000);
   // Feeds followed before 0.28.4 are handed over once, with the ask.
   if (feeds.length && !load(FEEDS_ASKED_KEY, false)) { store(FEEDS_ASKED_KEY, true); askToNotify = true; }
+  if (allFolders().some((n) => folderSource(folderPages(n)))) askChapterAlerts();
   watchFeeds();
   takeFeedNews();
   C.platform.feedChecks.onOpen(takeFeedNews);
@@ -788,8 +788,12 @@ function readChangelog() {
 
 function changelogView() {
   if (!changelog && !(changelogLoad && changelogLoad.settled)) return [el("p", { class: "meta" }, t("Loading…"))];
-  return changelog && changelog.length ? changelog.map((e) => el("section", { class: "news-entry" + (e.version === APP_VERSION ? " now" : "") },
-    el("h2", { class: "news-version" }, e.version, e.version === APP_VERSION ? el("span", { class: "news-you" }, t("You have this")) : null),
+  // A build of main ships "## [Unreleased]" on top (keel's withPending):
+  // what it has beyond its version, so the badge goes there.
+  const ahead = !!(changelog && changelog.length && changelog[0].version === "Unreleased");
+  const mine = (e) => (ahead ? e.version === "Unreleased" : e.version === APP_VERSION);
+  return changelog && changelog.length ? changelog.map((e) => el("section", { class: "news-entry" + (mine(e) ? " now" : "") },
+    el("h2", { class: "news-version" }, e.version === "Unreleased" ? t("Not released yet") : e.version, mine(e) ? el("span", { class: "news-you" }, t("You have this")) : null),
     e.date ? el("p", { class: "meta" }, formatDay(e.date)) : null,
     ...notesView([e]))) : [el("p", { class: "empty-text" }, t("The list of changes didn't load."))];
 }

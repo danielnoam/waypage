@@ -301,7 +301,7 @@ function aloudGroup() {
     el("div", { class: "group" }, el("div", { class: "rc-list" }, aloudControls())));
 }
 
-// Kokoro voices (Android, arm64): downloads that become Waypage's own
+// Kokoro voices (Android, arm64; iOS): downloads that become Waypage's own
 // speech engine, picked for English when the first is in. Three to pick
 // from on their own screen (Daniel's ask), one in use at a time. Asked
 // again about once a second while one downloads or unpacks.
@@ -383,7 +383,7 @@ async function fillKokoro(slot) {
     phoneSection.push(section(t("Phone's voices"), null, el("div", { class: "group" },
       el("div", { class: "row" }, el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, t("Personal Voice")), note), allow))));
   }
-  if (!s) { slot.replaceChildren(...phoneSection, el("p", { class: "footnote" }, t("Kokoro voices need an Android phone with a 64-bit processor."))); return; }
+  if (!s) { slot.replaceChildren(...phoneSection, el("p", { class: "footnote" }, t("Kokoro voices need an iPhone, or an Android phone with a 64-bit processor."))); return; }
   kokoroArrived(s);
   piperArrived(s);
   const busy = kokoroBusy(s);
@@ -658,7 +658,8 @@ function notesSections() {
         options: [
           { value: "each", label: t("Each post on its own"), note: t("Its title and first words, with Save") },
           { value: "together", label: t("All together"), note: t("One saying how many, and from where") },
-        ] }) : null),
+        ] }) : null,
+      n.on && C.platform.android ? sw(t("New chapters"), t("When a linked collection's site has chapters you haven't got, checked every few hours"), n.chapters, (on) => setNotes({ chapters: on })) : null),
     phone)];
   if (!n.on) return out;
   // Feeds and newsletter addresses each in their own section (1.48.3).
@@ -683,7 +684,7 @@ function libraryGroup() {
           el("span", { class: "choice-label" }, t("Continue reading")),
           el("span", { class: "choice-note" }, t("Your last clip at the top of the library"))),
         input),
-      switchRow(t("Check for new chapters"), t("Once a day, when you're online"), load(DAILY_KEY, true), (on) => store(DAILY_KEY, on))));
+      switchRow(t("Check for new chapters"), t("Once a day, when you're online"), load(DAILY_KEY, true), (on) => { store(DAILY_KEY, on); watchFeeds(); })));
 }
 
 // Folders first, biggest first, then the pages in no folder as one
@@ -750,7 +751,7 @@ function roomRows() {
   const list = roomFor();
   const known = list.reduce((n, p) => n + (p.imageBytes || 0), 0);
   if (list.some((p) => p.imageBytes == null)) measureSizes(list, remeasured);
-  if (!list.length && !squeezable().length) return [];
+  if (!list.length && !squeezable().length) return [narrationsRow()];
   const go = el("button", { class: "row room-go", type: "button", ...(list.length && !makingRoom ? {} : { disabled: "" }), onclick: () => dropPictures(list, go) },
     el("span", { class: "choice-text" },
       el("span", { class: "choice-label" + (list.length ? " accent" : "") }, makingRoom ? t("Making room…") : t("Keep only the text of finished clips")),
@@ -766,7 +767,35 @@ function roomRows() {
       el("span", { class: "choice-label accent" }, makingRoom ? t("Making room…") : t("Make pictures smaller")),
       el("span", { class: "choice-note" }, fullBytes ? t("{clips} with full pictures, about {size}", { clips: countLine(full.length), size: formatSize(fullBytes) }) : t("{clips} with full pictures", { clips: countLine(full.length) }))),
     fullBytes ? el("span", { class: "row-value" }, formatSize(fullBytes)) : null) : null;
-  return [squeezeBtn, go];
+  return [squeezeBtn, go, narrationsRow()];
+}
+// Saved narrations (made with Save the narration) never sync, so removing
+// them only frees this phone; Narrate reads those clips live again.
+const narrationBytes = (p) => (p.audio.parts || []).reduce((n, x) => n + (x.size || 0), 0);
+function narrationsRow() {
+  const list = typeof voicedSound === "function" ? state.pages.filter(voicedSound) : [];
+  if (!list.length) return null;
+  const size = list.reduce((n, p) => n + narrationBytes(p), 0);
+  const btn = el("button", { class: "row room-narrations", type: "button", ...(makingRoom ? { disabled: "" } : {}), onclick: () => dropNarrations(list, size, btn) },
+    el("span", { class: "choice-text" },
+      el("span", { class: "choice-label accent" }, makingRoom ? t("Making room…") : t("Remove saved narrations")),
+      el("span", { class: "choice-note" }, t("{clips} with a saved narration. Narrate reads them live again.", { clips: countLine(list.length) }))),
+    size ? el("span", { class: "row-value" }, formatSize(size)) : null);
+  return btn;
+}
+async function dropNarrations(list, size, btn) {
+  if (makingRoom) return;
+  if (!confirm(size
+    ? t("Remove the saved narration of {clips}? It frees {size}; you can save it again.", { clips: countLine(list.length), size: formatSize(size) })
+    : t("Remove the saved narration of {clips}? You can save it again.", { clips: countLine(list.length) }))) return;
+  makingRoom = true;
+  btn.disabled = true;
+  for (const p of list) await dropVoiced(p, true).catch(() => {});
+  await C.store.writeIndex(state.pages);
+  makingRoom = false;
+  renderLibrary();
+  toast(size ? t("Made {formatSize} of room.", { formatSize: formatSize(size) }) : t("The saved narrations are gone."));
+  if (state.section === "storage") renderSection();
 }
 const squeezable = () => !C.platform.native ? [] : state.pages.filter((p) => !p.link && (p.mode === "full" || p.comic) && p.images && !(p.squeezed >= 1));
 async function squeezePictures(list, btn) {
@@ -1496,7 +1525,7 @@ const CREDITS = {
     { name: "Capacitor", by: "Ionic", licence: "MIT", url: "https://capacitorjs.com", note: t("Wraps the app for Android and iOS") },
     { name: "Capacitor File Opener", by: "Capawesome", licence: "MIT", url: "https://github.com/capawesome-team/capacitor-plugins", note: t("Opens the downloaded update") },
     { name: "Capacitor ML Kit Barcode Scanning", by: "Capawesome", licence: "Apache 2.0", url: "https://github.com/capawesome-team/capacitor-mlkit", note: t("Scans the sync setup code") },
-    { name: "sherpa-onnx", by: "k2-fsa", licence: "Apache 2.0", url: "https://github.com/k2-fsa/sherpa-onnx", note: t("Runs the Kokoro and Piper voices, and audiobook transcripts, on Android") },
+    { name: "sherpa-onnx", by: "k2-fsa", licence: "Apache 2.0", url: "https://github.com/k2-fsa/sherpa-onnx", note: t("Runs the Kokoro and Piper voices, and audiobook transcripts") },
     { name: "Kokoro", by: "hexgrad", licence: "Apache 2.0", url: "https://huggingface.co/hexgrad/Kokoro-82M", note: t("Voices for Narrate, downloaded") },
     { name: "Parakeet TDT 0.6B v3", by: "NVIDIA", licence: "CC BY 4.0", url: "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3", note: t("Better transcripts of audiobooks, downloaded") },
     { name: "Moonshine", by: "Useful Sensors", licence: "MIT", url: "https://github.com/usefulsensors/moonshine", note: t("Fast transcripts of audiobooks, downloaded") },

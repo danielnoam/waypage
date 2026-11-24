@@ -405,6 +405,23 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       assert.strictEqual((await read([["https://example.com/story", "toc-named.html"]], "https://example.com/story")).status, "");
     });
 
+    // Syosetu (2026-11): its contents page a hundred to a page, behind the
+    // pager's next link; an episode keeps the author's notes before and
+    // after it, set apart.
+    await test("Syosetu: every page of a serial's episodes, and an episode with its notes", async () => {
+      const { got, asked } = await inPage(browser, [["https://ncode.syosetu.com/n1234ab/?p=2", "syosetu-toc-2.html"], ["https://ncode.syosetu.com/n1234ab/", "syosetu-toc.html"]],
+        () => Waypage.save.findChapters("https://ncode.syosetu.com/n1234ab/"));
+      assert.strictEqual(got.title, "塩の道");
+      assert.deepStrictEqual(got.links, [1, 2, 3].map((n) => "https://ncode.syosetu.com/n1234ab/" + n + "/"));
+      assert.strictEqual(got.status, "ongoing");
+      assert.ok(asked.includes("https://ncode.syosetu.com/n1234ab/?p=2"));
+      const { meta, html } = await saveWith(browser, "https://ncode.syosetu.com/n1234ab/2/", [["https://ncode.syosetu.com/n1234ab/2/", "syosetu-ep.html"]]);
+      assert.strictEqual(meta.title, "港");
+      assert.match(plain(html), /朝の港は静かだった。/);
+      assert.strictEqual(count(html, /<blockquote/g), 2, "the notes before and after, set apart");
+      assert.ok(plain(html).indexOf("読んでくれて") < plain(html).indexOf("朝の港"), "the note before comes first");
+    });
+
     // Any page's own tags (2026-11): schema.org keywords first (machine
     // labels and repeats left out), else the post's rel="tag" links but not
     // a sidebar's tag cloud. Kept on the clip as suggestions.

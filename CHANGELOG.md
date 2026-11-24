@@ -2,6 +2,56 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.69.0] - 2026-11-21
+
+### Added
+- Find the book checks what it finds against the narrator: with a transcript model, a minute of the audiobook from where you are is tested against the first five books found, and each says Same words, Another translation or Doesn't match, the best first. Each shows its translator where the site names one. It searches Wikisource too; a Wikisource text comes in as one EPUB book to read along with. Android only, like transcripts.
+- When the narrator leaves the book for four minutes while you read along (another translation, or a part this edition leaves out), a card over the player offers Show the transcript or Find another book. The book is remembered, so The book under ⋯ › Read along goes back to it.
+- A zip of MP3s (or other sound files) added with Add a file becomes one audiobook, its files in name order as chapters, played from inside the zip. Only zips whose sound files are stored as they are; a compressed one says to unzip it and add the folder.
+- Sync transcripts, in Settings › Audiobooks: an audiobook's transcript syncs with the book, so another phone reads along without writing it again. On by default when Sync is on.
+- Android Auto: a Collections tab. Your 8 latest collections and series, each opening with quick starts (Continue, or Start for a new or finished one, and Newest), then its clips and audiobooks in order. A long series brings its first two, the newest and the stretch from where you left off, not all of it. Android only.
+- Android Auto: Next clip and Previous clip now go through the clip's collection or series in order, also when the car started it with the app closed (they used to go to the next under Up next). An audiobook's Next chapter after its last chapter goes on to the next book in its series, and Previous before the first goes back. Android only.
+- Under a collection's or series' Continue button: Last read (the clip you read last, even a finished one) and Newest (the clip added last). One that would open the same clip as Continue is left out.
+- A story in Discover (Royal Road, AO3, FanFiction.net, FictionPress, Scribble Hub, Wattpad, WEBTOON, Tapas, SpaceBattles, Sufficient Velocity, web serials, Wikisource) now has one Save button that asks how: as a collection, as a series, or as one EPUB file (CBZ for comics). The file is made from every chapter after they download and goes into Files, kept where Save in says, with no collection left behind. It doesn't follow new chapters.
+- Save with options (Add clips) can now put clips into a series as well as a collection: the list shows your series and offers both New collection… and New series….
+- Draw › Add › Note: drop a comment bubble anywhere on a clip, note or PDF, tap it to write a comment, and pick its colour and tags. The colours and tags are the highlights' own: a note's tag is offered on highlights and filters Highlights too. In Highlights a note shows as its comment, in its colour with its tags, beside the highlights (not as a drawing), and Copy all includes it. Hold a bubble to move it, or drag it with Select. Bubbles sync with a clip's drawings. They are not in a copy of a PDF, or Save as PDF, yet.
+- Audiobooks on iPhone keep playing with the screen locked, with back and forward on the lock screen and earbuds, the sleep timer and the chapter under the title.
+- Audiobook transcripts on iPhone: download a model in Settings › Audiobooks, and the phone writes the transcript a little ahead of where you are, so a book reads along with its text. The same models as Android.
+- Kokoro and Piper voices on iPhone: download them in Settings › Narrate › More speech engines, and Narrate reads with them, also with the screen locked. They're Waypage's own, so other apps on the iPhone can't use them. The app is about 25 MB bigger for it.
+- Website sync › Keep (All, 3, 5 or 10): a collection keeps that many unread chapters on the device. Read chapters are deleted and the next ones saved in their place, when it checks for new chapters. Highlighted, noted, drawn-on and favourite chapters are never deleted.
+- A series or collection's Edit page has a Status row, to set where the story stands yourself when its site doesn't say (a blog like The Zombie Knight Saga). It syncs.
+- Website sync has a "Status from the site" switch. Turn it off and your own pick shows instead of the site's word.
+- Series and collections kept in step with a site show where the story stands there: Completed, Ongoing, On hiatus, Stubbed, Dropped or Inactive, as a tag on the cover (in the line under the name in a list) and beside "Series" when it's open. Royal Road, Archive of Our Own, FanFiction.net and Scribble Hub say it; Website sync's check keeps it current.
+- A story read to the end that's still being written says "Caught up", not "All read".
+- Save the narration: a clip or book spoken by its Narrate voice (Kokoro and Piper too) into sound files kept on the phone, which the clip then plays. Narrate's button plays the saved sound, with the audiobook player's speed, chapters and sleep timer, and the words light up as they're heard. A collection's ⋯ saves one for each of its clips, and the car plays them too. ⋯ › More has Save the narration again and Remove the saved narration, and Settings › Storage removes every saved narration at once to make room. It's saved in the background with a card in Downloads (Pause, Stop); with Kokoro or Piper it waits while Narrate reads something else, since both share the engine. The sound files stay on the phone: they never sync and aren't in any backup. Android only; not built for iOS or the web copy (a browser can't record its own speech).
+- In Scroll, dragging a selected drawing or picture to the top or bottom edge scrolls the page along with it, so you can put it on another page. The scroll builds up and eases off smoothly.
+- Hold the pen still for half a second at the end of a rough line or circle to make it a straight line or a clean circle. A line's end follows the pen until you lift it, and a circle moves with it. Turn it on or off in the reader's settings, under Draw.
+
+### Changed
+- A sharper app icon: the same open book, road and sun, redrawn with curved pages, a page edge, a wider road that narrows toward the sun, and the sun rising behind the book.
+- Stories with no cover on their site (AO3, the forums, most of FictionPress) show a cover card of their own: the site, title and author on a colour picked from the story, the same each time.
+- A Discover story's Save asks just two things: Collection or series (picked on the Save with options page that opens, with your collections, your series, New collection… and New series…), or EPUB file.
+- Narrate with Kokoro or Piper makes up to about a minute ahead, not just the next paragraph, so a long paragraph after a short one no longer starts with a pause.
+- Website sync looks like Settings now: New chapters (the count with Save and Check, and Keep on this device), Save more and Synced with (one Refresh button: it reads the link again, or unlinks when the box is empty) each sit in their own group, one row each. Keep is a drop-down (Every chapter, 3, 5 or 10 unread). While chapters save, Save next shows only Pause and Stop.
+
+### Fixed
+- Android Auto: Next clip and Previous clip (and an audiobook's next and previous chapter) had the same arrows as the paragraph buttons, so beside them it looked like previous and next were swapped. They now show a list with an arrow. The car's tab names follow the app's language. Android only.
+- In Hebrew, the ⋯ menus of a collection, of Highlights and of Select opened partly off screen. On a phone on its side, a collection's ⋯ menu now scrolls instead of running off the bottom.
+- A chapter you deleted from a Website sync collection (or any series) came back as a new chapter, and Save new saved it again. Deleted chapters now stay deleted, also when they were deleted on another device.
+- Website sync no longer runs off the right edge on a phone; Unlink and the note under the link were cut off.
+- Typing in a search box right as a sheet closes (Audiobookshelf's sign-in, say) no longer sends the letters into the closing sheet's fields.
+- Drawing in Pages on a PDF or a note no longer moves or turns the page under your pen or finger, and what you draw or erase stays on the page you are on.
+- With Draw on in Pages, pinching zooms the page where it is and you can keep drawing on it, instead of opening the picture viewer. The page stays locked: zooming never shows another page. Sweep two fingers sideways to turn, which locks to the new page.
+- Dragging a selected drawing or picture to the side of the screen in Pages and holding it there for a moment carries it to the next page.
+- Zooming in Pages now keeps the spot under your fingers, as in Scroll, instead of drifting off to the right.
+- A note's new sheet in Pages is now laid out like the others.
+- On a small phone (320 px), the picking bar's Collection and Mark read ran into each other, and the Draw bar cut off the pen and Done at its ends.
+- With the phone on its side, the app lock's title and Forgot passcode were off the screen. They now sit beside the keys.
+- On a tablet or computer, Stats and Anki had no name at the top of the screen.
+- In Hebrew, the picking bar's Tags, Collection, Edit and Delete, the reader's Back to where you were, Read next and Shortcuts, and the Offline pill stayed in English.
+- With Audiobookshelf turned on, the app could start with it half loaded, so a book from your server might not play until the app was restarted.
+- Save in shows only when it matters: a Discover story saved as a collection or series, or a book added as clips, no longer shows a Save in pick that did nothing.
+
 ## [1.68.0] - 2026-11-19
 
 ### Added

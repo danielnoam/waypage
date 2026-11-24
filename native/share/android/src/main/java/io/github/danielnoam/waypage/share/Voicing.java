@@ -20,7 +20,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Text made into an audiobook (Make audiobook, app-listen.js): each piece
+ * The narration saved as sound (Save the narration, app-listen.js): each piece
  * of a chapter spoken into a file by the phone's speech engine (any of
  * them, Kokoro and Piper too, through Android's synthesizeToFile), read
  * back as PCM and encoded into one AAC .m4a for the chapter, with where
@@ -108,11 +108,22 @@ final class Voicing {
         o.t0 = new double[items.length];
         o.t1 = new double[items.length];
         try {
+            final boolean ours = c.getPackageName().equals(engine);
             for (int i = 0; i < items.length; i++) {
                 if (stop) throw new Exception("stopped");
                 short[] pcm = null;
                 int rate = 0;
                 String text = items[i] == null ? "" : items[i].trim();
+                int turns = 0;
+                if (ours && !text.isEmpty()) {
+                    // Kokoro and Piper make one piece at a time for both:
+                    // Narrate goes first, and this waits till it stops.
+                    while (SpeechService.ownBusy()) {
+                        if (stop) throw new Exception("stopped");
+                        Thread.sleep(500);
+                    }
+                    turns = SpeechService.ownTurns;
+                }
                 if (!text.isEmpty()) {
                     wav.delete();
                     String id = "v" + (++ids);
@@ -130,6 +141,9 @@ final class Voicing {
                         }
                     }
                     waits.remove(id);
+                    // Narrate started while it was made, and the engine cut
+                    // it short for Narrate's piece: made again.
+                    if (ours && SpeechService.ownTurns != turns) { i--; continue; }
                 }
                 if (pcm != null && pcm.length > 0 && rate > 0) {
                     if (aac == null) aac = new Aac(out, aacRate(rate));

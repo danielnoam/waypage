@@ -15,5 +15,20 @@ Pod::Spec.new do |s|
   # Translation is iOS 17.4+: weak, so the app still opens on older iOS.
   s.weak_frameworks = 'Translation'
   s.dependency 'Capacitor'
+  # The voices' archives are .tar.bz2 (Kokoro.swift unpacks them).
+  s.preserve_paths = 'ios/Sherpa/**/*'
+  s.libraries = 'bz2'
+  swift_paths = ['$(PODS_TARGET_SRCROOT)/ios/Sherpa/bz2']
+  # sherpa-onnx, for Kokoro and Piper voices: in the build only once
+  # tools/sherpa-ios.sh has fetched it; without it KokoroPlugin says
+  # unsupported (Kokoro.swift checks canImport(SherpaOnnxC)).
+  if File.exist?(File.join(__dir__, 'ios/Frameworks/sherpa-onnx.xcframework'))
+    s.vendored_frameworks = 'ios/Frameworks/sherpa-onnx.xcframework', 'ios/Frameworks/onnxruntime.xcframework'
+    s.preserve_paths = 'ios/Sherpa/**/*', 'ios/Frameworks/include/*'
+    s.libraries = 'bz2', 'c++'
+    s.frameworks = 'CoreML', 'Accelerate'
+    swift_paths << '$(PODS_TARGET_SRCROOT)/ios/Frameworks/include'
+  end
+  s.pod_target_xcconfig = { 'SWIFT_INCLUDE_PATHS' => swift_paths.join(' ') }
   s.swift_version = '5.1'
 end

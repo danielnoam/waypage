@@ -190,12 +190,45 @@ test("the Kokoro engine library is pinned, checked and fetched before the build"
   assert.ok(/getCanonicalPath\(\)\.startsWith\(rootPath\)/.test(kokoro), "unpacking must keep files inside the voices folder");
 });
 
+// iOS: the same engine as a pinned, checked xcframework fetched before pod
+// install, and the same downloads, each at the same SHA-256 as Android's.
+test("iOS fetches the Kokoro engine pinned and checked, and pins the same downloads as Android", () => {
+  const yml = fs.readFileSync(path.join(ROOT, ".github", "workflows", "ios.yml"), "utf8");
+  const sh = fs.readFileSync(path.join(ROOT, "tools", "sherpa-ios.sh"), "utf8");
+  const java = fs.readFileSync(path.join(ROOT, "native", "share", "android", "src", "main", "java", "io", "github", "danielnoam", "waypage", "share", "Kokoro.java"), "utf8");
+  const swift = fs.readFileSync(path.join(ROOT, "native", "share", "ios", "Sources", "KokoroPlugin", "Kokoro.swift"), "utf8");
+  const spec = fs.readFileSync(path.join(ROOT, "native", "share", "WaypageShare.podspec"), "utf8");
+  assert.ok(yml.indexOf("bash tools/sherpa-ios.sh") >= 0 && yml.indexOf("bash tools/sherpa-ios.sh") < yml.indexOf("npx cap add ios"), "fetched before the project's pod install");
+  assert.ok(/^V=\S+$/m.test(sh) && /^SHA=[0-9a-f]{64}$/m.test(sh) && /-c -/.test(sh));
+  assert.ok(/ios\/Frameworks\/sherpa-onnx\.xcframework/.test(spec) && /SWIFT_INCLUDE_PATHS/.test(spec));
+  const shas = (src) => (src.match(/"[0-9a-f]{64}"/g) || []).sort();
+  assert.ok(shas(java).length >= 18);
+  assert.deepStrictEqual(shas(swift), shas(java), "Kokoro.swift and Kokoro.java pin different downloads");
+  assert.ok(/CC_SHA256_Final/.test(swift) && /hasPrefix\(destPath\)/.test(swift), "iOS checks each download and keeps files inside the voices folder");
+});
+
+// iOS transcripts: the same models as Android's, at the same SHA-256.
+test("iOS transcripts pin the same models as Android", () => {
+  const dir = path.join(ROOT, "native", "share");
+  const java = fs.readFileSync(path.join(dir, "android", "src", "main", "java", "io", "github", "danielnoam", "waypage", "share", "Listen.java"), "utf8");
+  const swift = fs.readFileSync(path.join(dir, "ios", "Sources", "AudiobookPlugin", "Listen.swift"), "utf8");
+  const shas = (src) => (src.match(/"[0-9a-f]{64}"/g) || []).sort();
+  assert.strictEqual(shas(java).length, 3);
+  assert.deepStrictEqual(shas(swift), shas(java), "Listen.swift and Listen.java pin different models");
+  assert.ok(/Kokoro\.sha256\(of: archive\) == p\.sha256/.test(swift), "iOS checks each model before unpacking");
+});
+
 test("the updater downloads the asset the workflow publishes", () => {
   const yml = fs.readFileSync(path.join(ROOT, ".github", "workflows", "android.yml"), "utf8");
   const platform = fs.readFileSync(path.join(ROOT, "src", "platform.js"), "utf8");
   assert.ok(/gh release create "app-v\$V" Waypage\.apk/.test(yml));
-  assert.ok(platform.includes('"/releases/download/" + tag + "/" + file'));
-  assert.ok(platform.includes('file = "Waypage.apk", tag = "app-v" + version'));
+  // The download itself is keel's update.js (0.15.0), made with Waypage's name.
+  assert.ok(platform.includes('window.Keel.update.create({ name: "Waypage"'));
+  const vm = require("vm");
+  const box = { window: {} };
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "src", "keel", "update.js"), "utf8"), box);
+  const U = box.window.Keel.update.create({ name: "Waypage", platform: { build: { repo: "o/r" } } });
+  assert.strictEqual(U.apkUrl({ version: "1.2.3" }), "https://github.com/o/r/releases/download/app-v1.2.3/Waypage.apk");
 });
 
 // Test builds (1.48.0): a branch's APK goes on test-<branch>, a

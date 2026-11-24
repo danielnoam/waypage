@@ -263,6 +263,49 @@ test("a made audiobook's paragraphs are its text's, however short", () => {
   assert.deepStrictEqual(parts.map((x) => x.words.map((w) => w.w).join(" ")), ["Waypoints", "Each waypoint has a name. Some are jokes."]);
 });
 
+// The opening of Crime and Punishment (Constance Garnett's), as a book
+// and as a narrator heard it, with a few words heard wrong.
+const GARNETT = ["On an exceptionally hot evening early in July a young man came out of the garret in which he lodged in S. Place and walked slowly, as though in hesitation, towards K. bridge.",
+  "He had successfully avoided meeting his landlady on the staircase. His garret was under the roof of a high, five-storied house and was more like a cupboard than a room.",
+  "The landlady who provided him with garret, dinners, and attendance, lived on the floor below, and every time he went out he was obliged to pass her kitchen, the door of which invariably stood open.",
+  "Each time the student Raskolnikov passed, he thought of Petersburg and of the old woman Alyona Ivanovna, and he had a sick, frightened feeling, which made him scowl and feel ashamed."];
+const WHISHAW = ["One evening at the very beginning of July, in the great heat, a youth left the little room he rented in S. Lane and went with an uncertain step in the direction of K. bridge.",
+  "He had managed not to meet the woman who let the room to him as he came down. His room was tucked beneath the roof of a tall building of five floors and resembled a wardrobe more than a dwelling.",
+  "Whenever the student Raskolnikov went past her open kitchen he remembered Petersburg and the old pawnbroker Alyona Ivanovna and felt a dread that made him frown with shame."];
+const OTHER = ["Lighthouses were once kept by families who lived beside the lamp all year, trimming wicks and polishing lenses through the long winters on rocky coasts.",
+  "Today most of them run on their own, watched from offices far inland, and the keepers' cottages have become museums or holiday rentals for visitors from the cities."];
+const filler = (n) => Array.from({ length: n }, (_, i) => OTHER[i % OTHER.length]);
+const heardOf = (text) => text.split(/\s+/).map((w, i) => ({ w: i % 23 === 7 ? "mm" : w, t: i * 0.4 }));
+
+test("a minute of narration fits its book, another translation, or neither", () => {
+  const heard = heardOf(GARNETT.join(" "));
+  assert.strictEqual(L.fit(heard, [...GARNETT, ...filler(12)]).verdict, "same");
+  assert.strictEqual(L.fit(heard, [...WHISHAW, ...filler(12)]).verdict, "other");
+  assert.strictEqual(L.fit(heard, filler(14)).verdict, "no");
+  assert.strictEqual(L.fit(heard.slice(0, 10), GARNETT).verdict, "", "too little heard to say");
+});
+
+test("the narration away from the book only counts while words are heard", () => {
+  const sync = { t: [10, 11, 12, 100], b: [0, 0, 0, 1], o: [0, 3, 6, 0], l: [2, 2, 2, 2] };
+  const words = (from, to) => { const out = []; for (let t = from; t <= to; t += 1) out.push({ w: "word", t }); return out; };
+  assert.strictEqual(L.lostFor(sync, words(10, 60), 11.5), 0);
+  assert.strictEqual(L.lostFor(sync, words(10, 60), 60), 48, "heard all along, not in the book");
+  assert.strictEqual(L.lostFor(sync, words(10, 30), 60), 0, "nothing written past 30 s");
+  assert.strictEqual(L.lostFor(sync, words(0, 60), 5), 0, "before the book starts");
+});
+
+test("another device's transcript fills only what this one hasn't written", () => {
+  const mine = { pieces: [{ t0: 0, t1: 10, text: "mine" }], ranges: [[0, 10]], pack: "better", sync: { t: [1] }, syncKey: "k" };
+  const theirs = { pieces: [{ t0: 5, t1: 12, text: "overlap" }, { t0: 20, t1: 30, text: "theirs" }], ranges: [[0, 12], [20, 30]], pack: "fast" };
+  const m = L.mergeTranscript(mine, theirs);
+  assert.deepStrictEqual(m.pieces.map((x) => x.text), ["mine", "theirs"]);
+  assert.deepStrictEqual(m.ranges, [[0, 12], [20, 30]]);
+  assert.strictEqual(m.pack, "better");
+  assert.strictEqual(m.sync, null, "timings made again");
+  assert.deepStrictEqual(Object.keys(L.shareTranscript(m)).sort(), ["pack", "pieces", "ranges", "v"]);
+  assert.strictEqual(L.mergeTranscript(mine, { pieces: [], ranges: [] }).syncKey, "k", "nothing new keeps the timings");
+});
+
 test("times and lengths as words", () => {
   assert.strictEqual(L.timeText(42), "0:42");
   assert.strictEqual(L.timeText(3725), "1:02:05");

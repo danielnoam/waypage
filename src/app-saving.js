@@ -194,8 +194,11 @@ async function outsideDrawn(p, got) {
   }
   const keys = Object.keys(pages).filter((n) => pages[n].length);
   await C.store.writeInk(p.id, keys.length ? { v: 1, size: p.file.size || 0, pages } : null);
-  const d = keys.map((n) => [Number(n), new Set(pages[n].map((x) => x.id)).size]).sort((a, b) => a[0] - b[0]);
+  const d = keys.map((n) => [Number(n), new Set(pages[n].filter((x) => x.t !== "n").map((x) => x.id)).size]).filter((x) => x[1]).sort((a, b) => a[0] - b[0]);
   if (d.length) p.drawn = d; else delete p.drawn;
+  // Its comment bubbles' summary, for Highlights (2026-11).
+  const noted = keys.flatMap((n) => pages[n].filter((x) => x.t === "n").map((x) => ({ id: x.id, n: Number(n), text: String(x.text || "").slice(0, 4000), c: x.c, ...(x.tags && x.tags.length ? { tags: x.tags } : {}) }))).slice(0, 500);
+  if (noted.length) p.noted = noted; else delete p.noted;
   return true;
 
 }
@@ -1266,7 +1269,7 @@ function renderBatch(text, preset, from, siteTags) {
       C.platform.files.canPickFolder ? el("button", { class: "row", type: "button", onclick: () => back().then(addAudiobookFolder) },
         el("span", { class: "row-label accent" }, t("Add an audiobook folder"))) : null,
       newNoteRow),
-    el("p", { class: "meta" }, t("An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3{x}). A folder's files are each added on their own, in a collection named after their folder. It stays {ON_HERE}.", { x: C.platform.files.canPickFolder ? t(", or a folder of them") : "", ON_HERE: ON_HERE })));
+    el("p", { class: "meta" }, t("An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3, a zip of them{x}). A folder's files are each added on their own, in a collection named after their folder. It stays {ON_HERE}.", { x: C.platform.files.canPickFolder ? t(", or a folder of them") : "", ON_HERE: ON_HERE })));
   const form = el("form", { class: "batch-form" }, asPage, fromFile,
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Links")), area, count, finder, skipRow),
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Save as")),
@@ -1494,6 +1497,55 @@ function chapterLinks(name) {
   return gone.size ? entry.all.filter((u) => !gone.has(urlKey(u))) : entry.all;
 }
 
+// New chapters with the app closed (2026-11, Android): the phone's feed
+// job also reads each linked collection's contents page every few hours
+// and says when it lists a chapter this device hasn't seen. It can't run
+// save.js, so it gets what it takes to spot one: the page, the path every
+// chapter shares and how deep it goes, and every chapter already known.
+// A story whose chapters share no such path (a blog's dated posts) is
+// left to the daily check. Keys are a link's host (no www.) and path.
+const chapterKey = (u) => { try { const x = new URL(u); return x.hostname.replace(/^www\./i, "").toLowerCase() + x.pathname.replace(/\/+$/, ""); } catch (e) { return ""; } };
+function chapterShape(links) {
+  const paths = [];
+  for (const u of links) {
+    try { const x = new URL(u); paths.push({ host: x.hostname.replace(/^www\./i, "").toLowerCase(), path: x.pathname.replace(/\/+$/, "") }); } catch (e) { /* not a link */ }
+  }
+  if (new Set(paths.map((p) => p.path)).size < 2 || paths.some((p) => p.host !== paths[0].host)) return null;
+  let prefix = paths[0].path;
+  for (const p of paths) while (prefix && !p.path.startsWith(prefix)) prefix = prefix.slice(0, -1);
+  prefix = prefix.slice(0, prefix.lastIndexOf("/") + 1);
+  const parts = prefix.split("/").filter(Boolean);
+  if (!parts.length || (parts.length === 1 && /^\d{4}$/.test(parts[0]))) return null;
+  return { host: paths[0].host, prefix, depths: [...new Set(paths.map((p) => p.path.split("/").length))] };
+}
+const STORY_KNOWN_MAX = 3000;
+// Android asks once whether Waypage may notify, the first time a
+// collection is linked (or at start, for one linked before 2026-11).
+const CHAPTERS_ASKED_KEY = "waypage.chaptersAsked";
+function askChapterAlerts() {
+  if (!C.platform.android || load(CHAPTERS_ASKED_KEY, false)) return;
+  store(CHAPTERS_ASKED_KEY, true);
+  askToNotify = true;
+  watchFeeds();
+}
+function chapterWatchList() {
+  const n = notesPrefs();
+  if (!C.platform.android || !n.on || !n.chapters || !load(DAILY_KEY, true)) return [];
+  const out = [];
+  for (const name of allFolders()) {
+    const list = folderPages(name);
+    const source = folderSource(list);
+    const entry = newFor(name);
+    if (!source || !entry || !entry.all || !entry.all.length) continue;
+    const shape = chapterShape(entry.all);
+    if (!shape) continue;
+    const known = new Set([...entry.all, ...list.map((p) => p.url)].map(chapterKey).filter(Boolean));
+    for (const k of goneFor(name)) known.add(chapterKey(k));
+    out.push({ name, url: entry.page || source, ...shape, known: [...known].slice(-STORY_KNOWN_MAX) });
+  }
+  return out;
+}
+
 // Keep a set number (2026-11): a linked collection holds `n` unread
 // chapters on this device. Read ones are deleted (and stay deleted, as
 // above) and the next ones in the site's list are saved in their place.
@@ -1506,9 +1558,20 @@ function setKeepFor(name, n) {
   if (n) all[String(name).toLowerCase()] = n; else delete all[String(name).toLowerCase()];
   store(CHAPTERS_KEEP_KEY, all);
 }
-// Moves both with a renamed collection, or drops them with a removed one.
+// Translate its chapters (2026-11): a linked collection's chapters are
+// translated into `to` on this device as each opens, shown under or
+// instead of their words (`mode`). { [lower-case name]: { to, mode } },
+// this device's own like the translations themselves.
+const CHAPTERS_TR_KEY = "waypage.chaptersTranslate";
+const chaptersTranslateFor = (name) => { const v = (load(CHAPTERS_TR_KEY, {}) || {})[String(name).toLowerCase()]; return v && v.to ? { to: v.to, mode: v.mode === "replace" ? "replace" : "under" } : null; };
+function setChaptersTranslate(name, v) {
+  const all = load(CHAPTERS_TR_KEY, {}) || {};
+  if (v && v.to) all[String(name).toLowerCase()] = { to: v.to, mode: v.mode === "replace" ? "replace" : "under" }; else delete all[String(name).toLowerCase()];
+  store(CHAPTERS_TR_KEY, all);
+}
+// Moves these with a renamed collection, or drops them with a removed one.
 function moveChapterNotes(old, name) {
-  for (const k of [GONE_KEY, CHAPTERS_KEEP_KEY]) {
+  for (const k of [GONE_KEY, CHAPTERS_KEEP_KEY, CHAPTERS_TR_KEY]) {
     const all = load(k, {}) || {};
     const from = String(old).toLowerCase();
     if (!(from in all)) continue;
@@ -1605,7 +1668,8 @@ async function checkNew(name, quiet) {
       const all = found.links.slice(0, 5000);
       const gone = goneFor(name);
       count = all.filter((u) => !savedAs(u) && !savingAs(u) && !gone.has(urlKey(u))).length;
-      setNewFor(name, { at: Date.now(), count, all });
+      setNewFor(name, { at: Date.now(), count, all, page: found.page || source });
+      watchFeeds();
       await updateCover(name, found.cover || "");
       await keepStoryTags(name, found.siteTags);
       await keepStoryStatus(name, found.status);
@@ -1680,17 +1744,17 @@ function checkRow(list) {
 
 // ---- The folder's Website sync panel (0.26.0, was Story page) ----
 // Everything about a series in one place, in Settings' groups (2026-11):
-// new chapters and how many to keep, saving earlier or later ones, and
 // the site's page it's linked to (any site's contents page, or one of
-// its chapters).
+// its chapters), first (Daniel 2026-11-23), then new chapters and how
+// many to keep, and saving earlier or later ones. Edit's second tab.
 function chaptersPanel(list) {
-  const top = [checkRow(list), keepRow(list)].filter(Boolean);
+  const top = [checkRow(list), keepRow(list), ...translateRows(list)].filter(Boolean);
   const more = [followControls(list[list.length - 1]), followControls(list[0], true)].filter(Boolean);
   return el("div", { class: "folder-actions chapters-panel" },
+    sourceSection(list),
     top.length ? section(t("New chapters"), null, el("div", { class: "group" }, ...top))
-      : el("p", { class: "meta" }, t("These clips don't link to each other, so there's nothing to look for. Link the collection to its website below.")),
-    more.length ? section(t("Save more"), null, el("div", { class: "group follow-group" }, ...more)) : null,
-    sourceSection(list));
+      : el("p", { class: "meta" }, t("These clips don't link to each other, so there's nothing to look for. Link the collection to its website above.")),
+    more.length ? section(t("Save more"), null, el("div", { class: "group follow-group" }, ...more)) : null);
 }
 
 function keepRow(list) {
@@ -1700,6 +1764,41 @@ function keepRow(list) {
   return pickRow({ label: t("Keep on this device"), cls: "keep-pick",
     options: KEEP_CHOICES.map((n) => (n ? { value: String(n), label: t("{n} unread", { n: n }), note: keepNote } : { value: "0", label: t("Every chapter"), note: t("Nothing is deleted") })),
     get: () => String(keepFor(name)), set: (v) => pickKeep(name, +v) });
+}
+
+// Where this device can translate (platform.js's translator), a linked
+// collection can have each chapter translated as it opens.
+function translateRows(list) {
+  const T = C.platform.translator;
+  if (!folderSource(list) || !T.available) return [];
+  const name = state.folder;
+  const want = chaptersTranslateFor(name);
+  const langs = TR_LANGS.map((c) => ({ value: c, label: langName(c) })).sort((a, b) => a.label.localeCompare(b.label));
+  const into = pickRow({ label: t("Translate chapters"), cls: "translate-pick",
+    options: [{ value: "", label: t("Off"), note: t("Each chapter in its own words") }, ...langs.map((o) => ({ ...o, note: t("Each chapter as it opens, on this device") }))],
+    get: () => (chaptersTranslateFor(name) || {}).to || "",
+    set: (v) => {
+      setChaptersTranslate(name, v ? { to: v, mode: (chaptersTranslateFor(name) || {}).mode } : null);
+      renderFolder();
+      if (v) prepareChapterLanguages(list, v);
+    } });
+  const show = want ? pickRow({ label: t("Show"), cls: "translate-show",
+    options: [{ value: "under", label: t("Under the text") }, { value: "replace", label: t("Instead of the text") }],
+    get: () => (chaptersTranslateFor(name) || {}).mode || "under",
+    set: (v) => setChaptersTranslate(name, { to: (chaptersTranslateFor(name) || {}).to, mode: v }) }) : null;
+  return [into, show];
+}
+// The languages downloaded now, while online, so chapters translate on a
+// plane too. Only when the chapters say what language they're in.
+async function prepareChapterLanguages(list, to) {
+  const T = C.platform.translator;
+  const from = primary((list.find((p) => p.lang) || {}).lang);
+  if (!from || from === to || !navigator.onLine) return;
+  try {
+    if ((await T.ready(from, to)) !== "downloadable") return;
+    toast(t("Downloading {langName} and {langName2}, once, so chapters translate offline.", { langName: langName(from), langName2: langName(to) }));
+    await T.prepare(from, to, () => {});
+  } catch (e) { /* tried again when a chapter opens */ }
 }
 
 function sourceSection(list) {
@@ -1742,6 +1841,7 @@ function sourceSection(list) {
 }
 
 async function setSource(name, url, cover) {
+  if (url) askChapterAlerts();
   for (const p of folderPages(name)) { if (url) p.source = url; else delete p.source; }
   setNewFor(name, null);
   await C.store.writeIndex(state.pages);
@@ -1942,7 +2042,7 @@ function syncedFeeds(list) {
 const NOTES_KEY = "waypage.notes";
 function notesPrefs() {
   const n = load(NOTES_KEY, {}) || {};
-  return { on: n.on !== false, posts: n.posts === "together" ? "together" : "each", quiet: Array.isArray(n.quiet) ? n.quiet : [] };
+  return { on: n.on !== false, posts: n.posts === "together" ? "together" : "each", quiet: Array.isArray(n.quiet) ? n.quiet : [], chapters: n.chapters !== false };
 }
 function setNotes(change) {
   store(NOTES_KEY, { ...notesPrefs(), ...change });
@@ -1960,8 +2060,10 @@ function watchFeeds() {
   clearTimeout(watchTimer);
   watchTimer = setTimeout(() => {
     const list = feeds.map((f) => ({ url: f.url, title: f.title, known: [...new Set(f.items.flatMap((it) => [it.id, it.url]).filter(Boolean))] }));
+    const stories = chapterWatchList();
     const n = notesPrefs();
-    C.platform.feedChecks.watch(list, n.on && askToNotify && list.length > 0, { style: n.on ? n.posts : "off", quiet: n.quiet });
+    C.platform.feedChecks.watch(list, n.on && askToNotify && (list.length > 0 || stories.length > 0), { style: n.on ? n.posts : "off", quiet: n.quiet },
+      stories, load(DATA_SAVE_KEY, "any") === "wifi");
     askToNotify = false;
   }, 1000);
 }
@@ -2220,7 +2322,14 @@ async function saveCopied() {
 // the notification's tap opens Feeds.
 async function takeFeedNews() {
   const news = await C.platform.feedChecks.news();
-  if (news.open) {
+  // A collection's new chapters, found with the app closed: it opens, and
+  // each such collection checks itself now.
+  const story = news.story && allFolders().find((n) => sameTag(n, news.story));
+  if (news.open && story) {
+    await toLibrary();
+    if (state.place !== "library") await goPlace("library");
+    openFolder(story);
+  } else if (news.open) {
     await toLibrary();
     const to = news.feed && feeds.some((f) => f.url === news.feed) ? news.feed : null;
     const place = to && isMail({ url: to }) ? "newsletters" : "feeds";
@@ -2239,6 +2348,8 @@ async function takeFeedNews() {
     if (f) { f.checkedAt = 0; due = true; }
   }
   if (due) checkFeeds(false);
+  const names = (news.stories || []).map((x) => allFolders().find((n) => sameTag(n, x))).filter(Boolean);
+  if (names.length && navigator.onLine) (async () => { for (const name of names) await checkNew(name, true); })();
 }
 
 // One feed read again; a feed set to save its posts saves the new ones.

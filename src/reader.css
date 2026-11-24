@@ -190,6 +190,8 @@ mark.co-mark.co-pm.co-noted { box-shadow: inset 0 -2px var(--muted); }
 .co-ink[data-on="1"] .pad { pointer-events: all; }
 /* A stroke being drawn or an item being dragged shows over the next page too. */
 .co-ink[data-lift] { overflow: visible; clip-path: none !important; z-index: 3; }
+/* Zoomed in Pages with Draw on: only the locked page shows (reader.js setPzOrigin). */
+html.co-zoomed .co-comic > [data-page]:not([data-co-lock]) { visibility: hidden; }
 /* While a pen is near (ink.js near()), no pan under it: it draws. */
 html[data-co-pen-near] .co-ink[data-on="1"], html[data-co-inking][data-co-pen-near], html[data-co-inking][data-co-pen-near] body { touch-action: none; }
 .co-ink path.pen { stroke: none; }
@@ -198,6 +200,19 @@ html[data-co-pen-near] .co-ink[data-on="1"], html[data-co-inking][data-co-pen-ne
 .co-ink .sel { fill: none; stroke: var(--accent); stroke-width: 1.5px; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; pointer-events: none; }
 .co-ink .hnd { fill: var(--accent); stroke: #fff; stroke-width: 2px; vector-effect: non-scaling-stroke; }
 .co-ink .pic { pointer-events: none; }
+/* A comment bubble: always tappable, drawing or not. Its colour is a highlight's. */
+.co-ink .note { pointer-events: auto; cursor: pointer; outline: none; }
+.co-ink[data-lift] .note .bub { filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .35)); }
+.co-ink .note .hit { overflow: visible; }
+.co-ink .note-hit { width: 100%; height: 100%; touch-action: none; pointer-events: auto; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+.co-ink .note .bub { stroke: rgba(28, 27, 25, .45); stroke-width: 1px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.co-ink .note .bub.c-yellow { fill: #FFD60A; }
+.co-ink .note .bub.c-green { fill: #5BD66B; }
+.co-ink .note .bub.c-blue { fill: #5AB0FF; }
+.co-ink .note .bub.c-pink { fill: #FF7AB6; }
+.co-ink .note .bub.c-purple { fill: #B58CFF; }
+.co-ink .note .ln { stroke: #1C1B19; stroke-width: 1.5px; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.co-ink .note:focus-visible .bub { stroke: #2F5D8A; stroke-width: 3px; }
 html[data-co-pdf-dark] .co-ink .custom.pen, html[data-co-pdf-dark] .co-ink .custom.hl, html[data-co-pdf-dark] .co-ink .custom.txt { filter: invert(1) hue-rotate(180deg); }
 .co-ink .txt { font-family: "Instrument Sans", system-ui, sans-serif; white-space: pre; pointer-events: none; }
 .co-ink .txt.c-ink { fill: #1C1B19; }

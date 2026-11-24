@@ -350,6 +350,48 @@ async function phone(browser) {
       assert.deepStrictEqual(got.ids, ["wp26327373", "ao31001", "wt6202", "tpjetdragon", "sh501", "ffn42"]);
     });
 
+    await test("Syosetu's API reads as stories; its serials' addresses are story ids", async () => {
+      const { ctx, p } = await phone(browser);
+      const got = await p.evaluate((json) => {
+        const D = Waypage.discover;
+        return {
+          list: D.parseSyosetu(json).map((s) => [s.id, s.url, s.title, s.chapters, s.followers, s.by, s.tags.join("/")]),
+          bad: D.parseSyosetu("<html>nope</html>"),
+          ids: ["https://ncode.syosetu.com/n1234ab/", "https://ncode.syosetu.com/N1234AB", "https://ncode.syosetu.com/n1234ab/3/"].map(D.storyId),
+          url: D.syBrowseUrl("hyoka", "2", 2),
+        };
+      }, fixture("sy-api.json"));
+      await ctx.close();
+      assert.deepStrictEqual(got.list, [["syn1234ab", "https://ncode.syosetu.com/n1234ab/", "塩の道", 3, 420, "海辺", "ファンタジー/海/R15"],
+        ["syn5678cd", "https://ncode.syosetu.com/n5678cd/", "灯台守", 12, 0, "灯", ""]]);
+      assert.deepStrictEqual(got.bad, []);
+      assert.deepStrictEqual(got.ids, ["syn1234ab", "syn1234ab", ""], "a chapter isn't the story");
+      const u = new URL(got.url);
+      assert.deepStrictEqual([u.origin + u.pathname, u.searchParams.get("order"), u.searchParams.get("biggenre"), u.searchParams.get("st"), u.searchParams.get("type")],
+        ["https://api.syosetu.com/novelapi/api/", "hyoka", "2", "21", "re"]);
+    });
+
+    // New chapters with the app closed (2026-11): the phone's job is told
+    // the path a collection's chapters share and every one it knows.
+    await test("a linked collection hands the phone the shape of its chapters", async () => {
+      const { ctx, p } = await phone(browser);
+      const got = await p.evaluate(() => ({
+        rr: chapterShape(["https://www.royalroad.com/fiction/1/s/chapter/10/one", "https://royalroad.com/fiction/1/s/chapter/11/two/"]),
+        sy: chapterShape(["https://ncode.syosetu.com/n1234ab/1/", "https://ncode.syosetu.com/n1234ab/2/"]),
+        blog: chapterShape(["https://blog.example/2024/01/one/", "https://blog.example/2024/02/two/"]),
+        one: chapterShape(["https://a.example/s/1"]),
+        mixed: chapterShape(["https://a.example/s/1", "https://b.example/s/2"]),
+        key: chapterKey("https://WWW.RoyalRoad.com/fiction/1/s/chapter/11/two/#comments"),
+      }));
+      await ctx.close();
+      assert.deepStrictEqual(got.rr, { host: "royalroad.com", prefix: "/fiction/1/s/chapter/", depths: [7] });
+      assert.deepStrictEqual(got.sy, { host: "ncode.syosetu.com", prefix: "/n1234ab/", depths: [3] });
+      assert.strictEqual(got.blog, null, "a blog's dated posts share only their year");
+      assert.strictEqual(got.one, null);
+      assert.strictEqual(got.mixed, null);
+      assert.strictEqual(got.key, "royalroad.com/fiction/1/s/chapter/11/two");
+    });
+
     await test("FictionPress's mobile site (no div.z-list) reads as stories too", async () => {
       const { ctx, p } = await phone(browser);
       const got = await p.evaluate((html) => Waypage.discover.parseFP(html, "https://m.fictionpress.com/fiction/Fantasy/"), fixture("fp-mobile.html"));
@@ -426,6 +468,7 @@ async function phone(browser) {
       assert.deepStrictEqual(got.se.map((b) => [b.title, b.by]), [["Pride and Prejudice", "Jane Austen"], ["War and Peace", "Leo Tolstoy"]]);
       assert.strictEqual(got.se[0].epub, "https://standardebooks.org/ebooks/jane-austen/pride-and-prejudice/downloads/jane-austen_pride-and-prejudice.epub");
       assert.strictEqual(got.se[1].epub, "https://standardebooks.org/ebooks/leo-tolstoy/war-and-peace/louise-maude_aylmer-maude/downloads/leo-tolstoy_war-and-peace_louise-maude_aylmer-maude.epub");
+      assert.strictEqual(got.se[1].tr, "Louise Maude, Aylmer Maude", "a translation names its translators");
       assert.strictEqual(got.se[0].cover, "https://standardebooks.org/images/covers/pride-cover-thumbnail.jpg");
       assert.deepStrictEqual(got.ws.items.map((t) => t.title), ["The Time Machine (Wells)", "A Modest Proposal"], "categories inside a category are left out");
       assert.strictEqual(got.ws.next, "page|4b49|123");
