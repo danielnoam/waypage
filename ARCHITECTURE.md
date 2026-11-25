@@ -244,6 +244,13 @@ notes it as missed, and `comixWalk` reads a missed page again on its own.
 A chapter's render has `retryMs`, so a reader still without slots 7 s
 after loading is loaded again (four times at most): a few seconds later
 it comes (2 of 12 chapters in a row needed one).
+A walk turns pages at most every 0.7 s (quicker ones are what gets turned
+away), gets a minute without progress before PageRender takes what it
+has, and `comixWalk` carries a walk that stopped short on from the page
+after the last read. A whole list read stops after `COMIX_BUDGET` (six
+minutes) and keeps what it has, newest first: from this container (a
+datacenter address the firewall had flagged) One Piece's list took 28
+minutes without it.
 Trap: comix.to gives a title a new id now and then
 (`lly3j-how-to-use-a-returner` became `53qnl-…`, 2026-11); the old
 address and every chapter answer 404. The rule's `moved` (called by

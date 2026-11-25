@@ -706,16 +706,21 @@
   // One walk of a list (`group`, or every group's with null) from page
   // `start`: { rows: [{ url, n, group, label }], last, missed }, or null
   // without the hidden browser or when nothing came.
-  async function comixWalk(origin, titlePath, group, start, o) {
+  // A whole list read stops after COMIX_BUDGET, keeping what it has: newest
+  // first, so Website sync still sees the new chapters on a day the site's
+  // firewall lets few pages through.
+  const COMIX_BUDGET = 6 * 60000;
+  async function comixWalk(origin, titlePath, group, start, o, until) {
     const rows = [], missed = new Set();
     let last = 1, from = Math.max(1, start || 1);
+    until = until || Date.now() + COMIX_BUDGET;
     // A walk that stopped short (the time ran out while the site kept
     // turning pages away) is carried on from the page after the last read.
-    for (let tries = 0; tries < 12; tries++) {
+    for (let tries = 0; tries < 12 && until - Date.now() > 15000; tries++) {
       const a = new URL(origin + titlePath);
       if (group != null) a.searchParams.set("group_id", group);
       if (from > 1) a.searchParams.set("page", from);
-      const d = await C.platform.render(a.href, { collect: "(" + COMIX_WALK.toString() + ")(" + JSON.stringify(o || {}) + ")", maxMs: 300000, retryMs: 7000 });
+      const d = await C.platform.render(a.href, { collect: "(" + COMIX_WALK.toString() + ")(" + JSON.stringify(o || {}) + ")", maxMs: Math.min(300000, until - Date.now()), retryMs: 7000 });
       let got = null;
       try { got = d && d.collected ? JSON.parse(d.collected) : null; } catch (e) { got = null; }
       if (!got || !Array.isArray(got.rows)) break;
@@ -727,8 +732,8 @@
     }
     // A page the site kept turning away is read again, on its own.
     for (const n of [...missed].slice(0, 20)) {
-      if (o && o.again === false) break;
-      const one = await comixWalk(origin, titlePath, group, n, { pages: 1, again: false });
+      if ((o && o.again === false) || until - Date.now() < 15000) break;
+      const one = await comixWalk(origin, titlePath, group, n, { pages: 1, again: false }, until);
       if (one) { rows.push(...one.raw); missed.delete(n); }
     }
     if (!rows.length) return null;
@@ -772,10 +777,11 @@
     const groups = (data[JSON.stringify(["manga", "groups", hid])] || []).filter((g) => g && g.name);
     const detail = data[JSON.stringify(["manga", "detail", hid])] || {};
     const official = new Set(groups.filter((g) => g.id !== 0 && COMIX_OFFICIAL.test(g.name)).map((g) => String(g.id)));
+    const until = Date.now() + COMIX_BUDGET;
     const walks = new Map();
     const walk = async (group) => {
       const k = group == null ? "" : String(group);
-      if (!walks.has(k)) walks.set(k, await comixWalk(u.origin, titlePath, group, 1, {}));
+      if (!walks.has(k)) walks.set(k, await comixWalk(u.origin, titlePath, group, 1, {}, until));
       return walks.get(k);
     };
 
@@ -786,7 +792,7 @@
     if (group != null) main = await walk(group);
     else {
       // The first page of every group's list: who posted the newest.
-      const top = await comixWalk(u.origin, titlePath, null, 1, { pages: 1 });
+      const top = await comixWalk(u.origin, titlePath, null, 1, { pages: 1 }, until);
       walks.set("*", top);
       const newest = top && top.rows.find((r) => r.group !== "0");
       const off = groups.find((g) => /^official$/i.test(g.name)) || groups.find((g) => official.has(String(g.id)));
@@ -829,17 +835,17 @@
     for (const [k, w] of walks) if (k !== String(group) && k !== "*" && w) fill(w.rows);
     if (walks.get("*")) fill(walks.get("*").rows);
     const gaps = want();
-    if (gaps.length) {
+    if (gaps.length && until - Date.now() > 30000) {
       // Every group's list, newest first: a number's page is guessed from
       // how many uploads a chapter has on the first page, then walked down.
-      const first = walks.get("*") || await comixWalk(u.origin, titlePath, null, 1, { pages: 1 });
+      const first = walks.get("*") || await comixWalk(u.origin, titlePath, null, 1, { pages: 1 }, until);
       if (first) {
         const per = Math.max(1, new Set(first.rows.map((r) => r.n)).size);
         const top = Math.max(...gaps);
         const start = Math.max(1, Math.floor((latest - top) / per) - 1);
         // Read no further than the pages those numbers can be on (150 at most).
         const pages = Math.min(150, Math.ceil((top - Math.min(...gaps)) / per) + 6);
-        const all = await comixWalk(u.origin, titlePath, null, start, { above: top, below: Math.min(...gaps), pages });
+        const all = await comixWalk(u.origin, titlePath, null, start, { above: top, below: Math.min(...gaps), pages }, until);
         if (all) { count(all.rows); fill(all.rows); }
       }
     }
