@@ -7,6 +7,8 @@
 
 // An extension's own sections on its page, added by its code once loaded.
 const EXT_PAGES = {};
+// What draws an extension's place into <main id="its id">, added the same way.
+const EXT_PLACES = {};
 const extensionsOn = () => C.ext.list().filter((x) => C.ext.on(x.id)).length;
 
 // Settings › Extensions: one row each, saying whether it is on.
@@ -71,21 +73,13 @@ for (const x of C.ext.list()) {
 }
 SECTIONS.extensions = { title: t("Extensions"), build: extensionsSections, value: () => { const n = extensionsOn(); return n ? n + " on" : t("Off"); } };
 FIND_ALIASES.Extensions = "anki flashcards cards plugin add-on addon";
-FIND_ALIASES.Catalogs = "opds calibre kavita komga library server books catalog";
-FIND_ALIASES.WebDAV = "webdav nextcloud owncloud nas koofr server folder books";
-FIND_ALIASES.Audiobookshelf = "audiobookshelf abs audiobooks server stream listening podcasts";
-FIND_ALIASES.Calibre = "calibre library folder metadata ebooks";
-FIND_ALIASES.Anki = "flashcards cards spaced repetition deck";
+for (const x of C.ext.list()) if (x.find) FIND_ALIASES[x.title] = x.find;
 FIND_ALIASES.Languages = "language pack dictionary german vocabulary";
 
 // Turning one on or off: the sidebar and the Settings screens follow, and
-// someone in the Anki place when it goes is taken back to the library.
+// someone in its place when it goes is taken back to the library.
 C.ext.changed(() => {
-  if (state.place === "anki" && !C.ext.on("anki")) goPlace("library");
-  if (state.place === "calibre" && !C.ext.on("calibre")) goPlace("library");
-  if (state.place === "catalogs" && !C.ext.on("catalogs")) goPlace("library");
-  if (state.place === "webdav" && !C.ext.on("webdav")) goPlace("library");
-  if (state.place === "audiobookshelf" && !C.ext.on("audiobookshelf")) goPlace("library");
+  if (C.ext.place(state.place) && !C.ext.on(state.place)) goPlace("library");
   if (sideShown()) renderSide();
   if (state.section) renderSection();
   if (state.settings) renderSettings();
@@ -105,59 +99,13 @@ function loadExtensionsOn() { for (const x of C.ext.list()) if (C.ext.on(x.id)) 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", loadExtensionsOn, { once: true });
 else loadExtensionsOn();
 
-// The Anki place: its code is loaded first, so it draws once it's here.
-async function renderAnki() {
-  const root = $("anki");
-  try {
-    await C.ext.load("anki");
-  } catch (e) {
-    fill(root, el("div", { class: "empty" }, el("h2", { class: "empty-title" }, t("Anki didn't load")),
+// An extension's place: its code is loaded first, then it draws itself
+// (EXT_PLACES, filled in by its own shell file).
+async function renderExtension(id) {
+  try { await C.ext.load(id); } catch (e) {
+    fill($(id), el("div", { class: "empty" }, el("h2", { class: "empty-title" }, C.ext.place(id).place.failed()),
       el("p", { class: "empty-text" }, t("Check your connection, then open it again."))));
     return;
   }
-  try { await C.anki.load(); } catch (e) {
-    fill(root, el("div", { class: "empty" }, el("h2", { class: "empty-title" }, t("Your decks didn't open")), el("p", { class: "empty-text" }, t("Close the app and open it again."))));
-    return;
-  }
-  ankiDraw();
-}
-
-// The Calibre place: its code is loaded first, then the folder is read.
-async function renderCalibre() {
-  try { await C.ext.load("calibre"); } catch (e) {
-    fill($("calibre"), el("div", { class: "empty" }, el("h2", { class: "empty-title" }, t("Calibre didn't load")),
-      el("p", { class: "empty-text" }, t("Check your connection, then open it again."))));
-    return;
-  }
-  calibreOpen();
-}
-
-// The Audiobookshelf place: its code is loaded first, then the server is asked.
-async function renderAudiobookshelf() {
-  try { await C.ext.load("audiobookshelf"); } catch (e) {
-    fill($("audiobookshelf"), el("div", { class: "empty" }, el("h2", { class: "empty-title" }, t("Audiobookshelf didn't load")),
-      el("p", { class: "empty-text" }, t("Check your connection, then open it again."))));
-    return;
-  }
-  absDraw();
-}
-
-// The Catalogs place: its code is loaded first, then the catalog is read.
-async function renderCatalogs() {
-  try { await C.ext.load("catalogs"); } catch (e) {
-    fill($("catalogs"), el("div", { class: "empty" }, el("h2", { class: "empty-title" }, t("Catalogs didn't load")),
-      el("p", { class: "empty-text" }, t("Check your connection, then open it again."))));
-    return;
-  }
-  catalogDraw();
-}
-
-// The WebDAV place: its code is loaded first, then the folder is read.
-async function renderWebdav() {
-  try { await C.ext.load("webdav"); } catch (e) {
-    fill($("webdav"), el("div", { class: "empty" }, el("h2", { class: "empty-title" }, t("WebDAV didn't load")),
-      el("p", { class: "empty-text" }, t("Check your connection, then open it again."))));
-    return;
-  }
-  webdavDraw();
+  EXT_PLACES[id]();
 }

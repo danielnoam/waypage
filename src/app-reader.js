@@ -927,7 +927,7 @@ function fitRail() {
 }
 function paintRail() {
   const p = state.open;
-  $("railBackLabel").textContent = state.folder || (state.place === "feeds" ? t("Feeds") : state.place === "newsletters" ? t("Newsletters") : state.place === "highlights" ? t("Highlights") : state.place === "reading" ? t("Stats") : state.place === "anki" ? t("Anki") : state.place === "calibre" ? t("Calibre") : state.place === "audiobookshelf" ? t("Audiobookshelf") : state.place === "catalogs" ? t("Catalogs") : state.place === "webdav" ? t("WebDAV") : t("Library"));
+  $("railBackLabel").textContent = state.folder || (state.place === "feeds" ? t("Feeds") : state.place === "newsletters" ? t("Newsletters") : state.place === "highlights" ? t("Highlights") : state.place === "reading" ? t("Stats") : C.ext.place(state.place) ? C.ext.place(state.place).place.title() : t("Library"));
   const pages = railPages();
   $("readerRail").classList.toggle("paged", pages.length > 0);
   $("readerRail").setAttribute("aria-label", pages.length ? t("Pages") : t("Contents"));

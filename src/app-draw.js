@@ -359,10 +359,6 @@ function renderLibrary() {
   if (state.place === "newsletters") renderNewsletters();
   if (state.place === "highlights") renderHighlights();
   if (state.place === "reading") renderReading();
-  if (state.place === "anki") renderAnki();
-  if (state.place === "calibre") renderCalibre();
-  if (state.place === "audiobookshelf") renderAudiobookshelf();
-  if (state.place === "catalogs") renderCatalogs();
-  if (state.place === "webdav") renderWebdav();
+  if (C.ext.place(state.place)) renderExtension(state.place);
   if (sideShown()) renderSide();
 }

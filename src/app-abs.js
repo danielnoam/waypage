@@ -382,6 +382,7 @@ MENUS.absServer = { label: t("Audiobookshelf"), build: () => absServerSheet() };
 
 // The extension's page in Settings: each server (a tap signs in again,
 // signs out or removes it), then Add a server under Actions.
+EXT_PLACES.audiobookshelf = absDraw;
 EXT_PAGES.audiobookshelf = () => {
   const list = C.abs.list();
   return [

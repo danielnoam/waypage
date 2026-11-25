@@ -2002,7 +2002,7 @@ const mailAddress = (f) => (f.url.match(MAIL_FEED) || [])[1] + "@" + KTN;
 // "Please confirm your subscription": a Confirm button, not a clip.
 const CONFIRM = /\b(confirm|verify|activate|validate)|opt[- ]?in/i;
 const isConfirm = (it) => CONFIRM.test((it && it.title) || "");
-state.place = ["feeds", "newsletters", "highlights", "reading", "discover"].includes(load(PLACE_KEY, "library")) || (["anki", "calibre", "catalogs", "audiobookshelf", "webdav"].includes(load(PLACE_KEY, "library")) && C.ext.on(load(PLACE_KEY, "library"))) ? load(PLACE_KEY, "library") : "library";
+state.place = ["feeds", "newsletters", "highlights", "reading", "discover"].includes(load(PLACE_KEY, "library")) || (C.ext.place(load(PLACE_KEY, "library")) && C.ext.on(load(PLACE_KEY, "library"))) ? load(PLACE_KEY, "library") : "library";
 // The feed picked in the river (its url), or null for all of them.
 state.feed = null;
 state.side = false;
@@ -2434,24 +2434,17 @@ function paintPlace() {
   const marksOn = state.place === "highlights";
   const readOn = state.place === "reading";
   const findOn = state.place === "discover";
-  const ankiOn = state.place === "anki";
-  const calOn = state.place === "calibre";
-  const catOn = state.place === "catalogs";
-  const absOn = state.place === "audiobookshelf";
-  const davOn = state.place === "webdav";
-  $("placeTitle").textContent = feedsOn ? t("Feeds") : mailOn ? t("Newsletters") : marksOn ? t("Highlights") : readOn ? t("Stats") : findOn ? t("Discover") : ankiOn ? t("Anki") : calOn ? t("Calibre") : absOn ? t("Audiobookshelf") : catOn ? t("Catalogs") : davOn ? t("WebDAV") : t("Library");
+  // An extension's place (Anki, Calibre, ...), or null.
+  const ext = C.ext.place(state.place);
+  $("placeTitle").textContent = feedsOn ? t("Feeds") : mailOn ? t("Newsletters") : marksOn ? t("Highlights") : readOn ? t("Stats") : findOn ? t("Discover") : ext ? ext.place.title() : t("Library");
   $("libraryView").dataset.place = state.place;
-  $("library").hidden = feedsOn || mailOn || marksOn || readOn || findOn || ankiOn || calOn || catOn || absOn || davOn;
+  $("library").hidden = feedsOn || mailOn || marksOn || readOn || findOn || !!ext;
   $("feeds").hidden = !feedsOn;
   $("newsletters").hidden = !mailOn;
   $("highlights").hidden = !marksOn;
   $("reading").hidden = !readOn;
   $("discover").hidden = !findOn;
-  $("anki").hidden = !ankiOn;
-  $("calibre").hidden = !calOn;
-  $("catalogs").hidden = !catOn;
-  $("audiobookshelf").hidden = !absOn;
-  $("webdav").hidden = !davOn;
+  for (const x of C.ext.places()) $(x.id).hidden = x.id !== state.place;
   $("paneNote").textContent = marksOn ? t("Pick a highlight to read it here") : readOn ? t("Pick a clip to read it here") : mailOn ? t("Pick an email to read it here") : t("Pick a post to read it here");
   // The bottom field follows a feed in Feeds, makes a newsletter address
   // in Newsletters (1.43.1), searches Royal Road or follows a site in
@@ -2463,19 +2456,15 @@ function paintPlace() {
   if (mailOn) $("saveUrl").maxLength = 32; else $("saveUrl").removeAttribute("maxlength");
   document.querySelector('label[for="saveUrl"]').textContent = feedsOn ? t("Site or feed") : mailOn ? t("New address's name") : t("Page link");
   $("saveForm").querySelector(".btn-primary").textContent = feedsOn ? t("Follow") : mailOn ? t("Make") : t("Save");
-  $("severalBtn").hidden = feedsOn || mailOn || findOn || ankiOn || calOn || catOn || absOn || davOn;
+  $("severalBtn").hidden = feedsOn || mailOn || findOn || !!ext;
   $("viewBtn").hidden = !findOn && !(state.place === "library" && state.pages.length);
-  if (feedsOn || mailOn || marksOn || readOn || findOn || ankiOn || calOn || catOn || absOn || davOn) { if (state.query) clearSearch(); }
+  if (feedsOn || mailOn || marksOn || readOn || findOn || !!ext) { if (state.query) clearSearch(); }
   if (feedsOn) renderFeeds();
   else if (mailOn) renderNewsletters();
   else if (marksOn) renderHighlights();
   else if (readOn) renderReading();
   else if (findOn) openDiscover();
-  else if (ankiOn) renderAnki();
-  else if (calOn) renderCalibre();
-  else if (catOn) renderCatalogs();
-  else if (absOn) renderAudiobookshelf();
-  else if (davOn) renderWebdav();
+  else if (ext) renderExtension(ext.id);
   else renderLibrary();
 }
 

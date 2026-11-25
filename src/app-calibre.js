@@ -192,6 +192,7 @@ function calibreSheet() {
 MENUS.calibreBook = { label: t("Book"), build: () => calibreSheet() };
 
 // The extension's page in Settings: the folder, to pick again or let go.
+EXT_PLACES.calibre = calibreOpen;
 EXT_PAGES.calibre = () => {
   const f = C.calibre.folder();
   return [section(t("Library folder"), null, el("div", { class: "group" },
