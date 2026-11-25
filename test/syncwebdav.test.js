@@ -45,7 +45,9 @@ global.fetch = async (url, opts = {}) => {
 const CFG = JSON.stringify({ owner: "me", repo: "waypage-data", branch: "main", token: "t", looked: Date.now(), scoped: true, what: { clips: false, notes: false, feeds: false, newsletters: false, stats: false, anki: false } });
 mem.set("waypage.sync", CFG);
 let extOn = true;
-window.Waypage.ext = { on: (id) => extOn && id === "webdav", load: async () => true };
+// The real catalogue says which lists Sync carries; on and load are made up.
+require("../src/extensions.js");
+Object.assign(window.Waypage.ext, { on: (id) => extOn && id === "webdav", load: async () => true });
 require("../src/webdav.js");
 require("../src/keel/github.js");
 require("../src/sync.js");
