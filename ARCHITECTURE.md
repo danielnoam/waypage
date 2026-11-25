@@ -1135,6 +1135,11 @@ area.
 - Pages mode scrolls by hand (`pagedInput`), so ink's `preventDefault` on a
   touch doesn't stop it. A new document-level touch gesture has to check
   `e.defaultPrevented` and `inkHook.drawing()`, or the page moves under the pen.
+- The page's own touch gestures (pull to check, swipe between chips, swipe
+  in the sidebar) listen on the whole view, so they also see a drag inside
+  an open drop-down: pulling its list to the top reloaded Discover and shut
+  the menu. A new view-wide gesture skips `.dropdown-menu`, as the sheet's
+  drag to close does.
 - A build from before Notes (1.57.0 and older, and `test-omri-dev`) drops
   every note when it syncs: `cleanMeta` keeps only entries with an address,
   so the next merge marks them deleted and removes their folders on the

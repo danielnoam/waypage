@@ -268,6 +268,20 @@ function libViewSheet() {
 // One drop-down open at a time (Daniel's ask): opening one closes the
 // other, as a tap anywhere else does.
 let dropdownOpen = null;
+// A drag or wheel in a menu moves only the menu (2026-11, Daniel: the
+// page behind scrolled with it). overscroll-behavior covers a menu that
+// scrolls, but not one too short to, nor an iPhone before iOS 16.
+function holdScroll(m) {
+  let y = 0;
+  const stuck = (dy) => m.scrollHeight <= m.clientHeight + 1 || (dy > 0 && m.scrollTop <= 0) || (dy < 0 && m.scrollTop + m.clientHeight >= m.scrollHeight - 1);
+  m.addEventListener("touchstart", (e) => { y = e.touches[0].clientY; }, { passive: true });
+  m.addEventListener("touchmove", (e) => {
+    const dy = e.touches[0].clientY - y;
+    y = e.touches[0].clientY;
+    if (e.cancelable && stuck(dy)) e.preventDefault();
+  }, { passive: false });
+  m.addEventListener("wheel", (e) => { if (stuck(-e.deltaY)) e.preventDefault(); }, { passive: false });
+}
 function dropdown(o) {
   let value = o.value;
   const face = el("span", { class: "dropdown-face" });
@@ -367,6 +381,7 @@ function dropdown(o) {
       else if (e.key === "Home" || e.key === "End") { e.preventDefault(); items[e.key === "Home" ? 0 : items.length - 1].focus(); }
       else if (e.key === "Tab") close(false);
     });
+    holdScroll(menu);
     wrap.append(menu);
     btn.setAttribute("aria-expanded", "true");
     const g = wrap.closest(".group");

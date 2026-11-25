@@ -1558,7 +1558,7 @@ function swipeToSide(root) {
   root.addEventListener("touchstart", (e) => {
     const t = e.touches[0];
     start = e.touches.length === 1 && (M.rtl() ? innerWidth - t.clientX : t.clientX) <= EDGE && !state.select && !state.menu && !state.side
-      && !e.target.closest(".filters, .folder-strip, input, textarea, .drag-handle") ? { x: t.clientX, y: t.clientY } : null;
+      && !e.target.closest(".filters, .folder-strip, input, textarea, .drag-handle, .dropdown-menu") ? { x: t.clientX, y: t.clientY } : null;
   }, { passive: true });
   root.addEventListener("touchmove", (e) => {
     if (!start) return;
@@ -1591,7 +1591,7 @@ function swipeFeeds(root) {
     const t = e.touches[0];
     go = e.touches.length === 1 && (M.rtl() ? innerWidth - t.clientX : t.clientX) > EDGE && !state.feedPick && !state.side && !state.menu && chips().length > 1
       // Discover's row of covers scrolls sideways on its own; its grid doesn't.
-      && !e.target.closest(".filters, input, textarea, .dz-covers:not(.dz-grid)") ? { x: t.clientX, y: t.clientY, on: false, dx: 0, t: e.timeStamp } : null;
+      && !e.target.closest(".filters, input, textarea, .dz-covers:not(.dz-grid), .dropdown-menu") ? { x: t.clientX, y: t.clientY, on: false, dx: 0, t: e.timeStamp } : null;
   }, { passive: true });
   root.addEventListener("touchmove", (e) => {
     if (!go) return;
@@ -1648,8 +1648,10 @@ function pullToCheck(root) {
     hint.classList.toggle("ready", h >= PULL_AT);
   };
   root.addEventListener("touchstart", (e) => {
+    // Not from inside an open drop-down: pulling its list down to its top
+    // reloaded the page behind it and shut the menu (2026-11).
     start = !feedsChecking && !dailyRunning && scrollY <= 0 && e.touches.length === 1 && !state.side && !state.menu
-      ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+      && !e.target.closest(".dropdown-menu") ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
     pulled = 0;
   }, { passive: true });
   root.addEventListener("touchmove", (e) => {
