@@ -282,6 +282,29 @@ function holdScroll(m) {
   }, { passive: false });
   m.addEventListener("wheel", (e) => { if (stuck(-e.deltaY)) e.preventDefault(); }, { passive: false });
 }
+// A list longer than its menu shows it (2026-11, Daniel's pick): a thin
+// bar on the inner edge, its handle where you are and as long as what's
+// in view, and a fade over the edge that has more past it.
+function scrollHints(m) {
+  if (m.scrollHeight <= m.clientHeight + 1) return;
+  m.classList.add("scrolls");
+  const rail = el("div", { class: "dropdown-rail", "aria-hidden": "true" },
+    el("span", { class: "dropdown-fade top" }), el("span", { class: "dropdown-fade end" }), el("span", { class: "dropdown-track" }, el("span", { class: "dropdown-thumb" })));
+  m.append(rail);
+  const [top, end, track] = rail.children, thumb = track.firstChild;
+  const paint = () => {
+    const h = m.clientHeight, room = h - 8, span = m.scrollHeight - h;
+    const th = Math.max(28, room * h / m.scrollHeight);
+    track.style.height = room + "px";
+    thumb.style.height = th + "px";
+    thumb.style.transform = "translateY(" + (span > 0 ? (room - th) * m.scrollTop / span : 0) + "px)";
+    top.style.bottom = h - 40 + "px";
+    top.classList.toggle("on", m.scrollTop > 1);
+    end.classList.toggle("on", m.scrollTop < span - 1);
+  };
+  m.addEventListener("scroll", paint, { passive: true });
+  paint();
+}
 function dropdown(o) {
   let value = o.value;
   const face = el("span", { class: "dropdown-face" });
@@ -387,6 +410,7 @@ function dropdown(o) {
     const g = wrap.closest(".group");
     if (g) g.classList.add("menu-open");
     fit(menu);
+    scrollHints(menu);
     M.popFrom(menu, btn.getBoundingClientRect());
     document.addEventListener("pointerdown", outside, true);
     (items.find((b) => b.getAttribute("aria-selected") === "true") || items[0]).focus({ preventScroll: true });

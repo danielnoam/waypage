@@ -542,6 +542,17 @@ picture viewer's fallback only, never for a menu, bar or dialog.
   (`.field-pick`, 0.27.5) it is full width with the input's `--line`
   border, `--bg` fill and label type, an unpicked placeholder in
   `--muted`, and its menu as wide as the field.
+  A list longer than its menu (2026-11) shows a 4 px bar on its inner
+  edge (`--line` track, `--muted` handle sized to what's in view) and a
+  40 px fade to `--surface` over each edge with more past it. A drag in
+  it moves only the list, never the page behind.
+- **Discover › Sites (2026-11):** every site as a tile (a coloured
+  monogram, its name, one line on what it is) under Web fiction, Fan
+  fiction, Comics and Libraries; the search field finds a site. A tile
+  opens the site's page in its own history entry: ‹ Sites, the monogram
+  and name in the serif, the lists as a row of chips (outlined in
+  `--accent` when picked, under the filled Discover chips), the genre as
+  a quiet drop-down, then the covers, with no site name on them.
 - **Read aloud (Now, 0.27.0):** a speaker icon button in the reader's
   bar, before Aa: accent on `--line` while reading, and its label says
   Stop. While it reads, the bar along the bottom stays up and holds the

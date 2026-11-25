@@ -5199,11 +5199,11 @@ c("bk1", { at: 0.01 })]);
         Object.defineProperty(C.platform, "canFetchPages", { get: () => true, configurable: true });
         C.discover.sources.forEach((s) => { s.browse = async () => Array.from({ length: 12 }, (_, i) => ({ id: s.key + i, title: "Story " + i, url: "https://example.org/" + i, tags: [], chapters: 3, cover: "" })); });
         dzReadRR = async () => {}; dzReadWiki = async () => {};
-        goPlace("discover"); dzPick = "stories"; renderDiscover();
+        goPlace("discover"); dzPick = "stories"; dzOpenSite("rr");
       });
       await until(q, () => document.querySelectorAll(".dz-grid .dz-book").length > 0 && !dz.busy && !dz.grid.busy);
       // Discover may draw again as it settles, which puts the menu away.
-      await until(q, () => { if (!document.querySelector(".dropdown-menu")) document.querySelector(".dz-tools .dropdown-btn").click(); return !!document.querySelector(".dropdown-menu"); });
+      await until(q, () => { if (!document.querySelector(".dropdown-menu")) document.querySelector(".dz-genre .dropdown-btn").click(); return !!document.querySelector(".dropdown-menu"); });
       await q.waitForTimeout(400);
       await until(q, () => !!document.querySelector(".dropdown-menu"));
       const cdp = await ctx.newCDPSession(q);
@@ -5214,6 +5214,9 @@ c("bk1", { at: 0.01 })]);
         await q.waitForTimeout(300);
       };
       const at = () => q.evaluate(() => { const m = document.querySelector(".dropdown-menu"); return { y: scrollY, top: m ? m.scrollTop : -1, end: m ? m.scrollHeight - m.clientHeight : -1, pull: $("pullHint").style.height }; });
+      // A list longer than its menu shows a scroll bar and a fade where there's more.
+      const hints = () => q.evaluate(() => { const m = document.querySelector(".dropdown-menu"); return { bar: !!m.querySelector(".dropdown-thumb"), top: m.querySelector(".dropdown-fade.top").classList.contains("on"), end: m.querySelector(".dropdown-fade.end").classList.contains("on") }; });
+      assert.deepStrictEqual(await hints(), { bar: true, top: false, end: true });
       // Pulled down at the top of the page and of the list: no pull to check.
       await drag(320, 640);
       let s = await at();
@@ -5222,6 +5225,7 @@ c("bk1", { at: 0.01 })]);
       for (let i = 0; i < 3; i++) await drag(640, 300);
       s = await at();
       assert.ok(s.end > 0 && s.top >= s.end - 1 && s.y === 0, JSON.stringify(s));
+      assert.deepStrictEqual(await hints(), { bar: true, top: true, end: false });
       await ctx.close();
     });
 
