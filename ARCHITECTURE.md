@@ -101,6 +101,7 @@ src/anki-import.js  reads an Anki deck (.apkg: a zip with a SQLite collection) i
 src/anki.js         the Anki extension's engine: decks, cards and a review log (anki/ beside the library, per-device log), each card's schedule replayed from the log
 src/calibre.js      the Calibre extension's library folder: picked once (the Files plugin, or a browser's folder picker kept in IndexedDB), metadata.db read with sqlite.js into books, a book's best file and its cover read from the folder by path
 src/app-calibre.js  the Calibre extension's place: the books as covers with search, sort and tag, a book's sheet (Read it from the folder, or Copy into your Library), Settings › Extensions › Calibre
+src/servers.js      the list of servers Catalogs, WebDAV and Audiobookshelf each keep: stored with its passwords or tokens, the removed ones remembered, `shared()` without secrets for sync, `mergeIn()` from another device (a secret stays only for the same user on the same server, `servers.same`); loaded with any of the three
 src/opds.js         the Catalogs extension's catalogs: the list on this device, OPDS 1 (Atom) and 2 (JSON) feeds read into folders and books, search, a book's file with the catalog's login
 src/app-catalogs.js the Catalogs extension's screens: the Catalogs place in the sidebar (folders, books, search), the Add a catalog sheet, Settings › Extensions › Catalogs
 src/webdav.js       the WebDAV extension's servers: the list on this device, a PROPFIND answer read into folders and books, a book's picture found beside it, a file with the server's login
@@ -642,7 +643,9 @@ web copy stay links, as before.
   list with each catalog's address, name and username but never its
   password (`opds.shared()`), and the ones removed with when, so a removal
   sticks. Merged by id, the newer change winning (`opds.mergeIn`); a
-  password typed on this device stays, unless the username changed. One
+  password typed on this device stays, unless the username changed or
+  the address now points at another server (`servers.same`: the same
+  origin, or the same host moved up to https). One
   that arrives with a username and no password asks for it in its place.
   Sent only when it differs from GitHub's; no sync of its own, it goes
   with the next. `test/synccatalogs.test.js`.

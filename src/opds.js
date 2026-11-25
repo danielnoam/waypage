@@ -26,47 +26,13 @@
   // The files the Library can bring in from a link, best first.
   const KINDS = [["epub", /epub/i], ["cbz", /cbz|comicbook\+zip|x-cbz/i], ["pdf", /pdf/i]];
 
-  const read$ = () => { try { const v = JSON.parse(localStorage.getItem(KEY) || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
-  const write$ = (v) => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) { /* storage full: it stays as it was */ } };
-  const watchers = [];
-  const changed = (fn) => { watchers.push(fn); };
-  const tell = () => { for (const fn of watchers) { try { fn(); } catch (e) { console.error(e); } } };
-  const GONE = "waypage.catalogs.gone"; // { id: when it was removed }, so sync doesn't bring it back
-  const gone$ = () => { try { const v = JSON.parse(localStorage.getItem(GONE) || "{}"); return v && typeof v === "object" ? v : {}; } catch (e) { return {}; } };
-  const list = () => read$().map((c) => ({ ...c }));
+  // The list itself is src/servers.js's, shared with WebDAV and Audiobookshelf.
   const clean = (c) => ({ id: c.id || "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: String(c.title || "").trim().slice(0, 80) || host(c.url),
     url: String(c.url || "").trim(), user: String(c.user || ""), pass: String(c.pass || ""), at: Number(c.at) || Date.now() });
-  function add(c) { const x = clean({ ...c, at: Date.now() }); write$([...read$(), x]); tell(); return x; }
-  function update(c) { write$(read$().map((x) => (x.id === c.id ? clean({ ...x, ...c, at: Date.now() }) : x))); tell(); }
-  function remove(id) {
-    write$(read$().filter((x) => x.id !== id));
-    try { localStorage.setItem(GONE, JSON.stringify({ ...gone$(), [id]: Date.now() })); } catch (e) { /* not kept */ }
-    tell();
-  }
-  // What sync sends: every catalog but its password, and those removed.
-  const shared = () => ({ v: 1, list: read$().map(({ pass, ...c }) => c), gone: gone$() });
-  // Another device's list: the newer of each catalog wins, a password
-  // typed here stays here, and one removed anywhere goes.
-  function mergeIn(doc) {
-    if (!doc || !Array.isArray(doc.list)) return false;
-    const gone = { ...gone$() };
-    for (const [id, at] of Object.entries(doc.gone || {})) if (typeof at === "number" && !(gone[id] >= at)) gone[id] = at;
-    const mine = new Map(read$().map((c) => [c.id, c]));
-    for (const r of doc.list) {
-      if (!r || !r.id || !/^https?:\/\//i.test(r.url || "")) continue;
-      const at = Number(r.at) || 0, here = mine.get(r.id);
-      if (!here) mine.set(r.id, clean({ ...r, pass: "", at }));
-      else if (at > (here.at || 0)) mine.set(r.id, clean({ ...r, pass: r.user === here.user ? here.pass : "", at }));
-    }
-    for (const [id, at] of Object.entries(gone)) { const c = mine.get(id); if (c && (c.at || 0) <= at) mine.delete(id); }
-    const before = JSON.stringify(read$());
-    const out = [...mine.values()];
-    try { localStorage.setItem(GONE, JSON.stringify(gone)); } catch (e) { /* not kept */ }
-    if (JSON.stringify(out) === before) return false;
-    write$(out);
-    tell();
-    return true;
-  }
+  const S = C.servers({ key: KEY, clean, secrets: ["pass"] });
+  const { add, remove, shared, mergeIn, changed } = S;
+  const list = () => S.all().map((c) => ({ ...c }));
+  const update = (c) => S.change(c.id, (x) => clean({ ...x, ...c, at: Date.now() }));
 
   function host(u) { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return String(u || ""); } }
   const abs = (href, base) => { try { const u = new URL(href, base); return /^https?:$/.test(u.protocol) ? u.href : ""; } catch (e) { return ""; } };
@@ -180,12 +146,7 @@
   // The login goes only to the catalog's own server: a feed can link
   // folders, books and covers anywhere, and those never get it. The same
   // server moved up to https (a redirect) still does.
-  const own = (cat, url) => {
-    try {
-      const a = new URL(cat.url), b = new URL(url);
-      return a.origin === b.origin || (b.protocol === "https:" && a.hostname === b.hostname);
-    } catch (e) { return false; }
-  };
+  const own = (cat, url) => C.servers.same(cat.url, url);
   const login = (cat, url) => (cat && cat.user && own(cat, url) ? { Authorization: "Basic " + btoa(unescape(encodeURIComponent(cat.user + ":" + cat.pass))) } : {});
   const home = (url) => { try { return /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1|[^.]+$|.*\.(local|lan|home|internal)$)/i.test(new URL(url).hostname); } catch (e) { return false; } };
   const straight = (cat, url) => !C.platform.native && (!!(cat && cat.user && own(cat, url)) || home(url));

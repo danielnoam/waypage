@@ -48,6 +48,7 @@ let extOn = true;
 // The real catalogue says which lists Sync carries; on and load are made up.
 require("../src/extensions.js");
 Object.assign(window.Waypage.ext, { on: (id) => extOn && id === "webdav", load: async () => true });
+require("../src/servers.js");
 require("../src/webdav.js");
 require("../src/keel/github.js");
 require("../src/sync.js");

@@ -48,6 +48,7 @@ let extOn = true;
 // The real catalogue says which lists Sync carries; on and load are made up.
 require("../src/extensions.js");
 Object.assign(window.Waypage.ext, { on: (id) => extOn && id === "catalogs", load: async () => true });
+require("../src/servers.js");
 require("../src/opds.js");
 require("../src/keel/github.js");
 require("../src/sync.js");
@@ -103,6 +104,29 @@ async function test(name, fn) {
     as("b");
     await sync();
     assert.deepStrictEqual(O.list().map((c) => [c.title, c.pass]), [["Shelf", "on-b"]]);
+  });
+
+  await test("a password never follows a catalog to another server, only to the same one or its https", async () => {
+    as("a");
+    O.add({ id: "c1", title: "Home", url: "http://books.example.test/opds", user: "daniel", pass: "on-a" });
+    await sync();
+    as("b");
+    await sync();
+    await tick();
+    // The same server, moved up to https and to another folder: still its password.
+    O.update({ id: "c1", url: "https://books.example.test/new/opds" });
+    await sync();
+    as("a");
+    await sync();
+    assert.deepStrictEqual(O.list().map((c) => [c.url, c.pass]), [["https://books.example.test/new/opds", "on-a"]]);
+    // Another server under the same id and username: the password stays behind.
+    as("b");
+    await tick();
+    O.update({ id: "c1", url: "https://elsewhere.example.test/opds" });
+    await sync();
+    as("a");
+    await sync();
+    assert.deepStrictEqual(O.list().map((c) => [c.url, c.pass]), [["https://elsewhere.example.test/opds", ""]]);
   });
 
   await test("a catalog removed on one device goes from the other, and doesn't come back", async () => {

@@ -60,19 +60,19 @@
         title: () => t("Audiobookshelf"), failed: () => t("Audiobookshelf didn't load") },
       find: "audiobookshelf abs audiobooks server stream listening podcasts",
       sync: { file: "audiobookshelf.json", store: "abs", key: "waypage.syncAbs", says: "Audiobookshelf" },
-      scripts: ["src/abs.js", "src/app-abs.js"], packs: [] },
+      scripts: ["src/servers.js", "src/abs.js", "src/app-abs.js"], packs: [] },
     { id: "catalogs", title: "Catalogs", note: "Book catalogs (OPDS) you add, in the sidebar",
       place: { icon: '<path d="M3 5h6a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H3z"/><path d="M21 5h-6a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h7z"/>',
         title: () => t("Catalogs"), failed: () => t("Catalogs didn't load") },
       find: "opds calibre kavita komga library server books catalog",
       sync: { file: "catalogs.json", store: "opds", key: "waypage.syncCatalogs", says: "Catalogs" },
-      scripts: ["src/opds.js", "src/app-catalogs.js"], packs: [] },
+      scripts: ["src/servers.js", "src/opds.js", "src/app-catalogs.js"], packs: [] },
     { id: "webdav", title: "WebDAV", note: "A folder of books on your server (Nextcloud, a NAS), in the sidebar",
       place: { icon: '<path d="M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 8a4 4 0 0 1-.5 10z"/><path d="M12 11v6M9.5 14.5 12 17l2.5-2.5"/>',
         title: () => t("WebDAV"), failed: () => t("WebDAV didn't load") },
       find: "webdav nextcloud owncloud nas koofr server folder books",
       sync: { file: "webdav.json", store: "webdav", key: "waypage.syncWebdav", says: "WebDAV servers" },
-      scripts: ["src/webdav.js", "src/app-webdav.js"], packs: [] },
+      scripts: ["src/servers.js", "src/webdav.js", "src/app-webdav.js"], packs: [] },
   ];
 
   const read = () => { try { const v = JSON.parse(localStorage.getItem(KEY) || "{}"); return v && typeof v === "object" ? v : {}; } catch (e) { return {}; } };
