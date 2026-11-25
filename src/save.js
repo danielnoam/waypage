@@ -637,7 +637,7 @@
     var save = function () { try { sessionStorage.setItem(K, JSON.stringify(S)); } catch (e) { /* kept in the page only */ } };
     var out = function (done) {
       save();
-      window.__wpOut = JSON.stringify({ rows: S.rows, last: S.last, missed: S.missed });
+      window.__wpOut = JSON.stringify({ rows: S.rows, last: S.last, missed: S.missed, done: done, at: S.at || 0 });
       return JSON.stringify({ done: done, n: S.rows.length });
     };
     var rows = document.querySelectorAll(".mchap-row");
@@ -647,10 +647,13 @@
     var top = a0 ? a0.getAttribute("href") : "";
     var numOf = function (h) { var m = /-chapter-(\d+(?:\.\d+)?)/.exec(h || ""); return m ? parseFloat(m[1]) : NaN; };
     var button = function (n) { return [].filter.call(document.querySelectorAll(".npager__num"), function (x) { return parseInt(x.textContent, 10) === n; })[0]; };
+    // A page turn every 0.7 s at most: quicker ones are what the firewall
+    // turns away.
     var go = function (n) {
       var b = button(n);
       if (!b) return out(n > S.last || S.read[n] === 1);
-      S.pending = n; S.top = top; S.wait = 0; b.click();
+      if (Date.now() - (S.t || 0) < 700) return out(false);
+      S.pending = n; S.top = top; S.wait = 0; S.t = Date.now(); b.click();
       return out(false);
     };
     var load = function (n) {
@@ -677,6 +680,7 @@
     S.last = Math.max.apply(null, [S.last, cur].concat(nums));
     if (!S.read[cur]) {
       S.read[cur] = 1;
+      S.at = Math.max(S.at || 0, cur);
       var low = Infinity, high = -Infinity;
       [].forEach.call(rows, function (r) {
         var a = r.querySelector("a.mchap-row__primary");
@@ -703,23 +707,36 @@
   // `start`: { rows: [{ url, n, group, label }], last, missed }, or null
   // without the hidden browser or when nothing came.
   async function comixWalk(origin, titlePath, group, start, o) {
-    const a = new URL(origin + titlePath);
-    if (group != null) a.searchParams.set("group_id", group);
-    if (start > 1) a.searchParams.set("page", start);
-    const d = await C.platform.render(a.href, { collect: "(" + COMIX_WALK.toString() + ")(" + JSON.stringify(o || {}) + ")", maxMs: 300000, retryMs: 7000 });
-    let got = null;
-    try { got = d && d.collected ? JSON.parse(d.collected) : null; } catch (e) { got = null; }
-    if (!got || !Array.isArray(got.rows) || !got.rows.length) return null;
+    const rows = [], missed = new Set();
+    let last = 1, from = Math.max(1, start || 1);
+    // A walk that stopped short (the time ran out while the site kept
+    // turning pages away) is carried on from the page after the last read.
+    for (let tries = 0; tries < 12; tries++) {
+      const a = new URL(origin + titlePath);
+      if (group != null) a.searchParams.set("group_id", group);
+      if (from > 1) a.searchParams.set("page", from);
+      const d = await C.platform.render(a.href, { collect: "(" + COMIX_WALK.toString() + ")(" + JSON.stringify(o || {}) + ")", maxMs: 300000, retryMs: 7000 });
+      let got = null;
+      try { got = d && d.collected ? JSON.parse(d.collected) : null; } catch (e) { got = null; }
+      if (!got || !Array.isArray(got.rows)) break;
+      rows.push(...got.rows);
+      for (const n of got.missed || []) missed.add(n);
+      last = Math.max(last, got.last || 1);
+      if (got.done || !got.at || got.at < from || got.at >= last) break;
+      from = got.at + 1;
+    }
     // A page the site kept turning away is read again, on its own.
-    for (const n of (got.missed || []).slice(0, 20)) {
+    for (const n of [...missed].slice(0, 20)) {
       if (o && o.again === false) break;
       const one = await comixWalk(origin, titlePath, group, n, { pages: 1, again: false });
-      if (one) { got.rows.push(...one.raw); got.missed = got.missed.filter((x) => x !== n); }
+      if (one) { rows.push(...one.raw); missed.delete(n); }
     }
+    if (!rows.length) return null;
+    const seen = new Set();
+    const raw = rows.filter(([h]) => !seen.has(h) && seen.add(h));
     return {
-      raw: got.rows,
-      last: got.last || 1, missed: got.missed || [],
-      rows: got.rows.map(([h, g, label]) => ({
+      raw, last, missed: [...missed],
+      rows: raw.map(([h, g, label]) => ({
         url: absolute(h, origin),
         // From the address: the link's words go on with the chapter's title.
         n: parseFloat((String(h).match(/-chapter-(\d+(?:\.\d+)?)/) || [])[1]),
@@ -820,7 +837,9 @@
         const per = Math.max(1, new Set(first.rows.map((r) => r.n)).size);
         const top = Math.max(...gaps);
         const start = Math.max(1, Math.floor((latest - top) / per) - 1);
-        const all = await comixWalk(u.origin, titlePath, null, start, { above: top, below: Math.min(...gaps) });
+        // Read no further than the pages those numbers can be on (150 at most).
+        const pages = Math.min(150, Math.ceil((top - Math.min(...gaps)) / per) + 6);
+        const all = await comixWalk(u.origin, titlePath, null, start, { above: top, below: Math.min(...gaps), pages });
         if (all) { count(all.rows); fill(all.rows); }
       }
     }

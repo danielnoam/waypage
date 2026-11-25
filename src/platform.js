@@ -317,7 +317,9 @@
     const R = plugin("PageRender");
     if (!R) return null;
     try {
-      const wait = scroll ? (expect ? 60000 : 50000) : 20000;
+      // A walk (`collect`) gets a minute without progress: the site may
+      // take that long to let a page through.
+      const wait = collect ? 60000 : scroll ? (expect ? 60000 : 50000) : 20000;
       const res = await deadline(R.render({ url, timeoutMs: wait, maxMs: maxMs || wait, retryMs, scroll, waitFor, expect, ready, collect }), Math.max(wait, maxMs) + 10000);
       return res && res.html ? { text: res.html, url: res.url || url, expected: res.expected, ready: res.ready, collected: res.collected } : null;
     } catch (e) {
