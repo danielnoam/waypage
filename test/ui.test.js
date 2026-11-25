@@ -2120,6 +2120,11 @@ function zipOf(files) {
       await q.evaluate(() => { setFolderMode(""); setFolderLook("Serial", "covers"); });
       assert.strictEqual(await q.locator("#folderBody .folder-covers .cover-item").count(), 3);
       assert.strictEqual(await q.locator("#folderBody .folder-list").count(), 0);
+      // Website sync's tab lists the chapters one by one even with the grid look (Daniel 2026-11-25).
+      await q.evaluate(() => setFolderMode("chapters"));
+      assert.strictEqual(await q.locator("#folderBody .folder-covers").count(), 0);
+      assert.strictEqual(await q.locator("#folderBody .folder-list > li").count(), 3);
+      await q.evaluate(() => setFolderMode(""));
       await q.locator('#folderBody .folder-covers li[data-id="rr500"] .item-fav').click();
       await until(q, () => !state.pages.find((p) => p.id === "rr500").fav);
       // Opening a serial looks for its next chapter, which has nowhere to go here.

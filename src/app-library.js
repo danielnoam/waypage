@@ -819,7 +819,8 @@ function renderFolder() {
   // On a big screen the book's cover and facts stand beside its list.
   } else top = [el("div", { class: "book-side" }, ...bookHead(list, next, done))];
   const showList = folderMode !== "export";
-  const covers = showList && !editing && folderLook(state.folder) === "covers";
+  // The Website sync tab lists its chapters one by one, whatever the look (Daniel 2026-11-25).
+  const covers = showList && !folderMode && folderLook(state.folder) === "covers";
   fill($("folderBody"),
     ...top,
     ...(showList && !editing ? insideStrip(state.folder) : []),
