@@ -480,63 +480,147 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
     // to a page here (twenty on the site), by a stand-in for it that answers
     // from a made-up catalogue: Official has 1-12, Violet Scans 1-30,
     // Hades Scans 1-29.
-    const comix = (url, canRender, title = "comix-title.html") => inPage(browser, [
+    // comix.to: the title's list is walked in the hidden browser by the
+    // app's own script (PageRender `collect`). Here the "hidden browser" is a
+    // frame holding a page like the site's: five rows a page, newest first,
+    // a pager of eight numbers around the one on show, and a click that
+    // swaps the rows a moment later. `refuse` pages ignore their first click,
+    // as the site's firewall does now and then. `book`: group → [name,
+    // chapters], a chapter a number or [number, label].
+    const comix = (url, { canRender = true, title = "comix-title.html", book, refuse = [], answers = [] }) => inPage(browser, [
+      ...answers,
       ["https://comix.to/title/1w0v-the-perks", title],
-    ], async ({ url, canRender }) => {
-      const book = { 9897: ["Official", 12], 307: ["Violet Scans", 30], 10728: ["Hades Scans", 29] };
+    ], async ({ url, canRender, book, refuse }) => {
       const drawn = [];
       Object.defineProperty(Waypage.platform, "canRender", { get: () => canRender, configurable: true });
-      Waypage.platform.render = async (u, opts) => {
-        drawn.push(u);
-        const q = new URL(u).searchParams;
-        let rows = [];
+      const rowsFor = (group) => {
+        const rows = [];
         for (const g of Object.keys(book)) {
-          if (q.has("group_id") && q.get("group_id") !== g) continue;
-          for (let n = 1; n <= book[g][1]; n++) rows.push({ g, n });
+          if (group != null && group !== g) continue;
+          for (const c of book[g][1]) {
+            const [n, label] = Array.isArray(c) ? c : [c, "Ch." + c];
+            rows.push({ g, n, label });
+          }
         }
-        rows.sort((a, b) => b.n - a.n || Number(b.g) - Number(a.g));
-        const all = rows.length, page = Number(q.get("page") || 1);
-        rows = rows.slice((page - 1) * 5, page * 5);
-        const html = "<body><p>" + "A synopsis. ".repeat(50) + "</p>" + (opts.waitFor ? "" : "<!-- no waitFor -->") + rows.map((r) =>
-          '<div class="mchap-row"><a class="mchap-row__primary" href="/title/1w0v-the-perks/' + r.g + r.n + "-chapter-" + r.n + '"><span class="mchap-row__ch">Ch.' + r.n + '</span><span class="mchap-row__title">100 years later</span></a>' +
-          '<a class="mchap-row__group" href="/groups/' + r.g + '"><span>' + book[r.g][0] + "</span></a></div>").join("") +
-          '<div class="npager">' + Array.from({ length: Math.ceil(all / 5) }, (_, i) => '<button class="npager__num">' + (i + 1) + "</button>").join("") + "</div></body>";
-        return { text: html, url: u };
+        return rows.sort((a, b) => b.n - a.n || Number(b.g) - Number(a.g));
       };
-      const found = await Waypage.save.findChapters(url);
-      return { found, drawn };
-    }, { url, canRender });
-    const chapters = (g, count) => Array.from({ length: count }, (_, i) => "https://comix.to/title/1w0v-the-perks/" + g + (i + 1) + "-chapter-" + (i + 1));
+      Waypage.platform.render = async (u, opts) => {
+        drawn.push({ u, opts });
+        if (/\/browse\?q=/.test(u)) return { url: u, text: "<body>" + "A result. ".repeat(60) + (window.__found || "") + "</body>" };
+        if (!opts.collect) return null;
+        const q = new URL(u).searchParams;
+        const rows = rowsFor(q.get("group_id"));
+        // The script sent is the walker's own source, with its options.
+        if (!opts.collect.startsWith("(" + Waypage.save.COMIX_WALK.toString() + ")(")) throw new Error("not the walker");
+        const o = JSON.parse(opts.collect.slice(opts.collect.lastIndexOf(")(") + 2, -1));
+        const box = document.createElement("div");
+        document.body.append(box);
+        sessionStorage.removeItem("__wpC");
+        delete window.__wpC;
+        const pages = Math.max(1, Math.ceil(rows.length / 5));
+        const refused = new Set();
+        const show = (n) => {
+          const from = Math.max(1, Math.min(n - 3, pages - 7));
+          box.innerHTML = rows.slice((n - 1) * 5, n * 5).map((r) =>
+            '<div class="mchap-row"><a class="mchap-row__primary" href="/title/1w0v-the-perks/' + r.g + String(r.n).replace(".", "") + "-chapter-" + r.n + '"><span class="mchap-row__ch">' + r.label + '</span></a>' +
+            '<a class="mchap-row__group" href="/groups/' + r.g + '">' + book[r.g][0] + "</a></div>").join("") +
+            '<div class="npager">' + Array.from({ length: Math.min(8, pages) }, (_, i) => from + i).map((k) => '<button class="npager__num' + (k === n ? " is-active" : "") + '">' + k + "</button>").join("") + "</div>";
+          box.querySelectorAll(".npager__num").forEach((b) => b.addEventListener("click", () => {
+            const k = Number(b.textContent);
+            if (refuse.includes(k) && !refused.has(k)) { refused.add(k); return; }
+            setTimeout(() => show(k), 5);
+          }));
+        };
+        show(Math.min(pages, Number(q.get("page") || 1)));
+        let r = { done: false };
+        for (let i = 0; i < 5000 && !r.done; i++) {
+          r = JSON.parse(Waypage.save.COMIX_WALK(o));
+          await new Promise((go) => setTimeout(go, 2));
+        }
+        const collected = window.__wpOut;
+        box.remove();
+        return { url: u, text: "<html></html>", collected };
+      };
+      let found = null, error = null;
+      try { found = await Waypage.save.findChapters(url); } catch (e) { error = e.message; }
+      return { found, error, err: error, drawn: drawn.map((d) => ({ u: d.u, collect: !!d.opts.collect, maxMs: d.opts.maxMs, retryMs: d.opts.retryMs })) };
+    }, { url, canRender, book, refuse });
+    const range = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
+    const chapters = (g, nums) => nums.map((n) => "https://comix.to/title/1w0v-the-perks/" + g + String(n).replace(".", "") + "-chapter-" + n);
+    const BOOK = { 9897: ["Official", range(1, 12)], 307: ["Violet Scans", range(1, 30)], 10728: ["Hades Scans", range(1, 29)] };
 
-    await test("comix.to: a link with a group reads that group's chapters only, in reading order", async () => {
-      const { got } = await comix("https://comix.to/title/1w0v-the-perks?group_id=307", true);
-      assert.deepStrictEqual(got.found.links, chapters(307, 30));
+    await test("comix.to: a link with a group reads that group's whole list in the hidden browser, in reading order", async () => {
+      const { got } = await comix("https://comix.to/title/1w0v-the-perks?group_id=307", { book: BOOK });
+      assert.ok(got.found, "found: " + got.error);
+      assert.deepStrictEqual(got.found.links, chapters(307, range(1, 30)));
       assert.strictEqual(got.found.page, "https://comix.to/title/1w0v-the-perks?group_id=307", "kept to the group for the next sync");
       assert.strictEqual(got.found.title, "The Perks of Being an S-Class Heroine");
-      assert.strictEqual(got.drawn.length, 6, "each page once: 30 chapters, five a page");
+      assert.strictEqual(got.drawn.length, 1, "one walk of six pages, not a load a page");
+      assert.ok(got.drawn[0].collect && got.drawn[0].maxMs >= 120000 && got.drawn[0].retryMs > 0, "walked, with time for a long list and loads again when turned away");
     });
 
-    await test("comix.to: no group takes the official one", async () => {
-      const { got } = await comix("https://comix.to/title/1w0v-the-perks", true, "comix-title-current.html");
-      assert.deepStrictEqual(got.found.links, chapters(9897, 12));
+    await test("comix.to: no group takes the most complete of Official and the newest's group", async () => {
+      const { got } = await comix("https://comix.to/title/1w0v-the-perks", { book: BOOK });
+      assert.deepStrictEqual(got.found.links, chapters(307, range(1, 30)), "Official has 12 of 30: Violet's");
+      assert.strictEqual(got.found.page, "https://comix.to/title/1w0v-the-perks?group_id=307");
+    });
+
+    await test("comix.to: an official group with nine in ten of the chapters is taken", async () => {
+      const book = { ...BOOK, 9897: ["Official", range(1, 28)] };
+      const { got } = await comix("https://comix.to/title/1w0v-the-perks", { book });
       assert.strictEqual(got.found.page, "https://comix.to/title/1w0v-the-perks?group_id=9897");
+      assert.deepStrictEqual(got.found.links.slice(-3), [...chapters(9897, [28]), ...chapters(307, [29, 30])], "and its last two from Violet: " + got.found.links.slice(-3).join(" "));
     });
 
-    await test("comix.to: an official group far behind gives way to the group with the newest chapter", async () => {
-      const { got } = await comix("https://comix.to/title/1w0v-the-perks", true);
-      assert.deepStrictEqual(got.found.links, chapters(307, 30));
-      assert.ok(got.found.page.endsWith("?group_id=307"));
+    await test("comix.to: chapters the group skipped come from Official, then the busiest group; a whole volume is left out", async () => {
+      const book = {
+        9897: ["Official", [7, 12]],
+        307: ["Violet Scans", [...range(1, 30).filter((n) => n !== 7 && n !== 8 && n !== 12), [0, "Vol.3"]]],
+        10728: ["Hades Scans", [...range(1, 29), 8.5]],
+        5: ["Tiny Scans", [8]],
+      };
+      const { got } = await comix("https://comix.to/title/1w0v-the-perks?group_id=307", { book });
+      const want = range(1, 30).map((n) => n === 7 || n === 12 ? chapters(9897, [n])[0] : n === 8 ? chapters(10728, [8])[0] : chapters(307, [n])[0]);
+      assert.deepStrictEqual(got.found.links, want, "7 and 12 Official's, 8 Hades' (more chapters than Tiny's), no 8.5, no Vol.3");
+    });
+
+    await test("comix.to: a page the site turned away is asked for again, and none is missed", async () => {
+      const { got } = await comix("https://comix.to/title/1w0v-the-perks?group_id=307", { book: BOOK, refuse: [2, 4, 5] });
+      assert.deepStrictEqual(got.found.links, chapters(307, range(1, 30)));
     });
 
     await test("comix.to: a chapter's own address reads its title's list", async () => {
-      const { got } = await comix("https://comix.to/title/1w0v-the-perks/3071-chapter-1", true);
-      assert.strictEqual(got.found.links.length, 30);
+      const { got } = await comix("https://comix.to/title/1w0v-the-perks/3071-chapter-1", { book: BOOK });
+      assert.deepStrictEqual(got.found.links, chapters(307, range(1, 30)));
     });
 
     await test("comix.to: without the hidden browser nothing is guessed from the page's links", async () => {
-      const { got } = await comix("https://comix.to/title/1w0v-the-perks?group_id=307", false);
+      const { got } = await comix("https://comix.to/title/1w0v-the-perks?group_id=307", { canRender: false, book: BOOK });
       assert.deepStrictEqual(got.found.links, []);
       assert.strictEqual(got.drawn.length, 0);
+    });
+
+    await test("comix.to: a title given a new id is found by its name, and read there", async () => {
+      const { got } = await inPage(browser, [["https://comix.to/title/53qnl-the-perks", "comix-title.html"]], async () => {
+        Object.defineProperty(Waypage.platform, "canRender", { get: () => true, configurable: true });
+        const asked = [];
+        Waypage.platform.render = async (u, opts) => {
+          asked.push(u);
+          if (/\/browse\?q=/.test(u)) return { url: u, text: "<body>" + "A result. ".repeat(60) + '<a href="/title/9zz9-the-perks-2">Another</a><a href="/title/53qnl-the-perks">The Perks</a></body>' };
+          return null;
+        };
+        const moved = await Waypage.save.siteRule("https://comix.to/title/1w0v-the-perks").moved("https://comix.to/title/1w0v-the-perks/3071-chapter-1?x=1");
+        let error = null;
+        try { await Waypage.save.findChapters("https://comix.to/title/1w0v-the-perks?group_id=307"); } catch (e) { error = e.message; }
+        Waypage.platform.render = async (u) => (/\/browse\?q=/.test(u) ? { url: u, text: "<body>" + "Nothing. ".repeat(60) + "</body>" } : null);
+        let none = null;
+        try { await Waypage.save.findChapters("https://comix.to/title/1w0v-the-perks?group_id=307"); } catch (e) { none = e.message; }
+        return { asked, moved, error, none };
+      });
+      assert.strictEqual(got.moved, "https://comix.to/title/53qnl-the-perks/3071-chapter-1?x=1", "the chapter keeps its id, which the site sends on");
+      assert.ok(got.asked.some((u) => u === "https://comix.to/browse?q=the%20perks"), "looked up by its name");
+      assert.ok(!got.error || !/doesn't exist/.test(got.error), "the old address read at its new one: " + got.error);
+      assert.ok(/doesn't exist/.test(got.none || ""), "nothing found: the old error");
     });
 
     // A comix.to chapter: drawn and scrolled in the hidden browser, whose

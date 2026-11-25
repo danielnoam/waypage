@@ -1665,6 +1665,13 @@ async function checkNew(name, quiet) {
       // A linked folder reads the story's own chapter list: whatever in
       // it isn't saved is new, wherever it sits.
       const found = await C.save.findChapters(source);
+      // A site that moved the story (comix.to's new ids, 2026-11): the
+      // collection reads it at its new address from now on.
+      const rule = C.save.siteRule(source);
+      if (rule && rule.moved && found.page && found.page !== source) {
+        for (const p of list) if (p.source) p.source = found.page;
+        await C.store.writeIndex(state.pages);
+      }
       const all = found.links.slice(0, 5000);
       const gone = goneFor(name);
       count = all.filter((u) => !savedAs(u) && !savingAs(u) && !gone.has(urlKey(u))).length;

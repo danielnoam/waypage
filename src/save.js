@@ -608,15 +608,137 @@
   const uniqueLinks = (links) => { const seen = new Set(); return links.filter((u) => u && !seen.has(u) && seen.add(u)); };
 
   // comix.to (1.69.0): every chapter is posted by several scan groups, so
-  // a title's list is read for one group only: the group in the address
-  // (?group_id=307), else an official one (Official, or a publisher such as
-  // Tapas) unless it is far behind the newest chapter, else the group
-  // that posted the newest. The site fetches its chapters with a token and
-  // an encrypted answer, so the title page is drawn in the hidden browser,
-  // a page of twenty at a time, and read from what it shows. Nothing is
-  // read without that browser (iOS, the web copy).
-  const COMIX_OFFICIAL = /^(official|tapas|webtoon|line webtoon|tappytoon|lezhin|manta|pocket comics|kakao(page| webtoon)?|piccoma|comikey|azuki|inky ?pen)\b/i;
-  const COMIX_BEHIND = 5;
+  // a title's list is read for one group: the group in the address
+  // (?group_id=307), else the more complete of an official one (Official,
+  // or a publisher such as Tapas) and the group that posted the newest, the
+  // official one when it has nine in ten of the other's. Chapters that group
+  // skipped are taken from the other, then from any group (an official one
+  // first). The site fetches its chapters with a token and an encrypted
+  // answer, so the title page is drawn in the hidden browser and walked
+  // there, a page of twenty at a time, by COMIX_WALK. Nothing is read without
+  // that browser (iOS, the web copy).
+  const COMIX_OFFICIAL = /^(official|tapas|webtoon|line webtoon|tappytoon|lezhin|manta|pocket comics|kakao(page| webtoon)?|piccoma|comikey|azuki|inky ?pen|viz|viz media|mangaplus|manga plus|crunchyroll|k ?manga|yen press|kodansha|seven seas)\b/i;
+
+  // Runs in the hidden browser, every 400 ms (PageRender `collect`): reads
+  // the rows of the page of the list on show, then clicks the next page's
+  // number (by script: an ad's overlay takes a real tap). The site's firewall
+  // turns a request away now and then and clears itself in a few seconds, so
+  // a page that doesn't come is asked for again after 3, 6 and 10 s, then
+  // loaded by its address (twice), then noted as missed. What it has read is
+  // kept in sessionStorage, so it carries on after a load. `pages`: how many
+  // pages to read; `below`: stops once a page goes under that chapter number;
+  // `above`: a page that starts under it backs up one. Rows go to
+  // window.__wpOut as [href, group, label].
+  function COMIX_WALK(o) {
+    var K = "__wpC", S;
+    try { S = JSON.parse(sessionStorage.getItem(K) || "null"); } catch (e) { S = null; }
+    S = S || window.__wpC || { rows: [], seen: {}, read: {}, top: "", wait: 0, tries: 0, loads: 0, last: 0, back: 0, missed: [], pending: 0 };
+    window.__wpC = S;
+    var save = function () { try { sessionStorage.setItem(K, JSON.stringify(S)); } catch (e) { /* kept in the page only */ } };
+    var out = function (done) {
+      save();
+      window.__wpOut = JSON.stringify({ rows: S.rows, last: S.last, missed: S.missed });
+      return JSON.stringify({ done: done, n: S.rows.length });
+    };
+    var rows = document.querySelectorAll(".mchap-row");
+    var act = document.querySelector(".npager__num.is-active");
+    var cur = act ? parseInt(act.textContent, 10) || 1 : parseInt(new URLSearchParams(location.search).get("page"), 10) || 1;
+    var a0 = rows.length && rows[0].querySelector("a.mchap-row__primary");
+    var top = a0 ? a0.getAttribute("href") : "";
+    var numOf = function (h) { var m = /-chapter-(\d+(?:\.\d+)?)/.exec(h || ""); return m ? parseFloat(m[1]) : NaN; };
+    var button = function (n) { return [].filter.call(document.querySelectorAll(".npager__num"), function (x) { return parseInt(x.textContent, 10) === n; })[0]; };
+    var go = function (n) {
+      var b = button(n);
+      if (!b) return out(n > S.last || S.read[n] === 1);
+      S.pending = n; S.top = top; S.wait = 0; b.click();
+      return out(false);
+    };
+    var load = function (n) {
+      var u = new URL(location.href); u.searchParams.set("page", n);
+      S.pending = n; S.top = ""; S.wait = 0; S.loads++; save();
+      location.replace(u.href);
+      return out(false);
+    };
+    if (S.pending) {
+      var come = rows.length && top !== S.top && cur === S.pending;
+      if (!come) {
+        S.wait++;
+        if (S.wait === 8 || S.wait === 15 || S.wait === 25) { var b = button(S.pending); if (b) b.click(); return out(false); }
+        if (S.wait < 40) return out(false);
+        // Not after three asks: load that page by its address, twice.
+        if (S.tries < 2) { S.tries++; return load(S.pending); }
+        S.missed.push(S.pending); var skip = S.pending; S.pending = 0; S.tries = 0;
+        return rows.length ? go(skip + 1) : load(skip + 1);
+      }
+      S.pending = 0; S.tries = 0;
+    }
+    if (!rows.length) return out(false);
+    var nums = [].map.call(document.querySelectorAll(".npager__num"), function (x) { return parseInt(x.textContent, 10) || 0; });
+    S.last = Math.max.apply(null, [S.last, cur].concat(nums));
+    if (!S.read[cur]) {
+      S.read[cur] = 1;
+      var low = Infinity, high = -Infinity;
+      [].forEach.call(rows, function (r) {
+        var a = r.querySelector("a.mchap-row__primary");
+        if (!a) return;
+        var h = a.getAttribute("href"), n = numOf(h);
+        if (n < low) low = n;
+        if (n > high) high = n;
+        if (S.seen[h]) return;
+        S.seen[h] = 1;
+        var g = r.querySelector("a.mchap-row__group[href]");
+        var gm = g && /\/groups\/(\d+)/.exec(g.getAttribute("href"));
+        var lab = r.querySelector(".mchap-row__ch");
+        S.rows.push([h, gm ? gm[1] : "0", lab ? lab.textContent.replace(/\s+/g, " ").trim() : ""]);
+      });
+      S.count = (S.count || 0) + 1;
+      if (o.above != null && high < o.above && cur > 1 && S.back < 40) { S.back++; return go(cur - 1); }
+      if (o.below != null && low < o.below) return out(true);
+      if (o.pages && S.count >= o.pages) return out(true);
+    }
+    return go(cur + 1);
+  }
+
+  // One walk of a list (`group`, or every group's with null) from page
+  // `start`: { rows: [{ url, n, group, label }], last, missed }, or null
+  // without the hidden browser or when nothing came.
+  async function comixWalk(origin, titlePath, group, start, o) {
+    const a = new URL(origin + titlePath);
+    if (group != null) a.searchParams.set("group_id", group);
+    if (start > 1) a.searchParams.set("page", start);
+    const d = await C.platform.render(a.href, { collect: "(" + COMIX_WALK.toString() + ")(" + JSON.stringify(o || {}) + ")", maxMs: 300000, retryMs: 7000 });
+    let got = null;
+    try { got = d && d.collected ? JSON.parse(d.collected) : null; } catch (e) { got = null; }
+    if (!got || !Array.isArray(got.rows) || !got.rows.length) return null;
+    // A page the site kept turning away is read again, on its own.
+    for (const n of (got.missed || []).slice(0, 20)) {
+      if (o && o.again === false) break;
+      const one = await comixWalk(origin, titlePath, group, n, { pages: 1, again: false });
+      if (one) { got.rows.push(...one.raw); got.missed = got.missed.filter((x) => x !== n); }
+    }
+    return {
+      raw: got.rows,
+      last: got.last || 1, missed: got.missed || [],
+      rows: got.rows.map(([h, g, label]) => ({
+        url: absolute(h, origin),
+        // From the address: the link's words go on with the chapter's title.
+        n: parseFloat((String(h).match(/-chapter-(\d+(?:\.\d+)?)/) || [])[1]),
+        group: String(g || "0"), label: String(label || ""),
+      })).filter((r) => Number.isFinite(r.n)),
+    };
+  }
+
+  // A group's chapters, one upload a number (the first listed: the newest),
+  // without a whole volume posted as one (its label "Vol.22", no "Ch.").
+  function comixChapters(rows, group) {
+    const mine = rows.filter((r) => group == null || r.group === String(group));
+    const numbered = mine.filter((r) => /\bCh\./i.test(r.label) || !/^Vol\.?\s*\d/i.test(r.label));
+    const keep = numbered.length ? numbered : mine;
+    const by = new Map();
+    for (const r of keep) if (!by.has(r.n)) by.set(r.n, r);
+    return by;
+  }
+
   async function comixList(doc, url) {
     if (!C.platform.canRender) return [];
     const u = new URL(url);
@@ -632,57 +754,99 @@
     try { data = JSON.parse(doc.querySelector("#initial-data").textContent).queries || {}; } catch (e) { /* no groups to choose from */ }
     const groups = (data[JSON.stringify(["manga", "groups", hid])] || []).filter((g) => g && g.name);
     const detail = data[JSON.stringify(["manga", "detail", hid])] || {};
-
-    const drawn = new Map();
-    const draw = async (group, n) => {
-      const a = new URL(u.origin + titlePath);
-      if (group != null) a.searchParams.set("group_id", group);
-      a.searchParams.set("page", n);
-      if (!drawn.has(a.href)) {
-        const d = await C.platform.render(a.href, { waitFor: ".mchap-row" });
-        drawn.set(a.href, d ? parse(d.text, d.url || a.href) : null);
-      }
-      return drawn.get(a.href);
+    const official = new Set(groups.filter((g) => g.id !== 0 && COMIX_OFFICIAL.test(g.name)).map((g) => String(g.id)));
+    const walks = new Map();
+    const walk = async (group) => {
+      const k = group == null ? "" : String(group);
+      if (!walks.has(k)) walks.set(k, await comixWalk(u.origin, titlePath, group, 1, {}));
+      return walks.get(k);
     };
-    const rowsOf = (d) => !d ? [] : [...d.querySelectorAll(".mchap-row")].map((r) => {
-      const a = r.querySelector("a.mchap-row__primary[href]");
-      const g = r.querySelector("a.mchap-row__group[href]");
-      if (!a) return null;
-      return {
-        url: absolute(a.getAttribute("href"), u.origin),
-        // From the address: the link's words go on with the chapter's title.
-        n: parseFloat((a.getAttribute("href").match(/-chapter-(\d+(?:\.\d+)?)/) || [])[1]),
-        group: g ? ((g.getAttribute("href").match(/\/groups\/(\d+)/) || [])[1] || null) : null,
-      };
-    }).filter(Boolean);
 
+    // The group: the address's, else the more complete of the official one
+    // and the group of the newest upload.
     let group = u.searchParams.get("group_id");
-    if (group == null) {
-      const real = groups.filter((g) => g.id !== 0);
-      const official = real.find((g) => /^official$/i.test(g.name)) || real.find((g) => COMIX_OFFICIAL.test(g.name));
-      if (official) {
-        const top = Math.max(0, ...rowsOf(await draw(official.id, 1)).map((r) => r.n).filter(Number.isFinite));
-        if (!(detail.latestChapter - top > COMIX_BEHIND)) group = String(official.id);
+    let main = null;
+    if (group != null) main = await walk(group);
+    else {
+      // The first page of every group's list: who posted the newest.
+      const top = await comixWalk(u.origin, titlePath, null, 1, { pages: 1 });
+      walks.set("*", top);
+      const newest = top && top.rows.find((r) => r.group !== "0");
+      const off = groups.find((g) => /^official$/i.test(g.name)) || groups.find((g) => official.has(String(g.id)));
+      const sized = [];
+      for (const g of [...new Set([off && String(off.id), newest && newest.group].filter(Boolean))]) {
+        const w = await walk(g);
+        if (w) sized.push({ g, w, n: comixChapters(w.rows, g).size });
       }
-      if (group == null) {
-        const rows = rowsOf(await draw(null, 1));
-        const first = rows.find((r) => r.group && r.group !== "0") || rows[0];
-        group = first && first.group;
-      }
-      if (group == null) return [];
+      const most = Math.max(0, ...sized.map((x) => x.n));
+      const pick = sized.find((x) => official.has(x.g) && x.n >= most * 0.9) || sized.find((x) => x.n === most);
+      if (pick) { group = pick.g; main = pick.w; }
+      else if (top) { group = null; main = top; }
     }
+    if (!main) return [];
+    const chapters = comixChapters(main.rows, group);
 
-    const found = [];
-    for (let n = 1, last = 1; n <= Math.min(last, TOC_PAGES); n++) {
-      const d = await draw(group, n);
-      // A page that ignored the group is no use: only its rows count.
-      const rows = rowsOf(d).filter((r) => r.group == null || r.group === String(group));
-      if (!rows.length) break;
-      found.push(...rows.map((r) => r.url));
-      last = Math.max(last, ...[...d.querySelectorAll(".npager__num")].map((b) => parseInt(text(b), 10)).filter(Number.isFinite));
+    // Whole numbers the group skipped: from the other group read, then
+    // from every group's list, read only from where those numbers are.
+    const latest = Math.max(detail.latestChapter || 0, ...chapters.keys());
+    const lowest = Math.min(1, ...chapters.keys());
+    const want = () => { const w = []; for (let n = Math.max(0, Math.ceil(lowest)); n <= latest; n++) if (!chapters.has(n)) w.push(n); return w; };
+    // How many uploads each group has, over everything read: the busiest
+    // fills a gap when no official group has it.
+    const counts = new Map();
+    const count = (rows) => { for (const r of rows) counts.set(r.group, (counts.get(r.group) || 0) + 1); };
+    for (const w of walks.values()) if (w) count(w.rows);
+    const fill = (rows) => {
+      const byN = new Map();
+      for (const r of rows) {
+        if (r.group === String(group) || !Number.isInteger(r.n) || chapters.has(r.n)) continue;
+        if (!/\bCh\./i.test(r.label) && /^Vol\.?\s*\d/i.test(r.label)) continue;
+        (byN.get(r.n) || byN.set(r.n, []).get(r.n)).push(r);
+      }
+      for (const [n, rs] of byN) {
+        rs.sort((x, y) => (official.has(y.group) - official.has(x.group)) || ((counts.get(y.group) || 0) - (counts.get(x.group) || 0)));
+        chapters.set(n, rs[0]);
+      }
+    };
+    // A whole list read first, the first page of every group's after.
+    for (const [k, w] of walks) if (k !== String(group) && k !== "*" && w) fill(w.rows);
+    if (walks.get("*")) fill(walks.get("*").rows);
+    const gaps = want();
+    if (gaps.length) {
+      // Every group's list, newest first: a number's page is guessed from
+      // how many uploads a chapter has on the first page, then walked down.
+      const first = walks.get("*") || await comixWalk(u.origin, titlePath, null, 1, { pages: 1 });
+      if (first) {
+        const per = Math.max(1, new Set(first.rows.map((r) => r.n)).size);
+        const top = Math.max(...gaps);
+        const start = Math.max(1, Math.floor((latest - top) / per) - 1);
+        const all = await comixWalk(u.origin, titlePath, null, start, { above: top, below: Math.min(...gaps) });
+        if (all) { count(all.rows); fill(all.rows); }
+      }
     }
-    // The page lists newest first.
-    return { links: uniqueLinks(found).reverse(), title: detail.title || "", page: u.origin + titlePath + "?group_id=" + group };
+    const links = [...chapters.entries()].sort((x, y) => x[0] - y[0]).map(([, r]) => r.url);
+    return { links: uniqueLinks(links), title: detail.title || "", page: u.origin + titlePath + (group != null ? "?group_id=" + group : "") };
+  }
+
+  // comix.to gives a title a new id now and then (lly3j-how-to-use-a-returner
+  // became 53qnl-…, 2026-11): the old address and its chapters answer 404.
+  // The title is looked up by its name on the site's search page, drawn in
+  // the hidden browser, and the address rebuilt with the new id; a chapter
+  // keeps its old id there, which the site sends on to the chapter's new one.
+  async function comixMoved(url) {
+    if (!C.platform.canRender) return null;
+    const u = new URL(url);
+    const m = u.pathname.match(/^\/title\/([a-z0-9]+)-([^/]+)(\/.*)?$/i);
+    if (!m) return null;
+    const [, hid, slug, rest] = m;
+    const q = "https://comix.to/browse?q=" + encodeURIComponent(slug.replace(/-/g, " "));
+    const d = await C.platform.render(q, { waitFor: 'a[href*="/title/"]', retryMs: 7000 });
+    if (!d) return null;
+    const found = [...parse(d.text, q).querySelectorAll('a[href*="/title/"]')]
+      .map((a) => (a.getAttribute("href").match(/\/title\/([a-z0-9]+)-([^/?#]+)/i) || []))
+      .find((x) => x[2] === slug && x[1] !== hid);
+    if (!found) return null;
+    return u.origin + "/title/" + found[1] + "-" + slug + (rest || "") + u.search;
   }
 
   const SITES = [
@@ -1238,6 +1402,7 @@
       host: /(^|\.)comix\.to$/i,
       ownChapters: true,
       list: comixList,
+      moved: comixMoved,
       // A chapter (1.69.0) is a column of panels the site's reader puts in
       // as it scrolls (`.rpage-page__img`, five at first, the rest as they
       // near the screen, and kept), so it is drawn and scrolled like any
@@ -1248,7 +1413,10 @@
       // The reader makes a slot (`.rpage-page`) for every panel at once but
       // puts a picture in only the ones the scroll has reached, so it is
       // scrolled until each slot has its picture (PageRender `expect`/`ready`).
-      slots: { expect: ".rpage-page", ready: ".rpage-page__img[src^=http]" },
+      // A chapter the firewall turned away shows no slots: loaded again
+      // after 7 s (retryMs). The time runs from the last slot filled, up
+      // to 150 s, so a chapter of 180 pictures on a slow phone finishes.
+      slots: { expect: ".rpage-page", ready: ".rpage-page__img[src^=http]", retryMs: 7000, maxMs: 150000 },
       panels(doc, url) {
         return uniqueLinks([...doc.querySelectorAll(".rpage-page__img[src]")]
           .map((img) => absolute(img.getAttribute("src"), url))
@@ -2420,7 +2588,7 @@
     }
   }
 
-  async function get(url, headers) {
+  async function get(url, headers, moved) {
     let res;
     try {
       res = await C.platform.fetchText(url, { headers });
@@ -2438,7 +2606,13 @@
         : t("This browser can't reach that site directly. Save it in Waypage on your phone, then bring it here with a backup."), C.platform.canReadPages);
     }
     if (res.status === 429) throw new SaveError(t("The site asked to slow down. Try again in a few minutes."));
-    if (res.status === 404 || res.status === 410) throw new SaveError(t("That page doesn't exist any more. Check the link."), false, true);
+    if (res.status === 404 || res.status === 410) {
+      // A site that moves its pages (comix.to's new ids) says where to.
+      const rule = !moved && siteRule(url);
+      const to = rule && rule.moved && await rule.moved(url).catch(() => null);
+      if (to && to !== url) return get(to, headers, true);
+      throw new SaveError(t("That page doesn't exist any more. Check the link."), false, true);
+    }
     if (res.status >= 400) throw new SaveError(t("The site answered with an error ({status}). Try again later.", { status: res.status }), res.status >= 500 || res.status === 403, res.status === 403);
     return res;
   }
@@ -3470,7 +3644,7 @@
   C.save = {
     get compress() { return compress; }, set compress(v) { compress = v !== false; }, compressPictures,
     pageSource, preview, rebuild,
-    save, findArchived, unWayback, tidyMail, mailRule, formatDate, publishedAt, SaveError, ContentsPage, cutShort, findChapters, pageImage, siteIcon, keepCover, siteRule, removeHidden, scriptJson, chapterNumber, pickChapters, comicGroup, isPanel, retryMissing, saveFullImages, setPictures, findNext, creditLine, cleanSaved, savedPageHtml, newId, textDir, isNextText, isPrevText, plainText, replaceText,
+    save, COMIX_WALK, findArchived, unWayback, tidyMail, mailRule, formatDate, publishedAt, SaveError, ContentsPage, cutShort, findChapters, pageImage, siteIcon, keepCover, siteRule, removeHidden, scriptJson, chapterNumber, pickChapters, comicGroup, isPanel, retryMissing, saveFullImages, setPictures, findNext, creditLine, cleanSaved, savedPageHtml, newId, textDir, isNextText, isPrevText, plainText, replaceText,
     wikipediaPage, wikimediaThumb, parseSrcset, pickWidth, youtubeId, vimeoId, extOf, isTrackingPixel, readingMinutes, WORDS_PER_MINUTE, siteName,
   };
 })();

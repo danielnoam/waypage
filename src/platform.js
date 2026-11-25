@@ -307,14 +307,19 @@
   // filled (not merely until the page stops changing), and the answer has
   // `expected` and `ready`, the counts when it was taken, so a chapter the
   // time ran out on is known to be short (comix.to's panels).
-  async function render(url, { scroll = false, waitFor = "", expect = "", ready = "" } = {}) {
+  // `collect`: a script of Waypage's own that walks the page (comix.to's
+  // chapter list, a page of twenty at a time) and says { done, n }; the
+  // answer's `collected` is what it left in window.__wpOut.
+  // `maxMs`: the time runs from the last progress, up to this. `retryMs`: a
+  // page still showing nothing it waits for that long after loading is loaded
+  // again (comix.to's firewall turns a request away now and then).
+  async function render(url, { scroll = false, waitFor = "", expect = "", ready = "", collect = "", maxMs = 0, retryMs = 0 } = {}) {
     const R = plugin("PageRender");
     if (!R) return null;
     try {
-      // A chapter filled slot by slot takes the longest PageRender allows.
       const wait = scroll ? (expect ? 60000 : 50000) : 20000;
-      const res = await deadline(R.render({ url, timeoutMs: wait, scroll, waitFor, expect, ready }), wait + 10000);
-      return res && res.html ? { text: res.html, url: res.url || url, expected: res.expected, ready: res.ready } : null;
+      const res = await deadline(R.render({ url, timeoutMs: wait, maxMs: maxMs || wait, retryMs, scroll, waitFor, expect, ready, collect }), Math.max(wait, maxMs) + 10000);
+      return res && res.html ? { text: res.html, url: res.url || url, expected: res.expected, ready: res.ready, collected: res.collected } : null;
     } catch (e) {
       return null;
     }

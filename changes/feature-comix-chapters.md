@@ -4,3 +4,6 @@
 
 ### Fixed
 - A comix.to chapter no longer fails to save, or saves with only some of its pictures, when the site is slow to answer. Waypage scrolls the chapter until every picture is in (going back for any the site skipped), and a chapter that still comes up short says how many loaded and offers Try again, instead of being kept half done. Android only.
+- comix.to: Find chapters and Website sync read every chapter of a title, from chapter 1 (they stopped at the newest 800), in a fraction of the time. The scan group picked is the most complete one (an official one when it has nearly all), and chapters it skipped come from another group, so a collection has no holes. A whole volume posted as one "chapter 0" is left out. Android only.
+- comix.to: a chapter or list page the site's firewall turns away for a moment ("captcha required") is asked for again a few seconds later, instead of the chapter failing to save or the list coming back short. Long chapters (150+ pictures) get the time they need on a slower phone. Android only.
+- comix.to: a title the site gave a new address is found again by its name, so its collection and Website sync carry on there instead of saying the page doesn't exist. Android only.

@@ -215,15 +215,43 @@ shape share the site's first folder.
 A site rule's `list` may answer `{ links, page, title }`: `page` is the
 address the list is read from next time. comix.to (`comixList`) uses it:
 a title's chapters are posted by several scan groups, so one group's are
-read, the one in the link (`?group_id=`), else an official one (Official,
-or a publisher like Tapas) unless it is more than five chapters behind
-the title's newest, else the group that posted the newest; `page` keeps
-`?group_id=` so Website sync stays with that group. The site hands its
-list over with a token and an encrypted answer, so the title page is
-drawn in the hidden browser (`render` with `waitFor: ".mchap-row"`,
-which makes PageRender count the text only once the rows are there), a
-page of twenty at a time (40 pages at most). Without that browser (iOS,
-the web copy) nothing is read and no links are guessed from the page.
+read: the one in the link (`?group_id=`), else the more complete of an
+official one (Official, or a publisher like Tapas or VIZ) and the group
+that posted the newest, the official one when it has nine in ten of the
+other's chapters. `page` keeps `?group_id=` so Website sync stays with
+that group. Whole numbers the group skipped come from the other group
+read, then from every group's list (read only from where those numbers
+sit), an official upload first, then the group with the most uploads;
+a decimal chapter (12.5) comes from the group itself only. A row labelled
+only "Vol.22" (a whole volume as one upload, listed as chapter 0) is left
+out. The site hands its list over with a token and an encrypted answer,
+twenty a page, newest first, whatever the address asks, so the title page
+is drawn in the hidden browser and walked there by `COMIX_WALK`, a script
+of the app's own run by PageRender's `collect` every 400 ms: it reads the
+page on show, clicks the next number by script (an ad's overlay takes a
+real tap), and leaves the rows in `window.__wpOut`. Every chapter is read,
+from chapter 1: 194 pages for Martial Peak's main group, a page in under a
+second, where a fresh hidden browser a page took about five (and stopped
+at 40 pages, the newest 800). Without that browser (iOS, the web copy)
+nothing is read and no links are guessed from the page.
+Trap: comix.to's firewall turns a request away now and then
+(`{"error":"captcha_required"}`, a 403), mostly after several quick ones,
+runs a Cloudflare check by itself, and answers the next request. The site
+never asks again, so a list page simply doesn't come and a chapter shows
+no pages. `COMIX_WALK` asks again after 3, 6 and 10 s, then loads that
+page by its address (twice; what it read is kept in sessionStorage), then
+notes it as missed, and `comixWalk` reads a missed page again on its own.
+A chapter's render has `retryMs`, so a reader still without slots 7 s
+after loading is loaded again (four times at most): a few seconds later
+it comes (2 of 12 chapters in a row needed one).
+Trap: comix.to gives a title a new id now and then
+(`lly3j-how-to-use-a-returner` became `53qnl-…`, 2026-11); the old
+address and every chapter answer 404. The rule's `moved` (called by
+`get` on a 404) looks the title up by its name on the site's search page
+(`/browse?q=`, drawn in the hidden browser) and rebuilds the address with
+the new id; a chapter keeps its old id there, which the site sends on to
+the chapter's new one. Website sync then keeps the new address as the
+collection's source.
 A comix.to chapter is a comic by its address (`comic`): drawn and scrolled
 in the hidden browser, whose reader puts in `.rpage-page__img` as it
 scrolls and keeps them, and read by the rule's `panels`. Trap: its picture
@@ -235,16 +263,18 @@ Trap: the reader makes a slot (`.rpage-page`) for every panel at once
 but puts a picture in only the slots the scroll has reached, and only
 after its own request has answered. PageRender used to take the page once
 it was at the bottom with the picture count unchanged for 750 ms, which a
-slow answer or a short page met with none or a few panels. And a scroll of
-a whole window can jump past a few slots, which then keep their spinner
-for good (3 of 161 on one chapter) until the page is scrolled back to
-them. The rule's `slots` (`expect`, `ready`) make PageRender scroll down a
-screen at a time, go back to the first empty slot at the end and stay on
-it (up to ~4 s) until it fills, and take the page when every slot is
-filled, two steps running. It answers `expected` and `ready`, and gets
-the full 60 s; a chapter that came up short is drawn once more, then
-fails with Try again (never kept half done). The picture hosts
-(kkplayer.wtf) gave no trouble: 411 panels, 4 and 16 at a time, no
+slow answer or a short page met with none or a few panels. And a scroll
+can jump past a few slots, which then keep their spinner for good (3 of
+161 on one chapter) until the page is scrolled back to them. The rule's
+`slots` (`expect`, `ready`) make PageRender scroll down two screens a
+step, go back to the first empty slot at the end and stay on it (3 s by
+the clock) until it fills, and take the page when every slot is filled,
+two steps running. It answers `expected` and `ready`. Its time runs from
+the last slot filled (`maxMs`, 150 s at most), as a 154-picture chapter
+took 48 s on a slowed phone at one screen a step (36 s at two; faster
+steps leave the reader behind). A chapter that came up short is drawn
+once more, then fails with Try again (never kept half done). The picture
+hosts (kkplayer.wtf) gave no trouble: 411 panels, 4 and 16 at a time, no
 Referer, all 200, and addresses still good after 15 minutes.
 The same read gives the page's own tags (`pageTags`: a site rule's
 `tags`, else `article:tag` meta, ten at most) as `siteTags`; Save with
