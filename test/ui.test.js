@@ -5190,6 +5190,41 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("a drag in a drop-down moves only its list: not the page, not a pull to check (2026-11)", async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => {
+        Object.defineProperty(C.platform, "canFetchPages", { get: () => true, configurable: true });
+        C.discover.sources.forEach((s) => { s.browse = async () => Array.from({ length: 12 }, (_, i) => ({ id: s.key + i, title: "Story " + i, url: "https://example.org/" + i, tags: [], chapters: 3, cover: "" })); });
+        dzReadRR = async () => {}; dzReadWiki = async () => {};
+        goPlace("discover"); dzPick = "stories"; renderDiscover();
+      });
+      await until(q, () => document.querySelectorAll(".dz-grid .dz-book").length > 0 && !dz.busy && !dz.grid.busy);
+      // Discover may draw again as it settles, which puts the menu away.
+      await until(q, () => { if (!document.querySelector(".dropdown-menu")) document.querySelector(".dz-tools .dropdown-btn").click(); return !!document.querySelector(".dropdown-menu"); });
+      await q.waitForTimeout(400);
+      await until(q, () => !!document.querySelector(".dropdown-menu"));
+      const cdp = await ctx.newCDPSession(q);
+      const drag = async (y0, y1) => {
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: 120, y: y0 }] });
+        for (let i = 1; i <= 10; i++) { await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: 120, y: y0 + (y1 - y0) * i / 10 }] }); await q.waitForTimeout(16); }
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await q.waitForTimeout(300);
+      };
+      const at = () => q.evaluate(() => { const m = document.querySelector(".dropdown-menu"); return { y: scrollY, top: m ? m.scrollTop : -1, end: m ? m.scrollHeight - m.clientHeight : -1, pull: $("pullHint").style.height }; });
+      // Pulled down at the top of the page and of the list: no pull to check.
+      await drag(320, 640);
+      let s = await at();
+      assert.ok(s.top === 0 && s.y === 0 && !parseFloat(s.pull || "0"), JSON.stringify(s));
+      // Up past the list's end: the list ends there, the page stays.
+      for (let i = 0; i < 3; i++) await drag(640, 300);
+      s = await at();
+      assert.ok(s.end > 0 && s.top >= s.end - 1 && s.y === 0, JSON.stringify(s));
+      await ctx.close();
+    });
+
     await test("Speech engine lists each downloaded Kokoro version, and picking one puts it in use", async () => {
       const q = await page(browser, 390);
       await q.evaluate(() => {
