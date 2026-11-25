@@ -5,7 +5,9 @@
 // pinned SHA-256 before it is kept, never code that runs. See
 // ARCHITECTURE.md's Trade-offs.
 //
-//   list()           the catalogue: [{ id, title, note, scripts, packs }]
+//   list()           the catalogue: [{ id, title, note, scripts, packs, place, find }]
+//   places()         those that add a place to the sidebar, in its order
+//   place(id)        the extension whose place this is, or null
 //   on(id)           whether it is turned on (read from this device)
 //   turnOn(id)       turns it on and loads its scripts; resolves when ready
 //   turnOff(id)      turns it off; what it kept (decks) stays
@@ -29,16 +31,42 @@
   // under the hash pinned here; a new version of a pack is a new commit and
   // a new pin (tools/packs/build-lang.js prints the hash and size).
   const PACKS = "https://raw.githubusercontent.com/danielnoam/waypage/";
+  // An extension is added here and nowhere else in the core: its place in
+  // the sidebar (the icon's paths, its name and what to say when its code
+  // didn't come) and the words Settings search finds it by. Its own shell
+  // file fills in the rest once loaded: EXT_PLACES[id] draws the place into
+  // <main id="id"> (index.html), EXT_PAGES[id] adds to its Settings page.
+  // test/extensions.test.js fails when a core file names one.
   const CATALOGUE = [
-    { id: "anki", title: "Anki", note: "Flashcards from the words you pick in a clip", scripts: ["src/fsrs.js", "src/sqlite.js", "src/anki-import.js", "src/anki.js", "src/app-anki.js"], packs: [
+    { id: "anki", title: "Anki", note: "Flashcards from the words you pick in a clip",
+      place: { icon: '<rect x="8" y="3" width="13" height="15" rx="2"/><path d="M4 7v12a2 2 0 0 0 2 2h11"/>',
+        title: () => t("Anki"), failed: () => t("Anki didn't load") },
+      find: "flashcards cards spaced repetition deck",
+      scripts: ["src/fsrs.js", "src/sqlite.js", "src/anki-import.js", "src/anki.js", "src/app-anki.js"], packs: [
       { id: "de-en", title: "German → English", note: "Word meanings from Wiktionary", bytes: 4270563,
         sha256: "09f7325a69a742aec48e6cd360fa81222abf452201e451ae42fa9ba8482b1a6b",
         url: PACKS + "2b0eebb87575cddf948bac62051aa1b0fa9a0163/de-en.tar.gz" },
     ] },
-    { id: "calibre", title: "Calibre", note: "Your Calibre library folder, in the sidebar", scripts: ["src/sqlite.js", "src/calibre.js", "src/app-calibre.js"], packs: [] },
-    { id: "audiobookshelf", title: "Audiobookshelf", note: "Your Audiobookshelf server's audiobooks, streamed, in the sidebar", scripts: ["src/abs.js", "src/app-abs.js"], packs: [] },
-    { id: "catalogs", title: "Catalogs", note: "Book catalogs (OPDS) you add, in the sidebar", scripts: ["src/opds.js", "src/app-catalogs.js"], packs: [] },
-    { id: "webdav", title: "WebDAV", note: "A folder of books on your server (Nextcloud, a NAS), in the sidebar", scripts: ["src/webdav.js", "src/app-webdav.js"], packs: [] },
+    { id: "calibre", title: "Calibre", note: "Your Calibre library folder, in the sidebar",
+      place: { icon: '<path d="M4 20V5M8 20V4M12 20l3-15 4 1-3 14"/><path d="M3 20h18"/>',
+        title: () => t("Calibre"), failed: () => t("Calibre didn't load") },
+      find: "calibre library folder metadata ebooks",
+      scripts: ["src/sqlite.js", "src/calibre.js", "src/app-calibre.js"], packs: [] },
+    { id: "audiobookshelf", title: "Audiobookshelf", note: "Your Audiobookshelf server's audiobooks, streamed, in the sidebar",
+      place: { icon: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><path d="M4 15h3v5H5a1 1 0 0 1-1-1zM20 15h-3v5h2a1 1 0 0 0 1-1z"/>',
+        title: () => t("Audiobookshelf"), failed: () => t("Audiobookshelf didn't load") },
+      find: "audiobookshelf abs audiobooks server stream listening podcasts",
+      scripts: ["src/abs.js", "src/app-abs.js"], packs: [] },
+    { id: "catalogs", title: "Catalogs", note: "Book catalogs (OPDS) you add, in the sidebar",
+      place: { icon: '<path d="M3 5h6a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H3z"/><path d="M21 5h-6a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h7z"/>',
+        title: () => t("Catalogs"), failed: () => t("Catalogs didn't load") },
+      find: "opds calibre kavita komga library server books catalog",
+      scripts: ["src/opds.js", "src/app-catalogs.js"], packs: [] },
+    { id: "webdav", title: "WebDAV", note: "A folder of books on your server (Nextcloud, a NAS), in the sidebar",
+      place: { icon: '<path d="M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 8a4 4 0 0 1-.5 10z"/><path d="M12 11v6M9.5 14.5 12 17l2.5-2.5"/>',
+        title: () => t("WebDAV"), failed: () => t("WebDAV didn't load") },
+      find: "webdav nextcloud owncloud nas koofr server folder books",
+      scripts: ["src/webdav.js", "src/app-webdav.js"], packs: [] },
   ];
 
   const read = () => { try { const v = JSON.parse(localStorage.getItem(KEY) || "{}"); return v && typeof v === "object" ? v : {}; } catch (e) { return {}; } };
@@ -47,6 +75,8 @@
   const list = () => CATALOGUE.map((x) => ({ ...x }));
   const find = (id) => CATALOGUE.find((x) => x.id === id) || null;
   const on = (id) => !!find(id) && !!(read()[id] || {}).on;
+  const places = () => list().filter((x) => x.place);
+  const place = (id) => places().find((x) => x.id === id) || null;
 
   const listeners = [];
   const changed = (fn) => { listeners.push(fn); };
@@ -182,7 +212,7 @@
   }
 
   window.Waypage = window.Waypage || {};
-  window.Waypage.ext = { list, on, turnOn, turnOff, load, changed, packs, getPack, stopPack, dropPack, packDict, running, lastError, progress,
+  window.Waypage.ext = { list, places, place, on, turnOn, turnOff, load, changed, packs, getPack, stopPack, dropPack, packDict, running, lastError, progress,
     // The catalogue itself, not a copy (tests).
     get catalogue() { return CATALOGUE; } };
 })();

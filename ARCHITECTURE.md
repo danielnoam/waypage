@@ -66,7 +66,7 @@ src/app-kiwix.js    Kiwix packs and books kept as files: the + sheet's downloads
 src/app-discover.js the Discover place: Wikipedia today, the list, its search, the Sites grid (stories, books, texts), the story and sign-up sheets
 src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
 src/app-listen.js   audiobooks: bringing one in, the player and its bar, reading along, transcripts written ahead, fixes, Find the book (each found book checked against the narrator), the narrator-left-the-book card, Settings › Audiobooks
-src/app-extensions.js Settings › Extensions (a switch each) and the places extensions add to the sidebar, above Stats
+src/app-extensions.js Settings › Extensions (a switch each) and the places extensions add to the sidebar, above Stats: `renderExtension(id)` loads one's code, then draws it through `EXT_PLACES`
 src/app-lock.js     app lock: passcode (PBKDF2 hash), fingerprint or face on Android
 src/app-car.js      Android Auto: the list the car starts from (books, clips cut for Narrate, collections with quick starts) and where the car got to
 src/app-start.js    wiring at launch, what other apps share in, self-update, Test builds, What's new
@@ -94,7 +94,7 @@ src/imports.js      Pocket, Instapaper, Omnivore, Raindrop, Wallabag exports, Ki
 src/stats.js        reading stats and the reading pace
 src/activity.js     Share reading activity: builds activity/reading.json (docs/reading-activity.md)
 src/dict.js         StarDict dictionaries in IndexedDB
-src/extensions.js   extensions: the catalogue, on or off per device, loading an extension's scripts once it is on
+src/extensions.js   extensions: the catalogue, on or off per device, loading an extension's scripts once it is on. **Adding one:** an entry here (id, title, note, scripts, and `place`: the sidebar icon's paths, its name, what to say when its code didn't load; `find`: Settings search words), a hidden `<main id="id">` in index.html, its scripts in sw.js's ASSETS, and in its own shell file `EXT_PLACES.id = draw` (and `EXT_PAGES.id` for its Settings page). The core asks `C.ext.places()` and `C.ext.place(id)` and never names an extension (`extensions.test.js` fails if it does; sync.js is the listed exception for now)
 src/fsrs.js         the Anki extension's scheduler: FSRS-5 in plain JS; loaded only once Anki is on (as are anki.js and app-anki.js: not in index.html, but in sw.js's ASSETS)
 src/sqlite.js       a read-only SQLite reader (table b-trees and overflow pages, UTF-8), loaded with the Anki extension, for opening an Anki deck
 src/anki-import.js  reads an Anki deck (.apkg: a zip with a SQLite collection) into cards and reviews, and Anki's text export's counterpart lives in anki.js; loaded with the Anki extension

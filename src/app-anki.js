@@ -398,3 +398,12 @@ function ankiOptionsView() {
 }
 
 const ANKI_VIEWS = { decks: ankiDecksView, deck: ankiDeckView, name: ankiNameView, study: ankiStudyView, browse: ankiBrowseView, edit: ankiEditView, options: ankiOptionsView };
+
+// The Anki place: the decks are opened first, then it draws.
+EXT_PLACES.anki = async () => {
+  try { await C.anki.load(); } catch (e) {
+    fill($("anki"), el("div", { class: "empty" }, el("h2", { class: "empty-title" }, t("Your decks didn't open")), el("p", { class: "empty-text" }, t("Close the app and open it again."))));
+    return;
+  }
+  ankiDraw();
+};

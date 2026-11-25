@@ -1029,7 +1029,7 @@ function renderSide() {
   const inMarks = state.place === "highlights";
   const latest = (f) => Math.max(0, ...f.items.map(postAt));
   const big = wide.matches;
-  const inLib = !inFeeds && !inMarks && !["reading", "newsletters", "discover", "anki", "calibre", "catalogs", "audiobookshelf", "webdav"].includes(state.place);
+  const inLib = !inFeeds && !inMarks && !["reading", "newsletters", "discover"].includes(state.place) && !C.ext.place(state.place);
   const inLibrary = inLib && !state.part && !state.folder && state.filter !== "favourites" && state.filter !== "notes";
   const favs = sideFavourites();
   const hasFolders = (load(SERIES_APART_KEY, true) ? plainFolders() : allFolders()).length > 0;
@@ -1068,16 +1068,9 @@ function renderSide() {
     item(sideSvg("discover"), t("Discover"), state.place === "discover", null, () => goPlace("discover")),
     // Every highlight in the library (1.8.0), a place of its own.
     item(sideSvg("marks"), t("Highlights"), inMarks, null, () => goPlace("highlights")),
-    // Anki, once its extension is on (Settings › Extensions): practise the decks.
-    C.ext.on("anki") ? item(sideSvg("anki"), t("Anki"), state.place === "anki", null, () => goPlace("anki")) : null,
-    // Calibre, once its extension is on: the books in your Calibre folder.
-    C.ext.on("calibre") ? item(sideSvg("calibre"), t("Calibre"), state.place === "calibre", null, () => goPlace("calibre")) : null,
-    // Audiobookshelf, once its extension is on: your server's audiobooks.
-    C.ext.on("audiobookshelf") ? item(sideSvg("abs"), t("Audiobookshelf"), state.place === "audiobookshelf", null, () => goPlace("audiobookshelf")) : null,
-    // Catalogs, once its extension is on: the book catalogs you added.
-    C.ext.on("catalogs") ? item(sideSvg("catalogs"), t("Catalogs"), state.place === "catalogs", null, () => goPlace("catalogs")) : null,
-    // WebDAV, once its extension is on: the folders on your servers.
-    C.ext.on("webdav") ? item(sideSvg("webdav"), t("WebDAV"), state.place === "webdav", null, () => goPlace("webdav")) : null,
+    // The places of the extensions that are on (Settings › Extensions),
+    // in the catalogue's order.
+    ...C.ext.places().filter((x) => C.ext.on(x.id)).map((x) => item(sideIcon(x.place.icon), x.place.title(), state.place === x.id, null, () => goPlace(x.id))),
     item(sideSvg("reading"), t("Stats"), state.place === "reading", null, () => goPlace("reading")),
     // On a big screen the sidebar carries the rest (1.5.0): the tags,
     // and Settings at its foot. Feeds are added from the Feeds place.
@@ -1111,15 +1104,11 @@ const SIDE_SVG = {
   reading: '<path d="M5 20V12M10 20V6M15 20v-9M20 20V9"/>',
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
   discover: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
-  anki: '<rect x="8" y="3" width="13" height="15" rx="2"/><path d="M4 7v12a2 2 0 0 0 2 2h11"/>',
-  abs: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><path d="M4 15h3v5H5a1 1 0 0 1-1-1zM20 15h-3v5h2a1 1 0 0 0 1-1z"/>',
-  calibre: '<path d="M4 20V5M8 20V4M12 20l3-15 4 1-3 14"/><path d="M3 20h18"/>',
-  catalogs: '<path d="M3 5h6a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H3z"/><path d="M21 5h-6a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h7z"/>',
-  webdav: '<path d="M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 8a4 4 0 0 1-.5 10z"/><path d="M12 11v6M9.5 14.5 12 17l2.5-2.5"/>',
 };
-function sideSvg(name) {
+const sideSvg = (name) => sideIcon(SIDE_SVG[name]);
+function sideIcon(paths) {
   const box = el("span", { class: "side-icon", "aria-hidden": "true" });
-  box.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + SIDE_SVG[name] + "</svg>";
+  box.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + paths + "</svg>";
   return box;
 }
 
@@ -1237,7 +1226,7 @@ function keysSheet() {
 
 const typingIn = (t) => !!(t && t.closest && t.closest("input, textarea, select, [contenteditable]"));
 // The card or collection with focus, in the list on screen.
-const listNow = () => (state.folder ? $("folderBody") : state.place === "feeds" ? $("feeds") : state.place === "newsletters" ? $("newsletters") : state.place === "highlights" ? $("highlights") : state.place === "reading" ? $("reading") : state.place === "discover" ? $("discover") : state.place === "anki" ? $("anki") : state.place === "calibre" ? $("calibre") : state.place === "audiobookshelf" ? $("audiobookshelf") : state.place === "catalogs" ? $("catalogs") : state.place === "webdav" ? $("webdav") : $("library"));
+const listNow = () => (state.folder ? $("folderBody") : state.place === "feeds" ? $("feeds") : state.place === "newsletters" ? $("newsletters") : state.place === "highlights" ? $("highlights") : state.place === "reading" ? $("reading") : state.place === "discover" ? $("discover") : C.ext.place(state.place) ? $(state.place) : $("library"));
 const focusedNode = () => { const a = document.activeElement; return a && a.closest && listNow().contains(a) ? a.closest("[data-ids]") : null; };
 const focusedPage = () => {
   const n = focusedNode();
@@ -1341,7 +1330,7 @@ function onKeys(e) {
       if (state.place === "highlights") { $("highlights").querySelector(".hl-search input").focus(); return; }
       if (state.place === "discover") { openDzSearch(); return; }
       if (postPlace() && (state.place === "feeds" ? siteFeeds() : mailBoxes()).length) { openPostSearch(); return; }
-      return (["feeds", "newsletters", "reading", "anki", "calibre", "catalogs", "audiobookshelf", "webdav"].includes(state.place) ? goPlace("library") : Promise.resolve()).then(openSearch);
+      return (["feeds", "newsletters", "reading"].includes(state.place) || C.ext.place(state.place) ? goPlace("library") : Promise.resolve()).then(openSearch);
     }),
     d: () => openDownloads(),
     ",": () => openSettings(),

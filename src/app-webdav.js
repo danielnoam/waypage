@@ -250,6 +250,7 @@ MENUS.addWebdav = { label: t("Add a server"), build: () => webdavServerSheet() }
 
 // The extension's page in Settings: each server (a tap changes or removes
 // it), then Add a server under Actions.
+EXT_PLACES.webdav = webdavDraw;
 EXT_PAGES.webdav = () => {
   const all = C.webdav.list();
   return [
