@@ -341,7 +341,10 @@ test("no two scripts index.html loads declare the same top-level name", () => {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   const seen = {};
   // An extension's scripts load later, into the same scope, so they count too.
-  const scripts = [...html.matchAll(/<script src="([^"?]+)/g)].map((m) => m[1]).concat("src/app-anki.js");
+  const scripts = [...html.matchAll(/<script src="([^"?]+)/g)].map((m) => m[1]);
+  const ext = fs.readFileSync(path.join(ROOT, "src/extensions.js"), "utf8");
+  for (const m of ext.matchAll(/"(src\/[\w-]+\.js)"/g)) if (!scripts.includes(m[1])) scripts.push(m[1]);
+  assert.ok(scripts.includes("src/app-webdav.js"), "the extensions' scripts weren't found");
   for (const f of scripts) {
     const src = fs.readFileSync(path.join(ROOT, f), "utf8");
     const first = src.replace(/^(\s*(\/\/.*|\/\*[\s\S]*?\*\/))*\s*/, "");

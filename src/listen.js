@@ -60,7 +60,6 @@
   // MP4 (M4B, M4A): Nero's chpl list, else a QuickTime chapter track (a
   // text track another track names in tref/chap), read box by box so a
   // 2 GB book costs a few small reads.
-  const CONTAINERS = new Set(["moov", "trak", "mdia", "minf", "stbl", "udta", "edts", "dinf"]);
   async function boxes(blob, from, to) {
     const out = [];
     let at = from;

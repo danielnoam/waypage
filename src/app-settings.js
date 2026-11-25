@@ -1377,19 +1377,6 @@ function editNotes(ids) {
     files ? el("p", { class: "footnote" }, t("A file read from where it is stays as it is: only Waypage's copy of its words changes, on this device.")) : null,
   ].filter(Boolean);
 }
-// A list of radio rows like choiceGroup's, without its section.
-function choiceList(name, label, options, current, set) {
-  const list = el("div", { class: "group", role: "radiogroup", "aria-label": label });
-  for (const o of options) {
-    const check = el("span", { class: "choice-check", "aria-hidden": "true" });
-    check.innerHTML = CHECK;
-    list.append(el("label", { class: "choice" },
-      el("input", { class: "visually-hidden", type: "radio", name, value: o.value, checked: o.value === current, onchange: () => set(o.value) }),
-      el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, o.label), o.note ? el("span", { class: "choice-note" }, o.note) : null),
-      check));
-  }
-  return list;
-}
 
 function pickToEdit() {
   toLibrary().then(() => { startSelect([]); toast(t("Pick the clips and files to change, then tap Edit.")); });

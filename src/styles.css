@@ -553,7 +553,7 @@ html.native .screen-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
 /* Two cards in one section (a list and its action, say) stand apart (1.48.1). */
 /* The reader's own theme sits close under Theme, with no heading. */
 .settings-section + .settings-section.reader-theme-sec { margin-top: var(--s-3); }
-.settings-section > .group + .group, .settings-section > :is(.footnote, .warn-note, textarea, .report-field) + .group { margin-top: var(--s-3); }
+.settings-section > .group + .group, .settings-section > :is(.footnote, textarea, .report-field) + .group { margin-top: var(--s-3); }
 .overline {
   margin: 0 0 var(--s-2) var(--s-1);
   font: 600 var(--fs-meta)/var(--lh-meta) var(--sans);
@@ -1203,10 +1203,6 @@ html.native .find-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top))
 }
 .sheet-row.danger { color: var(--warn); }
 .sheet-row[aria-pressed="true"] { color: var(--accent); font-weight: 600; }
-.share-rows { display: flex; gap: var(--s-2); }
-.share-rows .sheet-row { flex: 1; justify-content: center; }
-.sheet-row.two-line { flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: var(--s-2) var(--s-3); text-align: start; }
-.sheet-note { font: 400 var(--fs-meta)/var(--lh-meta) var(--sans); color: var(--muted); }
 .card-tag { color: var(--accent); }
 .step-rows { display: flex; gap: var(--s-2); }
 .step-row {
@@ -1538,8 +1534,6 @@ span.update-text { cursor: default; }
 .row:disabled { cursor: default; }
 .row:disabled .row-label, .row:disabled .choice-label { color: var(--muted); }
 .warn { color: var(--warn); }
-.update-notes { padding: var(--s-2) var(--s-4) var(--s-3); border-top: 1px solid var(--line); }
-.update-notes .overline { margin: var(--s-2) 0 0; }
 .news-entry + .news-entry { margin-top: var(--s-6); padding-top: var(--s-5); border-top: 1px solid var(--line); }
 .news-version { display: flex; align-items: baseline; gap: var(--s-3); margin: 0; font: 700 var(--fs-heading)/var(--lh-heading) var(--serif); }
 .news-you { font: 600 var(--fs-meta)/var(--lh-meta) var(--sans); color: var(--accent); }
@@ -1547,7 +1541,6 @@ span.update-text { cursor: default; }
 .news-list { margin: 0; padding-inline-start: 1.2em; }
 .news-list li { margin: var(--s-1) 0; line-height: 1.5; }
 .news-list li::marker { color: var(--muted); }
-.update-notes + .row { border-top: 1px solid var(--line); }
 
 /* ---- 0.19.0: the library in sections ---- */
 .section-head {
@@ -1583,8 +1576,6 @@ span.update-text { cursor: default; }
 .dropdown-item[aria-selected="true"] { color: var(--accent); font-weight: 600; }
 .dropdown-check { display: inline-flex; width: 20px; height: 20px; }
 @media (prefers-reduced-motion: reduce) { .dropdown-caret { transition: none; } }
-.chip-caret { font-size: 11px; opacity: 0.8; }
-.tag-filters { margin-top: var(--s-2); }
 
 .folder-strip {
   display: flex; gap: var(--s-3); overflow-x: auto; scrollbar-width: none;
@@ -1628,8 +1619,6 @@ span.update-text { cursor: default; }
 @keyframes badge-pulse { 0%, 100% { transform: scale(1); } 40% { transform: scale(1.18); } }
 @media (prefers-reduced-motion: reduce) { .tile-new.saving { animation: none; } }
 .check-new .chips { flex-wrap: nowrap; justify-content: space-between; }
-.check-note { color: var(--muted); font-size: var(--fs-meta); line-height: var(--lh-meta); }
-.check-note.accent { color: var(--accent); font-weight: 600; }
 .tile .progress { margin-top: auto; }
 .card-open ~ *, .tile .card-open ~ * { pointer-events: none; }
 .card-open ~ .card-body .card-retry { pointer-events: auto; }
@@ -1848,8 +1837,6 @@ span.update-text { cursor: default; }
 
 
 /* 0.19.1: the filters between Folders and the pages, and a switch. */
-.filter-box .filters { margin-top: 0; }
-.filter-box .tag-filters { margin-top: var(--s-1); }
 .switch {
   appearance: none; -webkit-appearance: none; flex-shrink: 0; position: relative;
   width: 52px; height: 32px; margin: 0; border-radius: var(--r-full);
@@ -2198,7 +2185,6 @@ span.update-text { cursor: default; }
 .book-facts .folder-meta { margin: 0 0 var(--s-2); }
 .book-progress { height: 4px; border-radius: var(--r-full); background: var(--line); overflow: hidden; }
 .book-progress-fill { display: block; height: 100%; background: var(--accent); }
-.book-note { margin-top: calc(-1 * var(--s-2)); margin-bottom: var(--s-4); }
 .folder-go { margin-bottom: var(--s-2); }
 .folder-starts { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: var(--s-3); }
 .folder-starts > :last-child:nth-child(odd) { grid-column: span 2; }
