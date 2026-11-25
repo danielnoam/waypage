@@ -5,7 +5,7 @@
 // pinned SHA-256 before it is kept, never code that runs. See
 // ARCHITECTURE.md's Trade-offs.
 //
-//   list()           the catalogue: [{ id, title, note, scripts, packs, place, find }]
+//   list()           the catalogue: [{ id, title, note, scripts, packs, place, find, sync }]
 //   places()         those that add a place to the sidebar, in its order
 //   place(id)        the extension whose place this is, or null
 //   on(id)           whether it is turned on (read from this device)
@@ -33,7 +33,10 @@
   const PACKS = "https://raw.githubusercontent.com/danielnoam/waypage/";
   // An extension is added here and nowhere else in the core: its place in
   // the sidebar (the icon's paths, its name and what to say when its code
-  // didn't come) and the words Settings search finds it by. Its own shell
+  // didn't come), the words Settings search finds it by, and the list
+  // Sync carries for it (`sync`: the file beside the library, the module
+  // under window.Waypage with list(), shared() and mergeIn(), where this
+  // device remembers what it sent, and the commit's words). Its own shell
   // file fills in the rest once loaded: EXT_PLACES[id] draws the place into
   // <main id="id"> (index.html), EXT_PAGES[id] adds to its Settings page.
   // test/extensions.test.js fails when a core file names one.
@@ -56,16 +59,19 @@
       place: { icon: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><path d="M4 15h3v5H5a1 1 0 0 1-1-1zM20 15h-3v5h2a1 1 0 0 0 1-1z"/>',
         title: () => t("Audiobookshelf"), failed: () => t("Audiobookshelf didn't load") },
       find: "audiobookshelf abs audiobooks server stream listening podcasts",
+      sync: { file: "audiobookshelf.json", store: "abs", key: "waypage.syncAbs", says: "Audiobookshelf" },
       scripts: ["src/abs.js", "src/app-abs.js"], packs: [] },
     { id: "catalogs", title: "Catalogs", note: "Book catalogs (OPDS) you add, in the sidebar",
       place: { icon: '<path d="M3 5h6a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H3z"/><path d="M21 5h-6a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h7z"/>',
         title: () => t("Catalogs"), failed: () => t("Catalogs didn't load") },
       find: "opds calibre kavita komga library server books catalog",
+      sync: { file: "catalogs.json", store: "opds", key: "waypage.syncCatalogs", says: "Catalogs" },
       scripts: ["src/opds.js", "src/app-catalogs.js"], packs: [] },
     { id: "webdav", title: "WebDAV", note: "A folder of books on your server (Nextcloud, a NAS), in the sidebar",
       place: { icon: '<path d="M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 8a4 4 0 0 1-.5 10z"/><path d="M12 11v6M9.5 14.5 12 17l2.5-2.5"/>',
         title: () => t("WebDAV"), failed: () => t("WebDAV didn't load") },
       find: "webdav nextcloud owncloud nas koofr server folder books",
+      sync: { file: "webdav.json", store: "webdav", key: "waypage.syncWebdav", says: "WebDAV servers" },
       scripts: ["src/webdav.js", "src/app-webdav.js"], packs: [] },
   ];
 

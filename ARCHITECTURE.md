@@ -94,7 +94,7 @@ src/imports.js      Pocket, Instapaper, Omnivore, Raindrop, Wallabag exports, Ki
 src/stats.js        reading stats and the reading pace
 src/activity.js     Share reading activity: builds activity/reading.json (docs/reading-activity.md)
 src/dict.js         StarDict dictionaries in IndexedDB
-src/extensions.js   extensions: the catalogue, on or off per device, loading an extension's scripts once it is on. **Adding one:** an entry here (id, title, note, scripts, and `place`: the sidebar icon's paths, its name, what to say when its code didn't load; `find`: Settings search words), a hidden `<main id="id">` in index.html, its scripts in sw.js's ASSETS, and in its own shell file `EXT_PLACES.id = draw` (and `EXT_PAGES.id` for its Settings page). The core asks `C.ext.places()` and `C.ext.place(id)` and never names an extension (`extensions.test.js` fails if it does; sync.js is the listed exception for now)
+src/extensions.js   extensions: the catalogue, on or off per device, loading an extension's scripts once it is on. **Adding one:** an entry here (id, title, note, scripts, and `place`: the sidebar icon's paths, its name, what to say when its code didn't load; `find`: Settings search words), a hidden `<main id="id">` in index.html, its scripts in sw.js's ASSETS, and in its own shell file `EXT_PLACES.id = draw` (and `EXT_PAGES.id` for its Settings page). The core asks `C.ext.places()` and `C.ext.place(id)` and never names an extension (`extensions.test.js` fails if it does; Anki's own sync in sync.js and its switch on the Sync screen are the listed exceptions). A list Sync should carry is a `sync` entry too, see Sync
 src/fsrs.js         the Anki extension's scheduler: FSRS-5 in plain JS; loaded only once Anki is on (as are anki.js and app-anki.js: not in index.html, but in sw.js's ASSETS)
 src/sqlite.js       a read-only SQLite reader (table b-trees and overflow pages, UTF-8), loaded with the Anki extension, for opening an Anki deck
 src/anki-import.js  reads an Anki deck (.apkg: a zip with a SQLite collection) into cards and reviews, and Anki's text export's counterpart lives in anki.js; loaded with the Anki extension
@@ -633,6 +633,11 @@ web copy stay links, as before.
   A device that has reviewed nothing sends no log. Changes made here
   start a sync 30 seconds after the last one (`anki.edited`).
   `test/syncanki.test.js` plays two devices on one made-up repo.
+- **Extensions' lists** go through one function, `syncList`, for every
+  catalogue entry in `src/extensions.js` with a `sync` (its file, its
+  module, where this device remembers what it sent). A new extension with
+  a list to carry adds that entry and `list()`, `shared()` and
+  `mergeIn()` on its module; sync.js doesn't change. The three today:
 - **Catalogs** (2026-11, while the extension is on): `catalogs.json`, the
   list with each catalog's address, name and username but never its
   password (`opds.shared()`), and the ones removed with when, so a removal
