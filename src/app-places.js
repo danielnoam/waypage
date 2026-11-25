@@ -717,7 +717,6 @@ function mailList(boxes) {
   return out.sort((a, b) => postAt(b.it) - postAt(a.it));
 }
 const mailUnread = (it) => { const saved = savedAs(it.url); return !it.opened && !(saved && (saved.readAt || saved.finished)); };
-const unreadMail = () => mailList(mailBoxes()).filter((x) => mailUnread(x.it)).length;
 
 function openMail(f, it) {
   const saved = savedAs(it.url);
