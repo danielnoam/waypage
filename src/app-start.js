@@ -31,6 +31,7 @@ function route(s) {
     if (state.section && state.settings && wide.matches && view === "settings") { history.back(); return; }
     closeSection();
   }
+  if (!view) dzBackHome();
   if (view !== "batch") closeBatch();
   if (view === "batch") openBatch("", true, s.folder);
   const part = (view === "part" && s.part) || (["folder", "reader", "menu", "select"].includes(view) && state.part) || null;
