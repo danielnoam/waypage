@@ -150,6 +150,9 @@ async function phone(browser) {
       assert.deepStrictEqual(page.tags, ["Fantasy"]);
       assert.strictEqual(page.title, "The Tombs of Atuan");
       assert.strictEqual(page.byline, "Ursula K. Le Guin");
+      // The book is in the library a moment before the reader is in the
+      // history: Back before then leaves the app, and the page with it.
+      await p.waitForFunction(() => history.state && history.state.view === "reader");
       await p.evaluate(() => history.back());
       await p.evaluate(() => goPlace("calibre"));
       await p.locator('#calibre .dz-book[aria-label="The Tombs of Atuan, in your library"]').waitFor();
