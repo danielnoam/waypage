@@ -5193,11 +5193,14 @@ c("bk1", { at: 0.01 })]);
       await q.evaluate(() => {
         Object.defineProperty(C.platform, "canFetchPages", { get: () => true, configurable: true });
         C.discover.sources.forEach((s) => { s.browse = async () => Array.from({ length: 12 }, (_, i) => ({ id: s.key + i, title: "Story " + i, url: "https://example.org/" + i, tags: [], chapters: 3, cover: "" })); });
+        dzReadRR = async () => {}; dzReadWiki = async () => {};
         goPlace("discover"); dzPick = "stories"; renderDiscover();
       });
-      await until(q, () => document.querySelectorAll(".dz-grid .dz-book").length > 0);
-      await q.click(".dz-tools .dropdown-btn");
+      await until(q, () => document.querySelectorAll(".dz-grid .dz-book").length > 0 && !dz.busy && !dz.grid.busy);
+      // Discover may draw again as it settles, which puts the menu away.
+      await until(q, () => { if (!document.querySelector(".dropdown-menu")) document.querySelector(".dz-tools .dropdown-btn").click(); return !!document.querySelector(".dropdown-menu"); });
       await q.waitForTimeout(400);
+      await until(q, () => !!document.querySelector(".dropdown-menu"));
       const cdp = await ctx.newCDPSession(q);
       const drag = async (y0, y1) => {
         await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: 120, y: y0 }] });
