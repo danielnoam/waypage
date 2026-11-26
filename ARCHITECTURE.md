@@ -1150,6 +1150,7 @@ area.
   deleted notes reads. Don't sync a library with Notes from such a build.
 
 - A new field on a clip that should sync goes in three lists: sync.js `SYNCED`, app-sync.js `SYNCED_KEEP`, and backup.js `cleanMeta`. Sync's merge runs every entry through `cleanMeta` first, so a field missing there is dropped on every sync even though `SYNCED` names it (Live, 2026-11).
+- `actions/deploy-pages` often finds no `github-pages` artifact straight after the upload (most deploys of main failed so on 25 Nov 2026, leaving the web copy and `unreleased/` a few merges behind). `pages.yml` tries three times with waits; a red Web app run still means the unreleased channel didn't move.
 - A merge done with the workflow's own `GITHUB_TOKEN` starts no other workflows, so `pages.yml` and the release builds never run. `auto-merge.yml` turns auto-merge on with the `AUTOMERGE_TOKEN` secret (a fine-grained token of Daniel's) for that reason.
 - The books of an audiobook folder added as a series share one `link`, the folder picked. Removing an entry lets go of its `link` only when no other entry still reads from it (`releaseLinks`).
 - A field missing from sync's `SYNCED`, backup's `cleanMeta`, `SYNCED_KEEP` and `AGAIN_KEEP` is dropped on the next sync or update. `folderSeries` and `folderIn` are in all four; a device without them strips them from clips it changes, which `healSeries` repairs while any clip of the series keeps them.
@@ -1250,6 +1251,13 @@ area.
   engine the next piece only when one ends, so Kokoro paused between
   paragraphs. `SpeechService.makeAhead` asks `Kokoro.take` for the next
   piece, made on its own thread.
+- **Narrate's skips while a piece is being made:** each press moved on
+  again, so they piled up and fired once the sound came. Previous/next
+  are dropped while the piece hasn't sounded (`SpeechService.busy`,
+  `moveAloud`), and the stuck-piece guard counts from its first sound.
+- **sherpa-onnx speaks a lone closing quote:** it cuts sentences after
+  the full stop, so `"Stop."` left a `"` that came out as a mumble.
+  `Kokoro.unquoted` (and its Swift twin) takes quote marks out first.
 - **`el()` attributes:** `disabled: false` still disables a button (it's
   set as an attribute); pass `null`.
 - **`replaceChildren`/`append` write a `null` out as the text "null":**

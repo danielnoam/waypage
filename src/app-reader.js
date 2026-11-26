@@ -1582,7 +1582,7 @@ function showReadHere() {
   const box = (mark && mark.box) || spot || (picked && picked.box);
   if (!box) { hideReadHere(); return; }
   if (!readHere) {
-    const aloudBtn = el("button", { class: "sel-aloud", type: "button", "aria-label": t("Narrate from here"), onclick: () => {
+    const aloudBtn = el("button", { class: "sel-aloud", type: "button", "aria-label": t("Narrate"), onclick: () => {
       const s = C.reader.selectionSpot();
       hideReadHere();
       C.reader.clearSelection();
@@ -1591,7 +1591,7 @@ function showReadHere() {
       else if (s) startAloud(null, s);
     } });
     aloudBtn.innerHTML = $("readerAloud").innerHTML;
-    aloudBtn.append(el("span", { class: "sel-label" }, t("Narrate from here")));
+    aloudBtn.append(el("span", { class: "sel-label" }, t("Narrate")));
     const markBtn = el("button", { class: "sel-mark", type: "button", onclick: (e) => {
       // A hold already opened the colours: its click doesn't highlight too.
       if (markHeld) { markHeld = false; e.preventDefault(); return; }
@@ -1636,8 +1636,8 @@ function showReadHere() {
   markBtn.setAttribute("aria-label", on.all ? t("Unmark") : t("Mark"));
   readHere.querySelector(".sel-draw").hidden = !mark || !inkReady() || C.ink.on;
   readHere.querySelector(".sel-aloud").hidden = !spot;
-  readHere.querySelector(".sel-aloud .sel-label").textContent = heard ? t("Play from here") : t("Narrate from here");
-  readHere.querySelector(".sel-aloud").setAttribute("aria-label", heard ? t("Play from here") : t("Narrate from here"));
+  readHere.querySelector(".sel-aloud .sel-label").textContent = heard ? t("Play") : t("Narrate");
+  readHere.querySelector(".sel-aloud").setAttribute("aria-label", heard ? t("Play") : t("Narrate"));
   listenSelection(readHere, picked);
   if (typeof ankiSelection === "function") ankiSelection(readHere, picked);
   readHere.querySelector(".sel-translate").hidden = !picked;
@@ -2051,11 +2051,17 @@ async function readNext() {
 
 // The block that piece `i` is in, and the first piece of a block.
 const blockAt = (i) => aloud.map[i] ?? -1;
+// Previous or next while the piece it went to is still being made is
+// dropped, not counted up: once the sound came, every press had moved it
+// on again (Daniel 2026-11-26). The voice's progress clears it.
+let aloudMoving = 0;
 function moveAloud(d) {
+  if (aloud.state === "playing" && Date.now() - aloudMoving < 20000) return;
   const b = blockAt(aloud.index) + d;
   const i = aloud.map.indexOf(b);
   if (i < 0) return;
   setAloud(aloud.state, i);
+  if (aloud.state === "playing") aloudMoving = Date.now();
   speech.seek(i);
 }
 
@@ -2299,6 +2305,7 @@ speech.onProgress(({ key, index, state: st, thinking }) => {
   setAloud(st, index);
   if (moved) queueNext();
   aloudThinking(!!thinking && st === "playing");
+  if (!thinking || st !== "playing") aloudMoving = 0;
 });
 // The ring round Pause while the engine makes the piece (Daniel's ask);
 // a quick one never shows it.
