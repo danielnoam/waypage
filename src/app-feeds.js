@@ -203,9 +203,9 @@ function followFeeds(list) {
   let added = 0;
   for (const o of list) {
     if (feeds.some((h) => sameUrl(h.url, o.url))) continue;
-    const title = cleanTag(o.title) || C.feeds.siteOf(o.url);
+    const title = cleanName(o.title) || C.feeds.siteOf(o.url);
     feeds.push({ url: o.url, title, link: "", icon: "", mode: "show", images: feedImages(),
-      folder: cleanTag(o.folder) || title, days: 7, addedAt: Date.now(), checkedAt: 0, error: "", items: [] });
+      folder: cleanName(o.folder) || title, days: 7, addedAt: Date.now(), checkedAt: 0, error: "", items: [] });
     added++;
   }
   if (!added) { toast(list.length ? t("You follow all of those feeds already.") : t("No feeds in that file.")); return; }

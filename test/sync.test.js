@@ -310,6 +310,17 @@ test("a series and the collection it sits in go to the other device, and a backu
   assert.strictEqual(B.cleanMeta(page("a1b2", { folderSeries: true }), "a1b2").folderSeries, undefined);
 });
 
+test("a long collection name syncs whole, up to 200 characters", () => {
+  require("../src/backup.js");
+  const B = window.Waypage.backup;
+  const name = "The Cartographer's Daughter and the Long Road Home, Book One";
+  const m = B.cleanMeta(page("a1b2", { folder: name, folderSeries: true, folderIn: name + " Shelf" }), "a1b2");
+  assert.strictEqual(m.folder, name);
+  assert.strictEqual(m.folderIn, name + " Shelf");
+  assert.strictEqual(B.cleanMeta(page("a1b2", { folder: "x".repeat(250) }), "a1b2").folder, "x".repeat(200));
+  assert.strictEqual(B.cleanFeed({ url: "https://example.org/feed.xml", folder: name }).folder, name);
+});
+
 test("Live survives the sync merge and a backup (2026-11)", () => {
   require("../src/backup.js");
   const B = window.Waypage.backup;

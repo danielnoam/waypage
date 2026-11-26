@@ -6,6 +6,10 @@
 // case-insensitive duplicates dropped.
 
 const cleanTag = (t) => String(t).replace(/\s+/g, " ").trim().slice(0, 32);
+// A collection's, series' or feed's name: long enough for any real title.
+// backup.js caps synced and imported names at the same 200.
+const NAME_MAX = 200;
+const cleanName = (t) => String(t).replace(/\s+/g, " ").trim().slice(0, NAME_MAX);
 const sameTag = (a, b) => a.toLocaleLowerCase() === b.toLocaleLowerCase();
 
 function allTags() {
@@ -366,7 +370,7 @@ async function setFolderTagNew(name, on) {
 }
 
 // A folder's name as already spelled, if one by that name exists.
-const folderName = (name) => allFolders().find((n) => sameTag(n, cleanTag(name))) || cleanTag(name);
+const folderName = (name) => allFolders().find((n) => sameTag(n, cleanName(name))) || cleanName(name);
 
 // The page to carry on with: the first one not finished, else the first.
 // The clip to go on with in a collection: the one read last, or the
@@ -393,7 +397,7 @@ function folderNext(list) {
 // one it's already going into, before the first volume numbered after it,
 // so the collection reads 1, 2, 3 however they were added.
 function fileSeries(p) {
-  const name = p.folder || (p.series && cleanTag(p.series) ? folderName(p.series) : "");
+  const name = p.folder || (p.series && cleanName(p.series) ? folderName(p.series) : "");
   if (!name) return;
   const list = folderPages(name).filter((q) => q !== p);
   if (!p.folder) { p.folder = name; joinFav(p, name); }
@@ -407,7 +411,7 @@ function fileSeries(p) {
 }
 
 async function setFolder(p, name) {
-  const clean = name && cleanTag(name);
+  const clean = name && cleanName(name);
   if (clean) {
     if (p.folder && sameTag(p.folder, clean)) return;
     p.folder = folderName(clean);
@@ -644,7 +648,7 @@ function bookHead(list, next, done) {
   let title;
   if (renaming) {
     title = el("input", { class: "book-title-input", type: "text", value: folderDraft ?? name, "aria-label": t("Collection name"),
-      maxlength: "32", enterkeyhint: "done", autocapitalize: "sentences", spellcheck: "false", dir: "auto" });
+      maxlength: String(NAME_MAX), enterkeyhint: "done", autocapitalize: "sentences", spellcheck: "false", dir: "auto" });
     title.addEventListener("input", () => { folderDraft = title.value; });
     title.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); $("folderDone").click(); }
@@ -2209,7 +2213,7 @@ function tagsSheet() {
 function folderSheet() {
   const list = picked(), n = list.length;
   const move = async (name) => {
-    const target = name && cleanTag(name) ? folderName(name) : null;
+    const target = name && cleanName(name) ? folderName(name) : null;
     const now = Date.now();
     [...list].sort((a, b) => (a.folderAt || a.savedAt || 0) - (b.folderAt || b.savedAt || 0)).forEach((p, i) => {
       if (!target) { if (p.folder) p.movedAt = now; delete p.folder; delete p.folderAt; joinFav(p, null); return; }
@@ -2226,12 +2230,12 @@ function folderSheet() {
     toast(target ? t("Moved {countLine} to {target}", { countLine: countLine(n), target: target }) : t("Took {countLine} out of their collections", { countLine: countLine(n) }));
   };
   const input = el("input", { class: "tag-input", type: "text", placeholder: t("New collection"), "aria-label": t("New collection"),
-    maxlength: "32", enterkeyhint: "done", autocapitalize: "sentences" });
-  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && cleanTag(input.value)) { e.preventDefault(); move(input.value); } });
+    maxlength: String(NAME_MAX), enterkeyhint: "done", autocapitalize: "sentences" });
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && cleanName(input.value)) { e.preventDefault(); move(input.value); } });
   const folders = allFolders();
   return el("div", { class: "page-controls" },
     el("h2", { class: "menu-title" }, t("Move {countLine} to", { countLine: countLine(n) })),
-    folders.length ? el("div", { class: "chips" }, ...folders.map((f) => el("button", { class: "chip", type: "button", onclick: () => move(f) }, f))) : null,
+    folders.length ? el("div", { class: "chips" }, ...folders.map((f) => el("button", { class: "chip", type: "button", title: f, onclick: () => move(f) }, el("span", { class: "chip-label", dir: "auto" }, f)))) : null,
     input,
     list.some((p) => p.folder) ? el("div", { class: "group" },
       el("button", { class: "row", type: "button", onclick: () => move(null) }, el("span", { class: "row-label" }, t("Take out of their collections")))) : null);
@@ -3506,7 +3510,7 @@ function watchIntoPick(w) {
     onpick: (v) => {
       if (v !== WATCH_NEW) { set(v); return; }
       const typed = prompt(t("Name the new collection"));
-      if (typed && cleanTag(typed)) set(folderName(typed));
+      if (typed && cleanName(typed)) set(folderName(typed));
       else renderSection();
     } });
 }

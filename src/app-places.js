@@ -855,7 +855,7 @@ async function makeMailBox(name) {
   } finally { makingMail = false; }
 }
 function newMailSheet() {
-  const name = el("input", { class: "feed-input", type: "text", placeholder: t("Newsletters"), "aria-label": t("Name"), maxlength: "32",
+  const name = el("input", { class: "feed-input", type: "text", placeholder: t("Newsletters"), "aria-label": t("Name"), maxlength: String(NAME_MAX),
     value: (state.menu && state.menu.page && state.menu.page.name) || "", autocomplete: "off", autocapitalize: "sentences", enterkeyhint: "next" });
   const link = el("input", { class: "feed-input", type: "url", inputmode: "url", placeholder: "https://kill-the-newsletter.com/feeds/….xml",
     "aria-label": t("Its feed link"), autocomplete: "off", autocapitalize: "off", spellcheck: "false", enterkeyhint: "go" });
@@ -865,7 +865,7 @@ function newMailSheet() {
     const url = link.value.trim();
     if (!MAIL_FEED.test(url)) { help.className = "footnote warn"; help.textContent = t("That isn't a Kill the Newsletter feed link. It ends in .xml."); link.focus(); return; }
     await back();
-    if (await addMailBox(url, cleanTag(name.value) || t("Newsletters"))) $("saveUrl").value = "";
+    if (await addMailBox(url, cleanName(name.value) || t("Newsletters"))) $("saveUrl").value = "";
   });
   name.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); link.focus(); } });
   link.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); go.click(); } });
@@ -1725,7 +1725,7 @@ function addFeedSheet() {
   const go = el("button", { class: "btn-primary", type: "button" }, t("Find its feed"));
   const paintNote = () => {
     if (!found) return;
-    note.textContent = t("{x}Saved posts go into a collection called {cleanTag}{picturesLine}.", { x: mode === "save" ? t("New posts save themselves while you're online. ") : t("New posts wait in Feeds for you to save. "), cleanTag: cleanTag(found.feed.title), picturesLine: picturesLine(feedImages()) });
+    note.textContent = t("{x}Saved posts go into a collection called {cleanTag}{picturesLine}.", { x: mode === "save" ? t("New posts save themselves while you're online. ") : t("New posts wait in Feeds for you to save. "), cleanTag: cleanName(found.feed.title), picturesLine: picturesLine(feedImages()) });
   };
   const reset = () => {
     found = null;
@@ -1767,8 +1767,8 @@ function addFeedSheet() {
   };
   const follow = async () => {
     const got = found;
-    const f = { url: got.url, title: cleanTag(got.feed.title) || C.feeds.siteOf(got.url), link: got.feed.link, icon: got.feed.icon,
-      mode, images: feedImages(), folder: cleanTag(got.feed.title) || C.feeds.siteOf(got.url), days: got.feed.releases ? 30 : 7,
+    const f = { url: got.url, title: cleanName(got.feed.title) || C.feeds.siteOf(got.url), link: got.feed.link, icon: got.feed.icon,
+      mode, images: feedImages(), folder: cleanName(got.feed.title) || C.feeds.siteOf(got.url), days: got.feed.releases ? 30 : 7,
       addedAt: Date.now(), checkedAt: Date.now(), error: "", items: [] };
     // A GitHub repo's releases (2026-11) come a few a month, not a day.
     if (got.feed.releases) f.releases = true;
@@ -1802,8 +1802,8 @@ function feedSheet() {
   const set = (change) => { Object.assign(f, change); saveFeeds(); paintFeeds(); };
   const row = (label, control) => el("div", { class: "rc-row stack" }, el("span", { class: "rc-label" }, label), control);
   const into = el("input", { class: "tag-input", type: "text", value: f.folder || "", placeholder: t("No collection"), "aria-label": t("Save into"),
-    maxlength: "32", enterkeyhint: "done", autocapitalize: "sentences" });
-  into.addEventListener("change", () => set({ folder: cleanTag(into.value) }));
+    maxlength: String(NAME_MAX), enterkeyhint: "done", autocapitalize: "sentences" });
+  into.addEventListener("change", () => set({ folder: cleanName(into.value) }));
   into.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); into.blur(); } });
   const shortUrl = mail ? mailAddress(f) : f.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
   return el("div", { class: "page-controls feed-sheet" },
@@ -1869,7 +1869,7 @@ function paintPlace() {
   $("saveUrl").inputMode = mailOn ? "text" : "url";
   $("saveUrl").autocapitalize = mailOn ? "sentences" : "off";
   $("saveUrl").enterKeyHint = "go";
-  if (mailOn) $("saveUrl").maxLength = 32; else $("saveUrl").removeAttribute("maxlength");
+  if (mailOn) $("saveUrl").maxLength = NAME_MAX; else $("saveUrl").removeAttribute("maxlength");
   document.querySelector('label[for="saveUrl"]').textContent = feedsOn ? t("Site or feed") : mailOn ? t("New address's name") : t("Page link");
   $("saveForm").querySelector(".btn-primary").textContent = feedsOn ? t("Follow") : mailOn ? t("Make") : t("Save");
   $("severalBtn").hidden = feedsOn || mailOn || findOn || !!ext;
