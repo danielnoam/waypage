@@ -447,6 +447,14 @@ a.btn-small { text-decoration: none; white-space: nowrap; display: inline-flex; 
   background: var(--bg); color: var(--accent); cursor: pointer;
 }
 .card-narrate[hidden], .selecting .card-narrate { display: none; }
+.folder-go-row { display: flex; margin-bottom: var(--s-5); }
+.folder-go-row > .folder-go { flex: 1; min-width: 0; margin: 0; }
+.folder-go-row > .folder-go:not(:last-child) { border-start-end-radius: 0; border-end-end-radius: 0; }
+.folder-narrate {
+  width: 52px; height: 48px; margin-inline-start: 1px; align-self: stretch;
+  border: 0; border-radius: var(--r-md); border-start-start-radius: 0; border-end-start-radius: 0;
+  background: var(--accent); color: var(--accent-ink);
+}
 .card.saving { cursor: default; }
 /* A run's card keeps one height: its status is one line whatever it says. */
 .card.run .card-status { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -2207,7 +2215,7 @@ span.update-text { cursor: default; }
 .book-facts .folder-meta { margin: 0 0 var(--s-2); }
 .book-progress { height: 4px; border-radius: var(--r-full); background: var(--line); overflow: hidden; }
 .book-progress-fill { display: block; height: 100%; background: var(--accent); }
-.folder-go { margin-bottom: var(--s-2); }
+.folder-go, .folder-go-row { margin-bottom: var(--s-2); }
 .folder-starts { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: var(--s-3); }
 .folder-starts > :last-child:nth-child(odd) { grid-column: span 2; }
 .quick-start .chip-icon { display: flex; color: var(--accent); }

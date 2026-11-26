@@ -57,8 +57,8 @@ const pushes = new WeakMap();
 let tapped = null;
 const zoomed = new WeakMap();
 document.addEventListener("click", (e) => {
-  const t = e.target.closest && e.target.closest(".card-open, .folder-go, .post-open");
-  const panel = t && (t.classList.contains("folder-go") ? t : t.closest(".card, .tile, .post"));
+  const t = e.target.closest && e.target.closest(".card-open, .folder-go, .folder-narrate, .post-open");
+  const panel = t && (t.classList.contains("folder-go") ? t : t.closest(".folder-go-row, .card, .tile, .post"));
   tapped = panel ? { rect: panel.getBoundingClientRect(), radius: parseFloat(getComputedStyle(panel).borderTopLeftRadius) || 0, at: Date.now(), panel, key: panelKey(panel) } : null;
 }, true);
 // The same panel after the library is drawn again (1.11.1), so Back
@@ -71,6 +71,7 @@ function panelKey(n) {
   if (n.dataset.name) return ".tile" + q("data-name", n.dataset.name);
   if (n.dataset.key) return q("data-key", n.dataset.key);
   if (n.classList.contains("folder-go")) return ".folder-go";
+  if (n.classList.contains("folder-go-row")) return ".folder-go-row";
   return n.id ? "#" + CSS.escape(n.id) : "";
 }
 function panelNow(from, under) {
@@ -2144,7 +2145,7 @@ function setAloud(st, index) {
     setTimeout(() => { if (aloud.state === "ended" && aloud.key === wentOnFrom) readNext(); }, 800);
   }
   if (!on && !ended) aloud.key = "";
-  for (const n of document.querySelectorAll(".card-narrate")) n.hidden = on && n.closest(".card").dataset.ids === aloud.key;
+  for (const n of document.querySelectorAll(".card-narrate")) n.hidden = on && (n.dataset.ids || n.closest(".card").dataset.ids) === aloud.key;
   if (st !== "playing" && st !== "paused" && sleep.pick) setSleep("");
   else if (sleep.at && Date.now() >= sleep.at - 1000) { sleep.pick = ""; sleep.at = 0; paintSleep(); }
   keepAwake();
@@ -2330,10 +2331,21 @@ function keepAloudPlace(index) {
 // Not for what Narrate can't read, nor while it's this clip being read.
 const narratable = (p) => !!speech.available && !isAudiobook(p) && !p.comic && !p.note && !C.files.printed(p);
 const narratingNow = (p) => aloudOn() && aloud.key === p.id;
+// A finished clip (a collection read through, read again) is narrated
+// from its start.
 async function narrateFrom(p) {
+  const again = !!p.finished;
   await openPage(p.id);
   if (state.open !== p || narratingNow(p)) return;
-  voicedSound(p) ? voicedPlay() : startAloud();
+  voicedSound(p) ? voicedPlay() : startAloud(again ? 0 : undefined);
+}
+// The speaker beside a collection's Continue (2026-11, Daniel's pick):
+// one blue button in two, like Save and its list.
+function narrateHalf(p) {
+  const b = el("button", { class: "card-narrate folder-narrate", type: "button", "data-ids": p.id, "aria-label": t("Narrate"), title: t("Narrate"), hidden: narratingNow(p) ? "" : null,
+    onclick: () => narrateFrom(p) });
+  b.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+  return b;
 }
 
 // The ring round Pause while the engine makes the piece (Daniel's ask);

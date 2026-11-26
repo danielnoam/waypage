@@ -3408,6 +3408,46 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("a collection's Continue has Narrate beside it, from the start once all is read (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (i) => ({ id: "s" + i, url: "https://example.com/s" + i, title: "Part " + i, site: "example.com", savedAt: 1000 + i, minutes: 3, mode: "links", at: 0, folder: "Tale", folderAt: 1000 + i });
+        const one = { ...c(1), at: 1, finished: Date.now(), readAt: Date.now() };
+        await S.writeIndex([one, c(2)]);
+        for (const i of [1, 2]) await S.writePage("s" + i, "<!doctype html><html><body><h1>Part " + i + "</h1>" + "<p>Words of part " + i + ", enough of them to fill a line of the page.</p>".repeat(40) + "</body></html>", c(i));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const sp = window.Waypage.platform.speech;
+        sp.play = (o) => { window.played = o; return Promise.resolve(); };
+        sp.stop = () => Promise.resolve();
+        const wait = (f) => new Promise((ok) => { const t = setInterval(() => { if (f()) { clearInterval(t); ok(); } }, 50); });
+        openFolder("Tale");
+        await wait(() => document.querySelector("#folderView .folder-narrate"));
+        const out = { row: !!document.querySelector("#folderView .folder-go-row .folder-go + .folder-narrate") };
+        document.querySelector("#folderView .folder-narrate").click();
+        await wait(() => window.played);
+        out.next = window.played.key;
+        sp.stop(); setAloud("stopped", -1);
+        closeReader();
+        // All read: Read again narrates the first part from its start.
+        for (const p of state.pages) Object.assign(p, { at: 1, finished: Date.now() });
+        window.played = null;
+        openFolder("Tale");
+        renderFolder();
+        await wait(() => document.querySelector("#folderView .folder-narrate[data-ids='s1']"));
+        document.querySelector("#folderView .folder-narrate").click();
+        await wait(() => window.played);
+        out.again = window.played.key + ":" + window.played.start;
+        return out;
+      });
+      assert.deepStrictEqual(got, { row: true, next: "s2", again: "s1:0" });
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("an audiobook's Keep playing when you leave the book (2026-11)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
