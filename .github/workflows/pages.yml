@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+      url: ${{ steps.deploy1.outputs.page_url || steps.deploy2.outputs.page_url || steps.deploy3.outputs.page_url }}
     steps:
       - name: Check Pages deploys from Actions
         id: source
@@ -98,6 +98,27 @@ jobs:
         with:
           path: .
 
+      # deploy-pages often finds no "github-pages" artifact right after the
+      # upload (Nov 2026: most deploys of main failed so, and the web copy
+      # and unreleased/ stayed behind). Wait and try again, twice.
       - uses: actions/deploy-pages@v4
         if: steps.at.outputs.sha
-        id: deploy
+        id: deploy1
+        continue-on-error: true
+
+      - name: Wait before trying again
+        if: steps.at.outputs.sha && steps.deploy1.outcome == 'failure'
+        run: sleep 30
+
+      - uses: actions/deploy-pages@v4
+        if: steps.at.outputs.sha && steps.deploy1.outcome == 'failure'
+        id: deploy2
+        continue-on-error: true
+
+      - name: Wait before the last try
+        if: steps.at.outputs.sha && steps.deploy2.outcome == 'failure'
+        run: sleep 90
+
+      - uses: actions/deploy-pages@v4
+        if: steps.at.outputs.sha && steps.deploy2.outcome == 'failure'
+        id: deploy3

@@ -1147,6 +1147,7 @@ area.
   deleted notes reads. Don't sync a library with Notes from such a build.
 
 - A new field on a clip that should sync goes in three lists: sync.js `SYNCED`, app-saving.js `SYNCED_KEEP`, and backup.js `cleanMeta`. Sync's merge runs every entry through `cleanMeta` first, so a field missing there is dropped on every sync even though `SYNCED` names it (Live, 2026-11).
+- `actions/deploy-pages` often finds no `github-pages` artifact straight after the upload (most deploys of main failed so on 25 Nov 2026, leaving the web copy and `unreleased/` a few merges behind). `pages.yml` tries three times with waits; a red Web app run still means the unreleased channel didn't move.
 - A merge done with the workflow's own `GITHUB_TOKEN` starts no other workflows, so `pages.yml` and the release builds never run. `auto-merge.yml` turns auto-merge on with the `AUTOMERGE_TOKEN` secret (a fine-grained token of Daniel's) for that reason.
 - The books of an audiobook folder added as a series share one `link`, the folder picked. Removing an entry lets go of its `link` only when no other entry still reads from it (`releaseLinks`).
 - A field missing from sync's `SYNCED`, backup's `cleanMeta`, `SYNCED_KEEP` and `AGAIN_KEEP` is dropped on the next sync or update. `folderSeries` and `folderIn` are in all four; a device without them strips them from clips it changes, which `healSeries` repairs while any clip of the series keeps them.
