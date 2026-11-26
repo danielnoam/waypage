@@ -1107,7 +1107,7 @@ function openFolderMenu() {
   };
   const sep = () => el("div", { class: "pop-sep", role: "separator" });
   const pop = el("div", { class: "pop-menu", id: "folderPop", role: "menu", "aria-label": t("Collection") },
-    item("add", t("Add clips"), () => openBatch("", false, state.folder)),
+    item("add", t("Add"), () => openBatch("", false, state.folder)),
     sep(),
     folderLook(state.folder) === "covers"
       ? item("chapters", t("Show as a list"), () => setFolderLook(state.folder, "list"))
@@ -2782,21 +2782,55 @@ async function pickFile(first) {
       toast(t("Couldn't read that file. Try opening it again."));
       return;
     }
-    openFile(file, null, true, got.ref);
+    await openFile(file, null, true, got.ref);
     return;
   }
-  // Kept in the page while the picker is up, so it isn't collected.
+  const f = (await browserPick({ accept: FILE_ACCEPT }))[0];
+  if (!f) return;
+  if (first) await first();
+  await openFile(f, null, true);
+}
+// The browser's own picker: the files picked, none when it's closed.
+// Kept in the page while it's up, so it isn't collected.
+function browserPick(attrs) {
   document.querySelectorAll(".file-pick").forEach((n) => n.remove());
-  const input = el("input", { type: "file", accept: FILE_ACCEPT, class: "file-pick visually-hidden", tabindex: "-1", "aria-hidden": "true" });
+  const input = el("input", { type: "file", ...attrs, class: "file-pick visually-hidden", tabindex: "-1", "aria-hidden": "true" });
   document.body.append(input);
-  input.addEventListener("change", async () => {
-    const f = input.files[0];
-    input.remove();
-    if (!f) return;
-    if (first) await first();
-    openFile(f, null, true);
+  return new Promise((done) => {
+    const end = () => { const got = [...(input.files || [])]; input.remove(); done(got); };
+    input.addEventListener("change", end);
+    input.addEventListener("cancel", end);
+    input.click();
   });
-  input.click();
+}
+
+// ---- Adding from inside a collection (2026-11) ----
+// The collection's Add offers what the library's does: a file, a
+// folder, an audiobook folder. Whatever that brings in joins it. A
+// series made of an audiobook folder goes in whole when this is a
+// collection; collections hold no collections, so anything else filed
+// on its way in comes here instead.
+async function addInto(name, adding) {
+  const start = Date.now(), had = new Set(state.pages.map((p) => p.id));
+  await adding();
+  const at = (p) => p.folderAt || p.savedAt || 0;
+  const fresh = state.pages.filter((p) => !had.has(p.id) && (p.savedAt || 0) >= start && (p.file || p.audio || !p.url))
+    .sort((a, b) => at(a) - at(b));
+  if (!fresh.length) return;
+  const home = folderName(name), series = isSeriesFolder(home), now = Date.now();
+  const hosts = new Set();
+  fresh.forEach((p, i) => {
+    if (p.folder && sameTag(p.folder, home)) return;
+    if (!series && p.folder && isSeriesFolder(p.folder) && folderPages(p.folder).every((q) => fresh.includes(q))) { hosts.add(p.folder); return; }
+    p.folder = home;
+    p.folderAt = now + i;
+    joinFav(p, home);
+  });
+  for (const f of hosts) markSeries(f, true, home);
+  await C.store.writeIndex(state.pages);
+  renderLibrary();
+  if (state.folder) renderFolder();
+  if (fresh.length === 1) toast(t("Added “{title}” to {folder}", { title: fresh[0].title, folder: home }));
 }
 
 // ---- Add a folder (2026-11) ----
@@ -2807,7 +2841,7 @@ async function pickFile(first) {
 // permission, so it copies the files.
 const canAddFolder = () => C.platform.files.canPickFolder || "webkitdirectory" in HTMLInputElement.prototype;
 async function addFolder() {
-  if (!C.platform.files.canPickFolder) { addFolderInBrowser(); return; }
+  if (!C.platform.files.canPickFolder) { await addFolderInBrowser(); return; }
   let got = null;
   try { got = await C.platform.files.pickFolder(); } catch (e) { got = null; }
   if (!got) return;
@@ -2823,22 +2857,15 @@ async function addFolder() {
   const added = await addFolderFiles(name, books.map((f) => ({ ...f, read: () => C.platform.files.blob(f.ref, f.size) })));
   if (!added) C.platform.files.release(got.ref);
 }
-function addFolderInBrowser() {
-  document.querySelectorAll(".file-pick").forEach((n) => n.remove());
-  const input = el("input", { type: "file", multiple: "", webkitdirectory: "", class: "file-pick visually-hidden", tabindex: "-1", "aria-hidden": "true" });
-  document.body.append(input);
-  input.addEventListener("change", async () => {
-    const picked = [...input.files];
-    input.remove();
-    if (!picked.length) return;
-    // "Books/Sci-fi/dune.epub": the folder picked, then the path in it.
-    const root = (picked[0].webkitRelativePath || "").split("/")[0] || t("Folder");
-    const books = picked.filter((f) => WATCH_EXTS.test(f.name));
-    if (!books.length) { toast(t("There's nothing in {root} that Waypage opens.", { root: root })); return; }
-    await addFolderFiles(root, books.map((f) => ({ name: f.name, size: f.size, ref: null,
-      path: (f.webkitRelativePath || f.name).split("/").slice(1).join("/") || f.name, read: async () => f })));
-  });
-  input.click();
+async function addFolderInBrowser() {
+  const picked = await browserPick({ multiple: "", webkitdirectory: "" });
+  if (!picked.length) return;
+  // "Books/Sci-fi/dune.epub": the folder picked, then the path in it.
+  const root = (picked[0].webkitRelativePath || "").split("/")[0] || t("Folder");
+  const books = picked.filter((f) => WATCH_EXTS.test(f.name));
+  if (!books.length) { toast(t("There's nothing in {root} that Waypage opens.", { root: root })); return; }
+  await addFolderFiles(root, books.map((f) => ({ name: f.name, size: f.size, ref: null,
+    path: (f.webkitRelativePath || f.name).split("/").slice(1).join("/") || f.name, read: async () => f })));
 }
 // One card in the library and Downloads, with Pause and Stop, as a
 // watched folder's. Resolves to how many were added.
