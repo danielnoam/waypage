@@ -2034,7 +2034,7 @@ function zipOf(files) {
       await q.evaluate(() => openFolder("Serial"));
       // Favourite and Edit sit in the bar; the ⋯ menu keeps the rest.
       await q.click("#folderMore");
-      assert.deepStrictEqual(await q.locator("#folderPop .pop-label").allTextContents(), ["Add clips", "Show as a list", "Make it a series", "Tags", "Select", "Export", "Remove"]);
+      assert.deepStrictEqual(await q.locator("#folderPop .pop-label").allTextContents(), ["Add", "Show as a list", "Make it a series", "Tags", "Select", "Export", "Remove"]);
       await q.keyboard.press("Escape");
       await q.click("#folderFav");
       await until(q, () => folderFav("Serial") && document.getElementById("folderFav").getAttribute("aria-pressed") === "true");
@@ -5158,6 +5158,64 @@ c("bk1", { at: 0.01 })]);
       fs.rmSync(dir, { recursive: true, force: true });
     });
 
+    await test("a collection's Add offers files, folders and notes like the library's, and what they bring joins it; a new audiobook series goes in it whole (2026-11-26)", async () => {
+      const q = await page(browser, 390);
+      const dir = fs.mkdtempSync(path.join(require("os").tmpdir(), "wp-into-"));
+      fs.mkdirSync(path.join(dir, "Stories"));
+      fs.writeFileSync(path.join(dir, "Stories", "one.md"), "# One\n\nThe first story.");
+      fs.writeFileSync(path.join(dir, "Stories", "two.md"), "# Two\n\nThe second story.");
+      fs.writeFileSync(path.join(dir, "three.md"), "# Three\n\nThe third story.");
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = { id: "sh1", url: "https://example.com/c", title: "Chapter", site: "example.com", savedAt: 1, minutes: 1, mode: "links", at: 0, finished: false, folder: "Shelf", folderAt: 1 };
+        await S.writeIndex([c]);
+        await S.writePage(c.id, "<!doctype html><html><body><p>x</p></body></html>", c);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => {
+        Object.defineProperty(window.Waypage.platform.files, "canLink", { get: () => false, configurable: true });
+        openFolder("Shelf");
+      });
+      await q.click("#folderMore");
+      await q.locator("#folderPop .pop-item", { hasText: /^Add$/ }).click();
+      assert.deepStrictEqual(await q.locator("#batchView .batch-file .row-label").allTextContents(), ["Add a file", "Add a folder", "New note"]);
+      assert.ok(/joins Shelf/.test(await q.locator("#batchView .batch-file .meta").textContent()));
+      let chooser = q.waitForEvent("filechooser");
+      await q.locator("#batchView .row", { hasText: "Add a folder" }).click();
+      await (await chooser).setFiles(path.join(dir, "Stories"));
+      await until(q, () => state.pages.length === 3 && !runs.size && state.pages.every((p) => p.folder === "Shelf"));
+      await until(q, () => !state.batch && state.folder === "Shelf");
+      await q.click("#folderMore");
+      await q.locator("#folderPop .pop-item", { hasText: /^Add$/ }).click();
+      chooser = q.waitForEvent("filechooser");
+      await q.locator("#batchView .row", { hasText: "Add a file" }).click();
+      await (await chooser).setFiles(path.join(dir, "three.md"));
+      await until(q, () => state.pages.length === 4 && state.pages.every((p) => p.folder === "Shelf"));
+      assert.deepStrictEqual(await q.evaluate(async () => (await C.store.readIndex()).filter((p) => p.folder === "Shelf").length), 4);
+      // A folder of book folders is a new series: it goes into Shelf whole.
+      await q.evaluate(() => {
+        const F = window.Waypage.platform.files, A = window.Waypage.platform.audio;
+        Object.defineProperty(A, "native", { get: () => true, configurable: true });
+        A.probe = async () => ({ duration: 60000 });
+        F.release = async () => {};
+        F.blob = async () => new Blob([new Uint8Array(16)]);
+        F.pickFolder = async () => ({ ref: "tree:saga", name: "saga" });
+        F.scan = async () => ({ ok: true, name: "The Saga", files: ["Book 1/01.mp3", "Book 2/01.mp3"].map((path) => ({ ref: "tree:saga/" + path, path, name: "01.mp3", size: 10 })) });
+      });
+      await q.evaluate(() => addInto("Shelf", addAudiobookFolder));
+      const saga = await q.evaluate(() => ({ series: isSeriesFolder("The Saga"), host: seriesHost("The Saga"), n: folderPages("The Saga").length, shelf: folderPages("Shelf").length }));
+      assert.deepStrictEqual(saga, { series: true, host: "Shelf", n: 2, shelf: 4 });
+      // Into a series, the books go in themselves.
+      await q.evaluate(() => { markSeries("Shelf", true, null); window.Waypage.platform.files.pickFolder = async () => ({ ref: "tree:more", name: "more" }); });
+      await q.evaluate(() => addInto("Shelf", addAudiobookFolder));
+      assert.strictEqual(await q.evaluate(() => folderPages("Shelf").length), 6);
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
     // CONTRIBUTING "Explain less": a ? only where Daniel agreed to one.
     await test("More speech engines (Kokoro): Download starts the one pressed, and is pressable when nothing else is downloading", async () => {
       const q = await page(browser, 390);
@@ -6710,7 +6768,7 @@ c("bk1", { at: 0.01 })]);
       await until(q, () => !!document.querySelector('.tile[data-name="Serial"]'));
       await q.evaluate(() => openFolder("Serial"));
       await q.click("#folderMore");
-      await q.locator("#folderPop .pop-item", { hasText: "Add clips" }).click();
+      await q.locator("#folderPop .pop-item", { hasText: "Add" }).click();
       await q.locator("#batchView .row", { hasText: "New note" }).click();
       await q.locator(".paper-row", { hasText: "Blank note" }).click();
       await until(q, () => !!state.open && state.open.note);

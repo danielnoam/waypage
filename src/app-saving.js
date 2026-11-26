@@ -206,17 +206,20 @@ function renderBatch(text, preset, from, siteTags) {
   // A file of your own comes in from here too (0.31.0).
   const newNoteRow = el("button", { class: "row", type: "button", onclick: () => openMenu("newNote") },
     el("span", { class: "row-label accent" }, t("New note")));
-  // Inside a collection only a new note is offered: it joins the collection.
-  const fromFile = from ? null : preset ? el("section", { class: "settings-section batch-file" }, el("h2", { class: "overline" }, t("Note")),
-    el("div", { class: "group" }, newNoteRow)) : el("section", { class: "settings-section batch-file" }, el("h2", { class: "overline" }, t("File")),
-    el("div", { class: "group" }, el("button", { class: "row", type: "button", onclick: () => pickFile(() => back()) },
+  // Inside a collection the same, and what they bring in joins it (a
+  // new note joins it by itself).
+  const into = (adding) => () => (preset ? addInto(preset, adding) : adding());
+  const fromFile = from ? null : el("section", { class: "settings-section batch-file" }, el("h2", { class: "overline" }, t("File")),
+    el("div", { class: "group" }, el("button", { class: "row", type: "button", onclick: into(() => pickFile(() => back())) },
       el("span", { class: "row-label accent" }, t("Add a file"))),
-      canAddFolder() ? el("button", { class: "row", type: "button", onclick: () => back().then(addFolder) },
+      canAddFolder() ? el("button", { class: "row", type: "button", onclick: () => back().then(into(addFolder)) },
         el("span", { class: "row-label accent" }, t("Add a folder"))) : null,
-      C.platform.files.canPickFolder ? el("button", { class: "row", type: "button", onclick: () => back().then(addAudiobookFolder) },
+      C.platform.files.canPickFolder ? el("button", { class: "row", type: "button", onclick: () => back().then(into(addAudiobookFolder)) },
         el("span", { class: "row-label accent" }, t("Add an audiobook folder"))) : null,
       newNoteRow),
-    el("p", { class: "meta" }, t("An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3, a zip of them{x}). A folder's files are each added on their own, in a collection named after their folder. It stays {ON_HERE}.", { x: C.platform.files.canPickFolder ? t(", or a folder of them") : "", ON_HERE: ON_HERE })));
+    el("p", { class: "meta" }, preset
+      ? t("An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3, a zip of them{x}). Everything added here joins {name}. It stays {ON_HERE}.", { x: C.platform.files.canPickFolder ? t(", or a folder of them") : "", name: preset, ON_HERE: ON_HERE })
+      : t("An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3, a zip of them{x}). A folder's files are each added on their own, in a collection named after their folder. It stays {ON_HERE}.", { x: C.platform.files.canPickFolder ? t(", or a folder of them") : "", ON_HERE: ON_HERE })));
   const form = el("form", { class: "batch-form" }, asPage, fromFile,
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Links")), area, count, finder, skipRow),
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Save as")),
