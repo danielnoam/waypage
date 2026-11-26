@@ -6141,10 +6141,10 @@ c("bk1", { at: 0.01 })]);
       const entry = "https://kill-the-newsletter.com/feeds/testbox1/entries/m1.html";
       const xml = '<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Morning</title>'
         + '<entry><id>urn:kill-the-newsletter:c1</id><link rel="alternate" type="text/html" href="https://kill-the-newsletter.com/feeds/testbox1/entries/c1.html"/>'
-        + '<published>2026-10-27T08:00:00.000Z</published><author><name>x</name><email>bounce-mc.us5_1@mail1.mcsv.net</email></author><title>Please confirm your subscription</title>'
+        + '<published>' + new Date(Date.now() - 2 * 36e5).toISOString() + '</published><author><name>x</name><email>bounce-mc.us5_1@mail1.mcsv.net</email></author><title>Please confirm your subscription</title>'
         + '<content type="html">' + '<p><a href="https://list.example.com/unsubscribe">Unsubscribe</a> <a href="https://list.example.com/confirm?id=9">Yes, subscribe me</a></p>'.replace(/&/g, "&amp;").replace(/</g, "&lt;") + '</content></entry>'
         + '<entry><id>urn:kill-the-newsletter:m1</id><link rel="alternate" type="text/html" href="' + entry + '"/>'
-        + '<published>2026-10-27T09:00:00.000Z</published><author><name>x</name><email>crew@morningbrew.com</email></author><title>Chip wars heat up</title>'
+        + '<published>' + new Date(Date.now() - 36e5).toISOString() + '</published><author><name>x</name><email>crew@morningbrew.com</email></author><title>Chip wars heat up</title>'
         + '<content type="html">' + ('<h1>Morning Brew</h1>' + '<p>' + 'Chips are the new oil, and everyone wants a refinery. '.repeat(30) + '</p><hr/><p><small><a href="https://kill-the-newsletter.com/feeds/testbox1">Kill the Newsletter! feed settings</a></small></p>').replace(/&/g, "&amp;").replace(/</g, "&lt;") + '</content></entry></feed>';
       const got = await q.evaluate(async ([xml, feed]) => {
         const parsed = C.feeds.parseFeed(xml, feed);
