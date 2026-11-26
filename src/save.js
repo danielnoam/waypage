@@ -819,6 +819,14 @@
     return by;
   }
 
+  // The pages filling gaps reads, every group's list from page `start` down
+  // to chapter `low`: chapters / (chapters a page on the first page), with
+  // half again for the older chapters more groups posted (The Gamer: one
+  // upload a chapter on its first page, two in the middle; 37 pages
+  // expected, 34 read). The same guess before the main list is read and
+  // after, so the bar doesn't wait between them.
+  const gapPages = (latest, low, per, start) => Math.max(2, Math.ceil((latest - low) / Math.max(1, per) * 1.5) - start + 1);
+
   async function comixList(doc, url, ignored, opts = {}) {
     if (!C.platform.canRender) return [];
     const u = new URL(url);
@@ -930,7 +938,7 @@
       // pages, and filling gaps may read most of it (The Gamer: 31 of 34):
       // kept whole, so the bar never waits on it; a title with no gaps jumps.
       const perPage = top ? Math.max(1, new Set(top.rows.map((r) => r.n)).size) : 20;
-      plan.gaps = { est: Math.ceil((detail.latestChapter || 20) / perPage), done: 0 };
+      plan.gaps = { est: gapPages(detail.latestChapter || 20, 1, perPage, 1), done: 0 };
       const newest = top && top.rows.find((r) => r.group !== "0");
       const off = groups.find((g) => /^official$/i.test(g.name)) || groups.find((g) => official.has(String(g.id)));
       const sized = [];
@@ -987,11 +995,8 @@
         const top = Math.max(...gaps);
         const start = Math.max(1, Math.floor((latest - top) / per) - 1);
         // It stops once past the lowest missing number (`below`), 150 pages
-        // at most. The bar expects the pages from `start` down to that number
-        // with twice the first page's uploads a chapter (older chapters have
-        // more groups: The Gamer's first page has one each, its middle two).
-        // Too many only makes the bar jump at the end; too few would stall it.
-        plan.gaps = { est: Math.max(2, Math.ceil((latest - Math.min(...gaps)) / per * 2) - start + 1), done: 0, from: start };
+        // at most; the bar expects `gapPages` of it.
+        plan.gaps = { est: gapPages(latest, Math.min(...gaps), per, start), done: 0, from: start };
         const all = await comixWalk(u.origin, titlePath, null, start, { above: top, below: Math.min(...gaps), pages: 150 }, until, stepFor(nameOf(null), "gaps"), opts.signal);
         ended("gaps", all);
         if (all) { count(all.rows); fill(all.rows); }
