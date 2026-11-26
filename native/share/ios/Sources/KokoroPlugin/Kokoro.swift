@@ -644,11 +644,22 @@ final class KokoroEngine {
         init(_ chunk: @escaping ([Float]) -> Bool) { self.chunk = chunk }
     }
 
+    // Quote marks aren't said, but the model cuts a sentence after its full
+    // stop, so a closing quote came out as a short mumble of its own. A "
+    // between two letters stays (Hebrew acronyms). As Kokoro.java's QUOTES.
+    private static let quotes = try? NSRegularExpression(pattern:
+        "[\\u201C\\u201D\\u201E\\u201F\\u00AB\\u00BB\\u2018]|(?<!\\p{L})\"|\"(?!\\p{L})|(?<=[.!?\\u2026,;:])['\\u2019]+(?=\\s|$)")
+    static func unquoted(_ text: String) -> String {
+        guard let q = quotes else { return text }
+        return q.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "")
+    }
+
     /// Speaks `text` sentence by sentence into `chunk` (false stops it).
     /// `lang`: espeak-ng's voice for a multi-language model's words.
     @discardableResult
-    func generate(_ text: String, sid: Int, speed: Float, lang: String, chunk: @escaping ([Float]) -> Bool) -> Bool {
+    func generate(_ said: String, sid: Int, speed: Float, lang: String, chunk: @escaping ([Float]) -> Bool) -> Bool {
         #if canImport(SherpaOnnxC)
+        let text = Self.unquoted(said)
         // Narrate and Save the narration take turns, a piece at a time.
         Self.speaking.lock()
         defer { Self.speaking.unlock() }

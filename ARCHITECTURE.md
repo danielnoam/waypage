@@ -1248,6 +1248,13 @@ area.
   engine the next piece only when one ends, so Kokoro paused between
   paragraphs. `SpeechService.makeAhead` asks `Kokoro.take` for the next
   piece, made on its own thread.
+- **Narrate's skips while a piece is being made:** each press moved on
+  again, so they piled up and fired once the sound came. Previous/next
+  are dropped while the piece hasn't sounded (`SpeechService.busy`,
+  `moveAloud`), and the stuck-piece guard counts from its first sound.
+- **sherpa-onnx speaks a lone closing quote:** it cuts sentences after
+  the full stop, so `"Stop."` left a `"` that came out as a mumble.
+  `Kokoro.unquoted` (and its Swift twin) takes quote marks out first.
 - **`el()` attributes:** `disabled: false` still disables a button (it's
   set as an attribute); pass `null`.
 - **`replaceChildren`/`append` write a `null` out as the text "null":**

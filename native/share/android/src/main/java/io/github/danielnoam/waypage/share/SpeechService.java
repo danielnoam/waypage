@@ -136,6 +136,10 @@ public class SpeechService extends Service {
         return s != null && "playing".equals(s.state) && s.getPackageName().equals(s.engine);
     }
 
+    static boolean thinkingNow() { return running != null && running.busy(); }
+    // An engine that never says it has sound doesn't hold the buttons for good.
+    private boolean busy() { return thinking && "playing".equals(state) && System.currentTimeMillis() - thinkingFrom < 20000; }
+
     static String stateOf() { return running == null ? "stopped" : running.state; }
     static int indexOf() { return running == null ? -1 : running.index; }
     static String keyOf() { return running == null || running.job == null ? "" : running.job.key; }
@@ -270,6 +274,7 @@ public class SpeechService extends Service {
         generation++;
         voiced.clear();
         thinking = true;
+        thinkingFrom = System.currentTimeMillis();
         applyVoice();
         tts.setSpeechRate(job.rate);
         String id = generation + ":" + index;
@@ -285,9 +290,29 @@ public class SpeechService extends Service {
 
     // Some engines say nothing back for a piece they can't voice, which
     // left the reading stuck there: after well over its length, go on.
+    // Counted from the piece's first sound once it has one, so a piece
+    // that took a while to make (Piper or Kokoro after a skip) isn't cut
+    // off partway through; Waypage's own engine gets two minutes to make it.
+    private String guardId = "";
+    private int guardLength;
+    private long guardFrom;
+    private final Runnable guardRun = () -> {
+        if (job == null || !guardId.equals(generation + ":" + index) || !"playing".equals(state)) return;
+        if (!voiced.contains(guardId) && getPackageName().equals(engine) && System.currentTimeMillis() - guardFrom < 120000) {
+            main.postDelayed(this.guardRun, 5000);
+            return;
+        }
+        said(guardId);
+    };
     private void guard(String id, String text) {
-        long most = 8000 + (long) (text.length() * 160 / Math.max(0.5f, job.rate));
-        main.postDelayed(() -> said(id), most);
+        guardId = id;
+        guardLength = text.length();
+        guardFrom = System.currentTimeMillis();
+        armGuard();
+    }
+    private void armGuard() {
+        main.removeCallbacks(guardRun);
+        main.postDelayed(guardRun, 8000 + (long) (guardLength * 160 / Math.max(0.5f, job == null ? 1f : job.rate)));
     }
 
     // Waypage's own engine (Kokoro and Piper voices) makes a piece as soon as it's asked for
@@ -350,10 +375,12 @@ public class SpeechService extends Service {
     // still making it). Told to the app on its own, without the
     // notification report() redraws.
     private boolean thinking;
+    private long thinkingFrom;
     private volatile String lastVoiced = "";
     private final java.util.Set<String> voiced = new java.util.HashSet<>();
     private void voicedNow(String id) {
         voiced.add(id);
+        if (id.equals(guardId)) armGuard();
         if (thinking && job != null && id.equals(generation + ":" + index)) {
             thinking = false;
             if (listener != null) listener.onProgress(job.key, index, state, false);
@@ -393,6 +420,7 @@ public class SpeechService extends Service {
         index++;
         if (ahead == index) {
             thinking = !voiced.contains(generation + ":" + index);
+            thinkingFrom = System.currentTimeMillis();
             guard(generation + ":" + index, job.items[index]);
             report();
             queueAhead();
@@ -459,8 +487,11 @@ public class SpeechService extends Service {
     // Previous and next from anywhere (the notification, a car, earbuds,
     // the small window): a paragraph at a time, to its first piece, as the
     // app's own buttons go (1.26.0).
+    // A press while the piece it went to is still being made is dropped,
+    // not counted: each one moved on again, so once the sound came it
+    // was several paragraphs further than wanted (Daniel 2026-11-26).
     private void step(int d) {
-        if (job == null) return;
+        if (job == null || busy()) return;
         if (job.blocks == null) { move(index + d); return; }
         int want = job.blocks[index] + d;
         for (int i = 0; i < job.blocks.length; i++) if (job.blocks[i] == want) { move(i); return; }
