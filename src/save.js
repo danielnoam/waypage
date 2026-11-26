@@ -654,8 +654,8 @@
     var save = function () { try { sessionStorage.setItem(K, JSON.stringify(S)); } catch (e) { /* kept in the page only */ } };
     var out = function (done, wait) {
       save();
-      window.__wpOut = JSON.stringify({ rows: S.rows, last: S.last, missed: S.missed, done: done, at: S.at, tok: S.tok });
-      return JSON.stringify({ done: done, n: S.rows.length, at: S.at, last: S.last, wait: Math.ceil((wait || 0) / 1000), refused: S.hold > 0 });
+      window.__wpOut = JSON.stringify({ rows: S.rows, last: S.last, missed: S.missed, done: done, at: S.at, tok: S.tok, count: S.count });
+      return JSON.stringify({ done: done, n: S.rows.length, at: S.at, last: S.last, count: S.count, final: !!S.final, wait: Math.ceil((wait || 0) / 1000), refused: S.hold > 0 });
     };
     var rows = document.querySelectorAll(".mchap-row");
     var act = document.querySelector(".npager__num.is-active");
@@ -716,6 +716,10 @@
     }
     var nums = [].map.call(document.querySelectorAll(".npager__num"), function (x) { return parseInt(x.textContent, 10) || 0; });
     S.last = Math.max.apply(null, [S.last, cur].concat(nums));
+    // The pager shows eight numbers around the page on show: fewer than four
+    // after it, and its last is the list's last (`final`), not just the
+    // furthest seen so far.
+    if (S.last - cur < 4) S.final = true;
     if (!S.read[cur]) {
       S.read[cur] = 1;
       S.at = Math.max(S.at, cur);
@@ -734,7 +738,9 @@
         S.rows.push([h, gm ? gm[1] : "0", lab ? lab.textContent.replace(/\s+/g, " ").trim() : ""]);
       });
       S.count++;
-      if (o.above != null && high < o.above && cur > 1 && S.back < 40) { S.back++; return go(cur - 1); }
+      // Backing up only until a page reaches `above`: from there it goes on down.
+      if (o.above != null && high >= o.above) S.reached = true;
+      if (o.above != null && !S.reached && high < o.above && cur > 1 && S.back < 40) { S.back++; return go(cur - 1); }
       if (o.below != null && low < o.below) return out(true);
       if (o.pages && S.count >= o.pages) return out(true);
     }
@@ -755,8 +761,10 @@
   const COMIX_BUDGET = 45 * 60000;
   async function comixWalk(origin, titlePath, group, start, o, until, onStep, signal) {
     const rows = [], missed = new Set();
-    let last = 1, from = Math.max(1, start || 1);
+    let last = 1, from = Math.max(1, start || 1), pages = 0;
     until = until || Date.now() + COMIX_BUDGET;
+    // Pages read, over every render of this walk (it may be carried on).
+    const told = onStep ? (e) => onStep({ ...e, count: pages + (e.count || 0) }) : null;
     // A walk that stopped short is carried on from the page after the last read.
     for (let tries = 0; tries < 12 && until - Date.now() > 15000 && !(signal && signal.stopped); tries++) {
       const a = new URL(origin + titlePath);
@@ -766,13 +774,14 @@
       const d = await C.platform.render(a.href, {
         collect: "(" + COMIX_WALK.toString() + ")(" + JSON.stringify(opts) + ")",
         maxMs: Math.min(300000, until - Date.now()), retryMs: 5000,
-        onProgress: onStep,
+        onProgress: told,
         onId: signal ? (id) => { signal.current = id; } : null,
       });
       let got = null;
       try { got = d && d.collected ? JSON.parse(d.collected) : null; } catch (e) { got = null; }
       if (!got || !Array.isArray(got.rows)) break;
       if (typeof got.tok === "number") { comixAllowance.n = got.tok; comixAllowance.at = Date.now(); }
+      pages += got.count || 0;
       rows.push(...got.rows);
       for (const n of got.missed || []) missed.add(n);
       last = Math.max(last, got.last || 1);
@@ -782,14 +791,14 @@
     // A page the site kept turning away is read again, on its own.
     for (const n of [...missed].slice(0, 20)) {
       if ((o && o.again === false) || until - Date.now() < 15000 || (signal && signal.stopped)) break;
-      const one = await comixWalk(origin, titlePath, group, n, { pages: 1, again: false }, until, onStep, signal);
-      if (one) { rows.push(...one.raw); missed.delete(n); }
+      const one = await comixWalk(origin, titlePath, group, n, { pages: 1, again: false }, until, null, signal);
+      if (one) { rows.push(...one.raw); missed.delete(n); pages += one.pages; }
     }
     if (!rows.length) return null;
     const seen = new Set();
     const raw = rows.filter(([h]) => !seen.has(h) && seen.add(h));
     return {
-      raw, last, missed: [...missed],
+      raw, last, pages, missed: [...missed],
       rows: raw.map(([h, g, label]) => ({
         url: absolute(h, origin),
         // From the address: the link's words go on with the chapter's title.
@@ -827,22 +836,63 @@
     const detail = data[JSON.stringify(["manga", "detail", hid])] || {};
     const official = new Set(groups.filter((g) => g.id !== 0 && COMIX_OFFICIAL.test(g.name)).map((g) => String(g.id)));
     const until = Date.now() + COMIX_BUDGET;
-    // How the read stands, for a progress bar: `say` a stage in words, and
-    // `stepFor` a walk's own steps (page 12 of 23, a page turned away) as a
-    // share between `from` and `to` of the whole.
-    const say = (text, share) => { if (opts.onProgress) opts.onProgress({ text, share }); };
+    // How the read stands, for a progress bar: the share is the page turns
+    // done over the page turns the read is expected to take. `plan` holds a
+    // step each, estimated before it is walked (a group's list: the newest
+    // chapter / 20 pages) and corrected once the walk sees its real end or
+    // ends; the share never goes back, and only "Found" makes it whole.
+    const perList = Math.max(1, Math.ceil((detail.latestChapter || 20) / 20));
+    const plan = { title: { est: 1, done: 1, final: true } };
+    let shown = 0;
+    // Each step weighs its estimate; how far it is goes with the pages read,
+    // straight up to four fifths of the estimate, then easing towards the
+    // whole without reaching it while its end is out of sight: a list longer
+    // than guessed slows the bar instead of stopping it near full.
+    const along = (x) => {
+      if (x.final) return Math.min(1, x.done / Math.max(1, x.est));
+      const k = x.done / Math.max(1, x.est);
+      return k <= 0.8 ? k : 0.8 + 0.2 * (1 - Math.exp(-(k - 0.8) / 0.3));
+    };
+    const shareNow = () => {
+      let d = 0, e = 0;
+      for (const x of Object.values(plan)) { const w = Math.max(1, x.est); d += w * along(x); e += w; }
+      return Math.min(0.99, d / Math.max(1, e));
+    };
+    const say = (text, whole) => {
+      if (!opts.onProgress) return;
+      shown = whole ? 1 : Math.max(shown, shareNow());
+      opts.onProgress({ text, share: shown });
+    };
     const nameOf = (g) => ((groups.find((x) => String(x.id) === String(g)) || {}).name) || t("every group");
-    const stepFor = (name, from, to) => !opts.onProgress ? null : (e) => {
-      const share = from + (to - from) * Math.min(1, (e.at || 0) / Math.max(1, e.last || 1));
+    const stepFor = (name, key) => !opts.onProgress ? null : (e) => {
+      const x = plan[key] || (plan[key] = { est: perList, done: 0 });
+      x.done = e.count || 0;
+      // Its real end in sight: the estimate becomes the list's length.
+      if (e.final && e.last) { x.est = Math.max(x.done, e.last - (x.from || 1) + 1); x.final = true; }
+      const pages = Math.max(x.est + (x.from || 1) - 1, e.at || 0);
       say(e.refused
         ? t("The site asked to slow down. Trying page {page} again in {s} s", { page: (e.at || 0) + 1, s: e.wait })
-        : t("Reading {name}: page {at} of {last}, {n} chapters", { name, at: Math.max(1, e.at || 0), last: Math.max(1, e.last || 0), n: e.n }), share);
+        : e.final
+          ? t("Reading {name}: page {at} of {pages}, {n} chapters", { name, at: Math.max(1, e.at || 0), pages: e.last, n: e.n })
+          : t("Reading {name}: page {at} of about {pages}, {n} chapters", { name, at: Math.max(1, e.at || 0), pages, n: e.n }));
     };
-    say(t("Reading the title page"), 0.02);
+    // A walk that ended: what it read is what that step was.
+    const ended = (key, w) => { if (plan[key]) { plan[key].done = w ? w.pages : plan[key].done; plan[key].est = plan[key].done; plan[key].final = true; } };
+    // The whole read, estimated before any of it: the groups' first page,
+    // two lists to compare (or the address's group's), and filling gaps.
+    const named = new URL(url).searchParams.get("group_id");
+    if (named == null) Object.assign(plan, { first: { est: 1, done: 0 }, picks: { est: 2 * perList, done: 0 } });
+    else plan["g" + named] = { est: perList, done: 0 };
+    plan.gaps = { est: perList, done: 0 };
+    say(t("Reading the title page"));
     const walks = new Map();
     const walk = async (group) => {
       const k = group == null ? "" : String(group);
-      if (!walks.has(k)) walks.set(k, await comixWalk(u.origin, titlePath, group, 1, {}, until, stepFor(nameOf(group), 0.15, 0.85), opts.signal));
+      if (!walks.has(k)) {
+        plan["g" + k] = plan["g" + k] || { est: perList, done: 0 };
+        walks.set(k, await comixWalk(u.origin, titlePath, group, 1, {}, until, stepFor(nameOf(group), "g" + k), opts.signal));
+        ended("g" + k, walks.get(k));
+      }
       return walks.get(k);
     };
 
@@ -857,7 +907,10 @@
     const known = (opts.known || []).filter((l) => Number.isFinite(nOf(l)));
     if (group != null && known.length) {
       const top = Math.max(...known.map(nOf));
-      const w = await comixWalk(u.origin, titlePath, group, 1, { below: top - 0.001 }, until, stepFor(nameOf(group), 0.05, 0.95), opts.signal);
+      // The pages down to the newest chapter known: the whole of this read.
+      for (const k of Object.keys(plan)) if (k !== "title") delete plan[k];
+      plan.known = { est: Math.max(1, Math.ceil(((detail.latestChapter || top) - top) / 20) + 1), done: 0 };
+      const w = await comixWalk(u.origin, titlePath, group, 1, { below: top - 0.001 }, until, stepFor(nameOf(group), "known"), opts.signal);
       const byN = new Map(known.map((l) => [nOf(l), l]));
       // Chapters the group has newer than the newest known (a decimal one
       // between known ones is found too: the page that has it is read).
@@ -865,16 +918,27 @@
       const links = [...byN.entries()].sort((x, y) => x[0] - y[0]).map(([, l]) => l);
       return { links, title: detail.title || "", page: u.origin + titlePath + "?group_id=" + group };
     }
-    if (group != null) main = await walk(group);
-    else {
+    if (group != null) {
+      main = await walk(group);
+    } else {
       // The first page of every group's list: who posted the newest.
-      say(t("Comparing the scan groups"), 0.06);
+      say(t("Comparing the scan groups"));
       const top = await comixWalk(u.origin, titlePath, null, 1, { pages: 1 }, until, null, opts.signal);
       walks.set("*", top);
+      Object.assign(plan.first, { done: 1, final: true });
+      // Every group's list is about the newest chapter / (chapters a page)
+      // pages, and filling gaps may read most of it (The Gamer: 31 of 34):
+      // kept whole, so the bar never waits on it; a title with no gaps jumps.
+      const perPage = top ? Math.max(1, new Set(top.rows.map((r) => r.n)).size) : 20;
+      plan.gaps = { est: Math.ceil((detail.latestChapter || 20) / perPage), done: 0 };
       const newest = top && top.rows.find((r) => r.group !== "0");
       const off = groups.find((g) => /^official$/i.test(g.name)) || groups.find((g) => official.has(String(g.id)));
       const sized = [];
-      for (const g of [...new Set([off && String(off.id), newest && newest.group].filter(Boolean))]) {
+      const picks = [...new Set([off && String(off.id), newest && newest.group].filter(Boolean))];
+      // Both lists to read are in the plan before the first is walked.
+      delete plan.picks;
+      for (const g of picks) plan["g" + g] = { est: perList, done: 0 };
+      for (const g of picks) {
         const w = await walk(g);
         if (w) sized.push({ g, w, n: comixChapters(w.rows, g).size });
       }
@@ -912,8 +976,9 @@
     for (const [k, w] of walks) if (k !== String(group) && k !== "*" && w) fill(w.rows);
     if (walks.get("*")) fill(walks.get("*").rows);
     const gaps = want();
+    if (!gaps.length || until - Date.now() <= 30000) delete plan.gaps;
     if (gaps.length && until - Date.now() > 30000) {
-      say(tn(gaps.length, "Filling in {n} missing chapter from other groups", "Filling in {n} missing chapters from other groups", { n: gaps.length }), 0.88);
+      say(tn(gaps.length, "Filling in {n} missing chapter from other groups", "Filling in {n} missing chapters from other groups", { n: gaps.length }));
       // Every group's list, newest first: a number's page is guessed from
       // how many uploads a chapter has on the first page, then walked down.
       const first = walks.get("*") || await comixWalk(u.origin, titlePath, null, 1, { pages: 1 }, until, null, opts.signal);
@@ -921,14 +986,19 @@
         const per = Math.max(1, new Set(first.rows.map((r) => r.n)).size);
         const top = Math.max(...gaps);
         const start = Math.max(1, Math.floor((latest - top) / per) - 1);
-        // Read no further than the pages those numbers can be on (150 at most).
-        const pages = Math.min(150, Math.ceil((top - Math.min(...gaps)) / per) + 6);
-        const all = await comixWalk(u.origin, titlePath, null, start, { above: top, below: Math.min(...gaps), pages }, until, stepFor(nameOf(null), 0.88, 0.98), opts.signal);
+        // It stops once past the lowest missing number (`below`), 150 pages
+        // at most. The bar expects the pages from `start` down to that number
+        // with twice the first page's uploads a chapter (older chapters have
+        // more groups: The Gamer's first page has one each, its middle two).
+        // Too many only makes the bar jump at the end; too few would stall it.
+        plan.gaps = { est: Math.max(2, Math.ceil((latest - Math.min(...gaps)) / per * 2) - start + 1), done: 0, from: start };
+        const all = await comixWalk(u.origin, titlePath, null, start, { above: top, below: Math.min(...gaps), pages: 150 }, until, stepFor(nameOf(null), "gaps"), opts.signal);
+        ended("gaps", all);
         if (all) { count(all.rows); fill(all.rows); }
       }
     }
     const links = [...chapters.entries()].sort((x, y) => x[0] - y[0]).map(([, r]) => r.url);
-    say(tn(links.length, "Found {n} chapter", "Found {n} chapters", { n: links.length }), 1);
+    say(tn(links.length, "Found {n} chapter", "Found {n} chapters", { n: links.length }), true);
     return { links: uniqueLinks(links), title: detail.title || "", page: u.origin + titlePath + (group != null ? "?group_id=" + group : "") };
   }
 

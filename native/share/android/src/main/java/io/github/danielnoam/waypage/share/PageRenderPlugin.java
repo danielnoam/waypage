@@ -43,7 +43,8 @@ import org.json.JSONObject;
  *     left in window.__wpOut. The script is save.js's own, never page text.
  *
  * With `id`, `collect` also tells the app how it stands, as a "progress" event
- * { id, n, at, last, wait, refused } whenever it changes, for a progress bar.
+ * { id, n, at, last, count, final, wait, refused } whenever it changes, for a
+ * progress bar.
  *
  * With `maxMs`, the time runs from the last progress (more text, slots
  * filled, rows collected) rather than from the start, up to maxMs. With
@@ -334,6 +335,8 @@ public class PageRenderPlugin extends Plugin {
                         ev.put("n", n);
                         ev.put("at", o.optInt("at", 0));
                         ev.put("last", o.optInt("last", 0));
+                        ev.put("count", o.optInt("count", 0));
+                        ev.put("final", o.optBoolean("final", false));
                         ev.put("wait", o.optInt("wait", 0));
                         ev.put("refused", o.optBoolean("refused", false));
                         notifyListeners("progress", ev);

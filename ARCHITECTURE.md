@@ -261,7 +261,18 @@ Martial Peak's 194 pages about 20), so it is a run in Downloads
 Official: page 12 of 23, 240 chapters", "The site asked to slow down. Trying
 page 13 again in 5 s"; `findChapters` takes `onProgress({ text, share })`,
 which comixList builds from the walker's own reply, forwarded by PageRender
-as `progress` events), Stop (PageRender `cancel(id)` takes what has been
+as `progress` events; the share is the page turns read over the page turns
+the read is expected to take, a `plan` of steps estimated before any of it
+is walked: a group's list as the newest chapter / 20 pages, filling gaps as
+the pages from where it starts down to the lowest missing number at twice
+the first page's uploads a chapter. A step's estimate becomes its real
+length once its end is in sight (the pager shows eight numbers around the
+page on show, so its last is the list's last only when fewer than four
+follow: until then the status says "of about"), and a step read past its
+estimate eases towards its share instead of filling it, so the bar slows
+rather than sitting near full; it never goes back, and only "Found" fills
+it. Trap: the site's pager is no total: "page 6 of 9" was page 6 of 23,
+which had the bar at 62% after a seventh of The Gamer's read), Stop (PageRender `cancel(id)` takes what has been
 read), and Android's notification (DownloadService, dataSync) says the same
 and keeps the app running while it is put away. The hidden WebView is
 driven by native posts, not page timers, so the walk goes on. With the

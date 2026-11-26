@@ -567,7 +567,7 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       let found = null, error = null;
       const progress = [];
       try { found = await Waypage.save.findChapters(url, false, { ...find, onProgress: find.progress ? (e) => progress.push(e) : undefined }); } catch (e) { error = e.message; }
-      return { found, error, err: error, progress, clicks: window.__wpClicks, loads: window.__wpLoads || [], drawn: drawn.map((d) => ({ u: d.u, collect: !!d.opts.collect, maxMs: d.opts.maxMs, retryMs: d.opts.retryMs })) };
+      return { found, error, err: error, progress, clicks: window.__wpClicks, loads: window.__wpLoads || [], drawn: drawn.map((d) => ({ u: d.u, walk: d.opts.collect ? d.opts.collect.slice(d.opts.collect.lastIndexOf(")(") + 2, -1) : "", collect: !!d.opts.collect, maxMs: d.opts.maxMs, retryMs: d.opts.retryMs })) };
     }, { url, canRender, book, refuse, find });
     const range = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
     const chapters = (g, nums) => nums.map((n) => "https://comix.to/title/1w0v-the-perks/" + g + String(n).replace(".", "") + "-chapter-" + n);
@@ -634,11 +634,40 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       const { got } = await comix("https://comix.to/title/1w0v-the-perks?group_id=307", { book: BOOK, find: { progress: true } });
       const texts = got.progress.map((e) => e.text);
       assert.strictEqual(texts[0], "Reading the title page");
-      assert.ok(texts.some((x) => /^Reading Violet Scans: page \d+ of \d+, \d+ chapters$/.test(x)), texts.join(" | "));
+      assert.ok(texts.some((x) => /^Reading Violet Scans: page \d+ of \d+, \d+ chapters$/.test(x)), "of its real length once its end is in sight: " + texts.join(" | "));
       assert.strictEqual(texts[texts.length - 1], "Found 30 chapters");
       const shares = got.progress.map((e) => e.share);
       assert.strictEqual(shares[shares.length - 1], 1);
       assert.ok(shares.every((x, i) => i === 0 || x >= shares[i - 1] - 1e-9), "never back: " + shares.join(","));
+    });
+
+    await test("comix.to: the bar follows the pages read, also through a long gap fill, never back, never full before the end", async () => {
+      const many = range(1, 30);
+      const book = {
+        9897: ["Official", [7, 12]],
+        307: ["Violet Scans", many.filter((n) => n < 5 || n > 16)],
+        10728: ["Hades Scans", range(1, 29)],
+        5: ["Tiny Scans", range(1, 20)],
+        6: ["Small Scans", range(1, 20)],
+      };
+      const { got } = await comix("https://comix.to/title/1w0v-the-perks", { book, find: { progress: true } });
+      const p = got.progress;
+      const at = (re) => p.findIndex((e) => re.test(e.text));
+      const filling = at(/^Filling in/);
+      assert.ok(filling > 0, p.map((e) => e.text).join(" | "));
+      assert.ok(p[filling].share < 0.75, "the gap fill is still ahead when it starts: " + p[filling].share);
+      const during = new Set(p.slice(filling, -1).map((e) => e.share));
+      assert.ok(during.size >= 3, "and the bar moves while it reads: " + [...during].join(","));
+      assert.ok(p.every((e, i) => i === 0 || e.share >= p[i - 1].share), "never back");
+      assert.ok(p[p.length - 2].share < 0.99 && p[p.length - 1].share === 1, "full only when found");
+      assert.ok(got.found.links.length === 30, "and the chapters are all there");
+    });
+
+    await test("comix.to: the status says 'of about' while the list's end is out of sight", async () => {
+      const { got } = await comix("https://comix.to/title/1w0v-the-perks?group_id=307", { book: { 307: ["Violet Scans", range(1, 60)] }, title: "comix-title.html", find: { progress: true } });
+      const texts = got.progress.map((e) => e.text);
+      assert.ok(texts.some((x) => /^Reading Violet Scans: page 1 of about \d+, 5 chapters$/.test(x)), texts.join(" | "));
+      assert.ok(texts.some((x) => x === "Reading Violet Scans: page 12 of 12, 60 chapters"), "then its real length: " + texts.join(" | "));
     });
 
     await test("comix.to: page turns draw on an allowance, so the firewall isn't hit", async () => {
