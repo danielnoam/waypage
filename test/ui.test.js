@@ -3444,7 +3444,9 @@ c("bk1", { at: 0.01 })]);
         return out;
       });
       assert.deepStrictEqual(got, { row: true, next: "s2", again: "s1:0" });
-      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      // On CI the app asks the fetch worker for the made-up example.com page; that 404 is not what this test checks.
+      const errs = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errs, [], errs.join(" | "));
       await q.context().close();
     });
 
