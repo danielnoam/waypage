@@ -1841,3 +1841,60 @@ async function unfollow(f) {
   paintFeeds();
   toast(t("Unfollowed {title}. The posts you saved stay.", { title: f.title }));
 }
+
+// ---- Going to a place (moved from app-saving.js, 2026-11) ----
+// Library, Feeds or Highlights under the same bar; only the title changes.
+function paintPlace() {
+  const feedsOn = state.place === "feeds";
+  const mailOn = state.place === "newsletters";
+  const marksOn = state.place === "highlights";
+  const readOn = state.place === "reading";
+  const findOn = state.place === "discover";
+  // An extension's place (Anki, Calibre, ...), or null.
+  const ext = C.ext.place(state.place);
+  $("placeTitle").textContent = feedsOn ? t("Feeds") : mailOn ? t("Newsletters") : marksOn ? t("Highlights") : readOn ? t("Stats") : findOn ? t("Discover") : ext ? ext.place.title() : t("Library");
+  $("libraryView").dataset.place = state.place;
+  $("library").hidden = feedsOn || mailOn || marksOn || readOn || findOn || !!ext;
+  $("feeds").hidden = !feedsOn;
+  $("newsletters").hidden = !mailOn;
+  $("highlights").hidden = !marksOn;
+  $("reading").hidden = !readOn;
+  $("discover").hidden = !findOn;
+  for (const x of C.ext.places()) $(x.id).hidden = x.id !== state.place;
+  $("paneNote").textContent = marksOn ? t("Pick a highlight to read it here") : readOn ? t("Pick a clip to read it here") : mailOn ? t("Pick an email to read it here") : t("Pick a post to read it here");
+  // The bottom field follows a feed in Feeds, makes a newsletter address
+  // in Newsletters (1.43.1), searches Royal Road or follows a site in
+  // Discover, and saves a link elsewhere.
+  $("saveUrl").placeholder = feedsOn ? t("Paste a site or feed to follow") : mailOn ? t("Name a new address") : t("Paste a link to save");
+  $("saveUrl").inputMode = mailOn ? "text" : "url";
+  $("saveUrl").autocapitalize = mailOn ? "sentences" : "off";
+  $("saveUrl").enterKeyHint = "go";
+  if (mailOn) $("saveUrl").maxLength = 32; else $("saveUrl").removeAttribute("maxlength");
+  document.querySelector('label[for="saveUrl"]').textContent = feedsOn ? t("Site or feed") : mailOn ? t("New address's name") : t("Page link");
+  $("saveForm").querySelector(".btn-primary").textContent = feedsOn ? t("Follow") : mailOn ? t("Make") : t("Save");
+  $("severalBtn").hidden = feedsOn || mailOn || findOn || !!ext;
+  $("viewBtn").hidden = !findOn && !(state.place === "library" && state.pages.length);
+  if (feedsOn || mailOn || marksOn || readOn || findOn || !!ext) { if (state.query) clearSearch(); }
+  if (feedsOn) renderFeeds();
+  else if (mailOn) renderNewsletters();
+  else if (marksOn) renderHighlights();
+  else if (readOn) renderReading();
+  else if (findOn) openDiscover();
+  else if (ext) renderExtension(ext.id);
+  else renderLibrary();
+}
+
+function goPlace(place, feed) {
+  // The pinned sidebar is there over a collection or Files too: a tap in
+  // it steps back to the library first.
+  if (pinned.matches && history.state && history.state.view) return toLibrary().then(() => goPlace(place, feed));
+  if (place !== state.place) leavePostSearch();
+  state.place = place;
+  state.feed = feed || null;
+  store(PLACE_KEY, place);
+  const done = state.side ? back() : Promise.resolve();
+  paintPlace();
+  if (pinned.matches) renderSide();
+  scrollTo(0, 0);
+  return done;
+}

@@ -60,8 +60,11 @@ src/app-reader.js   moving between screens; the reader around the page: brightne
 src/app-ink.js      Draw: the pen button, the bar of tools, Try your pen, saving a copy with drawings
 src/app-pentest.js  the pen test in Try your pen: asks for ten things in turn, records what the page and the phone report, makes a log
 src/app-library.js  tags, collections, a clip's sheet, multi-select, export, import, watched folders
-src/app-saving.js   sync screen, saving several, next links and new chapters, feeds, home-screen widgets
-src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestures, a feed's sheets
+src/app-sync.js     the shell's sync: GitHub sync and what it carries, sync history, Google Drive backups, the Sync screen
+src/app-saving.js   saving several, next links, new chapters and Website sync
+src/app-feeds.js    Feeds and Newsletters: the feeds followed, checked, drawn and saved from
+src/app-widgets.js  the home-screen widgets and the app icon's shortcuts
+src/app-places.js   the Highlights place, the sidebar, going to a place (`goPlace`, `paintPlace`), big screens, keys, gestures, a feed's sheets
 src/app-kiwix.js    Kiwix packs and books kept as files: the + sheet's downloads (where they're kept, Wi-Fi wait), a pack's articles in the reader (links, Back, Search this pack, Save this article), a book as a collection of clips
 src/app-discover.js the Discover place: Wikipedia today, the list, its search, the Sites grid (stories, books, texts), the story and sign-up sheets
 src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
@@ -312,7 +315,7 @@ strokes]]`, for Highlights to list. Highlights and drawings on a file read
 from outside go in library.json's `outside` map, keyed by the file's
 fingerprint (`files.fingerprint`: size and first and last 256 KB, SHA-256),
 merged three ways (`sync.mergeOutside`) and applied to every file here
-with that fingerprint (`app-saving.js outsideTake`). A note's `ink.json`
+with that fingerprint (`app-sync.js outsideTake`). A note's `ink.json`
 merges with GitHub's against `ink-base.json` (`sync.noteInkMerged`), what
 sync last left on both.
 
@@ -1146,7 +1149,7 @@ area.
   phone. GitHub's `notes/<id>/` is left, which is what Recover's Look for
   deleted notes reads. Don't sync a library with Notes from such a build.
 
-- A new field on a clip that should sync goes in three lists: sync.js `SYNCED`, app-saving.js `SYNCED_KEEP`, and backup.js `cleanMeta`. Sync's merge runs every entry through `cleanMeta` first, so a field missing there is dropped on every sync even though `SYNCED` names it (Live, 2026-11).
+- A new field on a clip that should sync goes in three lists: sync.js `SYNCED`, app-sync.js `SYNCED_KEEP`, and backup.js `cleanMeta`. Sync's merge runs every entry through `cleanMeta` first, so a field missing there is dropped on every sync even though `SYNCED` names it (Live, 2026-11).
 - A merge done with the workflow's own `GITHUB_TOKEN` starts no other workflows, so `pages.yml` and the release builds never run. `auto-merge.yml` turns auto-merge on with the `AUTOMERGE_TOKEN` secret (a fine-grained token of Daniel's) for that reason.
 - The books of an audiobook folder added as a series share one `link`, the folder picked. Removing an entry lets go of its `link` only when no other entry still reads from it (`releaseLinks`).
 - A field missing from sync's `SYNCED`, backup's `cleanMeta`, `SYNCED_KEEP` and `AGAIN_KEEP` is dropped on the next sync or update. `folderSeries` and `folderIn` are in all four; a device without them strips them from clips it changes, which `healSeries` repairs while any clip of the series keeps them.
