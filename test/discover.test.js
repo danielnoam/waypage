@@ -268,6 +268,8 @@ async function phone(browser) {
       await p.locator('#discover [data-key="site:rr"]').click();
       await p.locator("#discover .dz-grid .dz-book").first().waitFor();
       assert.strictEqual(await p.locator("#discover .dz-site-head h2").textContent(), "Royal Road");
+      // A site's page has the room: the Discover chips step aside until Back.
+      assert.ok(await p.locator("#discover .feed-chips").isHidden());
       assert.strictEqual(await p.locator("#discover .feed-chips .chip.on").textContent(), "Sites");
       assert.strictEqual(await p.locator("#discover .dz-row").count(), 0, "only stories under Sites");
       // Page 2 is the same fixture: nothing new, so the list says it's all.
@@ -285,6 +287,7 @@ async function phone(browser) {
       await p.evaluate((fp) => { const P = Waypage.platform, rr = P.fetchText; P.fetchText = async (url) => (/fictionpress/.test(url) ? (window.asked.push(url), { status: 200, url, text: fp }) : rr(url)); }, fixture("fp-list.html"));
       // Back goes to the tiles, then FictionPress.
       await p.evaluate(() => history.back());
+      await p.locator("#discover .feed-chips").waitFor();
       await p.locator('#discover [data-key="site:fp"]').click();
       await p.locator('#discover .dz-grid .dz-book:has-text("The Salt Road")').waitFor();
       asked = await p.evaluate(() => window.asked);

@@ -85,6 +85,9 @@ function renderDiscover() {
   const chips = dzHead.querySelector(".feed-chips");
   const scrollX = chips.scrollLeft;
   fill(chips, ...DZ_KINDS.map(([k, l]) => chip(k, l)));
+  // On one site's page the chips step aside for the site (Daniel,
+  // 2026-11): they come back with the tiles.
+  chips.hidden = dzPick === "stories" && dzSiteOpen;
   const q = dzQ();
   const nodes = [];
   const show = (k) => dzPick === "all" || dzPick === k;
