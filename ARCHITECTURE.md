@@ -1129,6 +1129,10 @@ adds a line here.
 
 Things that broke once and would again. Check here before touching the
 area.
+- Narrate's reading place with the page off screen (clip closed, phone locked)
+  comes from `aloud.places`, each block's spot taken when the reading starts
+  (`C.reader.places()`, or `readableAt` for a queued next clip). The page's
+  scroll can't keep it there: a hidden page doesn't scroll.
 - Chrome and Android's WebView ignore `touch-action` on SVG shapes. A drag that
   starts on one (a comment bubble in `ink.js`) is cancelled by the browser's
   own pan (`pointercancel`), and the item snaps back. Give the shape a real
