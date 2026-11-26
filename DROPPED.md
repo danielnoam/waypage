@@ -43,3 +43,10 @@ stops being true.
   for notes. The pen on a PDF asks to make a note from it (a copy of its
   pages), so the PDF is never marked and its own drawings aren't a second
   kind of thing to keep in step.
+- **Audiobook extras (Daniel, 21 Nov 2026).** Skip silence needs a new
+  player (Media3; Android's MediaPlayer can't). A dot on words the
+  transcript is unsure of: the engine gives no per-word certainty.
+  Hotwords: Fix this word already covers names it mishears. A
+  punctuation model: Parakeet and Whisper already punctuate. Writing
+  transcripts on a computer's graphics card in a desktop browser: the
+  phone is where people listen.

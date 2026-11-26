@@ -128,6 +128,18 @@ public class SpeechService extends Service {
         @Override public void toQueueItem(long id) {}
     };
 
+    // Narrate reading with Waypage's own engine (Kokoro, Piper), which
+    // Save the narration waits for; ownTurns counts the pieces it asked for.
+    static volatile int ownTurns;
+    static boolean ownBusy() {
+        SpeechService s = running;
+        return s != null && "playing".equals(s.state) && s.getPackageName().equals(s.engine);
+    }
+
+    static boolean thinkingNow() { return running != null && running.busy(); }
+    // An engine that never says it has sound doesn't hold the buttons for good.
+    private boolean busy() { return thinking && "playing".equals(state) && System.currentTimeMillis() - thinkingFrom < 20000; }
+
     static String stateOf() { return running == null ? "stopped" : running.state; }
     static int indexOf() { return running == null ? -1 : running.index; }
     static String keyOf() { return running == null || running.job == null ? "" : running.job.key; }
@@ -262,6 +274,7 @@ public class SpeechService extends Service {
         generation++;
         voiced.clear();
         thinking = true;
+        thinkingFrom = System.currentTimeMillis();
         applyVoice();
         tts.setSpeechRate(job.rate);
         String id = generation + ":" + index;
@@ -277,18 +290,52 @@ public class SpeechService extends Service {
 
     // Some engines say nothing back for a piece they can't voice, which
     // left the reading stuck there: after well over its length, go on.
+    // Counted from the piece's first sound once it has one, so a piece
+    // that took a while to make (Piper or Kokoro after a skip) isn't cut
+    // off partway through; Waypage's own engine gets two minutes to make it.
+    private String guardId = "";
+    private int guardLength;
+    private long guardFrom;
+    private final Runnable guardRun = () -> {
+        if (job == null || !guardId.equals(generation + ":" + index) || !"playing".equals(state)) return;
+        if (!voiced.contains(guardId) && getPackageName().equals(engine) && System.currentTimeMillis() - guardFrom < 120000) {
+            main.postDelayed(this.guardRun, 5000);
+            return;
+        }
+        said(guardId);
+    };
     private void guard(String id, String text) {
-        long most = 8000 + (long) (text.length() * 160 / Math.max(0.5f, job.rate));
-        main.postDelayed(() -> said(id), most);
+        guardId = id;
+        guardLength = text.length();
+        guardFrom = System.currentTimeMillis();
+        armGuard();
+    }
+    private void armGuard() {
+        main.removeCallbacks(guardRun);
+        main.postDelayed(guardRun, 8000 + (long) (guardLength * 160 / Math.max(0.5f, job == null ? 1f : job.rate)));
     }
 
     // Waypage's own engine (Kokoro and Piper voices) makes a piece as soon as it's asked for
     // here, not when Android hands it over (Kokoro.take).
-    private void makeAhead(int n) {
+    private void makeAhead(int n) { makeAhead(n, 0); }
+
+    // With more after it, it keeps going past n until about a minute of
+    // sound is asked for, so a long paragraph after a short one is
+    // already made when it comes (the engine makes them in order).
+    private static final int AHEAD_CHARS = 60 * 15, AHEAD_MOST = 8;
+    private void makeAhead(int n, int more) {
         if (!getPackageName().equals(engine) || !Kokoro.ready(this)) return;
+        ownTurns++;
         Locale l = job.lang != null && !job.lang.isEmpty() ? Locale.forLanguageTag(job.lang) : Locale.getDefault();
         Kokoro.Pick pick = Kokoro.pick(this, job.voice, l);
-        if (pick != null) Kokoro.take(this, job.items[n], pick, Kokoro.speedOf((int) (job.rate * 100)));
+        if (pick == null) return;
+        float speed = Kokoro.speedOf((int) (job.rate * 100));
+        Kokoro.take(this, job.items[n], pick, speed);
+        int chars = 0, budget = (int) (AHEAD_CHARS * Math.max(1f, job.rate));
+        for (int i = n + 1; i <= n + more && i < job.items.length && chars < budget; i++) {
+            Kokoro.take(this, job.items[i], pick, speed);
+            chars += job.items[i].length();
+        }
     }
 
     // The next piece goes to the engine while this one plays, so it's
@@ -298,7 +345,7 @@ public class SpeechService extends Service {
         int n = index + 1;
         ahead = -1;
         if (job == null || n >= job.items.length) return;
-        makeAhead(n);
+        makeAhead(n, AHEAD_MOST);
         if (tts.speak(job.items[n], TextToSpeech.QUEUE_ADD, params(), generation + ":" + n) == TextToSpeech.SUCCESS) ahead = n;
     }
 
@@ -328,10 +375,12 @@ public class SpeechService extends Service {
     // still making it). Told to the app on its own, without the
     // notification report() redraws.
     private boolean thinking;
+    private long thinkingFrom;
     private volatile String lastVoiced = "";
     private final java.util.Set<String> voiced = new java.util.HashSet<>();
     private void voicedNow(String id) {
         voiced.add(id);
+        if (id.equals(guardId)) armGuard();
         if (thinking && job != null && id.equals(generation + ":" + index)) {
             thinking = false;
             if (listener != null) listener.onProgress(job.key, index, state, false);
@@ -371,6 +420,7 @@ public class SpeechService extends Service {
         index++;
         if (ahead == index) {
             thinking = !voiced.contains(generation + ":" + index);
+            thinkingFrom = System.currentTimeMillis();
             guard(generation + ":" + index, job.items[index]);
             report();
             queueAhead();
@@ -393,9 +443,10 @@ public class SpeechService extends Service {
         else play();
     }
 
-    // Next or previous clip from the car (Daniel's ask): on, the clip the
-    // app queued (the collection's next) or the next under Up next; back,
-    // the one before under Up next, else this clip from its start.
+    // Next or previous clip from the car: on, the clip the app queued (the
+    // collection's next); else what comes next in the clip's collection
+    // or series (an audiobook in it too), or under Up next. Back past the
+    // first, this clip from its start.
     private void clip(int d) {
         if (job == null) return;
         Job to = null;
@@ -404,7 +455,13 @@ public class SpeechService extends Service {
             queued = null;
             queuedAfter = null;
         }
-        if (to == null) to = Car.neighbour(this, job.key, d);
+        String id = to == null ? Car.nextId(this, Car.CLIP + job.key, d) : null;
+        if (to == null) to = Car.clipFor(this, id);
+        if (to == null && id != null && id.startsWith(Car.BOOK)) {
+            if (job.car) Car.heardClip(this, job.key, index, through(), false);
+            Car.playId(id);
+            return;
+        }
         if (to == null) { if (d < 0) { move(0); if (!"playing".equals(state)) play(); } return; }
         if (job.car) Car.heardClip(this, job.key, index, through(), false);
         switchTo(to);
@@ -430,8 +487,11 @@ public class SpeechService extends Service {
     // Previous and next from anywhere (the notification, a car, earbuds,
     // the small window): a paragraph at a time, to its first piece, as the
     // app's own buttons go (1.26.0).
+    // A press while the piece it went to is still being made is dropped,
+    // not counted: each one moved on again, so once the sound came it
+    // was several paragraphs further than wanted (Daniel 2026-11-26).
     private void step(int d) {
-        if (job == null) return;
+        if (job == null || busy()) return;
         if (job.blocks == null) { move(index + d); return; }
         int want = job.blocks[index] + d;
         for (int i = 0; i < job.blocks.length; i++) if (job.blocks[i] == want) { move(i); return; }

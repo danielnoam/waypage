@@ -25,14 +25,17 @@ const marksMatch = (p, m, q) => (!marksColor || colorOf(m) === marksColor) && ta
 // Drawings (2026-11) are listed with each clip's highlights; a search
 // finds them by the clip's title, and a colour picked shows highlights alone.
 const hasDrawings = (p) => !p.note && !!((p.ink && Object.keys(p.ink).length) || (p.drawn && p.drawn.length));
+// Comment bubbles (2026-11) go through the same colour, tag and word filters as highlights.
+const hasNotes = (p) => !!((p.noted && p.noted.length) || (p.ink && Object.values(p.ink).some((l) => Array.isArray(l) && l.some((s) => s && s.t === "n"))) || (state.open === p && inkReady() && C.ink.notes().length));
 function marksShown() {
   const q = marksQuery.trim().toLowerCase();
-  return state.pages.filter((p) => (p.marks || []).length || hasDrawings(p))
+  return state.pages.filter((p) => (p.marks || []).length || hasDrawings(p) || hasNotes(p))
     .map((p) => {
       const ink = !marksColor && !marksTags.length && hasDrawings(p) && (!q || p.title.toLowerCase().includes(q)) ? inkGroups(p) : [];
-      return { p, ink, last: Math.max(p.inkAt || 0, ...(p.marks || []).map((m) => m.at || 0)), list: (p.marks || []).filter((m) => marksMatch(p, m, q)) };
+      const notes = hasNotes(p) ? inkNotes(p).filter((m) => marksMatch(p, m, q)) : [];
+      return { p, ink, notes, last: Math.max(p.inkAt || 0, ...(p.marks || []).map((m) => m.at || 0)), list: (p.marks || []).filter((m) => marksMatch(p, m, q)) };
     })
-    .filter((c) => c.list.length || c.ink.length)
+    .filter((c) => c.list.length || c.ink.length || c.notes.length)
     .sort((a, b) => b.last - a.last);
 }
 // Past five drawings, a clip's list stops with Show all (a PDF can have hundreds of pages drawn on).
@@ -78,7 +81,8 @@ function openMatchMenu() {
     }));
   const at = btn.getBoundingClientRect();
   pop.style.top = at.bottom + 4 + "px";
-  pop.style.right = Math.max(8, innerWidth - at.right) + "px";
+  if (document.dir === "rtl") pop.style.left = Math.max(8, at.left) + "px";
+  else pop.style.right = Math.max(8, innerWidth - at.right) + "px";
   $("highlights").append(pop);
   btn.setAttribute("aria-expanded", "true");
   M.popFrom(pop, at);
@@ -98,6 +102,7 @@ function renderHighlights() {
   const total = state.pages.reduce((n, p) => n + (p.marks || []).length, 0);
   const drawnIn = state.pages.filter(hasDrawings);
   const drawings = drawnIn.reduce((n, p) => n + inkTotal(p), 0);
+  const everyNote = state.pages.filter(hasNotes).flatMap((p) => inkNotes(p));
   if (!marksHead) {
     const input = el("input", { type: "search", placeholder: t("Search your highlights"), "aria-label": t("Search your highlights"),
       autocomplete: "off", spellcheck: "false", enterkeyhint: "search", dir: "auto" });
@@ -108,13 +113,13 @@ function renderHighlights() {
       el("div", { class: "hl-line" },
         el("p", { class: "meta hl-count", role: "status" }),
         el("button", { class: "btn-text hl-copy", type: "button", onclick: () => {
-          const text = marksShown().map((c) => C.backup.marksMarkdown({ ...c.p, marks: c.list })).join("\n");
+          const text = marksShown().map((c) => C.backup.marksMarkdown({ ...c.p, marks: c.list }, c.notes)).join("\n");
           copyText(text, t("Highlights copied"));
         } }, t("Copy all"))),
       el("div", { class: "hl-colors" }),
       el("div", { class: "hl-tags" }));
   }
-  const everyMark = state.pages.flatMap((p) => p.marks || []);
+  const everyMark = [...state.pages.flatMap((p) => p.marks || []), ...everyNote];
   if (marksColor && !everyMark.some((m) => colorOf(m) === marksColor)) marksColor = "";
   const chips = colorChips(everyMark, marksColor, (c) => { marksColor = c; marksUpTo = MARKS_FIRST; renderHighlights(); });
   fill(marksHead.querySelector(".hl-colors"), chips);
@@ -136,22 +141,23 @@ function renderHighlights() {
         return el("button", { class: "chip" + (on ? " on" : ""), type: "button", "aria-pressed": String(on), dir: "auto", onclick: () => pickTag(x) }, "#" + x); })),
     matchBtn) : null);
   const clips = marksShown();
-  const shown = clips.reduce((n, c) => n + c.list.length, 0);
+  const shown = clips.reduce((n, c) => n + c.list.length, 0), shownNotes = clips.reduce((n, c) => n + c.notes.length, 0);
   if (marksQuery !== marksList) { marksList = marksQuery; marksUpTo = MARKS_FIRST; }
   const more = clips.length > marksUpTo;
-  marksHead.hidden = !total && !drawings;
+  marksHead.hidden = !total && !drawings && !everyNote.length;
   const hl = (n) => tn(n, "1 highlight", "{n} highlights");
   marksHead.querySelector(".hl-count").textContent = marksQuery.trim() || marksColor || marksTags.length
-    ? t("{hl} found", { hl: hl(shown) }) + (marksTags.length && (marksTags.length > 1 || marksHow === "none") ? " · " + MATCH_WORDS[marksHow].count.replace("{n}", marksTags.length) : "")
-    : t("{what} in {clips}", { what: [total || !drawings ? hl(total) : null, drawings ? inkWord(drawings) : null].filter(Boolean).join(" · "), clips: countLine(clips.length) });
-  marksHead.querySelector(".hl-copy").hidden = !shown;
-  const nodes = clips.slice(0, marksUpTo).map(({ p, list, ink }) => {
+    ? t("{hl} found", { hl: [shown || !shownNotes ? hl(shown) : null, shownNotes ? noteWord(shownNotes) : null].filter(Boolean).join(" · ") }) + (marksTags.length && (marksTags.length > 1 || marksHow === "none") ? " · " + MATCH_WORDS[marksHow].count.replace("{n}", marksTags.length) : "")
+    : t("{what} in {clips}", { what: [total || (!drawings && !everyNote.length) ? hl(total) : null, everyNote.length ? noteWord(everyNote.length) : null, drawings ? inkWord(drawings) : null].filter(Boolean).join(" · "), clips: countLine(clips.length) });
+  marksHead.querySelector(".hl-copy").hidden = !shown && !shownNotes;
+  const nodes = clips.slice(0, marksUpTo).map(({ p, list, ink, notes }) => {
     const rows = list.map((m) => ({ at: m.page ? m.page : m.block || 0, row: el("li", { class: "mark-item" },
       el("button", { class: "row mark-row", type: "button", "aria-label": t("{slice}, in {title}", { slice: m.text.slice(0, 120), title: p.title }), onclick: () => goToMark(p, m.id) },
         el("span", { class: "mark-quote", "data-c": colorOf(m), dir: "auto" }, m.text),
         m.note ? el("span", { class: "mark-note", dir: "auto" }, m.note) : null,
         markTagsLine(m))) }));
     const all = inkOpen.has(p.id);
+    for (const nt of notes) rows.push({ at: inkOrder(nt) + 0.25, row: noteRow(p, nt, () => inkNoteGo(p, nt), () => inkNoteGo(p, nt), p.title) });
     for (const g of all ? ink : ink.slice(0, INK_FIRST)) rows.push({ at: inkOrder(g) + 0.5, row: inkRow(p, g, () => inkGoTo(p, g)) });
     rows.sort((a, b) => a.at - b.at);
     const more = !all && ink.length > INK_FIRST
@@ -164,7 +170,7 @@ function renderHighlights() {
         el("span", { class: "meta" }, siteOf(p))),
       el("ol", { class: "group marks-rows" }, ...rows.map((r) => r.row), more));
   });
-  if (!total && !drawings) {
+  if (!total && !drawings && !everyNote.length) {
     nodes.push(el("div", { class: "empty" },
       el("h2", { class: "empty-title" }, t("No highlights yet")),
       el("p", { class: "empty-text" }, t("Select words in a clip and tap Mark, or Draw. Every highlight and drawing in your library gathers here."))));
@@ -711,7 +717,6 @@ function mailList(boxes) {
   return out.sort((a, b) => postAt(b.it) - postAt(a.it));
 }
 const mailUnread = (it) => { const saved = savedAs(it.url); return !it.opened && !(saved && (saved.readAt || saved.finished)); };
-const unreadMail = () => mailList(mailBoxes()).filter((x) => mailUnread(x.it)).length;
 
 function openMail(f, it) {
   const saved = savedAs(it.url);
@@ -1023,7 +1028,7 @@ function renderSide() {
   const inMarks = state.place === "highlights";
   const latest = (f) => Math.max(0, ...f.items.map(postAt));
   const big = wide.matches;
-  const inLib = !inFeeds && !inMarks && !["reading", "newsletters", "discover", "anki", "calibre", "catalogs", "audiobookshelf", "webdav"].includes(state.place);
+  const inLib = !inFeeds && !inMarks && !["reading", "newsletters", "discover"].includes(state.place) && !C.ext.place(state.place);
   const inLibrary = inLib && !state.part && !state.folder && state.filter !== "favourites" && state.filter !== "notes";
   const favs = sideFavourites();
   const hasFolders = (load(SERIES_APART_KEY, true) ? plainFolders() : allFolders()).length > 0;
@@ -1062,16 +1067,9 @@ function renderSide() {
     item(sideSvg("discover"), t("Discover"), state.place === "discover", null, () => goPlace("discover")),
     // Every highlight in the library (1.8.0), a place of its own.
     item(sideSvg("marks"), t("Highlights"), inMarks, null, () => goPlace("highlights")),
-    // Anki, once its extension is on (Settings › Extensions): practise the decks.
-    C.ext.on("anki") ? item(sideSvg("anki"), t("Anki"), state.place === "anki", null, () => goPlace("anki")) : null,
-    // Calibre, once its extension is on: the books in your Calibre folder.
-    C.ext.on("calibre") ? item(sideSvg("calibre"), t("Calibre"), state.place === "calibre", null, () => goPlace("calibre")) : null,
-    // Audiobookshelf, once its extension is on: your server's audiobooks.
-    C.ext.on("audiobookshelf") ? item(sideSvg("abs"), t("Audiobookshelf"), state.place === "audiobookshelf", null, () => goPlace("audiobookshelf")) : null,
-    // Catalogs, once its extension is on: the book catalogs you added.
-    C.ext.on("catalogs") ? item(sideSvg("catalogs"), t("Catalogs"), state.place === "catalogs", null, () => goPlace("catalogs")) : null,
-    // WebDAV, once its extension is on: the folders on your servers.
-    C.ext.on("webdav") ? item(sideSvg("webdav"), t("WebDAV"), state.place === "webdav", null, () => goPlace("webdav")) : null,
+    // The places of the extensions that are on (Settings › Extensions),
+    // in the catalogue's order.
+    ...C.ext.places().filter((x) => C.ext.on(x.id)).map((x) => item(sideIcon(x.place.icon), x.place.title(), state.place === x.id, null, () => goPlace(x.id))),
     item(sideSvg("reading"), t("Stats"), state.place === "reading", null, () => goPlace("reading")),
     // On a big screen the sidebar carries the rest (1.5.0): the tags,
     // and Settings at its foot. Feeds are added from the Feeds place.
@@ -1105,15 +1103,11 @@ const SIDE_SVG = {
   reading: '<path d="M5 20V12M10 20V6M15 20v-9M20 20V9"/>',
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
   discover: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
-  anki: '<rect x="8" y="3" width="13" height="15" rx="2"/><path d="M4 7v12a2 2 0 0 0 2 2h11"/>',
-  abs: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><path d="M4 15h3v5H5a1 1 0 0 1-1-1zM20 15h-3v5h2a1 1 0 0 0 1-1z"/>',
-  calibre: '<path d="M4 20V5M8 20V4M12 20l3-15 4 1-3 14"/><path d="M3 20h18"/>',
-  catalogs: '<path d="M3 5h6a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H3z"/><path d="M21 5h-6a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h7z"/>',
-  webdav: '<path d="M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 8a4 4 0 0 1-.5 10z"/><path d="M12 11v6M9.5 14.5 12 17l2.5-2.5"/>',
 };
-function sideSvg(name) {
+const sideSvg = (name) => sideIcon(SIDE_SVG[name]);
+function sideIcon(paths) {
   const box = el("span", { class: "side-icon", "aria-hidden": "true" });
-  box.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + SIDE_SVG[name] + "</svg>";
+  box.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + paths + "</svg>";
   return box;
 }
 
@@ -1231,7 +1225,7 @@ function keysSheet() {
 
 const typingIn = (t) => !!(t && t.closest && t.closest("input, textarea, select, [contenteditable]"));
 // The card or collection with focus, in the list on screen.
-const listNow = () => (state.folder ? $("folderBody") : state.place === "feeds" ? $("feeds") : state.place === "newsletters" ? $("newsletters") : state.place === "highlights" ? $("highlights") : state.place === "reading" ? $("reading") : state.place === "discover" ? $("discover") : state.place === "anki" ? $("anki") : state.place === "calibre" ? $("calibre") : state.place === "audiobookshelf" ? $("audiobookshelf") : state.place === "catalogs" ? $("catalogs") : state.place === "webdav" ? $("webdav") : $("library"));
+const listNow = () => (state.folder ? $("folderBody") : state.place === "feeds" ? $("feeds") : state.place === "newsletters" ? $("newsletters") : state.place === "highlights" ? $("highlights") : state.place === "reading" ? $("reading") : state.place === "discover" ? $("discover") : C.ext.place(state.place) ? $(state.place) : $("library"));
 const focusedNode = () => { const a = document.activeElement; return a && a.closest && listNow().contains(a) ? a.closest("[data-ids]") : null; };
 const focusedPage = () => {
   const n = focusedNode();
@@ -1335,7 +1329,7 @@ function onKeys(e) {
       if (state.place === "highlights") { $("highlights").querySelector(".hl-search input").focus(); return; }
       if (state.place === "discover") { openDzSearch(); return; }
       if (postPlace() && (state.place === "feeds" ? siteFeeds() : mailBoxes()).length) { openPostSearch(); return; }
-      return (["feeds", "newsletters", "reading", "anki", "calibre", "catalogs", "audiobookshelf", "webdav"].includes(state.place) ? goPlace("library") : Promise.resolve()).then(openSearch);
+      return (["feeds", "newsletters", "reading"].includes(state.place) || C.ext.place(state.place) ? goPlace("library") : Promise.resolve()).then(openSearch);
     }),
     d: () => openDownloads(),
     ",": () => openSettings(),
@@ -1564,7 +1558,7 @@ function swipeToSide(root) {
   root.addEventListener("touchstart", (e) => {
     const t = e.touches[0];
     start = e.touches.length === 1 && (M.rtl() ? innerWidth - t.clientX : t.clientX) <= EDGE && !state.select && !state.menu && !state.side
-      && !e.target.closest(".filters, .folder-strip, input, textarea, .drag-handle") ? { x: t.clientX, y: t.clientY } : null;
+      && !e.target.closest(".filters, .folder-strip, input, textarea, .drag-handle, .dropdown-menu") ? { x: t.clientX, y: t.clientY } : null;
   }, { passive: true });
   root.addEventListener("touchmove", (e) => {
     if (!start) return;
@@ -1582,7 +1576,7 @@ function swipeToSide(root) {
 // left the chips run from the right, so a swipe to the right goes on.
 function swipeFeeds(root) {
   let go = null;
-  const chips = () => [...root.querySelectorAll(".feed-chips .chip")];
+  const chips = () => [...root.querySelectorAll(".feed-chips:not([hidden]) .chip")];
   // The chips stay put; what's under them slides (Daniel, 1.45.6).
   // Discover's search and chips sit in one box at the top; it stays too,
   // and so does the search field over Feeds and Newsletters.
@@ -1597,7 +1591,7 @@ function swipeFeeds(root) {
     const t = e.touches[0];
     go = e.touches.length === 1 && (M.rtl() ? innerWidth - t.clientX : t.clientX) > EDGE && !state.feedPick && !state.side && !state.menu && chips().length > 1
       // Discover's row of covers scrolls sideways on its own; its grid doesn't.
-      && !e.target.closest(".filters, input, textarea, .dz-covers:not(.dz-grid)") ? { x: t.clientX, y: t.clientY, on: false, dx: 0, t: e.timeStamp } : null;
+      && !e.target.closest(".filters, input, textarea, .dz-covers:not(.dz-grid), .dropdown-menu") ? { x: t.clientX, y: t.clientY, on: false, dx: 0, t: e.timeStamp } : null;
   }, { passive: true });
   root.addEventListener("touchmove", (e) => {
     if (!go) return;
@@ -1654,8 +1648,10 @@ function pullToCheck(root) {
     hint.classList.toggle("ready", h >= PULL_AT);
   };
   root.addEventListener("touchstart", (e) => {
+    // Not from inside an open drop-down: pulling its list down to its top
+    // reloaded the page behind it and shut the menu (2026-11).
     start = !feedsChecking && !dailyRunning && scrollY <= 0 && e.touches.length === 1 && !state.side && !state.menu
-      ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+      && !e.target.closest(".dropdown-menu") ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
     pulled = 0;
   }, { passive: true });
   root.addEventListener("touchmove", (e) => {
@@ -1844,4 +1840,61 @@ async function unfollow(f) {
   await back();
   paintFeeds();
   toast(t("Unfollowed {title}. The posts you saved stay.", { title: f.title }));
+}
+
+// ---- Going to a place (moved from app-saving.js, 2026-11) ----
+// Library, Feeds or Highlights under the same bar; only the title changes.
+function paintPlace() {
+  const feedsOn = state.place === "feeds";
+  const mailOn = state.place === "newsletters";
+  const marksOn = state.place === "highlights";
+  const readOn = state.place === "reading";
+  const findOn = state.place === "discover";
+  // An extension's place (Anki, Calibre, ...), or null.
+  const ext = C.ext.place(state.place);
+  $("placeTitle").textContent = feedsOn ? t("Feeds") : mailOn ? t("Newsletters") : marksOn ? t("Highlights") : readOn ? t("Stats") : findOn ? t("Discover") : ext ? ext.place.title() : t("Library");
+  $("libraryView").dataset.place = state.place;
+  $("library").hidden = feedsOn || mailOn || marksOn || readOn || findOn || !!ext;
+  $("feeds").hidden = !feedsOn;
+  $("newsletters").hidden = !mailOn;
+  $("highlights").hidden = !marksOn;
+  $("reading").hidden = !readOn;
+  $("discover").hidden = !findOn;
+  for (const x of C.ext.places()) $(x.id).hidden = x.id !== state.place;
+  $("paneNote").textContent = marksOn ? t("Pick a highlight to read it here") : readOn ? t("Pick a clip to read it here") : mailOn ? t("Pick an email to read it here") : t("Pick a post to read it here");
+  // The bottom field follows a feed in Feeds, makes a newsletter address
+  // in Newsletters (1.43.1), searches Royal Road or follows a site in
+  // Discover, and saves a link elsewhere.
+  $("saveUrl").placeholder = feedsOn ? t("Paste a site or feed to follow") : mailOn ? t("Name a new address") : t("Paste a link to save");
+  $("saveUrl").inputMode = mailOn ? "text" : "url";
+  $("saveUrl").autocapitalize = mailOn ? "sentences" : "off";
+  $("saveUrl").enterKeyHint = "go";
+  if (mailOn) $("saveUrl").maxLength = NAME_MAX; else $("saveUrl").removeAttribute("maxlength");
+  document.querySelector('label[for="saveUrl"]').textContent = feedsOn ? t("Site or feed") : mailOn ? t("New address's name") : t("Page link");
+  $("saveForm").querySelector(".btn-primary").textContent = feedsOn ? t("Follow") : mailOn ? t("Make") : t("Save");
+  $("severalBtn").hidden = feedsOn || mailOn || findOn || !!ext;
+  $("viewBtn").hidden = !findOn && !(state.place === "library" && state.pages.length);
+  if (feedsOn || mailOn || marksOn || readOn || findOn || !!ext) { if (state.query) clearSearch(); }
+  if (feedsOn) renderFeeds();
+  else if (mailOn) renderNewsletters();
+  else if (marksOn) renderHighlights();
+  else if (readOn) renderReading();
+  else if (findOn) openDiscover();
+  else if (ext) renderExtension(ext.id);
+  else renderLibrary();
+}
+
+function goPlace(place, feed) {
+  // The pinned sidebar is there over a collection or Files too: a tap in
+  // it steps back to the library first.
+  if (pinned.matches && history.state && history.state.view) return toLibrary().then(() => goPlace(place, feed));
+  if (place !== state.place) leavePostSearch();
+  state.place = place;
+  state.feed = feed || null;
+  store(PLACE_KEY, place);
+  const done = state.side ? back() : Promise.resolve();
+  paintPlace();
+  if (pinned.matches) renderSide();
+  scrollTo(0, 0);
+  return done;
 }

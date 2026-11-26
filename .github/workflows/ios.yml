@@ -65,6 +65,11 @@ jobs:
 
       - run: npm ci
 
+      # Kokoro and Piper voices' engine (sherpa-onnx), pinned and checked,
+      # before pod install reads the podspec.
+      - name: Fetch sherpa-onnx
+        run: bash tools/sherpa-ios.sh
+
       - name: Bundle the web app
         run: node tools/build-www.js
 
@@ -107,7 +112,12 @@ jobs:
           xcodebuild -workspace App.xcworkspace -scheme App -configuration Release
           -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build
           CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
-          build 2>&1 | tail -80
+          build 2>&1 | tee "$RUNNER_TEMP/xcodebuild.log" | tail -80
+
+      # The tail can miss the compiler's own words; these are them.
+      - name: Build errors
+        if: failure()
+        run: grep -E "error:|fatal error|Undefined symbol" "$RUNNER_TEMP/xcodebuild.log" | sort -u | head -60 || true
 
       # An .ipa is a zip of Payload/<name>.app, signed ad hoc (no identity,
       # just a signature) so AltStore and SideStore can re-sign it. The

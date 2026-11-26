@@ -177,6 +177,8 @@ function renderLibrary() {
   // The same for All notes once the last note is gone (2.0.0).
   if (loaded && state.filter === "notes" && !state.pages.some((p) => p.note)) { state.filter = "all"; store(FILTER_KEY, "all"); }
   renderTools();
+  // A mosaic cover whose clips changed is drawn again (2026-11).
+  if (loaded) watchMosaics();
   // Until the library is read nothing is said (1.2.0): the empty state
   // showed for the second it took, as if there were no clips.
   $("libraryMeta").textContent = n ? pagesLine(n) : loaded ? t("Nothing saved yet") : "";
@@ -219,7 +221,7 @@ function renderLibrary() {
   const flat = ts.length || (state.filter !== "all" && !status && !favs);
   const folders = flat ? [] : allFolders().filter((f) => favs ? folderFav(f) : !status
     || (state.filter === "unread" ? folderPages(f).some(unread) : folderPages(f).every((x) => x.finished)));
-  const folderSig = (f) => [f, freshCount(f), folderFav(f), isSeriesFolder(f), seriesInside(f).length, ...folderPages(f).map((x) => x.id + readingLine(x) + (x.thumb || "") + (x.cover || "") + (x.coverPick || ""))].join("|");
+  const folderSig = (f) => [f, freshCount(f), folderFav(f), isSeriesFolder(f), seriesInside(f).length, folderStatus(folderPages(f)), ...folderPages(f).map((x) => x.id + readingLine(x) + (x.thumb || "") + (x.cover || "") + (x.coverPick || "") + (x.statusPick || "") + (x.folderNoStatus ? "!" : ""))].join("|");
   if (!ts.length && state.filter === "all" && !state.part) {
     const going = !state.select && load(CONTINUE_KEY, true) && continuePage();
     if (going) {
@@ -357,10 +359,6 @@ function renderLibrary() {
   if (state.place === "newsletters") renderNewsletters();
   if (state.place === "highlights") renderHighlights();
   if (state.place === "reading") renderReading();
-  if (state.place === "anki") renderAnki();
-  if (state.place === "calibre") renderCalibre();
-  if (state.place === "audiobookshelf") renderAudiobookshelf();
-  if (state.place === "catalogs") renderCatalogs();
-  if (state.place === "webdav") renderWebdav();
+  if (C.ext.place(state.place)) renderExtension(state.place);
   if (sideShown()) renderSide();
 }

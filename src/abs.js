@@ -32,63 +32,33 @@
 (function () {
   const C = (window.Waypage = window.Waypage || {});
   const KEY = "waypage.abs";
-  const GONE = "waypage.abs.gone";
   const DEVICE = "waypage.abs.device";
   const MIMES = ["audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/x-m4b", "audio/aac", "audio/ogg", "audio/opus", "audio/flac", "audio/wav", "audio/webm"];
 
   class AbsError extends Error {}
   const read$ = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k) || "null"); return v == null ? d : v; } catch (e) { return d; } };
   const write$ = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage full: it stays as it was */ } };
-  const all$ = () => { const v = read$(KEY, []); return Array.isArray(v) ? v : []; };
-  const gone$ = () => { const v = read$(GONE, {}); return v && typeof v === "object" ? v : {}; };
-  const watchers = [];
-  const changed = (fn) => { watchers.push(fn); };
-  const tell = () => { for (const fn of watchers) { try { fn(); } catch (e) { console.error(e); } } };
 
   const trim = (u) => String(u || "").trim().replace(/\/+$/, "");
   function host(u) { try { return new URL(u).host.replace(/^www\./, ""); } catch (e) { return String(u || ""); } }
   const clean = (s) => ({ id: s.id || "a" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: String(s.title || "").trim().slice(0, 80) || host(s.url),
     url: trim(s.url), user: String(s.user || "").trim().slice(0, 200), at: Number(s.at) || Date.now(),
     token: String(s.token || ""), refresh: String(s.refresh || "") });
+  // The list itself is src/servers.js's, shared with Catalogs and WebDAV.
+  const S = C.servers({ key: KEY, clean, secrets: ["token", "refresh"] });
+  const { shared, mergeIn, changed, tell } = S;
+  const all$ = S.all;
   const out = (s) => ({ id: s.id, title: s.title, url: s.url, user: s.user, signed: !!(s.token || s.refresh) });
   const list = () => all$().map(out);
   const mine = (id) => all$().find((s) => s.id === id) || null;
-  function add(s) { const x = clean({ ...s, at: Date.now() }); write$(KEY, [...all$(), x]); tell(); return out(x); }
+  const add = (s) => out(S.add(s));
   // Tokens are the server's to change (login, refresh, signOut), never a caller's.
-  function update(s) { write$(KEY, all$().map((x) => (x.id === s.id ? clean({ ...x, title: s.title != null ? s.title : x.title, url: s.url || x.url, user: s.user != null ? s.user : x.user, at: Date.now() }) : x))); tell(); }
-  const keepTokens = (id, token, refresh) => write$(KEY, all$().map((x) => (x.id === id ? { ...x, token: token || "", refresh: refresh || "" } : x)));
+  const update = (s) => S.change(s.id, (x) => clean({ ...x, title: s.title != null ? s.title : x.title, url: s.url || x.url, user: s.user != null ? s.user : x.user, at: Date.now() }));
+  const keepTokens = (id, token, refresh) => S.write(all$().map((x) => (x.id === id ? { ...x, token: token || "", refresh: refresh || "" } : x)));
   function remove(id) {
     const s = mine(id);
     if (s && s.refresh) logout(s).catch(() => {});
-    write$(KEY, all$().filter((x) => x.id !== id));
-    write$(GONE, { ...gone$(), [id]: Date.now() });
-    tell();
-  }
-
-  // What sync sends: every server but its tokens, and those removed.
-  const shared = () => ({ v: 1, list: all$().map(({ token, refresh, ...s }) => s), gone: gone$() });
-  // Another device's list: the newer of each wins, tokens here stay here
-  // (for the same address and user), one removed anywhere goes.
-  function mergeIn(doc) {
-    if (!doc || !Array.isArray(doc.list)) return false;
-    const gone = { ...gone$() };
-    for (const [id, at] of Object.entries(doc.gone || {})) if (typeof at === "number" && !(gone[id] >= at)) gone[id] = at;
-    const here = new Map(all$().map((s) => [s.id, s]));
-    for (const r of doc.list) {
-      if (!r || !r.id || !/^https?:\/\//i.test(r.url || "")) continue;
-      const at = Number(r.at) || 0, had = here.get(r.id);
-      const same = had && had.user === r.user && trim(had.url) === trim(r.url);
-      if (!had) here.set(r.id, clean({ ...r, token: "", refresh: "", at }));
-      else if (at > (had.at || 0)) here.set(r.id, clean({ ...r, token: same ? had.token : "", refresh: same ? had.refresh : "", at }));
-    }
-    for (const [id, at] of Object.entries(gone)) { const s = here.get(id); if (s && (s.at || 0) <= at) here.delete(id); }
-    const before = JSON.stringify(all$());
-    const next = [...here.values()];
-    write$(GONE, gone);
-    if (JSON.stringify(next) === before) return false;
-    write$(KEY, next);
-    tell();
-    return true;
+    S.remove(id);
   }
 
   // This device as the server's sessions list names it.
@@ -159,7 +129,7 @@
     const token = u.accessToken || u.token || "", refresh = u.refreshToken || "";
     if (!token) throw new AbsError("not abs");
     const title = (r.data.serverSettings && r.data.serverSettings.title) || "";
-    if (!mine(s.id)) write$(KEY, [...all$(), clean({ ...s, title: s.title || title, at: Date.now() })]);
+    if (!mine(s.id)) S.write([...all$(), clean({ ...s, title: s.title || title, at: Date.now() })]);
     keepTokens(s.id, token, refresh);
     tell();
     return { ...out(mine(s.id)), library: r.data.userDefaultLibraryId || "" };

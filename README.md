@@ -62,8 +62,8 @@ Each section below shows the computer (left) and the phone (right).
 <p><img src="docs/shots/collections-desktop.jpg" width="74%" alt="A collection on a computer"> <img src="docs/shots/collections-phone.jpg" width="21%" alt="A collection on a phone"></p>
 
 - Collections are ordered folders: chapters in order, "2 of 4 read", Continue. Star a collection, or any clip in it, from its own screen.
-- Sort a collection by chapter, release date, date added or title, or show it as covers instead of a list. Its cover shows a mark for each kind it holds (clips, files, audiobooks, notes).
-- Website sync: a collection linked to a site's contents page (any site, or one of its chapters) finds new chapters and shows a "+N" to save them.
+- Sort a collection by chapter, release date, date added or title (pick it again to turn it round), or show it as covers instead of a list. Its cover shows a mark for each kind it holds (clips, files, audiobooks, notes), and can be its site's picture, your own, a clip's, or a mosaic of the first pictures (four, or two stacked or side by side) that keeps up as clips change.
+- Website sync (Edit's second tab): a collection linked to a site's contents page (any site, or one of its chapters) finds new chapters and shows a "+N" to save them.
 - Files: EPUB, PDF, MOBI, AZW3, FB2, CBZ, Markdown, text and HTML, copied in (a clip like any other) or read from where they are. Books keep their own contents.
 - PDFs mixing Hebrew or Arabic with English keep each line's words in order.
 - Big PDFs are read a piece at a time, never whole in memory.
@@ -79,6 +79,7 @@ Each section below shows the computer (left) and the phone (right).
 - A note is a page of your own to draw and type on. Save with options › New note asks for Blank, Lines or Squares paper, each shown beside its name.
 - It grows as you write: drawing on its last sheet adds another. Aa › Show as Pages shows it a sheet at a time.
 - Pen, highlighter, eraser, Undo and Redo as before, and Select (loop, cut, copy, paste, move), Add › Image and Add › Text. Only a pen draws on a touch screen unless Finger is on.
+- Hold the pen still for half a second at the end of a rough line or circle and it becomes a straight line (its end follows the pen) or a clean circle, which moves with the pen until you lift it. Aa › Draw turns it off.
 - Opening a PDF offers Make a note beside Keep a copy and Read from where it is, and ⋯ › Make a note from it works on any file: a PDF's own pages, a comic's pictures, anything else set as pages. The file stays as it is. A note's card shows its first sheet.
 - Notes show in their own part of the library, above Files, and Show › All notes (there once you have a note) lists them alone. Aa on a note has only Layout (All notes or This note, margins, brightness slider, theme, Dark note) and Auto-scroll, which goes on to the next note.
 - ⋯ › Try your pen shows what a pen sends and runs the pen test; ⋯ › Save as PDF makes a PDF of the sheets with what is on them.

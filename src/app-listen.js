@@ -30,13 +30,19 @@ let trackDrag = null;
 const lis = { key: "", state: "stopped", part: 0, t: 0, data: null, dataFor: "", sync: null, syncFor: "", said: -1, savedAt: 0, writing: false, note: "", seen: 0 };
 // An audiobook of its own; hasSound also takes an EPUB with narration.
 const hasSound = (p) => !!(p && p.audio && p.audio.parts);
-const isAudiobook = (p) => hasSound(p) && !p.audio.overlay;
+// A book's own narration (overlay) or a clip's made sound (voiced)
+// plays on the clip itself: it isn't an audiobook of its own.
+const ownSound = (p) => !!(p && p.audio && (p.audio.overlay || p.audio.voiced));
+const isAudiobook = (p) => hasSound(p) && !ownSound(p);
+// Sound kept inside one file, played from where each part's bytes are:
+// an EPUB's narration, or a zip of sound files (2026-11).
+const inPacked = (a) => !!(a && a.audio && (a.audio.overlay || a.audio.zip));
 const listenPage = () => state.pages.find((p) => p.id === lis.key) || null;
 // The book the player in the reader is for: the one playing if it is
 // this page's, else this page's own.
 const playerBook = () => { const a = listenPage(), here = audioFor(state.open); return here && !(a && shownFor(a) === state.open) ? here : a || here; };
 const listening = () => lis.state === "playing" || lis.state === "paused" || lis.state === "loading";
-const modeOf = (a) => (a && a.listen && a.listen.mode) || (a && a.audio && a.audio.overlay ? "book" : "listen");
+const modeOf = (a) => (ownSound(a) ? "book" : (a && a.listen && a.listen.mode) || "listen");
 const speedOf = (a) => (a && a.listen && a.listen.speed) || 1;
 const placeOf = (a) => (a && a.listen && a.listen.t) || 0;
 const durOf = (a) => (a && a.audio && a.audio.dur) || (a && a.listen && a.listen.dur) || 0;
@@ -45,8 +51,8 @@ const chaptersOf = (a) => (a && a.audio && a.audio.chapters) || [];
 // The book an audiobook reads along with: by its id, else the same file
 // (another device's copy), else the same address.
 function bookOf(a) {
-  if (a && a.audio && a.audio.overlay) return a;
-  const b = a && a.listen && a.listen.book;
+  if (ownSound(a)) return a;
+  const b = a && a.listen && (a.listen.book || a.listen.was);
   if (!b) return null;
   return state.pages.find((p) => p.id === b.id && !isAudiobook(p))
     || (b.fp && state.pages.find((p) => p.file && p.file.fp === b.fp && !isAudiobook(p)))
@@ -60,7 +66,7 @@ const audioFor = (p) => (!p ? null : hasSound(p) ? p
   : state.pages.find((a) => isAudiobook(a) && modeOf(a) === "book" && bookOf(a) === p) || null);
 // Opening an audiobook that reads along with a book opens the book.
 function listenRedirect(p) {
-  if (!isAudiobook(p) || p.audio.overlay) return null;
+  if (!isAudiobook(p)) return null;
   const b = modeOf(p) === "book" ? bookOf(p) : null;
   return b ? b.id : null;
 }
@@ -99,6 +105,65 @@ async function addAudiobook(file, ref) {
     audio: { parts: [part], chapters: tags.chapters.filter((c) => c.t < dur), dur },
   }, cover);
   arrived(meta);
+}
+
+// A zip of sound files (2026-11): one book, its files in name order,
+// played from inside the zip like an EPUB's narration, so only files
+// stored in it as they are (the usual way MP3s are zipped). Its cover is
+// a picture in it. False when the zip has no sound files.
+const ZIP_JUNK = /(^|\/)(__MACOSX\/|\.)/;
+async function addAudiobookZip(file, ref) {
+  let entries;
+  try { entries = await C.backup.zipEntries(file); } catch (e) { return false; }
+  const names = [...entries.keys()].filter((n) => !n.endsWith("/") && !ZIP_JUNK.test(n));
+  const files = L.inOrder(names.filter((n) => L.isAudioName(n)).map((n) => ({ name: n.split("/").pop(), path: n })));
+  if (!files.length) return false;
+  if (!ref) { toast(t("Waypage plays an audiobook from where it is, so it needs lasting access. Add it with Add a file.")); return true; }
+  const dup = state.pages.find((p) => isAudiobook(p) && p.file && p.file.name === file.name && p.file.size === file.size);
+  if (dup) { C.platform.files.release(ref); toast(t("Already in your library")); openPage(dup.id); return true; }
+  if (files.some((f) => entries.get(f.path).method !== 0)) {
+    C.platform.files.release(ref);
+    toast(t("The sound files in {name} are compressed, so Waypage can't play them from the zip. Unzip it and add the folder with Add an audiobook folder.", { name: file.name }));
+    return true;
+  }
+  const title = L.baseName(file.name);
+  toast(t("Adding “{x}”, {n} files…", { x: title, n: files.length }));
+  const parts = [], chapters = [];
+  let artist = "", cover = null, at = 0;
+  for (const f of files) {
+    const e = entries.get(f.path);
+    const h = new DataView(await file.slice(e.offset, e.offset + 30).arrayBuffer());
+    const offset = e.offset + 30 + h.getUint16(26, true) + h.getUint16(28, true);
+    const part = { ref, name: String(f.name).slice(0, 200), size: e.size, offset, length: e.size, dur: 0 };
+    const blob = file.slice(offset, offset + e.size);
+    const { dur, got: g } = await partLength(part, blob);
+    if (!dur) continue;
+    part.dur = dur;
+    let own = [];
+    try {
+      const tg = await L.tags(blob, L.sniff(null, f.name));
+      own = tg.chapters || [];
+      if (!cover && tg.cover) cover = tg.cover;
+      if (!artist && tg.artist) artist = tg.artist;
+    } catch (err) { /* the name will do */ }
+    if (g) { if (!artist && g.artist) artist = g.artist; if (!cover && g.cover) cover = b64bytes(g.cover); }
+    if (own.length > 1) own.forEach((c) => chapters.push({ t: at + c.t, title: c.title }));
+    else chapters.push({ t: at, title: (g && g.title) || L.baseName(f.name) });
+    parts.push(part);
+    at += dur;
+  }
+  if (!parts.length) { C.platform.files.release(ref); toast(t("Waypage can't play the files in {name}.", { name: file.name })); return true; }
+  const pics = names.filter((n) => /\.(jpe?g|png|webp)$/i.test(n) && entries.get(n).size < 20 << 20);
+  const pic = pics.find((n) => /(^|\/)(cover|folder|front|album ?art\w*)\.[a-z]+$/i.test(n)) || pics.sort((x, y) => entries.get(y).size - entries.get(x).size)[0];
+  if (pic) { try { cover = await C.backup.zipRead(file, entries.get(pic)); } catch (e) { /* its own picture, if any */ } }
+  const fp = await C.files.fingerprint(file).catch(() => null);
+  const meta = await newAudiobook({
+    title, byline: artist,
+    file: { name: file.name.slice(0, 200), kind: "audio", ext: L.extOf(parts[0].name) || "mp3", size: file.size, ...(fp ? { fp } : {}) }, link: ref,
+    audio: { parts, chapters, dur: at, zip: true },
+  }, cover);
+  arrived(meta);
+  return true;
 }
 
 // The folder's own picture: cover.jpg, folder.png and the like first,
@@ -345,7 +410,7 @@ function dropAudioFiles(p) {
   });
 }
 // The Project Gutenberg book the recording was read from, downloaded and
-// read along with (Find the book in Discover does the same by hand).
+// read along with (Find the book does the same by hand).
 async function audiobookBook(a, d) {
   try {
     const book = await C.discover.pgBook(C.discover.pgNumber(d.text));
@@ -424,9 +489,9 @@ async function partsToPlay(a) {
     return urls.map((u) => (A.native ? { uri: u } : { src: async () => u }));
   }
   if (A.native) {
-    return a.audio.parts.map((p) => (a.audio.overlay ? { uri: a.link, offset: p.offset, length: p.length } : { uri: p.ref }));
+    return a.audio.parts.map((p, i) => partSource(a, i));
   }
-  const whole = a.audio.overlay ? await C.platform.files.blob(a.link, a.file.size) : null;
+  const whole = inPacked(a) ? await C.platform.files.blob(a.link, a.file.size) : null;
   return a.audio.parts.map((p) => ({
     src: async () => {
       const blob = whole ? whole.slice(p.offset, p.offset + p.length) : await C.platform.files.blob(p.ref, p.size);
@@ -485,6 +550,7 @@ function listenToggle() {
 }
 function listenStop() {
   if (!lis.key) return;
+  hideLost();
   saveListenPlace(true);
   remoteSaid(listenPage(), "done");
   A.stop();
@@ -583,14 +649,14 @@ function paintListen() {
   const open = state.open;
   const mine = open && (a ? shownFor(a) === open : !!audioFor(open));
   const here = audioFor(open);
-  if (here && isAudiobook(open) && !open.audio.overlay) $("readerAloud").hidden = true;
+  if (here && isAudiobook(open)) $("readerAloud").hidden = true;
   // No words on the page yet: nothing to highlight, draw on or translate.
   if (audioWordless(open)) {
     for (const id of ["readerMarks", "readerTranslate", "readerInk"]) $(id).hidden = true;
     coverIn(open);
   }
   const show = !!here;
-  if (here && !here.audio.overlay && modeOf(here) === "transcript" && state.open === here && chapterNow(here, placeNow(here)) !== pageCh[here.id]) turnPage(here);
+  if (here && !ownSound(here) && modeOf(here) === "transcript" && state.open === here && chapterNow(here, placeNow(here)) !== pageCh[here.id]) turnPage(here);
   $("readerChapters").hidden = !here || (chaptersOf(playerBook()).length < 2 && !bookmarksOf(playerBook()).length);
   const box = $("listenPlayer");
   const was = box.hidden;
@@ -745,6 +811,7 @@ function listenOpened(p) {
   paintListen();
 }
 function listenClosed() {
+  hideLost();
   if (lis.key && !listenPrefs().keep) listenStop();
   C.reader.say(-1);
   lis.said = -1;
@@ -771,7 +838,8 @@ async function syncFor(a, page) {
     } else {
       const words = ci == null ? heardWords(a, data) : inChapter(a, heardWords(a, data), ci);
       if (!words.length) return null;
-      const html = page === a ? await C.store.readPage(a.id) : page.link ? await C.files.openLinked(page) : await C.store.readPage(page.id);
+      // An audiobook's own page is its transcript; a clip with its own sound reads along with itself.
+      const html = page.link && !(page === a && isAudiobook(a)) ? await C.files.openLinked(page) : await C.store.readPage(page.id);
       const texts = C.reader.readableIn(html, READ_OPTS);
       const book = L.bookWords(texts);
       sync = L.syncOf(book, L.align(words, book));
@@ -804,6 +872,7 @@ async function readAlong(force) {
   }
   const s = lis.sync;
   if (!s) return;
+  if (p !== a) checkLost(a, s);
   const i = L.wordAt(s, lis.t);
   if (i === lis.said && !force) return;
   lis.said = i;
@@ -811,6 +880,47 @@ async function readAlong(force) {
   if (i < 0) { C.reader.say(-1); maybeReshow(a); return; }
   C.reader.say(s.b[i], s.o[i], s.o[i] + s.l[i]);
   if (s.b[i] !== lis.pipBlock) { lis.pipBlock = s.b[i]; if (document.body.classList.contains("pip")) paintPip(); }
+}
+// The narrator away from the book (2026-11): heard for LOST_AFTER seconds
+// and not found in it (another translation, or a part this edition
+// leaves out). A card over the player says so, once each time.
+const LOST_AFTER = 240;
+let lostAt = 0, lostTimer = 0;
+function checkLost(a, s) {
+  if (modeOf(a) !== "book" || ownSound(a) || lis.dataFor !== a.id || !lis.data || Date.now() - lostAt < 10000) return;
+  lostAt = Date.now();
+  const away = L.lostFor(s, heardWords(a, lis.data), lis.t);
+  if (away < LOST_AFTER) { if (!away) lis.lostSaid = false; return; }
+  if (lis.lostSaid) return;
+  lis.lostSaid = true;
+  showLost(a, away);
+}
+function hideLost() {
+  clearTimeout(lostTimer);
+  const c = $("listenLost");
+  if (c) c.hidden = true;
+}
+function showLost(a, away) {
+  let c = $("listenLost");
+  if (!c) { c = el("div", { class: "listen-lost", id: "listenLost", role: "status" }); document.body.append(c); }
+  const act = (label, fn) => el("button", { class: "toast-act", type: "button", onclick: () => { hideLost(); fn(); } }, label);
+  c.replaceChildren(
+    el("p", { class: "listen-lost-title" }, tn(Math.round(away / 60), "The narrator left the book a minute ago", "The narrator left the book {n} minutes ago")),
+    el("p", { class: "listen-lost-note" }, t("Maybe another translation, or a part this edition leaves out.")),
+    el("div", { class: "listen-lost-acts" },
+      act(t("Show the transcript"), async () => {
+        listenMode(a, "transcript");
+        if (!readyPack()) return;
+        await writeListenPage(a, await loadListenData(a));
+        await openPage(a.id);
+        toast(t("Showing the transcript. Pick The book again under ⋯ when you like."));
+      }),
+      act(t("Find another book"), () => openSheet("listenFind"))));
+  const player = $("listenPlayer").getBoundingClientRect();
+  c.style.bottom = (player.height && !$("listenPlayer").hidden ? innerHeight - player.top + 12 : 96) + "px";
+  c.hidden = false;
+  clearTimeout(lostTimer);
+  lostTimer = setTimeout(hideLost, 20000);
 }
 // A transcript that's grown past what's shown is shown again, now and
 // then, when you're at its end.
@@ -849,7 +959,7 @@ const readyPack = () => {
   const ready = (packs.packs || []).filter((p) => p.ready);
   return ready.find((p) => p.id === want) || ready.find((p) => p.id === "better") || ready[0] || null;
 };
-const wantsWords = (a) => !!a && !a.audio.overlay && (modeOf(a) === "transcript" || modeOf(a) === "book");
+const wantsWords = (a) => !!a && !ownSound(a) && (modeOf(a) === "transcript" || modeOf(a) === "book");
 
 // The first stretch from `t` that isn't written yet, or null when the
 // next AHEAD seconds are.
@@ -867,10 +977,17 @@ function addRange(ranges, from, to) {
   return out;
 }
 
+// Where a part's sound is for the phone: its own file, or a stretch of
+// the zip or EPUB it's in.
+function partSource(a, part) {
+  const p = a.audio.parts[part];
+  if (a.remote) { const uri = REMOTE_AUDIO[a.remote.kind] && REMOTE_AUDIO[a.remote.kind].uri(a, part); return uri ? { uri } : null; }
+  return inPacked(a) ? { uri: a.link, offset: p.offset, length: p.length } : { uri: p.ref };
+}
 let aheadTimer = 0;
 async function writeAhead() {
   clearTimeout(aheadTimer);
-  if (lis.writing || lis.held || !A.canTranscribe) return;
+  if (lis.writing || lis.held || lis.testing || !A.canTranscribe) return;
   if (!packs) await listenModels();
   const pack = readyPack();
   if (!pack) return;
@@ -904,7 +1021,6 @@ async function writeAhead() {
   const partStart = L.startOf(a.audio.parts, part), partEnd = partStart + (a.audio.parts[part].dur || 0);
   const to = Math.min(partEnd, from + CHUNK);
   if (to - from < 0.5) { data.ranges = addRange(data.ranges || [], from, to); aheadTimer = setTimeout(writeAhead, 100); return; }
-  const p = a.audio.parts[part];
   lis.writing = true;
   lis.job = { id: a.id, from, to, data, partStart };
   paintListen();
@@ -912,9 +1028,9 @@ async function writeAhead() {
     const ch = chaptersOf(a), ci = L.chapterAt(ch, from);
     const cFrom = ci >= 0 ? ch[ci].t : 0, cTo = ci >= 0 && ch[ci + 1] ? ch[ci + 1].t : durOf(a);
     const part01 = (t) => (cTo > cFrom ? Math.min(1, Math.max(0, (t - cFrom) / (cTo - cFrom))) : -1);
-    const uri = a.remote ? REMOTE_AUDIO[a.remote.kind] && REMOTE_AUDIO[a.remote.kind].uri(a, part) : a.audio.overlay ? a.link : p.ref;
-    if (!uri) throw new Error("stopped");
-    const res = await A.transcribe({ uri, from: Math.round(pos * 1000), to: Math.round((pos + (to - from)) * 1000), pack: pack.id, lang: (a.lang || "").split("-")[0],
+    const src = partSource(a, part);
+    if (!src) throw new Error("stopped");
+    const res = await A.transcribe({ ...src, from: Math.round(pos * 1000), to: Math.round((pos + (to - from)) * 1000), pack: pack.id, lang: (a.lang || "").split("-")[0],
       title: a.title, text: ci >= 0 ? (ch[ci].title || t("Chapter {n}", { n: ci + 1 })) + (ch.length > 1 ? " · " + t("{done} of {total}", { done: ci + 1, total: ch.length }) : "") : "", done: part01(from), end: part01(to) });
     const pieces = L.onBookClock(res.pieces || [], partStart);
     data.pieces = (data.pieces || []).filter((x) => x.t1 <= from + 0.05 || x.t0 >= to - 0.05).concat(pieces).sort((x, y) => x.t0 - y.t0);
@@ -1009,7 +1125,8 @@ function writeRestButton(a, after) {
 function listenMode(a, mode, book) {
   a.listen = { ...(a.listen || {}), mode, t: placeOf(a), tAt: Date.now() };
   if (book) a.listen.book = { id: book.id, ...(book.file && book.file.fp ? { fp: book.file.fp } : {}), ...(book.url ? { url: book.url } : {}) };
-  if (mode !== "book") delete a.listen.book;
+  // The book stays known while it isn't read along with, to go back to.
+  if (mode !== "book") { if (a.listen.book) a.listen.was = a.listen.book; delete a.listen.book; } else delete a.listen.was;
   lis.sync = null; lis.syncFor = "";
   C.store.writeIndexOnly(state.pages);
   if (C.sync.on) syncSoon();
@@ -1018,9 +1135,9 @@ function listenMode(a, mode, book) {
 // one this book is read along with.
 function listenAlongRows(p) {
   const a = audioFor(p);
-  if (!a || a.audio.overlay) return null;
+  if (!a || ownSound(a)) return null;
   const head = el("h3", { class: "overline" }, t("Read along"));
-  if (!A.canTranscribe) return [head, el("p", { class: "meta" }, t("Reading along with a book or a transcript is in the Android app, which writes the transcript on the phone."))];
+  if (!A.canTranscribe) return [head, el("p", { class: "meta" }, t("Reading along with a book or a transcript is in the Android and iPhone apps, which write the transcript on the phone."))];
   const row = (label, note, act, accent) => el("button", { class: "row", type: "button", onclick: act },
     el("span", { class: "choice-text" }, el("span", { class: "choice-label" + (accent ? " accent" : "") }, label), note ? el("span", { class: "choice-note" }, note) : null));
   // The drop-down picks what it reads along with; under it, only what
@@ -1197,39 +1314,142 @@ async function pairWith(a, book) {
   writeAhead();
 }
 
-// Find the book in Discover: every book site Discover has, searched for
-// the audiobook's title; the one picked is downloaded and read along with.
+// Find the book: Discover's book sites and Wikisource, searched for the
+// audiobook's title. With a transcript model, a minute of the narrator
+// (where you are) is tested against the first few found (2026-11), and
+// each says whether it has the same words, is another translation, or
+// isn't the book. The one picked is downloaded and read along with; a
+// Wikisource text comes in as one EPUB book, like Discover's Save as an
+// EPUB file.
 let finding = null, pairPending = null;
 const bookTitle = (t) => String(t).replace(/\((unabridged|abridged|audiobook|audible[^)]*)\)/gi, "").replace(/\[[^\]]*\]/g, "").replace(/\s*[-:|]\s*(unabridged|audiobook).*$/i, "").replace(/\s+/g, " ").trim();
+const TEST_MAX = 5;
+const findSites = () => C.discover.sources.filter((s) => (s.books || s.texts) && s.search);
+const canTest = () => A.canTranscribe && !!readyPack();
+const FIT_ORDER = { same: 0, other: 1, "": 2, testing: 2, no: 3 };
 function listenFindSheet() {
   const a = audioFor(state.open);
   if (!a) return el("div");
   const q = bookTitle(a.title);
   const box = el("div", { class: "group listen-found" }, el("p", { class: "footnote" }, t("Searching…")));
-  const sites = C.discover.sources.filter((s) => s.books && s.search);
-  if (!finding || finding.q !== q) {
-    finding = { q, items: null, error: "" };
+  const sites = findSites();
+  const redraw = () => { if (state.sheet === "listenFind") $("readingBody").replaceChildren(listenFindSheet()); };
+  if (!finding || finding.q !== q || finding.id !== a.id) {
+    finding = { q, id: a.id, items: null, error: "", tests: new Map(), heard: null, note: "" };
     const f = finding;
     if (!navigator.onLine) f.error = t("You're offline. Search when you're back online.");
-    else Promise.all(sites.map((s) => s.search(q).then((list) => list.map((x) => ({ ...x, from: s.label }))).catch(() => []))).then((lists) => {
+    else Promise.all(sites.map((s) => s.search(q).then((list) => list.map((x) => ({ ...x, from: s.label, ws: !!s.texts }))).catch(() => []))).then((lists) => {
       const by = L.norm((a.byline || "").split(/[ ,]/).pop() || "");
-      f.items = lists.flat().sort((x, y) => (by && L.norm(y.by || "").includes(by) ? 1 : 0) - (by && L.norm(x.by || "").includes(by) ? 1 : 0)).slice(0, 30);
-      if (state.sheet === "listenFind") $("readingBody").replaceChildren(listenFindSheet());
+      const near = (x) => (by && L.norm(x.by || "").includes(by) ? 1 : 0) + (L.norm(x.title || "").includes(L.norm(q)) ? 1 : 0);
+      f.items = lists.flat().filter((x) => x.epub || x.ws).sort((x, y) => near(y) - near(x)).slice(0, 30);
+      redraw();
+      if (canTest()) testFound(a, f, redraw);
     });
   }
   const f = finding;
+  const badge = (v) => {
+    const word = { same: t("Same words"), other: t("Another translation"), no: t("Doesn't match"), testing: t("Testing…") }[v];
+    return word ? el("span", { class: "pill listen-fit" + (v === "same" ? " same" : "") }, word) : null;
+  };
+  const note = (s) => [s.tr ? t("Translated by {name}", { name: s.tr }) : s.by || "", s.ws ? t("{site}, comes in as one book", { site: s.from }) : s.from].filter(Boolean).join(" · ");
   if (f.error) fill(box, el("p", { class: "footnote" }, f.error));
   else if (f.items && !f.items.length) fill(box, el("p", { class: "footnote" }, t("None of Discover's book sites ({join}) has “{q}”. Add the book as a file, then pick it under A book in your Library.", { join: sites.map((s) => s.label).join(", "), q: q })));
-  else if (f.items) fill(box, ...f.items.map((s) => el("button", { class: "row", type: "button", onclick: () => findPicked(a, s) },
-    el("span", { class: "choice-text" }, el("span", { class: "choice-label", dir: "auto" }, s.title),
-      el("span", { class: "choice-note", dir: "auto" }, [s.by, s.from].filter(Boolean).join(" · "))))));
+  else if (f.items) {
+    const rank = (s) => FIT_ORDER[f.tests.get(s.id) || ""];
+    const shown = f.items.map((s, i) => [s, i]).sort((x, y) => rank(x[0]) - rank(y[0]) || x[1] - y[1]).map(([s]) => s);
+    fill(box, ...shown.map((s) => el("button", { class: "row listen-found-row", type: "button", onclick: () => findPicked(a, s) },
+      el("span", { class: "choice-text" }, el("span", { class: "choice-label", dir: "auto" }, s.title),
+        el("span", { class: "choice-note", dir: "auto" }, note(s))), badge(f.tests.get(s.id)))));
+  }
+  const testing = canTest();
   return el("div", { class: "page-controls" },
-    el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, t("Find the book in Discover")),
-      el("p", { class: "meta" }, t("“{q}” on {join}. Pick the same edition and translation the narrator reads, if you can.", { q: q, join: i18n.join(sites.map((s) => s.label)) }))),
-    box);
+    el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, t("Find the book")),
+      el("p", { class: "meta" }, testing ? t("“{q}” on {join}. Each of the first few is checked against a minute of the narrator.", { q: q, join: i18n.join(sites.map((s) => s.label)) })
+        : t("“{q}” on {join}. Pick the same edition and translation the narrator reads, if you can.", { q: q, join: i18n.join(sites.map((s) => s.label)) }))),
+    f.heard ? el("p", { class: "footnote listen-heard", dir: "auto" }, t("Heard: “{words}…”", { words: f.heard })) : null,
+    f.note ? el("p", { class: "footnote" }, f.note) : null,
+    box,
+    el("p", { class: "footnote" }, testing ? t("Checking downloads each book it checks.")
+      : A.canTranscribe ? t("Download a transcript model in Settings › Audiobooks, and each book found is checked against the narrator.") : null));
+}
+
+// A minute of the narrator from where you are: what the transcript has
+// there, else written now (and kept, like any of the transcript).
+async function heardSample(a) {
+  const data = await loadListenData(a);
+  const from = Math.max(0, placeNow(a) - 5);
+  const near = () => heardWords(a, data).filter((w) => w.t >= from && w.t < from + 120);
+  if (near().length >= 40) return near();
+  lis.testing = true;
+  try {
+    for (let i = 0; lis.writing && i < 120; i++) await new Promise((go) => setTimeout(go, 1000));
+    const pack = readyPack();
+    if (!pack || lis.writing) return near();
+    const { part, pos } = L.partAt(a.audio.parts, from);
+    const partStart = L.startOf(a.audio.parts, part), partEnd = partStart + (a.audio.parts[part].dur || 0);
+    const to = Math.min(partEnd, from + 60);
+    const src = partSource(a, part);
+    if (!src || to - from < 5) return near();
+    const res = await A.transcribe({ ...src, from: Math.round(pos * 1000), to: Math.round((pos + (to - from)) * 1000), pack: pack.id, lang: (a.lang || "").split("-")[0], title: a.title, text: t("Finding the book"), done: -1, end: -1 });
+    const pieces = L.onBookClock(res.pieces || [], partStart);
+    data.pieces = (data.pieces || []).filter((x) => x.t1 <= from + 0.05 || x.t0 >= to - 0.05).concat(pieces).sort((x, y) => x.t0 - y.t0);
+    data.ranges = addRange(data.ranges || [], from, to);
+    data.pack = data.pack || pack.id;
+    await C.store.writeListen(a.id, data);
+    return near();
+  } finally { lis.testing = false; setTimeout(writeAhead, 1500); }
+}
+// A found book's text, as blocks: its EPUB's pages, or the Wikisource page.
+async function foundTexts(s) {
+  if (s.ws) {
+    const u = new URL(new URL(s.url).origin + "/w/api.php");
+    for (const [k, v] of Object.entries({ action: "parse", format: "json", origin: "*", prop: "text", page: decodeURIComponent(new URL(s.url).pathname.replace(/^\/wiki\//, "")) })) u.searchParams.set(k, v);
+    const res = await C.platform.fetchText(u.href, { headers: { Accept: "application/json" } });
+    const html = (((JSON.parse(res.text) || {}).parse || {}).text || {})["*"] || "";
+    return [...new DOMParser().parseFromString(html, "text/html").querySelectorAll("p, li, dd")].map((n) => n.textContent);
+  }
+  const { blob } = await C.platform.fetchBytes(s.epub, "check.epub");
+  const entries = await C.backup.zipEntries(blob);
+  const texts = [];
+  for (const [name, e] of entries) {
+    if (!/\.x?html?$/i.test(name) || /(^|\/)(nav|toc|cover|titlepage|colophon|imprint|uncopyright)\b/i.test(name)) continue;
+    try {
+      const doc = new DOMParser().parseFromString(new TextDecoder().decode(await C.backup.zipRead(blob, e)), "text/html");
+      texts.push(...[...doc.querySelectorAll("p, li, dd, h1, h2, h3")].map((n) => n.textContent));
+    } catch (err) { /* a page it can't read */ }
+  }
+  return texts;
+}
+async function testFound(a, f, redraw) {
+  const list = f.items.slice(0, TEST_MAX);
+  list.forEach((s) => f.tests.set(s.id, "testing"));
+  redraw();
+  let heard = [];
+  try { heard = await heardSample(a); } catch (e) { heard = []; }
+  if (finding !== f) return;
+  if (heard.length < 30) {
+    list.forEach((s) => f.tests.delete(s.id));
+    f.note = t("Couldn't hear enough of the narrator to check them. Pick the same edition and translation, if you can.");
+    redraw();
+    return;
+  }
+  f.heard = heard.slice(0, 14).map((w) => w.w).join(" ");
+  redraw();
+  for (const s of list) {
+    if (finding !== f) return;
+    let v = "";
+    try { v = L.fit(heard, await foundTexts(s)).verdict; } catch (e) { v = ""; }
+    f.tests.set(s.id, v);
+    redraw();
+  }
 }
 async function findPicked(a, s) {
   closeSheet(true);
+  if (s.ws) {
+    pairPending = { audio: a.id, title: L.norm(s.title), at: Date.now() };
+    dzSaveStory(s, { as: "file", where: dzWhere() });
+    return;
+  }
   const name = dzBookName(s);
   const have = state.pages.find((p) => p.file && p.file.name === name);
   if (have) { pairWith(a, have); return; }
@@ -1239,14 +1459,30 @@ async function findPicked(a, s) {
 }
 // A file just added: the book that was asked for, read along with.
 function pairArrived(meta) {
-  if (!pairPending || !meta || !meta.file || meta.file.name !== pairPending.name || Date.now() - pairPending.at > 10 * 60000) return;
-  const a = state.pages.find((p) => p.id === pairPending.audio);
+  const p = pairPending;
+  if (!p || !meta || !meta.file || Date.now() - p.at > 30 * 60000) return;
+  if (p.name ? meta.file.name !== p.name : !(meta.file.kind === "epub" || /\.epub$/i.test(meta.file.name)) || !L.norm(meta.title).startsWith(p.title)) return;
+  const a = state.pages.find((x) => x.id === p.audio);
   pairPending = null;
   if (!a) return;
   listenMode(a, "book", meta);
   toast(t("Reading along with “{title}”. The transcript is written as you listen.", { title: meta.title }));
   setTimeout(writeAhead, 2000);
 }
+
+// Another device's transcript (sync.js syncTranscripts), into this one's:
+// the same object any writing under way holds, so neither loses words.
+C.listenTake = async (id, theirs) => {
+  const a = state.pages.find((p) => p.id === id);
+  if (!a || !isAudiobook(a) || !theirs || !Array.isArray(theirs.pieces)) return;
+  const data = (lis.job && lis.job.id === id && lis.job.data) || (lis.dataFor === id && lis.data) || await listenData(a);
+  const merged = L.mergeTranscript(data, theirs);
+  if (merged.pieces.length === (data.pieces || []).length && JSON.stringify(merged.ranges) === JSON.stringify(data.ranges || [])) return;
+  Object.assign(data, merged);
+  await C.store.writeListen(id, data);
+  if (lis.dataFor === id) { lis.sync = null; lis.syncFor = ""; }
+  liveShow(a, data);
+};
 
 // ---- Fixing a word in a transcript ----
 
@@ -1433,7 +1669,7 @@ SHEETS.listenMark = { button: "listenMark", label: t("Bookmark"), build: listenM
 SHEETS.listenSearch = { button: "readerMore", label: t("Search the transcript"), build: listenSearchSheet };
 SHEETS.listenChapters = { button: "readerChapters", label: t("Chapters"), build: listenChaptersSheet };
 SHEETS.listenBook = { button: "readerMore", label: t("A book to read along with"), build: listenBookSheet };
-SHEETS.listenFind = { button: "readerMore", label: t("Find the book in Discover"), build: listenFindSheet };
+SHEETS.listenFind = { button: "readerMore", label: t("Find the book"), build: listenFindSheet };
 SHEETS.listenFix = { label: t("Fix a word"), build: listenFixSheet };
 
 // ---- An EPUB's own narration ----
@@ -1453,6 +1689,196 @@ async function lookForNarration(p) {
   if (found && state.open === p) { paintListen(); toast(t("This book has its own narration. Press play to read along."), t("Play"), () => listenPlay(p)); }
 }
 
+// ---- Made from text (2026-11) ----
+// A clip or book spoken by its Narrate voice into sound files (Android:
+// AudiobookPlugin.voice, one .m4a at a time, in Waypage's own files) that
+// the clip itself then plays, reading along with its words, in place of
+// Narrate: `audio` on the clip with `voiced`, like a book's own narration.
+// The files are this device's (`audio` never syncs and is in no backup).
+// A collection gives each of its clips its own. Each piece's times come
+// with the sound, so the words to read along with are written whole.
+const VOICE_FILE = 120;
+let voicingRun = null;
+const voicedSound = (p) => !!(p && p.audio && p.audio.voiced && p.audio.parts);
+const canVoice = () => A.canVoice;
+// What has text to speak: not a sound, a picture book or printed pages.
+const voiceable = (p) => !!p && !p.preview && !p.remote && !p.comic && !p.zim && !(hasSound(p) && !voicedSound(p)) && !(p.file && p.file.kind === "audio") && !C.files.printed(p);
+
+async function voiceTextsOf(p) {
+  let html = null;
+  try { html = p.link ? await C.files.openLinked(p) : await C.store.readPage(p.id); } catch (e) { html = null; }
+  return html ? C.reader.readableRanks(html, READ_OPTS) : { texts: [], ranks: [] };
+}
+// A clip's chapters: its top headings (the clip's title alone doesn't
+// count), each with the text under it; a heading with nothing under it
+// joins the next.
+function voiceChapters(p, texts, ranks) {
+  const count = (r) => ranks.filter((x) => x > 0 && x <= r).length;
+  const level = count(1) >= 2 ? 1 : count(2) >= 2 ? 2 : count(3) >= 2 ? 3 : 0;
+  const out = [];
+  texts.forEach((text, b) => {
+    const head = level && ranks[b] > 0 && ranks[b] <= level;
+    const last = out[out.length - 1];
+    if (!last || (head && last.blocks.some((x) => ranks[x] === 0))) out.push({ title: head ? text : p.title, blocks: [] });
+    out[out.length - 1].blocks.push(b);
+  });
+  return out.map((c) => ({ ...c, texts: c.blocks.map((b) => texts[b]) }));
+}
+// The pieces Narrate would speak, cut into files of at most VOICE_FILE.
+function voiceFiles(chapters) {
+  const files = [];
+  chapters.forEach((c, ci) => {
+    const { items, map } = pieces(c.texts.map((text, block) => ({ text, block })));
+    for (let i = 0; i < items.length; i += VOICE_FILE) files.push({ ci, first: i === 0, items: items.slice(i, i + VOICE_FILE), blocks: map.slice(i, i + VOICE_FILE) });
+  });
+  return files;
+}
+
+// One clip's sound, made and put on it. Throws "stopped", "engine",
+// "silent" or another reason. `step(share)` hears how far it got.
+async function voiceClip(p, run, step) {
+  const { texts, ranks } = await voiceTextsOf(p);
+  if (!texts.length) throw new Error("silent");
+  const chapters = voiceChapters(p, texts, ranks);
+  const files = voiceFiles(chapters);
+  const total = files.reduce((s, f) => s + f.items.length, 0);
+  if (!total) throw new Error("silent");
+  const folder = String(p.title).replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 70) + " (" + p.id + ")";
+  const parts = [], marks = [], data = { pieces: [], ranges: [], pack: "voice" }, kept = [];
+  let at = 0, done = 0;
+  try {
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      let got = null;
+      while (!got) {
+        if (!(await gate(run))) throw new Error("stopped");
+        voiceStep = (e) => {
+          step(Math.min(1, (done + (e.n || 0)) / total));
+          if (run.paused || run.stopped) A.stopVoicing();
+        };
+        try {
+          got = await A.voice({ items: f.items, blocks: f.blocks, lang: p.lang || "", voice: voiceFor(p), engine: engineFor(p), name: "v" + run.id + "-" + i });
+        } catch (e) {
+          const why = String((e && e.message) || e);
+          if (why === "silent") { got = { skip: true }; break; }
+          // Paused: this file again from its start on Resume.
+          if (why === "stopped" && run.paused && !run.stopped) continue;
+          throw new Error(why);
+        } finally { voiceStep = null; }
+      }
+      done += f.items.length;
+      if (got.skip || !got.dur) continue;
+      const ref = await C.platform.keepMade(got.uri, folder + "/" + String(i + 1).padStart(3, "0") + ".m4a", "app");
+      if (!ref) throw new Error("not kept");
+      kept.push(ref);
+      if (f.first) marks.push({ t: at, title: chapters[f.ci].title });
+      f.items.forEach((text, k) => {
+        if (got.t1[k] > got.t0[k]) data.pieces.push({ t0: at + got.t0[k], t1: at + got.t1[k], text, ...(k === 0 || f.blocks[k] !== f.blocks[k - 1] ? { para: 1 } : {}) });
+      });
+      parts.push({ ref, name: String(i + 1).padStart(3, "0") + ".m4a", size: got.size || 0, dur: got.dur });
+      at += got.dur;
+    }
+    if (!parts.length) throw new Error("silent");
+  } catch (e) {
+    for (const ref of kept) C.platform.dropKept(ref);
+    throw e;
+  }
+  data.ranges = [[0, at]];
+  // A sound made before goes, with its files.
+  if (voicedSound(p)) dropAudioFiles(p);
+  if (lis.key === p.id) listenStop();
+  p.audio = { parts, chapters: marks.length > 1 ? marks : [], dur: at, ours: true, voiced: { at: Date.now(), of: p.editedAt || p.savedAt || 0 } };
+  p.listen = { ...(p.listen || {}), t: 0, tAt: Date.now(), dur: Math.round(at) };
+  delete p.listen.mode;
+  delete p.listen.book;
+  await C.store.writeListen(p.id, data);
+  if (lis.dataFor === p.id) { lis.data = null; lis.dataFor = ""; }
+  lis.sync = null; lis.syncFor = "";
+}
+
+// what: { page } or { folder }.
+async function makeAudiobook(what) {
+  if (!canVoice()) { toast(t("Saving the narration is in the Android and iPhone apps.")); return; }
+  if (voicingRun) { toast(t("A narration is being saved already. It's in Downloads.")); return; }
+  const list = (what.folder ? folderPages(what.folder).filter((p) => !voicedSound(p)) : [what.page]).filter(voiceable);
+  const title = what.folder || what.page.title;
+  if (!list.length) { toast(what.folder && folderPages(what.folder).some(voicedSound) ? t("Every clip here has its narration saved already.") : t("There's no text here to narrate.")); return; }
+  const run = Object.assign(startRun(null, t("Saving the narration"), 1), { label: title, files: true, keep: true, voicing: true, now: t("Starting"), part: 0 });
+  voicingRun = run;
+  runChanged();
+  toast(t("Saving the narration of “{title}”. It's in Downloads.", { title }));
+  let made = 0, why = "";
+  try {
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i];
+      if (!state.pages.includes(p)) continue;
+      run.now = list.length > 1 ? t("Clip {n} of {all}", { n: i + 1, all: list.length }) : t("Starting");
+      updateRunCard(run);
+      try {
+        await voiceClip(p, run, (share) => {
+          run.part = (i + share) / list.length;
+          if (list.length === 1) run.now = t("{pct}% done", { pct: Math.round(share * 100) });
+          updateRunCard(run);
+        });
+        made++;
+        await C.store.writeIndex(state.pages);
+        if (state.open === p) listenOpened(p);
+      } catch (e) {
+        why = String((e && e.message) || e);
+        // One clip with nothing to say doesn't stop the rest.
+        if (why !== "silent" || list.length === 1) throw e;
+      }
+    }
+    renderLibrary();
+    if (state.folder) renderFolder();
+    if (!made) throw new Error(why || "silent");
+    const one = list.length === 1 ? list[0] : null;
+    toast(one ? t("“{title}” plays its saved narration now.", { title }) : tn(made, "1 clip in “{title}” plays its saved narration now.", "{n} clips in “{title}” play their saved narration now.", { title }),
+      one && state.open !== one ? t("Open") : null, one && state.open !== one ? () => openPage(one.id) : null);
+  } catch (e) {
+    why = String((e && e.message) || e);
+    toast(run.stopped || why === "stopped" ? (made ? t("Stopped. The clips already saved keep their narration.") : t("Stopped. Nothing was kept."))
+      : why === "engine" ? t("Couldn't start the speech engine. Check the phone's text-to-speech settings.")
+        : why === "silent" ? t("The voice made no sound for this text. Try another voice in Narrate.")
+          : t("Couldn't save the narration. Try again, or pick another voice in Narrate."));
+  } finally {
+    A.stopVoicing();
+    voicingRun = null;
+    run.now = null;
+    runs.delete(run);
+    runChanged();
+  }
+}
+// The made sound taken off a clip: it narrates again.
+async function dropVoiced(p, quiet) {
+  if (!voicedSound(p)) return;
+  if (lis.key === p.id) listenStop();
+  dropAudioFiles(p);
+  delete p.audio;
+  delete p.listen;
+  await C.store.writeListen(p.id, null).catch(() => {});
+  lis.sync = null; lis.syncFor = "";
+  if (lis.dataFor === p.id) { lis.data = null; lis.dataFor = ""; }
+  if (state.open === p) listenOpened(p);
+  if (quiet) return;
+  await C.store.writeIndex(state.pages);
+  renderLibrary();
+  toast(t("The saved narration is gone. Narrate reads it live again."));
+}
+// Narrate's button on a clip with its own sound: from the reading line,
+// or pause and go on as the player's button does.
+async function voicedPlay() {
+  const p = state.open;
+  if (lis.key === p.id) { listenToggle(); return; }
+  C.reader.readable(READ_OPTS);
+  const at = C.reader.firstShown();
+  const s = await syncFor(p, p).catch(() => null);
+  const t = s && (at.index > 0 || at.offset > 0) ? L.timeAt(s, at.index, at.offset) : null;
+  listenPlay(p, t == null ? undefined : t);
+}
+let voiceStep = null;
+A.onVoiced((e) => { if (voiceStep) voiceStep(e); });
+
 // ---- The card and the library ----
 
 // An audiobook's line on its card: what's left to hear.
@@ -1467,7 +1893,7 @@ function listenLine(p) {
 const listenDone = (p) => (durOf(p) ? Math.min(1, placeOf(p) / durOf(p)) : 0);
 // The headphones on an audiobook's cover.
 function listenBadge(p, thumb) {
-  if (!isAudiobook(p) || p.audio.overlay) return thumb;
+  if (!isAudiobook(p)) return thumb;
   const mark = el("span", { class: "listen-badge", "aria-hidden": "true" });
   mark.innerHTML = ICON_HEAD;
   if (thumb.tagName !== "IMG") { thumb.classList.add("has-listen"); thumb.append(mark); return thumb; }
@@ -1492,7 +1918,7 @@ function listeningGroup(title = t("Listening")) {
     switchRow(t("Keep playing when you leave the book"), t("Off: it stops when you go back or open another clip"), prefs.keep, (on) => setListenPref("keep", on)),
     A.native ? switchRow(t("Allow mixing"), t("Music or a podcast in another app keeps playing under the book. Off: they pause while it plays"), prefs.mix, (on) => { setListenPref("mix", on); volRow.hidden = !on; }) : null,
     volRow,
-    A.native ? switchRow(t("Small window outside the app"), t("Going home, the book stays in a window you can move, with back, play and forward"), prefs.pip, (on) => setListenPref("pip", on)) : null));
+    A.native && C.platform.android ? switchRow(t("Small window outside the app"), t("Going home, the book stays in a window you can move, with back, play and forward"), prefs.pip, (on) => setListenPref("pip", on)) : null));
 }
 // The reader sheet's tab for an audiobook, in Narrate's place.
 function listenSheetPart() {
@@ -1505,8 +1931,8 @@ function listenSheetPart() {
   return part;
 }
 function audiobookSections() {
-  const adding = el("p", { class: "footnote" }, t("Add an M4B or MP3 with Add a file{x}. It's played from where it is, and shows under Files.", { x: C.platform.files.canPickFolder ? t(", or a folder of them with Add an audiobook folder") : "" }));
-  if (!A.canTranscribe) return [listeningGroup(), adding, el("p", { class: "footnote" }, t("Reading along with a book or a transcript is in the Android app."))];
+  const adding = el("p", { class: "footnote" }, t("Add an M4B, an MP3 or a zip of them with Add a file{x}. It's played from where it is, and shows under Files.", { x: C.platform.files.canPickFolder ? t(", or a folder of them with Add an audiobook folder") : "" }));
+  if (!A.canTranscribe) return [listeningGroup(), adding, el("p", { class: "footnote" }, t("Reading along with a book or a transcript is in the Android and iPhone apps."))];
   const slot = el("div", { class: "kokoro-slot" }, el("p", { class: "footnote" }, t("Looking…")));
   fillTranscripts(slot);
   return [listeningGroup(), slot, adding];
@@ -1515,7 +1941,7 @@ async function fillTranscripts(slot) {
   const s = await listenModels();
   if (!slot.isConnected && slot.dataset.drawn) return;
   slot.dataset.drawn = "1";
-  if (!s || !s.supported) { slot.replaceChildren(el("p", { class: "footnote" }, t("Transcripts need an Android phone with a 64-bit processor."))); return; }
+  if (!s || !s.supported) { slot.replaceChildren(el("p", { class: "footnote" }, t("Transcripts need an iPhone, or an Android phone with a 64-bit processor."))); return; }
   const busy = s.step === "downloading" || s.step === "checking" || s.step === "unpacking";
   const again = () => fillTranscripts(slot);
   const act = (fn) => async () => { try { await fn(); } catch (e) { toast((e && e.message) || t("Couldn't do that. Try again.")); } again(); };
@@ -1545,7 +1971,11 @@ async function fillTranscripts(slot) {
       switchRow(t("Write ahead while charging"), t("The rest of the book gets written while the phone charges"), prefs.charging, (on) => { setListenPref("charging", on); if (on) { lis.held = false; writeAhead(); } }),
       switchRow(t("Paragraphs from pauses"), t("A long pause from the narrator starts a new paragraph"), prefs.pauses, (on) => setListenPref("pauses", on)),
       switchRow(t("Chapters from the file"), t("The audiobook's own chapter names as headings"), prefs.chapters, (on) => setListenPref("chapters", on)))),
-    el("p", { class: "footnote" }, t("Transcripts stay on this phone, written while you listen and never when the battery is low or the phone is hot. To fix a word heard wrong, select it in the transcript and tap the pen: it's fixed everywhere it's heard, and the fix syncs.")));
+    C.sync.on ? section(t("Sync"), null, el("div", { class: "group" },
+      switchRow(t("Sync transcripts"), t("Another phone reads along without writing it again. A long book's is a few MB."), C.sync.what.transcripts, (on) => { C.sync.setWhat("transcripts", on); if (on) syncSoon(); }))) : null,
+    el("p", { class: "footnote" }, C.sync.on && C.sync.what.transcripts
+      ? t("Transcripts are written on the phone while you listen, never when the battery is low or the phone is hot. To fix a word heard wrong, select it in the transcript and tap the pen: it's fixed everywhere it's heard, and the fix syncs.")
+      : t("Transcripts stay on this phone, written while you listen and never when the battery is low or the phone is hot. To fix a word heard wrong, select it in the transcript and tap the pen: it's fixed everywhere it's heard, and the fix syncs.")));
   if (busy) setTimeout(() => { if (slot.isConnected) again(); }, 1000);
 }
 SECTIONS.audiobooks = { title: t("Audiobooks"), build: audiobookSections, value: () => (readyPack() || {}).title || "" };

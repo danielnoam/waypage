@@ -60,22 +60,25 @@ src/app-reader.js   moving between screens; the reader around the page: brightne
 src/app-ink.js      Draw: the pen button, the bar of tools, Try your pen, saving a copy with drawings
 src/app-pentest.js  the pen test in Try your pen: asks for ten things in turn, records what the page and the phone report, makes a log
 src/app-library.js  tags, collections, a clip's sheet, multi-select, export, import, watched folders
-src/app-saving.js   sync screen, saving several, next links and new chapters, feeds, home-screen widgets
-src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestures, a feed's sheets
+src/app-sync.js     the shell's sync: GitHub sync and what it carries, sync history, Google Drive backups, the Sync screen
+src/app-saving.js   saving several, next links, new chapters and Website sync
+src/app-feeds.js    Feeds and Newsletters: the feeds followed, checked, drawn and saved from
+src/app-widgets.js  the home-screen widgets and the app icon's shortcuts
+src/app-places.js   the Highlights place, the sidebar, going to a place (`goPlace`, `paintPlace`), big screens, keys, gestures, a feed's sheets
 src/app-kiwix.js    Kiwix packs and books kept as files: the + sheet's downloads (where they're kept, Wi-Fi wait), a pack's articles in the reader (links, Back, Search this pack, Save this article), a book as a collection of clips
 src/app-discover.js the Discover place: Wikipedia today, the list, its search, the Sites grid (stories, books, texts), the story and sign-up sheets
 src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
-src/app-listen.js   audiobooks: bringing one in, the player and its bar, reading along, transcripts written ahead, fixes, Find the book in Discover, Settings › Audiobooks
-src/app-extensions.js Settings › Extensions (a switch each) and the places extensions add to the sidebar, above Stats
+src/app-listen.js   audiobooks: bringing one in, the player and its bar, reading along, transcripts written ahead, fixes, Find the book (each found book checked against the narrator), the narrator-left-the-book card, Settings › Audiobooks
+src/app-extensions.js Settings › Extensions (a switch each) and the places extensions add to the sidebar, above Stats: `renderExtension(id)` loads one's code, then draws it through `EXT_PLACES`
 src/app-lock.js     app lock: passcode (PBKDF2 hash), fingerprint or face on Android
-src/app-car.js      Android Auto: the list the car starts from (books, clips cut for Narrate) and where the car got to
+src/app-car.js      Android Auto: the list the car starts from (books, clips cut for Narrate, collections with quick starts) and where the car got to
 src/app-start.js    wiring at launch, what other apps share in, self-update, Test builds, What's new
 src/save.js         link to saved page: fetch, Wikipedia adapter or Readability, allowlist cleaner, picture previews, video cards
 src/reader.js       a saved page in the sandboxed iframe: place, find, highlights, translation, pages mode
 src/store.js        one directory per clip and library.json; IndexedDB in a browser
 src/platform.js     browser vs app: native fetch, plugins, downloads, speech, opening links
 src/files.js        EPUB, Kindle (MOBI/AZW3), FB2, CBZ, Markdown, text and HTML files
-src/listen.js       audiobooks' pure parts: chapters from M4B and MP3 tags, transcripts as paragraphs, fixes, heard words matched to a book's, EPUB Media Overlays
+src/listen.js       audiobooks' pure parts: chapters from M4B and MP3 tags, transcripts as paragraphs, fixes, heard words matched to a book's, how a minute fits a found book (`fit`), how long the narration has been away from the book (`lostFor`), transcripts merged across devices, EPUB Media Overlays
 src/zim.js          Kiwix packs (.zim): the header, entries by path, the title index, clusters stored, xz (its own LZMA2 decoder) or Zstandard (src/vendor/fzstd.mjs); loaded by files.js the first time a pack is opened
 src/pdf.js          PDFs through pdf.js in a locked-down frame
 src/ink.js          drawing over a clip's blocks or a PDF's pages: strokes, layers, undo, what a copy of the PDF is given
@@ -94,13 +97,14 @@ src/imports.js      Pocket, Instapaper, Omnivore, Raindrop, Wallabag exports, Ki
 src/stats.js        reading stats and the reading pace
 src/activity.js     Share reading activity: builds activity/reading.json (docs/reading-activity.md)
 src/dict.js         StarDict dictionaries in IndexedDB
-src/extensions.js   extensions: the catalogue, on or off per device, loading an extension's scripts once it is on
+src/extensions.js   extensions: the catalogue, on or off per device, loading an extension's scripts once it is on. **Adding one:** an entry here (id, title, note, scripts, and `place`: the sidebar icon's paths, its name, what to say when its code didn't load; `find`: Settings search words), a hidden `<main id="id">` in index.html, its scripts in sw.js's ASSETS, and in its own shell file `EXT_PLACES.id = draw` (and `EXT_PAGES.id` for its Settings page). The core asks `C.ext.places()` and `C.ext.place(id)` and never names an extension (`extensions.test.js` fails if it does; Anki's own sync in sync.js and its switch on the Sync screen are the listed exceptions). A list Sync should carry is a `sync` entry too, see Sync
 src/fsrs.js         the Anki extension's scheduler: FSRS-5 in plain JS; loaded only once Anki is on (as are anki.js and app-anki.js: not in index.html, but in sw.js's ASSETS)
 src/sqlite.js       a read-only SQLite reader (table b-trees and overflow pages, UTF-8), loaded with the Anki extension, for opening an Anki deck
 src/anki-import.js  reads an Anki deck (.apkg: a zip with a SQLite collection) into cards and reviews, and Anki's text export's counterpart lives in anki.js; loaded with the Anki extension
 src/anki.js         the Anki extension's engine: decks, cards and a review log (anki/ beside the library, per-device log), each card's schedule replayed from the log
 src/calibre.js      the Calibre extension's library folder: picked once (the Files plugin, or a browser's folder picker kept in IndexedDB), metadata.db read with sqlite.js into books, a book's best file and its cover read from the folder by path
 src/app-calibre.js  the Calibre extension's place: the books as covers with search, sort and tag, a book's sheet (Read it from the folder, or Copy into your Library), Settings › Extensions › Calibre
+src/servers.js      the list of servers Catalogs, WebDAV and Audiobookshelf each keep: stored with its passwords or tokens, the removed ones remembered, `shared()` without secrets for sync, `mergeIn()` from another device (a secret stays only for the same user on the same server, `servers.same`); loaded with any of the three
 src/opds.js         the Catalogs extension's catalogs: the list on this device, OPDS 1 (Atom) and 2 (JSON) feeds read into folders and books, search, a book's file with the catalog's login
 src/app-catalogs.js the Catalogs extension's screens: the Catalogs place in the sidebar (folders, books, search), the Add a catalog sheet, Settings › Extensions › Catalogs
 src/webdav.js       the WebDAV extension's servers: the list on this device, a PROPFIND answer read into folders and books, a book's picture found beside it, a file with the server's login
@@ -114,6 +118,7 @@ src/keel/github.js  the GitHub requests sync.js makes: reading, writing and comm
 src/keel/errlog.js  the errors this device hit, for Report a problem; loaded first, set up by its tag in index.html (from keel, below)
 src/keel/platform.js  where it runs (phone, browser), app-build.json, links out to the phone's browser (from keel, below); src/platform.js builds on it
 src/keel/releases.js  the app's releases on GitHub: the update check, the Test builds list, opening one in the browser (from keel, below)
+src/keel/update.js    the APK download and Android's installer behind platform.js's downloadUpdate (from keel, below)
 src/keel/motion.js  the motion engine: springs sampled into CSS linear(), every move, reduced motion and Animations off (from keel, below); src/motion.js gives it Waypage's springs
 src/keel/sw-preview.js  sw.js's half of a test build in the browser (from keel, below)
 src/keel/i18n.js    translations: t() and tn() with plurals, dir, dates and numbers in the chosen language (from keel, below)
@@ -125,7 +130,7 @@ src/vendor/         Readability, pdf.js, foliate-js's MOBI reader, fzstd (Zstand
 assets/             icon and splash sources for the apps
 icons/, icon.svg    app icons
 worker/             the web copy's fetch proxy, a Cloudflare Worker (worker.js, wrangler.toml, README.md has the setup)
-native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Pen, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes), Audiobook (AudiobookService plays with the screen off; Listen writes transcripts with sherpa-onnx's offline recognizer), Car (Android Auto: CarService, Car's one shared media session), Dav (a WebDAV PROPFIND written over a socket, for Files' davList), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
+native/share/       the Capacitor plugin package (Android Java, iOS Swift): share target, Files, Speech, Downloads, Feeds, Widgets, SignIn, Translate, Drive, VolumeKeys, Pen, Brightness, AppLock, Kokoro (voices for Narrate, with the com/k2fsa/sherpa/onnx mirror of sherpa-onnx's JNI classes; on iOS KokoroVoice plays them for SpeechPlugin, and ios/Sherpa/bz2 is libbz2's module map for unpacking), Look (the theme's colour on the window and WebView at the next start), Audiobook (AudiobookService plays with the screen off, AVPlayer on iOS; Listen writes transcripts with sherpa-onnx's offline recognizer; Voicing speaks text into an audiobook, Voicing.swift on iOS), Car (Android Auto: CarService, Car's one shared media session), Dav (a WebDAV PROPFIND written over a socket, for Files' davList), PageRender, FileSave, Print, Connection, and the iOS share extension and widgets
 tools/build-www.js  copies sw.js's ASSETS into www/ for the apps, writes app-build.json
 tools/android-manifest.js, tools/android-version.js, tools/ios-project.js, tools/ios-extensions.rb   patch the generated native projects
 tools/release.js    bumps the three version places and dates CHANGELOG.md's Unreleased entry
@@ -134,9 +139,11 @@ tools/keel-checks.js  contrast and CSP checks the tests use (from keel, below)
 tools/unreleased.js  the unreleased channel's files: a note beside main's APK, then the Pages deploy puts the newest under unreleased/ (from keel)
 tools/sign-apk.sh   signs the APK with the release key in CI
 tools/sherpa-lib.sh   fetches sherpa-onnx's arm64 library (Kokoro voices) into the Android build, pinned and checked
+tools/sherpa-ios.sh   fetches sherpa-onnx's and onnxruntime's iOS xcframeworks (Kokoro and Piper voices) into the iOS build, pinned and checked, with the module map Swift needs
 tools/test-build.sh        puts a labelled pull request's build on its test-<branch> pre-release
 tools/packs/build-lang.js  builds Anki's language packs (a StarDict .tar.gz) from Wiktextract data; not shipped, and prints the SHA-256 the catalogue pins
 tools/shots.js      retakes the README's screenshots (tools/shots/demo is the demo library)
+tools/icons.js      renders icons/ and assets/ (icons, light splash) from icon.svg
 tools/check-discover.js  checks every feed, sign-up and serial in Discover's list still answers (weekly, discover-check.yml)
 test/               node test/run-all.js runs every *.test.js
 keel.config.json, keel.lock.json  the files shared with LifeLog through keel (see Versions, cache and updates)
@@ -308,7 +315,7 @@ strokes]]`, for Highlights to list. Highlights and drawings on a file read
 from outside go in library.json's `outside` map, keyed by the file's
 fingerprint (`files.fingerprint`: size and first and last 256 KB, SHA-256),
 merged three ways (`sync.mergeOutside`) and applied to every file here
-with that fingerprint (`app-saving.js outsideTake`). A note's `ink.json`
+with that fingerprint (`app-sync.js outsideTake`). A note's `ink.json`
 merges with GitHub's against `ink-base.json` (`sync.noteInkMerged`), what
 sync last left on both.
 
@@ -337,6 +344,22 @@ fountain pen thin along a 45° nib and thick across it, brush a strong
 response with tapered ends); a saved size from the three-step bar maps 0, 1, 2
 to 0, 2, 4 on the five (`waypage.ink` has `v: 2` from then on).
 
+Draw on in Pages is locked to the screen shown (`reader.js lock`,
+`lockedPages()`; ink.js `lockOf()`). A touch that draws never turns or
+drags the page (`pagedInput` checks `e.defaultPrevented` and
+`inkHook.drawing()`), and a scroll the frame didn't ask for is put back.
+Strokes, the eraser, drops and Paste stay on the locked page(s) (a stroke's
+points stop at its edges). A pinch zooms the row in place instead of
+opening the viewer (`pz`, a transform about the locked page's middle,
+`applyPz`, clamped so the page's edges never leave the screen's, the other
+pages hidden by `co-zoomed`); `drawNear` draws larger by `pageZoom()`. Only
+a turn changes the lock: two fingers swept sideways (zoomed, past the
+page's edge), or a selection dragged to a side and held a quarter of a second
+(`ink.js edgeWatch`, `carry`), which turns and brings the items onto the
+new page. In Scroll the same drag held at the top or bottom edge scrolls
+the page with it, its speed easing in and out. Straight lines and clean circles (`ink.js holdArm`, `snapShape`, `lineTo`): a pen or highlighter stroke held still 500 ms (the pointer within 6 px) is checked against a line (every point within 8% of its length) and an ellipse (closed, within 25% of the bounds' ring); a line's end then follows the pen, a circle moves with the pen (`moveRound`). The switch is `shapes`, kept in `waypage.ink` and set from the reader settings' Draw tab (`app-reader.js drawPart`, shown for a note and for anything drawn on). The zoom's origin is the locked page's middle (set when a gesture starts, cleared only by `resetPz`), so the spot under the fingers stays under them. A pen, or a palm beside it, is not a pinch
+(`inkHook.penDown`).
+
 Select, a picture and colours of your own (1.57.0), all in `ink.js` and
 `app-ink.js`. Select is a fourth tool: a loop (`inside`, even-odd) takes the
 strokes with half their points in it and the pictures whose middle is in
@@ -359,6 +382,43 @@ kept (`.custom`). The bar's colours are slots (`inkSlots`, kept in
 `waypage.ink` as `slots`): a long press, right click or Shift+Enter opens
 the colour sheet for one; its eyedropper (`ink.pick`, `colorAt`) takes the
 colour of the stroke tapped, else the pixel of the page's picture there.
+
+A comment bubble (2026-11, `ink.js` `t: "n"`) is a third box item beside text
+and pictures: `{ id, t: "n", c, x, y, w, h, text, tags? }`, `w` and `h` one fixed
+size in page widths (`NOTE_W`), `c` one of the five highlight colours, up to 20
+tags. Draw's Add › Note drops one on the page in view (`addNote`) and opens its
+sheet (`app-ink.js inkNoteSheet`, laid out like a highlight's: colours, comment,
+tags); `editNote` and `removeNote` are undo steps. It works in both modes, so a
+clip's bubbles ride `ink` by block through sync and backup unchanged (`mergeInk`
+is by id). Tapping a bubble opens its sheet with Draw off (`onNote`, a click on the
+`.note` node, which keeps `pointer-events` on in reader.css); with Draw on, Select
+takes it and the bar's Edit note opens it. Its colours are the highlights' (`MARK_COLORS`)
+and its tags are the highlights' list: `allMarkTags` counts a bubble's tags, and the
+sheet uses `markTagsEditor` with a `put` in place of saving a highlight. A bubble is
+not a drawing: `count`, `drawn`, `clearPage`, `clearAll`, `inkGroups` and a row's
+remove leave it out, and Highlights lists it as what it says (`app-ink.js inkNotes`,
+`noteRow`): in the clip's sheet and the Highlights place, among the highlights in
+the clip's order, through the same colour, tag and word filters, and in Copy all
+as `> 💬 comment #tags`. By block it is read from `ink` on the entry; a note's or
+outside PDF's are summed up on the entry as `noted` (`[{ id, n, text, c, tags }]`,
+this device's own like `drawn`, written by `onSaved` and `outsideDrawn`), so a
+file's bubbles show and count their tags without it being opened; on another
+device a note's show once it has been opened there. Moving: with Select, any
+pointer on a bubble takes it and drags it in the same press (`down`); otherwise a
+press held still for 450 ms (`notePress`, `carry`) picks it up and drags it, Draw
+on or off, and a quick tap opens it (on the click that follows, as opening on
+`pointerup` put the sheet under the finger and the click closed it). Chrome ignores `touch-action` on SVG shapes, so a
+finger on a bare bubble starts a pan and the browser sends `pointercancel`, which
+puts a dragged item back: its touch area is an HTML `div.note-hit` (`touch-action:
+none`) in a `foreignObject`, the one thing it honours, and the reader's swipes,
+page turns and brightness skip touches that start on one (`reader.js onBubble`);
+tests for it must use real touch (CDP `Input.dispatchTouchEvent`), not events fired
+at the node. A carry is `cur` with
+`select`, `carry` and `mode: "drag"`, so `selMove`, `selUp`, `selDrop` and undo
+are Select's own; after it the selection is cleared when Draw is off, and the
+reader's tap is held back (`click`, `noteAt`). Left out for now: a copy of the
+PDF and Save as PDF (`pdf.js inkOf` has no sticky-note editor in pdf.js's
+annotation storage; `forPdf` and `notes.js sheetCanvas` skip it).
 
 The pages are one surface (1.57.0). A stroke or picture that reaches over
 more than one page is kept on each page it touches, whole, in that page's
@@ -577,11 +637,18 @@ web copy stay links, as before.
   A device that has reviewed nothing sends no log. Changes made here
   start a sync 30 seconds after the last one (`anki.edited`).
   `test/syncanki.test.js` plays two devices on one made-up repo.
+- **Extensions' lists** go through one function, `syncList`, for every
+  catalogue entry in `src/extensions.js` with a `sync` (its file, its
+  module, where this device remembers what it sent). A new extension with
+  a list to carry adds that entry and `list()`, `shared()` and
+  `mergeIn()` on its module; sync.js doesn't change. The three today:
 - **Catalogs** (2026-11, while the extension is on): `catalogs.json`, the
   list with each catalog's address, name and username but never its
   password (`opds.shared()`), and the ones removed with when, so a removal
   sticks. Merged by id, the newer change winning (`opds.mergeIn`); a
-  password typed on this device stays, unless the username changed. One
+  password typed on this device stays, unless the username changed or
+  the address now points at another server (`servers.same`: the same
+  origin, or the same host moved up to https). One
   that arrives with a username and no password asks for it in its place.
   Sent only when it differs from GitHub's; no sync of its own, it goes
   with the next. `test/synccatalogs.test.js`.
@@ -634,12 +701,18 @@ offers any version higher than its own. A merge without a bump only
 refreshes the web copy. CONTRIBUTING.md has the steps.
 
 The files listed in `keel.lock.json` (`server.js`, `src/keel/qr.js`,
-`src/keel/github.js`, `src/keel/drive.js`, `src/keel/errlog.js`, `src/keel/platform.js`, `src/keel/releases.js`, `src/keel/sw-preview.js`, `src/keel/i18n.js`,
+`src/keel/github.js`, `src/keel/drive.js`, `src/keel/errlog.js`, `src/keel/platform.js`, `src/keel/releases.js`, `src/keel/update.js`, `src/keel/sw-preview.js`, `src/keel/i18n.js`,
 `tools/release.js`, `tools/android-version.js`, `tools/keel-sync.js`, `tools/keel-checks.js`, `tools/unreleased.js`,
 `test/keel.test.js`, the github-pages skill) come from keel
 (danielnoam/keel), shared with LifeLog. Don't edit them here:
 `keel.test.js` fails. Change them in keel, tag a release there, then run
 `node tools/keel-sync.js v<version>` in a PR here.
+
+The app's home is index.html's `keel-site` and `keel-repo` metas: where
+installed copies look for unreleased builds and the web address they
+link to. Before moving the repo to an organization or a custom domain,
+change both and ship a release; GitHub redirects the repo, not its Pages
+address (keel README, "Moving an app").
 
 ## The phone apps
 
@@ -696,7 +769,7 @@ drive the app in Chromium with Playwright and skip when it isn't installed
 saved in `test/fixtures/sites/`, with nothing going out; `discover.test.js`
 reads the story sites' lists from hand-made pages and pages cut from WEBTOON, Tapas and Wattpad in `test/fixtures/discover/`); `build.test.js` checks the
 bundle, the three version places and CHANGELOG.md; `contrast.test.js`
-checks every theme for WCAG AA; `csp.test.js` checks the page's Content-Security-Policy through keel's check (ui.test.js fails on anything it blocks); `docs.test.js` checks this file names
+checks every theme for WCAG AA; `csp.test.js` checks the page's Content-Security-Policy through keel's check (ui.test.js fails on anything it blocks); `unused.test.js` fails on a function, top-level name or CSS class in src/ that nothing uses (a class built from pieces is listed in its `BUILT`); `docs.test.js` checks this file names
 every source file, that the app uses only DESIGN.md's moves and that every looping animation has a reduced-motion answer (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
 `sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `syncanki.test.js`, `synccatalogs.test.js`, `syncwebdav.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `recover.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) and `zim.test.js` (Kiwix packs, old and new layout, xz and Zstandard, against `test/fixtures/zim/`, which `make.py` builds) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR and on `main`, spread
@@ -723,7 +796,10 @@ fixes from both). `audio` (`{ parts, chapters, dur }`, each part a sound
 file's ref) is this device's own. A folder is one book; its fingerprint
 is its files' names and sizes. Playing is AudiobookService (a foreground
 mediaPlayback service, one MediaPlayer, parts played in turn, a stretch
-of a zip by fd offset for an EPUB's narration); a browser uses <audio>.
+of a zip by fd offset for an EPUB's narration); on iOS AudiobookPlugin.swift
+(one AVPlayer, a zip's stretch copied out to the cache first, as AVPlayer
+plays only whole files, with Listen.swift for transcripts); a browser
+uses <audio>.
 
 Reading along needs words with times. The phone writes a transcript a
 little ahead of where you are (`writeAhead`, three minutes at a time,
@@ -747,7 +823,52 @@ so another phone that downloads the same recording picks up the place.
 `audio.ours` marks parts in Waypage's own places, which `dropAudioFiles`
 deletes with the clip; a picked folder's stay. Its Gutenberg book (the
 recording's `url_text_source`) downloads after it and is paired
-through `pairPending`, as Find the book in Discover does.
+through `pairPending`, as Find the book does.
+
+Find the book (2026-11) searches Discover's book sites and Wikisource.
+With a transcript model it takes a minute of the narrator from where you
+are (the transcript there, else `heardSample` writes it now, holding
+`writeAhead` off with `lis.testing`), downloads the first five found
+(EPUBs, or the Wikisource page through its API) and `listen.fit` says
+"same" (a fifth of the heard runs of five words are in the book),
+"other" (the names heard mid-sentence are the book's: another
+translation) or "no". A Wikisource text is saved as one EPUB book
+(Discover's Save as an EPUB file) and paired when it arrives. While
+reading along, `checkLost` asks `listen.lostFor` every ten seconds; four
+minutes heard and not in the book brings the `#listenLost` card. Going
+to the transcript keeps the book as `listen.was`, so The book in the
+Read along drop-down goes back to it.
+
+A zip of sound files (Add a file) is one book (`addAudiobookZip`,
+`audio.zip`): its parts are stretches of the zip (`offset`, `length`),
+played and transcribed from there like an EPUB's narration
+(`partSource`). Only files stored as they are; a zip whose sound files
+are compressed is turned away with a word to unzip it.
+
+Transcripts sync (2026-11, `what.transcripts`, on by default) as
+`transcripts/<fingerprint>.json` (`listen.shareTranscript`: pieces,
+ranges, pack). `syncTranscripts` brings GitHub's into this device's
+through `C.listenTake` (`listen.mergeTranscript`: what's written here
+stays, theirs fills the gaps), into the same object any writing under way
+holds, and sends this device's when it has changed.
+
+A clip's own sound made from its text (Save the narration,
+`makeAudiobook`, Android only) is spoken by the Narrate voice of the
+clip's language: `AudiobookPlugin.voice` runs `Voicing` on its own
+thread, each of Narrate's pieces through `TextToSpeech.synthesizeToFile`
+(any engine, Kokoro and Piper through `KokoroTtsService`), read back as
+PCM and encoded with MediaCodec into one AAC .m4a (48 kbps mono) of at
+most 120 pieces, with each piece's start and end. The files go through
+`keepMade` into Waypage's own files and become the clip's own `audio`
+(`ours`, `voiced`), like an EPUB's narration: the clip is no audiobook of
+its own (`ownSound`), it reads along with itself, Narrate's button plays
+it (`voicedPlay`), and the car lists it with the audiobooks. `audio`
+never syncs and is in no backup (`backup.cleanMeta` leaves it out), so
+the files stay on the phone. The pieces' times are written whole into
+listen.json (`ranges` covers it, so nothing is written ahead; `para`
+starts each paragraph). A collection makes one for each clip without.
+The run is a Downloads card, so the dataSync notification keeps the
+app up while it's made.
 
 A streamed audiobook (the Audiobookshelf extension) is an entry with
 `remote` (`{ kind, server, item }`) and a `link` of `abs:<server>:<item>`
@@ -767,18 +888,29 @@ MediaBrowserService, no androidx) and `automotive_app_desc` in the
 plugin's manifest. Narrate and audiobooks share one MediaSession
 (`Car.session`, never released): the car binds to one token, so each
 player only says it's the one playing (`Car.playing`) and hands it back
-when it stops (`Car.idle`). The car's tabs are Continue, Audiobooks and
-Up next; an audiobook's chapters are the session's queue. Custom
-actions add next and previous clip (`SpeechService.clip`: the clip the
-app queued, else `Car.neighbour` under Up next) and next and previous
-chapter or file (`AudiobookService.chapter`). A clip the car jumps to
-that the app didn't queue isn't followed by the open app's player.
+when it stops (`Car.idle`). The car's tabs are Continue, Audiobooks,
+Up next and Collections (Android Auto shows four at most); an
+audiobook's chapters are the session's queue. Custom actions add next
+and previous clip (`SpeechService.clip`: the clip the app queued, else
+`Car.nextId`: the next in the clip's collection or series, else under
+Up next) and next and previous chapter or file
+(`AudiobookService.chapter`, which past the book's ends goes to the
+collection's next or previous). Their icons are a list with an arrow,
+not the skip arrows: beside the paragraph buttons, look-alikes read as
+previous and next swapped. A clip the car jumps to that the app didn't
+queue isn't followed by the open app's player.
 
 The car starts things with the app closed, so the WebView can't help.
 `app-car.js` writes `car.json` (CarPlugin) when the app is put away and
 a little after it opens, if anything changed: up to 40 books with their
 parts, chapters and place, and the 10 latest unfinished clips with their
-text already cut into Narrate's pieces, voice, engine and speed. A job
+text already cut into Narrate's pieces, voice, engine and speed, and
+the 8 collections or series read or added to last, in their order, with
+quick starts and only some of their clips (the first two, the newest,
+and from just before where it was left to 8 after; `at` gives each
+one's place, so Next never jumps a gap). Those carried only for a
+collection are marked `hide` and stay off the Audiobooks and Up next
+tabs. The car's words come in the app's language (`words`). A job
 the car started is marked `car`; where it got to goes into
 SharedPreferences (`Car.heardBook`, `Car.heardClip`) and `carPlaces`
 takes it back into the library when the app opens. A clip's place there
@@ -817,6 +949,8 @@ adds a line here.
 
 - Live clips and Update from the site (2026-11) keep one earlier copy of the page on the device (`earlier` in the index, app-cards.js), never synced or backed up, so going back works only on the device that fetched it. A copy that looks broken (under half the words, under 100 where there were more, or only the start where it was whole) is kept as the other copy instead of put in place. An unchanged page keeps its copy and id, so nothing new goes to sync. A live clip updates on open at most once an hour (`liveAt`, device-only), and on every pull down the library (`updateLiveClips`, three at a time, quiet per clip).
 - Deleted chapters and Keep in Website sync (2026-11) are this device's own (`waypage.chaptersGone`, `waypage.chaptersKeep` in localStorage, app-saving.js), not synced: a chapter deleted on another device is noted here when sync takes it away, so nothing new had to go into library.json. Keep deletes only read chapters, never one with highlights, notes or drawings, a favourite or the one open, and saves only chapters after the last one saved or deleted, so a story started part way in doesn't fill in from chapter 1.
+- New chapters with the app closed (2026-11, Android) are spotted by FeedCheckJob without save.js: the app hands it each linked collection's contents page, the path its chapters share and how deep they go (`chapterShape`), and every chapter it knows (`chapterKey`: host without www., then the path). Any link on the page (or in its scripts' JSON) of that shape that isn't known counts. It's only a notification: the app finds the chapters itself when opened. It misses what the one page doesn't list (a list oldest first over several pages), and a blog's dated posts share no path, so those wait for the daily check. A plain request turned away goes through `HiddenPage`, a WebView with no window.
+- Translate chapters (2026-11) translates a chapter when it opens, not when it saves: the blocks a translation is kept against come from the reader's laid-out page (`translatable()` in reader.js), which a save never builds. ML Kit works offline once its languages are down, so picking the language downloads them then. The pick (`waypage.chaptersTranslate`) is this device's own, like the translations.
 - Deleted clips in Stats (2026-11): stats.js keeps only ids, so each device keeps a name (title, site, address or file key) for every clip it has read, in its synced stats file, and marks it gone when the clip leaves its library. No cover is kept for a deleted clip. Clips deleted before this have no name and stay out of the list. Removing one from Stats hides it on every device but leaves its time in the totals.
 - Kiwix packs (2026-11) are read over the bridge a stretch at a time (`files.blob`, 4 MB pieces, small reads through zim.js's 64 KB blocks): a title search on a big pack makes a few hundred small reads. A native ZIM reader would be faster but is Android and iOS code twice; this is plain JS everywhere. Downloads go one at a time through the Downloads plugin, which resumes but never runs two.
 - The page's Content-Security-Policy (index.html) lets in inline styles
@@ -878,7 +1012,12 @@ adds a line here.
   file in; only the model is downloaded, and checked against its SHA-256
   before unpacking. It is a real Android speech engine (`KokoroTtsService`),
   so the lock screen, PiP and sleep timer work unchanged, but other apps
-  can use it too. 32-bit and x86 phones, iOS and the web copy get none.
+  can use it too. 32-bit and x86 phones and the web copy get none.
+  iOS has them too (sherpa-onnx's static xcframework, linked into the app,
+  about 25 MB): iOS lets no app add voices to the phone's list, so only
+  Narrate speaks them, through SpeechPlugin playing KokoroVoice's audio on
+  an AVAudioEngine. Its archive lags Android's (pinned to the newest with
+  an iOS build); the models are the same files.
   Piper voices (one per language) are more downloads for the same engine
   and library; one model is in memory at a time, so switching between a
   Kokoro and a Piper language reloads (a second or two).
@@ -979,21 +1118,43 @@ adds a line here.
   so the car can start them with the app closed. Only the car, the
   Assistant, Bluetooth and system apps (by uid, system or from the Play
   Store) may browse it, and with App lock on it lists nothing.
+- Save the narration takes as long as the voice does: Google's voices
+  are faster than real time, Kokoro on a phone may be slower, so a long
+  book can take hours, and Android 15 ends a dataSync service after six
+  hours a day. Pausing stops the file in hand and makes it again from its
+  start. A clip's made sound is in no backup or sync: another phone
+  narrates the clip, or makes its own.
 
 ## Traps
 
 Things that broke once and would again. Check here before touching the
 area.
+- Chrome and Android's WebView ignore `touch-action` on SVG shapes. A drag that
+  starts on one (a comment bubble in `ink.js`) is cancelled by the browser's
+  own pan (`pointercancel`), and the item snaps back. Give the shape a real
+  box: an HTML `div` in a `foreignObject` with `touch-action: none`. A test that
+  fires `PointerEvent`s at the node passes anyway; use real touch (CDP
+  `Input.dispatchTouchEvent`), as the Add › Note steps in `test/ui.test.js` do.
+- Pages mode scrolls by hand (`pagedInput`), so ink's `preventDefault` on a
+  touch doesn't stop it. A new document-level touch gesture has to check
+  `e.defaultPrevented` and `inkHook.drawing()`, or the page moves under the pen.
+- The page's own touch gestures (pull to check, swipe between chips, swipe
+  in the sidebar) listen on the whole view, so they also see a drag inside
+  an open drop-down: pulling its list to the top reloaded Discover and shut
+  the menu. A new view-wide gesture skips `.dropdown-menu`, as the sheet's
+  drag to close does.
 - A build from before Notes (1.57.0 and older, and `test-omri-dev`) drops
   every note when it syncs: `cleanMeta` keeps only entries with an address,
   so the next merge marks them deleted and removes their folders on the
   phone. GitHub's `notes/<id>/` is left, which is what Recover's Look for
   deleted notes reads. Don't sync a library with Notes from such a build.
 
-- A new field on a clip that should sync goes in three lists: sync.js `SYNCED`, app-saving.js `SYNCED_KEEP`, and backup.js `cleanMeta`. Sync's merge runs every entry through `cleanMeta` first, so a field missing there is dropped on every sync even though `SYNCED` names it (Live, 2026-11).
+- A new field on a clip that should sync goes in three lists: sync.js `SYNCED`, app-sync.js `SYNCED_KEEP`, and backup.js `cleanMeta`. Sync's merge runs every entry through `cleanMeta` first, so a field missing there is dropped on every sync even though `SYNCED` names it (Live, 2026-11).
+- `actions/deploy-pages` often finds no `github-pages` artifact straight after the upload (most deploys of main failed so on 25 Nov 2026, leaving the web copy and `unreleased/` a few merges behind). `pages.yml` tries three times with waits; a red Web app run still means the unreleased channel didn't move.
 - A merge done with the workflow's own `GITHUB_TOKEN` starts no other workflows, so `pages.yml` and the release builds never run. `auto-merge.yml` turns auto-merge on with the `AUTOMERGE_TOKEN` secret (a fine-grained token of Daniel's) for that reason.
 - The books of an audiobook folder added as a series share one `link`, the folder picked. Removing an entry lets go of its `link` only when no other entry still reads from it (`releaseLinks`).
 - A field missing from sync's `SYNCED`, backup's `cleanMeta`, `SYNCED_KEEP` and `AGAIN_KEEP` is dropped on the next sync or update. `folderSeries` and `folderIn` are in all four; a device without them strips them from clips it changes, which `healSeries` repairs while any clip of the series keeps them.
+- A story's status (`siteStatus`: completed, ongoing, hiatus, stubbed, dropped, inactive) is read only by site rules (`status` in save.js `SITES`: Royal Road, AO3, FanFiction.net, Scribble Hub) from the story page, kept on every clip of the collection like `siteTags`, and refreshed by Website sync's check. It is device-only like the cover (not in sync or backups): each device reads its own on its next check. A page that stops saying keeps the last word. `statusPick` (Edit's Status row) and `folderNoStatus` (Website sync's "Status from the site" off) are synced marks on every clip like `coverPick`; the site's word shows over the pick unless it's switched off. Chapters saved later take it from their collection mates, or from `seenStatus` (what the last story page read said) on a first save.
 - A site's tags (`siteTags`, { site, tags }) are read in `readArticle` before Readability runs: Readability takes the `<script>` tags out, and the schema.org keywords with them. A collection's clips carry the story page's tags, never a chapter page's own (`runJob`).
 - On a big screen the route steps back out of Settings by itself when it lands on the menu with a section open, so leaving Settings from deep inside (`outOfSettings`) waits a moment after each step instead of reading `history.state`: two backs at once leave the app.
 
@@ -1045,9 +1206,15 @@ area.
   `onDestroy`: the car holds that token.
 
 - A collection's mosaic cover is a picture of your own whose name starts
-  "ux" (`MOSAIC_FILE`); own pictures start with a base-36 time ("um…"
-  until the 2050s). Change how either is named and the Cover choices
-  show the wrong one as picked.
+  "uy", then its kind (m mosaic, s stacked, v side by side) and a hash of
+  the clips it shows (`mosaicName`); "ux" is a mosaic from before, drawn
+  again once. Own pictures start with a base-36 time ("um…" until the
+  2050s). Change how either is named and the Cover choices show the wrong
+  one as picked. A mosaic is a drawn picture, so it went stale when its
+  clips changed (it showed a deleted one): `watchMosaics` (after each
+  library draw) draws it again when the hash no longer matches. Which
+  clips it shows depends on `thumb`, which is this device's own; two
+  devices that disagree would each draw their own, once a session.
 - The small window outside the app (picture in picture) is one setting
   on the activity that Narrate and audiobooks share, and Android keeps it
   armed until told otherwise. Only `PipWindow.java` sets it, and it arms
@@ -1084,6 +1251,13 @@ area.
   engine the next piece only when one ends, so Kokoro paused between
   paragraphs. `SpeechService.makeAhead` asks `Kokoro.take` for the next
   piece, made on its own thread.
+- **Narrate's skips while a piece is being made:** each press moved on
+  again, so they piled up and fired once the sound came. Previous/next
+  are dropped while the piece hasn't sounded (`SpeechService.busy`,
+  `moveAloud`), and the stuck-piece guard counts from its first sound.
+- **sherpa-onnx speaks a lone closing quote:** it cuts sentences after
+  the full stop, so `"Stop."` left a `"` that came out as a mumble.
+  `Kokoro.unquoted` (and its Swift twin) takes quote marks out first.
 - **`el()` attributes:** `disabled: false` still disables a button (it's
   set as an attribute); pass `null`.
 - **`replaceChildren`/`append` write a `null` out as the text "null":**

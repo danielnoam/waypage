@@ -92,6 +92,7 @@
     [/(^|\.)scribblehub\.com$/i, "sh", /^\/series\/(\d+)/],
     [/(^|\.)wattpad\.com$/i, "wp", /^\/story\/(\d+)/],
     [/(^|\.)tapas\.io$/i, "tp", /^\/series\/([^/?#]+)/],
+    [/^ncode\.syosetu\.com$/i, "sy", /^\/(n\d+[a-z]+)\/?$/i],
   ];
   const storyId = (url) => {
     try {
@@ -412,6 +413,47 @@
   const wpBrowseUrl = (key, cat, page) => WP + "/api/v3/stories?filter=" + (key || "hot") + "&category=" + (cat || "3") + "&limit=20&offset=" + (Math.max(1, page || 1) - 1) * 20 + "&fields=" + encodeURIComponent(WP_FIELDS);
   const wpSearch = (words) => found(stories(WP + "/v4/search/stories?query=" + encodeURIComponent(String(words || "").trim()) + "&limit=20&fields=" + encodeURIComponent(WP_FIELDS), parseWattpad));
 
+  // ---- Syosetu ----
+  // Japanese web novels (Shōsetsuka ni Narō), posted by their own authors.
+  // Its public API answers JSON: its first row is the count, then a story
+  // a row. Serials only (type=re, running or finished): a one-shot story
+  // has no chapters to follow. Read with Translate chapters in mind.
+  const SY = "https://ncode.syosetu.com";
+  const SY_API = "https://api.syosetu.com/novelapi/api/";
+  const SY_LISTS = [
+    { key: "weeklypoint", label: "Popular this week" },
+    { key: "hyoka", label: "Top rated" },
+    { key: "favnovelcnt", label: "Most bookmarked" },
+    { key: "new", label: "Latest updates" },
+  ];
+  const SY_GENRES = [[2, "Fantasy"], [1, "Romance"], [3, "Literature"], [4, "Sci-fi"], [99, "Other"]].map(([key, label]) => ({ key: String(key), label }));
+  function parseSyosetu(body) {
+    let data;
+    try { data = JSON.parse(String(body || "").trim()); } catch (e) { return []; }
+    if (!Array.isArray(data)) return [];
+    return data.filter((s) => s && s.ncode && s.title).slice(0, MAX).map((s) => {
+      const code = String(s.ncode).toLowerCase();
+      return {
+        id: "sy" + code, url: SY + "/" + code + "/", site: "Syosetu", title: String(s.title).slice(0, 120), cover: "",
+        tags: String(s.keyword || "").split(/\s+/).filter(Boolean).slice(0, 3),
+        chapters: +s.general_all_no || 0, followers: +s.fav_novel_cnt || 0, rating: 0,
+        by: s.writer ? String(s.writer) : "", about: String(s.story || "").slice(0, 600),
+      };
+    });
+  }
+  const syUrl = (params, page) => {
+    const u = new URL(SY_API);
+    u.searchParams.set("out", "json");
+    u.searchParams.set("of", "t-n-w-s-k-ga-e-f");
+    u.searchParams.set("type", "re");
+    u.searchParams.set("lim", "20");
+    u.searchParams.set("st", String((Math.max(1, page || 1) - 1) * 20 + 1));
+    for (const [k, v] of Object.entries(params)) if (v) u.searchParams.set(k, v);
+    return u.href;
+  };
+  const syBrowseUrl = (key, genre, page) => syUrl({ order: (SY_LISTS.find((l) => l.key === key) || SY_LISTS[0]).key, biggenre: genre || "" }, page);
+  const sySearch = (words) => found(stories(syUrl({ word: String(words || "").trim(), order: "hyoka" }, 1), parseSyosetu));
+
   // ---- WEBTOON ----
   // Comics. The phone gets m.webtoons.com, whose genre and ranking pages
   // list series as links with title_no; its search builds itself, so it
@@ -469,6 +511,7 @@
         tags: (b.bookshelves || []).map((t) => String(t).replace(/^(Browsing|Category):\s*/i, "")).filter((t) => t && !/Best Books|Listings|^Reading Lists?$/i.test(t)).slice(0, 3),
         chapters: 0, followers: 0, rating: 0, stat: b.download_count ? short(b.download_count) + " downloads" : "",
         by: (b.authors || []).map((a) => personName(a && a.name)).filter(Boolean).slice(0, 2).join(", "),
+        tr: (b.translators || []).map((a) => personName(a && a.name)).filter(Boolean).slice(0, 2).join(", "),
         about: String((b.summaries || [])[0] || "").replace(/\s*\(This is an automatically generated summary\.\)\s*$/i, "").slice(0, 600),
       };
     });
@@ -491,6 +534,9 @@
   const SE_SUBJECTS = ["fiction", "nonfiction", "adventure", "science-fiction", "fantasy", "horror", "mystery", "comedy", "drama", "poetry", "shorts", "philosophy", "travel", "childrens"]
     .map((t) => ({ key: t, label: t === "childrens" ? "Children's" : t === "shorts" ? "Short stories" : t[0].toUpperCase() + t.slice(1).replace("-", " ") }));
   const SE_BOOK = /^\/ebooks\/([a-z0-9-]+(?:\/[a-z0-9_-]+){1,3})\/?$/;
+  // A translation's path names its translator third: author/title/translator.
+  const seTranslator = (path) => (path.split("/")[2] || "").split("_").filter(Boolean).slice(0, 2)
+    .map((n) => n.split("-").filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(" ")).join(", ");
   const seEpub = (path) => SE + "/ebooks/" + path + "/downloads/" + path.replace(/\//g, "_") + ".epub";
   function parseSE(html, base) {
     const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
@@ -512,7 +558,7 @@
       out.push({
         id: "se" + path, url: SE + "/ebooks/" + path, site: "Standard Ebooks", book: true, epub: seEpub(path), title: title.slice(0, 120),
         cover: img ? httpUrl(new URL(img.getAttribute("src") || "", base || SE).href) : "",
-        tags: [], chapters: 0, followers: 0, rating: 0, stat: "", by: author, about: "",
+        tags: [], chapters: 0, followers: 0, rating: 0, stat: "", by: author, about: "", tr: seTranslator(path),
       });
       if (out.length >= MAX) break;
     }
@@ -947,6 +993,8 @@
       browse: (k, g, p) => stories(shBrowseUrl(k, g, p), parseSH), search: shSearch },
     { key: "wp", label: "Wattpad", lists: WP_LISTS, genres: WP_CATEGORIES, anyGenre: false,
       browse: (k, g, p) => stories(wpBrowseUrl(k, g, p), parseWattpad), search: wpSearch },
+    { key: "sy", label: "Syosetu", lists: SY_LISTS, genres: SY_GENRES, anyGenre: true,
+      browse: (k, g, p) => stories(syBrowseUrl(k, g, p), parseSyosetu), search: sySearch },
     { key: "wt", label: "WEBTOON", comics: true, once: true, lists: WT_LISTS, genres: WT_GENRES, anyGenre: true,
       browse: (k, g, p) => (p > 1 ? Promise.resolve([]) : stories(wtBrowseUrl(k, g), (h, b) => parseWebtoon(h, b, g))), search: wtSearch },
     // Tapas's browse pages draw their cards with no links to read (seen on
@@ -973,7 +1021,7 @@
       browse: kxBrowse, search: kxSearch },
   ];
 
-  C.discover = { list, refresh, fromSource, clean, isStory, storyId, parseList, rrLists: RR_LISTS, rrGenres: RR_GENRES, rrSaved, rrRead, rrSearch, rrBrowse, rrBrowseUrl, parseFP, parseFFN, parseAO3, parseSH, parseWattpad, parseWebtoon, parseTapas, fpBrowseUrl, ffnBrowseUrl, ao3BrowseUrl, wpBrowseUrl, firstSaved, firstRead, fpSaved, fpRead, serialLinks, serialChapters, sources: SOURCES,
+  C.discover = { list, refresh, fromSource, clean, isStory, storyId, parseList, rrLists: RR_LISTS, rrGenres: RR_GENRES, rrSaved, rrRead, rrSearch, rrBrowse, rrBrowseUrl, parseFP, parseFFN, parseAO3, parseSH, parseWattpad, parseSyosetu, syBrowseUrl, parseWebtoon, parseTapas, fpBrowseUrl, ffnBrowseUrl, ao3BrowseUrl, wpBrowseUrl, firstSaved, firstRead, fpSaved, fpRead, serialLinks, serialChapters, sources: SOURCES,
     parseGutendex, parseSE, parseWsList, parseXf, parseXfSearch, parseWikiToday, pgBrowseUrl, seBrowseUrl, xfBrowseUrl, seEpub, wikiSaved, wikiToday,
     parseLibriVox, parseIaScrape, iaParts, lvDetails, pgNumber, pgBook, parseKiwix, kxUrl, kxSize };
 })();

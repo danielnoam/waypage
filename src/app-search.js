@@ -268,6 +268,43 @@ function libViewSheet() {
 // One drop-down open at a time (Daniel's ask): opening one closes the
 // other, as a tap anywhere else does.
 let dropdownOpen = null;
+// A drag or wheel in a menu moves only the menu (2026-11, Daniel: the
+// page behind scrolled with it). overscroll-behavior covers a menu that
+// scrolls, but not one too short to, nor an iPhone before iOS 16.
+function holdScroll(m) {
+  let y = 0;
+  const stuck = (dy) => m.scrollHeight <= m.clientHeight + 1 || (dy > 0 && m.scrollTop <= 0) || (dy < 0 && m.scrollTop + m.clientHeight >= m.scrollHeight - 1);
+  m.addEventListener("touchstart", (e) => { y = e.touches[0].clientY; }, { passive: true });
+  m.addEventListener("touchmove", (e) => {
+    const dy = e.touches[0].clientY - y;
+    y = e.touches[0].clientY;
+    if (e.cancelable && stuck(dy)) e.preventDefault();
+  }, { passive: false });
+  m.addEventListener("wheel", (e) => { if (stuck(-e.deltaY)) e.preventDefault(); }, { passive: false });
+}
+// A list longer than its menu shows it (2026-11, Daniel's pick): a thin
+// bar on the inner edge, its handle where you are and as long as what's
+// in view, and a fade over the edge that has more past it.
+function scrollHints(m) {
+  if (m.scrollHeight <= m.clientHeight + 1) return;
+  m.classList.add("scrolls");
+  const rail = el("div", { class: "dropdown-rail", "aria-hidden": "true" },
+    el("span", { class: "dropdown-fade top" }), el("span", { class: "dropdown-fade end" }), el("span", { class: "dropdown-track" }, el("span", { class: "dropdown-thumb" })));
+  m.append(rail);
+  const [top, end, track] = rail.children, thumb = track.firstChild;
+  const paint = () => {
+    const h = m.clientHeight, room = h - 8, span = m.scrollHeight - h;
+    const th = Math.max(28, room * h / m.scrollHeight);
+    track.style.height = room + "px";
+    thumb.style.height = th + "px";
+    thumb.style.transform = "translateY(" + (span > 0 ? (room - th) * m.scrollTop / span : 0) + "px)";
+    top.style.bottom = h - 40 + "px";
+    top.classList.toggle("on", m.scrollTop > 1);
+    end.classList.toggle("on", m.scrollTop < span - 1);
+  };
+  m.addEventListener("scroll", paint, { passive: true });
+  paint();
+}
 function dropdown(o) {
   let value = o.value;
   const face = el("span", { class: "dropdown-face" });
@@ -279,9 +316,11 @@ function dropdown(o) {
     const at = o.options.find((x) => !x.head && x.value === value) || (o.placeholder ? { label: o.placeholder } : o.options[0]);
     const empty = !!o.placeholder && at.label === o.placeholder;
     face.textContent = at.label;
+    // A mark after the words (a sort's ↑ or ↓), and what it means to a screen reader.
+    if (at.mark) face.append(at.mark.cloneNode(true));
     face.style.cssText = at.style || "";
     face.classList.toggle("unset", empty);
-    btn.setAttribute("aria-label", empty ? o.label : o.label + ": " + at.label);
+    btn.setAttribute("aria-label", empty ? o.label : o.label + ": " + at.label + (at.markLabel ? ", " + at.markLabel : ""));
   };
   let menu = null;
   const outside = (e) => { if (!wrap.contains(e.target)) close(false); };
@@ -351,9 +390,10 @@ function dropdown(o) {
           // The new choice pops into the face (1.48.0).
           if (changed) { face.classList.remove("changed"); void face.offsetWidth; face.classList.add("changed"); }
           close(true);
-          if (changed) o.onpick(x.value);
+          // `again`: picking the chosen one again counts too (a sort turns round).
+          if (changed || o.again) o.onpick(x.value);
         } },
-        el("span", { class: "dropdown-text", dir: "auto", style: x.style || null }, x.label, x.sample || null), check);
+        el("span", { class: "dropdown-text", dir: "auto", style: x.style || null }, x.label, x.sample || null, x.mark ? x.mark.cloneNode(true) : null), check);
     });
     const items = nodes.filter((x) => x.tagName === "BUTTON");
     menu = el("div", { class: "dropdown-menu", role: "listbox", "aria-label": o.label }, ...nodes);
@@ -364,11 +404,13 @@ function dropdown(o) {
       else if (e.key === "Home" || e.key === "End") { e.preventDefault(); items[e.key === "Home" ? 0 : items.length - 1].focus(); }
       else if (e.key === "Tab") close(false);
     });
+    holdScroll(menu);
     wrap.append(menu);
     btn.setAttribute("aria-expanded", "true");
     const g = wrap.closest(".group");
     if (g) g.classList.add("menu-open");
     fit(menu);
+    scrollHints(menu);
     M.popFrom(menu, btn.getBoundingClientRect());
     document.addEventListener("pointerdown", outside, true);
     (items.find((b) => b.getAttribute("aria-selected") === "true") || items[0]).focus({ preventScroll: true });

@@ -12,9 +12,9 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * What Android Auto opens (2026-11): Continue, Audiobooks and Up next to
- * pick from, and the one session both players share (Car). Only the car,
- * the Assistant, Bluetooth and the phone itself may look: the list holds
+ * What Android Auto opens (2026-11): Continue, Audiobooks, Up next and
+ * Collections to pick from, and the one session both players share
+ * (Car). Only the car, the Assistant, Bluetooth and the phone itself may look: the list holds
  * the titles of what you read.
  */
 public class CarService extends MediaBrowserService {

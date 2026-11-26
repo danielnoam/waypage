@@ -68,7 +68,7 @@ function openDzSearch() {
 
 // The story site Enter searches: the grid's in Sites, Royal Road in All.
 function dzSearchSrc() {
-  if (dzPick === "stories") return dzSrc();
+  if (dzPick === "stories") return dzSiteOpen ? dzSrc() : null;
   return dzPick === "all" && dzCanRead() ? C.discover.sources.find((x) => x.key === "rr") : null;
 }
 
@@ -79,12 +79,15 @@ function renderDiscover() {
   const input = dzHead.querySelector("input");
   const src = dzPick === "stories" ? dzSrc() : null;
   input.placeholder = dzPick === "feeds" ? t("Search feeds") : dzPick === "newsletters" ? t("Search newsletters")
-    : dzPick === "stories" ? (src ? t("Search {label}", { label: src.label }) : t("Search web serials")) : t("Search Discover");
+    : dzPick === "stories" ? (!dzSiteOpen && dzSources().length ? t("Find a site") : src ? t("Search {label}", { label: src.label }) : t("Search web serials")) : t("Search Discover");
   const chip = (key, label) => el("button", { class: "chip" + (dzPick === key ? " on" : ""), type: "button", "aria-pressed": String(dzPick === key),
-    "data-key": "chip:" + key, onclick: () => { dzPick = key; dz.found = null; renderDiscover(); } }, el("span", { class: "chip-label" }, label));
+    "data-key": "chip:" + key, onclick: () => { dzPick = key; dz.found = null; dzLeaveSite(); renderDiscover(); } }, el("span", { class: "chip-label" }, label));
   const chips = dzHead.querySelector(".feed-chips");
   const scrollX = chips.scrollLeft;
   fill(chips, ...DZ_KINDS.map(([k, l]) => chip(k, l)));
+  // On one site's page the chips step aside for the site (Daniel,
+  // 2026-11): they come back with the tiles.
+  chips.hidden = dzPick === "stories" && dzSiteOpen;
   const q = dzQ();
   const nodes = [];
   const show = (k) => dzPick === "all" || dzPick === k;
@@ -101,7 +104,7 @@ function renderDiscover() {
     nodes.push(sectionHead(t("Newsletters")), el("div", { class: "group feed-group" }, ...pick("newsletter").map(dzRow)));
   }
   if (q && dzPick !== "stories" && !nodes.some(Boolean)) nodes.push(el("p", { class: "empty-text dz-none" }, t("Nothing here matches that.")));
-  if (dzPick !== "stories" || !dzSrc()) nodes.push(el("p", { class: "footnote dz-foot" }, t("Picked by hand. "),
+  if (dzPick !== "stories" || !dzSiteOpen || !dzSrc()) nodes.push(el("p", { class: "footnote dz-foot" }, t("Picked by hand. "),
     el("button", { class: "btn-text dz-suggest", type: "button", onclick: () => C.platform.openOutside("https://github.com/danielnoam/waypage/issues/new?title=" + encodeURIComponent("Discover: ")) }, t("Suggest one on GitHub"))));
   if (dzHead.parentNode !== root) root.replaceChildren(dzHead, el("div", { class: "dz-body" }));
   fill(root.querySelector(".dz-body"), ...nodes.filter(Boolean));
@@ -218,24 +221,103 @@ const dzGrid0 = () => {
 };
 dz.grid = dzGrid0();
 
+// Sites opens on every site as a tile, grouped by kind, each with a line
+// on what it is (2026-11, Daniel: the one drop-down of 17 sites said
+// nothing about them). A tile opens that site's own page, in its own
+// history entry so Back comes home to the tiles.
+let dzSiteOpen = false;
+const DZ_GROUPS = [
+  [t("Web fiction"), ["rr", "sh", "wp", "fp", "sy", "sb", "sv", "serials"]],
+  [t("Fan fiction"), ["ao3", "ffn"]],
+  [t("Comics"), ["wt", "tp"]],
+  [t("Libraries"), ["pg", "se", "ws", "lv", "kx"]],
+];
+const DZ_ABOUT = {
+  rr: t("Ongoing web serials"), sh: t("Web novels"), wp: t("Stories of every kind"), fp: t("Original fiction"),
+  sy: t("Japanese web novels"), sb: t("Stories and quests from the forum"), sv: t("Stories and quests from the forum"),
+  serials: t("Stories on their own sites"), ao3: t("The fan fiction archive"), ffn: t("Fan fiction by fandom"),
+  wt: t("Comics, episode by episode"), tp: t("Comics and novels, by search"), pg: t("Free classic books"),
+  se: t("Classics, carefully made"), ws: t("Free texts and documents"), lv: t("Free audiobooks"), kx: t("Whole sites to read offline"),
+};
+const DZ_HUE = { rr: 24, sh: 200, wp: 12, fp: 265, sy: 150, sb: 222, sv: 340, serials: 40, ao3: 0, ffn: 212, wt: 135, tp: 48, pg: 190, se: 95, ws: 232, lv: 285, kx: 172 };
+function dzMono(key, label) {
+  const letters = label.replace(/[^A-Za-z0-9 ]/g, "").split(" ").filter(Boolean).map((w) => w[0]).join("").slice(0, 2).toUpperCase() || label.slice(0, 1);
+  return el("span", { class: "dz-mono", style: "--dz-hue:" + (DZ_HUE[key] || 210), "aria-hidden": "true" }, letters);
+}
+const dzSiteLabel = (key) => (key === "serials" ? t("Web serials") : (dzSources().find((x) => x.key === key) || {}).label || "");
+function dzOpenSite(key) {
+  dzSource = key;
+  store("waypage.discover.source", key);
+  dz.found = null;
+  dz.grid = dzGrid0();
+  if (dzHead) dzHead.querySelector("input").value = "";
+  dzSiteOpen = true;
+  history.pushState({ view: "dzSite" }, "");
+  renderDiscover();
+  scrollTo(0, 0);
+}
+// Back on the page (the button, or the phone's): the tiles again.
+function dzCloseSite() {
+  if (history.state && history.state.view === "dzSite") { history.back(); return; }
+  dzLeaveSite();
+  renderDiscover();
+}
+// Back past a site's page, from wherever it went (app-start.js's route).
+function dzBackHome() {
+  if (!dzSiteOpen) return;
+  dzLeaveSite();
+  if (state.place === "discover") renderDiscover();
+}
+function dzLeaveSite() {
+  if (!dzSiteOpen) return;
+  dzSiteOpen = false;
+  dz.found = null;
+  if (dzHead) dzHead.querySelector("input").value = "";
+  if (history.state && history.state.view === "dzSite") history.replaceState(null, "");
+}
+function dzSitesHome() {
+  const q = dzQ().toLowerCase();
+  const have = new Set([...dzSources().map((x) => x.key), "serials"]);
+  const nodes = [];
+  for (const [head, keys] of DZ_GROUPS) {
+    const tiles = keys.filter((k) => have.has(k)).map((k) => ({ k, label: dzSiteLabel(k), about: DZ_ABOUT[k] || "" }))
+      .filter((x) => !q || x.label.toLowerCase().includes(q) || x.about.toLowerCase().includes(q))
+      .map((x) => el("button", { class: "dz-tile", type: "button", "data-key": "site:" + x.k, onclick: () => dzOpenSite(x.k) },
+        dzMono(x.k, x.label), el("span", { class: "dz-tile-name", dir: "auto" }, x.label), el("span", { class: "dz-tile-about" }, x.about)));
+    if (tiles.length) nodes.push(sectionHead(head), el("div", { class: "dz-tiles" }, ...tiles));
+  }
+  if (!nodes.length) nodes.push(el("p", { class: "empty-text dz-none" }, t("Nothing here matches that.")));
+  if (!dzCanRead()) nodes.push(el("p", { class: "footnote" }, t("The story sites (Royal Road, AO3 and the rest) show in Waypage on your phone.")));
+  return nodes;
+}
+// A site's own page: Back to the tiles, its name and what it is.
+function dzSiteHead(key) {
+  const back = el("button", { class: "dz-back", type: "button", onclick: dzCloseSite });
+  back.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
+  back.append(t("Sites"));
+  const label = dzSiteLabel(key);
+  return el("div", { class: "dz-site-head" }, back,
+    el("div", { class: "dz-site-title" }, dzMono(key, label),
+      el("div", { class: "dz-site-text" }, el("h2", { dir: "auto" }, label), el("span", { class: "dz-tile-about" }, DZ_ABOUT[key] || ""))));
+}
+
 function dzGrid() {
   if (!dzSources().length) return dzStories();
+  if (!dzSiteOpen) return dzSitesHome();
   const here = dzSrc();
   // The copy's reach can change after load (the app's plugins arrive).
   if (dz.grid.source !== (here ? here.key : "serials")) dz.grid = dzGrid0();
-  const sources = dropdown({ label: t("Site"), cls: "field-pick dz-pick", value: here ? here.key : "serials",
-    options: [...dzSources().map((x) => ({ value: x.key, label: x.label })), { value: "serials", label: t("Web serials") }],
-    onpick: (v) => { dzSource = v; store("waypage.discover.source", v); dz.found = null; dz.grid = dzGrid0(); renderDiscover(); } });
+  const sources = dzSiteHead(here ? here.key : "serials");
   const src = dzSrc();
   if (!src) {
     const serials = C.discover.list().entries.filter((e) => e.kind === "serial" && dzMatch(e, dzQ()));
-    return [el("div", { class: "dz-tools" }, sources),
+    return [sources,
       serials.length ? el("div", { class: "group feed-group dz-serials" }, ...serials.map(dzSerialRow)) : el("p", { class: "empty-text dz-none" }, t("Nothing here matches that.")),
       el("p", { class: "footnote" }, t("Stories posted on their own sites, most on WordPress. A tap saves the whole story as a collection."))];
   }
   if (dz.found) {
     const f = dz.found;
-    return [el("div", { class: "dz-tools" }, sources),
+    return [sources,
       sectionHead(t("Results for “{words}”", { words: f.words }), el("button", { class: "btn-text", type: "button", onclick: dzClearSearch }, t("Clear"))),
       f.busy ? el("p", { class: "footnote dz-src" }, t("Searching {label}…", { label: src.label }))
         : f.items.length ? (src.packs ? dzPacks(f.items) : dzCovers(f.items, true)) : el("p", { class: "footnote" + (f.error ? " warn" : "") }, f.error || (src.packs ? t("No packs with that in their name.") : t("No stories with that in their title.")))];
@@ -244,9 +326,8 @@ function dzGrid() {
   const phoneOnly = dzCanRead() ? null : el("p", { class: "footnote" }, t("The story sites (Royal Road, AO3 and the rest) show in Waypage on your phone."));
   if (src.searchOnly) {
     if (src.browse) src.browse(g.key, "", 0);
-    const lists = dropdown({ label: t("{label} list", { label: src.label }), cls: "field-pick dz-pick", value: g.key,
-      options: src.lists.map((l) => ({ value: l.key, label: l.label })), onpick: (v) => { store("waypage.discover.pick." + src.key, { key: v }); dz.grid = { ...dzGrid0(), key: v }; renderDiscover(); } });
-    return [el("div", { class: "dz-tools" }, sources, lists), dzAsk(src),
+    const lists = dzListChips(src, g.key, (v) => { store("waypage.discover.pick." + src.key, { key: v }); dz.grid = { ...dzGrid0(), key: v }; renderDiscover(); });
+    return [sources, lists, dzAsk(src),
       el("p", { class: "footnote dz-src" }, t("{label} shows its lists only in its own app. Search it with the field above.", { label: src.label }))];
   }
   if (!g.page && !g.busy && !g.error) {
@@ -262,16 +343,15 @@ function dzGrid() {
     dz.grid = { ...dzGrid0(), ...pick };
     renderDiscover();
   };
-  const lists = dropdown({ label: t("{label} list", { label: src.label }), cls: "field-pick dz-pick", value: g.key,
-    options: src.lists.map((l) => ({ value: l.key, label: l.label })), onpick: (v) => keep({ key: v }) });
-  const genres = src.genres.length ? dropdown({ label: { Tag: t("Tag"), Subject: t("Subject"), Fandom: t("Fandom"), Language: t("Language") }[src.genreLabel] || t("Genre"), cls: "field-pick dz-pick", value: g.genre,
+  const lists = dzListChips(src, g.key, (v) => keep({ key: v }));
+  const genres = src.genres.length ? dropdown({ label: { Tag: t("Tag"), Subject: t("Subject"), Fandom: t("Fandom"), Language: t("Language") }[src.genreLabel] || t("Genre"), cls: "dz-genre", value: g.genre,
     options: [...(src.anyGenre ? [{ value: "", label: ({ Tag: t("Every tag"), Subject: t("Every subject"), Fandom: t("Every fandom"), Language: t("Every language") }[src.genreLabel] || t("Every genre")) }] : []), ...src.genres.map((x) => ({ value: x.key, label: x.label }))],
     onpick: (v) => keep({ genre: v }) }) : null;
   const line = g.busy ? (g.page ? t("Reading more…") : t("Reading {site}…", { site: src.label })) : g.error;
   const q = dzQ().toLowerCase();
   const shown = g.items.filter((s) => !q || s.title.toLowerCase().includes(q));
   return [
-    el("div", { class: "dz-tools" }, sources, src.lists.length > 1 ? lists : null, genres),
+    sources, lists, genres ? el("div", { class: "dz-tools" }, genres) : null,
     dzAsk(src),
     shown.length ? (src.packs ? dzPacks(shown) : dzCovers(shown, true)) : null,
     src.packs && !g.busy && !g.error ? el("p", { class: "footnote" }, t("A pack is a whole site in one file, to read with no connection. It's read from where you save it, in Files.")) : null,
@@ -282,32 +362,143 @@ function dzGrid() {
   ];
 }
 
+// A site's lists as a row of chips, the picked one first in view.
+function dzListChips(src, at, pick) {
+  if (src.lists.length < 2) return null;
+  const row = el("div", { class: "chips filters dz-lists", role: "group", "aria-label": t("{label} list", { label: src.label }) },
+    ...src.lists.map((l) => el("button", { class: "chip" + (l.key === at ? " on" : ""), type: "button", "aria-pressed": String(l.key === at),
+      onclick: () => { if (l.key !== at) pick(l.key); } }, el("span", { class: "chip-label" }, l.label))));
+  requestAnimationFrame(() => { const on = row.querySelector(".chip.on"); if (on && row.isConnected) row.scrollLeft += on.getBoundingClientRect().left - row.getBoundingClientRect().left - 16; });
+  return row;
+}
+
 // A web serial from the list: + saves it whole, from its contents page.
 function dzSerialRow(e) {
   const on = allFolders().some((n) => { const src = folderSource(folderPages(n)); return src && sameUrl(src, e.url); });
   return el("div", { class: "post dz-row", "data-key": "dz:" + e.url },
-    el("button", { class: "post-open", type: "button", "aria-label": e.name, onclick: () => dzSaveStory({ url: e.url, title: e.name, serial: true }) }),
+    el("button", { class: "post-open", type: "button", "aria-label": e.name, onclick: () => openMenu("saveStory", { url: e.url, title: e.name, serial: true, tags: [] }) }),
     feedMark({ url: e.url, link: e.url, title: e.name }),
     el("span", { class: "post-body" },
       el("span", { class: "post-title", dir: "auto" }, e.name),
       e.about ? el("span", { class: "dz-about", dir: "auto" }, e.about) : null,
       el("span", { class: "post-meta" }, dzHost(e.url))),
     on ? el("span", { class: "post-saved dz-on" }, dzIcon("check"), t("Saved"))
-      : el("button", { class: "post-act post-save", type: "button", "aria-label": t("Save {name}", { name: e.name }), onclick: () => dzSaveStory({ url: e.url, title: e.name, serial: true }) }, dzIcon("plus")));
+      : el("button", { class: "post-act post-save", type: "button", "aria-label": t("Save {name}", { name: e.name }), onclick: () => openMenu("saveStory", { url: e.url, title: e.name, serial: true, tags: [] }) }, dzIcon("plus")));
 }
 
-// A story to the library: its chapter list, to check and save as a
-// collection, which then follows its new chapters.
-async function dzSaveStory(s) {
+// A story to the library, as the Save sheet picked (2026-11, Daniel:
+// not always a collection): `as` "collection" or "series" opens its
+// chapter list to check, then saves it into one that follows its new
+// chapters; "file" makes one book of it (dzStoryFile), with no collection.
+async function dzSaveStory(s, how = { as: "collection" }) {
   if (!navigator.onLine) { toast(t("You're offline. Save it when you're back online.")); return; }
   toast(t("Finding its chapters…"));
   try {
-    const found = s.serial ? await C.discover.serialChapters(s.url) : await C.save.findChapters(s.url);
+    const found = s.serial ? await C.discover.serialChapters(s.url) : noteStatus(await C.save.findChapters(s.url));
+    const title = found.title || s.title;
+    if (how.as === "file") { dzStoryFile(s, found.links.length ? found.links : [s.url], title, how); return; }
     if (!found.links.length) { savePage(s.url); return; }
     // The story page's own tags; Discover's list row, when it gave none.
     const siteTags = found.siteTags || (s.tags && s.tags.length ? { site: s.serial ? dzHost(s.url) : s.site || "Royal Road", tags: s.tags } : null);
-    openBatch(found.links.join("\n"), false, folderName(found.title || s.title), s.url, siteTags);
+    openBatch(found.links.join("\n"), false, folderName(title), s.url, siteTags);
   } catch (e) { toast(e instanceof C.save.SaveError ? e.message : t("Couldn't read its chapters. Try again.")); }
+}
+
+const dzIsComic = (s) => C.discover.sources.some((x) => x.comics && x.label === s.site);
+
+// The Save sheet: a collection, a series, or one book file. The pick and
+// the file's place are remembered.
+const DZ_STORY_AS_KEY = "waypage.discover.storyAs";
+function dzStorySaveSheet() {
+  const s = state.menu.page;
+  const comic = dzIsComic(s);
+  // Clips go into a collection or a series, picked on Save with options.
+  let as = load(DZ_STORY_AS_KEY, "clips") === "file" ? "file" : "clips";
+  let where = dzWhere();
+  const whereRow = C.platform.native ? dzWhereRow(() => where, (v) => { where = v; }) : null;
+  const note = el("p", { class: "footnote dz-add-note" });
+  const paint = () => {
+    if (whereRow) whereRow.hidden = as !== "file";
+    note.textContent = as === "file" ? (comic ? t("Every episode downloads, then they become one CBZ comic in Files. It doesn't follow new episodes.")
+      : t("Every chapter downloads, then they become one EPUB book in Files. It doesn't follow new chapters."))
+      : t("Its chapter list opens to check, with a collection or a series to save it into. New chapters join it when they're out.");
+  };
+  const asRow = pickRow({ label: t("Save as"), options: [
+    { value: "clips", label: t("Collection or series"), note: t("A clip for each chapter") },
+    { value: "file", label: comic ? t("CBZ file") : t("EPUB file"), note: t("One file in Files, no collection") },
+  ], get: () => as, set: (v) => { as = v; store(DZ_STORY_AS_KEY, v); paint(); } });
+  paint();
+  const site = s.serial ? dzHost(s.url) : s.site || "Royal Road";
+  return el("div", { class: "page-controls dz-add" },
+    el("div", { class: "menu-head" },
+      el("p", { class: "menu-title", dir: "auto" }, s.title),
+      el("p", { class: "meta" }, site)),
+    el("div", { class: "group" }, asRow, whereRow),
+    note,
+    el("button", { class: "btn-primary", type: "button", onclick: async () => { await back(); dzSaveStory(s, { as, where }); } }, t("Save")));
+}
+MENUS.saveStory = { label: t("Save"), build: () => dzStorySaveSheet() };
+
+// A story made into one book: every chapter is saved out of sight (never
+// in the Library), made into an EPUB (a CBZ for comics) as Export does,
+// then the saved chapters go and the book is added like a file brought in,
+// kept where Save in says. The card in Downloads has Pause and Stop.
+async function dzStoryFile(s, links, title, how) {
+  if (!C.platform.canReadPages) { toast(t("This browser can't download from that site. Add it in Waypage on your phone.")); return; }
+  const comic = dzIsComic(s);
+  const tree = await pickedTree(how);
+  if (tree === false) return;
+  const k = keepRun(comic ? t("Making a comic") : t("Making a book"), title);
+  const made = [];
+  const say = (part, now) => { k.run.part = part; k.run.now = now; updateRunCard(k.run); };
+  let failed = 0;
+  try {
+    for (const [i, url] of links.entries()) {
+      if (!(await gate(k.run))) throw new Error("stopped");
+      await wifiGate();
+      say(0.8 * i / links.length, comic ? t("Episode {done} of {total}", { done: i + 1, total: links.length }) : t("Chapter {done} of {total}", { done: i + 1, total: links.length }));
+      if (i) await new Promise((go) => setTimeout(go, PACE_MS));
+      try { made.push(await saveOnce({ url, site: s.site }, { mode: comic ? "full" : load(IMAGES_KEY, "previews"), kind: comic ? "comic" : "article" })); }
+      catch (e) { failed++; }
+    }
+    if (!made.length) throw new Error("none saved");
+    if (!(await gate(k.run))) throw new Error("stopped");
+    const by = s.by || made[0].byline || "";
+    const name = dzBookName({ title, by, kind: comic ? "cbz" : "epub" });
+    const cover = comic ? null : await dzCoverBytes(s);
+    const packing = (done, total, pack) => say(0.8 + 0.2 * (pack ? done / total : 0), pack ? t("Packing the book…") : comic ? t("Making the comic…") : t("Making the book…"));
+    const out = comic ? await C.files.exportComic(made, title, packing)
+      : await C.epub.exportBook(made, title, cover, packing, { heads: true, author: by || made[0].site || "" });
+    const mime = comic ? "application/vnd.comicbook+zip" : "application/epub+zip";
+    say(1, t("Opening"));
+    let file, ref = null;
+    if (out.uri) {
+      ref = await C.platform.keepMade(out.uri, name, how.where, tree);
+      file = await C.platform.files.blob(ref, 0);
+    } else {
+      file = new File([out.blob], name, { type: mime });
+      const kept = await C.platform.saveLinked(file, name, mime).catch(() => ({ saved: null, ref: null }));
+      if (kept.saved === false) throw new Error("stopped");
+      ref = kept.ref || null;
+    }
+    k.done();
+    const siteTags = s.tags && s.tags.length ? { site: s.serial ? dzHost(s.url) : s.site || "Royal Road", tags: s.tags } : undefined;
+    await openFile(file, null, false, ref, { ...(ref ? { ref } : {}), siteTags });
+    if (failed) toast(tn(failed, "1 chapter couldn't be saved and isn't in the book.", "{n} chapters couldn't be saved and aren't in the book."));
+  } catch (e) {
+    k.done();
+    if (!(e instanceof C.save.SaveError)) console.error(e);
+    toast(k.run.stopped || (e && e.message === "stopped") ? t("Stopped.") : made.length ? t("Couldn't make the book. Try again.") : t("Couldn't save its chapters. Try again."));
+  } finally {
+    for (const m of made) C.store.removePage(m.id).catch(() => {});
+    if (state.place === "discover") renderDiscover();
+  }
+}
+
+// The story's cover from its site, for the book's own.
+async function dzCoverBytes(s) {
+  if (!s.cover) return null;
+  try { return new Uint8Array(await (await C.platform.fetchBytes(s.cover, "cover")).blob.arrayBuffer()); } catch (e) { return null; }
 }
 
 // The next page of the grid's list, added under what's there.
@@ -336,10 +527,23 @@ async function dzMore() {
   if (state.place === "discover") renderDiscover();
 }
 
+// A story's cover, and under it a card of its own for when there's no
+// picture (AO3, the forums and most of FictionPress have none): its site,
+// title and author on a colour picked from the story, the same each time.
+function dzCoverCard(s, cls) {
+  let h = 0;
+  for (const c of String(s.id || s.url || s.title)) h = (h * 31 + c.codePointAt(0)) % 360;
+  const site = s.serial ? dzHost(s.url) : s.site || "Royal Road";
+  return el("span", { class: "dz-cover" + (cls ? " " + cls : ""), "aria-hidden": "true", style: "--dz-hue:" + h },
+    el("span", { class: "dz-cover-s" }, el("bdi", {}, site)),
+    el("span", { class: "dz-cover-t", dir: "auto" }, s.title),
+    s.by ? el("span", { class: "dz-cover-by", dir: "auto" }, s.by) : null);
+}
+
 function dzCovers(items, grid, sites) {
   return el("div", { class: grid ? "dz-covers dz-grid" : "dz-covers", role: "list" }, ...items.map((s) => {
     const saved = dzSavedStory(s);
-    const art = el("span", { class: "dz-cover", "aria-hidden": "true" }, el("span", { class: "dz-cover-t", dir: "auto" }, s.title));
+    const art = dzCoverCard(s);
     if (s.cover) {
       const img = el("img", { src: s.cover, alt: "", loading: "lazy", referrerpolicy: "no-referrer" });
       img.addEventListener("load", () => art.classList.add("has-img"));
@@ -351,7 +555,7 @@ function dzCovers(items, grid, sites) {
       "aria-label": saved ? t("{title}, in your library", { title: s.title }) : s.title, onclick: () => openMenu("story", s) },
       el("span", { class: "dz-art" }, art, el("span", { class: "dz-mark" + (saved ? " on" : "") }, dzIcon(saved ? "check" : "plus", 16))),
       el("span", { class: "dz-bt", dir: "auto" }, s.title),
-      meta ? el("span", { class: "dz-bm" }, meta) : null);
+      meta ? el("span", { class: "dz-bm", dir: "auto" }, meta) : null);
   }));
 }
 
@@ -452,7 +656,7 @@ function storySheet() {
   const s = state.menu.page;
   if (s.audiobook) return dzAudioSheet(s);
   const saved = dzSavedStory(s);
-  const cover = el("span", { class: "dz-cover dz-sheet-cover", "aria-hidden": "true" }, el("span", { class: "dz-cover-t", dir: "auto" }, s.title));
+  const cover = dzCoverCard(s, "dz-sheet-cover");
   if (s.cover) {
     const img = el("img", { src: s.cover, alt: "", referrerpolicy: "no-referrer" });
     img.addEventListener("load", () => cover.classList.add("has-img"));
@@ -466,8 +670,8 @@ function storySheet() {
   const kind = (s.kind || "epub").toUpperCase();
   const save = s.book
     ? el("button", { class: "btn-primary", type: "button", ...(saved ? { disabled: "" } : {}), onclick: async () => { await back(); if (s.catalog) dzSaveBook(s); else openMenu("addBook", s); } }, saved ? t("In your library") : t("Add the book"))
-    : el("button", { class: "btn-primary", type: "button", onclick: async () => { await back(); dzSaveStory(s); } },
-      saved ? t("Save it again") : s.texts ? t("Save it") : t("Save as a collection"));
+    : el("button", { class: "btn-primary", type: "button", onclick: async () => { await back(); openMenu("saveStory", s); } },
+      saved ? t("Save it again") : t("Save"));
   return el("div", { class: "page-controls dz-story" },
     el("div", { class: "dz-sheethead" }, cover,
       el("div", { class: "dz-sheet-text" },
@@ -480,8 +684,8 @@ function storySheet() {
     save,
     el("p", { class: "footnote" }, s.catalog ? t("Its {kind} downloads and joins your Library, to read offline.", { kind })
       : s.book ? t("Its EPUB downloads and joins your Library, to read offline. It's in the public domain.")
-      : s.texts ? t("A text in parts saves as a collection, its parts checked first; a short one saves as one clip.")
-        : t("Its chapter list opens to check, then every chapter saves for reading offline. New chapters join the collection when they're out.")),
+      : s.texts ? t("A text in parts saves as a collection, a series or one EPUB book; a short one saves as one clip.")
+        : t("Save it as a collection or a series that gets its new chapters, or as one EPUB book.")),
     s.catalog && s.url === s.epub ? null : el("button", { class: "btn-quiet", type: "button", onclick: () => C.platform.openOutside(s.url) }, dzIcon("out", 16), t("Open on {site}", { site: site })));
 }
 
@@ -492,7 +696,7 @@ function storySheet() {
 function dzAudioSheet(s) {
   const saved = dzSavedStory(s);
   const can = canGetAudiobooks();
-  const cover = el("span", { class: "dz-cover dz-sheet-cover", "aria-hidden": "true" }, el("span", { class: "dz-cover-t", dir: "auto" }, s.title));
+  const cover = dzCoverCard(s, "dz-sheet-cover");
   if (s.cover) {
     const img = el("img", { src: s.cover, alt: "", referrerpolicy: "no-referrer" });
     img.addEventListener("load", () => cover.classList.add("has-img"));

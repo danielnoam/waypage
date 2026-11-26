@@ -48,8 +48,10 @@ final class Car {
         void toQueueItem(long id);
     }
 
-    static final String ROOT = "root", RECENT = "recent", CONTINUE = "continue", BOOKS = "books", CLIPS = "clips";
-    static final String BOOK = "b:", CLIP = "c:";
+    static final String ROOT = "root", RECENT = "recent", CONTINUE = "continue", BOOKS = "books", CLIPS = "clips", COLLECTIONS = "collections";
+    // A collection or series to open, and a quick start in one ("q0:" and
+    // the item it plays).
+    static final String BOOK = "b:", CLIP = "c:", FOLDER = "f:", START = "q";
     // What both players add to their own: what the car may ask for.
     static final long ACTIONS = PlaybackState.ACTION_PLAY_FROM_MEDIA_ID | PlaybackState.ACTION_PLAY_FROM_SEARCH
         | PlaybackState.ACTION_PREPARE_FROM_MEDIA_ID | PlaybackState.ACTION_PREPARE_FROM_SEARCH;
@@ -132,6 +134,39 @@ final class Car {
         return a == null ? new JSONArray() : a;
     }
 
+    // Anything under this tab (not only in collections).
+    private static boolean shown(Context ctx, String name) {
+        JSONArray a = list(ctx, name);
+        for (int i = 0; i < a.length(); i++) {
+            JSONObject o = a.optJSONObject(i);
+            if (o != null && !o.optBoolean("hide")) return true;
+        }
+        return false;
+    }
+
+    // The car's words, in the app's language.
+    private static String word(Context ctx, String key, String english) {
+        JSONObject w = catalog(ctx).optJSONObject("words");
+        String s = w == null ? "" : w.optString(key, "");
+        return s.isEmpty() ? english : s;
+    }
+
+    private static JSONObject collection(Context ctx, String name) {
+        JSONArray a = list(ctx, COLLECTIONS);
+        for (int i = 0; i < a.length(); i++) {
+            JSONObject o = a.optJSONObject(i);
+            if (o != null && name.equals(o.optString("name"))) return o;
+        }
+        return null;
+    }
+
+    // "q0:c:id" plays "c:id".
+    private static String started(String mediaId) {
+        if (mediaId == null || !mediaId.startsWith(START)) return mediaId;
+        int at = mediaId.indexOf(':');
+        return at < 0 ? null : mediaId.substring(at + 1);
+    }
+
     private static JSONObject find(Context ctx, String mediaId) {
         boolean book = mediaId.startsWith(BOOK);
         if (!book && !mediaId.startsWith(CLIP)) return null;
@@ -148,9 +183,36 @@ final class Car {
         List<MediaBrowser.MediaItem> out = new ArrayList<>();
         if (ROOT.equals(parent)) {
             if (catalog(ctx).optBoolean("locked")) return out;
-            if (list(ctx, CONTINUE).length() > 0) out.add(folder(CONTINUE, "Continue"));
-            if (list(ctx, BOOKS).length() > 0) out.add(folder(BOOKS, "Audiobooks"));
-            if (list(ctx, CLIPS).length() > 0) out.add(folder(CLIPS, "Up next"));
+            if (list(ctx, CONTINUE).length() > 0) out.add(folder(CONTINUE, word(ctx, "continue", "Continue")));
+            if (shown(ctx, BOOKS)) out.add(folder(BOOKS, word(ctx, "books", "Audiobooks")));
+            if (shown(ctx, CLIPS)) out.add(folder(CLIPS, word(ctx, "clips", "Up next")));
+            if (list(ctx, COLLECTIONS).length() > 0) out.add(folder(COLLECTIONS, word(ctx, "collections", "Collections")));
+            return out;
+        }
+        if (catalog(ctx).optBoolean("locked")) return out;
+        if (COLLECTIONS.equals(parent)) {
+            JSONArray a = list(ctx, COLLECTIONS);
+            for (int i = 0; i < a.length(); i++) {
+                JSONObject o = a.optJSONObject(i);
+                if (o != null) out.add(shelf(ctx, o));
+            }
+            return out;
+        }
+        if (parent.startsWith(FOLDER)) {
+            JSONObject c = collection(ctx, parent.substring(FOLDER.length()));
+            if (c == null) return out;
+            JSONArray starts = c.optJSONArray("starts");
+            for (int i = 0; starts != null && i < starts.length(); i++) {
+                JSONObject s = starts.optJSONObject(i);
+                JSONObject o = s == null ? null : find(ctx, s.optString("id"));
+                if (o != null) out.add(quick(ctx, START + i + ":" + s.optString("id"), s.optString("label"), o));
+            }
+            JSONArray items = c.optJSONArray("items");
+            for (int i = 0; items != null && i < items.length(); i++) {
+                String id = items.optString(i);
+                JSONObject o = find(ctx, id);
+                if (o != null) out.add(item(ctx, id, o));
+            }
             return out;
         }
         if (CONTINUE.equals(parent) || RECENT.equals(parent)) {
@@ -164,11 +226,12 @@ final class Car {
             return out;
         }
         boolean book = BOOKS.equals(parent);
-        if ((!book && !CLIPS.equals(parent)) || catalog(ctx).optBoolean("locked")) return out;
+        if (!book && !CLIPS.equals(parent)) return out;
         JSONArray a = list(ctx, parent);
         for (int i = 0; i < a.length(); i++) {
             JSONObject o = a.optJSONObject(i);
-            if (o != null) out.add(item(ctx, (book ? BOOK : CLIP) + o.optString("id"), o));
+            // Only in a collection, not under this tab.
+            if (o != null && !o.optBoolean("hide")) out.add(item(ctx, (book ? BOOK : CLIP) + o.optString("id"), o));
         }
         return out;
     }
@@ -203,6 +266,30 @@ final class Car {
         extras.putInt(CarService.STYLE_PLAYABLE, CarService.STYLE_LIST);
         return new MediaBrowser.MediaItem(new MediaDescription.Builder().setMediaId(id).setTitle(title).setExtras(extras).build(),
             MediaBrowser.MediaItem.FLAG_BROWSABLE);
+    }
+
+    private static MediaBrowser.MediaItem shelf(Context ctx, JSONObject o) {
+        MediaDescription.Builder d = new MediaDescription.Builder()
+            .setMediaId(FOLDER + o.optString("name"))
+            .setTitle(o.optString("name"))
+            .setSubtitle(o.optString("by"));
+        Bitmap b = art(ctx, o.optString("cover"), 160);
+        if (b != null) d.setIconBitmap(b);
+        Bundle extras = new Bundle();
+        extras.putInt(CarService.STYLE_PLAYABLE, CarService.STYLE_LIST);
+        d.setExtras(extras);
+        return new MediaBrowser.MediaItem(d.build(), MediaBrowser.MediaItem.FLAG_BROWSABLE);
+    }
+
+    // A quick start: what it does, then what it plays.
+    private static MediaBrowser.MediaItem quick(Context ctx, String mediaId, String label, JSONObject o) {
+        MediaDescription.Builder d = new MediaDescription.Builder()
+            .setMediaId(mediaId)
+            .setTitle(label)
+            .setSubtitle(o.optString("title"));
+        Bitmap b = art(ctx, o.optString("cover"), 160);
+        if (b != null) d.setIconBitmap(b);
+        return new MediaBrowser.MediaItem(d.build(), MediaBrowser.MediaItem.FLAG_PLAYABLE);
     }
 
     private static MediaBrowser.MediaItem item(Context ctx, String mediaId, JSONObject o) {
@@ -241,11 +328,12 @@ final class Car {
 
     static void playId(String mediaId) {
         Context ctx = app;
+        mediaId = started(mediaId);
         if (ctx == null || mediaId == null) return;
         JSONObject o = find(ctx, mediaId);
         if (o == null) return;
         if (mediaId.startsWith(BOOK)) playBook(ctx, o);
-        else playClip(ctx, o, true);
+        else playClip(ctx, o);
     }
 
     private static void playBook(Context ctx, JSONObject o) {
@@ -283,29 +371,49 @@ final class Car {
         AudiobookService.send(ctx, AudiobookService.PLAY, null, null);
     }
 
-    private static void playClip(Context ctx, JSONObject o, boolean now) {
+    private static void playClip(Context ctx, JSONObject o) {
         SpeechService.Job j = clipJob(ctx, o);
         if (j == null) return;
-        if (!now) {
-            SpeechService.queued = j;
-            return;
-        }
         if (AudiobookService.running != null) AudiobookService.send(ctx, AudiobookService.STOP, null, null);
         SpeechService.pending = j;
         SpeechService.send(ctx, SpeechService.PLAY, null, null);
     }
 
-    // The clip `step` from `key` under Up next; on from a clip that isn't
-    // there (started in the app), the first of them.
-    static SpeechService.Job neighbour(Context ctx, String key, int step) {
+    // What comes `step` after `mediaId`: in the collection or series it's
+    // in, in that one's order, and nothing past its ends or across a
+    // stretch the app didn't hand over (`at`); a clip in none,
+    // the next under Up next (the first, for one that isn't there).
+    static String nextId(Context ctx, String mediaId, int step) {
+        if (ctx == null || mediaId == null) return null;
+        JSONArray cs = list(ctx, COLLECTIONS);
+        for (int i = 0; i < cs.length(); i++) {
+            JSONObject c = cs.optJSONObject(i);
+            JSONArray items = c == null ? null : c.optJSONArray("items"), at = c == null ? null : c.optJSONArray("at");
+            for (int k = 0; items != null && k < items.length(); k++) {
+                if (!mediaId.equals(items.optString(k))) continue;
+                int to = k + step;
+                if (to < 0 || to >= items.length()) return null;
+                if (at != null && at.optInt(to, -1) != at.optInt(k, -1) + step) return null;
+                return items.optString(to);
+            }
+        }
+        if (!mediaId.startsWith(CLIP)) return null;
+        String key = mediaId.substring(CLIP.length());
+        List<String> shown = new ArrayList<>();
         JSONArray a = list(ctx, CLIPS);
-        int at = -1;
         for (int i = 0; i < a.length(); i++) {
             JSONObject o = a.optJSONObject(i);
-            if (o != null && key != null && key.equals(o.optString("id"))) { at = i; break; }
+            if (o != null && !o.optBoolean("hide")) shown.add(o.optString("id"));
         }
+        int at = shown.indexOf(key);
         int to = at < 0 ? (step > 0 ? 0 : -1) : at + step;
-        JSONObject o = to >= 0 && to < a.length() ? a.optJSONObject(to) : null;
+        return to >= 0 && to < shown.size() ? CLIP + shown.get(to) : null;
+    }
+
+    // The clip to switch to, when what comes next is one.
+    static SpeechService.Job clipFor(Context ctx, String mediaId) {
+        if (mediaId == null || !mediaId.startsWith(CLIP)) return null;
+        JSONObject o = find(ctx, mediaId);
         return o == null ? null : clipJob(ctx, o);
     }
 
@@ -369,19 +477,15 @@ final class Car {
         } catch (Exception e) { /* not kept */ }
     }
 
-    // A clip from the car started: the next under Up next waits behind
-    // it, as Go on to the next clip does in the app.
+    // A clip from the car started: what comes next (its collection's next,
+    // else the next under Up next) waits behind it, as Go on to the next
+    // clip does in the app.
     static void queueAfter(Context ctx, String key) {
         if (!catalog(ctx).optBoolean("goOn")) return;
-        JSONArray a = list(ctx, CLIPS);
-        for (int i = 0; i + 1 < a.length(); i++) {
-            JSONObject o = a.optJSONObject(i);
-            if (o != null && key.equals(o.optString("id"))) {
-                JSONObject next = a.optJSONObject(i + 1);
-                if (next != null) { SpeechService.queuedAfter = key; playClip(ctx, next, false); }
-                return;
-            }
-        }
+        SpeechService.Job next = clipFor(ctx, nextId(ctx, CLIP + key, 1));
+        if (next == null) return;
+        SpeechService.queuedAfter = key;
+        SpeechService.queued = next;
     }
 
     static String takePlaces(Context ctx) {

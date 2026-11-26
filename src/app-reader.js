@@ -39,6 +39,9 @@ document.addEventListener("focusin", (e) => {
   if (!e.target.closest || !e.target.closest("[data-covered]")) return;
   const tops = [...document.querySelectorAll(".screen:not([hidden]):not([data-covered]), #sidebar:not([hidden]):not([data-covered]), #menuSheet:not([hidden])")];
   const top = tops[tops.length - 1];
+  // A sheet on its way down (state.menu already gone) gives focus back
+  // at once: a tap in the screen it uncovers isn't sent into its fields.
+  if (top && top.id === "menuSheet" && !state.menu) return;
   const first = top && [...top.querySelectorAll("button:not(:disabled), [href], input:not(:disabled), [tabindex]:not([tabindex=\"-1\"])")].find((n) => n.getClientRects().length);
   if (first) first.focus({ preventScroll: true }); else e.target.blur();
 });
@@ -460,7 +463,7 @@ function show(p, html) {
     brightOpen();
     volumeWatch();
     paintMarks(p);
-    loadTranslation(p);
+    loadTranslation(p).then(() => autoTranslate(p));
     inkSync(p);
     paintNote();
     $("readerContents").hidden = C.reader.headings().length < 2;
@@ -924,7 +927,7 @@ function fitRail() {
 }
 function paintRail() {
   const p = state.open;
-  $("railBackLabel").textContent = state.folder || (state.place === "feeds" ? t("Feeds") : state.place === "newsletters" ? t("Newsletters") : state.place === "highlights" ? t("Highlights") : state.place === "reading" ? t("Stats") : state.place === "anki" ? t("Anki") : state.place === "calibre" ? t("Calibre") : state.place === "audiobookshelf" ? t("Audiobookshelf") : state.place === "catalogs" ? t("Catalogs") : state.place === "webdav" ? t("WebDAV") : t("Library"));
+  $("railBackLabel").textContent = state.folder || (state.place === "feeds" ? t("Feeds") : state.place === "newsletters" ? t("Newsletters") : state.place === "highlights" ? t("Highlights") : state.place === "reading" ? t("Stats") : C.ext.place(state.place) ? C.ext.place(state.place).place.title() : t("Library"));
   const pages = railPages();
   $("readerRail").classList.toggle("paged", pages.length > 0);
   $("readerRail").setAttribute("aria-label", pages.length ? t("Pages") : t("Contents"));
@@ -1579,7 +1582,7 @@ function showReadHere() {
   const box = (mark && mark.box) || spot || (picked && picked.box);
   if (!box) { hideReadHere(); return; }
   if (!readHere) {
-    const aloudBtn = el("button", { class: "sel-aloud", type: "button", "aria-label": t("Narrate from here"), onclick: () => {
+    const aloudBtn = el("button", { class: "sel-aloud", type: "button", "aria-label": t("Narrate"), onclick: () => {
       const s = C.reader.selectionSpot();
       hideReadHere();
       C.reader.clearSelection();
@@ -1588,7 +1591,7 @@ function showReadHere() {
       else if (s) startAloud(null, s);
     } });
     aloudBtn.innerHTML = $("readerAloud").innerHTML;
-    aloudBtn.append(el("span", { class: "sel-label" }, t("Narrate from here")));
+    aloudBtn.append(el("span", { class: "sel-label" }, t("Narrate")));
     const markBtn = el("button", { class: "sel-mark", type: "button", onclick: (e) => {
       // A hold already opened the colours: its click doesn't highlight too.
       if (markHeld) { markHeld = false; e.preventDefault(); return; }
@@ -1633,8 +1636,8 @@ function showReadHere() {
   markBtn.setAttribute("aria-label", on.all ? t("Unmark") : t("Mark"));
   readHere.querySelector(".sel-draw").hidden = !mark || !inkReady() || C.ink.on;
   readHere.querySelector(".sel-aloud").hidden = !spot;
-  readHere.querySelector(".sel-aloud .sel-label").textContent = heard ? t("Play from here") : t("Narrate from here");
-  readHere.querySelector(".sel-aloud").setAttribute("aria-label", heard ? t("Play from here") : t("Narrate from here"));
+  readHere.querySelector(".sel-aloud .sel-label").textContent = heard ? t("Play") : t("Narrate");
+  readHere.querySelector(".sel-aloud").setAttribute("aria-label", heard ? t("Play") : t("Narrate"));
   listenSelection(readHere, picked);
   if (typeof ankiSelection === "function") ankiSelection(readHere, picked);
   readHere.querySelector(".sel-translate").hidden = !picked;
@@ -1872,8 +1875,10 @@ const markTagsLine = (m) => (m.tags && m.tags.length
   ? el("span", { class: "mark-tags", dir: "auto" }, ...m.tags.map((x) => el("span", { class: "card-tag" }, "#" + x))) : null);
 // The tags on one highlight: its own as chips to remove, a field to add,
 // and the other highlight tags to add with a tap.
-function markTagsEditor(p, m, draw) {
+// `put(tags)`, when given, keeps them in place of saving a highlight (a comment bubble's).
+function markTagsEditor(p, m, draw, put) {
   const write = (tags) => {
+    if (put) { put(tags); if (tags.length) m.tags = tags; else delete m.tags; draw(); return; }
     if (tags.length) m.tags = tags; else delete m.tags;
     m.at = Date.now();
     return saveMarks(p).then(draw);
@@ -1909,7 +1914,7 @@ function marksView(p, back) {
   };
   const markList = (p, back, draw) => {
     const all = p.marks || [];
-    if (sheetColor && !all.some((m) => colorOf(m) === sheetColor)) sheetColor = "";
+    if (sheetColor && !all.some((m) => colorOf(m) === sheetColor) && !inkNotes(p).some((nt) => nt.c === sheetColor)) sheetColor = "";
     const list = sheetColor ? all.filter((m) => colorOf(m) === sheetColor) : all;
     const rows = list.map((m) => {
       const lost = inReader && lostMarks.has(m.id);
@@ -1943,9 +1948,15 @@ function marksView(p, back) {
       if (lost) row.querySelector(".ink-row-text").append(el("span", { class: "meta" }, t("Not found in this copy of the clip")));
       rows.push({ at: inkOrder(g) + 0.5, row });
     }
+    // Comment bubbles (2026-11) are listed as what they say, with the highlights.
+    const notes = inkNotes(p).filter((nt) => !sheetColor || nt.c === sheetColor);
+    for (const nt of notes) {
+      const go = () => inkBack().then(() => inkNoteGo(p, nt));
+      rows.push({ at: inkOrder(nt) + 0.25, row: noteRow(p, nt, go, go) });
+    }
     rows.sort((a, b) => a.at - b.at);
     const drawings = groups.reduce((a, g) => a + inkGroupCount(g), 0);
-    const title = [list.length || !drawings ? tn(list.length, "1 highlight", "{n} highlights") : null, drawings ? inkWord(drawings) : null].filter(Boolean).join(" · ");
+    const title = [list.length || (!drawings && !notes.length) ? tn(list.length, "1 highlight", "{n} highlights") : null, notes.length ? noteWord(notes.length) : null, drawings ? inkWord(drawings) : null].filter(Boolean).join(" · ");
     const canDraw = inReader && inkReady();
     return el("div", { class: "marks-list" },
       el("div", { class: "export-top" },
@@ -1955,7 +1966,7 @@ function marksView(p, back) {
       // A note has its pen in the reader bar already.
       canDraw && !p.note ? el("button", { class: "row ink-start", type: "button", onclick: inkStart },
         inkIcon("pen"), el("span", { class: "row-label" }, p.file ? t("Draw on this file") : t("Draw on this clip"))) : null,
-      colorChips(all, sheetColor, (c) => { sheetColor = c; draw(); }),
+      colorChips([...all, ...inkNotes(p)], sheetColor, (c) => { sheetColor = c; draw(); }),
       rows.length ? el("ol", { class: "group marks-rows" }, ...rows.map((r) => r.row))
         : el("p", { class: "footnote" }, t("{x} Highlights and drawings go with the clip to your other devices.", { x: pictureBook() && state.open === p ? (p.file ? t("Tap Draw on this file to draw on its pictures.") : t("Tap Draw on this clip to draw on its pictures."))
           : t("Select words in the text and tap Mark or Draw.") })),
@@ -2040,11 +2051,17 @@ async function readNext() {
 
 // The block that piece `i` is in, and the first piece of a block.
 const blockAt = (i) => aloud.map[i] ?? -1;
+// Previous or next while the piece it went to is still being made is
+// dropped, not counted up: once the sound came, every press had moved it
+// on again (Daniel 2026-11-26). The voice's progress clears it.
+let aloudMoving = 0;
 function moveAloud(d) {
+  if (aloud.state === "playing" && Date.now() - aloudMoving < 20000) return;
   const b = blockAt(aloud.index) + d;
   const i = aloud.map.indexOf(b);
   if (i < 0) return;
   setAloud(aloud.state, i);
+  if (aloud.state === "playing") aloudMoving = Date.now();
   speech.seek(i);
 }
 
@@ -2288,6 +2305,7 @@ speech.onProgress(({ key, index, state: st, thinking }) => {
   setAloud(st, index);
   if (moved) queueNext();
   aloudThinking(!!thinking && st === "playing");
+  if (!thinking || st !== "playing") aloudMoving = 0;
 });
 // The ring round Pause while the engine makes the piece (Daniel's ask);
 // a quick one never shows it.
@@ -2315,7 +2333,8 @@ document.addEventListener("visibilitychange", async () => {
 });
 
 $("readerAloud").hidden = !speech.available;
-$("readerAloud").addEventListener("click", () => (aloudOn() && aloudHere() ? stopAloud() : startAloud()));
+// A clip with its own made sound plays that instead (app-listen.js).
+$("readerAloud").addEventListener("click", () => (aloudOn() && aloudHere() ? stopAloud() : voicedSound(state.open) ? voicedPlay() : startAloud()));
 $("readerScroll").addEventListener("click", () => (glide.on ? stopGlide() : startGlide()));
 $("aloudPlay").addEventListener("click", () => {
   if (aloud.state === "playing") { setAloud("paused", aloud.index); speech.pause(); }
@@ -2770,7 +2789,8 @@ function readerSettings() {
     box.append(a);
     parts.push(a);
   }
-  const names = { layout: t("Layout"), text: t("Text"), aloud: audio ? t("Audiobook") : comic ? "Auto-scroll" : t("Narrate") };
+  if (state.open && C.files.drawable(state.open)) { const d = drawPart(); box.append(d); parts.push(d); }
+  const names = { layout: t("Layout"), text: t("Text"), aloud: audio ? t("Audiobook") : comic ? "Auto-scroll" : t("Narrate"), draw: t("Draw") };
   let tab = load(SHEET_TAB_KEY, "text");
   if (!parts.some((x) => x.dataset.part === tab)) tab = "text";
   const show = (v) => {
@@ -2983,17 +3003,29 @@ async function keepTranslation(p, data) {
   if (state.open === p) translateButton(p);
   if (state.open === p) C.reader.paintTranslation(trMode(data) !== "off" ? data.blocks : null, data && data.to, trMode(data));
 }
-async function startTranslate(p, to, redraw) {
+// A chapter of a collection set to translate its chapters (2026-11)
+// starts on its own when it opens, quietly, unless it's done already.
+function autoTranslate(p) {
+  const want = p && p.folder ? chaptersTranslateFor(p.folder) : null;
+  if (!want || state.open !== p || translating || !C.platform.translator.available) return;
+  const tr = translationOf(p);
+  if (tr && tr.to === want.to && tr.blocks.length >= C.reader.translatable().length) return;
+  startTranslate(p, want.to, () => {}, { mode: want.mode, quiet: true });
+}
+// opts: mode, the way to show it ("under" or "replace"); quiet, no word
+// when it's done or there's nothing to do (a chapter that translates
+// itself).
+async function startTranslate(p, to, redraw, opts = {}) {
   const T = C.platform.translator;
   if (state.open !== p || translating) return;
   const blocks = C.reader.translatable();
-  if (!blocks.length) { toast(t("There's no text in this clip to translate.")); return; }
+  if (!blocks.length) { if (!opts.quiet) toast(t("There's no text in this clip to translate.")); return; }
   const job = translating = { id: p.id, to, from: primary(p.lang), stop: false, line: t("Getting ready…") };
   redraw();
   try {
     if (!job.from) job.from = primary(await T.detect(blocks.slice(0, 30).map((b) => b.text).join(" ")));
     if (!job.from) { toast(t("Couldn't tell what language this clip is in.")); return; }
-    if (job.from === to) { toast(t("This clip is in {langName} already.", { langName: langName(to) })); return; }
+    if (job.from === to) { if (!opts.quiet) toast(t("This clip is in {langName} already.", { langName: langName(to) })); return; }
     const can = await T.ready(job.from, to);
     if (can === "unavailable") { toast(t("Translating {langName} into {langName2} isn't possible here.", { langName: langName(job.from), langName2: langName(to) })); return; }
     if (can === "downloadable") {
@@ -3007,7 +3039,7 @@ async function startTranslate(p, to, redraw) {
     const done = new Map(same.map((b) => [b.i + "|" + b.print, b]));
     const kept = blocks.filter((b) => done.has(b.i + "|" + b.print)).map((b) => done.get(b.i + "|" + b.print));
     const todo = blocks.filter((b) => !done.has(b.i + "|" + b.print));
-    const data = { from: job.from, to, at: Date.now(), mode: trMode(was) === "replace" ? "replace" : "under", blocks: kept };
+    const data = { from: job.from, to, at: Date.now(), mode: opts.mode || (trMode(was) === "replace" ? "replace" : "under"), blocks: kept };
     for (let k = 0; k < todo.length && !job.stop; k += TR_BATCH) {
       const part = todo.slice(k, k + TR_BATCH);
       const got = await T.translate(part.map((b) => b.text.slice(0, 5000)), job.from, to);
@@ -3019,7 +3051,7 @@ async function startTranslate(p, to, redraw) {
     }
     data.blocks.sort((a, b) => a.i - b.i);
     await keepTranslation(p, data);
-    toast(job.stop ? t("Stopped. What's translated is kept.") : t("Translated into {langName}", { langName: langName(to) }));
+    if (!opts.quiet || job.stop) toast(job.stop ? t("Stopped. What's translated is kept.") : t("Translated into {langName}", { langName: langName(to) }));
   } catch (e) {
     toast(t("Couldn't translate this clip{x}", { x: e && e.message ? ": " + String(e.message).slice(0, 80) : "." }));
   } finally {
@@ -3776,6 +3808,16 @@ $("viewerNext").addEventListener("click", () => stepImage(1));
 $("viewerZoomIn").addEventListener("click", () => zoomStep(1));
 $("viewerZoomOut").addEventListener("click", () => zoomStep(-1));
 
+// The Draw tab of the settings sheet: for a note and for anything drawn on.
+function drawPart() {
+  const part = el("div", { class: "rc-part", "data-part": "draw" }, el("h2", { class: "overline" }, t("Draw")),
+    el("label", { class: "rc-row switch-row" },
+      el("span", { class: "choice-text" }, el("span", { class: "rc-label" }, t("Straighten lines and circles")),
+        el("span", { class: "choice-note" }, t("Draw a line or circle and hold the pen still for a moment"))),
+      el("input", { class: "switch", type: "checkbox", role: "switch", "data-pref": "inkShapes", checked: inkShapesOn(), onchange: (e) => inkShapes(e.target.checked) })));
+  return part;
+}
+
 // A note's own settings (2.0.0): only Layout (where they apply, Scroll or
 // Pages, margins, brightness slider, theme, dark note) and Auto-scroll. A
 // note is sheets, so it has no text to set.
@@ -3803,8 +3845,9 @@ function noteSettings() {
   a.classList.add("rc-part");
   a.dataset.part = "aloud";
   a.prepend(el("h2", { class: "overline" }, t("Auto-scroll")));
-  const parts = [layout, a];
-  const names = { layout: t("Layout"), aloud: "Auto-scroll" };
+  const d = drawPart();
+  const parts = [layout, a, d];
+  const names = { layout: t("Layout"), aloud: "Auto-scroll", draw: t("Draw") };
   let tab = load(SHEET_TAB_KEY, "layout");
   if (!names[tab]) tab = "layout";
   const show = (v) => { tab = v; store(SHEET_TAB_KEY, v); for (const x of parts) x.hidden = x.dataset.part !== v; };

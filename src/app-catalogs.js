@@ -211,6 +211,7 @@ MENUS.addCatalog = { label: t("Add a catalog"), build: () => catalogSheet() };
 
 // The extension's page in Settings: each catalog (a tap changes or removes
 // it), then Add a catalog under Actions.
+EXT_PLACES.catalogs = catalogDraw;
 EXT_PAGES.catalogs = () => {
   const cats = C.opds.list();
   return [

@@ -54,12 +54,25 @@ import org.xmlpull.v1.XmlPullParser;
  * [feed url] }. "each" posts every new post on its own, its title and the
  * start of its summary, grouped by feed, with Save; "together" is the one
  * notification there was before.
+ *
+ * Linked collections too (2026-11, stories.json): each one's contents
+ * page is read (through a hidden WebView when the site turns a plain
+ * request away) and the links on it that share the path its chapters
+ * share, as deep, and that aren't among the chapters the app knows, are
+ * new chapters: one notification per collection. Only a count; the app
+ * finds them itself when it's opened, with save.js.
  */
 public class FeedCheckJob extends JobService {
 
     static final String OPEN = "io.github.danielnoam.waypage.FEEDS";
     static final String PREFS = "waypage-feeds";
     static final String WATCH = "feeds.json";
+    static final String STORIES = "stories.json";
+    static final String STORY = "story";
+    private static final String STORY_CHANNEL = "waypage-chapters";
+    private static final String STORY_TAG = "waypage-chapters";
+    private static final int MAX_NEW_CHAPTERS = 100;
+    private static final long RENDER_MS = 30000;
     private static final String TOLD = "feeds-told.json";
     static final String FEED = "feed";
     static final String SAVE = "save";
@@ -115,7 +128,8 @@ public class FeedCheckJob extends JobService {
 
     private void run() throws Exception {
         JSONArray watch = readJson(new File(getFilesDir(), WATCH), new JSONArray());
-        if (watch.length() == 0) return;
+        JSONArray stories = readJson(new File(getFilesDir(), STORIES), new JSONArray());
+        if (watch.length() == 0 && stories.length() == 0) return;
         File toldFile = new File(getFilesDir(), TOLD);
         JSONObject told = readJson(toldFile, new JSONObject());
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
@@ -160,11 +174,165 @@ public class FeedCheckJob extends JobService {
             fresh.put(url, news);
             found = true;
         }
-        if (!found) return;
+        JSONObject storyNews = stories(stories, told, prefs);
+        if (!found && storyNews.length() == 0) return;
         writeJson(toldFile, told.toString());
-        prefs.edit().putString("waiting", waiting.toString()).commit();
-        notify(this, waiting, fresh);
-        Widgets.refresh(this);
+        if (found) {
+            prefs.edit().putString("waiting", waiting.toString()).commit();
+            notify(this, waiting, fresh);
+            Widgets.refresh(this);
+        }
+        if (storyNews.length() > 0) notifyStories(this, storyNews);
+    }
+
+    // ---- Linked collections: new chapters on their contents pages ----
+
+    // { name: count } for the collections with new chapters this run; the
+    // running counts wait in preferences as "storiesWaiting".
+    private JSONObject stories(JSONArray stories, JSONObject told, SharedPreferences prefs) throws Exception {
+        JSONObject fresh = new JSONObject();
+        if (stories.length() == 0 || stopped) return fresh;
+        if (prefs.getBoolean("storiesWifi", false)) {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null || cm.isActiveNetworkMetered()) return fresh;
+        }
+        JSONObject waiting = new JSONObject(prefs.getString("storiesWaiting", "{}"));
+        for (int i = 0; i < stories.length() && !stopped; i++) {
+            JSONObject s = stories.optJSONObject(i);
+            if (s == null) continue;
+            String name = s.optString("name", ""), url = s.optString("url", "");
+            if (name.isEmpty() || !url.startsWith("http")) continue;
+            String body = page(url);
+            if (body == null) continue;
+            Set<String> known = new HashSet<>();
+            JSONArray k = s.optJSONArray("known");
+            if (k != null) for (int j = 0; j < k.length(); j++) known.add(k.optString(j));
+            String toldKey = "story " + name;
+            JSONArray t = told.optJSONArray(toldKey);
+            if (t != null) for (int j = 0; j < t.length(); j++) known.add(t.optString(j));
+            List<String> news = newChapters(body, s, known);
+            if (news.isEmpty() || news.size() > MAX_NEW_CHAPTERS) continue;
+            JSONArray now = new JSONArray();
+            for (String key : news) now.put(key);
+            if (t != null) for (int j = 0; j < t.length() && now.length() < MAX_TOLD; j++) now.put(t.optString(j));
+            told.put(toldKey, now);
+            waiting.put(name, waiting.optInt(name, 0) + news.size());
+            fresh.put(name, waiting.optInt(name, 0));
+        }
+        if (fresh.length() > 0) prefs.edit().putString("storiesWaiting", waiting.toString()).commit();
+        return fresh;
+    }
+
+    // Every link in the page (in its markup or its scripts' JSON) under the
+    // chapters' shared path, as deep as theirs, that isn't known, as the
+    // key the app gives a link: host without www., then the path.
+    static List<String> newChapters(String body, JSONObject s, Set<String> known) {
+        String host = s.optString("host", "").toLowerCase();
+        String prefix = s.optString("prefix", "");
+        Set<Integer> depths = new HashSet<>();
+        JSONArray d = s.optJSONArray("depths");
+        if (d != null) for (int j = 0; j < d.length(); j++) depths.add(d.optInt(j));
+        List<String> out = new ArrayList<>();
+        if (host.isEmpty() || prefix.length() < 2 || depths.isEmpty()) return out;
+        String text = body.replace("\\/", "/");
+        String lower = text.toLowerCase();
+        Set<String> seen = new HashSet<>();
+        for (int at = text.indexOf(prefix); at >= 0; at = text.indexOf(prefix, at + 1)) {
+            if (at > 0) {
+                char c = text.charAt(at - 1);
+                if (Character.isLetterOrDigit(c) || c == '.' || c == '-') {
+                    // Only after this site's own name: another site's link
+                    // with the same path isn't one of these chapters.
+                    if (!lower.startsWith(host, at - host.length())) continue;
+                    int h = at - host.length();
+                    if (h > 0) {
+                        char b = text.charAt(h - 1);
+                        if (b != '/' && b != '.') continue;
+                    }
+                } else if (c == '_' || c == '~' || c == '%' || c == '/') continue;
+            }
+            int end = at + prefix.length();
+            while (end < text.length() && "\"'<> \t\r\n#?\\)".indexOf(text.charAt(end)) < 0) end++;
+            String path = text.substring(at, end);
+            while (path.endsWith("/")) path = path.substring(0, path.length() - 1);
+            if (path.length() <= prefix.length() - 1 || !depths.contains(path.split("/", -1).length)) continue;
+            String key = host + path;
+            if (known.contains(key) || !seen.add(key)) continue;
+            out.add(key);
+        }
+        return out;
+    }
+
+    // A contents page's HTML: a plain request, else (a "Just a moment"
+    // page, a 403 or 503) the page drawn in a hidden WebView, as the app's
+    // PageRender does. null when neither gets it.
+    private String page(String address) {
+        try {
+            URL url = new URL(address);
+            HttpURLConnection c = null;
+            for (int hop = 0; hop < 5; hop++) {
+                c = (HttpURLConnection) url.openConnection();
+                c.setConnectTimeout(TIMEOUT_MS);
+                c.setReadTimeout(TIMEOUT_MS);
+                c.setInstanceFollowRedirects(false);
+                c.setRequestProperty("Accept", "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8");
+                c.setRequestProperty("User-Agent", userAgent(this));
+                int code = c.getResponseCode();
+                if (code < 300 || code >= 400) break;
+                String to = c.getHeaderField("Location");
+                c.disconnect();
+                if (to == null) return null;
+                url = new URL(url, to);
+            }
+            int code = c.getResponseCode();
+            if (code == 200) {
+                String body;
+                try (InputStream in = c.getInputStream()) { body = new String(readAll(in, MAX_BYTES), StandardCharsets.UTF_8); }
+                finally { c.disconnect(); }
+                if (!challenged(body)) return body;
+            } else {
+                c.disconnect();
+                if (code != 403 && code != 429 && code != 503) return null;
+            }
+        } catch (Exception e) { return null; }
+        if (stopped) return null;
+        String drawn = HiddenPage.html(getApplicationContext(), address, RENDER_MS);
+        return drawn == null || challenged(drawn) ? null : drawn;
+    }
+
+    private static final java.util.regex.Pattern CHALLENGE = java.util.regex.Pattern.compile("<title>\\s*(Just a moment|Request temporarily denied|Attention Required)", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    static boolean challenged(String body) {
+        return CHALLENGE.matcher(body).find();
+    }
+
+    static void notifyStories(Context ctx, JSONObject fresh) {
+        if (Build.VERSION.SDK_INT >= 33 && ctx.checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) return;
+        if (notes(ctx).optString("style", "each").equals("off")) return;
+        NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(STORY_CHANNEL) == null)
+            nm.createNotificationChannel(new NotificationChannel(STORY_CHANNEL, "New chapters", NotificationManager.IMPORTANCE_DEFAULT));
+        for (Iterator<String> it = fresh.keys(); it.hasNext(); ) {
+            String name = it.next();
+            int count = fresh.optInt(name, 0);
+            if (count <= 0) continue;
+            int id = ("story " + name).hashCode();
+            Intent open = ctx.getPackageManager().getLaunchIntentForPackage(ctx.getPackageName());
+            Notification.Builder b = (Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(ctx, STORY_CHANNEL) : new Notification.Builder(ctx))
+                .setSmallIcon(R.drawable.waypage_feed)
+                .setContentTitle(name)
+                .setContentText(count == 1 ? "A new chapter" : count + " new chapters")
+                .setNumber(count)
+                .setAutoCancel(true)
+                .setOnlyAlertOnce(true);
+            if (open != null) {
+                open.setAction(OPEN);
+                open.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                open.putExtra(STORY, name);
+                b.setContentIntent(PendingIntent.getActivity(ctx, id, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+            }
+            nm.notify(STORY_TAG, id, b.build());
+        }
     }
 
     // ---- Reading a feed: each post as the set of ids it can go by, and
@@ -462,12 +630,12 @@ public class FeedCheckJob extends JobService {
     }
 
     static void clear(Context ctx) {
-        ctx.getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove("waiting").commit();
+        ctx.getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove("waiting").remove("storiesWaiting").commit();
         Widgets.refresh(ctx);
         NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
         nm.cancel(NOTE);
         try {
-            for (StatusBarNotification n : nm.getActiveNotifications()) if (TAG.equals(n.getTag())) nm.cancel(TAG, n.getId());
+            for (StatusBarNotification n : nm.getActiveNotifications()) if (TAG.equals(n.getTag()) || STORY_TAG.equals(n.getTag())) nm.cancel(n.getTag(), n.getId());
         } catch (Exception e) { /* nothing showing */ }
     }
 

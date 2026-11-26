@@ -18,63 +18,27 @@
 (function () {
   const C = (window.Waypage = window.Waypage || {});
   const KEY = "waypage.webdav";
-  const GONE = "waypage.webdav.gone"; // { id: when it was removed }, so sync doesn't bring it back
   const DAV = "DAV:";
   // What the Library opens, by the file's name.
   const KINDS = { epub: "EPUB", azw3: "AZW3", azw: "MOBI", mobi: "MOBI", prc: "MOBI", fb2: "FB2", cbz: "CBZ", pdf: "PDF", md: "Markdown", markdown: "Markdown",
     txt: "Text", html: "HTML", htm: "HTML", m4b: "Audiobook", mp3: "Audio" };
   const PICTURE = /\.(jpe?g|png|webp)$/i;
 
-  const parse$ = (k, empty) => { try { const v = JSON.parse(localStorage.getItem(k) || empty); return v && typeof v === "object" ? v : JSON.parse(empty); } catch (e) { return JSON.parse(empty); } };
-  const read$ = () => { const v = parse$(KEY, "[]"); return Array.isArray(v) ? v : []; };
-  const write$ = (v) => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) { /* storage full: it stays as it was */ } };
-  const gone$ = () => parse$(GONE, "{}");
-  const watchers = [];
-  const changed = (fn) => { watchers.push(fn); };
-  const tell = () => { for (const fn of watchers) { try { fn(); } catch (e) { console.error(e); } } };
-
   function host(u) { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return String(u || ""); } }
   // A folder's address always ends in /, as servers answer it.
   const folderUrl = (u) => { try { const x = new URL(String(u || "").trim()); if (!/^https?:$/.test(x.protocol)) return ""; x.hash = ""; if (!x.pathname.endsWith("/")) x.pathname += "/"; return x.href; } catch (e) { return ""; } };
   const lastName = (u) => { try { const p = new URL(u).pathname.replace(/\/+$/, "").split("/").pop(); return decodeURIComponent(p || ""); } catch (e) { return ""; } };
 
-  const list = () => read$().map((s) => ({ ...s }));
+  // The list itself is src/servers.js's, shared with Catalogs and Audiobookshelf.
   const clean = (s) => {
     const url = folderUrl(s.url) || String(s.url || "").trim();
     return { id: s.id || "w" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: String(s.title || "").trim().slice(0, 80) || lastName(url) || host(url),
       url, user: String(s.user || ""), pass: String(s.pass || ""), at: Number(s.at) || Date.now() };
   };
-  function add(s) { const x = clean({ ...s, at: Date.now() }); write$([...read$(), x]); tell(); return x; }
-  function update(s) { write$(read$().map((x) => (x.id === s.id ? clean({ ...x, ...s, at: Date.now() }) : x))); tell(); }
-  function remove(id) {
-    write$(read$().filter((x) => x.id !== id));
-    try { localStorage.setItem(GONE, JSON.stringify({ ...gone$(), [id]: Date.now() })); } catch (e) { /* not kept */ }
-    tell();
-  }
-  // What sync sends: every server but its password, and those removed.
-  const shared = () => ({ v: 1, list: read$().map(({ pass, ...s }) => s), gone: gone$() });
-  // Another device's list: the newer of each wins, a password typed here
-  // stays here (while the username is the same), one removed anywhere goes.
-  function mergeIn(doc) {
-    if (!doc || !Array.isArray(doc.list)) return false;
-    const gone = { ...gone$() };
-    for (const [id, at] of Object.entries(doc.gone || {})) if (typeof at === "number" && !(gone[id] >= at)) gone[id] = at;
-    const mine = new Map(read$().map((s) => [s.id, s]));
-    for (const r of doc.list) {
-      if (!r || !r.id || !/^https?:\/\//i.test(r.url || "")) continue;
-      const at = Number(r.at) || 0, here = mine.get(r.id);
-      if (!here) mine.set(r.id, clean({ ...r, pass: "", at }));
-      else if (at > (here.at || 0)) mine.set(r.id, clean({ ...r, pass: r.user === here.user ? here.pass : "", at }));
-    }
-    for (const [id, at] of Object.entries(gone)) { const s = mine.get(id); if (s && (s.at || 0) <= at) mine.delete(id); }
-    const before = JSON.stringify(read$());
-    const out = [...mine.values()];
-    try { localStorage.setItem(GONE, JSON.stringify(gone)); } catch (e) { /* not kept */ }
-    if (JSON.stringify(out) === before) return false;
-    write$(out);
-    tell();
-    return true;
-  }
+  const S = C.servers({ key: KEY, clean, secrets: ["pass"] });
+  const { add, remove, shared, mergeIn, changed } = S;
+  const list = () => S.all().map((s) => ({ ...s }));
+  const update = (s) => S.change(s.id, (x) => clean({ ...x, ...s, at: Date.now() }));
 
   const ext = (name) => ((String(name).match(/\.([a-z0-9]{1,8})$/i) || [])[1] || "").toLowerCase();
   const kindOf = (name) => (KINDS[ext(name)] ? ext(name) : "");

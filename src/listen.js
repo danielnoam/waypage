@@ -60,7 +60,6 @@
   // MP4 (M4B, M4A): Nero's chpl list, else a QuickTime chapter track (a
   // text track another track names in tref/chap), read box by box so a
   // 2 GB book costs a few small reads.
-  const CONTAINERS = new Set(["moov", "trak", "mdia", "minf", "stbl", "udta", "edts", "dinf"]);
   async function boxes(blob, from, to) {
     const out = [];
     let at = from;
@@ -287,7 +286,7 @@
       const chars = words.reduce((s, w) => s + w.length + 1, 0) || 1;
       let c = 0;
       words.forEach((w, i) => {
-        out.push({ w, t: times ? times[i] : p.t0 + (p.t1 - p.t0) * (c / chars), q: i === 0 ? p.quiet || 0 : 0 });
+        out.push({ w, t: times ? times[i] : p.t0 + (p.t1 - p.t0) * (c / chars), q: i === 0 ? p.quiet || 0 : 0, ...(i === 0 && p.para ? { p: 1 } : {}) });
         c += w.length + 1;
       });
     }
@@ -354,7 +353,8 @@
       }
       const n = para ? para.words.length : 0;
       const prev = para && para.words[n - 1];
-      if (para && ((pauses && x.q >= PAUSE && n >= 12) || (n >= (pauses ? 220 : 110) && prev && end(prev.w)))) para = null;
+      // A paragraph of the text an audiobook was made from starts one here.
+      if (para && (x.p || (pauses && x.q >= PAUSE && n >= 12) || (n >= (pauses ? 220 : 110) && prev && end(prev.w)))) para = null;
       if (!para) { para = { words: [] }; out.push(para); }
       para.words.push(x);
       last = x.t;
@@ -532,6 +532,67 @@
   // How much of the heard words found their place: 0 to 1.
   const matched = (heard, sync) => (heard.length ? Math.min(1, sync.t.length / heard.length) : 0);
 
+  // How a minute of narration fits a book's text (Find the book, 2026-11):
+  // "same" when its words come in the book's runs of five, "other" when
+  // they don't but the names heard are the book's (another translation),
+  // else "no"; "" when there's too little of either to say.
+  function fit(heard, texts) {
+    const said = heard.map((x) => String(x.w)).filter((w) => norm(w));
+    const book = bookWords(texts);
+    if (said.length < 30 || book.w.length < 300) return { verdict: "", same: 0, names: 0 };
+    const fives = new Set();
+    for (let k = 0; k + 4 < book.w.length; k++) fives.add(book.w[k] + " " + book.w[k + 1] + " " + book.w[k + 2] + " " + book.w[k + 3] + " " + book.w[k + 4]);
+    const n = said.map(norm);
+    let hit = 0, all = 0;
+    for (let i = 0; i + 4 < n.length; i++) { all++; if (fives.has(n.slice(i, i + 5).join(" "))) hit++; }
+    const same = all ? hit / all : 0;
+    // Names: capitalised words that don't start a sentence.
+    const have = new Set(book.w);
+    const names = [...new Set(said.filter((w, i) => i && /^\p{Lu}\p{Ll}{2,}/u.test(w) && !/[.!?:"”»]$/.test(said[i - 1])).map(norm))];
+    const nameFit = names.length ? names.filter((w) => have.has(w)).length / names.length : 0;
+    const verdict = same >= 0.2 ? "same" : names.length >= 2 && nameFit >= 0.6 ? "other" : "no";
+    return { verdict, same: Math.round(same * 100) / 100, names: Math.round(nameFit * 100) / 100 };
+  }
+
+  // How long the narration has been away from the book at `t`, in
+  // seconds: since the last word found in it, counted only while the
+  // transcript has words all along (a stretch not written yet, or the
+  // part before the book starts, isn't away). 0 when it's in the book.
+  function lostFor(sync, heard, t) {
+    const ts = sync && sync.t;
+    if (!ts || !ts.length || !heard.length || t < ts[0]) return 0;
+    let lo = 0, hi = ts.length - 1;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (ts[mid] <= t + 0.05) lo = mid; else hi = mid - 1; }
+    const away = t - ts[lo];
+    if (away < 30) return 0;
+    // Words heard all through: none of the gaps between them over 20 s.
+    let last = ts[lo], said = 0;
+    for (const w of heard) {
+      if (w.t <= ts[lo] || w.t > t) continue;
+      if (w.t - last > 20) return 0;
+      last = w.t; said++;
+    }
+    if (t - last > 20 || said < away / 3) return 0;
+    return away;
+  }
+
+  // A transcript as it syncs (2026-11): the words and what's written,
+  // never this device's timings for a book.
+  const shareTranscript = (d) => ({ v: 1, pieces: (d && d.pieces) || [], ranges: (d && d.ranges) || [], ...(d && d.pack ? { pack: d.pack } : {}) });
+  // Another device's transcript into this one's: what's written here
+  // stays, and theirs fills the stretches this one hasn't written.
+  function mergeTranscript(mine, theirs) {
+    const here = (mine && mine.pieces) || [], there = (theirs && theirs.pieces) || [];
+    const taken = here.filter(Boolean);
+    const free = (x) => !taken.some((y) => x.t0 < y.t1 - 0.05 && x.t1 > y.t0 + 0.05);
+    const pieces = taken.concat(there.filter((x) => x && Number.isFinite(x.t0) && Number.isFinite(x.t1) && free(x))).sort((x, y) => x.t0 - y.t0);
+    const all = [...((mine && mine.ranges) || []), ...((theirs && theirs.ranges) || [])].filter((r) => Array.isArray(r) && r.length === 2).sort((x, y) => x[0] - y[0]);
+    const ranges = [];
+    for (const r of all) { const last = ranges[ranges.length - 1]; if (last && r[0] <= last[1] + 1) last[1] = Math.max(last[1], r[1]); else ranges.push([r[0], r[1]]); }
+    const added = pieces.length !== here.length;
+    return { ...(mine || {}), pieces, ranges, pack: (mine && mine.pack) || (theirs && theirs.pack) || "", ...(added ? { sync: null, syncKey: "" } : {}) };
+  }
+
   // The word being said at `t`: its index in the sync, or -1 before the
   // first. A word whose time was long ago (the narration has gone past
   // anything in the book) is -1 too.
@@ -659,6 +720,6 @@
   };
 
   C.listen = { EXTS, MIMES, extOf, isAudioName, sniff, locked, lockedText, tags, id3, mp4Chapters, inOrder, baseName, partAt, startOf, onBookClock, mendTimes, covered, chapterAt,
-    timedWords, applyFixes, countHeard, norm, paragraphs, findHeard, transcriptMarkdown, transcriptBody, bookWords, align, syncOf, matched, wordAt, timeAt,
+    timedWords, applyFixes, countHeard, norm, paragraphs, findHeard, transcriptMarkdown, transcriptBody, bookWords, align, syncOf, matched, wordAt, timeAt, fit, lostFor, shareTranscript, mergeTranscript,
     clock, overlays, overlaySync, timeText, lengthText };
 })();

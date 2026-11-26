@@ -569,6 +569,53 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    // Translate chapters (2026-11): a linked collection's chapter
+    // translates itself as it opens, the way Website sync was set to show it.
+    await test("Website sync's Translate chapters translates a chapter as it opens", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (id, i) => ({ id, url: "https://example.com/story/" + id, title: "Chapter " + i, site: "example.com", savedAt: 1000 + i, minutes: 1, mode: "links", at: 0, finished: false,
+          folder: "Far Tale", folderAt: i, source: "https://example.com/story/", lang: "ja" });
+        const list = [c("ft1", 1), c("ft2", 2)];
+        localStorage.setItem("waypage.checkDaily", "false");
+        await S.writeIndex(list);
+        for (const x of list) await S.writePage(x.id, "<!doctype html><html lang=\"ja\"><body><p>First words of " + x.id + " in the story.</p><p>Second words of " + x.id + " here.</p></body></html>", x);
+      });
+      await q.reload();
+      const fake = () => {
+        const T = window.Waypage.platform.translator;
+        window.__prepared = [];
+        Object.defineProperty(T, "available", { get: () => true, configurable: true });
+        T.detect = async () => "ja";
+        T.ready = async () => "downloadable";
+        T.prepare = async (from, to, on) => { window.__prepared.push(from + ">" + to); if (on) on(1); };
+        T.translate = async (texts) => texts.map((t) => "[en] " + t);
+      };
+      await q.evaluate(fake);
+      await until(q, () => state.pages.length === 2);
+      await q.evaluate(() => { openFolder("Far Tale"); setFolderMode("chapters"); });
+      await q.locator("#folderBody .translate-pick button").first().click();
+      await q.getByRole("option", { name: "English" }).click();
+      await until(q, () => chaptersTranslateFor("Far Tale") && chaptersTranslateFor("Far Tale").to === "en");
+      await until(q, () => window.__prepared.includes("ja>en"));
+      await until(q, () => !document.querySelector(".dropdown-menu"));
+      await q.locator("#folderBody .translate-show button").first().click();
+      await q.getByRole("option", { name: "Instead of the text" }).click();
+      await until(q, () => chaptersTranslateFor("Far Tale").mode === "replace");
+      await q.evaluate(() => { setFolderMode(""); openPage("ft2"); });
+      const tr = q.frameLocator("#readerFrame").locator(".co-tr");
+      await tr.first().waitFor();
+      assert.strictEqual(await tr.count(), 2);
+      assert.match(await tr.first().textContent(), /^\[en\] First words of ft2/);
+      await until(q, () => document.getElementById("readerFrame").contentDocument.documentElement.classList.contains("co-replace"));
+      // A clip in no such collection doesn't.
+      assert.strictEqual(await q.evaluate(() => chaptersTranslateFor("Elsewhere")), null);
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("the Highlights button lists them, and words already highlighted can be unhighlighted", async () => {
       await p.locator(".page-card", { hasText: "The Long Haul Flight" }).first().click();
       const marks = p.frameLocator("#readerFrame").locator("mark.co-mark");
@@ -1692,6 +1739,139 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    // A story's status on its site (2026-11, Daniel): a tag on its cover,
+    // "Caught up" rather than done while it's still being written, and
+    // Website sync keeps it current.
+    // A sheet on its way down doesn't take the keyboard back: the search
+    // tapped as it closes keeps what's typed (Audiobookshelf's sign-in).
+    await test("a field in the library takes focus while a sheet is still closing", async () => {
+      const q = await page(browser, 390);
+      const got = await q.evaluate(async () => {
+        openMenu("addFeed");
+        await new Promise((r) => setTimeout(r, 400));
+        closeMenu();
+        const input = document.querySelector("#sideBtn");
+        input.focus();
+        return { menu: !!state.menu, sheetUp: !$("menuSheet").hidden, focused: document.activeElement === input };
+      });
+      assert.deepStrictEqual(got, { menu: false, sheetUp: true, focused: true });
+      await q.context().close();
+    });
+
+    await test("a series shows its story's status, and caught up isn't finished while it's still going", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (id) => ({ id, url: "https://www.royalroad.com/fiction/5/a/chapter/" + id, title: id, site: "Royal Road", savedAt: 1000, minutes: 1, mode: "links", at: 1, finished: true, folder: "Saga", folderAt: Number(id.slice(1)),
+          folderSeries: true, source: "https://www.royalroad.com/fiction/5/a", siteStatus: "ongoing" });
+        const list = [c("m1"), c("m2")];
+        await S.writeIndex(list);
+        for (const x of list) await S.writePage(x.id, "<!doctype html><html><body><p>" + x.id + "</p></body></html>", x);
+      });
+      await q.reload();
+      const tile = '[data-key="series"] .tile[data-name="Saga"]';
+      await until(q, () => !!document.querySelector('[data-key="series"] .tile[data-name="Saga"] .tile-status'));
+      assert.strictEqual(await q.textContent(tile + " .tile-status"), "Ongoing");
+      assert.ok(/Caught up/.test(await q.textContent(tile + " .tile-meta")) && !/All read/.test(await q.textContent(tile + " .tile-meta")));
+      await q.evaluate(() => openFolder("Saga"));
+      await until(q, () => state.folder === "Saga" && !!document.querySelector("#folderBody .book-site"));
+      assert.strictEqual(await q.textContent("#folderBody .book-site"), "Royal Road · Series · Ongoing");
+      assert.strictEqual(await q.textContent("#folderBody .folder-meta"), "Caught up: all 2 read");
+      // The site says it's done now: Website sync's check takes the word.
+      await q.evaluate(async () => {
+        Waypage.save.findChapters = async (u) => ({ title: "Saga", links: ["https://www.royalroad.com/fiction/5/a/chapter/m1", "https://www.royalroad.com/fiction/5/a/chapter/m2"], cover: "", page: u, siteTags: null, status: "completed" });
+        Object.defineProperty(navigator, "onLine", { get: () => true, configurable: true });
+        await checkNew("Saga", true);
+      });
+      await until(q, () => folderPages("Saga").every((p) => p.siteStatus === "completed"));
+      await until(q, () => /All 2 read/.test(document.querySelector("#folderBody .folder-meta").textContent));
+      await q.evaluate(() => { history.back(); });
+      await until(q, () => !state.folder && document.querySelector('[data-key="series"] .tile[data-name="Saga"] .tile-status')?.textContent === "Completed");
+      assert.ok(/All read/.test(await q.textContent(tile + " .tile-meta")));
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a collection's quick starts under Continue: last read and newest, unless Continue opens them", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (id, at, folderAt, readAt) => ({ id, url: "https://blog.example.com/" + id, title: id, site: "blog.example.com", savedAt: 1000, minutes: 1, mode: "links",
+          at, finished: at === 1, readAt, folder: "Shelf", folderAt });
+        const list = [c("q1", 1, 1, 50), c("q2", 1, 2, 90), c("q3", 0, 4, 0), c("q4", 0.3, 3, 10)];
+        await S.writeIndex(list);
+        for (const x of list) await S.writePage(x.id, "<!doctype html><html><body><p>Words in " + x.id + ".</p></body></html>", x);
+      });
+      await q.reload();
+      await until(q, () => state.pages.length === 4);
+      await q.evaluate(() => openFolder("Shelf"));
+      await until(q, () => !!document.querySelector("#folderBody .folder-starts"));
+      const labels = () => q.$$eval("#folderBody .folder-starts .chip", (b) => b.map((x) => x.getAttribute("aria-label")));
+      assert.deepStrictEqual(await labels(), ["Last read: q2", "Newest: q3"]);
+      const pick = async (label, id) => {
+        await q.locator("#folderBody .folder-starts .chip", { hasText: label }).click();
+        await until(q, (id) => state.open && state.open.id === id, id);
+        await q.evaluate(() => { history.back(); });
+        await until(q, () => state.folder === "Shelf" && $("readerView").hidden);
+      };
+      await pick("Newest", "q3");
+      await q.evaluate(async () => { const p = state.pages.find((x) => x.id === "q2"); p.readAt = Date.now() + 1e6; await Waypage.store.writeIndex(state.pages); renderFolder(); });
+      await pick("Last read", "q2");
+      // Continue opens the clip read last while it's unfinished: no Last read then.
+      await q.evaluate(async () => { const p = state.pages.find((x) => x.id === "q4"); p.readAt = Date.now() + 2e6; await Waypage.store.writeIndex(state.pages); renderFolder(); });
+      assert.deepStrictEqual(await labels(), ["Newest: q3"]);
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
+    // A site that never says (a blog): picked by hand in Edit, on every
+    // clip so it syncs; a clip joining takes it. Website sync can turn the
+    // site's own word off.
+    await test("a series' status can be picked in Edit, and the site's word turned off in Website sync", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (id, folder) => ({ id, url: "https://blog.example.com/" + id, title: id, site: "blog.example.com", savedAt: 1000, minutes: 1, mode: "links", at: 0, finished: false, folder, folderAt: Number(id.slice(1)), folderSeries: !!folder });
+        const list = [c("k1", "Knight"), c("k2", "Knight"), c("x1")];
+        delete list[2].folder;
+        await S.writeIndex(list);
+        for (const x of list) await S.writePage(x.id, "<!doctype html><html><body><p>" + x.id + "</p></body></html>", x);
+      });
+      await q.reload();
+      await until(q, () => !!document.querySelector('[data-key="series"] .tile[data-name="Knight"]'));
+      await q.evaluate(() => { openFolder("Knight"); });
+      await until(q, () => state.folder === "Knight");
+      await q.evaluate(() => setFolderMode("edit"));
+      await q.locator("#folderBody .status-pick button").first().click();
+      await q.locator(".dropdown-menu [role=option], .dropdown-menu button", { hasText: "Completed" }).first().click();
+      await until(q, () => folderPages("Knight").every((p) => p.statusPick === "completed"));
+      await q.evaluate(() => setFolderMode(""));
+      await until(q, () => /Series · Completed/.test(document.querySelector("#folderBody .book-site").textContent));
+      // A clip joining takes it.
+      await q.evaluate(async () => { const p = state.pages.find((x) => x.id === "x1"); p.folder = "Knight"; joinFav(p, "Knight"); });
+      assert.strictEqual(await q.evaluate(() => state.pages.find((x) => x.id === "x1").statusPick), "completed");
+      // Linked, the site's word shows over the pick, until Website sync turns it off.
+      await q.evaluate(() => { for (const p of folderPages("Knight")) { p.siteStatus = "ongoing"; p.source = "https://blog.example.com/"; } renderFolder(); });
+      await until(q, () => /Series · Ongoing/.test(document.querySelector("#folderBody .book-site").textContent));
+      // While the site sets it, Edit has no Status row (Daniel 2026-11-23).
+      await q.evaluate(() => setFolderMode("edit"));
+      assert.strictEqual(await q.locator("#folderBody .status-pick").count(), 0);
+      // Website sync is Edit's second tab, its link on top.
+      await q.locator("#folderBody .edit-tabs .rs-tab", { hasText: "Website sync" }).click();
+      await until(q, () => folderMode === "chapters" && document.querySelector("#folderBody .chapters-panel > .settings-section .source-input"));
+      const sw = q.locator("#folderBody .row", { hasText: "Status from the site" }).locator("input");
+      assert.ok(await sw.isChecked());
+      await sw.click();
+      await until(q, () => folderPages("Knight").every((p) => p.folderNoStatus));
+      await q.evaluate(() => setFolderMode(""));
+      await until(q, () => /Series · Completed/.test(document.querySelector("#folderBody .book-site").textContent));
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("a series has its own section, sits in a collection, and turns back into a collection with nothing lost", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
@@ -1854,7 +2034,7 @@ function zipOf(files) {
       await q.evaluate(() => openFolder("Serial"));
       // Favourite and Edit sit in the bar; the ⋯ menu keeps the rest.
       await q.click("#folderMore");
-      assert.deepStrictEqual(await q.locator("#folderPop .pop-label").allTextContents(), ["Website sync", "Add clips", "Show as a list", "Make it a series", "Tags", "Select", "Export", "Remove"]);
+      assert.deepStrictEqual(await q.locator("#folderPop .pop-label").allTextContents(), ["Add clips", "Show as a list", "Make it a series", "Tags", "Select", "Export", "Remove"]);
       await q.keyboard.press("Escape");
       await q.click("#folderFav");
       await until(q, () => folderFav("Serial") && document.getElementById("folderFav").getAttribute("aria-pressed") === "true");
@@ -1866,16 +2046,28 @@ function zipOf(files) {
       assert.strictEqual(await q.locator("#folderBody .item-fav").count(), 0);
       // A name typed in Edit stays while the order changes under it.
       await q.fill("#folderBody .book-title-input", "Serial two");
+      // Edit shows no cover or progress at the top: the cover's choices are below.
+      assert.strictEqual(await q.locator("#folderBody .book-head .book-cover, #folderBody .book-head .book-progress, #folderBody .book-head .folder-meta").count(), 0);
       const order = () => q.evaluate(() => folderPages("Serial").map((p) => p.id).join());
-      await q.locator('[data-sort="released"]').click();
+      // Sort by is a drop-down on top of the chapters; picking the same
+      // sort again turns it round, and the face carries ↑ or ↓.
+      const sortBy = async (label) => {
+        await q.locator("#folderBody .sort-row .dropdown-btn").click();
+        await q.locator(".dropdown-menu .dropdown-item", { hasText: label }).click();
+      };
+      const face = () => q.evaluate(() => { const b = document.querySelector("#folderBody .sort-row .dropdown-btn"); return b && b.getAttribute("aria-label"); });
+      await sortBy("Release date");
       await until(q, () => folderPages("Serial")[0].id === "rr100");
       assert.strictEqual(await order(), "rr100,rr300,rr500");
-      await q.locator('[data-sort="released"]').click();
+      await until(q, () => !!document.querySelector("#folderBody .sort-row .dropdown-face .sort-dir"));
+      assert.ok(/Release date$/.test(await face()), await face());
+      await sortBy("Release date");
       await until(q, () => folderPages("Serial")[0].id === "rr500");
-      await q.locator('[data-sort="title"]').click();
+      await until(q, () => /Release date, Reversed$/.test(document.querySelector("#folderBody .sort-row .dropdown-btn").getAttribute("aria-label")));
+      await sortBy("Title");
       await until(q, () => folderPages("Serial")[0].id === "rr300");
       assert.strictEqual(await order(), "rr300,rr100,rr500");
-      await q.locator('[data-sort="added"]').click();
+      await sortBy("Date added");
       await until(q, () => folderPages("Serial")[0].id === "rr100");
       assert.strictEqual(await order(), "rr100,rr300,rr500");
       // No arrow buttons: the handle takes the arrow keys.
@@ -1886,7 +2078,15 @@ function zipOf(files) {
       await until(q, () => folderPages("Serial")[1].id === "rr100" && !!document.activeElement.closest("li"));
       assert.strictEqual(await order(), "rr300,rr100,rr500");
       assert.strictEqual(await q.evaluate(() => document.activeElement.closest("li").dataset.id), "rr100");
+      // A move into an order it knows shows that one; any other is your own.
+      await until(q, () => /Title$/.test(document.querySelector("#folderBody .sort-row .dropdown-btn").getAttribute("aria-label")));
+      assert.strictEqual(await q.evaluate(() => { const l = folderPages("Serial"); return folderSortNow([l[1], l[2], l[0]].map((p, i) => ({ ...p, title: ["b", "c", "a"][i], savedAt: [3, 1, 2][i], published: null, url: "https://x.example/" + i }))); }), null);
       assert.strictEqual(await q.locator("#folderBody .book-title-input").inputValue(), "Serial two");
+      // A chapter's line sits on its title's side, in Hebrew too.
+      assert.strictEqual(await q.locator('#folderBody .folder-list .choice-text:not([dir="auto"])').count(), 0);
+      // The typed name is kept on Website sync's tab, and Done there renames.
+      await q.locator("#folderBody .edit-tabs .rs-tab", { hasText: "Website sync" }).click();
+      await until(q, () => folderMode === "chapters");
       await q.click("#folderDone");
       await until(q, () => state.folder === "Serial two" && !folderMode);
       await q.evaluate(async () => {
@@ -1895,7 +2095,19 @@ function zipOf(files) {
         setFolderMode("edit");
       });
       await q.locator('.cover-choice[aria-label="Mosaic of the first 3 pictures"]').click();
-      await until(q, () => /^ux[a-z0-9]+\.jpg$/.test(coverPick(folderPages("Serial"))) && document.querySelector('.cover-choice[aria-pressed="true"] .cover-choice-name').textContent === "Mosaic");
+      await until(q, () => /^uym[a-z0-9]+\.jpg$/.test(coverPick(folderPages("Serial"))) && document.querySelector('.cover-choice[aria-pressed="true"] .cover-choice-name').textContent === "Mosaic");
+      // A mosaic follows its clips: one moved out, it's drawn again from
+      // what's left (it kept showing a deleted clip, Daniel 2026-11-23).
+      const drawn = await q.evaluate(() => coverPick(folderPages("Serial")));
+      await q.evaluate(async () => { await setFolder(folderPages("Serial")[0], ""); });
+      await until(q, (was) => { const now = coverPick(folderPages("Serial")); return /^uym/.test(now) && now !== was; }, drawn);
+      assert.strictEqual(await q.evaluate(() => coverPick(folderPages("Serial")) === mosaicName("m", folderPages("Serial").filter(thumbUrl))), true);
+      // Two pictures side by side, and back to Automatic with fewer than two.
+      await q.locator('.cover-choice[aria-label="The first two pictures, side by side"]').click();
+      await until(q, () => /^uyv/.test(coverPick(folderPages("Serial"))));
+      await q.evaluate(async () => { await setFolder(folderPages("Serial")[0], ""); });
+      await until(q, () => !coverPick(folderPages("Serial")));
+      await q.evaluate(async () => { for (const p of state.pages.filter((x) => /^rr/.test(x.id) && !x.folder)) await setFolder(p, "Serial"); });
       // What's saved counts files and audiobooks by kind, not as pictures.
       const kept = await q.evaluate(() => {
         const book = { id: "fb1", title: "Book", bytes: 900000, images: 22, imageBytes: 0, mode: "full", file: { kind: "epub", ext: "epub" }, link: "x" };
@@ -1908,6 +2120,11 @@ function zipOf(files) {
       await q.evaluate(() => { setFolderMode(""); setFolderLook("Serial", "covers"); });
       assert.strictEqual(await q.locator("#folderBody .folder-covers .cover-item").count(), 3);
       assert.strictEqual(await q.locator("#folderBody .folder-list").count(), 0);
+      // Website sync's tab lists the chapters one by one even with the grid look (Daniel 2026-11-25).
+      await q.evaluate(() => setFolderMode("chapters"));
+      assert.strictEqual(await q.locator("#folderBody .folder-covers").count(), 0);
+      assert.strictEqual(await q.locator("#folderBody .folder-list > li").count(), 3);
+      await q.evaluate(() => setFolderMode(""));
       await q.locator('#folderBody .folder-covers li[data-id="rr500"] .item-fav').click();
       await until(q, () => !state.pages.find((p) => p.id === "rr500").fav);
       // Opening a serial looks for its next chapter, which has nowhere to go here.
@@ -2019,6 +2236,223 @@ function zipOf(files) {
       for (let i = 1; i < last; i++) assert.strictEqual(await swipe(300, 300, 60, 300), "sw1", "turns a page");
       assert.strictEqual(await q.evaluate(() => C.reader.pageInfo().page), last);
       assert.strictEqual(await swipe(300, 300, 60, 300), "sw2", "past the last page, the next clip");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("drawing in Pages keeps the page still, and a pinch zooms it in place", async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      q.errors = [];
+      q.on("pageerror", (e) => q.errors.push(e.message));
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      await q.waitForTimeout(1000);
+      await q.evaluate(async () => { const m = await C.notes.create("lines"); state.pages.unshift(m); await C.store.writeIndex(state.pages); openPage(m.id); });
+      await until(q, () => state.open && C.reader.frameDoc && C.reader.frameDoc.querySelector("img[data-page]"));
+      await q.evaluate(() => setNoteLook({ layout: "pages" }));
+      await until(q, () => C.reader.paged && C.reader.pageInfo());
+      await q.evaluate(() => { inkStart(); C.ink.setting({ finger: true }); });
+      await until(q, () => C.ink.on);
+      // Touches from the page's own document, as the swipe test does.
+      const touch = (steps) => q.evaluate(async (steps) => {
+        const d = C.reader.frameDoc, target = d.querySelector(".co-ink") || d.body;
+        const t = (id, x, y) => new Touch({ identifier: id, target, clientX: x, clientY: y, screenX: x, screenY: y });
+        const fire = (type, list, ch) => target.dispatchEvent(new TouchEvent(type, { touches: list.map((p) => t(...p)), changedTouches: (ch || list).map((p) => t(...p)), bubbles: true, cancelable: true }));
+        for (const [type, list, ch] of steps) { fire(type, list, ch); await new Promise((r) => setTimeout(r, 16)); }
+      }, steps);
+      // A finger drawing: pointer events along `pts` on the page's layer.
+      const stroke = (pts) => q.evaluate(async (pts) => {
+        const d = C.reader.frameDoc, svg = [...d.querySelectorAll(".co-ink")].find((l) => l.getBoundingClientRect().right > 0 && l.getBoundingClientRect().left < 390), P = d.defaultView.PointerEvent;
+        const fire = (type, [x, y]) => svg.dispatchEvent(new P(type, { pointerId: 7, pointerType: "touch", isPrimary: true, clientX: x, clientY: y, button: 0, buttons: type === "pointerup" ? 0 : 1, bubbles: true, cancelable: true }));
+        fire("pointerdown", pts[0]);
+        for (const q of pts.slice(1)) { fire("pointermove", q); await new Promise((r) => setTimeout(r, 16)); }
+        fire("pointerup", pts[pts.length - 1]);
+        await new Promise((r) => setTimeout(r, 100));
+      }, pts);
+      const state_ = () => q.evaluate(() => ({ x: C.reader.frameWin.scrollX, z: C.reader.pageZoom(), viewer: !!document.querySelector(".viewer:not([hidden])") }));
+      // A finger sweeping sideways draws, and neither moves nor turns the page.
+      await stroke(Array.from({ length: 9 }, (_, i) => [100 + i * 25, 400]));
+      assert.deepStrictEqual(await state_(), { x: 0, z: 1, viewer: false });
+      // A pinch zooms the page where it is: no viewer.
+      const pinch = [["touchstart", [[1, 150, 400]]], ["touchstart", [[1, 150, 400], [2, 240, 400]], [[2, 240, 400]]]];
+      for (let i = 1; i <= 8; i++) pinch.push(["touchmove", [[1, 150 - i * 8, 400], [2, 240 + i * 8, 400]]]);
+      pinch.push(["touchend", [], [[1, 86, 400], [2, 304, 400]]]);
+      const spot = () => q.evaluate(() => { const r = C.reader.frameDoc.querySelector("img[data-page]").getBoundingClientRect(); return { l: r.left, t: r.top, w: r.width, h: r.height }; });
+      const r0 = await spot();
+      await touch(pinch);
+      // The spot under the fingers stays under them, as in Scroll.
+      const r1 = await spot(), fx = (195 - r0.l) / r0.w, fy = (400 - r0.t) / r0.h;
+      assert.ok(Math.abs(r1.l + fx * r1.w - 195) < 3 && Math.abs(r1.t + fy * r1.h - 400) < 3, "zoomed about the fingers: " + JSON.stringify([r0, r1]));
+      const z = await state_();
+      assert.ok(z.z > 1.5 && !z.viewer, "zoomed in place: " + JSON.stringify(z));
+      await q.evaluate(() => C.reader.unzoomPage());
+      assert.strictEqual(await q.evaluate(() => C.reader.pageZoom()), 1);
+      // The stroke made a second sheet. A pinch whose first finger lifts first,
+      // the other drifting sideways, neither turns nor shows the next sheet.
+      await until(q, () => C.reader.pageInfo().pages >= 2);
+      const drift = [["touchstart", [[1, 150, 400]]], ["touchstart", [[1, 150, 400], [2, 240, 400]], [[2, 240, 400]]]];
+      for (let i = 1; i <= 8; i++) drift.push(["touchmove", [[1, 150 - i * 8, 400], [2, 240 + i * 8, 400]]]);
+      drift.push(["touchend", [[2, 304, 400]], [[1, 86, 400]]]);
+      for (let i = 1; i <= 6; i++) drift.push(["touchmove", [[2, 304 - i * 15, 400]]]);
+      drift.push(["touchend", [], [[2, 214, 400]]]);
+      await touch(drift);
+      await q.waitForTimeout(500);
+      const kept = await q.evaluate(() => ({ x: C.reader.frameWin.scrollX, page: C.reader.pageInfo().page, z: C.reader.pageZoom(), locked: C.reader.lockedPages() }));
+      assert.ok(kept.x === 0 && kept.page === 1 && kept.z > 1.5, "stays on the page: " + JSON.stringify(kept));
+      // Zoomed, only the locked page shows.
+      assert.strictEqual(await q.evaluate(() => [...C.reader.frameDoc.querySelectorAll("img[data-page]")].filter((i) => getComputedStyle(i).visibility !== "hidden").length), 1);
+      await q.evaluate(() => C.reader.unzoomPage());
+      // Two fingers swept sideways turn the page, and the new one is locked.
+      const swipe2 = [["touchstart", [[1, 250, 400]]], ["touchstart", [[1, 250, 400], [2, 320, 400]], [[2, 320, 400]]]];
+      for (let i = 1; i <= 8; i++) swipe2.push(["touchmove", [[1, 250 - i * 15, 400], [2, 320 - i * 15, 400]]]);
+      swipe2.push(["touchend", [[2, 200, 400]], [[1, 130, 400]]], ["touchend", [], [[2, 200, 400]]]);
+      await touch(swipe2);
+      await until(q, () => C.reader.pageInfo().page === 2 && Math.round(C.reader.frameWin.scrollX) === C.reader.frameWin.innerWidth);
+      assert.strictEqual(await q.evaluate(() => C.reader.pageZoom()), 1);
+      assert.deepStrictEqual(await q.evaluate(() => C.reader.lockedPages().length), 1);
+      // A selection dragged to the edge and held carries over to the next page.
+      await q.evaluate(() => { C.reader.turnSide("left", true); C.ink.setting({ tool: "select" }); });
+      await until(q, () => C.reader.pageInfo().page === 1);
+      const ptr = (seq) => q.evaluate(async (seq) => {
+        const d = C.reader.frameDoc, svg = [...d.querySelectorAll(".co-ink")].find((l) => l.getBoundingClientRect().right > 0 && l.getBoundingClientRect().left < 390), P = d.defaultView.PointerEvent;
+        for (const [type, x, y, wait] of seq) {
+          svg.dispatchEvent(new P(type, { pointerId: 9, pointerType: "touch", isPrimary: true, clientX: x, clientY: y, button: 0, buttons: type === "pointerup" ? 0 : 1, bubbles: true, cancelable: true }));
+          await new Promise((r) => setTimeout(r, wait || 20));
+        }
+      }, seq);
+      await ptr([["pointerdown", 200, 400], ["pointerup", 200, 400, 600]]);
+      assert.strictEqual(await q.evaluate(() => C.ink.state().selected), 1, "the stroke is taken");
+      await ptr([["pointerdown", 200, 400], ["pointermove", 300, 400], ["pointermove", 380, 400], ["pointermove", 382, 400, 400], ["pointerup", 382, 400, 300]]);
+      assert.strictEqual(await q.evaluate(() => C.reader.pageInfo().page), 2, "held at the edge, the page turns");
+      const carried = await q.evaluate(() => { const o = JSON.parse(C.ink.snapshot()); return { one: (o[1] || []).filter((x) => x.t === "p").length, two: (o[2] || []).filter((x) => x.t === "p").length }; });
+      assert.deepStrictEqual(carried, { one: 0, two: 1 }, "the stroke is on the page it was carried to");
+      await q.evaluate(() => C.ink.setting({ tool: "pen" }));
+      // A stroke that runs off the page's edge stays on it, cut at the edge.
+      await stroke(Array.from({ length: 9 }, (_, i) => [300 + i * 30, 300]));
+      const pagesNow = await q.evaluate(() => JSON.parse(C.ink.snapshot()));
+      const last = Object.values(pagesNow).flat().filter((x) => x.t === "p").pop();
+      let max = 0;
+      for (let i = 0; i < last.p.length; i += 3) max = Math.max(max, last.p[i]);
+      assert.ok(max <= 1, "stops at the page's edge: " + max);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await ctx.close();
+    });
+
+    await test("in Scroll, a selection dragged to the bottom edge scrolls the page along with it", async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      q.errors = [];
+      q.on("pageerror", (e) => q.errors.push(e.message));
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      await q.waitForTimeout(1000);
+      await q.evaluate(async () => { const m = await C.notes.create("lines"); state.pages.unshift(m); await C.store.writeIndex(state.pages); openPage(m.id); });
+      await until(q, () => state.open && C.reader.frameDoc && C.reader.frameDoc.querySelector("img[data-page]"));
+      await q.evaluate(() => { inkStart(); C.ink.setting({ finger: true }); });
+      await until(q, () => C.ink.on);
+      const ptr = (seq) => q.evaluate(async (seq) => {
+        const d = C.reader.frameDoc, svg = d.querySelector(".co-ink"), P = d.defaultView.PointerEvent;
+        for (const [type, x, y, wait] of seq) {
+          svg.dispatchEvent(new P(type, { pointerId: 9, pointerType: "touch", isPrimary: true, clientX: x, clientY: y, button: 0, buttons: type === "pointerup" ? 0 : 1, bubbles: true, cancelable: true }));
+          await new Promise((r) => setTimeout(r, wait || 20));
+        }
+      }, seq);
+      await ptr([["pointerdown", 100, 300], ["pointermove", 200, 300], ["pointermove", 300, 300], ["pointerup", 300, 300, 400]]);
+      await until(q, () => C.files.noteSheets() >= 2);
+      await q.evaluate(() => C.ink.setting({ tool: "select" }));
+      await ptr([["pointerdown", 200, 300], ["pointerup", 200, 300, 600]]);
+      const y = () => q.evaluate(() => C.reader.frameWin.scrollY);
+      const y0 = await y();
+      await ptr([["pointerdown", 200, 300], ["pointermove", 200, 600], ["pointermove", 200, 830, 20]]);
+      // Sampled while held at the edge: the speed builds up and the steps stay even.
+      const ys = await q.evaluate(async () => { const out = []; for (let i = 0; i < 12; i++) { out.push(C.reader.frameWin.scrollY); await new Promise((r) => setTimeout(r, 50)); } return out; });
+      await ptr([["pointerup", 200, 831, 200]]);
+      const steps = ys.slice(1).map((v, i) => v - ys[i]);
+      assert.ok(ys[ys.length - 1] > y0 + 20, "it scrolls on: " + ys);
+      assert.ok(ys[ys.length - 1] - y0 < 700, "at an ordinary pace, not a jump: " + ys);
+      assert.ok(steps.every((d, i) => d >= 0 && (i === 0 || d <= steps[i - 1] * 2 + 4)), "smooth steps: " + steps);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await ctx.close();
+    });
+
+    await test("holding the pen still makes a rough line straight and a rough circle round, if the Draw tab's switch is on", async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      q.errors = [];
+      q.on("pageerror", (e) => q.errors.push(e.message));
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      await q.waitForTimeout(1000);
+      await q.evaluate(async () => { const m = await C.notes.create("lines"); state.pages.unshift(m); await C.store.writeIndex(state.pages); openPage(m.id); });
+      await until(q, () => state.open && C.reader.frameDoc && C.reader.frameDoc.querySelector("img[data-page]"));
+      await q.evaluate(() => { inkStart(); C.ink.setting({ finger: true }); });
+      await until(q, () => C.ink.on);
+      const ptr = (seq) => q.evaluate(async (seq) => {
+        const d = C.reader.frameDoc, svg = d.querySelector(".co-ink"), P = d.defaultView.PointerEvent;
+        for (const [type, x, y, wait] of seq) {
+          svg.dispatchEvent(new P(type, { pointerId: 9, pointerType: "touch", isPrimary: true, clientX: x, clientY: y, button: 0, buttons: type === "pointerup" ? 0 : 1, bubbles: true, cancelable: true }));
+          await new Promise((r) => setTimeout(r, wait || 16));
+        }
+      }, seq);
+      const last = () => q.evaluate(() => { const o = JSON.parse(C.ink.snapshot()); const l = Object.values(o).flat().filter((x) => x.t === "p"); return l.length ? { n: l.length, p: l[l.length - 1].p } : { n: 0, p: [] }; });
+      const line = [["pointerdown", 60, 300]];
+      for (let i = 1; i <= 20; i++) line.push(["pointermove", 60 + i * 12, 300 + i * 0.5 + (i % 3) * 3]);
+      // Held still, then lifted: a straight line from the start to the end.
+      await ptr([...line, ["pointermove", 300, 310, 700], ["pointerup", 300, 310]]);
+      let l = await last();
+      assert.strictEqual(l.p.length, 13 * 3, "twelve even steps: " + l.p.length);
+      const dev = Math.max(...Array.from({ length: 13 }, (_, i) => Math.abs(l.p[3 * i + 1] - (l.p[1] + (l.p[37] - l.p[1]) * i / 12))));
+      assert.ok(dev < 0.002, "on one straight line: " + dev);
+      // Not held: kept as drawn.
+      await ptr([...line, ["pointerup", 300, 310]]);
+      l = await last();
+      assert.ok(l.p.length > 13 * 3, "no hold, no change");
+      // Held, then moved on: the end follows the pen.
+      await ptr([...line, ["pointermove", 300, 310, 700], ["pointermove", 320, 380], ["pointerup", 320, 380]]);
+      l = await last();
+      const box = await q.evaluate(() => { const r = C.reader.frameDoc.querySelector(".co-ink").getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width }; });
+      assert.ok(Math.abs(box.x + l.p[36] * box.w - 320) < 3 && Math.abs(box.y + l.p[37] * box.w - 380) < 4, "the end followed the pen: " + JSON.stringify([l.p.slice(36), box]));
+      // A rough circle.
+      const ring = [["pointerdown", 280, 380]];
+      for (let i = 1; i <= 40; i++) { const a = (i / 40) * Math.PI * 2, r = 70 + (i % 4) * 2; ring.push(["pointermove", 200 + r * Math.cos(a), 380 + r * Math.sin(a)]); }
+      await ptr([...ring, ["pointermove", 270, 380, 700], ["pointerup", 270, 380]]);
+      l = await last();
+      assert.strictEqual(l.p.length, 65 * 3, "a closed round shape");
+      const mx = l.p.filter((_, i) => i % 3 === 0), my = l.p.filter((_, i) => i % 3 === 1);
+      const cx = (Math.max(...mx) + Math.min(...mx)) / 2, cy = (Math.max(...my) + Math.min(...my)) / 2;
+      const rs = mx.map((x, i) => Math.hypot(x - cx, my[i] - cy));
+      assert.ok(Math.max(...rs) - Math.min(...rs) < 0.004, "all the same distance from the middle");
+      // Held, then dragged on: the circle moves with the pen, the same size.
+      await ptr([...ring, ["pointermove", 270, 380, 700], ["pointermove", 290, 395], ["pointermove", 310, 410], ["pointerup", 310, 410]]);
+      const moved = await last();
+      assert.strictEqual(moved.p.length, 65 * 3, "still the circle");
+      const nx = moved.p.filter((_, i) => i % 3 === 0), ny = moved.p.filter((_, i) => i % 3 === 1);
+      const ncx = (Math.max(...nx) + Math.min(...nx)) / 2, ncy = (Math.max(...ny) + Math.min(...ny)) / 2;
+      const lw = await q.evaluate(() => C.reader.frameDoc.querySelector(".co-ink").getBoundingClientRect().width);
+      assert.ok(Math.abs((ncx - cx) * lw - 40) < 3 && Math.abs((ncy - cy) * lw - 30) < 3, "moved by the pen's drag");
+      assert.ok(Math.abs((Math.max(...nx) - Math.min(...nx)) - (Math.max(...mx) - Math.min(...mx))) < 0.002, "the same size");
+      // Off in the Draw tab: kept as drawn.
+      await q.evaluate(() => inkShapes(false));
+      await ptr([...line, ["pointermove", 300, 310, 700], ["pointerup", 300, 310]]);
+      l = await last();
+      assert.ok(l.p.length > 13 * 3, "switched off, kept as drawn");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await ctx.close();
+    });
+
+    await test("the settings sheet has a Draw tab with the shapes switch, for a note and for a PDF", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => { const m = await C.notes.create("lines"); state.pages.unshift(m); await C.store.writeIndex(state.pages); openPage(m.id); });
+      await until(q, () => state.open && state.open.note && C.reader.frameDoc);
+      const tab = await q.evaluate(() => {
+        const box = readerSettings();
+        const part = box.querySelector('.rc-part[data-part="draw"]'), sw = part && part.querySelector("input.switch");
+        return { has: !!part, on: sw && sw.checked, tabs: [...box.querySelectorAll(".sheet-tabs [role=radio], .sheet-tabs input, .sheet-tabs button")].length };
+      });
+      assert.ok(tab.has && tab.on === true && tab.tabs >= 3, JSON.stringify(tab));
+      await q.evaluate(() => { const sw = readerSettings().querySelector('.rc-part[data-part="draw"] input.switch'); sw.checked = false; sw.dispatchEvent(new Event("change")); });
+      assert.strictEqual(await q.evaluate(() => C.ink.state().shapes), false);
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
     });
@@ -3858,6 +4292,85 @@ c("bk1", { at: 0.01 })]);
       assert.ok(moved.some((x) => Math.abs(x - x0 - 0.2) < 0.01), "the stroke moved 0.2 right: " + JSON.stringify([x0, moved]));
       await q.locator('.ink-bar [data-act="delete"]').click();
       assert.strictEqual(await q.evaluate(() => Waypage.ink.count()) < 3, true);
+      // Add > Note: a comment bubble, written in its sheet, in a highlight's colour with tags that highlights share.
+      const before = await q.evaluate(() => Waypage.ink.count());
+      await q.locator('.ink-bar [data-act="add"]').click();
+      await q.locator(".ink-pop button", { hasText: "Note" }).click();
+      await q.locator(".mark-note-field").fill("Check the date");
+      await q.locator(".mark-swatch").nth(2).click();
+      await q.locator(".tag-input").fill("history");
+      await q.locator(".tag-input").press("Enter");
+      const note = await q.evaluate(() => Waypage.ink.notes()[0]);
+      assert.deepStrictEqual([note.text, note.c, note.tags], ["Check the date", "blue", ["history"]]);
+      assert.strictEqual(await q.evaluate(() => allMarkTags().includes("history")), true, "highlights offer a note's tags");
+      await q.locator("button.row", { hasText: /^Done$/ }).click();
+      assert.strictEqual(await q.evaluate(() => document.getElementById("readerFrame").contentDocument.querySelectorAll(".co-ink .note .bub.c-blue").length > 0), true, "the bubble is on the page");
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), before, "a bubble isn't counted as a drawing");
+      // In Highlights it is the comment itself, in its colour with its tags, not a drawing.
+      const listed = await q.evaluate(() => { const v = marksView(state.open); const r = v.querySelector(".note-item .mark-quote"); return { text: r && r.textContent, c: r && r.dataset.c, tags: v.querySelector(".note-item") && v.querySelector(".note-item").textContent.includes("#history") }; });
+      assert.deepStrictEqual(listed, { text: "Check the date", c: "blue", tags: true });
+      // The Highlights place lists it with the highlights, through the same colour, tag and word filters.
+      const place = await q.evaluate(() => {
+        const has = () => !!document.querySelector("#highlights .note-item .note-quote[data-c='blue']");
+        const out = {};
+        renderHighlights(); out.all = has();
+        marksTags = ["history"]; renderHighlights(); out.tag = has();
+        // (a colour nothing has is dropped when drawn, so the list is asked directly)
+        marksTags = []; marksColor = "pink"; out.pink = marksShown().some((c) => c.notes.length);
+        marksColor = ""; marksQuery = "the date"; renderHighlights(); out.words = has();
+        marksQuery = "nothing like it"; renderHighlights(); out.none = has();
+        marksQuery = ""; renderHighlights();
+        return out;
+      });
+      assert.deepStrictEqual(place, { all: true, tag: true, pink: false, words: true, none: false });
+      // Moving it, with real touch (Chrome decides at touch-down whether a finger may scroll, and
+      // ignores touch-action on SVG shapes: events fired at the node would pass either way).
+      const bubbleAt = () => q.evaluate(() => { const fr = document.getElementById("readerFrame"), fb = fr.getBoundingClientRect(), g = fr.contentDocument.querySelector(".co-ink .note"), r = g.querySelector("circle.bub").getBoundingClientRect(), w = g.ownerSVGElement.getBoundingClientRect().width; return { x: fb.left + r.left + r.width / 2, y: fb.top + r.top + r.height / 2, w }; });
+      // The sheet the bubble was written in has closed and gone, so nothing is over the page.
+      await until(q, () => document.getElementById("menuSheet").hidden);
+      const cdp = await ctx.newCDPSession(q);
+      const touch = (type, x, y) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x, y }] });
+      const press = async (at, holdMs, dx) => {
+        await touch("touchStart", at.x, at.y);
+        await q.waitForTimeout(holdMs);
+        for (let i = 1; i <= 8; i++) { await touch("touchMove", at.x + dx * i / 8, at.y + dx * i / 16); await q.waitForTimeout(16); }
+        await touch("touchEnd");
+        await q.waitForTimeout(350);
+      };
+      const xOf = () => q.evaluate((id) => Waypage.ink.strokes(1).find((s) => s.id === id).x, note.id);
+      // With Select, a finger takes it and drags it in one go (Finger off).
+      const fingerWas = await q.evaluate(() => Waypage.ink.state().finger);
+      await q.evaluate(() => Waypage.ink.setting({ tool: "select", finger: false }));
+      let x1 = await xOf(), at = await bubbleAt();
+      await press(at, 50, at.w * 0.2);
+      assert.ok(Math.abs((await xOf()) - x1 - 0.2) < 0.02, "Select drags it: " + [x1, await xOf()]);
+      await q.locator('.ink-bar [data-act="undo"]').click();
+      assert.ok(Math.abs((await xOf()) - x1) < 0.001, "Undo puts it back");
+      // Held still, a finger that doesn't draw picks it up and carries it; no sheet opens.
+      await q.evaluate(() => Waypage.ink.setting({ tool: "pen" }));
+      x1 = await xOf(); at = await bubbleAt();
+      await press(at, 700, at.w * 0.15);
+      assert.ok(Math.abs((await xOf()) - x1 - 0.15) < 0.02, "a hold carries it: " + [x1, await xOf()]);
+      assert.strictEqual(await q.locator(".mark-note-field:visible").count(), 0, "carrying doesn't open it");
+      // A quick tap opens it.
+      await q.evaluate(() => Waypage.ink.setOn(false));
+      await q.waitForTimeout(300);
+      // With Draw off a hold carries it too, and the page and clip stay as they were.
+      const open0 = await q.evaluate(() => state.open.id);
+      x1 = await xOf(); at = await bubbleAt();
+      await press(at, 700, at.w * 0.1);
+      assert.ok(Math.abs((await xOf()) - x1 - 0.1) < 0.02, "a hold carries it with Draw off: " + [x1, await xOf()]);
+      assert.strictEqual(await q.evaluate(() => state.open.id), open0);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.state().selected), 0, "nothing is left taken");
+      await press(await bubbleAt(), 60, 0);
+      await q.locator(".mark-note-field:visible").waitFor();
+      assert.strictEqual(await q.locator(".mark-note-field:visible").inputValue(), "Check the date");
+      await q.locator("button.row:visible", { hasText: /^Done$/ }).click();
+      await until(q, () => document.getElementById("menuSheet").hidden);
+      await q.evaluate(() => Waypage.ink.setOn(true));
+      await q.evaluate((f) => Waypage.ink.setting({ tool: "select", finger: f }), fingerWas);
+      await q.evaluate((id) => Waypage.ink.removeNote(id), note.id);
+      assert.strictEqual(await q.evaluate(() => Waypage.ink.count()), before, "taking the note off leaves the drawings as they were");
       // Add > Image puts a picture on the page, taken, kept and saved in a copy.
       const png = await q.evaluate(() => { const c = document.createElement("canvas"); c.width = 40; c.height = 20; const g = c.getContext("2d"); g.fillStyle = "#c33"; g.fillRect(0, 0, 40, 20); return c.toDataURL("image/png"); });
       await q.locator('.ink-bar [data-act="add"]').click();
@@ -4675,6 +5188,45 @@ c("bk1", { at: 0.01 })]);
       assert.deepStrictEqual(await q.evaluate(() => [...document.querySelectorAll(".dropdown-menu")].filter((m) => m.style.pointerEvents !== "none").map((m) => m.parentElement.id)), ["ddB"]);
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
       await q.context().close();
+    });
+
+    await test("a drag in a drop-down moves only its list: not the page, not a pull to check (2026-11)", async () => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: "block" });
+      const q = await ctx.newPage();
+      await q.goto(ROOT);
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => {
+        Object.defineProperty(C.platform, "canFetchPages", { get: () => true, configurable: true });
+        C.discover.sources.forEach((s) => { s.browse = async () => Array.from({ length: 12 }, (_, i) => ({ id: s.key + i, title: "Story " + i, url: "https://example.org/" + i, tags: [], chapters: 3, cover: "" })); });
+        dzReadRR = async () => {}; dzReadWiki = async () => {};
+        goPlace("discover"); dzPick = "stories"; dzOpenSite("rr");
+      });
+      await until(q, () => document.querySelectorAll(".dz-grid .dz-book").length > 0 && !dz.busy && !dz.grid.busy);
+      // Discover may draw again as it settles, which puts the menu away.
+      await until(q, () => { if (!document.querySelector(".dropdown-menu")) document.querySelector(".dz-genre .dropdown-btn").click(); return !!document.querySelector(".dropdown-menu"); });
+      await q.waitForTimeout(400);
+      await until(q, () => !!document.querySelector(".dropdown-menu"));
+      const cdp = await ctx.newCDPSession(q);
+      const drag = async (y0, y1) => {
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: 120, y: y0 }] });
+        for (let i = 1; i <= 10; i++) { await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: 120, y: y0 + (y1 - y0) * i / 10 }] }); await q.waitForTimeout(16); }
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await q.waitForTimeout(300);
+      };
+      const at = () => q.evaluate(() => { const m = document.querySelector(".dropdown-menu"); return { y: scrollY, top: m ? m.scrollTop : -1, end: m ? m.scrollHeight - m.clientHeight : -1, pull: $("pullHint").style.height }; });
+      // A list longer than its menu shows a scroll bar and a fade where there's more.
+      const hints = () => q.evaluate(() => { const m = document.querySelector(".dropdown-menu"); return { bar: !!m.querySelector(".dropdown-thumb"), top: m.querySelector(".dropdown-fade.top").classList.contains("on"), end: m.querySelector(".dropdown-fade.end").classList.contains("on") }; });
+      assert.deepStrictEqual(await hints(), { bar: true, top: false, end: true });
+      // Pulled down at the top of the page and of the list: no pull to check.
+      await drag(320, 640);
+      let s = await at();
+      assert.ok(s.top === 0 && s.y === 0 && !parseFloat(s.pull || "0"), JSON.stringify(s));
+      // Up past the list's end: the list ends there, the page stays.
+      for (let i = 0; i < 3; i++) await drag(640, 300);
+      s = await at();
+      assert.ok(s.end > 0 && s.top >= s.end - 1 && s.y === 0, JSON.stringify(s));
+      assert.deepStrictEqual(await hints(), { bar: true, top: true, end: false });
+      await ctx.close();
     });
 
     await test("Speech engine lists each downloaded Kokoro version, and picking one puts it in use", async () => {
@@ -5589,10 +6141,10 @@ c("bk1", { at: 0.01 })]);
       const entry = "https://kill-the-newsletter.com/feeds/testbox1/entries/m1.html";
       const xml = '<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Morning</title>'
         + '<entry><id>urn:kill-the-newsletter:c1</id><link rel="alternate" type="text/html" href="https://kill-the-newsletter.com/feeds/testbox1/entries/c1.html"/>'
-        + '<published>2026-10-27T08:00:00.000Z</published><author><name>x</name><email>bounce-mc.us5_1@mail1.mcsv.net</email></author><title>Please confirm your subscription</title>'
+        + '<published>' + new Date(Date.now() - 2 * 36e5).toISOString() + '</published><author><name>x</name><email>bounce-mc.us5_1@mail1.mcsv.net</email></author><title>Please confirm your subscription</title>'
         + '<content type="html">' + '<p><a href="https://list.example.com/unsubscribe">Unsubscribe</a> <a href="https://list.example.com/confirm?id=9">Yes, subscribe me</a></p>'.replace(/&/g, "&amp;").replace(/</g, "&lt;") + '</content></entry>'
         + '<entry><id>urn:kill-the-newsletter:m1</id><link rel="alternate" type="text/html" href="' + entry + '"/>'
-        + '<published>2026-10-27T09:00:00.000Z</published><author><name>x</name><email>crew@morningbrew.com</email></author><title>Chip wars heat up</title>'
+        + '<published>' + new Date(Date.now() - 36e5).toISOString() + '</published><author><name>x</name><email>crew@morningbrew.com</email></author><title>Chip wars heat up</title>'
         + '<content type="html">' + ('<h1>Morning Brew</h1>' + '<p>' + 'Chips are the new oil, and everyone wants a refinery. '.repeat(30) + '</p><hr/><p><small><a href="https://kill-the-newsletter.com/feeds/testbox1">Kill the Newsletter! feed settings</a></small></p>').replace(/&/g, "&amp;").replace(/</g, "&lt;") + '</content></entry></feed>';
       const got = await q.evaluate(async ([xml, feed]) => {
         const parsed = C.feeds.parseFeed(xml, feed);
@@ -5920,7 +6472,7 @@ c("bk1", { at: 0.01 })]);
       await until(q, () => C.files.noteSheets() === 2 && (C.reader.frameDoc || document).querySelectorAll(".co-comic > img").length === 2);
       // Its Aa sheet: Layout and Auto-scroll, in the note's words.
       await q.click("#readerAa");
-      assert.deepStrictEqual(await q.locator(".sheet-tabs label, .sheet-tabs button").allTextContents(), ["Layout", "Auto-scroll"]);
+      assert.deepStrictEqual(await q.locator(".sheet-tabs label, .sheet-tabs button").allTextContents(), ["Layout", "Auto-scroll", "Draw"]);
       await q.locator(".sheet-tabs", { hasText: "Auto-scroll" }).getByText("Auto-scroll").click();
       assert.ok(await q.getByText("Go on to the next note").isVisible(), "the note's own wording");
       // Show as Pages: a sheet at a time, and the pen still draws on it (2026-11).
@@ -6127,6 +6679,176 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("Save the narration gives a clip its own sound, which plays in place of Narrate and never syncs; a collection gives each clip one", async () => {
+      const q = await page(browser, 390);
+      for (const f of ["article.html", "chapters.html"]) {
+        await q.fill("#saveUrl", ROOT + "test/fixtures/" + f);
+        await q.press("#saveUrl", "Enter");
+        await until(q, (n) => state.pages.length >= n, f === "article.html" ? 1 : 2);
+      }
+      await q.evaluate(async () => {
+        const A = window.Waypage.platform.audio;
+        Object.defineProperty(A, "canVoice", { get: () => true, configurable: true });
+        window.asked = [];
+        window.played = [];
+        A.voice = async (o) => {
+          asked.push(o);
+          if (voiceStep) voiceStep({ n: o.items.length, of: o.items.length });
+          return { uri: "file:///cache/" + o.name + ".m4a", dur: o.items.length * 5, size: 100, t0: o.items.map((_, i) => i * 5), t1: o.items.map((_, i) => i * 5 + 4) };
+        };
+        A.stopVoicing = () => {};
+        A.play = async (o) => { played.push(o); };
+        window.Waypage.platform.keepMade = async (from, name) => "file:///data/Files/" + name;
+        state.pages.forEach((x, i) => { x.folder = "Flights"; x.folderAt = 1000 - i; });
+        await window.Waypage.store.writeIndex(state.pages);
+      });
+      const clip = await q.evaluate(() => state.pages.find((x) => /Long Haul/.test(x.title)).id);
+      await q.evaluate((id) => makeAudiobook({ page: state.pages.find((x) => x.id === id) }), clip);
+      const one = await q.evaluate(async (id) => {
+        const p = state.pages.find((x) => x.id === id);
+        const data = await window.Waypage.store.readListen(id);
+        return { count: state.pages.length, own: audioFor(p) === p, audiobook: isAudiobook(p), mode: modeOf(p), ours: p.audio.ours, chapters: p.audio.chapters.length, dur: p.audio.dur,
+          words: data.pieces.map((x) => x.text).join(" "), covered: data.ranges, synced: JSON.stringify(window.Waypage.backup.cleanMeta(p, p.id)), car: carBookOk(p) && !carClipOk(p) };
+      }, clip);
+      // No new entry: the clip itself has the sound, reads along with itself, and isn't an audiobook of its own.
+      assert.strictEqual(one.count, 2);
+      assert.ok(one.own && !one.audiobook && one.mode === "book" && one.ours && one.car, JSON.stringify(one));
+      assert.ok(/oceanic track/.test(one.words), "the words to read along with are the clip's text");
+      assert.deepStrictEqual(one.covered, [[0, one.dur]]);
+      // The start and its two headings are its chapters.
+      assert.strictEqual(one.chapters, 3);
+      // The sound's files stay on this device: not in what syncs or is backed up.
+      assert.ok(!/file:\/\/\/data|"audio"/.test(one.synced), one.synced);
+      // Narrate's button plays the sound, with no speaking.
+      await q.evaluate((id) => openPage(id), clip);
+      await q.locator("#readerView:not([hidden])").waitFor();
+      await q.evaluate(() => { window.spoke = 0; const S = window.Waypage.platform.speech; S.play = async () => { spoke++; }; });
+      await q.click("#readerAloud");
+      await until(q, () => played.length === 1);
+      assert.strictEqual(await q.evaluate(() => spoke), 0);
+      assert.ok(await q.evaluate((id) => played[0].key === id && played[0].parts.length === state.pages.find((x) => x.id === id).audio.parts.length, clip), "plays the made files");
+      await q.evaluate(() => { listenStop(); closeReader(); });
+      // A collection: each clip without a sound gets its own; the one made already is left.
+      const n = await q.evaluate(() => asked.length);
+      await q.evaluate(() => makeAudiobook({ folder: "Flights" }));
+      const all = await q.evaluate((k) => ({ voiced: folderPages("Flights").filter(voicedSound).length, count: state.pages.length,
+        engines: asked.slice(k).every((o) => "engine" in o && "voice" in o && o.items.length) }), n);
+      assert.deepStrictEqual(all, { voiced: 2, count: 2, engines: true });
+      // Storage removes every saved narration at once, to make room.
+      await q.click("#settingsBtn");
+      await q.locator(".nav-row", { hasText: "Storage" }).click();
+      const room = q.locator(".room-narrations");
+      await room.waitFor();
+      assert.ok(/2 clips with a saved narration/.test(await room.innerText()), await room.innerText());
+      await q.evaluate(() => { window.confirm = () => true; });
+      await room.click();
+      await until(q, () => !document.querySelector(".room-narrations"));
+      assert.strictEqual(await q.evaluate(() => state.pages.filter(voicedSound).length), 0);
+      // Narrate reads it again once it's removed.
+      assert.ok(await q.evaluate((id) => { const p = state.pages.find((x) => x.id === id); return !p.audio && !audioFor(p); }, clip));
+      assert.deepStrictEqual(q.errors.filter((e) => !/waypage-fetch/.test(e)), []);
+      await q.context().close();
+    });
+
+    await test("Find the book checks each book against a minute of the narrator, the one that fits first (2026-11)", async () => {
+      const q = await page(browser, 390);
+      const id = await q.evaluate(async () => {
+        const C = window.Waypage, A = C.platform.audio;
+        Object.defineProperty(A, "canTranscribe", { get: () => true, configurable: true });
+        A.models = async () => ({ supported: true, packs: [{ id: "better", title: "Better", note: "", size: 1, bytes: 1, ready: true }] });
+        await listenModels();
+        const book = "On an exceptionally hot evening early in July a young man came out of the garret in which he lodged in S. Place and walked slowly, as though in hesitation, towards K. bridge. He had successfully avoided meeting his landlady on the staircase, and each time the student Raskolnikov passed he thought of Petersburg and of the old woman Alyona Ivanovna.";
+        const other = "One evening at the very beginning of July a youth left the little room he rented and went towards the bridge, and the student Raskolnikov remembered Petersburg and the pawnbroker Alyona Ivanovna with dread.";
+        const filler = Array.from({ length: 20 }, () => "Lighthouses were once kept by families who lived beside the lamp all year, trimming wicks and polishing lenses through the long winters.");
+        window.foundBooks = { pg1: [other, ...filler], pg2: [book, ...filler], se1: filler };
+        foundTexts = async (s) => foundBooks[s.id];
+        const src = (key) => C.discover.sources.find((x) => x.key === key);
+        src("pg").search = async () => [{ id: "pg1", title: "Crime and Punishment", by: "Fyodor Dostoyevsky", tr: "Frederick Whishaw", epub: "https://example.org/1.epub", url: "https://example.org/1" },
+          { id: "pg2", title: "Crime and Punishment", by: "Fyodor Dostoyevsky", tr: "Constance Garnett", epub: "https://example.org/2.epub", url: "https://example.org/2" }];
+        src("se").search = async () => [{ id: "se1", title: "Lighthouses", by: "Someone", epub: "https://example.org/3.epub", url: "https://example.org/3" }];
+        src("ws").search = async () => [];
+        const m = await newAudiobook({ title: "Crime and Punishment (Unabridged)", byline: "Fyodor Dostoyevsky", file: { name: "c.mp3", kind: "audio", ext: "mp3", size: 10 }, link: "x",
+          audio: { parts: [{ ref: "x", name: "c.mp3", size: 10, dur: 600 }], chapters: [], dur: 600 } }, null);
+        arrived(m);
+        const words = book.split(" ");
+        await C.store.writeListen(m.id, { pieces: [{ t0: 0, t1: words.length * 0.4, text: book }], ranges: [[0, 60]] });
+        return m.id;
+      });
+      await q.evaluate((i) => { openPage(i); }, id);
+      await until(q, () => state.open && state.open.id !== undefined);
+      // A new file's first sheet can come up as it opens.
+      await until(q, () => { if (state.sheet !== "listenFind") { if (state.sheet) closeSheet(true); openSheet("listenFind"); } return document.querySelectorAll(".listen-found-row").length > 0; });
+      await until(q, () => document.querySelectorAll(".listen-found-row").length === 3 && document.querySelector(".listen-heard") && ![...document.querySelectorAll(".listen-fit")].some((b) => /Testing/.test(b.textContent)), null, 15000);
+      const rows = await q.evaluate(() => [...document.querySelectorAll(".listen-found-row")].map((r) => r.querySelector(".choice-note").textContent + " | " + ((r.querySelector(".listen-fit") || {}).textContent || "")));
+      assert.deepStrictEqual(rows, ["Translated by Constance Garnett · Project Gutenberg | Same words",
+        "Translated by Frederick Whishaw · Project Gutenberg | Another translation",
+        "Someone · Standard Ebooks | Doesn't match"]);
+      assert.ok(/Heard: “On an exceptionally hot/.test(await q.evaluate(() => document.querySelector(".listen-heard").textContent)));
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a zip of sound files is one audiobook, played from inside the zip (2026-11)", async () => {
+      const q = await page(browser, 390);
+      const got = await q.evaluate(async () => {
+        const C = window.Waypage, A = C.platform.audio, F = C.platform.files;
+        Object.defineProperty(A, "native", { get: () => true, configurable: true });
+        window.probed = [];
+        A.probe = async (ref, offset, length) => { probed.push([ref, offset, length]); return { duration: 30000 }; };
+        window.released = [];
+        F.release = async (ref) => { released.push(ref); };
+        const make = async (files) => {
+          const parts = [];
+          const z = C.backup.zipWriter((b) => { parts.push(b); });
+          for (const [name, text] of files) await z.add(name, new TextEncoder().encode(text));
+          await z.finish();
+          return new File(parts, "The Road.zip", { type: "application/zip" });
+        };
+        const file = await make([["The Road/02 Two.mp3", "second part"], ["The Road/01 One.mp3", "first part!"], ["__MACOSX/The Road/._01 One.mp3", "junk"], ["notes.txt", "hi"]]);
+        const kind = await C.files.kindOf(file);
+        const took = await addAudiobookZip(file, "content://zip");
+        const p = state.pages.find((x) => x.title === "The Road");
+        const inside = [];
+        for (const part of p.audio.parts) inside.push(await file.slice(part.offset, part.offset + part.length).text());
+        const none = await addAudiobookZip(await make([["a.txt", "no sound"]]), "content://other");
+        return { kind, took, none, zip: p.audio.zip, link: p.link, names: p.audio.parts.map((x) => x.name), inside, chapters: p.audio.chapters.map((c) => c.title + "@" + c.t),
+          play: (await partsToPlay(p)).map((x) => x.uri + ":" + (x.offset > 0) + ":" + x.length), probed: probed.length };
+      });
+      assert.strictEqual(got.kind, "zip");
+      assert.ok(got.took && !got.none);
+      assert.strictEqual(got.zip, true);
+      assert.strictEqual(got.link, "content://zip");
+      assert.deepStrictEqual(got.names, ["01 One.mp3", "02 Two.mp3"]);
+      assert.deepStrictEqual(got.inside, ["first part!", "second part"]);
+      assert.deepStrictEqual(got.chapters, ["01 One@0", "02 Two@30"]);
+      assert.deepStrictEqual(got.play, ["content://zip:true:11", "content://zip:true:11"]);
+      assert.strictEqual(got.probed, 2);
+      await q.context().close();
+    });
+
+    await test("the narrator away from the book: a card offers the transcript or another book (2026-11)", async () => {
+      const q = await page(browser, 390);
+      const id = await q.evaluate(async () => {
+        const m = await newAudiobook({ title: "Away", byline: "", file: { name: "w.mp3", kind: "audio", ext: "mp3", size: 10 }, link: "x",
+          audio: { parts: [{ ref: "x", name: "w.mp3", size: 10, dur: 600 }], chapters: [], dur: 600 } }, null);
+        arrived(m);
+        listenMode(m, "book", { id: "bookaway1", url: "https://example.org/away" });
+        showLost(m, 250);
+        return m.id;
+      });
+      const card = await q.evaluate(() => document.getElementById("listenLost").textContent);
+      assert.ok(/The narrator left the book 4 minutes ago/.test(card), card);
+      assert.ok(/Show the transcript/.test(card) && /Find another book/.test(card));
+      await q.evaluate(() => [...document.querySelectorAll("#listenLost button")].find((b) => /Show the transcript/.test(b.textContent)).click());
+      await until(q, () => document.getElementById("listenLost").hidden);
+      const l = await q.evaluate((i) => state.pages.find((p) => p.id === i).listen, id);
+      assert.strictEqual(l.mode, "transcript");
+      assert.ok(!l.book && l.was && l.was.id === "bookaway1", JSON.stringify(l));
+      assert.deepStrictEqual(await q.evaluate((i) => window.Waypage.backup.cleanListen(state.pages.find((p) => p.id === i).listen).was, id), { id: "bookaway1", url: "https://example.org/away" });
+      await q.context().close();
+    });
+
     await test("an audiobook's dot drags along the chapter and seeks once, on letting go (1.58.2)", async () => {
       const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
       const q = await ctx.newPage();
@@ -6248,6 +6970,32 @@ c("bk1", { at: 0.01 })]);
 
     // Every screen at every size (the 320 px phone, a phone on its side, a
     // computer): each of these was cut off or missing before.
+    await test("the car's collections: quick starts, the clips around where it was left, and no jumping a gap (2026-11-20)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store, all = [];
+        for (let i = 1; i <= 20; i++) {
+          const c = { id: "car" + i, url: "", title: "Part " + i, site: "", savedAt: i, minutes: 1, mode: "full", at: i <= 4 ? 1 : 0, finished: i <= 4, readAt: i <= 4 ? 100 + i : 0, folder: "Serial", folderAt: i };
+          all.push(c);
+        }
+        await S.writeIndex(all);
+        for (const c of all) await S.writePage(c.id, "<!doctype html><html><body><p>The " + c.title + " goes on a while.</p><p>And then it ends.</p></body></html>", c);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await until(q, () => state.pages.length === 20);
+      const got = await q.evaluate(async () => {
+        const list = { books: [], clips: [] };
+        const c = await carFolderList(carFolders()[0], list, new Set());
+        return { c, hidden: list.clips.every((x) => x.hide && x.items.length === 2) };
+      });
+      assert.deepStrictEqual(got.c.starts.map((x) => [x.label, x.id]), [["Continue", "c:car5"], ["Newest", "c:car20"]]);
+      assert.deepStrictEqual(got.c.at, [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 18, 19]);
+      assert.strictEqual(got.c.items[got.c.at.indexOf(3)], "c:car4");
+      assert.ok(got.hidden);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
     await test("the picking bar, Draw bar, app lock and Stats fit at 320 px, on a phone's side and at 1280 px", async () => {
       const q = await page(browser, 320);
       await q.setViewportSize({ width: 320, height: 568 });

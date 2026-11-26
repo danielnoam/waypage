@@ -8,12 +8,10 @@
 // a single function. The rule that keeps it working: what runs at load,
 // rather than later on a tap or a timer, may only use what an earlier
 // part, or its own, has declared. A part's functions can call into any
-// part, since nothing is tapped until all of them have loaded. The order:
-// app (this file: version, helpers, theme, state), app-reading,
-// app-cards, app-downloads, app-search, app-draw, app-jobs, app-reader,
-// app-library, app-saving, app-places, app-settings, app-lock, and
-// app-start, which runs last and starts things up.
-const APP_VERSION = "1.68.0";
+// part, since nothing is tapped until all of them have loaded. The order
+// is index.html's: app (this file: version, helpers, theme, state) first,
+// app-start last, which starts things up.
+const APP_VERSION = "1.69.0";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;

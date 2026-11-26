@@ -395,12 +395,13 @@
       if (!S || os !== "android") return false;
       try { await S.moreVoices(engine ? { engine } : {}); return true; } catch (e) { return false; }
     },
-    // Kokoro voices (Android, arm64): Waypage's own speech engine, from a
-    // download in Settings. null where there's no such plugin or phone.
-    // action: download / use / remove (with the pack's id), or cancel.
+    // Kokoro and Piper voices (Android, arm64; iOS): Waypage's own speech
+    // engine, from a download in Settings. null where there's no such
+    // plugin or phone. action: download / use / remove (with the pack's
+    // id), or cancel.
     async kokoro(action, id) {
       const K = plugin("Kokoro");
-      if (!K || os !== "android") return null;
+      if (!K) return null;
       if (action) { await K[action](id ? { id } : {}); return null; }
       try { const s = await K.status(); return s && s.supported ? s : null; } catch (e) { return null; }
     },
@@ -552,17 +553,21 @@
   const feedChecks = {
     // [{ url, title, known }]: the feeds and the post ids they have.
     // notes (1.30.0): { style: "each" | "together" | "off", quiet: [url] }.
-    watch(feeds, ask, notes) {
+    // stories (2026-11): linked collections to look at for new chapters,
+    // [{ name, url, host, prefix, depths, known }]; `wifi` keeps those
+    // checks off mobile data.
+    watch(feeds, ask, notes, stories, wifi) {
       const F = plugin("Feeds");
-      if (F) F.watch({ feeds, ask: !!ask, notes }).catch(() => {});
+      if (F) F.watch({ feeds, ask: !!ask, notes, stories: stories || [], wifi: !!wifi }).catch(() => {});
     },
-    // { feeds: [url], open, feed, save }: feeds with new posts since,
-    // whether a notification opened the app, the feed it was for and the
-    // post its Save asked for.
+    // { feeds: [url], open, feed, save, stories: [name], story }: feeds
+    // with new posts since, whether a notification opened the app, the
+    // feed it was for and the post its Save asked for; collections with
+    // new chapters since, and the one a notification opened.
     async news() {
       const F = plugin("Feeds");
       if (F) { try { return await F.news(); } catch (e) { /* none */ } }
-      return { feeds: [], open: false };
+      return { feeds: [], open: false, stories: [] };
     },
     // Whether the phone lets Waypage notify; null where it can't tell.
     async allowed() {
@@ -768,17 +773,16 @@
   }
 
   // ---- updating the app in place (0.2.0, from LifeLog's 0.179.0) ----
-  // Downloads the release's APK into the app's cache, reporting progress, and
-  // hands it to Android's installer: no browser tab, no Downloads folder.
-  // Android asks once whether Waypage may install apps, then to install.
-  // Signed with the same key (alias waypage), it installs over the top and
-  // keeps every saved page. The download names the tag, not `latest`, so a
-  // release published mid-download can't swap the file. Resolves to the
-  // file's uri so a dismissed installer can be reopened without downloading
-  // again; null where there's no in-app installer (iOS, a browser).
-  const APK_MIME = "application/vnd.android.package-archive";
+  // keel's update.js (0.15.0) downloads the release's APK into the app's
+  // cache, reporting progress, and hands it to Android's installer: no
+  // browser tab, no Downloads folder. Android asks once whether Waypage may
+  // install apps, then to install. Signed with the same key (alias
+  // waypage), it installs over the top and keeps every saved page. The
+  // download names the tag, not `latest`, so a release published
+  // mid-download can't swap the file. Resolves to the file's uri so a
+  // dismissed installer can be reopened without downloading again; null
+  // where there's no in-app installer (iOS, a browser).
   const repo = () => (K.build && K.build.repo) || null;
-  // `file` is the release's APK: Waypage.apk once Waypage is Waypage (0.36.0).
   // Since 1.23.0 it comes through Downloads' own fetch, which goes on
   // with the app put away and can pause and pick up where it stopped: a
   // pause rejects with code "PAUSED". Older builds use Filesystem.
@@ -786,33 +790,27 @@
   // and `version` is then its file's name part (test-<branch>-<sha>).
   // An unreleased build (2026-11-18) passes its own `url` (the site's
   // unreleased/Waypage.apk), and `version` is unreleased-<sha>.
-  async function downloadUpdate(version, onProgress, file = "Waypage.apk", tag = "app-v" + version, url = null) {
-    const FS = plugin("Filesystem");
-    if (os !== "android" || !FS || !plugin("FileOpener") || !repo()) return null;
-    url = url || "https://github.com/" + repo() + "/releases/download/" + tag + "/" + file;
-    const path = file.replace(/\.apk$/, "") + "-" + version + ".apk";
+  async function viaDownloads(url, path, onProgress) {
     const D = plugin("Downloads");
-    if (D && typeof D.fetch === "function") {
-      const heard = await D.addListener("fetched", (p) => {
-        if (onProgress && p && p.path === path) onProgress(p.total > 0 ? Math.min(1, p.bytes / p.total) : 0, p.bytes, p.total);
-      });
-      try {
-        return (await D.fetch({ url, path })).uri;
-      } catch (e) {
-        if (!(e && e.code === "UNIMPLEMENTED") && !/not implemented/i.test(String((e && e.message) || e))) throw e;
-      } finally {
-        if (heard && heard.remove) heard.remove();
-      }
-    }
-    const listener = await FS.addListener("progress", (p) => {
-      if (onProgress && p && p.contentLength > 0) onProgress(Math.min(1, p.bytes / p.contentLength));
+    if (!D || typeof D.fetch !== "function") return null;
+    const heard = await D.addListener("fetched", (p) => {
+      if (onProgress && p && p.path === path) onProgress(p.total > 0 ? Math.min(1, p.bytes / p.total) : 0, p.bytes, p.total);
     });
     try {
-      await FS.downloadFile({ url, path, directory: "CACHE", progress: true });
+      return (await D.fetch({ url, path })).uri;
+    } catch (e) {
+      if (!(e && e.code === "UNIMPLEMENTED") && !/not implemented/i.test(String((e && e.message) || e))) throw e;
+      return null;
     } finally {
-      if (listener && listener.remove) listener.remove();
+      if (heard && heard.remove) heard.remove();
     }
-    return (await FS.getUri({ path, directory: "CACHE" })).uri;
+  }
+  // A preview's APK stays until this is that preview: a paused download
+  // of another one picks up where it stopped.
+  let updater = null;
+  const U = () => updater || (updater = window.Keel.update.create({ name: "Waypage", platform: K, fetch: viaDownloads, keepBuilds: true }));
+  function downloadUpdate(version, onProgress, file = "Waypage.apk", tag, url = null) {
+    return U().download({ version, key: version, tag: tag || undefined, url: url || undefined }, onProgress);
   }
   // A file kept where the person picked (2026-11: a Kiwix pack, a book
   // kept as a file): downloaded into the cache natively, resumable (the
@@ -828,12 +826,15 @@
     keeping = run.catch(() => {});
     return run;
   }
+  // "Folder/file.mp3" keeps a file in a folder of its own (an audiobook's parts).
+  const keepName = (name) => {
+    const clean = (x) => String(x || "").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
+    return String(name || "file").split("/").map(clean).filter(Boolean).slice(-2).join("/") || "file";
+  };
   async function keepOne(url, name, where, onProgress, tree) {
     const FS = plugin("Filesystem");
     if (!FS || !native) return null;
-    // "Folder/file.mp3" keeps a file in a folder of its own (an audiobook's parts).
-    const clean = (x) => String(x || "").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
-    const safe = String(name || "file").split("/").map(clean).filter(Boolean).slice(-2).join("/") || "file";
+    const safe = keepName(name);
     const temp = "keep-" + safe.replace(/[^\w.-]+/g, "_");
     const D = plugin("Downloads");
     let from = null;
@@ -849,6 +850,18 @@
       finally { if (listener && listener.remove) listener.remove(); }
       from = (await FS.getUri({ path: temp, directory: "CACHE" })).uri;
     }
+    return placeKept(FS, from, temp, safe, where, tree);
+  }
+  // A file the app made in its cache (a story made into a book) kept the
+  // same way, moved out of the cache.
+  async function keepMade(from, name, where, tree) {
+    const FS = plugin("Filesystem");
+    if (!FS || !native) return null;
+    const run = keeping.then(() => placeKept(FS, from, null, keepName(name), where, tree));
+    keeping = run.catch(() => {});
+    return run;
+  }
+  async function placeKept(FS, from, temp, safe, where, tree) {
     if (where === "folder" && tree) {
       const F = plugin("Files");
       await F.folderMoveIn({ tree, path: safe, from });
@@ -866,7 +879,10 @@
       path = to.dir + safe.replace(/(\.[a-z0-9]+)?$/i, (ext) => " (" + n + ")" + ext);
     }
     await folderFor(FS, path, to.directory);
-    try { await FS.rename({ from: temp, directory: "CACHE", to: path, toDirectory: to.directory }); }
+    if (!temp) {
+      await FS.copy({ from, to: path, toDirectory: to.directory });
+      await FS.deleteFile({ path: from }).catch(() => {});
+    } else try { await FS.rename({ from: temp, directory: "CACHE", to: path, toDirectory: to.directory }); }
     catch (e) {
       await FS.copy({ from: temp, directory: "CACHE", to: path, toDirectory: to.directory });
       await FS.deleteFile({ path: temp, directory: "CACHE" }).catch(() => {});
@@ -884,25 +900,10 @@
     const D = plugin("Downloads");
     return D && typeof D.pauseFetch === "function" ? D.pauseFetch().then(() => true, () => false) : Promise.resolve(false);
   }
-  function openInstaller(uri) {
-    return plugin("FileOpener").openFile({ path: uri, mimeType: APK_MIME });
-  }
+  const openInstaller = (uri) => U().install(uri);
   // APKs for versions already installed have done their job, and so has
   // a preview's once this is that preview.
-  async function clearOldUpdates(currentVersion, isNewer) {
-    const FS = plugin("Filesystem");
-    if (!FS) return;
-    const here = K.build && K.build.sha ? String(K.build.sha).slice(0, 7) : null;
-    try {
-      const { files } = await FS.readdir({ path: "", directory: "CACHE" });
-      for (const f of files || []) {
-        const name = typeof f === "string" ? f : f.name;
-        const m = /^Waypage-(\d+\.\d+\.\d+)\.apk(\.part)?$/.exec(name || "");
-        const p = /^Waypage-(?:test|preview|unreleased)-(?:.*-)?([0-9a-f]{7})\.apk(\.part)?$/.exec(name || "");
-        if ((m && !isNewer(m[1], currentVersion)) || (p && p[1] === here)) await FS.deleteFile({ path: name, directory: "CACHE" });
-      }
-    } catch (e) { /* nothing to tidy */ }
-  }
+  const clearOldUpdates = (currentVersion) => U().clearOld({ version: currentVersion, sha: K.build && K.build.sha });
 
   // Reading a QR code (0.30.1, sync's setup code), with
   // @capacitor-mlkit/barcode-scanning as LifeLog does. On Android that's
@@ -1055,11 +1056,11 @@
       } catch (e) { return null; }
     },
     // The folder a file sits in, opened in the phone's Files app (1.27.2,
-    // Android). { opened, where }, where its path ("Download/Books").
-    get canReveal() { return os === "android" && !!plugin("Files"); },
+    // Android; iOS too). { opened, where }, where its path ("Download/Books").
+    get canReveal() { return (os === "android" || os === "ios") && !!plugin("Files"); },
     async reveal(ref, tree) {
       const F = plugin("Files");
-      if (!F || os !== "android") return { opened: false, where: "" };
+      if (!F || !(os === "android" || os === "ios")) return { opened: false, where: "" };
       try {
         const got = await F.reveal(tree ? { uri: ref, tree } : { uri: ref });
         return { opened: !!got.opened, where: got.where || "" };
@@ -1300,6 +1301,12 @@
       onPiece(fn) { if (A()) A().addListener("piece", fn); },
       // Stop pressed on the "Writing the transcript" notification.
       onWritingStopped(fn) { if (A()) A().addListener("writingStopped", fn); },
+      // The narration saved as sound: one sound file per call,
+      // { uri, dur, size, t0, t1 }, with fn({ n, of }) heard after each piece.
+      get canVoice() { return !!A(); },
+      voice: (o) => A().voice(o),
+      stopVoicing: () => (A() ? A().stopVoicing().catch(() => {}) : null),
+      onVoiced(fn) { if (A()) A().addListener("voiced", fn); },
     };
   })();
 
@@ -1328,7 +1335,7 @@
       return !!c && /^(cellular|wimax|bluetooth)$/.test(c.type || "");
     },
     // The theme's background and whether it's dark, for the phone's bars
-    // and, through native/share's Look plugin (Android), for the window
+    // and, through native/share's Look plugin, for the window
     // and WebView at the next start, before the page paints. SystemBars
     // first: it also repaints the window, which Look then puts right.
     // keep is false for a reader's own theme: the next start opens on the library.
@@ -1415,7 +1422,7 @@
     onBack,
     exitApp,
     download,
-    downloadUpdate, keepFile, dropKept, pauseKeep: () => pauseUpdate(),
+    downloadUpdate, keepFile, keepMade, dropKept, pauseKeep: () => pauseUpdate(),
     pauseUpdate,
     openInstaller,
     clearOldUpdates,

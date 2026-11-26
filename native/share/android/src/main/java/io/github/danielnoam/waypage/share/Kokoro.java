@@ -421,8 +421,8 @@ final class Kokoro {
     // ahead of the speaker, and hands it the next piece only once this one
     // is done, so Kokoro paused at every paragraph while it made the next.
     // Narrate (SpeechService, same process) asks for the piece being read
-    // and the one after here; they're made one after another on their own
-    // thread, and the engine plays from what's made.
+    // and up to about a minute after it here; they're made one after
+    // another on their own thread, and the engine plays from what's made.
 
     static final class Take {
         final String key;
@@ -450,7 +450,7 @@ final class Kokoro {
             for (Take t : takes) if (t.key.equals(key) && !t.cancelled) return t;
             Take t = new Take(key, ++seqs);
             takes.add(t);
-            while (takes.size() > 6) takes.remove(0).cancelled = true;
+            while (takes.size() > 12) takes.remove(0).cancelled = true;
             final Context app = c.getApplicationContext();
             String lang = p.multi() && sid < p.voices.length ? espeakOf(p.voices[sid]) : "";
             maker.execute(() -> make(app, t, p, text, sid, speed, lang));
@@ -508,7 +508,16 @@ final class Kokoro {
         }
     }
 
-    private static void make(Context c, Take t, Pack p, String text, int sid, float speed, String lang) {
+    // Quote marks aren't said, but the model cuts a sentence after its
+    // full stop, so the closing quote of He said "Stop." was a sentence of
+    // its own that came out as a short mumble. A " between two letters
+    // stays: Hebrew writes acronyms that way (צה"ל).
+    private static final java.util.regex.Pattern QUOTES = java.util.regex.Pattern.compile(
+        "[\\u201C\\u201D\\u201E\\u201F\\u00AB\\u00BB\\u2018]|(?<!\\p{L})\"|\"(?!\\p{L})|(?<=[.!?\\u2026,;:])['\\u2019]+(?=\\s|$)");
+    static String unquoted(String text) { return QUOTES.matcher(text).replaceAll(""); }
+
+    private static void make(Context c, Take t, Pack p, String said, int sid, float speed, String lang) {
+        String text = unquoted(said);
         OfflineTts tts = t.cancelled ? null : get(c, p);
         if (tts != null) {
             final int perMs = Math.max(1, tts.sampleRate() / 1000);

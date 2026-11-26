@@ -45,6 +45,12 @@ function appVersion(root = ROOT) {
 }
 
 // owner/repo: from Actions when building there, else from the git remote.
+// <meta name="keel-site"> in index.html, ending in "/", or null.
+function siteMeta(root = ROOT) {
+  const m = fs.readFileSync(path.join(root, "index.html"), "utf8").match(/<meta name="keel-site" content="(https:\/\/[^"]+)"/i);
+  return m ? m[1].trim().replace(/\/?$/, "/") : null;
+}
+
 function repoSlug() {
   if (process.env.GITHUB_REPOSITORY) return process.env.GITHUB_REPOSITORY;
   try {
@@ -87,6 +93,9 @@ function build(out = OUT, root = ROOT) {
     const to = path.join(out, rel);
     fs.mkdirSync(path.dirname(to), { recursive: true });
     if (rel === "index.html") fs.writeFileSync(to, appIndexHtml(fs.readFileSync(from, "utf8")));
+    // What's merged since the last release, on top as "## [Unreleased]",
+    // so a build of main says what it has beyond its version.
+    else if (rel === "CHANGELOG.md") fs.writeFileSync(to, require("./release.js").withPending(root));
     else fs.copyFileSync(from, to);
   }
   const repo = repoSlug();
@@ -94,8 +103,9 @@ function build(out = OUT, root = ROOT) {
   const info = {
     version: appVersion(root),
     repo,
+    // index.html's keel-site when it has one (a custom domain), else
     // GitHub Pages: the host is the owner lowercased, the path the repo as named.
-    webUrl: repo ? "https://" + owner.toLowerCase() + ".github.io/" + name + "/" : null,
+    webUrl: siteMeta(root) || (repo ? "https://" + owner.toLowerCase() + ".github.io/" + name + "/" : null),
     builtAt: new Date().toISOString(),
     branch: process.env.GITHUB_REF_NAME || null,
     sha: process.env.GITHUB_SHA || null,
@@ -108,4 +118,4 @@ if (require.main === module) {
   const r = build();
   console.log("www: " + r.files + " files → " + path.relative(ROOT, r.out) + " (" + r.info.version + ", " + (r.info.repo || "no repo") + ")");
 }
-module.exports = { build, assetList, referencedByIndex, appVersion, appIndexHtml };
+module.exports = { build, siteMeta, assetList, referencedByIndex, appVersion, appIndexHtml };

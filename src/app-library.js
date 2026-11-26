@@ -25,9 +25,11 @@ function allTags() {
 // highlight's `tags`, most used first.
 function allMarkTags() {
   const counts = new Map();
-  for (const p of state.pages) for (const m of p.marks || []) for (const t of m.tags || []) {
-    const k = [...counts.keys()].find((x) => sameTag(x, t)) || t;
-    counts.set(k, (counts.get(k) || 0) + 1);
+  const count = (t) => { const k = [...counts.keys()].find((x) => sameTag(x, t)) || t; counts.set(k, (counts.get(k) || 0) + 1); };
+  for (const p of state.pages) {
+    for (const m of p.marks || []) for (const t of m.tags || []) count(t);
+    // A comment bubble's tags are a highlight's (2026-11): one list, most used first.
+    if (typeof inkNotes === "function") for (const n of inkNotes(p)) for (const t of n.tags) count(t);
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t);
 }
@@ -37,12 +39,6 @@ function withTags(has, more) {
   const out = [...(has || [])];
   for (const t of more) if (!out.some((x) => sameTag(x, t))) out.push(t);
   return out;
-}
-
-async function setTags(p, tags) {
-  p.tags = tags;
-  await C.store.writeIndex(state.pages);
-  renderLibrary();
 }
 
 // What a tag is on (2026-11): its clips, and a collection counts once,
@@ -241,6 +237,9 @@ function joinFav(p, name) {
   joinTags(p, name);
   const pick = name ? coverPick(folderPages(name).filter((x) => x !== p)) : "";
   if (pick) p.coverPick = pick; else delete p.coverPick;
+  const status = name ? pickedStatus(folderPages(name).filter((x) => x !== p)) : "";
+  if (status) p.statusPick = status; else delete p.statusPick;
+  if (name && folderPages(name).some((x) => x !== p && x.folderNoStatus)) p.folderNoStatus = true; else delete p.folderNoStatus;
   joinSeries(p, name);
 }
 
@@ -318,6 +317,51 @@ async function keepStoryTags(name, got) {
   for (const p of folderPages(name)) if (JSON.stringify(p.siteTags || null) !== was) { p.siteTags = got; changed = true; }
   if (changed) await C.store.writeIndex(state.pages);
 }
+// Where the story stands on its site (2026-11): "completed", "ongoing",
+// "hiatus", "stubbed", "dropped" or "inactive", kept on each of a
+// collection's clips like its site's tags; Website sync refreshes it. A
+// page that no longer says leaves the last word in place.
+const STORY_STATUS = { completed: () => t("Completed"), ongoing: () => t("Ongoing"), hiatus: () => t("On hiatus"), stubbed: () => t("Stubbed"), dropped: () => t("Dropped"), inactive: () => t("Inactive") };
+// What story pages read lately said, by address, for the chapters a
+// save then files under them.
+const seenStatus = new Map();
+function noteStatus(found) {
+  if (found && found.status && STORY_STATUS[found.status] && found.page) seenStatus.set(urlKey(found.page), found.status);
+  return found;
+}
+async function keepStoryStatus(name, got) {
+  if (!got || !STORY_STATUS[got]) return;
+  let changed = false;
+  for (const p of folderPages(name)) if (p.siteStatus !== got) { p.siteStatus = got; changed = true; }
+  if (changed) await C.store.writeIndex(state.pages);
+}
+// The site's word, unless Website sync's "Status from the site" is off
+// (`folderNoStatus`); else the one picked in Edit (`statusPick`). Both
+// are on every clip, synced like coverPick.
+const siteStatusOf = (list) => { const p = list.find((x) => STORY_STATUS[x.siteStatus]); return p ? p.siteStatus : ""; };
+const pickedStatus = (list) => { const p = list.find((x) => STORY_STATUS[x.statusPick]); return p ? p.statusPick : ""; };
+const siteStatusOn = (list) => !list.some((x) => x.folderNoStatus);
+const siteSays = (list) => (siteStatusOn(list) ? siteStatusOf(list) : "");
+const folderStatus = (list) => siteSays(list) || pickedStatus(list);
+async function setFolderStatus(name, key, value) {
+  for (const p of folderPages(name)) { if (value) p[key] = value; else delete p[key]; }
+  await C.store.writeIndex(state.pages);
+  syncSoon();
+  renderLibrary();
+  renderFolder();
+}
+// Edit's Status row (2026-11, Daniel): picked by hand for a story whose
+// site doesn't say. While the site's word shows it's hidden; Website
+// sync's "Status from the site" turns that off (Daniel 2026-11-23).
+function statusRow(list) {
+  return pickRow({ label: t("Status"), cls: "status-pick",
+    options: [{ value: "", label: t("None") }, ...Object.keys(STORY_STATUS).map((s) => ({ value: s, label: statusName(s) }))],
+    get: () => pickedStatus(list), set: (v) => setFolderStatus(state.folder, "statusPick", v) });
+}
+const statusName = (s) => (STORY_STATUS[s] ? STORY_STATUS[s]() : "");
+// Read to the end of a story that isn't finished on its site: caught up,
+// not done (Daniel: you can't finish what's still being written).
+const caughtUp = (list) => { const s = folderStatus(list); return !!s && s !== "completed"; };
 async function setFolderTagNew(name, on) {
   for (const p of folderPages(name)) { if (on) p.folderTagNew = true; else delete p.folderTagNew; }
   await C.store.writeIndex(state.pages);
@@ -390,7 +434,7 @@ async function setFolder(p, name) {
 // 2 files". A copy made from a file is a clip, as in the library.
 // A list of only files says Files, and of only audiobooks, heard for read.
 const allFiles = (list) => list.length > 0 && list.every((p) => p.file);
-const allHeard = (list) => list.length > 0 && list.every((p) => p.audio && p.audio.parts && !p.audio.overlay);
+const allHeard = (list) => list.length > 0 && list.every(isAudiobook);
 const listHead = (list) => (allFiles(list) ? t("Files") : isSeries(list) ? t("Chapters") : t("Clips")) + " · " + list.length;
 const HOLDS = [["note", (n) => tn(n, "1 note", "{n} notes")], ["audio", (n) => tn(n, "1 audiobook", "{n} audiobooks")], ["file", (n) => tn(n, "1 file", "{n} files")], ["clip", (n) => tn(n, "1 clip", "{n} clips")]];
 const holdKind = (p) => (p.note ? "note" : isAudiobook(p) ? "audio" : p.link ? "file" : "clip");
@@ -426,8 +470,9 @@ function folderTile(name) {
   const fresh = freshCount(name);
   const fav = list.some((p) => p.folderFav);
   const series = isSeriesFolder(name), inside = series ? 0 : seriesInside(name).length;
+  const status = statusName(folderStatus(list));
   const tile = el("div", { class: "tile", role: "listitem", "data-ids": list.map((p) => p.id).join(","), "data-name": name },
-    el("button", { class: "card-open", type: "button", "aria-label": [name, fav ? t("favourite") : "", series ? t("series") : t("collection"), inside ? tn(inside, "1 series", "{n} series") : "", holdsLine(list), (allHeard(list) ? t("{n} heard", { n: done }) : t("{n} read", { n: done })), fresh ? tn(fresh, "1 new chapter", "{n} new chapters") : ""].filter(Boolean).join(", "),
+    el("button", { class: "card-open", type: "button", "aria-label": [name, fav ? t("favourite") : "", series ? t("series") : t("collection"), status, inside ? tn(inside, "1 series", "{n} series") : "", holdsLine(list), (allHeard(list) ? t("{n} heard", { n: done }) : t("{n} read", { n: done })), fresh ? tn(fresh, "1 new chapter", "{n} new chapters") : ""].filter(Boolean).join(", "),
       onclick: () => tapPages(list.map((p) => p.id), () => openFolder(name)) }),
     pickMark(),
     el("span", { class: "tile-thumb" + (thumb ? "" : " blank") },
@@ -443,7 +488,7 @@ function folderTile(name) {
           saveNewChapters(name, e.currentTarget);
         } }, "+" + (fresh >= NEW_MAX ? NEW_MAX : fresh)) : null),
     el("span", { class: "tile-name", dir: "auto" }, name),
-    el("span", { class: "tile-meta" }, el("span", { class: "tile-kind" }, series ? t("Series · ") : t("Collection · ")), inside ? tn(inside, "1 series, {clips}", "{n} series, {clips}", { clips: holdsLine(list) }) : (allHeard(list) ? (done === list.length ? t("All heard") : t("{done} of {n} heard", { done: done, n: list.length })) : done === list.length ? t("All read") : t("{done} of {n} read", { done: done, n: list.length })), el("span", { class: "tile-size" }, " · " + formatSize(sizeOf(list)))),
+    el("span", { class: "tile-meta" }, el("span", { class: "tile-kind" }, series ? t("Series · ") : t("Collection · ")), inside ? tn(inside, "1 series, {clips}", "{n} series, {clips}", { clips: holdsLine(list) }) : (allHeard(list) ? (done === list.length ? t("All heard") : t("{done} of {n} heard", { done: done, n: list.length })) : done === list.length ? (caughtUp(list) ? t("Caught up") : t("All read")) : t("{done} of {n} read", { done: done, n: list.length })), status ? el("span", { class: "tile-status-word" }, " · " + status) : null, el("span", { class: "tile-size" }, " · " + formatSize(sizeOf(list)))),
     el("span", { class: "progress thin", "aria-hidden": "true" },
       el("span", { class: "progress-fill", style: "transform: scaleX(" + done / list.length + ")" })));
   // A cover whose file is gone (a restored backup) is read again.
@@ -458,6 +503,8 @@ function folderTile(name) {
   // icon used to sit.
   if (fav) tile.querySelector(".tile-thumb").append(favStar());
   tile.querySelector(".tile-thumb").append(holdsMarks(list));
+  // Where the story stands on its site, a tag at the cover's top.
+  if (status) tile.querySelector(".tile-thumb").append(el("span", { class: "tile-status", "aria-hidden": "true", "data-status": folderStatus(list) }, status));
   return tile;
 }
 
@@ -507,15 +554,16 @@ function closeFolder() {
 
 // The collection's screen is a book page (0.27.11): its cover and title,
 // how far along, Continue, then its chapters. Favourite and Edit sit in
-// the bar, the rest in the ⋯ menu. Edit (name, cover and order in one
-// place), Website sync and Export take the screen over in place, with
-// Done in the bar.
+// the bar, the rest in the ⋯ menu. Edit and Export take the screen over
+// in place, with Done in the bar. Edit has two tabs (2026-11, Daniel's
+// pick): Collection (name, cover, status, order) and Website sync
+// ("chapters"), which was its own screen from the ⋯ menu.
 let folderMode = "";
 // The name typed in Edit, kept while a cover or move draws the screen again.
 let folderDraft = null;
 const FOLDER_BARS = {
   edit: { title: t("Edit"), done: t("Done") },
-  chapters: { title: t("Website sync"), done: t("Done") },
+  chapters: { title: t("Edit"), done: t("Done") },
   export: { title: t("Export"), done: t("Done") },
 };
 
@@ -526,6 +574,20 @@ function setFolderMode(m) {
   renderFolder();
   $("folderBody").scrollTop = 0;
   $(m ? "folderDone" : "folderMore").focus({ preventScroll: true });
+}
+
+// Edit's two tabs; the name typed on one is kept on the other.
+const editMode = () => folderMode === "edit" || folderMode === "chapters";
+function editTabs() {
+  const tab = (m, label) => el("button", { class: "rs-tab", type: "button", role: "tab", "aria-selected": String(folderMode === m),
+    onclick: () => {
+      if (folderMode === m) return;
+      folderMode = m;
+      renderFolder();
+      $("folderBody").scrollTop = 0;
+      $("folderBody").querySelector('.edit-tabs [aria-selected="true"]').focus({ preventScroll: true });
+    } }, label);
+  return el("div", { class: "rs-seg edit-tabs", role: "tablist", "aria-label": t("Edit") }, tab("edit", t("Collection")), tab("chapters", t("Website sync")));
 }
 
 function paintFolderBar() {
@@ -595,24 +657,27 @@ function bookHead(list, next, done) {
   } else title = el("h2", { class: "book-title", dir: "auto" }, name);
   const left = minutesLeft(list);
   const heard = allHeard(list);
-  const meta = done === n ? (heard ? t("All {n} heard", { n }) : t("All {n} read", { n })) : heard ? t("{done} of {n} heard · {left} left", { done, n, left: minutesText(left) }) : t("{done} of {n} read · {left} left", { done, n, left: minutesText(left) });
+  const meta = done === n ? (heard ? t("All {n} heard", { n }) : caughtUp(list) ? t("Caught up: all {n} read", { n }) : t("All {n} read", { n })) : heard ? t("{done} of {n} heard · {left} left", { done, n, left: minutesText(left) }) : t("{done} of {n} read · {left} left", { done, n, left: minutesText(left) });
   const bar = el("div", { class: "book-progress", role: "progressbar", "aria-label": t("Read"), "aria-valuemin": "0",
     "aria-valuemax": String(n), "aria-valuenow": String(done), "aria-valuetext": heard ? t("{done} of {n} heard", { done, n }) : t("{done} of {n} read", { done, n }) },
     el("span", { class: "book-progress-fill", style: "width: " + (done / n * 100).toFixed(1) + "%" }));
+  // In Edit the cover's choices are below and the name takes the width
+  // (Daniel 2026-11): no cover, and no progress under the name.
   const head = el("div", { class: "book-head" },
-    bookCover(list),
+    renaming ? null : bookCover(list),
     el("div", { class: "book-facts" },
-      el("p", { class: "book-site" }, [siteOf(list[0]), isSeriesFolder(name) ? t("Series") : t("Collection")].filter(Boolean).join(" · ")),
+      el("p", { class: "book-site" }, [siteOf(list[0]), isSeriesFolder(name) ? t("Series") : t("Collection"), statusName(folderStatus(list))].filter(Boolean).join(" · ")),
       title,
       !renaming && seriesHost(name) ? el("button", { class: "book-saved series-in", type: "button", onclick: () => openFolder(seriesHost(name)) },
         el("span", { class: "accent", dir: "auto" }, t("In {collection}", { collection: seriesHost(name) }))) : null,
-      el("p", { class: "meta folder-meta" }, meta),
+      renaming ? null : el("p", { class: "meta folder-meta" }, meta),
       folderTagLine(list),
-      bar));
+      renaming ? null : bar));
   if (renaming) return [head];
   const go = done === n ? t("Read again from the start") : (next.at > 0.02 || done ? t("Continue: {title}", { title: next.title }) : t("Start: {title}", { title: next.title }));
   return [head,
     el("button", { class: "btn-primary folder-go", type: "button", dir: "auto", onclick: () => openPage(done === n ? list[0].id : next.id) }, go),
+    quickStarts(list, done === n ? list[0] : next),
     saveNewButton(list),
     savedLine(list)];
 }
@@ -725,7 +790,8 @@ function renderFolder() {
   // drawn late redraws the list after a move by keys).
   const a = document.activeElement;
   const had = a && a.matches && a.matches("#folderBody .drag-handle, #folderBody .item-fav")
-    ? '[data-id="' + a.closest("li").dataset.id + '"] .' + a.classList[a.classList.length - 1] : null;
+    ? 'li[data-id="' + a.closest("li").dataset.id + '"] .' + a.classList[a.classList.length - 1]
+    : a && a.matches && a.matches("#folderBody .sort-row .dropdown-btn") ? ".sort-row .dropdown-btn" : null;
   const list = folderPages(state.folder);
   if (!list.length) {
     folderMode = "";
@@ -741,38 +807,38 @@ function renderFolder() {
   const editing = folderMode === "edit";
   const ordering = editing && list.length > 1;
   let top;
-  if (folderMode === "chapters") top = [chaptersPanel(list)];
+  if (folderMode === "chapters") top = [editTabs(), chaptersPanel(list)];
   else if (folderMode === "export") top = [el("div", { class: "folder-actions export-panel" }, exportControls({ pages: list, title: state.folder }, () => setFolderMode("")))];
-  // Edit: the name in place of the title, the cover's choices, then the
-  // chapters with what they keep, to put in order.
+  // Edit: the name in place of the title, the cover's choices, its status
+  // (unless the site sets it, in Website sync), then the chapters with
+  // what they keep, Sort by on top, to put in order.
   else if (editing) {
-    top = [el("div", { class: "folder-edit" }, ...bookHead(list, next, done),
-      sharing() ? el("div", { class: "group" },
-        switchRow(t("In other apps"), t("Listed in the reading activity that apps you connect to your sync repo can read"), !list.some((p) => p.folderNoShare), (v) => setFolderShare(state.folder, !v))) : null,
+    const status = siteSays(list) ? null : statusRow(list);
+    const share = sharing() ? switchRow(t("In other apps"), t("Listed in the reading activity that apps you connect to your sync repo can read"), !list.some((p) => p.folderNoShare), (v) => setFolderShare(state.folder, !v)) : null;
+    top = [editTabs(), el("div", { class: "folder-edit" }, ...bookHead(list, next, done),
       sectionHead(t("Cover")), coverPanel(list),
+      status || share ? el("div", { class: "group folder-facts" }, status, share) : null,
       sectionHead(listHead(list)),
-      savedLine(list),
-      ordering ? el("div", { class: "order-hint" },
-        el("div", { class: "chips sort-chips", role: "group", "aria-label": t("Sort by") },
-          el("span", { class: "meta" }, t("Sort by")),
-          ...Object.entries(FOLDER_SORTS).map(([key, s]) =>
-            el("button", { class: "chip", type: "button", "data-sort": key, onclick: () => sortFolder(list, key) }, el("span", { class: "chip-label" }, s.label))))) : null)];
+      savedLine(list))];
   // On a big screen the book's cover and facts stand beside its list.
   } else top = [el("div", { class: "book-side" }, ...bookHead(list, next, done))];
   const showList = folderMode !== "export";
-  const covers = showList && !editing && folderLook(state.folder) === "covers";
+  // The Website sync tab lists its chapters one by one, whatever the look (Daniel 2026-11-25).
+  const covers = showList && !folderMode && folderLook(state.folder) === "covers";
   fill($("folderBody"),
     ...top,
     ...(showList && !editing ? insideStrip(state.folder) : []),
     showList && !editing ? sectionHead(listHead(list)) : null,
     covers ? el("ol", { class: "folder-covers" }, ...list.map((p) => coverItem(p, p === next && done < list.length))) : null,
+    ordering ? el("div", { class: "group sort-head" }, sortRow(list)) : null,
     showList && !covers ? el("ol", { class: "group folder-list" + (ordering ? " ordering" : "") },
       ...list.map((p, i) => el("li", folderMode ? { "data-id": p.id } : { "data-id": p.id, "data-ids": p.id },
         el("button", { class: "row chapter" + (p === next && done < list.length ? " now" : ""), type: "button",
           onclick: () => (folderMode ? null : tapPages([p.id], () => openPage(p.id))) },
           pickMark(),
           el("span", { class: "chapter-n", "aria-hidden": "true" }, String(i + 1)),
-          el("span", { class: "choice-text" },
+          // Its line under it sits on its title's side (Hebrew app, English title).
+          el("span", { class: "choice-text", dir: "auto" },
             el("span", { class: "row-label", dir: "auto" }, p.title),
             editing ? el("span", { class: "choice-note" }, formatSize(p.bytes || 0))
               : el("span", { class: "choice-note" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, ...liveMark(p), readingLine(p))),
@@ -781,7 +847,7 @@ function renderFolder() {
   paintFolderBar();
   paintPicks();
   folderFlip(before);
-  const again = had && $("folderBody").querySelector("li" + had);
+  const again = had && $("folderBody").querySelector(had);
   if (again) again.focus({ preventScroll: true });
 }
 
@@ -950,15 +1016,60 @@ const FOLDER_SORTS = {
 // Puts the folder in one of FOLDER_SORTS' orders, oldest (or A) first;
 // sorting again when it's already in that order turns it around. The
 // folder's own places are reused, as in moveInFolder.
+const sortCmp = (x, y) => (typeof x === "string" ? x.localeCompare(y, undefined, { numeric: true, sensitivity: "base" }) : x - y);
+// Whether `keys` run one way (1) or the other (-1), the ones without a key last.
+function inOrder(keys, dir) {
+  let last = null, gap = false;
+  for (const k of keys) {
+    if (k == null) { gap = true; continue; }
+    if (gap) return false;
+    if (last != null && dir * sortCmp(last, k) > 0) return false;
+    last = k;
+  }
+  return true;
+}
+// The order the collection is in now, for Sort by: { how, back }, or
+// null for an order of its own. A list in more than one order (chapter
+// and release date, often) shows the one last picked.
+const sortPicked = new Map();
+function folderSortNow(list) {
+  const last = sortPicked.get(String(state.folder).toLowerCase());
+  const hows = Object.keys(FOLDER_SORTS).sort((a, b) => (b === last) - (a === last));
+  for (const how of hows) {
+    const sort = FOLDER_SORTS[how];
+    const keys = sort.keys(list);
+    const known = keys.filter((k) => k != null);
+    // Clips that all share a date (or have none) aren't in its order.
+    if (known.length < 2 || known.every((k) => sortCmp(k, known[0]) === 0)) continue;
+    if (inOrder(keys, 1)) return { how, back: false };
+    if (inOrder(keys, -1)) return { how, back: true };
+  }
+  return null;
+}
+// Sort by (2026-11, Daniel's ask): a drop-down on top of the chapters;
+// the chosen sort carries ↑ or ↓, and picking it again turns it round.
+function sortRow(list) {
+  const now = folderSortNow(list);
+  const mark = (back) => {
+    const s = el("span", { class: "sort-dir", "aria-hidden": "true" });
+    s.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' + (back ? '<path d="M12 5v14M6 13l6 6 6-6"/>' : '<path d="M12 19V5M6 11l6-6 6 6"/>') + "</svg>";
+    return s;
+  };
+  const pick = dropdown({ label: t("Sort by"), cls: "field-pick row-pick sort-pick", value: now ? now.how : "", placeholder: t("Your order"), again: true,
+    options: Object.entries(FOLDER_SORTS).map(([key, s]) => ({ value: key, label: s.label,
+      mark: now && now.how === key ? mark(now.back) : null, markLabel: now && now.how === key && now.back ? t("Reversed") : "" })),
+    onpick: (v) => { sortPicked.set(String(state.folder).toLowerCase(), v); sortFolder(folderPages(state.folder), v); } });
+  return el("div", { class: "row pick-row sort-row" },
+    el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, t("Sort by"))), pick);
+}
 async function sortFolder(list, how) {
   const sort = FOLDER_SORTS[how];
   const keys = sort.keys(list);
-  if (keys.filter((k) => k != null).length < 2) { toast(sort.none); return; }
-  const cmp = (x, y) => (typeof x === "string" ? x.localeCompare(y, undefined, { numeric: true, sensitivity: "base" }) : x - y);
+  if (keys.filter((k) => k != null).length < 2) { toast(sort.none); renderFolder(); return; }
   const order = (dir) => list.map((p, i) => [p, i]).sort((a, b) => {
     const x = keys[a[1]], y = keys[b[1]];
     if (x == null || y == null) return (x == null) - (y == null) || a[1] - b[1];
-    return dir * cmp(x, y) || a[1] - b[1];
+    return dir * sortCmp(x, y) || a[1] - b[1];
   }).map(([p]) => p);
   let sorted = order(1);
   const back = !sorted.some((p, i) => p !== list[i]);
@@ -985,7 +1096,6 @@ function openFolderMenu() {
   if ($("folderPop")) { closeFolderMenu(); return; }
   const list = folderPages(state.folder);
   if (!list.length) return;
-  const fresh = freshCount(state.folder);
   const item = (icon, label, onclick, opts = {}) => {
     const b = el("button", { class: "pop-item" + (opts.warn ? " warn" : ""), type: "button", role: "menuitem", tabindex: "-1",
       onclick: () => { closeFolderMenu(true); onclick(); } },
@@ -997,7 +1107,6 @@ function openFolderMenu() {
   };
   const sep = () => el("div", { class: "pop-sep", role: "separator" });
   const pop = el("div", { class: "pop-menu", id: "folderPop", role: "menu", "aria-label": t("Collection") },
-    item("book", t("Website sync"), () => setFolderMode("chapters"), fresh ? { note: newCountText(fresh), accent: true } : {}),
     item("add", t("Add clips"), () => openBatch("", false, state.folder)),
     sep(),
     folderLook(state.folder) === "covers"
@@ -1012,11 +1121,16 @@ function openFolderMenu() {
     item("tag", t("Tags"), () => openMenu("folderTags"), sharedTags(list).length ? { note: String(sharedTags(list).length) } : {}),
     item("select", t("Select"), () => startSelect([])),
     item("send", t("Export"), () => setFolderMode("export")),
+    typeof makeAudiobook === "function" && canVoice() && list.some(voiceable) ? item("listen", t("Save the narration"), () => makeAudiobook({ folder: state.folder })) : null,
     sep(),
     item("remove", t("Remove"), () => openMenu("remove"), { warn: true }));
   const more = $("folderMore"), at = more.getBoundingClientRect();
   pop.style.top = at.bottom + 4 + "px";
-  pop.style.right = Math.max(8, innerWidth - at.right) + "px";
+  if (document.dir === "rtl") pop.style.left = Math.max(8, at.left) + "px";
+  else pop.style.right = Math.max(8, innerWidth - at.right) + "px";
+  // A phone on its side is shorter than the menu: it scrolls.
+  pop.style.maxHeight = innerHeight - at.bottom - 12 + "px";
+  pop.style.overflowY = "auto";
   $("folderView").append(pop);
   more.setAttribute("aria-expanded", "true");
   M.popFrom(pop, at);
@@ -1030,6 +1144,25 @@ function openFolderMenu() {
     else if (e.key === "Tab") closeFolderMenu(true);
   });
   setTimeout(() => addEventListener("pointerdown", outsideMenu, true));
+}
+
+// Quick starts under Continue (Daniel 2026-11-20): the clip read last
+// and the one added last, unless Continue opens it already.
+function quickStarts(list, main) {
+  const at = (p) => p.folderAt || p.savedAt || 0;
+  const newest = list.reduce((a, p) => (at(p) >= at(a) ? p : a), list[0]);
+  const last = list.reduce((a, p) => ((p.readAt || 0) > ((a && a.readAt) || 0) ? p : a), null);
+  const shown = new Set([main]);
+  const open = (icon, label, p) => {
+    if (!p || shown.has(p)) return null;
+    shown.add(p);
+    const b = el("button", { class: "chip quick-start", type: "button", "aria-label": label + ": " + p.title, onclick: () => openPage(p.id) },
+      el("span", { class: "chip-icon", "aria-hidden": "true" }), el("span", { class: "chip-label" }, label));
+    b.firstChild.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS[icon] + "</svg>";
+    return b;
+  };
+  const chips = [open("history", t("Last read"), last), open("newest", t("Newest"), newest)].filter(Boolean);
+  return chips.length ? el("div", { class: "chips folder-starts", role: "group", "aria-label": t("Quick starts") }, ...chips) : null;
 }
 
 function outsideMenu(e) {
@@ -1068,18 +1201,26 @@ function coverPanel(list) {
     return i;
   };
   const autoUrl = shownCover(list.map((p) => ({ ...p, coverPick: undefined })));
-  const mixed = MOSAIC_FILE.test(pick);
-  const own = C.backup.COVER_FILE.test(pick) && !mixed ? C.store.coverUrl(pick) : null;
+  const kind = mosaicKind(pick);
+  const own = C.backup.COVER_FILE.test(pick) && !kind ? C.store.coverUrl(pick) : null;
   const plus = svgIcon("add", 28);
   const clips = list.filter((p) => thumbUrl(p));
-  const tiles = clips.slice(0, 4);
+  // Mosaic takes three or four pictures (two, if it was picked with two);
+  // Stacked and Side by side take two (Daniel 2026-11-23).
+  const mosaic = (k, label, cls, named) => {
+    const tiles = mosaicSources(list, k);
+    if (tiles.length < 2 || (k === "m" && tiles.length < 3 && kind !== "m")) return null;
+    return choice(label(tiles.length), kind === k,
+      kind === k ? img(C.store.coverUrl(pick)) : el("span", { class: "cover-mosaic " + cls(tiles.length) }, ...tiles.map((p) => img(thumbUrl(p)))),
+      () => coverMosaic(state.folder, k), named);
+  };
   return el("div", { class: "folder-actions cover-panel" }, input,
     el("div", { class: "cover-grid" },
       choice(t("Automatic"), !pick, autoUrl ? img(autoUrl) : collectionIcon(list, 28), () => setCoverPick(state.folder, ""), t("Automatic")),
       choice(own ? t("Your picture, choose another") : t("Choose a picture of your own"), !!own, own ? img(own) : plus, () => input.click(), t("Your picture")),
-      tiles.length > 1 ? choice(t("Mosaic of the first {n} pictures", { n: tiles.length }), mixed,
-        mixed ? img(C.store.coverUrl(pick)) : el("span", { class: "cover-mosaic n" + tiles.length }, ...tiles.map((p) => img(thumbUrl(p)))),
-        () => coverMosaic(state.folder), t("Mosaic")) : null,
+      mosaic("m", (n) => t("Mosaic of the first {n} pictures", { n }), (n) => "n" + n, t("Mosaic")),
+      mosaic("s", () => t("The first two pictures, one above the other"), () => "n2", t("Stacked")),
+      mosaic("v", () => t("The first two pictures, side by side"), () => "side", t("Side by side")),
       ...clips.map((p) => choice(p.title, pick === "clip:" + p.id, img(thumbUrl(p)), () => setCoverPick(state.folder, "clip:" + p.id)))));
 }
 
@@ -1093,24 +1234,45 @@ async function setCoverPick(name, pick) {
   renderLibrary();
 }
 
-// A mosaic: the first two to four pictures in the collection, drawn
-// into one picture of your own, so it syncs and backs up like one. Its
-// name starts "ux" (own pictures start with a time, "um" for decades).
-// Picking it again draws it again from what's there now.
-const MOSAIC_FILE = /^ux[a-z0-9]+\.jpg$/;
-async function coverMosaic(name) {
-  const srcs = folderPages(name).map(thumbUrl).filter(Boolean).slice(0, 4);
-  const pics = (await Promise.all(srcs.map(async (url) => {
+// A mosaic: the first two to four pictures in the collection, or two
+// stacked or side by side ("m", "s", "v"), drawn into one picture of your
+// own, so it syncs and backs up like one. Its name is "uy", its kind and
+// a hash of the clips it shows, so it's drawn again when those change (a
+// clip deleted, moved out or put in another order: it showed a deleted
+// clip until 2026-11-23) and every device names the new one alike.
+// "ux" ones are from before and are drawn again once. Own pictures start
+// with a time, "um" for decades. Picking it again draws it again.
+const MOSAIC_FILE = /^u[xy][a-z0-9]+\.jpg$/;
+const mosaicKind = (pick) => (/^uy[msv]/.test(pick) ? pick[2] : MOSAIC_FILE.test(pick) ? "m" : "");
+const mosaicSources = (list, kind) => list.filter((p) => thumbUrl(p)).slice(0, kind === "m" ? 4 : 2);
+function mosaicName(kind, clips) {
+  const text = kind + clips.map((p) => p.id).join(",");
+  const hash = (seed) => {
+    let x = seed >>> 0;
+    for (let i = 0; i < text.length; i++) x = Math.imul(x ^ text.charCodeAt(i), 16777619) >>> 0;
+    return x.toString(36);
+  };
+  return "uy" + kind + hash(2166136261) + hash(3735928559) + ".jpg";
+}
+async function coverMosaic(name, kind = "m", quiet = false) {
+  const clips = mosaicSources(folderPages(name), kind);
+  const pics = (await Promise.all(clips.map(thumbUrl).map(async (url) => {
     try {
       const here = url.startsWith("data:") || new URL(url, location.href).origin === location.origin;
       const blob = here ? await (await fetch(url)).blob() : navigator.onLine ? (await C.platform.fetchBytes(url, "cover")).blob : null;
       return blob ? await createImageBitmap(blob) : null;
     } catch (e) { return null; }
   }))).filter(Boolean);
-  if (pics.length < 2) { toast(t("Couldn't read enough of its pictures for a mosaic.")); return; }
+  // Drawn again on its own, it waits for every picture (offline, say).
+  if (pics.length < 2 || (quiet && pics.length < clips.length)) {
+    pics.forEach((pic) => pic.close());
+    if (!quiet) toast(t("Couldn't read enough of its pictures for a mosaic."));
+    return false;
+  }
   const W = 480, H = 720;
-  // Two stack; three put one across the top; four make a two-by-two.
-  const spots = { 2: [[0, 0, W, H / 2], [0, H / 2, W, H / 2]],
+  // Two stack (or stand side by side); three put one across the top;
+  // four make a two-by-two.
+  const spots = kind === "v" ? [[0, 0, W / 2, H], [W / 2, 0, W / 2, H]] : { 2: [[0, 0, W, H / 2], [0, H / 2, W, H / 2]],
     3: [[0, 0, W, H / 2], [0, H / 2, W / 2, H / 2], [W / 2, H / 2, W / 2, H / 2]],
     4: [[0, 0, W / 2, H / 2], [W / 2, 0, W / 2, H / 2], [0, H / 2, W / 2, H / 2], [W / 2, H / 2, W / 2, H / 2]] }[pics.length];
   const canvas = el("canvas", { width: String(W), height: String(H) });
@@ -1124,10 +1286,38 @@ async function coverMosaic(name) {
     pic.close();
   });
   const blob = await new Promise((done) => canvas.toBlob(done, "image/jpeg", 0.85));
-  if (!blob) { toast(t("Couldn't make the mosaic. Try again.")); return; }
-  const kept = "ux" + C.save.newId() + ".jpg";
+  if (!blob) { if (!quiet) toast(t("Couldn't make the mosaic. Try again.")); return false; }
+  const kept = mosaicName(kind, clips);
   await C.store.writeCover(kept, new Uint8Array(await blob.arrayBuffer()), "image/jpeg");
   await setCoverPick(name, kept);
+  return true;
+}
+
+// Mosaics follow the clips they show: a while after the library changes,
+// one whose clips changed is drawn again, quietly, or goes back to
+// Automatic once fewer than two pictures are left. Each new name is
+// tried once a session, so a picture that can't be read isn't fetched
+// over and over.
+let mosaicTimer = 0;
+const mosaicTried = new Set();
+function watchMosaics() {
+  clearTimeout(mosaicTimer);
+  mosaicTimer = setTimeout(async () => {
+    const names = new Map();
+    for (const p of state.pages) if (p.folder && p.coverPick && MOSAIC_FILE.test(p.coverPick)) names.set(String(p.folder).toLowerCase(), p.folder);
+    for (const name of names.values()) {
+      const list = folderPages(name);
+      const pick = coverPick(list);
+      const kind = mosaicKind(pick);
+      if (!kind) continue;
+      const clips = mosaicSources(list, kind);
+      if (clips.length < 2) { await setCoverPick(name, ""); continue; }
+      const want = mosaicName(kind, clips);
+      if (want === pick || mosaicTried.has(want)) continue;
+      mosaicTried.add(want);
+      await coverMosaic(name, kind, true);
+    }
+  }, 1500);
 }
 
 // A picture of your own, drawn no bigger than a cover is shown (480 by
@@ -1382,7 +1572,7 @@ async function removeFolder(withPages) {
   if (withPages) { forgetWatched(list); releaseLinks(list); }
   for (const p of list) {
     if (withPages) { dropPackFile(p); dropAudioFiles(p); await C.store.removePage(p.id); }
-    else { delete p.folder; delete p.folderAt; delete p.folderFav; delete p.folderFavAt; delete p.coverPick; delete p.folderNoShare; delete p.folderTagNew; delete p.folderSeries; delete p.folderIn; }
+    else { delete p.folder; delete p.folderAt; delete p.folderFav; delete p.folderFavAt; delete p.coverPick; delete p.statusPick; delete p.folderNoStatus; delete p.folderNoShare; delete p.folderTagNew; delete p.folderSeries; delete p.folderIn; }
   }
   // Its series stay, in the library's Series.
   for (const f of inside) for (const p of folderPages(f)) delete p.folderIn;
@@ -1427,6 +1617,9 @@ const ICONS = {
   translate: '<path d="M4 5h9M8.5 3v2M11 5c-1 4-3.5 7-7 8.5M6.5 8.5c1.2 2 3 3.5 5 4.5"/><path d="M13 21l4-9 4 9M14.5 18h5"/>',
   grid: '<rect x="4" y="4" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1"/>',
   cover: '<rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.5"/><path d="M20 15l-4.5-4.5L6 20"/>',
+  history: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  newest: '<path d="M12 4l1.8 4.7L18.5 10.5l-4.7 1.8L12 17l-1.8-4.7L5.5 10.5l4.7-1.8z"/><path d="M19 16v4M17 18h4"/>',
+  listen: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><path d="M4 15h3v5H5a1 1 0 0 1-1-1zM20 15h-3v5h2a1 1 0 0 0 1-1z"/>',
   lookup: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/><path d="M9 8h7M9 11.5h5"/>',
 };
 function svgIcon(name, size) {
@@ -1548,6 +1741,9 @@ function pageSheet(p, where) {
         // Moved here from Highlights (Daniel's ask, 2026-11-13).
         inReader && inkReady() ? menuRow(t("Try your pen"), () => { history.back(); setTimeout(() => openSheet("ink"), 0); }) : null,
         C.files.convertible(p) ? menuRow(t("Make a note from it"), () => back().then(() => makeNoteFrom(p))) : null,
+        // Save the narration: the Narrate voice kept as sound on the clip (Android).
+        typeof makeAudiobook === "function" && canVoice() && voiceable(p) ? menuRow(voicedSound(p) ? t("Save the narration again") : t("Save the narration"), () => back().then(() => makeAudiobook({ page: p }))) : null,
+        typeof makeAudiobook === "function" && voicedSound(p) ? menuRow(t("Remove the saved narration"), () => back().then(() => dropVoiced(p))) : null,
         inReader && !p.note && !C.files.printed(p) ? menuRow(t("Find in this clip"), () => back().then(openFind)) : null,
         inReader && !p.note && !C.files.printed(p) && C.reader.links(p.url).length ? menuRow(t("Save linked pages"), () => back().then(() => openSheet("links"))) : null,
         p.note ? null : menuRow(p.finished ? t("Mark as unread") : t("Mark as read"), () => markRead([p], !p.finished).then(draw)),
@@ -1812,7 +2008,8 @@ function openSelectMenu() {
     item("up", t("Previous"), pickAbove, !picked().length));
   const more = $("selectMore"), at = more.getBoundingClientRect();
   pop.style.top = at.bottom + 4 + "px";
-  pop.style.right = Math.max(8, innerWidth - at.right) + "px";
+  if (document.dir === "rtl") pop.style.left = Math.max(8, at.left) + "px";
+  else pop.style.right = Math.max(8, innerWidth - at.right) + "px";
   document.body.append(pop);
   more.setAttribute("aria-expanded", "true");
   M.popFrom(pop, at);
@@ -1914,6 +2111,7 @@ const MENUS = {
   send: { label: t("Saving a page"), build: () => sendSheet() },
   newNote: { label: t("New note"), build: () => newNoteSheet() },
   noteText: { label: t("Text"), build: () => noteTextSheet() },
+  inkNote: { label: t("Note"), build: () => inkNoteSheet() },
   noteParts: { label: t("Make a note"), build: () => notePartsSheet() },
   statsGone: { label: t("Deleted"), build: () => statsGoneSheet(state.menu.page) },
 };
@@ -2434,21 +2632,6 @@ function exportBusy(btn, first, book) {
   };
 }
 
-// A page, or a folder in its order, as an e-book (epub.js), for an
-// e-reader or Send to Kindle.
-async function sendBook(pages, btn, title) {
-  btn.disabled = true;
-  try {
-    const out = await C.epub.exportBook([].concat(pages), title);
-    if (out.uri) await C.platform.shareFile(out.uri, out.name);
-    else C.platform.download(out.name, out.blob);
-  } catch (e) {
-    console.error(e);
-    toast(t("Couldn't make the book. Try again."));
-  }
-  btn.disabled = false;
-}
-
 // The page file with a plain print style, on the phone's print screen;
 // it runs no scripts and loads nothing, its pictures are inside it.
 const printPage = (p, btn) => printFile(() => C.backup.exportPage(p), btn);
@@ -2928,6 +3111,11 @@ async function openFile(file, btn, open, ref, forced) {
     if (kind === "audio") {
       if (btn) { btn.disabled = false; say(t("Restore")); }
       await addAudiobook(file, ref);
+      return;
+    }
+    // A zip of sound files is one audiobook (2026-11).
+    if (kind === "zip" && await addAudiobookZip(file, ref)) {
+      if (btn) { btn.disabled = false; say(t("Restore")); }
       return;
     }
     // Already here from the watched folder (1.1.3), copy or not.
