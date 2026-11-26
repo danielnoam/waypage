@@ -611,7 +611,9 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
     await test("comix.to: a page the site turned away is seen at once and sent again by its address, not by a second click", async () => {
       const { got } = await comix("https://comix.to/title/1w0v-the-perks?group_id=307", { book: BOOK, refuse: [2, 4, 5] });
       assert.deepStrictEqual(got.found.links, chapters(307, range(1, 30)), "none missed");
-      assert.deepStrictEqual(got.loads, [2, 4, 5], "each refused page loaded once by its address");
+      assert.strictEqual(got.loads[0], 2, "the refused page is sent again by its address, not by a second click");
+      assert.deepStrictEqual(got.loads, [2, 3, 4, 5, 6], "and, the clicks being turned away from then on, so is each page after it, once");
+      assert.strictEqual(got.clicks, 0, "the one click made was the refused one");
     });
 
     await test("comix.to: a check with the links found last time reads only the newest page and keeps the rest", async () => {

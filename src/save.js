@@ -630,12 +630,14 @@
   //
   // The site's firewall turns a list request away (403 captcha_required)
   // when pages come too fast: after about six in a row at 0.7 s, none at 6 s
-  // each. So turns draw on an allowance, up to 5 at once and one more every
+  // each. So turns draw on an allowance, up to 2 at once and one more every
   // 6 s (`tok`, kept across walks by comixWalk). A turn that was refused is
   // seen at once, from the request's own status in the page's resource
   // timing, and sent again by loading that page's address (a second click
   // sends nothing: the page caches its answers) after 5 s, then 10, then
-  // 20; a fourth refusal notes the page as missed. What it has read is kept
+  // 20; a fourth refusal notes the page as missed. After a first refusal
+  // the clicks go on being turned away while loads aren't, so every page
+  // after it is loaded by its address too. What it has read is kept
   // in sessionStorage, so it carries on after that load.
   // `pages`: how many pages to read; `below`: stops once a page goes under
   // that chapter number; `above`: a page that starts under it backs up one;
@@ -646,9 +648,9 @@
     var K = "__wpC", S, now = Date.now(), T = window.__wpTune || {};
     var DELAY = T.delays || [5000, 10000, 20000], GAP = T.gap || 6000;
     try { S = JSON.parse(sessionStorage.getItem(K) || "null"); } catch (e) { S = null; }
-    S = S || window.__wpC || { rows: [], seen: {}, read: {}, last: 0, back: 0, missed: [], pending: 0, how: "", asked: 0, tries: 0, hold: 0, count: 0, at: 0, born: now, tok: o.tokens == null ? 5 : o.tokens, tokAt: now };
+    S = S || window.__wpC || { rows: [], seen: {}, read: {}, last: 0, back: 0, missed: [], pending: 0, how: "", mode: "", asked: 0, tries: 0, hold: 0, count: 0, at: 0, born: now, tok: o.tokens == null ? 2 : o.tokens, tokAt: now };
     window.__wpC = S;
-    S.tok = Math.min(5, S.tok + (now - S.tokAt) / GAP); S.tokAt = now;
+    S.tok = Math.min(2, S.tok + (now - S.tokAt) / GAP); S.tokAt = now;
     var save = function () { try { sessionStorage.setItem(K, JSON.stringify(S)); } catch (e) { /* kept in the page only */ } };
     var out = function (done, wait) {
       save();
@@ -669,16 +671,22 @@
       return st;
     };
     var known = typeof PerformanceResourceTiming !== "undefined" && "responseStatus" in PerformanceResourceTiming.prototype;
+    // After a refusal the page's own clicks go on being turned away while a
+    // fresh load of a page's address is let through (measured), so from then
+    // on the next page is loaded by its address (`mode` "load").
     var go = function (n) {
       var b = button(n);
-      if (!b) return out(n > S.last || S.read[n] === 1);
+      if (S.mode === "load" ? (n > S.last || S.read[n] === 1) : !b) return out(n > S.last || S.read[n] === 1);
       if (S.tok < 1) return out(false, (1 - S.tok) * GAP);
-      S.tok -= 1; S.pending = n; S.how = "click"; S.top = top; S.asked = now; S.tries = 0; S.hold = 0; b.click();
+      S.tok -= 1;
+      if (S.mode === "load") return load(n, true);
+      S.pending = n; S.how = "click"; S.top = top; S.asked = now; S.tries = 0; S.hold = 0; b.click();
       return out(false);
     };
-    var load = function (n) {
+    var load = function (n, spent) {
       var u = new URL(location.href); u.searchParams.set("page", n);
-      S.pending = n; S.how = "load"; S.top = ""; S.asked = now; S.hold = 0; S.tok = 0; S.tokAt = now;
+      S.pending = n; S.how = "load"; S.top = ""; S.asked = now; S.hold = 0; if (!spent) { S.tok = 0; S.tokAt = now; }
+      if (!spent) S.tries = S.tries || 0;
       save();
       (window.__wpLoad || function (h) { location.replace(h); })(u.href);
       return out(false);
@@ -699,6 +707,7 @@
         var refused = st >= 400 || (!st && now - S.asked > (known ? 20000 : 4000));
         if (!refused) return out(false);
         S.tries++;
+        S.mode = "load";
         if (S.tries <= DELAY.length) { S.hold = now + DELAY[S.tries - 1]; return out(false, DELAY[S.tries - 1]); }
         S.missed.push(S.pending); var skip = S.pending; S.pending = 0; S.tries = 0; S.hold = 0;
         return rows.length ? go(skip + 1) : load(skip + 1);
@@ -734,8 +743,8 @@
 
   // The allowance of page turns the firewall lets through, kept across the
   // walks of a read (it counts a connection's requests, not a page's).
-  const comixAllowance = { n: 5, at: 0 };
-  const comixTokens = () => Math.min(5, comixAllowance.n + (Date.now() - (comixAllowance.at || Date.now())) / 6000);
+  const comixAllowance = { n: 2, at: 0 };
+  const comixTokens = () => Math.min(2, comixAllowance.n + (Date.now() - (comixAllowance.at || Date.now())) / 6000);
 
   // One walk of a list (`group`, or every group's with null) from page
   // `start`: { rows: [{ url, n, group, label }], last, missed }, or null

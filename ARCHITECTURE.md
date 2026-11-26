@@ -241,13 +241,14 @@ on one title, a page every 0.7 s was refused at the 7th, every 2.5 s at the
 answers the next request, but the page keeps its refused answer: a second
 click on that page, or another page and back, sends no request. A fresh
 load by its address does, and a load 5 s after the refusal was let through
-every time. `COMIX_WALK` therefore (a) draws page turns on an allowance, 5
-at once and one more every 6 s (`comixAllowance`, kept across the walks of
+every time, and from then on the page's clicks were turned away while loads
+still were let through. `COMIX_WALK` therefore (a) draws page turns on an
+allowance, 2 at once and one more every 6 s (`comixAllowance`, kept across the walks of
 a read: the site counts a connection's requests), (b) sees a refusal at
 once, from the request's status in the page's resource timing (4 s of
 unchanged rows where a WebView doesn't give one), and (c) sends that page
-again by loading its address after 5, then 10, then 20 s; a fourth refusal
-notes it as missed, and `comixWalk` rereads missed pages on its own. What it
+again by loading its address after 5, then 10, then 20 s, and loads every
+page after it by its address too; a fourth refusal notes a page as missed, and `comixWalk` rereads missed pages on its own. What it
 read is kept in sessionStorage across the load. A walk that stopped short
 resumes in a fresh render from the page after the last read. Nothing waits
 a minute: the walk gets 30 s without progress (PageRender `collect`), and a
