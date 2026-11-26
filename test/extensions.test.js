@@ -91,7 +91,7 @@ const ROOT = path.join(__dirname, "..");
 // Still named in the core, to be moved out; this list may only get shorter.
 const STILL_NAMED = {
   "src/sync.js": ["anki"],        // Anki's decks, cards and logs: a sync of its own shape
-  "src/app-saving.js": ["anki"],  // Sync's "what to sync" switch
+  "src/app-sync.js": ["anki"],    // Sync's "what to sync" switch
 };
 test("no core file names an extension", async () => {
   const named = [];
