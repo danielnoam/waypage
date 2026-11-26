@@ -1576,7 +1576,7 @@ function swipeToSide(root) {
 // left the chips run from the right, so a swipe to the right goes on.
 function swipeFeeds(root) {
   let go = null;
-  const chips = () => [...root.querySelectorAll(".feed-chips .chip")];
+  const chips = () => [...root.querySelectorAll(".feed-chips:not([hidden]) .chip")];
   // The chips stay put; what's under them slides (Daniel, 1.45.6).
   // Discover's search and chips sit in one box at the top; it stays too,
   // and so does the search field over Feeds and Newsletters.

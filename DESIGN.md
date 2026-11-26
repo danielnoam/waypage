@@ -549,7 +549,8 @@ picture viewer's fallback only, never for a menu, bar or dialog.
 - **Discover › Sites (2026-11):** every site as a tile (a coloured
   monogram, its name, one line on what it is) under Web fiction, Fan
   fiction, Comics and Libraries; the search field finds a site. A tile
-  opens the site's page in its own history entry: ‹ Sites, the monogram
+  opens the site's page in its own history entry, with Discover's own
+  chips hidden until Back (Daniel: the room is the site's): ‹ Sites, the monogram
   and name in the serif, the lists as a row of chips (outlined in
   `--accent` when picked, under the filled Discover chips), the genre as
   a quiet drop-down, then the covers, with no site name on them.
