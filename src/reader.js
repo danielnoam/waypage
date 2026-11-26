@@ -1079,6 +1079,39 @@
       blocks = was.blocks;
     }
   }
+  // Each block's reading place (2026-11): Narrate keeps the place where
+  // the voice is with the clip closed or the phone locked, where the
+  // page isn't there to scroll. A block's place is the last spot at or
+  // before it, and how much of the text comes before it.
+  function placesOf(list, base) {
+    const total = blocks.reduce((n, b) => n + b.text.length, 0) || 1;
+    let j = -1, before = 0;
+    return blocks.map((b) => {
+      while (j + 1 < list.length && (list[j + 1] === b.el || b.el.compareDocumentPosition(list[j + 1]) & 2)) j++;
+      const a = list[Math.max(0, j)], at = Math.round(before / total * 1000) / 1000;
+      before += b.text.length;
+      return a ? { spot: base + Math.max(0, j) + "/0", words: blockWords(a), at } : { spot: "", words: "", at };
+    });
+  }
+  // For the blocks readable() found just now in the open clip.
+  function places() {
+    if (!doc || (rest && rest.base == null)) return [];
+    findAnchors();
+    return placesOf(anchors, rest ? rest.base : 0);
+  }
+  // readableIn, with each block's place.
+  function readableAt(html, opts) {
+    const was = { doc, blocks };
+    try {
+      doc = new DOMParser().parseFromString(html, "text/html");
+      blocks = [];
+      const texts = readable(opts);
+      return { texts, places: placesOf(anchorsIn(doc), 0) };
+    } finally {
+      doc = was.doc;
+      blocks = was.blocks;
+    }
+  }
   // The same, with each block's heading rank (1 to 3, 0 for text): where
   // Make audiobook starts its chapters.
   function readableRanks(html, opts) {
@@ -2976,5 +3009,5 @@
       return line;
     }));
   }
-  C.reader = { get filling() { return !!rest; }, whole: () => wholeP, shown: () => shownP, say, spotOfId, blockCount, pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, set hideFar(v) { hideFar = !!v; }, set note(f) { noteHook = f; }, geometry, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, readableRanks, locateIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionContext, selectionMark, selectionMarks, paintMarks, locate, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, inkRoot, inkBlock, inkBlocks, inkBlockBox, inkBlockAt, inkBlocksNear, inkBlockWords, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide, turnSide, lockedPages, repage() { if (doc && picsPaged()) picsLayout(); }, pageZoom: () => pz.s, unzoomPage() { if (pz.s > 1) { resetPz(); placeText(); } } };
+  C.reader = { get filling() { return !!rest; }, whole: () => wholeP, shown: () => shownP, say, spotOfId, blockCount, pdfDarkFilter, setEnd, set tapPictures(v) { onTapOnly = !!v; }, set hideFar(v) { hideFar = !!v; }, set note(f) { noteHook = f; }, geometry, open, placed: () => placed, touched: () => touched, settle, close, find, findGo, clearFind, position, spot, jump, setPaged, setPicsDir, setWide, turn, get paged() { return isPaged(); }, pageInfo, screenShare, headings, section, parts, skimTo, jumpTo, readable, readableIn, readableAt, places, readableRanks, locateIn, wordless, firstShown, spotIn, light, following, selectionSpot, clearSelection, selectionText, selectionContext, selectionMark, selectionMarks, paintMarks, locate, toMark, textLayer, dropText, hasText, placeText, pageBox, pageImg, pageShown, pageGone, inkRoot, inkBlock, inkBlocks, inkBlockBox, inkBlockAt, inkBlocksNear, inkBlockWords, set inkHook(h) { inkHook = h; }, get frameDoc() { return doc; }, get frameWin() { return frame && frame.contentWindow; }, translatable, paintTranslation, links, spotWords, applyTheme, applyConnection, srcdoc, CSP, setSpread, refit: applyTop, images, imageInfo, printedPages, printedNow, toPrinted, glide, turnSide, lockedPages, repage() { if (doc && picsPaged()) picsLayout(); }, pageZoom: () => pz.s, unzoomPage() { if (pz.s > 1) { resetPz(); placeText(); } } };
 })();

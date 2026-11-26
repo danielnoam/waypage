@@ -665,7 +665,14 @@ function pageCard(p, found, hero) {
       el("span", { class: "card-status" }, facts, status ? " · " : null, status, retry ? " · " : null, retry),
       started ? el("span", { class: "progress thin", role: "progressbar", "aria-label": t("Read so far"),
         "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.round(done * 100)) },
-        el("span", { class: "progress-fill", style: "transform: scaleX(" + done + ")" })) : null));
+        el("span", { class: "progress-fill", style: "transform: scaleX(" + done + ")" })) : null),
+    hero && narratable(p) ? narrateButton(p) : null);
+}
+function narrateButton(p) {
+  const b = el("button", { class: "card-narrate", type: "button", "aria-label": t("Narrate"), title: t("Narrate"), hidden: narratingNow(p) ? "" : null,
+    onclick: () => tapPages([p.id], () => narrateFrom(p)) });
+  b.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+  return b;
 }
 
 // A favourite's star sits on its picture's corner (1.16.0), not by its

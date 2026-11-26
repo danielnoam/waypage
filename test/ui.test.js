@@ -3359,6 +3359,55 @@ c("bk1", { at: 0.01 })]);
       await q.context().close();
     });
 
+    await test("Narrate on Continue reading, and the place following the voice with the clip closed (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = { id: "n1", url: "https://example.com/n1", title: "Long clip", site: "example.com", savedAt: 1000, minutes: 9, mode: "links", at: 0.05, readAt: Date.now() };
+        await S.writeIndex([c]);
+        let body = "<h1>Long clip</h1>";
+        for (let i = 0; i < 60; i++) body += "<p>Paragraph number " + i + " of the long clip, with enough words in it to take a line or two.</p>";
+        await S.writePage("n1", "<!doctype html><html><body>" + body + "</body></html>", c);
+      });
+      await q.reload();
+      await q.waitForSelector(".continue .card-narrate");
+      const got = await q.evaluate(async () => {
+        const sp = window.Waypage.platform.speech;
+        sp.play = (o) => { window.played = o; return Promise.resolve(); };
+        sp.stop = () => Promise.resolve();
+        const wait = (f) => new Promise((ok) => { const t = setInterval(() => { if (f()) { clearInterval(t); ok(); } }, 50); });
+        document.querySelector(".continue .card-narrate").click();
+        await wait(() => window.played && state.open && state.open.id === "n1");
+        const out = { start: window.played.start > 0, reading: aloud.key === "n1" && aloud.state === "playing" };
+        closeReader();
+        await wait(() => !state.open && document.querySelector(".continue .card-narrate"));
+        await new Promise((r) => setTimeout(r, 300));
+        out.hidden = document.querySelector(".continue .card-narrate").hidden;
+        // The voice moves on with the clip closed: the place goes with it.
+        const p = state.pages.find((x) => x.id === "n1"), was = p.at;
+        const last = window.played.items.length - 3, block = aloud.map[last];
+        setAloud("playing", last);
+        keepAloudPlace(last);
+        out.moved = p.at > was && !!p.spot && /Paragraph number/.test(p.spotWords);
+        await savePositions();
+        sp.stop(); setAloud("stopped", -1);
+        openPage("n1");
+        await wait(() => state.open && state.open.id === "n1");
+        await window.Waypage.reader.placed();
+        out.block = block;
+        await new Promise((r) => setTimeout(r, 800));
+        window.Waypage.reader.readable();
+        out.back = window.Waypage.reader.firstShown().index;
+        return out;
+      });
+      assert.ok(got.start && got.reading, JSON.stringify(got));
+      assert.strictEqual(got.hidden, true);
+      assert.ok(got.moved, JSON.stringify(got));
+      assert.ok(Math.abs(got.back - got.block) <= 1, JSON.stringify(got));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("an audiobook's Keep playing when you leave the book (2026-11)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
