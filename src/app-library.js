@@ -1107,8 +1107,6 @@ function openFolderMenu() {
   };
   const sep = () => el("div", { class: "pop-sep", role: "separator" });
   const pop = el("div", { class: "pop-menu", id: "folderPop", role: "menu", "aria-label": t("Collection") },
-    item("add", t("Add"), () => openBatch("", false, state.folder)),
-    sep(),
     folderLook(state.folder) === "covers"
       ? item("chapters", t("Show as a list"), () => setFolderLook(state.folder, "list"))
       : item("grid", t("Show as a grid"), () => setFolderLook(state.folder, "covers")),

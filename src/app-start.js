@@ -121,6 +121,7 @@ $("settingsBack").addEventListener("click", () => history.go(state.section && wi
 $("folderBack").addEventListener("click", () => history.back());
 $("folderMore").addEventListener("click", openFolderMenu);
 $("folderEdit").addEventListener("click", () => setFolderMode("edit"));
+$("folderAdd").addEventListener("click", () => openBatch("", false, state.folder));
 $("folderFav").addEventListener("click", () => favFolder(state.folder, !folderFav(state.folder)));
 $("folderCancel").addEventListener("click", () => setFolderMode(""));
 $("folderDone").addEventListener("click", async () => {
