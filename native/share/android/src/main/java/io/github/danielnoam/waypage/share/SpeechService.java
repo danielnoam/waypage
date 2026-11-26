@@ -296,13 +296,17 @@ public class SpeechService extends Service {
     private String guardId = "";
     private int guardLength;
     private long guardFrom;
-    private final Runnable guardRun = () -> {
-        if (job == null || !guardId.equals(generation + ":" + index) || !"playing".equals(state)) return;
-        if (!voiced.contains(guardId) && getPackageName().equals(engine) && System.currentTimeMillis() - guardFrom < 120000) {
-            main.postDelayed(this.guardRun, 5000);
-            return;
+    // An anonymous class, not a lambda: it posts itself again, and a
+    // lambda can't name the field it is being assigned to.
+    private final Runnable guardRun = new Runnable() {
+        @Override public void run() {
+            if (job == null || !guardId.equals(generation + ":" + index) || !"playing".equals(state)) return;
+            if (!voiced.contains(guardId) && getPackageName().equals(engine) && System.currentTimeMillis() - guardFrom < 120000) {
+                main.postDelayed(this, 5000);
+                return;
+            }
+            said(guardId);
         }
-        said(guardId);
     };
     private void guard(String id, String text) {
         guardId = id;
