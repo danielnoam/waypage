@@ -487,11 +487,13 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
     // swaps the rows a moment later. `refuse` pages ignore their first click,
     // as the site's firewall does now and then. `book`: group → [name,
     // chapters], a chapter a number or [number, label].
-    const comix = (url, { canRender = true, title = "comix-title.html", book, refuse = [], answers = [] }) => inPage(browser, [
+    const comix = (url, { canRender = true, title = "comix-title.html", book, refuse = [], answers = [], find = {} }) => inPage(browser, [
       ...answers,
       ["https://comix.to/title/1w0v-the-perks", title],
-    ], async ({ url, canRender, book, refuse }) => {
+    ], async ({ url, canRender, book, refuse, find }) => {
       const drawn = [];
+      const said = [];
+      window.__wpClicks = 0;
       Object.defineProperty(Waypage.platform, "canRender", { get: () => canRender, configurable: true });
       const rowsFor = (group) => {
         const rows = [];
@@ -518,7 +520,21 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
         sessionStorage.removeItem("__wpC");
         delete window.__wpC;
         const pages = Math.max(1, Math.ceil(rows.length / 5));
-        const refused = new Set();
+        // The site's firewall: a refused page shows a 403 in the request's
+        // timing, ignores clicks on it (the page caches its answer), and
+        // comes when its address is loaded (`__wpLoad`) after a pause.
+        const blocked = new Set(), fake = [], loads = [];
+        const entries = performance.getEntriesByType.bind(performance);
+        performance.getEntriesByType = (t) => (t === "resource" ? [...entries(t), ...fake] : entries(t));
+        window.__wpTune = { delays: [20, 40, 80], gap: 4 };
+        let cleared = new Set();
+        window.__wpLoad = (href) => {
+          const k = Number(new URL(href).searchParams.get("page"));
+          loads.push(k);
+          for (let i = fake.length - 1; i >= 0; i--) if (fake[i].name.includes("page=" + k + "&")) fake.splice(i, 1);
+          blocked.delete(k); cleared.add(k);
+          setTimeout(() => show(k), 5);
+        };
         const show = (n) => {
           const from = Math.max(1, Math.min(n - 3, pages - 7));
           box.innerHTML = rows.slice((n - 1) * 5, n * 5).map((r) =>
@@ -527,7 +543,10 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
             '<div class="npager">' + Array.from({ length: Math.min(8, pages) }, (_, i) => from + i).map((k) => '<button class="npager__num' + (k === n ? " is-active" : "") + '">' + k + "</button>").join("") + "</div>";
           box.querySelectorAll(".npager__num").forEach((b) => b.addEventListener("click", () => {
             const k = Number(b.textContent);
-            if (refuse.includes(k) && !refused.has(k)) { refused.add(k); return; }
+            if (blocked.has(k)) return;
+            if (refuse.includes(k) && !cleared.has(k)) { blocked.add(k); fake.push({ name: "https://comix.to/api/v1/manga/x/chapters?page=" + k + "&limit=20", responseStatus: 403 }); return; }
+            window.__wpClicks++;
+            fake.push({ name: "https://comix.to/api/v1/manga/x/chapters?page=" + k + "&limit=20", responseStatus: 200 });
             setTimeout(() => show(k), 5);
           }));
         };
@@ -535,16 +554,21 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
         let r = { done: false };
         for (let i = 0; i < 5000 && !r.done; i++) {
           r = JSON.parse(Waypage.save.COMIX_WALK(o));
+          if (opts.onProgress) opts.onProgress(r);
           await new Promise((go) => setTimeout(go, 2));
         }
+        performance.getEntriesByType = entries;
+        delete window.__wpTune; delete window.__wpLoad;
+        window.__wpLoads = loads;
         const collected = window.__wpOut;
         box.remove();
         return { url: u, text: "<html></html>", collected };
       };
       let found = null, error = null;
-      try { found = await Waypage.save.findChapters(url); } catch (e) { error = e.message; }
-      return { found, error, err: error, drawn: drawn.map((d) => ({ u: d.u, collect: !!d.opts.collect, maxMs: d.opts.maxMs, retryMs: d.opts.retryMs })) };
-    }, { url, canRender, book, refuse });
+      const progress = [];
+      try { found = await Waypage.save.findChapters(url, false, { ...find, onProgress: find.progress ? (e) => progress.push(e) : undefined }); } catch (e) { error = e.message; }
+      return { found, error, err: error, progress, clicks: window.__wpClicks, loads: window.__wpLoads || [], drawn: drawn.map((d) => ({ u: d.u, collect: !!d.opts.collect, maxMs: d.opts.maxMs, retryMs: d.opts.retryMs })) };
+    }, { url, canRender, book, refuse, find });
     const range = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
     const chapters = (g, nums) => nums.map((n) => "https://comix.to/title/1w0v-the-perks/" + g + String(n).replace(".", "") + "-chapter-" + n);
     const BOOK = { 9897: ["Official", range(1, 12)], 307: ["Violet Scans", range(1, 30)], 10728: ["Hades Scans", range(1, 29)] };
@@ -584,9 +608,82 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
       assert.deepStrictEqual(got.found.links, want, "7 and 12 Official's, 8 Hades' (more chapters than Tiny's), no 8.5, no Vol.3");
     });
 
-    await test("comix.to: a page the site turned away is asked for again, and none is missed", async () => {
+    await test("comix.to: a page the site turned away is seen at once and sent again by its address, not by a second click", async () => {
       const { got } = await comix("https://comix.to/title/1w0v-the-perks?group_id=307", { book: BOOK, refuse: [2, 4, 5] });
-      assert.deepStrictEqual(got.found.links, chapters(307, range(1, 30)));
+      assert.deepStrictEqual(got.found.links, chapters(307, range(1, 30)), "none missed");
+      assert.deepStrictEqual(got.loads, [2, 4, 5], "each refused page loaded once by its address");
+    });
+
+    await test("comix.to: a check with the links found last time reads only the newest page and keeps the rest", async () => {
+      const known = chapters(307, range(1, 27));
+      const { got } = await comix("https://comix.to/title/1w0v-the-perks?group_id=307", { book: BOOK, find: { known } });
+      assert.deepStrictEqual(got.found.links, chapters(307, range(1, 30)), "the three new ones after the known ones");
+      assert.strictEqual(got.clicks, 0, "page 1 only: no page turned");
+      assert.strictEqual(got.found.page, "https://comix.to/title/1w0v-the-perks?group_id=307");
+    });
+
+    await test("comix.to: a cover is read from the title page alone, without reading the list", async () => {
+      const { got } = await comix("https://comix.to/title/1w0v-the-perks?group_id=307", { book: BOOK, find: { coverOnly: true } });
+      assert.deepStrictEqual(got.found.links, []);
+      assert.strictEqual(got.drawn.length, 0, "no hidden browser");
+    });
+
+    await test("comix.to: the read says how it stands, in words and a share that only rises", async () => {
+      const { got } = await comix("https://comix.to/title/1w0v-the-perks?group_id=307", { book: BOOK, find: { progress: true } });
+      const texts = got.progress.map((e) => e.text);
+      assert.strictEqual(texts[0], "Reading the title page");
+      assert.ok(texts.some((x) => /^Reading Violet Scans: page \d+ of \d+, \d+ chapters$/.test(x)), texts.join(" | "));
+      assert.strictEqual(texts[texts.length - 1], "Found 30 chapters");
+      const shares = got.progress.map((e) => e.share);
+      assert.strictEqual(shares[shares.length - 1], 1);
+      assert.ok(shares.every((x, i) => i === 0 || x >= shares[i - 1] - 1e-9), "never back: " + shares.join(","));
+    });
+
+    await test("comix.to: page turns draw on an allowance, so the firewall isn't hit", async () => {
+      const { got } = await inPage(browser, [], async () => {
+        const box = document.createElement("div");
+        document.body.append(box);
+        box.innerHTML = '<div class="mchap-row"><a class="mchap-row__primary" href="/title/1w0v-the-perks/1-chapter-3"></a></div><div class="npager"><button class="npager__num is-active">1</button><button class="npager__num">2</button></div>';
+        let clicks = 0;
+        box.querySelectorAll(".npager__num")[1].addEventListener("click", () => clicks++);
+        window.__wpTune = { gap: 60 };
+        sessionStorage.removeItem("__wpC"); delete window.__wpC;
+        const first = JSON.parse(Waypage.save.COMIX_WALK({ tokens: 0 }));
+        const at0 = clicks;
+        await new Promise((go) => setTimeout(go, 90));
+        const second = JSON.parse(Waypage.save.COMIX_WALK({ tokens: 0 }));
+        box.remove(); delete window.__wpTune; sessionStorage.removeItem("__wpC"); delete window.__wpC;
+        return { first, at0, second, clicks };
+      });
+      assert.strictEqual(got.at0, 0, "no turn without an allowance");
+      assert.ok(got.first.wait >= 1 && !got.first.done, "says it is waiting: " + JSON.stringify(got.first));
+      assert.strictEqual(got.clicks, 1, "one turn once it had come");
+    });
+
+    await test("Find chapters: a read is a run in Downloads and in Android's notification, with its status and a bar, and Stop ends it", async () => {
+      const { got } = await inPage(browser, [], async () => {
+        const told = [];
+        Waypage.platform.downloads.update = (o) => told.push(o);
+        Waypage.platform.downloads.stop = () => told.push("stop");
+        let seen = null, signal = null;
+        Waypage.save.findChapters = async (u, led, opts) => {
+          signal = opts.signal;
+          opts.onProgress({ text: "Reading Official: page 3 of 9, 60 chapters", share: 0.4 });
+          seen = { runs: [...runs].map((r) => ({ finding: r.finding, now: r.now, part: r.part, total: r.total, label: r.label })) };
+          stopRun([...runs][0]);
+          return { title: "T", links: ["https://comix.to/title/1w0v-the-perks/1-chapter-1"], page: u };
+        };
+        const found = await findWithProgress("https://comix.to/title/1w0v-the-perks?group_id=9897");
+        return { found: found.links.length, seen, told, stopped: signal.stopped, left: [...runs].length };
+      });
+      assert.strictEqual(JSON.stringify(got.seen.runs), JSON.stringify([{ finding: true, now: "Reading Official: page 3 of 9, 60 chapters", part: 0.4, total: 1, label: "comix.to" }]));
+      const note = got.told.find((o) => o && o.text === "Reading Official: page 3 of 9, 60 chapters");
+      assert.ok(note, "the notification says the stage: " + JSON.stringify(got.told));
+      assert.strictEqual(note.title, "Finding the chapters of comix.to");
+      assert.strictEqual(note.done, 400, "and its bar");
+      assert.strictEqual(got.stopped, true, "Stop reaches the read");
+      assert.strictEqual(got.left, 0, "the run is gone once it ends");
+      assert.strictEqual(got.told[got.told.length - 1], "stop", "and so is the notification");
     });
 
     await test("comix.to: a chapter's own address reads its title's list", async () => {

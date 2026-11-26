@@ -18,6 +18,8 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.StringReader;
+import java.util.HashMap;
+import java.util.Map;
 import org.json.JSONObject;
 
 /**
@@ -40,12 +42,16 @@ import org.json.JSONObject;
  *     400 ms and answers JSON { done, n }; when done, `collected` is what it
  *     left in window.__wpOut. The script is save.js's own, never page text.
  *
+ * With `id`, `collect` also tells the app how it stands, as a "progress" event
+ * { id, n, at, last, wait, refused } whenever it changes, for a progress bar.
+ *
  * With `maxMs`, the time runs from the last progress (more text, slots
  * filled, rows collected) rather than from the start, up to maxMs. With
  * `retryMs`, a page that still shows nothing it waits for that long after
- * loading is loaded again (four times at most): comix.to's firewall turns
- * a request away now and then ("captcha_required"), clears itself with a
- * check of its own, and answers the next one.
+ * loading is loaded again (three times at most, the wait doubling: 5, 10,
+ * 20 s): comix.to's firewall turns a request away now and then
+ * ("captcha_required"), clears itself with a check of its own, and answers
+ * a request sent again a few seconds later.
  *
  * The page runs in its own WebView, out of sight behind the app's: no
  * Capacitor bridge, no JavaScript interfaces, no file access, http(s) only,
@@ -54,6 +60,10 @@ import org.json.JSONObject;
  */
 @CapacitorPlugin(name = "PageRender")
 public class PageRenderPlugin extends Plugin {
+
+    // The walks in progress, by the id the app gave them, so Stop can take
+    // what one has read so far.
+    private final Map<String, Job> jobs = new HashMap<>();
 
     private static final long POLL_MS = 700;
     private static final int MIN_TEXT = 500;
@@ -69,7 +79,7 @@ public class PageRenderPlugin extends Plugin {
         + "return (at?'1:':'0:')+n;})()";
     private static final long SCROLL_MS = 250;
     private static final long COLLECT_MS = 400;
-    private static final int MAX_RELOADS = 4;
+    private static final int MAX_RELOADS = 3;
     // A tall window, so a long chapter is a few dozen steps, not hundreds.
     private static final int SCROLL_HEIGHT = 4000;
 
@@ -88,7 +98,23 @@ public class PageRenderPlugin extends Plugin {
         String expect = call.getString("expect");
         String ready = call.getString("ready");
         String collect = call.getString("collect");
-        new Handler(Looper.getMainLooper()).post(() -> new Job(call, url, timeout, max, retry, scroll, waitFor, expect, ready, collect).start());
+        String id = call.getString("id");
+        new Handler(Looper.getMainLooper()).post(() -> {
+            Job job = new Job(call, url, timeout, max, retry, scroll, waitFor, expect, ready, collect, id);
+            if (id != null && !id.isEmpty()) jobs.put(id, job);
+            job.start();
+        });
+    }
+
+    // render's `id` given back: the walk ends now with what it has read.
+    @PluginMethod
+    public void cancel(PluginCall call) {
+        String id = call.getString("id");
+        new Handler(Looper.getMainLooper()).post(() -> {
+            Job job = id == null ? null : jobs.get(id);
+            if (job != null) job.take();
+            call.resolve();
+        });
     }
 
     private class Job {
@@ -103,6 +129,8 @@ public class PageRenderPlugin extends Plugin {
         // picture count, and the page is taken when they match.
         final String slots;
         final String collect;
+        final String id;
+        String told = "";
         int expected = -1;
         int filled = -1;
         int rows = -1;
@@ -118,8 +146,9 @@ public class PageRenderPlugin extends Plugin {
         long deadline;
         int reloads;
 
-        Job(PluginCall call, String url, long timeout, long max, long retry, boolean scroll, String waitFor, String expect, String ready, String collect) {
+        Job(PluginCall call, String url, long timeout, long max, long retry, boolean scroll, String waitFor, String expect, String ready, String collect, String id) {
             this.call = call;
+            this.id = id;
             this.slots = scroll && expect != null && !expect.isEmpty() && ready != null && !ready.isEmpty()
                 ? "(function(){var s=document.querySelectorAll(" + JSONObject.quote(expect) + "),got=0,first=null;"
                     + "for(var i=0;i<s.length;i++){if(s[i].querySelector(" + JSONObject.quote(ready) + "))got++;else if(!first)first=s[i];}"
@@ -146,7 +175,9 @@ public class PageRenderPlugin extends Plugin {
 
         @SuppressLint("SetJavaScriptEnabled")
         void start() {
-            ViewGroup root = getActivity().findViewById(android.R.id.content);
+            // With the activity gone (swiped away from the recents) the page
+            // is laid out on its own, windowless, as HiddenPage does.
+            ViewGroup root = getActivity() != null ? getActivity().findViewById(android.R.id.content) : null;
             web = new WebView(getContext());
             WebSettings s = web.getSettings();
             s.setJavaScriptEnabled(true);
@@ -181,8 +212,12 @@ public class PageRenderPlugin extends Plugin {
                 }
             });
             // Behind the app's own WebView, so it never takes a touch.
-            root.addView(web, 0, new FrameLayout.LayoutParams(root.getWidth() > 0 ? root.getWidth() : 1080,
-                scroll ? SCROLL_HEIGHT : root.getHeight() > 0 ? root.getHeight() : 1920));
+            if (root != null) {
+                root.addView(web, 0, new FrameLayout.LayoutParams(root.getWidth() > 0 ? root.getWidth() : 1080,
+                    scroll ? SCROLL_HEIGHT : root.getHeight() > 0 ? root.getHeight() : 1920));
+            } else {
+                web.layout(0, 0, 1080, scroll ? SCROLL_HEIGHT : 1920);
+            }
             started = loadedAt = System.currentTimeMillis();
             deadline = started + timeout;
             // The longest it may take, whatever progress it makes.
@@ -201,7 +236,7 @@ public class PageRenderPlugin extends Plugin {
 
         // Nothing it waits for yet, retryMs after the page loaded: load it again.
         boolean reloadIfStuck() {
-            if (retry <= 0 || reloads >= MAX_RELOADS || System.currentTimeMillis() - loadedAt < retry) return false;
+            if (retry <= 0 || reloads >= MAX_RELOADS || System.currentTimeMillis() - loadedAt < (retry << reloads)) return false;
             reloads++;
             loadedAt = System.currentTimeMillis();
             moved();
@@ -288,9 +323,21 @@ public class PageRenderPlugin extends Plugin {
                 boolean over = false;
                 int n = 0;
                 try {
-                    JSONObject o = new JSONObject(decode(v));
+                    String raw = decode(v);
+                    JSONObject o = new JSONObject(raw);
                     over = o.optBoolean("done", false);
                     n = o.optInt("n", 0);
+                    if (id != null && !raw.equals(told)) {
+                        told = raw;
+                        JSObject ev = new JSObject();
+                        ev.put("id", id);
+                        ev.put("n", n);
+                        ev.put("at", o.optInt("at", 0));
+                        ev.put("last", o.optInt("last", 0));
+                        ev.put("wait", o.optInt("wait", 0));
+                        ev.put("refused", o.optBoolean("refused", false));
+                        notifyListeners("progress", ev);
+                    }
                 } catch (Exception e) { /* not started yet */ }
                 if (n > rows) moved();
                 if (n == 0 && rows <= 0) reloadIfStuck();
@@ -326,6 +373,7 @@ public class PageRenderPlugin extends Plugin {
         }
 
         void finish() {
+            if (id != null) jobs.remove(id);
             main.removeCallbacksAndMessages(null);
             ViewGroup parent = (ViewGroup) web.getParent();
             if (parent != null) parent.removeView(web);

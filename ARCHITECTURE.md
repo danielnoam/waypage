@@ -234,23 +234,42 @@ from chapter 1: 194 pages for Martial Peak's main group, a page in under a
 second, where a fresh hidden browser a page took about five (and stopped
 at 40 pages, the newest 800). Without that browser (iOS, the web copy)
 nothing is read and no links are guessed from the page.
-Trap: comix.to's firewall turns a request away now and then
-(`{"error":"captcha_required"}`, a 403), mostly after several quick ones,
-runs a Cloudflare check by itself, and answers the next request. The site
-never asks again, so a list page simply doesn't come and a chapter shows
-no pages. `COMIX_WALK` asks again after 3, 6 and 10 s, then loads that
-page by its address (twice; what it read is kept in sessionStorage), then
-notes it as missed, and `comixWalk` reads a missed page again on its own.
-A chapter's render has `retryMs`, so a reader still without slots 7 s
-after loading is loaded again (four times at most): a few seconds later
-it comes (2 of 12 chapters in a row needed one).
-A walk turns pages at most every 0.7 s (quicker ones are what gets turned
-away), gets a minute without progress before PageRender takes what it
-has, and `comixWalk` carries a walk that stopped short on from the page
-after the last read. A whole list read stops after `COMIX_BUDGET` (six
-minutes) and keeps what it has, newest first: from this container (a
-datacenter address the firewall had flagged) One Piece's list took 28
-minutes without it.
+Trap: comix.to's firewall turns a list request away now and then
+(`{"error":"captcha_required"}`, a 403) when pages come too fast: measured
+on one title, a page every 0.7 s was refused at the 7th, every 2.5 s at the
+12th, every 6 s never (23 pages). It runs a Cloudflare check by itself and
+answers the next request, but the page keeps its refused answer: a second
+click on that page, or another page and back, sends no request. A fresh
+load by its address does, and a load 5 s after the refusal was let through
+every time. `COMIX_WALK` therefore (a) draws page turns on an allowance, 5
+at once and one more every 6 s (`comixAllowance`, kept across the walks of
+a read: the site counts a connection's requests), (b) sees a refusal at
+once, from the request's status in the page's resource timing (4 s of
+unchanged rows where a WebView doesn't give one), and (c) sends that page
+again by loading its address after 5, then 10, then 20 s; a fourth refusal
+notes it as missed, and `comixWalk` rereads missed pages on its own. What it
+read is kept in sessionStorage across the load. A walk that stopped short
+resumes in a fresh render from the page after the last read. Nothing waits
+a minute: the walk gets 30 s without progress (PageRender `collect`), and a
+whole read is capped at 45 minutes (`COMIX_BUDGET`). A chapter's render has
+`retryMs` (5 s), so a reader still without slots after loading is loaded
+again, the wait doubling (5, 10, 20 s, three times at most).
+A read of a long title takes minutes (The Gamer: 40 page turns, about 3.5;
+Martial Peak's 194 pages about 20), so it is a run in Downloads
+(`findWithProgress`, `finding: true`): a bar and the stage in words ("Reading
+Official: page 12 of 23, 240 chapters", "The site asked to slow down. Trying
+page 13 again in 5 s"; `findChapters` takes `onProgress({ text, share })`,
+which comixList builds from the walker's own reply, forwarded by PageRender
+as `progress` events), Stop (PageRender `cancel(id)` takes what has been
+read), and Android's notification (DownloadService, dataSync) says the same
+and keeps the app running while it is put away. The hidden WebView is
+driven by native posts, not page timers, so the walk goes on. With the
+activity gone it is laid out windowless, as HiddenPage does. A check for
+new chapters (`checkNew`) passes the links found last time (`known`): the
+list is newest first, so only the pages down to the newest known chapter are
+read (page 1 for a title with no new chapter) and the rest is kept; a cover
+refresh (`updateCover`) passes `coverOnly`, which a rule marked `slowList`
+answers from the title page alone.
 Trap: comix.to gives a title a new id now and then
 (`lly3j-how-to-use-a-returner` became `53qnl-…`, 2026-11); the old
 address and every chapter answer 404. The rule's `moved` (called by

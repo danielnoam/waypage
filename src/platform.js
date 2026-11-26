@@ -308,23 +308,38 @@
   // `expected` and `ready`, the counts when it was taken, so a chapter the
   // time ran out on is known to be short (comix.to's panels).
   // `collect`: a script of Waypage's own that walks the page (comix.to's
-  // chapter list, a page of twenty at a time) and says { done, n }; the
-  // answer's `collected` is what it left in window.__wpOut.
+  // chapter list, a page of twenty at a time) and says { done, n, at, last,
+  // wait, refused }; the answer's `collected` is what it left in
+  // window.__wpOut. `onProgress` is told each change of that reply.
   // `maxMs`: the time runs from the last progress, up to this. `retryMs`: a
   // page still showing nothing it waits for that long after loading is loaded
-  // again (comix.to's firewall turns a request away now and then).
-  async function render(url, { scroll = false, waitFor = "", expect = "", ready = "", collect = "", maxMs = 0, retryMs = 0 } = {}) {
+  // again, the wait doubling, three times (comix.to's firewall turns a
+  // request away now and then and lets it through a few seconds later).
+  let renderIds = 0;
+  async function render(url, { scroll = false, waitFor = "", expect = "", ready = "", collect = "", maxMs = 0, retryMs = 0, onProgress = null, onId = null } = {}) {
     const R = plugin("PageRender");
     if (!R) return null;
+    let heard = null;
     try {
-      // A walk (`collect`) gets a minute without progress: the site may
-      // take that long to let a page through.
-      const wait = collect ? 60000 : scroll ? (expect ? 60000 : 50000) : 20000;
-      const res = await deadline(R.render({ url, timeoutMs: wait, maxMs: maxMs || wait, retryMs, scroll, waitFor, expect, ready, collect }), Math.max(wait, maxMs) + 10000);
+      // A walk (`collect`) says what it does every move, none of which waits
+      // longer than 20 s: it gets 30 s without progress, not a long timeout.
+      const wait = collect ? 30000 : scroll ? (expect ? 60000 : 50000) : 20000;
+      const id = collect ? "r" + ++renderIds : "";
+      if (id && onId) onId(id);
+      if (id && onProgress && R.addListener) heard = await R.addListener("progress", (e) => { if (e && e.id === id) onProgress(e); });
+      const res = await deadline(R.render({ url, timeoutMs: wait, maxMs: maxMs || wait, retryMs, scroll, waitFor, expect, ready, collect, id }), Math.max(wait, maxMs) + 10000);
       return res && res.html ? { text: res.html, url: res.url || url, expected: res.expected, ready: res.ready, collected: res.collected } : null;
     } catch (e) {
       return null;
+    } finally {
+      if (heard && heard.remove) heard.remove();
     }
+  }
+
+  // Takes what a walk (`collect`) has read so far and ends it (Stop on a read).
+  function cancelRender(id) {
+    const R = plugin("PageRender");
+    if (R && id && R.cancel) R.cancel({ id }).catch(() => {});
   }
 
   // A page (one self-contained HTML file) to the print screen, where Save as
@@ -1416,7 +1431,7 @@
     signIn,
     translateText,
     translator,
-    render,
+    render, cancelRender,
     get canRender() { return !!plugin("PageRender"); },
     downloadTo,
     openOutside,

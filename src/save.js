@@ -354,7 +354,11 @@
   // page }; links is [] when nothing looks like chapters, and page is the
   // page they were read from: a chapter's own link leads on to its
   // contents page when it has a link to one.
-  async function findChapters(url, led) {
+  // `opts`: `coverOnly` (a site whose list is slow to read, comix.to's, gives
+  // only the page's cover, tags and status: it's the cover that's wanted);
+  // `known` (the links found last time: a site that can, reads only what is
+  // newer); `onProgress({ text, share })`: how the read stands.
+  async function findChapters(url, led, opts = {}) {
     const site = siteRule(url);
     const res = await get(site && site.fetch ? site.fetch(url) : url, site && site.headers);
     const at = res.url || url;
@@ -367,7 +371,8 @@
       // A site's `list` may answer { links, page, title } rather than just
       // the links: `page` is the address to read the list from next time
       // (comix.to's, with the group chosen), so Website sync keeps to it.
-      const listed = own ? own : site.list ? await site.list(doc, at, res.text) : [];
+      if (opts.coverOnly && site.slowList) return { title: readTitle(doc), links: [], cover, page: url, siteTags, status };
+      const listed = own ? own : site.list ? await site.list(doc, at, res.text, opts) : [];
       const links = Array.isArray(listed) ? listed : listed.links;
       if (links.length) return { title: (!Array.isArray(listed) && listed.title) || readTitle(doc), links, cover, page: (!Array.isArray(listed) && listed.page) || url, siteTags, status };
       // A site whose chapters are only ever its own kind of link (a
@@ -621,24 +626,34 @@
 
   // Runs in the hidden browser, every 400 ms (PageRender `collect`): reads
   // the rows of the page of the list on show, then clicks the next page's
-  // number (by script: an ad's overlay takes a real tap). The site's firewall
-  // turns a request away now and then and clears itself in a few seconds, so
-  // a page that doesn't come is asked for again after 3, 6 and 10 s, then
-  // loaded by its address (twice), then noted as missed. What it has read is
-  // kept in sessionStorage, so it carries on after a load. `pages`: how many
-  // pages to read; `below`: stops once a page goes under that chapter number;
-  // `above`: a page that starts under it backs up one. Rows go to
-  // window.__wpOut as [href, group, label].
+  // number (by script: an ad's overlay takes a real tap).
+  //
+  // The site's firewall turns a list request away (403 captcha_required)
+  // when pages come too fast: after about six in a row at 0.7 s, none at 6 s
+  // each. So turns draw on an allowance, up to 5 at once and one more every
+  // 6 s (`tok`, kept across walks by comixWalk). A turn that was refused is
+  // seen at once, from the request's own status in the page's resource
+  // timing, and sent again by loading that page's address (a second click
+  // sends nothing: the page caches its answers) after 5 s, then 10, then
+  // 20; a fourth refusal notes the page as missed. What it has read is kept
+  // in sessionStorage, so it carries on after that load.
+  // `pages`: how many pages to read; `below`: stops once a page goes under
+  // that chapter number; `above`: a page that starts under it backs up one;
+  // `tokens`: the allowance it starts with. Rows go to window.__wpOut as
+  // [href, group, label]; the reply says how it stands: { done, n, at, last,
+  // wait (seconds until its next move), refused }.
   function COMIX_WALK(o) {
-    var K = "__wpC", S;
+    var K = "__wpC", S, now = Date.now(), T = window.__wpTune || {};
+    var DELAY = T.delays || [5000, 10000, 20000], GAP = T.gap || 6000;
     try { S = JSON.parse(sessionStorage.getItem(K) || "null"); } catch (e) { S = null; }
-    S = S || window.__wpC || { rows: [], seen: {}, read: {}, top: "", wait: 0, tries: 0, loads: 0, last: 0, back: 0, missed: [], pending: 0 };
+    S = S || window.__wpC || { rows: [], seen: {}, read: {}, last: 0, back: 0, missed: [], pending: 0, how: "", asked: 0, tries: 0, hold: 0, count: 0, at: 0, born: now, tok: o.tokens == null ? 5 : o.tokens, tokAt: now };
     window.__wpC = S;
+    S.tok = Math.min(5, S.tok + (now - S.tokAt) / GAP); S.tokAt = now;
     var save = function () { try { sessionStorage.setItem(K, JSON.stringify(S)); } catch (e) { /* kept in the page only */ } };
-    var out = function (done) {
+    var out = function (done, wait) {
       save();
-      window.__wpOut = JSON.stringify({ rows: S.rows, last: S.last, missed: S.missed, done: done, at: S.at || 0 });
-      return JSON.stringify({ done: done, n: S.rows.length });
+      window.__wpOut = JSON.stringify({ rows: S.rows, last: S.last, missed: S.missed, done: done, at: S.at, tok: S.tok });
+      return JSON.stringify({ done: done, n: S.rows.length, at: S.at, last: S.last, wait: Math.ceil((wait || 0) / 1000), refused: S.hold > 0 });
     };
     var rows = document.querySelectorAll(".mchap-row");
     var act = document.querySelector(".npager__num.is-active");
@@ -647,40 +662,54 @@
     var top = a0 ? a0.getAttribute("href") : "";
     var numOf = function (h) { var m = /-chapter-(\d+(?:\.\d+)?)/.exec(h || ""); return m ? parseFloat(m[1]) : NaN; };
     var button = function (n) { return [].filter.call(document.querySelectorAll(".npager__num"), function (x) { return parseInt(x.textContent, 10) === n; })[0]; };
-    // A page turn every 0.7 s at most: quicker ones are what the firewall
-    // turns away.
+    // The status the site gave the list request for page n (0: none yet).
+    var status = function (n) {
+      var es = performance.getEntriesByType("resource"), st = 0, re = new RegExp("/chapters\\?(.*&)?page=" + n + "(&|$)");
+      for (var i = 0; i < es.length; i++) if (re.test(es[i].name)) st = es[i].responseStatus || 0;
+      return st;
+    };
+    var known = typeof PerformanceResourceTiming !== "undefined" && "responseStatus" in PerformanceResourceTiming.prototype;
     var go = function (n) {
       var b = button(n);
       if (!b) return out(n > S.last || S.read[n] === 1);
-      if (Date.now() - (S.t || 0) < 700) return out(false);
-      S.pending = n; S.top = top; S.wait = 0; S.t = Date.now(); b.click();
+      if (S.tok < 1) return out(false, (1 - S.tok) * GAP);
+      S.tok -= 1; S.pending = n; S.how = "click"; S.top = top; S.asked = now; S.tries = 0; S.hold = 0; b.click();
       return out(false);
     };
     var load = function (n) {
       var u = new URL(location.href); u.searchParams.set("page", n);
-      S.pending = n; S.top = ""; S.wait = 0; S.loads++; save();
-      location.replace(u.href);
+      S.pending = n; S.how = "load"; S.top = ""; S.asked = now; S.hold = 0; S.tok = 0; S.tokAt = now;
+      save();
+      (window.__wpLoad || function (h) { location.replace(h); })(u.href);
       return out(false);
     };
+    // The first page itself may be the one turned away: nothing on show.
+    if (!rows.length && !S.pending) { S.pending = cur; S.how = "load"; S.asked = S.born; }
     if (S.pending) {
-      var come = rows.length && top !== S.top && cur === S.pending;
+      var come = rows.length && cur === S.pending && (S.how === "load" || top !== S.top);
       if (!come) {
-        S.wait++;
-        if (S.wait === 8 || S.wait === 15 || S.wait === 25) { var b = button(S.pending); if (b) b.click(); return out(false); }
-        if (S.wait < 40) return out(false);
-        // Not after three asks: load that page by its address, twice.
-        if (S.tries < 2) { S.tries++; return load(S.pending); }
-        S.missed.push(S.pending); var skip = S.pending; S.pending = 0; S.tries = 0;
+        if (S.hold) {
+          if (now < S.hold) return out(false, S.hold - now);
+          return load(S.pending);
+        }
+        var st = status(S.pending);
+        // Turned away (403, 429), or no answer: at once from the status; a
+        // WebView that doesn't give one is waited on for 4 s, and a slow one
+        // for 20.
+        var refused = st >= 400 || (!st && now - S.asked > (known ? 20000 : 4000));
+        if (!refused) return out(false);
+        S.tries++;
+        if (S.tries <= DELAY.length) { S.hold = now + DELAY[S.tries - 1]; return out(false, DELAY[S.tries - 1]); }
+        S.missed.push(S.pending); var skip = S.pending; S.pending = 0; S.tries = 0; S.hold = 0;
         return rows.length ? go(skip + 1) : load(skip + 1);
       }
-      S.pending = 0; S.tries = 0;
+      S.pending = 0; S.tries = 0; S.hold = 0;
     }
-    if (!rows.length) return out(false);
     var nums = [].map.call(document.querySelectorAll(".npager__num"), function (x) { return parseInt(x.textContent, 10) || 0; });
     S.last = Math.max.apply(null, [S.last, cur].concat(nums));
     if (!S.read[cur]) {
       S.read[cur] = 1;
-      S.at = Math.max(S.at || 0, cur);
+      S.at = Math.max(S.at, cur);
       var low = Infinity, high = -Infinity;
       [].forEach.call(rows, function (r) {
         var a = r.querySelector("a.mchap-row__primary");
@@ -695,7 +724,7 @@
         var lab = r.querySelector(".mchap-row__ch");
         S.rows.push([h, gm ? gm[1] : "0", lab ? lab.textContent.replace(/\s+/g, " ").trim() : ""]);
       });
-      S.count = (S.count || 0) + 1;
+      S.count++;
       if (o.above != null && high < o.above && cur > 1 && S.back < 40) { S.back++; return go(cur - 1); }
       if (o.below != null && low < o.below) return out(true);
       if (o.pages && S.count >= o.pages) return out(true);
@@ -703,27 +732,38 @@
     return go(cur + 1);
   }
 
+  // The allowance of page turns the firewall lets through, kept across the
+  // walks of a read (it counts a connection's requests, not a page's).
+  const comixAllowance = { n: 5, at: 0 };
+  const comixTokens = () => Math.min(5, comixAllowance.n + (Date.now() - (comixAllowance.at || Date.now())) / 6000);
+
   // One walk of a list (`group`, or every group's with null) from page
   // `start`: { rows: [{ url, n, group, label }], last, missed }, or null
   // without the hidden browser or when nothing came.
-  // A whole list read stops after COMIX_BUDGET, keeping what it has: newest
-  // first, so Website sync still sees the new chapters on a day the site's
-  // firewall lets few pages through.
-  const COMIX_BUDGET = 6 * 60000;
-  async function comixWalk(origin, titlePath, group, start, o, until) {
+  // A whole list read stops after COMIX_BUDGET, a safety cap: the walker
+  // retries a refused page in seconds, and the read goes on in the
+  // background (a notification), so a long title just takes its time.
+  const COMIX_BUDGET = 45 * 60000;
+  async function comixWalk(origin, titlePath, group, start, o, until, onStep, signal) {
     const rows = [], missed = new Set();
     let last = 1, from = Math.max(1, start || 1);
     until = until || Date.now() + COMIX_BUDGET;
-    // A walk that stopped short (the time ran out while the site kept
-    // turning pages away) is carried on from the page after the last read.
-    for (let tries = 0; tries < 12 && until - Date.now() > 15000; tries++) {
+    // A walk that stopped short is carried on from the page after the last read.
+    for (let tries = 0; tries < 12 && until - Date.now() > 15000 && !(signal && signal.stopped); tries++) {
       const a = new URL(origin + titlePath);
       if (group != null) a.searchParams.set("group_id", group);
       if (from > 1) a.searchParams.set("page", from);
-      const d = await C.platform.render(a.href, { collect: "(" + COMIX_WALK.toString() + ")(" + JSON.stringify(o || {}) + ")", maxMs: Math.min(300000, until - Date.now()), retryMs: 7000 });
+      const opts = { ...(o || {}), tokens: comixTokens() };
+      const d = await C.platform.render(a.href, {
+        collect: "(" + COMIX_WALK.toString() + ")(" + JSON.stringify(opts) + ")",
+        maxMs: Math.min(300000, until - Date.now()), retryMs: 5000,
+        onProgress: onStep,
+        onId: signal ? (id) => { signal.current = id; } : null,
+      });
       let got = null;
       try { got = d && d.collected ? JSON.parse(d.collected) : null; } catch (e) { got = null; }
       if (!got || !Array.isArray(got.rows)) break;
+      if (typeof got.tok === "number") { comixAllowance.n = got.tok; comixAllowance.at = Date.now(); }
       rows.push(...got.rows);
       for (const n of got.missed || []) missed.add(n);
       last = Math.max(last, got.last || 1);
@@ -732,8 +772,8 @@
     }
     // A page the site kept turning away is read again, on its own.
     for (const n of [...missed].slice(0, 20)) {
-      if ((o && o.again === false) || until - Date.now() < 15000) break;
-      const one = await comixWalk(origin, titlePath, group, n, { pages: 1, again: false }, until);
+      if ((o && o.again === false) || until - Date.now() < 15000 || (signal && signal.stopped)) break;
+      const one = await comixWalk(origin, titlePath, group, n, { pages: 1, again: false }, until, onStep, signal);
       if (one) { rows.push(...one.raw); missed.delete(n); }
     }
     if (!rows.length) return null;
@@ -761,7 +801,7 @@
     return by;
   }
 
-  async function comixList(doc, url) {
+  async function comixList(doc, url, ignored, opts = {}) {
     if (!C.platform.canRender) return [];
     const u = new URL(url);
     const m = u.pathname.match(/^(\/title\/([a-z0-9]+)-[^/]+)(\/|$)/i);
@@ -778,10 +818,22 @@
     const detail = data[JSON.stringify(["manga", "detail", hid])] || {};
     const official = new Set(groups.filter((g) => g.id !== 0 && COMIX_OFFICIAL.test(g.name)).map((g) => String(g.id)));
     const until = Date.now() + COMIX_BUDGET;
+    // How the read stands, for a progress bar: `say` a stage in words, and
+    // `stepFor` a walk's own steps (page 12 of 23, a page turned away) as a
+    // share between `from` and `to` of the whole.
+    const say = (text, share) => { if (opts.onProgress) opts.onProgress({ text, share }); };
+    const nameOf = (g) => ((groups.find((x) => String(x.id) === String(g)) || {}).name) || t("every group");
+    const stepFor = (name, from, to) => !opts.onProgress ? null : (e) => {
+      const share = from + (to - from) * Math.min(1, (e.at || 0) / Math.max(1, e.last || 1));
+      say(e.refused
+        ? t("The site asked to slow down. Trying page {page} again in {s} s", { page: (e.at || 0) + 1, s: e.wait })
+        : t("Reading {name}: page {at} of {last}, {n} chapters", { name, at: Math.max(1, e.at || 0), last: Math.max(1, e.last || 0), n: e.n }), share);
+    };
+    say(t("Reading the title page"), 0.02);
     const walks = new Map();
     const walk = async (group) => {
       const k = group == null ? "" : String(group);
-      if (!walks.has(k)) walks.set(k, await comixWalk(u.origin, titlePath, group, 1, {}, until));
+      if (!walks.has(k)) walks.set(k, await comixWalk(u.origin, titlePath, group, 1, {}, until, stepFor(nameOf(group), 0.15, 0.85), opts.signal));
       return walks.get(k);
     };
 
@@ -789,10 +841,26 @@
     // and the group of the newest upload.
     let group = u.searchParams.get("group_id");
     let main = null;
+    // A check for new chapters of a title read before (the address names its
+    // group): the list is newest first, so only the pages down to the newest
+    // chapter already known are read, and the rest is what was found last time.
+    const nOf = (l) => parseFloat((String(l).match(/-chapter-(\d+(?:\.\d+)?)/) || [])[1]);
+    const known = (opts.known || []).filter((l) => Number.isFinite(nOf(l)));
+    if (group != null && known.length) {
+      const top = Math.max(...known.map(nOf));
+      const w = await comixWalk(u.origin, titlePath, group, 1, { below: top - 0.001 }, until, stepFor(nameOf(group), 0.05, 0.95), opts.signal);
+      const byN = new Map(known.map((l) => [nOf(l), l]));
+      // Chapters the group has newer than the newest known (a decimal one
+      // between known ones is found too: the page that has it is read).
+      for (const r of w ? comixChapters(w.rows, group).values() : []) if (!byN.has(r.n)) byN.set(r.n, r.url);
+      const links = [...byN.entries()].sort((x, y) => x[0] - y[0]).map(([, l]) => l);
+      return { links, title: detail.title || "", page: u.origin + titlePath + "?group_id=" + group };
+    }
     if (group != null) main = await walk(group);
     else {
       // The first page of every group's list: who posted the newest.
-      const top = await comixWalk(u.origin, titlePath, null, 1, { pages: 1 }, until);
+      say(t("Comparing the scan groups"), 0.06);
+      const top = await comixWalk(u.origin, titlePath, null, 1, { pages: 1 }, until, null, opts.signal);
       walks.set("*", top);
       const newest = top && top.rows.find((r) => r.group !== "0");
       const off = groups.find((g) => /^official$/i.test(g.name)) || groups.find((g) => official.has(String(g.id)));
@@ -836,20 +904,22 @@
     if (walks.get("*")) fill(walks.get("*").rows);
     const gaps = want();
     if (gaps.length && until - Date.now() > 30000) {
+      say(tn(gaps.length, "Filling in {n} missing chapter from other groups", "Filling in {n} missing chapters from other groups", { n: gaps.length }), 0.88);
       // Every group's list, newest first: a number's page is guessed from
       // how many uploads a chapter has on the first page, then walked down.
-      const first = walks.get("*") || await comixWalk(u.origin, titlePath, null, 1, { pages: 1 }, until);
+      const first = walks.get("*") || await comixWalk(u.origin, titlePath, null, 1, { pages: 1 }, until, null, opts.signal);
       if (first) {
         const per = Math.max(1, new Set(first.rows.map((r) => r.n)).size);
         const top = Math.max(...gaps);
         const start = Math.max(1, Math.floor((latest - top) / per) - 1);
         // Read no further than the pages those numbers can be on (150 at most).
         const pages = Math.min(150, Math.ceil((top - Math.min(...gaps)) / per) + 6);
-        const all = await comixWalk(u.origin, titlePath, null, start, { above: top, below: Math.min(...gaps), pages }, until);
+        const all = await comixWalk(u.origin, titlePath, null, start, { above: top, below: Math.min(...gaps), pages }, until, stepFor(nameOf(null), 0.88, 0.98), opts.signal);
         if (all) { count(all.rows); fill(all.rows); }
       }
     }
     const links = [...chapters.entries()].sort((x, y) => x[0] - y[0]).map(([, r]) => r.url);
+    say(tn(links.length, "Found {n} chapter", "Found {n} chapters", { n: links.length }), 1);
     return { links: uniqueLinks(links), title: detail.title || "", page: u.origin + titlePath + (group != null ? "?group_id=" + group : "") };
   }
 
@@ -865,7 +935,7 @@
     if (!m) return null;
     const [, hid, slug, rest] = m;
     const q = "https://comix.to/browse?q=" + encodeURIComponent(slug.replace(/-/g, " "));
-    const d = await C.platform.render(q, { waitFor: 'a[href*="/title/"]', retryMs: 7000 });
+    const d = await C.platform.render(q, { waitFor: 'a[href*="/title/"]', retryMs: 5000 });
     if (!d) return null;
     const found = [...parse(d.text, q).querySelectorAll('a[href*="/title/"]')]
       .map((a) => (a.getAttribute("href").match(/\/title\/([a-z0-9]+)-([^/?#]+)/i) || []))
@@ -1427,6 +1497,7 @@
       host: /(^|\.)comix\.to$/i,
       ownChapters: true,
       list: comixList,
+      slowList: true,
       moved: comixMoved,
       // A chapter (1.69.0) is a column of panels the site's reader puts in
       // as it scrolls (`.rpage-page__img`, five at first, the rest as they
@@ -1441,7 +1512,7 @@
       // A chapter the firewall turned away shows no slots: loaded again
       // after 7 s (retryMs). The time runs from the last slot filled, up
       // to 150 s, so a chapter of 180 pictures on a slow phone finishes.
-      slots: { expect: ".rpage-page", ready: ".rpage-page__img[src^=http]", retryMs: 7000, maxMs: 150000 },
+      slots: { expect: ".rpage-page", ready: ".rpage-page__img[src^=http]", retryMs: 5000, maxMs: 150000 },
       panels(doc, url) {
         return uniqueLinks([...doc.querySelectorAll(".rpage-page__img[src]")]
           .map((img) => absolute(img.getAttribute("src"), url))
