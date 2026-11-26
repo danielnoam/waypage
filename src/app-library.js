@@ -675,8 +675,11 @@ function bookHead(list, next, done) {
       renaming ? null : bar));
   if (renaming) return [head];
   const go = done === n ? t("Read again from the start") : (next.at > 0.02 || done ? t("Continue: {title}", { title: next.title }) : t("Start: {title}", { title: next.title }));
+  const first = done === n ? list[0] : next;
   return [head,
-    el("button", { class: "btn-primary folder-go", type: "button", dir: "auto", onclick: () => openPage(done === n ? list[0].id : next.id) }, go),
+    el("div", { class: "folder-go-row" },
+      el("button", { class: "btn-primary folder-go", type: "button", dir: "auto", onclick: () => openPage(first.id) }, go),
+      narratable(first) ? narrateHalf(first) : null),
     quickStarts(list, done === n ? list[0] : next),
     saveNewButton(list),
     savedLine(list)];
