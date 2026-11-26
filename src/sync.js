@@ -23,9 +23,6 @@
   const COVERS_KEY = "waypage.syncCovers"; // picked covers this device knows are on GitHub
   const STATS_KEY = "waypage.syncStats"; // { device: sha of its stats file as last read, _sent: what this device last wrote }
   const ANKI_KEY = "waypage.syncAnki"; // { decks, cards: sha as last seen; log: { device: sha }; sent: hash of what GitHub has of decks, cards, log }
-  const ABS_KEY = "waypage.syncAbs"; // { sha: audiobookshelf.json as last seen, sent: hash of what GitHub has }
-  const CAT_KEY = "waypage.syncCatalogs"; // { sha: catalogs.json as last seen, sent: hash of what GitHub has }
-  const DAV_KEY = "waypage.syncWebdav"; // the same for webdav.json
   const TR_KEY = "waypage.syncTranscripts"; // { fingerprint: { sha: as last seen, sent: hash of what GitHub has } }
   const ACT_KEY = "waypage.syncActivity"; // { sig } of the reading activity this device last wrote
   const ACT_PATH = "activity/reading.json";
@@ -661,9 +658,7 @@
     keep(SENT_KEY, null);
     keep(STATS_KEY, null);
     keep(ACT_KEY, null);
-    keep(CAT_KEY, null);
-    keep(DAV_KEY, null);
-    keep(ABS_KEY, null);
+    for (const x of extLists()) keep(x.sync.key, null);
     keep(TR_KEY, null);
   }
 
@@ -1429,9 +1424,7 @@
     const stats = async () => {
       if (what.stats) try { await syncStats(); } catch (e) { if (e instanceof Paused) throw e; }
       if (what.anki) try { await syncAnki(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
-      try { await syncCatalogs(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
-      try { await syncWebdav(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
-      try { await syncAbs(); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
+      for (const x of extLists()) try { await syncList(x); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
       try { await syncActivity(getPages()); } catch (e) { if (e instanceof Paused) throw e; }
       if (what.transcripts) try { await syncTranscripts(getPages()); } catch (e) { if (e instanceof Paused) throw e; console.error(e); }
     };
@@ -1716,59 +1709,28 @@
     }
   }
 
-  // Catalogs (2026-11, an extension): catalogs.json, the list without
-  // passwords (src/opds.js shared), merged with what's here and sent back
-  // only when it changed. Only while the extension is on.
-  async function syncCatalogs() {
-    if (!C.ext || !C.ext.on("catalogs")) return;
-    await C.ext.load("catalogs");
-    const known = load(CAT_KEY, {}) || {};
+  // An extension's list (2026-11): catalogs.json, webdav.json and
+  // audiobookshelf.json, each the list without its passwords or tokens
+  // (the module's shared()), merged with what's here (mergeIn) and sent
+  // back only when it changed. The catalogue in src/extensions.js says
+  // which extensions have one (`sync`); x.sync.key holds { sha: the file as
+  // last seen, sent: hash of what GitHub has }. Only while the extension
+  // is on, and never the reason a sync failed.
+  const extLists = () => (C.ext && C.ext.list ? C.ext.list().filter((x) => x.sync) : []);
+  async function syncList(x) {
+    if (!C.ext.on(x.id)) return;
+    await C.ext.load(x.id);
+    const L = C[x.sync.store], path = x.sync.file, key = x.sync.key;
+    const known = load(key, {}) || {};
     for (let tries = 0; ; tries++) {
       halt();
-      const r = await readJson("catalogs.json").catch((e) => { if (e instanceof Paused || !(e instanceof SyntaxError)) throw e; return null; });
-      if (r && r.sha !== known.sha) { C.opds.mergeIn(r.data); known.sha = r.sha; }
-      const out = JSON.stringify(C.opds.shared()), h = hashOf(out);
+      const r = await readJson(path).catch((e) => { if (e instanceof Paused || !(e instanceof SyntaxError)) throw e; return null; });
+      if (r && r.sha !== known.sha) { L.mergeIn(r.data); known.sha = r.sha; }
+      const out = JSON.stringify(L.shared()), h = hashOf(out);
       // Nothing to say, or GitHub says it already.
-      if (r ? hashOf(JSON.stringify(r.data)) === h : !C.opds.list().length) { known.sent = h; keep(CAT_KEY, known); return; }
+      if (r ? hashOf(JSON.stringify(r.data)) === h : !L.list().length) { known.sent = h; keep(key, known); return; }
       halt();
-      try { known.sha = await write("catalogs.json", out, r && r.sha, "Catalogs"); known.sent = h; keep(CAT_KEY, known); return; }
-      catch (e) { if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e; }
-    }
-  }
-
-  // WebDAV (2026-11, an extension): webdav.json, the servers without
-  // passwords (src/webdav.js shared), the same way as catalogs.json.
-  async function syncWebdav() {
-    if (!C.ext || !C.ext.on("webdav")) return;
-    await C.ext.load("webdav");
-    const known = load(DAV_KEY, {}) || {};
-    for (let tries = 0; ; tries++) {
-      halt();
-      const r = await readJson("webdav.json").catch((e) => { if (e instanceof Paused || !(e instanceof SyntaxError)) throw e; return null; });
-      if (r && r.sha !== known.sha) { C.webdav.mergeIn(r.data); known.sha = r.sha; }
-      const out = JSON.stringify(C.webdav.shared()), h = hashOf(out);
-      if (r ? hashOf(JSON.stringify(r.data)) === h : !C.webdav.list().length) { known.sent = h; keep(DAV_KEY, known); return; }
-      halt();
-      try { known.sha = await write("webdav.json", out, r && r.sha, "WebDAV servers"); known.sent = h; keep(DAV_KEY, known); return; }
-      catch (e) { if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e; }
-    }
-  }
-
-  // Audiobookshelf (2026-11, an extension): audiobookshelf.json, the
-  // servers without their tokens (src/abs.js shared), the same way as
-  // catalogs. Where you are in a book goes to the server itself, not here.
-  async function syncAbs() {
-    if (!C.ext || !C.ext.on("audiobookshelf")) return;
-    await C.ext.load("audiobookshelf");
-    const known = load(ABS_KEY, {}) || {};
-    for (let tries = 0; ; tries++) {
-      halt();
-      const r = await readJson("audiobookshelf.json").catch((e) => { if (e instanceof Paused || !(e instanceof SyntaxError)) throw e; return null; });
-      if (r && r.sha !== known.sha) { C.abs.mergeIn(r.data); known.sha = r.sha; }
-      const out = JSON.stringify(C.abs.shared()), h = hashOf(out);
-      if (r ? hashOf(JSON.stringify(r.data)) === h : !C.abs.list().length) { known.sent = h; keep(ABS_KEY, known); return; }
-      halt();
-      try { known.sha = await write("audiobookshelf.json", out, r && r.sha, "Audiobookshelf"); known.sent = h; keep(ABS_KEY, known); return; }
+      try { known.sha = await write(path, out, r && r.sha, x.sync.says); known.sent = h; keep(key, known); return; }
       catch (e) { if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e; }
     }
   }

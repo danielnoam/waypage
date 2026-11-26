@@ -60,13 +60,16 @@ src/app-reader.js   moving between screens; the reader around the page: brightne
 src/app-ink.js      Draw: the pen button, the bar of tools, Try your pen, saving a copy with drawings
 src/app-pentest.js  the pen test in Try your pen: asks for ten things in turn, records what the page and the phone report, makes a log
 src/app-library.js  tags, collections, a clip's sheet, multi-select, export, import, watched folders
-src/app-saving.js   sync screen, saving several, next links and new chapters, feeds, home-screen widgets
-src/app-places.js   the Highlights place, the sidebar, big screens, keys, gestures, a feed's sheets
+src/app-sync.js     the shell's sync: GitHub sync and what it carries, sync history, Google Drive backups, the Sync screen
+src/app-saving.js   saving several, next links, new chapters and Website sync
+src/app-feeds.js    Feeds and Newsletters: the feeds followed, checked, drawn and saved from
+src/app-widgets.js  the home-screen widgets and the app icon's shortcuts
+src/app-places.js   the Highlights place, the sidebar, going to a place (`goPlace`, `paintPlace`), big screens, keys, gestures, a feed's sheets
 src/app-kiwix.js    Kiwix packs and books kept as files: the + sheet's downloads (where they're kept, Wi-Fi wait), a pack's articles in the reader (links, Back, Search this pack, Save this article), a book as a collection of clips
 src/app-discover.js the Discover place: Wikipedia today, the list, its search, the Sites grid (stories, books, texts), the story and sign-up sheets
 src/app-settings.js Settings (built from data; the search reads the built screens), Make room, Credits, Report a problem
 src/app-listen.js   audiobooks: bringing one in, the player and its bar, reading along, transcripts written ahead, fixes, Find the book (each found book checked against the narrator), the narrator-left-the-book card, Settings › Audiobooks
-src/app-extensions.js Settings › Extensions (a switch each) and the places extensions add to the sidebar, above Stats
+src/app-extensions.js Settings › Extensions (a switch each) and the places extensions add to the sidebar, above Stats: `renderExtension(id)` loads one's code, then draws it through `EXT_PLACES`
 src/app-lock.js     app lock: passcode (PBKDF2 hash), fingerprint or face on Android
 src/app-car.js      Android Auto: the list the car starts from (books, clips cut for Narrate, collections with quick starts) and where the car got to
 src/app-start.js    wiring at launch, what other apps share in, self-update, Test builds, What's new
@@ -94,13 +97,14 @@ src/imports.js      Pocket, Instapaper, Omnivore, Raindrop, Wallabag exports, Ki
 src/stats.js        reading stats and the reading pace
 src/activity.js     Share reading activity: builds activity/reading.json (docs/reading-activity.md)
 src/dict.js         StarDict dictionaries in IndexedDB
-src/extensions.js   extensions: the catalogue, on or off per device, loading an extension's scripts once it is on
+src/extensions.js   extensions: the catalogue, on or off per device, loading an extension's scripts once it is on. **Adding one:** an entry here (id, title, note, scripts, and `place`: the sidebar icon's paths, its name, what to say when its code didn't load; `find`: Settings search words), a hidden `<main id="id">` in index.html, its scripts in sw.js's ASSETS, and in its own shell file `EXT_PLACES.id = draw` (and `EXT_PAGES.id` for its Settings page). The core asks `C.ext.places()` and `C.ext.place(id)` and never names an extension (`extensions.test.js` fails if it does; Anki's own sync in sync.js and its switch on the Sync screen are the listed exceptions). A list Sync should carry is a `sync` entry too, see Sync
 src/fsrs.js         the Anki extension's scheduler: FSRS-5 in plain JS; loaded only once Anki is on (as are anki.js and app-anki.js: not in index.html, but in sw.js's ASSETS)
 src/sqlite.js       a read-only SQLite reader (table b-trees and overflow pages, UTF-8), loaded with the Anki extension, for opening an Anki deck
 src/anki-import.js  reads an Anki deck (.apkg: a zip with a SQLite collection) into cards and reviews, and Anki's text export's counterpart lives in anki.js; loaded with the Anki extension
 src/anki.js         the Anki extension's engine: decks, cards and a review log (anki/ beside the library, per-device log), each card's schedule replayed from the log
 src/calibre.js      the Calibre extension's library folder: picked once (the Files plugin, or a browser's folder picker kept in IndexedDB), metadata.db read with sqlite.js into books, a book's best file and its cover read from the folder by path
 src/app-calibre.js  the Calibre extension's place: the books as covers with search, sort and tag, a book's sheet (Read it from the folder, or Copy into your Library), Settings › Extensions › Calibre
+src/servers.js      the list of servers Catalogs, WebDAV and Audiobookshelf each keep: stored with its passwords or tokens, the removed ones remembered, `shared()` without secrets for sync, `mergeIn()` from another device (a secret stays only for the same user on the same server, `servers.same`); loaded with any of the three
 src/opds.js         the Catalogs extension's catalogs: the list on this device, OPDS 1 (Atom) and 2 (JSON) feeds read into folders and books, search, a book's file with the catalog's login
 src/app-catalogs.js the Catalogs extension's screens: the Catalogs place in the sidebar (folders, books, search), the Add a catalog sheet, Settings › Extensions › Catalogs
 src/webdav.js       the WebDAV extension's servers: the list on this device, a PROPFIND answer read into folders and books, a book's picture found beside it, a file with the server's login
@@ -413,7 +417,7 @@ strokes]]`, for Highlights to list. Highlights and drawings on a file read
 from outside go in library.json's `outside` map, keyed by the file's
 fingerprint (`files.fingerprint`: size and first and last 256 KB, SHA-256),
 merged three ways (`sync.mergeOutside`) and applied to every file here
-with that fingerprint (`app-saving.js outsideTake`). A note's `ink.json`
+with that fingerprint (`app-sync.js outsideTake`). A note's `ink.json`
 merges with GitHub's against `ink-base.json` (`sync.noteInkMerged`), what
 sync last left on both.
 
@@ -735,11 +739,18 @@ web copy stay links, as before.
   A device that has reviewed nothing sends no log. Changes made here
   start a sync 30 seconds after the last one (`anki.edited`).
   `test/syncanki.test.js` plays two devices on one made-up repo.
+- **Extensions' lists** go through one function, `syncList`, for every
+  catalogue entry in `src/extensions.js` with a `sync` (its file, its
+  module, where this device remembers what it sent). A new extension with
+  a list to carry adds that entry and `list()`, `shared()` and
+  `mergeIn()` on its module; sync.js doesn't change. The three today:
 - **Catalogs** (2026-11, while the extension is on): `catalogs.json`, the
   list with each catalog's address, name and username but never its
   password (`opds.shared()`), and the ones removed with when, so a removal
   sticks. Merged by id, the newer change winning (`opds.mergeIn`); a
-  password typed on this device stays, unless the username changed. One
+  password typed on this device stays, unless the username changed or
+  the address now points at another server (`servers.same`: the same
+  origin, or the same host moved up to https). One
   that arrives with a username and no password asks for it in its place.
   Sent only when it differs from GitHub's; no sync of its own, it goes
   with the next. `test/synccatalogs.test.js`.
@@ -860,7 +871,7 @@ drive the app in Chromium with Playwright and skip when it isn't installed
 saved in `test/fixtures/sites/`, with nothing going out; `discover.test.js`
 reads the story sites' lists from hand-made pages and pages cut from WEBTOON, Tapas and Wattpad in `test/fixtures/discover/`); `build.test.js` checks the
 bundle, the three version places and CHANGELOG.md; `contrast.test.js`
-checks every theme for WCAG AA; `csp.test.js` checks the page's Content-Security-Policy through keel's check (ui.test.js fails on anything it blocks); `docs.test.js` checks this file names
+checks every theme for WCAG AA; `csp.test.js` checks the page's Content-Security-Policy through keel's check (ui.test.js fails on anything it blocks); `unused.test.js` fails on a function, top-level name or CSS class in src/ that nothing uses (a class built from pieces is listed in its `BUILT`); `docs.test.js` checks this file names
 every source file, that the app uses only DESIGN.md's moves and that every looping animation has a reduced-motion answer (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
 `sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `synchistory.test.js`, `syncanki.test.js`, `synccatalogs.test.js`, `syncwebdav.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `recover.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) and `zim.test.js` (Kiwix packs, old and new layout, xz and Zstandard, against `test/fixtures/zim/`, which `make.py` builds) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR and on `main`, spread
@@ -1229,13 +1240,19 @@ area.
 - Pages mode scrolls by hand (`pagedInput`), so ink's `preventDefault` on a
   touch doesn't stop it. A new document-level touch gesture has to check
   `e.defaultPrevented` and `inkHook.drawing()`, or the page moves under the pen.
+- The page's own touch gestures (pull to check, swipe between chips, swipe
+  in the sidebar) listen on the whole view, so they also see a drag inside
+  an open drop-down: pulling its list to the top reloaded Discover and shut
+  the menu. A new view-wide gesture skips `.dropdown-menu`, as the sheet's
+  drag to close does.
 - A build from before Notes (1.57.0 and older, and `test-omri-dev`) drops
   every note when it syncs: `cleanMeta` keeps only entries with an address,
   so the next merge marks them deleted and removes their folders on the
   phone. GitHub's `notes/<id>/` is left, which is what Recover's Look for
   deleted notes reads. Don't sync a library with Notes from such a build.
 
-- A new field on a clip that should sync goes in three lists: sync.js `SYNCED`, app-saving.js `SYNCED_KEEP`, and backup.js `cleanMeta`. Sync's merge runs every entry through `cleanMeta` first, so a field missing there is dropped on every sync even though `SYNCED` names it (Live, 2026-11).
+- A new field on a clip that should sync goes in three lists: sync.js `SYNCED`, app-sync.js `SYNCED_KEEP`, and backup.js `cleanMeta`. Sync's merge runs every entry through `cleanMeta` first, so a field missing there is dropped on every sync even though `SYNCED` names it (Live, 2026-11).
+- `actions/deploy-pages` often finds no `github-pages` artifact straight after the upload (most deploys of main failed so on 25 Nov 2026, leaving the web copy and `unreleased/` a few merges behind). `pages.yml` tries three times with waits; a red Web app run still means the unreleased channel didn't move.
 - A merge done with the workflow's own `GITHUB_TOKEN` starts no other workflows, so `pages.yml` and the release builds never run. `auto-merge.yml` turns auto-merge on with the `AUTOMERGE_TOKEN` secret (a fine-grained token of Daniel's) for that reason.
 - The books of an audiobook folder added as a series share one `link`, the folder picked. Removing an entry lets go of its `link` only when no other entry still reads from it (`releaseLinks`).
 - A field missing from sync's `SYNCED`, backup's `cleanMeta`, `SYNCED_KEEP` and `AGAIN_KEEP` is dropped on the next sync or update. `folderSeries` and `folderIn` are in all four; a device without them strips them from clips it changes, which `healSeries` repairs while any clip of the series keeps them.
@@ -1336,6 +1353,13 @@ area.
   engine the next piece only when one ends, so Kokoro paused between
   paragraphs. `SpeechService.makeAhead` asks `Kokoro.take` for the next
   piece, made on its own thread.
+- **Narrate's skips while a piece is being made:** each press moved on
+  again, so they piled up and fired once the sound came. Previous/next
+  are dropped while the piece hasn't sounded (`SpeechService.busy`,
+  `moveAloud`), and the stuck-piece guard counts from its first sound.
+- **sherpa-onnx speaks a lone closing quote:** it cuts sentences after
+  the full stop, so `"Stop."` left a `"` that came out as a mumble.
+  `Kokoro.unquoted` (and its Swift twin) takes quote marks out first.
 - **`el()` attributes:** `disabled: false` still disables a button (it's
   set as an attribute); pass `null`.
 - **`replaceChildren`/`append` write a `null` out as the text "null":**

@@ -274,6 +274,7 @@ public class SpeechPlugin extends Plugin {
 
     @PluginMethod
     public void skip(PluginCall call) {
+        if (SpeechService.thinkingNow()) { call.resolve(); return; }
         send(call, SpeechService.SEEK, SpeechService.indexOf() + call.getInt("by", 1), null);
     }
 

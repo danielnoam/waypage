@@ -68,7 +68,7 @@ function openDzSearch() {
 
 // The story site Enter searches: the grid's in Sites, Royal Road in All.
 function dzSearchSrc() {
-  if (dzPick === "stories") return dzSrc();
+  if (dzPick === "stories") return dzSiteOpen ? dzSrc() : null;
   return dzPick === "all" && dzCanRead() ? C.discover.sources.find((x) => x.key === "rr") : null;
 }
 
@@ -79,12 +79,15 @@ function renderDiscover() {
   const input = dzHead.querySelector("input");
   const src = dzPick === "stories" ? dzSrc() : null;
   input.placeholder = dzPick === "feeds" ? t("Search feeds") : dzPick === "newsletters" ? t("Search newsletters")
-    : dzPick === "stories" ? (src ? t("Search {label}", { label: src.label }) : t("Search web serials")) : t("Search Discover");
+    : dzPick === "stories" ? (!dzSiteOpen && dzSources().length ? t("Find a site") : src ? t("Search {label}", { label: src.label }) : t("Search web serials")) : t("Search Discover");
   const chip = (key, label) => el("button", { class: "chip" + (dzPick === key ? " on" : ""), type: "button", "aria-pressed": String(dzPick === key),
-    "data-key": "chip:" + key, onclick: () => { dzPick = key; dz.found = null; renderDiscover(); } }, el("span", { class: "chip-label" }, label));
+    "data-key": "chip:" + key, onclick: () => { dzPick = key; dz.found = null; dzLeaveSite(); renderDiscover(); } }, el("span", { class: "chip-label" }, label));
   const chips = dzHead.querySelector(".feed-chips");
   const scrollX = chips.scrollLeft;
   fill(chips, ...DZ_KINDS.map(([k, l]) => chip(k, l)));
+  // On one site's page the chips step aside for the site (Daniel,
+  // 2026-11): they come back with the tiles.
+  chips.hidden = dzPick === "stories" && dzSiteOpen;
   const q = dzQ();
   const nodes = [];
   const show = (k) => dzPick === "all" || dzPick === k;
@@ -101,7 +104,7 @@ function renderDiscover() {
     nodes.push(sectionHead(t("Newsletters")), el("div", { class: "group feed-group" }, ...pick("newsletter").map(dzRow)));
   }
   if (q && dzPick !== "stories" && !nodes.some(Boolean)) nodes.push(el("p", { class: "empty-text dz-none" }, t("Nothing here matches that.")));
-  if (dzPick !== "stories" || !dzSrc()) nodes.push(el("p", { class: "footnote dz-foot" }, t("Picked by hand. "),
+  if (dzPick !== "stories" || !dzSiteOpen || !dzSrc()) nodes.push(el("p", { class: "footnote dz-foot" }, t("Picked by hand. "),
     el("button", { class: "btn-text dz-suggest", type: "button", onclick: () => C.platform.openOutside("https://github.com/danielnoam/waypage/issues/new?title=" + encodeURIComponent("Discover: ")) }, t("Suggest one on GitHub"))));
   if (dzHead.parentNode !== root) root.replaceChildren(dzHead, el("div", { class: "dz-body" }));
   fill(root.querySelector(".dz-body"), ...nodes.filter(Boolean));
@@ -218,24 +221,103 @@ const dzGrid0 = () => {
 };
 dz.grid = dzGrid0();
 
+// Sites opens on every site as a tile, grouped by kind, each with a line
+// on what it is (2026-11, Daniel: the one drop-down of 17 sites said
+// nothing about them). A tile opens that site's own page, in its own
+// history entry so Back comes home to the tiles.
+let dzSiteOpen = false;
+const DZ_GROUPS = [
+  [t("Web fiction"), ["rr", "sh", "wp", "fp", "sy", "sb", "sv", "serials"]],
+  [t("Fan fiction"), ["ao3", "ffn"]],
+  [t("Comics"), ["wt", "tp"]],
+  [t("Libraries"), ["pg", "se", "ws", "lv", "kx"]],
+];
+const DZ_ABOUT = {
+  rr: t("Ongoing web serials"), sh: t("Web novels"), wp: t("Stories of every kind"), fp: t("Original fiction"),
+  sy: t("Japanese web novels"), sb: t("Stories and quests from the forum"), sv: t("Stories and quests from the forum"),
+  serials: t("Stories on their own sites"), ao3: t("The fan fiction archive"), ffn: t("Fan fiction by fandom"),
+  wt: t("Comics, episode by episode"), tp: t("Comics and novels, by search"), pg: t("Free classic books"),
+  se: t("Classics, carefully made"), ws: t("Free texts and documents"), lv: t("Free audiobooks"), kx: t("Whole sites to read offline"),
+};
+const DZ_HUE = { rr: 24, sh: 200, wp: 12, fp: 265, sy: 150, sb: 222, sv: 340, serials: 40, ao3: 0, ffn: 212, wt: 135, tp: 48, pg: 190, se: 95, ws: 232, lv: 285, kx: 172 };
+function dzMono(key, label) {
+  const letters = label.replace(/[^A-Za-z0-9 ]/g, "").split(" ").filter(Boolean).map((w) => w[0]).join("").slice(0, 2).toUpperCase() || label.slice(0, 1);
+  return el("span", { class: "dz-mono", style: "--dz-hue:" + (DZ_HUE[key] || 210), "aria-hidden": "true" }, letters);
+}
+const dzSiteLabel = (key) => (key === "serials" ? t("Web serials") : (dzSources().find((x) => x.key === key) || {}).label || "");
+function dzOpenSite(key) {
+  dzSource = key;
+  store("waypage.discover.source", key);
+  dz.found = null;
+  dz.grid = dzGrid0();
+  if (dzHead) dzHead.querySelector("input").value = "";
+  dzSiteOpen = true;
+  history.pushState({ view: "dzSite" }, "");
+  renderDiscover();
+  scrollTo(0, 0);
+}
+// Back on the page (the button, or the phone's): the tiles again.
+function dzCloseSite() {
+  if (history.state && history.state.view === "dzSite") { history.back(); return; }
+  dzLeaveSite();
+  renderDiscover();
+}
+// Back past a site's page, from wherever it went (app-start.js's route).
+function dzBackHome() {
+  if (!dzSiteOpen) return;
+  dzLeaveSite();
+  if (state.place === "discover") renderDiscover();
+}
+function dzLeaveSite() {
+  if (!dzSiteOpen) return;
+  dzSiteOpen = false;
+  dz.found = null;
+  if (dzHead) dzHead.querySelector("input").value = "";
+  if (history.state && history.state.view === "dzSite") history.replaceState(null, "");
+}
+function dzSitesHome() {
+  const q = dzQ().toLowerCase();
+  const have = new Set([...dzSources().map((x) => x.key), "serials"]);
+  const nodes = [];
+  for (const [head, keys] of DZ_GROUPS) {
+    const tiles = keys.filter((k) => have.has(k)).map((k) => ({ k, label: dzSiteLabel(k), about: DZ_ABOUT[k] || "" }))
+      .filter((x) => !q || x.label.toLowerCase().includes(q) || x.about.toLowerCase().includes(q))
+      .map((x) => el("button", { class: "dz-tile", type: "button", "data-key": "site:" + x.k, onclick: () => dzOpenSite(x.k) },
+        dzMono(x.k, x.label), el("span", { class: "dz-tile-name", dir: "auto" }, x.label), el("span", { class: "dz-tile-about" }, x.about)));
+    if (tiles.length) nodes.push(sectionHead(head), el("div", { class: "dz-tiles" }, ...tiles));
+  }
+  if (!nodes.length) nodes.push(el("p", { class: "empty-text dz-none" }, t("Nothing here matches that.")));
+  if (!dzCanRead()) nodes.push(el("p", { class: "footnote" }, t("The story sites (Royal Road, AO3 and the rest) show in Waypage on your phone.")));
+  return nodes;
+}
+// A site's own page: Back to the tiles, its name and what it is.
+function dzSiteHead(key) {
+  const back = el("button", { class: "dz-back", type: "button", onclick: dzCloseSite });
+  back.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
+  back.append(t("Sites"));
+  const label = dzSiteLabel(key);
+  return el("div", { class: "dz-site-head" }, back,
+    el("div", { class: "dz-site-title" }, dzMono(key, label),
+      el("div", { class: "dz-site-text" }, el("h2", { dir: "auto" }, label), el("span", { class: "dz-tile-about" }, DZ_ABOUT[key] || ""))));
+}
+
 function dzGrid() {
   if (!dzSources().length) return dzStories();
+  if (!dzSiteOpen) return dzSitesHome();
   const here = dzSrc();
   // The copy's reach can change after load (the app's plugins arrive).
   if (dz.grid.source !== (here ? here.key : "serials")) dz.grid = dzGrid0();
-  const sources = dropdown({ label: t("Site"), cls: "field-pick dz-pick", value: here ? here.key : "serials",
-    options: [...dzSources().map((x) => ({ value: x.key, label: x.label })), { value: "serials", label: t("Web serials") }],
-    onpick: (v) => { dzSource = v; store("waypage.discover.source", v); dz.found = null; dz.grid = dzGrid0(); renderDiscover(); } });
+  const sources = dzSiteHead(here ? here.key : "serials");
   const src = dzSrc();
   if (!src) {
     const serials = C.discover.list().entries.filter((e) => e.kind === "serial" && dzMatch(e, dzQ()));
-    return [el("div", { class: "dz-tools" }, sources),
+    return [sources,
       serials.length ? el("div", { class: "group feed-group dz-serials" }, ...serials.map(dzSerialRow)) : el("p", { class: "empty-text dz-none" }, t("Nothing here matches that.")),
       el("p", { class: "footnote" }, t("Stories posted on their own sites, most on WordPress. A tap saves the whole story as a collection."))];
   }
   if (dz.found) {
     const f = dz.found;
-    return [el("div", { class: "dz-tools" }, sources),
+    return [sources,
       sectionHead(t("Results for “{words}”", { words: f.words }), el("button", { class: "btn-text", type: "button", onclick: dzClearSearch }, t("Clear"))),
       f.busy ? el("p", { class: "footnote dz-src" }, t("Searching {label}…", { label: src.label }))
         : f.items.length ? (src.packs ? dzPacks(f.items) : dzCovers(f.items, true)) : el("p", { class: "footnote" + (f.error ? " warn" : "") }, f.error || (src.packs ? t("No packs with that in their name.") : t("No stories with that in their title.")))];
@@ -244,9 +326,8 @@ function dzGrid() {
   const phoneOnly = dzCanRead() ? null : el("p", { class: "footnote" }, t("The story sites (Royal Road, AO3 and the rest) show in Waypage on your phone."));
   if (src.searchOnly) {
     if (src.browse) src.browse(g.key, "", 0);
-    const lists = dropdown({ label: t("{label} list", { label: src.label }), cls: "field-pick dz-pick", value: g.key,
-      options: src.lists.map((l) => ({ value: l.key, label: l.label })), onpick: (v) => { store("waypage.discover.pick." + src.key, { key: v }); dz.grid = { ...dzGrid0(), key: v }; renderDiscover(); } });
-    return [el("div", { class: "dz-tools" }, sources, lists), dzAsk(src),
+    const lists = dzListChips(src, g.key, (v) => { store("waypage.discover.pick." + src.key, { key: v }); dz.grid = { ...dzGrid0(), key: v }; renderDiscover(); });
+    return [sources, lists, dzAsk(src),
       el("p", { class: "footnote dz-src" }, t("{label} shows its lists only in its own app. Search it with the field above.", { label: src.label }))];
   }
   if (!g.page && !g.busy && !g.error) {
@@ -262,16 +343,15 @@ function dzGrid() {
     dz.grid = { ...dzGrid0(), ...pick };
     renderDiscover();
   };
-  const lists = dropdown({ label: t("{label} list", { label: src.label }), cls: "field-pick dz-pick", value: g.key,
-    options: src.lists.map((l) => ({ value: l.key, label: l.label })), onpick: (v) => keep({ key: v }) });
-  const genres = src.genres.length ? dropdown({ label: { Tag: t("Tag"), Subject: t("Subject"), Fandom: t("Fandom"), Language: t("Language") }[src.genreLabel] || t("Genre"), cls: "field-pick dz-pick", value: g.genre,
+  const lists = dzListChips(src, g.key, (v) => keep({ key: v }));
+  const genres = src.genres.length ? dropdown({ label: { Tag: t("Tag"), Subject: t("Subject"), Fandom: t("Fandom"), Language: t("Language") }[src.genreLabel] || t("Genre"), cls: "dz-genre", value: g.genre,
     options: [...(src.anyGenre ? [{ value: "", label: ({ Tag: t("Every tag"), Subject: t("Every subject"), Fandom: t("Every fandom"), Language: t("Every language") }[src.genreLabel] || t("Every genre")) }] : []), ...src.genres.map((x) => ({ value: x.key, label: x.label }))],
     onpick: (v) => keep({ genre: v }) }) : null;
   const line = g.busy ? (g.page ? t("Reading more…") : t("Reading {site}…", { site: src.label })) : g.error;
   const q = dzQ().toLowerCase();
   const shown = g.items.filter((s) => !q || s.title.toLowerCase().includes(q));
   return [
-    el("div", { class: "dz-tools" }, sources, src.lists.length > 1 ? lists : null, genres),
+    sources, lists, genres ? el("div", { class: "dz-tools" }, genres) : null,
     dzAsk(src),
     shown.length ? (src.packs ? dzPacks(shown) : dzCovers(shown, true)) : null,
     src.packs && !g.busy && !g.error ? el("p", { class: "footnote" }, t("A pack is a whole site in one file, to read with no connection. It's read from where you save it, in Files.")) : null,
@@ -280,6 +360,16 @@ function dzGrid() {
     g.done && g.items.length ? el("p", { class: "footnote dz-src" }, t("That's all of them.")) : null,
     phoneOnly,
   ];
+}
+
+// A site's lists as a row of chips, the picked one first in view.
+function dzListChips(src, at, pick) {
+  if (src.lists.length < 2) return null;
+  const row = el("div", { class: "chips filters dz-lists", role: "group", "aria-label": t("{label} list", { label: src.label }) },
+    ...src.lists.map((l) => el("button", { class: "chip" + (l.key === at ? " on" : ""), type: "button", "aria-pressed": String(l.key === at),
+      onclick: () => { if (l.key !== at) pick(l.key); } }, el("span", { class: "chip-label" }, l.label))));
+  requestAnimationFrame(() => { const on = row.querySelector(".chip.on"); if (on && row.isConnected) row.scrollLeft += on.getBoundingClientRect().left - row.getBoundingClientRect().left - 16; });
+  return row;
 }
 
 // A web serial from the list: + saves it whole, from its contents page.
@@ -465,7 +555,7 @@ function dzCovers(items, grid, sites) {
       "aria-label": saved ? t("{title}, in your library", { title: s.title }) : s.title, onclick: () => openMenu("story", s) },
       el("span", { class: "dz-art" }, art, el("span", { class: "dz-mark" + (saved ? " on" : "") }, dzIcon(saved ? "check" : "plus", 16))),
       el("span", { class: "dz-bt", dir: "auto" }, s.title),
-      meta ? el("span", { class: "dz-bm" }, meta) : null);
+      meta ? el("span", { class: "dz-bm", dir: "auto" }, meta) : null);
   }));
 }
 

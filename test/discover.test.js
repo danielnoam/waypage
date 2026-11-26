@@ -263,8 +263,14 @@ async function phone(browser) {
       await p.evaluate(() => goPlace("discover"));
       await p.locator("#discover .dz-book").first().waitFor();
       await p.locator('#discover .section-link:has-text("Sites")').click();
+      // Sites opens on every site as a tile, grouped by kind.
+      assert.deepStrictEqual((await p.locator("#discover .section-head .overline").allTextContents()), ["Web fiction", "Fan fiction", "Comics", "Libraries"]);
+      await p.locator('#discover [data-key="site:rr"]').click();
       await p.locator("#discover .dz-grid .dz-book").first().waitFor();
-      assert.strictEqual(await p.locator("#discover .chip.on").textContent(), "Sites");
+      assert.strictEqual(await p.locator("#discover .dz-site-head h2").textContent(), "Royal Road");
+      // A site's page has the room: the Discover chips step aside until Back.
+      assert.ok(await p.locator("#discover .feed-chips").isHidden());
+      assert.strictEqual(await p.locator("#discover .feed-chips .chip.on").textContent(), "Sites");
       assert.strictEqual(await p.locator("#discover .dz-row").count(), 0, "only stories under Sites");
       // Page 2 is the same fixture: nothing new, so the list says it's all.
       await p.locator("#discover .dz-more").click();
@@ -272,15 +278,17 @@ async function phone(browser) {
       let asked = await p.evaluate(() => window.asked);
       assert.ok(asked.some((u) => u === "https://www.royalroad.com/fictions/rising-stars?page=2"), asked.join(" "));
       // A genre reads Royal Road's search with that tag.
-      await p.locator("#discover .dz-tools .dropdown").nth(2).locator(".dropdown-btn").click();
+      await p.locator("#discover .dz-genre .dropdown-btn").click();
       await p.locator('[role="option"]:has-text("Horror")').click();
       await p.locator("#discover .dz-grid .dz-book").first().waitFor();
       asked = await p.evaluate(() => window.asked);
       assert.ok(asked.some((u) => /\/fictions\/search\?tagsAdd=horror&orderBy=popularity$/.test(u)), asked.join(" "));
       // FictionPress: its own lists by category.
       await p.evaluate((fp) => { const P = Waypage.platform, rr = P.fetchText; P.fetchText = async (url) => (/fictionpress/.test(url) ? (window.asked.push(url), { status: 200, url, text: fp }) : rr(url)); }, fixture("fp-list.html"));
-      await p.locator("#discover .dz-tools .dropdown").first().locator(".dropdown-btn").click();
-      await p.locator('[role="option"]:has-text("FictionPress")').click();
+      // Back goes to the tiles, then FictionPress.
+      await p.evaluate(() => history.back());
+      await p.locator("#discover .feed-chips").waitFor();
+      await p.locator('#discover [data-key="site:fp"]').click();
       await p.locator('#discover .dz-grid .dz-book:has-text("The Salt Road")').waitFor();
       asked = await p.evaluate(() => window.asked);
       assert.ok(asked.some((u) => u.startsWith("https://www.fictionpress.com/fiction/Fantasy/")), asked.join(" "));
@@ -289,8 +297,8 @@ async function phone(browser) {
       await p.evaluate(() => history.back());
       await p.waitForFunction(() => !state.menu);
       // Web serials: the hand-picked ones, narrowed by the field.
-      await p.locator("#discover .dz-tools .dropdown").first().locator(".dropdown-btn").click();
-      await p.locator('[role="option"]:has-text("Web serials")').click();
+      await p.locator("#discover .dz-back").click();
+      await p.locator('#discover [data-key="site:serials"]').click();
       assert.ok(await p.locator("#discover .dz-serials .dz-row").count() >= 5);
       await p.fill("#discover .dz-search input", "katalepsis");
       assert.strictEqual(await p.locator("#discover .dz-serials .dz-row").count(), 1);
@@ -435,9 +443,9 @@ async function phone(browser) {
       await p.waitForTimeout(400);
       await swipe(320, 40);
       await p.waitForFunction(() => document.querySelector("#discover .chip.on").textContent === "Sites");
-      // Over Sites' grid of covers too.
-      await p.locator("#discover .dz-grid .dz-book").first().waitFor();
-      await swipe(320, 40, "#discover .dz-grid .dz-book");
+      // Over Sites' tiles too.
+      await p.locator("#discover .dz-tile").first().waitFor();
+      await swipe(320, 40, "#discover .dz-tile");
       await p.waitForFunction(() => document.querySelector("#discover .chip.on").textContent === "Feeds");
       await swipe(40, 320);
       await p.waitForFunction(() => document.querySelector("#discover .chip.on").textContent === "Sites");
@@ -628,8 +636,7 @@ async function phone(browser) {
       assert.match(await p.locator("#discover .dz-wiki .dz-row").first().textContent(), /Sea otter[\s\S]*Featured article/);
       // Sites: Project Gutenberg, a book's sheet, then Add the book.
       await p.locator('#discover .chip:has-text("Sites")').click();
-      await p.locator("#discover .dz-tools .dropdown").first().locator(".dropdown-btn").click();
-      await p.locator('[role="option"]:has-text("Project Gutenberg")').click();
+      await p.locator('#discover [data-key="site:pg"]').click();
       await p.locator('#discover .dz-grid .dz-book:has-text("Pride and Prejudice")').click();
       await p.locator('#menuSheet[data-kind="story"]:not([hidden])').waitFor();
       const sheet = await p.locator("#menuSheet").textContent();
@@ -672,6 +679,7 @@ async function phone(browser) {
         goPlace("discover");
       }, fixture("kiwix.xml"));
       await p.locator('#discover .chip:has-text("Sites")').click();
+      await p.locator('#discover [data-key="site:kx"]').click();
       await p.locator("#discover .dz-packs .dz-row").first().waitFor();
       const rows = await p.locator("#discover .dz-packs .dz-row").allTextContents();
       assert.match(rows[0], /Wikipedia 100[\s\S]*English · with pictures · 331 MB/);
@@ -889,9 +897,8 @@ async function phone(browser) {
       await p.locator('#discover .chip:has-text("Sites")').click();
       assert.match(await p.locator("#discover").textContent(), /on your phone/);
       // The books and texts are read here too, through the fetch proxy.
-      await p.locator("#discover .dz-tools .dropdown").first().locator(".dropdown-btn").click();
-      const sites = await p.locator('[role="option"]').allTextContents();
-      assert.deepStrictEqual(sites.map((t) => t.trim()), ["Project Gutenberg", "Standard Ebooks", "LibriVox", "Wikisource", "Kiwix", "Web serials"]);
+      const sites = await p.locator("#discover .dz-tile-name").allTextContents();
+      assert.deepStrictEqual(sites, ["Web serials", "Project Gutenberg", "Standard Ebooks", "Wikisource", "LibriVox", "Kiwix"]);
       await ctx.close();
     });
   } finally {

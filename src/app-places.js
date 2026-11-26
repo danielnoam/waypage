@@ -717,7 +717,6 @@ function mailList(boxes) {
   return out.sort((a, b) => postAt(b.it) - postAt(a.it));
 }
 const mailUnread = (it) => { const saved = savedAs(it.url); return !it.opened && !(saved && (saved.readAt || saved.finished)); };
-const unreadMail = () => mailList(mailBoxes()).filter((x) => mailUnread(x.it)).length;
 
 function openMail(f, it) {
   const saved = savedAs(it.url);
@@ -1029,7 +1028,7 @@ function renderSide() {
   const inMarks = state.place === "highlights";
   const latest = (f) => Math.max(0, ...f.items.map(postAt));
   const big = wide.matches;
-  const inLib = !inFeeds && !inMarks && !["reading", "newsletters", "discover", "anki", "calibre", "catalogs", "audiobookshelf", "webdav"].includes(state.place);
+  const inLib = !inFeeds && !inMarks && !["reading", "newsletters", "discover"].includes(state.place) && !C.ext.place(state.place);
   const inLibrary = inLib && !state.part && !state.folder && state.filter !== "favourites" && state.filter !== "notes";
   const favs = sideFavourites();
   const hasFolders = (load(SERIES_APART_KEY, true) ? plainFolders() : allFolders()).length > 0;
@@ -1068,16 +1067,9 @@ function renderSide() {
     item(sideSvg("discover"), t("Discover"), state.place === "discover", null, () => goPlace("discover")),
     // Every highlight in the library (1.8.0), a place of its own.
     item(sideSvg("marks"), t("Highlights"), inMarks, null, () => goPlace("highlights")),
-    // Anki, once its extension is on (Settings › Extensions): practise the decks.
-    C.ext.on("anki") ? item(sideSvg("anki"), t("Anki"), state.place === "anki", null, () => goPlace("anki")) : null,
-    // Calibre, once its extension is on: the books in your Calibre folder.
-    C.ext.on("calibre") ? item(sideSvg("calibre"), t("Calibre"), state.place === "calibre", null, () => goPlace("calibre")) : null,
-    // Audiobookshelf, once its extension is on: your server's audiobooks.
-    C.ext.on("audiobookshelf") ? item(sideSvg("abs"), t("Audiobookshelf"), state.place === "audiobookshelf", null, () => goPlace("audiobookshelf")) : null,
-    // Catalogs, once its extension is on: the book catalogs you added.
-    C.ext.on("catalogs") ? item(sideSvg("catalogs"), t("Catalogs"), state.place === "catalogs", null, () => goPlace("catalogs")) : null,
-    // WebDAV, once its extension is on: the folders on your servers.
-    C.ext.on("webdav") ? item(sideSvg("webdav"), t("WebDAV"), state.place === "webdav", null, () => goPlace("webdav")) : null,
+    // The places of the extensions that are on (Settings › Extensions),
+    // in the catalogue's order.
+    ...C.ext.places().filter((x) => C.ext.on(x.id)).map((x) => item(sideIcon(x.place.icon), x.place.title(), state.place === x.id, null, () => goPlace(x.id))),
     item(sideSvg("reading"), t("Stats"), state.place === "reading", null, () => goPlace("reading")),
     // On a big screen the sidebar carries the rest (1.5.0): the tags,
     // and Settings at its foot. Feeds are added from the Feeds place.
@@ -1111,15 +1103,11 @@ const SIDE_SVG = {
   reading: '<path d="M5 20V12M10 20V6M15 20v-9M20 20V9"/>',
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
   discover: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
-  anki: '<rect x="8" y="3" width="13" height="15" rx="2"/><path d="M4 7v12a2 2 0 0 0 2 2h11"/>',
-  abs: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><path d="M4 15h3v5H5a1 1 0 0 1-1-1zM20 15h-3v5h2a1 1 0 0 0 1-1z"/>',
-  calibre: '<path d="M4 20V5M8 20V4M12 20l3-15 4 1-3 14"/><path d="M3 20h18"/>',
-  catalogs: '<path d="M3 5h6a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H3z"/><path d="M21 5h-6a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h7z"/>',
-  webdav: '<path d="M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 8a4 4 0 0 1-.5 10z"/><path d="M12 11v6M9.5 14.5 12 17l2.5-2.5"/>',
 };
-function sideSvg(name) {
+const sideSvg = (name) => sideIcon(SIDE_SVG[name]);
+function sideIcon(paths) {
   const box = el("span", { class: "side-icon", "aria-hidden": "true" });
-  box.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + SIDE_SVG[name] + "</svg>";
+  box.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + paths + "</svg>";
   return box;
 }
 
@@ -1237,7 +1225,7 @@ function keysSheet() {
 
 const typingIn = (t) => !!(t && t.closest && t.closest("input, textarea, select, [contenteditable]"));
 // The card or collection with focus, in the list on screen.
-const listNow = () => (state.folder ? $("folderBody") : state.place === "feeds" ? $("feeds") : state.place === "newsletters" ? $("newsletters") : state.place === "highlights" ? $("highlights") : state.place === "reading" ? $("reading") : state.place === "discover" ? $("discover") : state.place === "anki" ? $("anki") : state.place === "calibre" ? $("calibre") : state.place === "audiobookshelf" ? $("audiobookshelf") : state.place === "catalogs" ? $("catalogs") : state.place === "webdav" ? $("webdav") : $("library"));
+const listNow = () => (state.folder ? $("folderBody") : state.place === "feeds" ? $("feeds") : state.place === "newsletters" ? $("newsletters") : state.place === "highlights" ? $("highlights") : state.place === "reading" ? $("reading") : state.place === "discover" ? $("discover") : C.ext.place(state.place) ? $(state.place) : $("library"));
 const focusedNode = () => { const a = document.activeElement; return a && a.closest && listNow().contains(a) ? a.closest("[data-ids]") : null; };
 const focusedPage = () => {
   const n = focusedNode();
@@ -1341,7 +1329,7 @@ function onKeys(e) {
       if (state.place === "highlights") { $("highlights").querySelector(".hl-search input").focus(); return; }
       if (state.place === "discover") { openDzSearch(); return; }
       if (postPlace() && (state.place === "feeds" ? siteFeeds() : mailBoxes()).length) { openPostSearch(); return; }
-      return (["feeds", "newsletters", "reading", "anki", "calibre", "catalogs", "audiobookshelf", "webdav"].includes(state.place) ? goPlace("library") : Promise.resolve()).then(openSearch);
+      return (["feeds", "newsletters", "reading"].includes(state.place) || C.ext.place(state.place) ? goPlace("library") : Promise.resolve()).then(openSearch);
     }),
     d: () => openDownloads(),
     ",": () => openSettings(),
@@ -1570,7 +1558,7 @@ function swipeToSide(root) {
   root.addEventListener("touchstart", (e) => {
     const t = e.touches[0];
     start = e.touches.length === 1 && (M.rtl() ? innerWidth - t.clientX : t.clientX) <= EDGE && !state.select && !state.menu && !state.side
-      && !e.target.closest(".filters, .folder-strip, input, textarea, .drag-handle") ? { x: t.clientX, y: t.clientY } : null;
+      && !e.target.closest(".filters, .folder-strip, input, textarea, .drag-handle, .dropdown-menu") ? { x: t.clientX, y: t.clientY } : null;
   }, { passive: true });
   root.addEventListener("touchmove", (e) => {
     if (!start) return;
@@ -1588,7 +1576,7 @@ function swipeToSide(root) {
 // left the chips run from the right, so a swipe to the right goes on.
 function swipeFeeds(root) {
   let go = null;
-  const chips = () => [...root.querySelectorAll(".feed-chips .chip")];
+  const chips = () => [...root.querySelectorAll(".feed-chips:not([hidden]) .chip")];
   // The chips stay put; what's under them slides (Daniel, 1.45.6).
   // Discover's search and chips sit in one box at the top; it stays too,
   // and so does the search field over Feeds and Newsletters.
@@ -1603,7 +1591,7 @@ function swipeFeeds(root) {
     const t = e.touches[0];
     go = e.touches.length === 1 && (M.rtl() ? innerWidth - t.clientX : t.clientX) > EDGE && !state.feedPick && !state.side && !state.menu && chips().length > 1
       // Discover's row of covers scrolls sideways on its own; its grid doesn't.
-      && !e.target.closest(".filters, input, textarea, .dz-covers:not(.dz-grid)") ? { x: t.clientX, y: t.clientY, on: false, dx: 0, t: e.timeStamp } : null;
+      && !e.target.closest(".filters, input, textarea, .dz-covers:not(.dz-grid), .dropdown-menu") ? { x: t.clientX, y: t.clientY, on: false, dx: 0, t: e.timeStamp } : null;
   }, { passive: true });
   root.addEventListener("touchmove", (e) => {
     if (!go) return;
@@ -1660,8 +1648,10 @@ function pullToCheck(root) {
     hint.classList.toggle("ready", h >= PULL_AT);
   };
   root.addEventListener("touchstart", (e) => {
+    // Not from inside an open drop-down: pulling its list down to its top
+    // reloaded the page behind it and shut the menu (2026-11).
     start = !feedsChecking && !dailyRunning && scrollY <= 0 && e.touches.length === 1 && !state.side && !state.menu
-      ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+      && !e.target.closest(".dropdown-menu") ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
     pulled = 0;
   }, { passive: true });
   root.addEventListener("touchmove", (e) => {
@@ -1850,4 +1840,61 @@ async function unfollow(f) {
   await back();
   paintFeeds();
   toast(t("Unfollowed {title}. The posts you saved stay.", { title: f.title }));
+}
+
+// ---- Going to a place (moved from app-saving.js, 2026-11) ----
+// Library, Feeds or Highlights under the same bar; only the title changes.
+function paintPlace() {
+  const feedsOn = state.place === "feeds";
+  const mailOn = state.place === "newsletters";
+  const marksOn = state.place === "highlights";
+  const readOn = state.place === "reading";
+  const findOn = state.place === "discover";
+  // An extension's place (Anki, Calibre, ...), or null.
+  const ext = C.ext.place(state.place);
+  $("placeTitle").textContent = feedsOn ? t("Feeds") : mailOn ? t("Newsletters") : marksOn ? t("Highlights") : readOn ? t("Stats") : findOn ? t("Discover") : ext ? ext.place.title() : t("Library");
+  $("libraryView").dataset.place = state.place;
+  $("library").hidden = feedsOn || mailOn || marksOn || readOn || findOn || !!ext;
+  $("feeds").hidden = !feedsOn;
+  $("newsletters").hidden = !mailOn;
+  $("highlights").hidden = !marksOn;
+  $("reading").hidden = !readOn;
+  $("discover").hidden = !findOn;
+  for (const x of C.ext.places()) $(x.id).hidden = x.id !== state.place;
+  $("paneNote").textContent = marksOn ? t("Pick a highlight to read it here") : readOn ? t("Pick a clip to read it here") : mailOn ? t("Pick an email to read it here") : t("Pick a post to read it here");
+  // The bottom field follows a feed in Feeds, makes a newsletter address
+  // in Newsletters (1.43.1), searches Royal Road or follows a site in
+  // Discover, and saves a link elsewhere.
+  $("saveUrl").placeholder = feedsOn ? t("Paste a site or feed to follow") : mailOn ? t("Name a new address") : t("Paste a link to save");
+  $("saveUrl").inputMode = mailOn ? "text" : "url";
+  $("saveUrl").autocapitalize = mailOn ? "sentences" : "off";
+  $("saveUrl").enterKeyHint = "go";
+  if (mailOn) $("saveUrl").maxLength = 32; else $("saveUrl").removeAttribute("maxlength");
+  document.querySelector('label[for="saveUrl"]').textContent = feedsOn ? t("Site or feed") : mailOn ? t("New address's name") : t("Page link");
+  $("saveForm").querySelector(".btn-primary").textContent = feedsOn ? t("Follow") : mailOn ? t("Make") : t("Save");
+  $("severalBtn").hidden = feedsOn || mailOn || findOn || !!ext;
+  $("viewBtn").hidden = !findOn && !(state.place === "library" && state.pages.length);
+  if (feedsOn || mailOn || marksOn || readOn || findOn || !!ext) { if (state.query) clearSearch(); }
+  if (feedsOn) renderFeeds();
+  else if (mailOn) renderNewsletters();
+  else if (marksOn) renderHighlights();
+  else if (readOn) renderReading();
+  else if (findOn) openDiscover();
+  else if (ext) renderExtension(ext.id);
+  else renderLibrary();
+}
+
+function goPlace(place, feed) {
+  // The pinned sidebar is there over a collection or Files too: a tap in
+  // it steps back to the library first.
+  if (pinned.matches && history.state && history.state.view) return toLibrary().then(() => goPlace(place, feed));
+  if (place !== state.place) leavePostSearch();
+  state.place = place;
+  state.feed = feed || null;
+  store(PLACE_KEY, place);
+  const done = state.side ? back() : Promise.resolve();
+  paintPlace();
+  if (pinned.matches) renderSide();
+  scrollTo(0, 0);
+  return done;
 }

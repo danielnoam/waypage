@@ -82,6 +82,45 @@ test("a pack that is not the file pinned is refused, and nothing is kept", async
   await assert.rejects(X.getPack("anki", "de-en"), /right file/, "the size is checked too");
 });
 
+// An extension is one entry in the catalogue plus its own files. The core
+// asks the catalogue (C.ext.places(), C.ext.place(id)) and never names one,
+// so adding or removing an extension doesn't mean hunting through the shell.
+const fs = require("fs");
+const path = require("path");
+const ROOT = path.join(__dirname, "..");
+// Still named in the core, to be moved out; this list may only get shorter.
+const STILL_NAMED = {
+  "src/sync.js": ["anki"],        // Anki's decks, cards and logs: a sync of its own shape
+  "src/app-sync.js": ["anki"],    // Sync's "what to sync" switch
+};
+test("no core file names an extension", async () => {
+  const named = [];
+  const files = fs.readdirSync(path.join(ROOT, "src")).filter((f) => f.endsWith(".js")).map((f) => "src/" + f);
+  for (const x of X.list()) {
+    for (const f of files) {
+      if (f === "src/extensions.js" || X.list().some((y) => y.scripts.includes(f))) continue;
+      if ((STILL_NAMED[f] || []).includes(x.id)) continue;
+      if (fs.readFileSync(path.join(ROOT, f), "utf8").includes('"' + x.id + '"')) named.push(f + ' names "' + x.id + '"');
+    }
+  }
+  assert.deepStrictEqual(named, []);
+  for (const [f, ids] of Object.entries(STILL_NAMED)) {
+    const src = fs.readFileSync(path.join(ROOT, f), "utf8");
+    for (const id of ids) assert.ok(src.includes('"' + id + '"'), f + " no longer names " + id + ": take it off STILL_NAMED");
+  }
+});
+test("every extension's place has its <main> in index.html and is drawn by its own code", async () => {
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  assert.ok(X.places().length >= 5);
+  for (const x of X.places()) {
+    assert.ok(new RegExp('<main [^>]*id="' + x.id + '" hidden>').test(html), "index.html has no hidden <main id=\"" + x.id + "\">");
+    assert.ok(x.scripts.some((f) => fs.readFileSync(path.join(ROOT, f), "utf8").includes("EXT_PLACES." + x.id + " = ")), x.id + "'s code doesn't set EXT_PLACES." + x.id);
+    assert.ok(x.place.icon.startsWith("<") && x.place.title() && x.place.failed(), x.id);
+    assert.strictEqual(X.place(x.id).id, x.id);
+  }
+  assert.strictEqual(X.place("library"), null);
+});
+
 test("a download that fails says so, and the next one clears it", async () => {
   reset();
   global.fetch = async () => { throw new TypeError("network"); };

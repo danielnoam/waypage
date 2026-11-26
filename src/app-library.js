@@ -37,12 +37,6 @@ function withTags(has, more) {
   return out;
 }
 
-async function setTags(p, tags) {
-  p.tags = tags;
-  await C.store.writeIndex(state.pages);
-  renderLibrary();
-}
-
 // What a tag is on (2026-11): its clips, and a collection counts once,
 // so one story's tags don't read as a hundred clips.
 function tagUse(tag) {
@@ -825,7 +819,8 @@ function renderFolder() {
   // On a big screen the book's cover and facts stand beside its list.
   } else top = [el("div", { class: "book-side" }, ...bookHead(list, next, done))];
   const showList = folderMode !== "export";
-  const covers = showList && !editing && folderLook(state.folder) === "covers";
+  // The Website sync tab lists its chapters one by one, whatever the look (Daniel 2026-11-25).
+  const covers = showList && !folderMode && folderLook(state.folder) === "covers";
   fill($("folderBody"),
     ...top,
     ...(showList && !editing ? insideStrip(state.folder) : []),
@@ -2631,21 +2626,6 @@ function exportBusy(btn, first, book) {
       held.forEach((b) => { b.disabled = false; });
     },
   };
-}
-
-// A page, or a folder in its order, as an e-book (epub.js), for an
-// e-reader or Send to Kindle.
-async function sendBook(pages, btn, title) {
-  btn.disabled = true;
-  try {
-    const out = await C.epub.exportBook([].concat(pages), title);
-    if (out.uri) await C.platform.shareFile(out.uri, out.name);
-    else C.platform.download(out.name, out.blob);
-  } catch (e) {
-    console.error(e);
-    toast(t("Couldn't make the book. Try again."));
-  }
-  btn.disabled = false;
 }
 
 // The page file with a plain print style, on the phone's print screen;
