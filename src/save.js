@@ -716,10 +716,10 @@
     }
     var nums = [].map.call(document.querySelectorAll(".npager__num"), function (x) { return parseInt(x.textContent, 10) || 0; });
     S.last = Math.max.apply(null, [S.last, cur].concat(nums));
-    // The pager shows eight numbers around the page on show: fewer than four
-    // after it, and its last is the list's last (`final`), not just the
-    // furthest seen so far.
-    if (S.last - cur < 4) S.final = true;
+    // The pager shows eight numbers around the page on show, three of them
+    // after it (page 5: 1 to 8): fewer than three after it, and its last is
+    // the list's last (`final`), not just the furthest seen so far.
+    if (S.last - cur < 3) S.final = true;
     if (!S.read[cur]) {
       S.read[cur] = 1;
       S.at = Math.max(S.at, cur);

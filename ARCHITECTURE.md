@@ -267,8 +267,8 @@ is walked: a group's list as the newest chapter / 20 pages, filling gaps as
 the pages from where it starts down to the lowest missing number at twice
 the first page's uploads a chapter. A step's estimate becomes its real
 length once its end is in sight (the pager shows eight numbers around the
-page on show, so its last is the list's last only when fewer than four
-follow: until then the status says "of about"), and a step read past its
+page on show, three after it, so its last is the list's last only when
+fewer than three follow: until then the status says "of about"), and a step read past its
 estimate eases towards its share instead of filling it, so the bar slows
 rather than sitting near full; it never goes back, and only "Found" fills
 it. Trap: the site's pager is no total: "page 6 of 9" was page 6 of 23,

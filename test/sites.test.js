@@ -536,7 +536,8 @@ const plain = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").rep
           setTimeout(() => show(k), 5);
         };
         const show = (n) => {
-          const from = Math.max(1, Math.min(n - 3, pages - 7));
+          // As the site's: eight numbers, the page on show and three after it.
+          const from = Math.max(1, Math.min(n - 4, pages - 7));
           box.innerHTML = rows.slice((n - 1) * 5, n * 5).map((r) =>
             '<div class="mchap-row"><a class="mchap-row__primary" href="/title/1w0v-the-perks/' + r.g + String(r.n).replace(".", "") + "-chapter-" + r.n + '"><span class="mchap-row__ch">' + r.label + '</span></a>' +
             '<a class="mchap-row__group" href="/groups/' + r.g + '">' + book[r.g][0] + "</a></div>").join("") +
