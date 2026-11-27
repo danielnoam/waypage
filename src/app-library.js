@@ -734,7 +734,7 @@ function saveNewChapters(name, b) {
   if (!fresh || !list.length) return;
   if (!navigator.onLine) { toast(t("You're offline. Try again when you're back online.")); return; }
   if (runFor(name)) { toast(t("Already saving into {name}. It's in Downloads.", { name: name })); return; }
-  if (entry && entry.all) { saveAll(chapterLinks(name), name, [], undefined, true, undefined, folderSource(list)); return; }
+  if (entry && entry.all) { saveAll(laterChapters(name), name, [], undefined, true, undefined, folderSource(list)); return; }
   const last = list[list.length - 1];
   if (!sizeOk(last, fresh)) return;
   if (b) b.disabled = true;
