@@ -57,8 +57,8 @@ const pushes = new WeakMap();
 let tapped = null;
 const zoomed = new WeakMap();
 document.addEventListener("click", (e) => {
-  const t = e.target.closest && e.target.closest(".card-open, .folder-go, .post-open");
-  const panel = t && (t.classList.contains("folder-go") ? t : t.closest(".card, .tile, .post"));
+  const t = e.target.closest && e.target.closest(".card-open, .folder-go, .folder-narrate, .post-open");
+  const panel = t && (t.classList.contains("folder-go") ? t : t.closest(".folder-go-row, .card, .tile, .post"));
   tapped = panel ? { rect: panel.getBoundingClientRect(), radius: parseFloat(getComputedStyle(panel).borderTopLeftRadius) || 0, at: Date.now(), panel, key: panelKey(panel) } : null;
 }, true);
 // The same panel after the library is drawn again (1.11.1), so Back
@@ -71,6 +71,7 @@ function panelKey(n) {
   if (n.dataset.name) return ".tile" + q("data-name", n.dataset.name);
   if (n.dataset.key) return q("data-key", n.dataset.key);
   if (n.classList.contains("folder-go")) return ".folder-go";
+  if (n.classList.contains("folder-go-row")) return ".folder-go-row";
   return n.id ? "#" + CSS.escape(n.id) : "";
 }
 function panelNow(from, under) {
@@ -1246,7 +1247,7 @@ function closeReader() {
 // `map` is each piece's block, which the reader lights up.
 
 const speech = C.platform.speech;
-const aloud = { key: "", map: [], state: "stopped", index: -1, arrived: false };
+const aloud = { key: "", map: [], places: [], state: "stopped", index: -1, arrived: false };
 // Whether the clip being read aloud is the one open in the reader; when
 // it isn't (another clip, the library, Settings), the bar along the
 // bottom of the app shows it instead (1.4.0).
@@ -1469,7 +1470,7 @@ async function startAloud(from, spot) {
   });
   const { items, map, first } = pieces(parts);
   const start = Math.max(0, first);
-  Object.assign(aloud, { key: p.id, map });
+  Object.assign(aloud, { key: p.id, map, places: C.reader.places() });
   setAloud("playing", start);
   queued = null;
   try {
@@ -1511,10 +1512,10 @@ async function queueNext() {
   let html;
   try { html = await C.store.readPage(next.id); } catch (e) { html = null; }
   if (!html || aloud.key !== p.id) return;
-  const texts = C.reader.readableIn(html, { footnotes: !!load(FOOTNOTES_KEY, false), edges: !!load(EDGES_KEY, false) });
+  const { texts, places } = C.reader.readableAt(html, { footnotes: !!load(FOOTNOTES_KEY, false), edges: !!load(EDGES_KEY, false) });
   if (!texts.length) return;
   const { items, map } = pieces(texts.map((text, block) => ({ text, block })));
-  queued = { key: next.id, after: p.id, map };
+  queued = { key: next.id, after: p.id, map, places };
   const ok = await speech.queue({ after: p.id, items, start: 0, lang: next.lang || "", voice: voiceFor(next), engine: engineFor(next), mix: !!load(MIX_KEY, false), volume: aloudVolume(),
     key: next.id, blocks: map, ...mediaInfo(next) });
   if (!ok) queued = null;
@@ -1527,7 +1528,7 @@ function wentOn(key) {
   const next = state.pages.find((x) => x.id === key);
   if (!next) return false;
   if (was) { was.finished = true; was.at = 1; delete was.spot; savePositions(); }
-  Object.assign(aloud, { key, map: queued.map });
+  Object.assign(aloud, { key, map: queued.map, places: queued.places });
   queued = null;
   wentOnFrom = "";
   if (was && state.open && state.open.id === was.id) {
@@ -2144,6 +2145,7 @@ function setAloud(st, index) {
     setTimeout(() => { if (aloud.state === "ended" && aloud.key === wentOnFrom) readNext(); }, 800);
   }
   if (!on && !ended) aloud.key = "";
+  for (const n of document.querySelectorAll(".card-narrate")) n.hidden = on && (n.dataset.ids || n.closest(".card").dataset.ids) === aloud.key;
   if (st !== "playing" && st !== "paused" && sleep.pick) setSleep("");
   else if (sleep.at && Date.now() >= sleep.at - 1000) { sleep.pick = ""; sleep.at = 0; paintSleep(); }
   keepAwake();
@@ -2303,10 +2305,49 @@ speech.onProgress(({ key, index, state: st, thinking }) => {
   const moved = key !== aloud.key;
   if (moved && !wentOn(key)) return;
   setAloud(st, index);
+  keepAloudPlace(index);
   if (moved) queueNext();
   aloudThinking(!!thinking && st === "playing");
   if (!thinking || st !== "playing") aloudMoving = 0;
 });
+// The reading place follows the voice (2026-11) where the page can't:
+// with the clip closed (the bar on Home) or the phone locked. An open
+// page on screen scrolls with it and keeps its own place.
+function keepAloudPlace(index) {
+  const p = aloudPage(), b = aloud.map[index];
+  const at = b != null ? aloud.places[b] : null;
+  if (!p || !at || p.preview || (state.open === p && !document.hidden)) return;
+  if (p.at === at.at && (p.spot || "") === at.spot) return;
+  p.at = at.at;
+  if (at.spot) { p.spot = at.spot; p.spotWords = at.words; } else { delete p.spot; delete p.spotWords; }
+  p.readAt = p.placeAt = Date.now();
+  p.readOn = deviceName();
+  clearTimeout(positionTimer);
+  positionTimer = setTimeout(savePositions, 1500);
+}
+
+// Narrate on Continue reading (2026-11, Daniel's ask): opens the clip at
+// its place and narrates from there, as the reader's own button does.
+// Not for what Narrate can't read, nor while it's this clip being read.
+const narratable = (p) => !!speech.available && !isAudiobook(p) && !p.comic && !p.note && !C.files.printed(p);
+const narratingNow = (p) => aloudOn() && aloud.key === p.id;
+// A finished clip (a collection read through, read again) is narrated
+// from its start.
+async function narrateFrom(p) {
+  const again = !!p.finished;
+  await openPage(p.id);
+  if (state.open !== p || narratingNow(p)) return;
+  voicedSound(p) ? voicedPlay() : startAloud(again ? 0 : undefined);
+}
+// The speaker beside a collection's Continue (2026-11, Daniel's pick):
+// one blue button in two, like Save and its list.
+function narrateHalf(p) {
+  const b = el("button", { class: "card-narrate folder-narrate", type: "button", "data-ids": p.id, "aria-label": t("Narrate"), title: t("Narrate"), hidden: narratingNow(p) ? "" : null,
+    onclick: () => narrateFrom(p) });
+  b.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+  return b;
+}
+
 // The ring round Pause while the engine makes the piece (Daniel's ask);
 // a quick one never shows it.
 let thinkTimer = 0;

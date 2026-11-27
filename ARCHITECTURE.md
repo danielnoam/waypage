@@ -1231,6 +1231,10 @@ adds a line here.
 
 Things that broke once and would again. Check here before touching the
 area.
+- Narrate's reading place with the page off screen (clip closed, phone locked)
+  comes from `aloud.places`, each block's spot taken when the reading starts
+  (`C.reader.places()`, or `readableAt` for a queued next clip). The page's
+  scroll can't keep it there: a hidden page doesn't scroll.
 - Chrome and Android's WebView ignore `touch-action` on SVG shapes. A drag that
   starts on one (a comment bubble in `ink.js`) is cancelled by the browser's
   own pan (`pointercancel`), and the item snaps back. Give the shape a real
@@ -1546,6 +1550,7 @@ area.
 - An extension's scripts are added as `<script>` tags, which can run before the shell files still being parsed after `app-extensions.js`. So the ones turned on load only at `DOMContentLoaded`: `app-abs.js` set `REMOTE_AUDIO.audiobookshelf` before `app-listen.js` had made `REMOTE_AUDIO`, threw, and streaming had nothing to play through.
 - A row or box that is centred (`justify-content` or `align-items: center`) and can be wider or taller than its screen loses both ends, and the start can't be scrolled to. Use `safe center` (the Draw bar at 320 px, the app lock with a phone on its side). A column that wraps (`flex-wrap: wrap`) is as wide as its widest row, so a panel built from `.folder-actions` needs `nowrap` to stay inside a phone.
 - Words written into `index.html` need `data-t` on them or a wrapper, or they stay English in Hebrew; a button with an icon wraps its word in `<span data-t>`. `i18n.test.js` checks it.
+- A collection's, series' or feed's name is cut at `NAME_MAX` (200, app-library.js `cleanName`); backup.js `cleanMeta` and `cleanFeed` cut at the same 200, so change them together. Tags stay at 32 (`cleanTag`). A build from 1.68.0 or older cuts a synced name to 32 on its side.
 
 ## The docs
 

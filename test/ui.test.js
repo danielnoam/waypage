@@ -2034,7 +2034,7 @@ function zipOf(files) {
       await q.evaluate(() => openFolder("Serial"));
       // Favourite and Edit sit in the bar; the ⋯ menu keeps the rest.
       await q.click("#folderMore");
-      assert.deepStrictEqual(await q.locator("#folderPop .pop-label").allTextContents(), ["Add clips", "Show as a list", "Make it a series", "Tags", "Select", "Export", "Remove"]);
+      assert.deepStrictEqual(await q.locator("#folderPop .pop-label").allTextContents(), ["Show as a list", "Make it a series", "Tags", "Select", "Export", "Remove"]);
       await q.keyboard.press("Escape");
       await q.click("#folderFav");
       await until(q, () => folderFav("Serial") && document.getElementById("folderFav").getAttribute("aria-pressed") === "true");
@@ -3356,6 +3356,97 @@ c("bk1", { at: 0.01 })]);
       assert.strictEqual(got.after, "stopped");
       assert.strictEqual(got.offPip, "false:true");
       assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("Narrate on Continue reading, and the place following the voice with the clip closed (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = { id: "n1", url: "https://example.com/n1", title: "Long clip", site: "example.com", savedAt: 1000, minutes: 9, mode: "links", at: 0.05, readAt: Date.now() };
+        await S.writeIndex([c]);
+        let body = "<h1>Long clip</h1>";
+        for (let i = 0; i < 60; i++) body += "<p>Paragraph number " + i + " of the long clip, with enough words in it to take a line or two.</p>";
+        await S.writePage("n1", "<!doctype html><html><body>" + body + "</body></html>", c);
+      });
+      await q.reload();
+      await q.waitForSelector(".continue .card-narrate");
+      const got = await q.evaluate(async () => {
+        const sp = window.Waypage.platform.speech;
+        sp.play = (o) => { window.played = o; return Promise.resolve(); };
+        sp.stop = () => Promise.resolve();
+        const wait = (f) => new Promise((ok) => { const t = setInterval(() => { if (f()) { clearInterval(t); ok(); } }, 50); });
+        document.querySelector(".continue .card-narrate").click();
+        await wait(() => window.played && state.open && state.open.id === "n1");
+        const out = { start: window.played.start > 0, reading: aloud.key === "n1" && aloud.state === "playing" };
+        closeReader();
+        await wait(() => !state.open && document.querySelector(".continue .card-narrate"));
+        await new Promise((r) => setTimeout(r, 300));
+        out.hidden = document.querySelector(".continue .card-narrate").hidden;
+        // The voice moves on with the clip closed: the place goes with it.
+        const p = state.pages.find((x) => x.id === "n1"), was = p.at;
+        const last = window.played.items.length - 3, block = aloud.map[last];
+        setAloud("playing", last);
+        keepAloudPlace(last);
+        out.moved = p.at > was && !!p.spot && /Paragraph number/.test(p.spotWords);
+        await savePositions();
+        sp.stop(); setAloud("stopped", -1);
+        openPage("n1");
+        await wait(() => state.open && state.open.id === "n1");
+        await window.Waypage.reader.placed();
+        out.block = block;
+        await new Promise((r) => setTimeout(r, 800));
+        window.Waypage.reader.readable();
+        out.back = window.Waypage.reader.firstShown().index;
+        return out;
+      });
+      assert.ok(got.start && got.reading, JSON.stringify(got));
+      assert.strictEqual(got.hidden, true);
+      assert.ok(got.moved, JSON.stringify(got));
+      assert.ok(Math.abs(got.back - got.block) <= 1, JSON.stringify(got));
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
+    await test("a collection's Continue has Narrate beside it, from the start once all is read (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (i) => ({ id: "s" + i, url: "https://example.com/s" + i, title: "Part " + i, site: "example.com", savedAt: 1000 + i, minutes: 3, mode: "links", at: 0, folder: "Tale", folderAt: 1000 + i });
+        const one = { ...c(1), at: 1, finished: Date.now(), readAt: Date.now() };
+        await S.writeIndex([one, c(2)]);
+        for (const i of [1, 2]) await S.writePage("s" + i, "<!doctype html><html><body><h1>Part " + i + "</h1>" + "<p>Words of part " + i + ", enough of them to fill a line of the page.</p>".repeat(40) + "</body></html>", c(i));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const got = await q.evaluate(async () => {
+        const sp = window.Waypage.platform.speech;
+        sp.play = (o) => { window.played = o; return Promise.resolve(); };
+        sp.stop = () => Promise.resolve();
+        const wait = (f) => new Promise((ok) => { const t = setInterval(() => { if (f()) { clearInterval(t); ok(); } }, 50); });
+        openFolder("Tale");
+        await wait(() => document.querySelector("#folderView .folder-narrate"));
+        const out = { row: !!document.querySelector("#folderView .folder-go-row .folder-go + .folder-narrate") };
+        document.querySelector("#folderView .folder-narrate").click();
+        await wait(() => window.played);
+        out.next = window.played.key;
+        sp.stop(); setAloud("stopped", -1);
+        closeReader();
+        // All read: Read again narrates the first part from its start.
+        for (const p of state.pages) Object.assign(p, { at: 1, finished: Date.now() });
+        window.played = null;
+        openFolder("Tale");
+        renderFolder();
+        await wait(() => document.querySelector("#folderView .folder-narrate[data-ids='s1']"));
+        document.querySelector("#folderView .folder-narrate").click();
+        await wait(() => window.played);
+        out.again = window.played.key + ":" + window.played.start;
+        return out;
+      });
+      assert.deepStrictEqual(got, { row: true, next: "s2", again: "s1:0" });
+      // On CI the app asks the fetch worker for the made-up example.com page; that 404 is not what this test checks.
+      const errs = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errs, [], errs.join(" | "));
       await q.context().close();
     });
 
@@ -5109,6 +5200,62 @@ c("bk1", { at: 0.01 })]);
       fs.rmSync(dir, { recursive: true, force: true });
     });
 
+    await test("a collection's Add offers files, folders and notes like the library's, and what they bring joins it; a new audiobook series goes in it whole (2026-11-26)", async () => {
+      const q = await page(browser, 390);
+      const dir = fs.mkdtempSync(path.join(require("os").tmpdir(), "wp-into-"));
+      fs.mkdirSync(path.join(dir, "Stories"));
+      fs.writeFileSync(path.join(dir, "Stories", "one.md"), "# One\n\nThe first story.");
+      fs.writeFileSync(path.join(dir, "Stories", "two.md"), "# Two\n\nThe second story.");
+      fs.writeFileSync(path.join(dir, "three.md"), "# Three\n\nThe third story.");
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = { id: "sh1", url: "https://example.com/c", title: "Chapter", site: "example.com", savedAt: 1, minutes: 1, mode: "links", at: 0, finished: false, folder: "Shelf", folderAt: 1 };
+        await S.writeIndex([c]);
+        await S.writePage(c.id, "<!doctype html><html><body><p>x</p></body></html>", c);
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      await q.evaluate(() => {
+        Object.defineProperty(window.Waypage.platform.files, "canLink", { get: () => false, configurable: true });
+        openFolder("Shelf");
+      });
+      await q.click("#folderAdd");
+      assert.deepStrictEqual(await q.locator("#batchView .batch-file .row-label").allTextContents(), ["Add a file", "Add a folder", "New note"]);
+      assert.ok(/joins Shelf/.test(await q.locator("#batchView .batch-file .meta").textContent()));
+      let chooser = q.waitForEvent("filechooser");
+      await q.locator("#batchView .row", { hasText: "Add a folder" }).click();
+      await (await chooser).setFiles(path.join(dir, "Stories"));
+      await until(q, () => state.pages.length === 3 && !runs.size && state.pages.every((p) => p.folder === "Shelf"));
+      await until(q, () => !state.batch && state.folder === "Shelf");
+      await q.click("#folderAdd");
+      chooser = q.waitForEvent("filechooser");
+      await q.locator("#batchView .row", { hasText: "Add a file" }).click();
+      await (await chooser).setFiles(path.join(dir, "three.md"));
+      await until(q, () => state.pages.length === 4 && state.pages.every((p) => p.folder === "Shelf"));
+      assert.deepStrictEqual(await q.evaluate(async () => (await C.store.readIndex()).filter((p) => p.folder === "Shelf").length), 4);
+      // A folder of book folders is a new series: it goes into Shelf whole.
+      await q.evaluate(() => {
+        const F = window.Waypage.platform.files, A = window.Waypage.platform.audio;
+        Object.defineProperty(A, "native", { get: () => true, configurable: true });
+        A.probe = async () => ({ duration: 60000 });
+        F.release = async () => {};
+        F.blob = async () => new Blob([new Uint8Array(16)]);
+        F.pickFolder = async () => ({ ref: "tree:saga", name: "saga" });
+        F.scan = async () => ({ ok: true, name: "The Saga", files: ["Book 1/01.mp3", "Book 2/01.mp3"].map((path) => ({ ref: "tree:saga/" + path, path, name: "01.mp3", size: 10 })) });
+      });
+      await q.evaluate(() => addInto("Shelf", addAudiobookFolder));
+      const saga = await q.evaluate(() => ({ series: isSeriesFolder("The Saga"), host: seriesHost("The Saga"), n: folderPages("The Saga").length, shelf: folderPages("Shelf").length }));
+      assert.deepStrictEqual(saga, { series: true, host: "Shelf", n: 2, shelf: 4 });
+      // Into a series, the books go in themselves.
+      await q.evaluate(() => { markSeries("Shelf", true, null); window.Waypage.platform.files.pickFolder = async () => ({ ref: "tree:more", name: "more" }); });
+      await q.evaluate(() => addInto("Shelf", addAudiobookFolder));
+      assert.strictEqual(await q.evaluate(() => folderPages("Shelf").length), 6);
+      const errors = q.errors.filter((e) => !/waypage-fetch/.test(e));
+      assert.deepStrictEqual(errors, [], errors.join(" | "));
+      await q.context().close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
     // CONTRIBUTING "Explain less": a ? only where Daniel agreed to one.
     await test("More speech engines (Kokoro): Download starts the one pressed, and is pressable when nothing else is downloading", async () => {
       const q = await page(browser, 390);
@@ -6660,8 +6807,7 @@ c("bk1", { at: 0.01 })]);
       await q.waitForSelector("#saveUrl");
       await until(q, () => !!document.querySelector('.tile[data-name="Serial"]'));
       await q.evaluate(() => openFolder("Serial"));
-      await q.click("#folderMore");
-      await q.locator("#folderPop .pop-item", { hasText: "Add clips" }).click();
+      await q.click("#folderAdd");
       await q.locator("#batchView .row", { hasText: "New note" }).click();
       await q.locator(".paper-row", { hasText: "Blank note" }).click();
       await until(q, () => !!state.open && state.open.note);

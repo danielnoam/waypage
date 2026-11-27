@@ -437,6 +437,24 @@ a.btn-small { text-decoration: none; white-space: nowrap; display: inline-flex; 
   vertical-align: middle;
 }
 .card-retry:disabled { color: var(--muted); cursor: default; }
+/* Narrate on Continue reading (2026-11): a round button on the card's
+   far side, so the card keeps its height. */
+.card-narrate {
+  position: relative; z-index: 1; flex: none; align-self: center;
+  width: var(--tap); height: var(--tap); padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: var(--r-full);
+  background: var(--bg); color: var(--accent); cursor: pointer;
+}
+.card-narrate[hidden], .selecting .card-narrate { display: none; }
+.folder-go-row { display: flex; margin-bottom: var(--s-5); }
+.folder-go-row > .folder-go { flex: 1; min-width: 0; margin: 0; }
+.folder-go-row > .folder-go:not(:last-child) { border-start-end-radius: 0; border-end-end-radius: 0; }
+.folder-narrate {
+  width: 52px; height: 48px; margin-inline-start: 1px; align-self: stretch;
+  border: 0; border-radius: var(--r-md); border-start-start-radius: 0; border-end-start-radius: 0;
+  background: var(--accent); color: var(--accent-ink);
+}
 .card.saving { cursor: default; }
 /* A run's card keeps one height: its status is one line whatever it says. */
 .card.run .card-status { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -874,7 +892,8 @@ body.aloud-bar-up .library, body.aloud-bar-up .screen-body { padding-bottom: cal
   border: 1px solid var(--line); background: var(--bg); color: var(--ink);
   font: 400 var(--fs-label)/var(--lh-label) var(--sans);
 }
-.field-pick .dropdown-face { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: start; }
+.field-pick .dropdown-btn { min-width: 0; }
+.field-pick .dropdown-face { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: start; }
 .field-pick .dropdown-face.unset { color: var(--muted); }
 .field-pick .dropdown-menu { inset-inline: 0; max-height: 50vh; overflow-y: auto; }
 .aloud-player .icon-btn { border-radius: var(--r-full); }
@@ -1578,6 +1597,9 @@ span.update-text { cursor: default; }
 }
 .dropdown-item:hover, .dropdown-item:focus-visible, .dropdown-item:active { background: var(--bar); outline: 0; }
 .dropdown-item[aria-selected="true"] { color: var(--accent); font-weight: 600; }
+/* A long name (a collection's) takes two lines at most, never stretches the menu. */
+.dropdown-item { flex-shrink: 0; padding-block: var(--s-1); }
+.dropdown-text { min-width: 0; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .dropdown-check { display: inline-flex; width: 20px; height: 20px; }
 @media (prefers-reduced-motion: reduce) { .dropdown-caret { transition: none; } }
 
@@ -2197,7 +2219,7 @@ span.update-text { cursor: default; }
 .book-facts .folder-meta { margin: 0 0 var(--s-2); }
 .book-progress { height: 4px; border-radius: var(--r-full); background: var(--line); overflow: hidden; }
 .book-progress-fill { display: block; height: 100%; background: var(--accent); }
-.folder-go { margin-bottom: var(--s-2); }
+.folder-go, .folder-go-row { margin-bottom: var(--s-2); }
 .folder-starts { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: var(--s-3); }
 .folder-starts > :last-child:nth-child(odd) { grid-column: span 2; }
 .quick-start .chip-icon { display: flex; color: var(--accent); }

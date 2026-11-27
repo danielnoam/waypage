@@ -80,7 +80,7 @@ function renderBatch(text, preset, from, siteTags) {
     el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, t("Skip links already saved")), skipNote), skip));
   const go = el("button", { class: "btn-primary batch-go", type: "submit" });
   const input = el("input", { class: "tag-input", type: "text", placeholder: t("New collection"), "aria-label": t("New collection"),
-    maxlength: "32", enterkeyhint: "done", autocapitalize: "sentences" });
+    maxlength: String(NAME_MAX), enterkeyhint: "done", autocapitalize: "sentences" });
   // One link may be a contents page: its chapters replace it, and the
   // folder takes its name.
   const findBar = el("span", { class: "progress thin batch-find-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", hidden: true }, el("span", { class: "progress-fill" }));
@@ -154,7 +154,7 @@ function renderBatch(text, preset, from, siteTags) {
       input.hidden = !fresh;
       series = fresh ? v === NEW_SERIES : isSeriesFolder(v);
       paintKind();
-      if (fresh) { pick(cleanTag(input.value) ? folderName(input.value) : null, true); input.focus(); }
+      if (fresh) { pick(cleanName(input.value) ? folderName(input.value) : null, true); input.focus(); }
       else pick(v || null);
     } });
   input.hidden = true;
@@ -236,7 +236,7 @@ function renderBatch(text, preset, from, siteTags) {
   };
   drawTagNew();
   area.addEventListener("input", sync);
-  input.addEventListener("input", () => pick(cleanTag(input.value) ? folderName(input.value) : null, true));
+  input.addEventListener("input", () => pick(cleanName(input.value) ? folderName(input.value) : null, true));
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
   const KIND_NOTES = { article: t("The text and its pictures, read as a page."), comic: t("Only the page's pictures, in order, edge to edge. For comics and manga.") };
   const kindNote = el("p", { class: "meta" }, KIND_NOTES[kind]);
@@ -250,17 +250,20 @@ function renderBatch(text, preset, from, siteTags) {
   // A file of your own comes in from here too (0.31.0).
   const newNoteRow = el("button", { class: "row", type: "button", onclick: () => openMenu("newNote") },
     el("span", { class: "row-label accent" }, t("New note")));
-  // Inside a collection only a new note is offered: it joins the collection.
-  const fromFile = from ? null : preset ? el("section", { class: "settings-section batch-file" }, el("h2", { class: "overline" }, t("Note")),
-    el("div", { class: "group" }, newNoteRow)) : el("section", { class: "settings-section batch-file" }, el("h2", { class: "overline" }, t("File")),
-    el("div", { class: "group" }, el("button", { class: "row", type: "button", onclick: () => pickFile(() => back()) },
+  // Inside a collection the same, and what they bring in joins it (a
+  // new note joins it by itself).
+  const into = (adding) => () => (preset ? addInto(preset, adding) : adding());
+  const fromFile = from ? null : el("section", { class: "settings-section batch-file" }, el("h2", { class: "overline" }, t("File")),
+    el("div", { class: "group" }, el("button", { class: "row", type: "button", onclick: into(() => pickFile(() => back())) },
       el("span", { class: "row-label accent" }, t("Add a file"))),
-      canAddFolder() ? el("button", { class: "row", type: "button", onclick: () => back().then(addFolder) },
+      canAddFolder() ? el("button", { class: "row", type: "button", onclick: () => back().then(into(addFolder)) },
         el("span", { class: "row-label accent" }, t("Add a folder"))) : null,
-      C.platform.files.canPickFolder ? el("button", { class: "row", type: "button", onclick: () => back().then(addAudiobookFolder) },
+      C.platform.files.canPickFolder ? el("button", { class: "row", type: "button", onclick: () => back().then(into(addAudiobookFolder)) },
         el("span", { class: "row-label accent" }, t("Add an audiobook folder"))) : null,
       newNoteRow),
-    el("p", { class: "meta" }, t("An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3, a zip of them{x}). A folder's files are each added on their own, in a collection named after their folder. It stays {ON_HERE}.", { x: C.platform.files.canPickFolder ? t(", or a folder of them") : "", ON_HERE: ON_HERE })));
+    el("p", { class: "meta" }, preset
+      ? t("An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3, a zip of them{x}). Everything added here joins {name}. It stays {ON_HERE}.", { x: C.platform.files.canPickFolder ? t(", or a folder of them") : "", name: preset, ON_HERE: ON_HERE })
+      : t("An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3, a zip of them{x}). A folder's files are each added on their own, in a collection named after their folder. It stays {ON_HERE}.", { x: C.platform.files.canPickFolder ? t(", or a folder of them") : "", ON_HERE: ON_HERE })));
   const form = el("form", { class: "batch-form" }, asPage, fromFile,
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Links")), area, count, finder, findBar, findNote, skipRow),
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Save as")),
@@ -301,9 +304,9 @@ function renderBatch(text, preset, from, siteTags) {
 
 // "The Wandering Inn - Chapter 1.01" → "The Wandering Inn".
 function seriesName(p) {
-  if (p.series) return cleanTag(p.series) || p.site;
+  if (p.series) return cleanName(p.series) || p.site;
   const t = p.title.replace(/[\s\-–—:|,·]*(chapter|ch\.?|part|episode|ep\.?|book|vol\.?|פרק|capítulo|chapitre|kapitel)\s*[\d.ivxl]+\b.*$/iu, "").trim();
-  return cleanTag(t && t !== p.title ? t : p.title) || p.site;
+  return cleanName(t && t !== p.title ? t : p.title) || p.site;
 }
 
 // Saves up to `n` pages following `from`'s next links (previous ones
@@ -939,7 +942,7 @@ async function dailyCheck(force) {
 // Renamed in place on the book page; the new-chapters entry follows.
 async function renameFolder(raw) {
   const old = state.folder;
-  const name = cleanTag(raw || "");
+  const name = cleanName(raw || "");
   if (!name) { toast(t("Type a name for the collection.")); return false; }
   if (name === old) return true;
   const clash = allFolders().find((n) => sameTag(n, name) && !sameTag(n, old));

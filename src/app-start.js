@@ -121,6 +121,7 @@ $("settingsBack").addEventListener("click", () => history.go(state.section && wi
 $("folderBack").addEventListener("click", () => history.back());
 $("folderMore").addEventListener("click", openFolderMenu);
 $("folderEdit").addEventListener("click", () => setFolderMode("edit"));
+$("folderAdd").addEventListener("click", () => openBatch("", false, state.folder));
 $("folderFav").addEventListener("click", () => favFolder(state.folder, !folderFav(state.folder)));
 $("folderCancel").addEventListener("click", () => setFolderMode(""));
 $("folderDone").addEventListener("click", async () => {
@@ -156,7 +157,7 @@ $("saveForm").addEventListener("submit", (e) => {
     return;
   }
   if (state.place === "newsletters") {
-    const name = cleanTag($("saveUrl").value);
+    const name = cleanName($("saveUrl").value);
     $("saveUrl").blur();
     makeMailBox(name).then((made) => { if (made) $("saveUrl").value = ""; });
     return;

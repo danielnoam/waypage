@@ -6,6 +6,10 @@
 // case-insensitive duplicates dropped.
 
 const cleanTag = (t) => String(t).replace(/\s+/g, " ").trim().slice(0, 32);
+// A collection's, series' or feed's name: long enough for any real title.
+// backup.js caps synced and imported names at the same 200.
+const NAME_MAX = 200;
+const cleanName = (t) => String(t).replace(/\s+/g, " ").trim().slice(0, NAME_MAX);
 const sameTag = (a, b) => a.toLocaleLowerCase() === b.toLocaleLowerCase();
 
 function allTags() {
@@ -366,7 +370,7 @@ async function setFolderTagNew(name, on) {
 }
 
 // A folder's name as already spelled, if one by that name exists.
-const folderName = (name) => allFolders().find((n) => sameTag(n, cleanTag(name))) || cleanTag(name);
+const folderName = (name) => allFolders().find((n) => sameTag(n, cleanName(name))) || cleanName(name);
 
 // The page to carry on with: the first one not finished, else the first.
 // The clip to go on with in a collection: the one read last, or the
@@ -393,7 +397,7 @@ function folderNext(list) {
 // one it's already going into, before the first volume numbered after it,
 // so the collection reads 1, 2, 3 however they were added.
 function fileSeries(p) {
-  const name = p.folder || (p.series && cleanTag(p.series) ? folderName(p.series) : "");
+  const name = p.folder || (p.series && cleanName(p.series) ? folderName(p.series) : "");
   if (!name) return;
   const list = folderPages(name).filter((q) => q !== p);
   if (!p.folder) { p.folder = name; joinFav(p, name); }
@@ -407,7 +411,7 @@ function fileSeries(p) {
 }
 
 async function setFolder(p, name) {
-  const clean = name && cleanTag(name);
+  const clean = name && cleanName(name);
   if (clean) {
     if (p.folder && sameTag(p.folder, clean)) return;
     p.folder = folderName(clean);
@@ -644,7 +648,7 @@ function bookHead(list, next, done) {
   let title;
   if (renaming) {
     title = el("input", { class: "book-title-input", type: "text", value: folderDraft ?? name, "aria-label": t("Collection name"),
-      maxlength: "32", enterkeyhint: "done", autocapitalize: "sentences", spellcheck: "false", dir: "auto" });
+      maxlength: String(NAME_MAX), enterkeyhint: "done", autocapitalize: "sentences", spellcheck: "false", dir: "auto" });
     title.addEventListener("input", () => { folderDraft = title.value; });
     title.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); $("folderDone").click(); }
@@ -671,8 +675,11 @@ function bookHead(list, next, done) {
       renaming ? null : bar));
   if (renaming) return [head];
   const go = done === n ? t("Read again from the start") : (next.at > 0.02 || done ? t("Continue: {title}", { title: next.title }) : t("Start: {title}", { title: next.title }));
+  const first = done === n ? list[0] : next;
   return [head,
-    el("button", { class: "btn-primary folder-go", type: "button", dir: "auto", onclick: () => openPage(done === n ? list[0].id : next.id) }, go),
+    el("div", { class: "folder-go-row" },
+      el("button", { class: "btn-primary folder-go", type: "button", dir: "auto", onclick: () => openPage(first.id) }, go),
+      narratable(first) ? narrateHalf(first) : null),
     quickStarts(list, done === n ? list[0] : next),
     saveNewButton(list),
     savedLine(list)];
@@ -1103,8 +1110,6 @@ function openFolderMenu() {
   };
   const sep = () => el("div", { class: "pop-sep", role: "separator" });
   const pop = el("div", { class: "pop-menu", id: "folderPop", role: "menu", "aria-label": t("Collection") },
-    item("add", t("Add clips"), () => openBatch("", false, state.folder)),
-    sep(),
     folderLook(state.folder) === "covers"
       ? item("chapters", t("Show as a list"), () => setFolderLook(state.folder, "list"))
       : item("grid", t("Show as a grid"), () => setFolderLook(state.folder, "covers")),
@@ -2209,7 +2214,7 @@ function tagsSheet() {
 function folderSheet() {
   const list = picked(), n = list.length;
   const move = async (name) => {
-    const target = name && cleanTag(name) ? folderName(name) : null;
+    const target = name && cleanName(name) ? folderName(name) : null;
     const now = Date.now();
     [...list].sort((a, b) => (a.folderAt || a.savedAt || 0) - (b.folderAt || b.savedAt || 0)).forEach((p, i) => {
       if (!target) { if (p.folder) p.movedAt = now; delete p.folder; delete p.folderAt; joinFav(p, null); return; }
@@ -2226,12 +2231,12 @@ function folderSheet() {
     toast(target ? t("Moved {countLine} to {target}", { countLine: countLine(n), target: target }) : t("Took {countLine} out of their collections", { countLine: countLine(n) }));
   };
   const input = el("input", { class: "tag-input", type: "text", placeholder: t("New collection"), "aria-label": t("New collection"),
-    maxlength: "32", enterkeyhint: "done", autocapitalize: "sentences" });
-  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && cleanTag(input.value)) { e.preventDefault(); move(input.value); } });
+    maxlength: String(NAME_MAX), enterkeyhint: "done", autocapitalize: "sentences" });
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && cleanName(input.value)) { e.preventDefault(); move(input.value); } });
   const folders = allFolders();
   return el("div", { class: "page-controls" },
     el("h2", { class: "menu-title" }, t("Move {countLine} to", { countLine: countLine(n) })),
-    folders.length ? el("div", { class: "chips" }, ...folders.map((f) => el("button", { class: "chip", type: "button", onclick: () => move(f) }, f))) : null,
+    folders.length ? el("div", { class: "chips" }, ...folders.map((f) => el("button", { class: "chip", type: "button", title: f, onclick: () => move(f) }, el("span", { class: "chip-label", dir: "auto" }, f)))) : null,
     input,
     list.some((p) => p.folder) ? el("div", { class: "group" },
       el("button", { class: "row", type: "button", onclick: () => move(null) }, el("span", { class: "row-label" }, t("Take out of their collections")))) : null);
@@ -2778,21 +2783,55 @@ async function pickFile(first) {
       toast(t("Couldn't read that file. Try opening it again."));
       return;
     }
-    openFile(file, null, true, got.ref);
+    await openFile(file, null, true, got.ref);
     return;
   }
-  // Kept in the page while the picker is up, so it isn't collected.
+  const f = (await browserPick({ accept: FILE_ACCEPT }))[0];
+  if (!f) return;
+  if (first) await first();
+  await openFile(f, null, true);
+}
+// The browser's own picker: the files picked, none when it's closed.
+// Kept in the page while it's up, so it isn't collected.
+function browserPick(attrs) {
   document.querySelectorAll(".file-pick").forEach((n) => n.remove());
-  const input = el("input", { type: "file", accept: FILE_ACCEPT, class: "file-pick visually-hidden", tabindex: "-1", "aria-hidden": "true" });
+  const input = el("input", { type: "file", ...attrs, class: "file-pick visually-hidden", tabindex: "-1", "aria-hidden": "true" });
   document.body.append(input);
-  input.addEventListener("change", async () => {
-    const f = input.files[0];
-    input.remove();
-    if (!f) return;
-    if (first) await first();
-    openFile(f, null, true);
+  return new Promise((done) => {
+    const end = () => { const got = [...(input.files || [])]; input.remove(); done(got); };
+    input.addEventListener("change", end);
+    input.addEventListener("cancel", end);
+    input.click();
   });
-  input.click();
+}
+
+// ---- Adding from inside a collection (2026-11) ----
+// The collection's Add offers what the library's does: a file, a
+// folder, an audiobook folder. Whatever that brings in joins it. A
+// series made of an audiobook folder goes in whole when this is a
+// collection; collections hold no collections, so anything else filed
+// on its way in comes here instead.
+async function addInto(name, adding) {
+  const start = Date.now(), had = new Set(state.pages.map((p) => p.id));
+  await adding();
+  const at = (p) => p.folderAt || p.savedAt || 0;
+  const fresh = state.pages.filter((p) => !had.has(p.id) && (p.savedAt || 0) >= start && (p.file || p.audio || !p.url))
+    .sort((a, b) => at(a) - at(b));
+  if (!fresh.length) return;
+  const home = folderName(name), series = isSeriesFolder(home), now = Date.now();
+  const hosts = new Set();
+  fresh.forEach((p, i) => {
+    if (p.folder && sameTag(p.folder, home)) return;
+    if (!series && p.folder && isSeriesFolder(p.folder) && folderPages(p.folder).every((q) => fresh.includes(q))) { hosts.add(p.folder); return; }
+    p.folder = home;
+    p.folderAt = now + i;
+    joinFav(p, home);
+  });
+  for (const f of hosts) markSeries(f, true, home);
+  await C.store.writeIndex(state.pages);
+  renderLibrary();
+  if (state.folder) renderFolder();
+  if (fresh.length === 1) toast(t("Added “{title}” to {folder}", { title: fresh[0].title, folder: home }));
 }
 
 // ---- Add a folder (2026-11) ----
@@ -2803,7 +2842,7 @@ async function pickFile(first) {
 // permission, so it copies the files.
 const canAddFolder = () => C.platform.files.canPickFolder || "webkitdirectory" in HTMLInputElement.prototype;
 async function addFolder() {
-  if (!C.platform.files.canPickFolder) { addFolderInBrowser(); return; }
+  if (!C.platform.files.canPickFolder) { await addFolderInBrowser(); return; }
   let got = null;
   try { got = await C.platform.files.pickFolder(); } catch (e) { got = null; }
   if (!got) return;
@@ -2819,22 +2858,15 @@ async function addFolder() {
   const added = await addFolderFiles(name, books.map((f) => ({ ...f, read: () => C.platform.files.blob(f.ref, f.size) })));
   if (!added) C.platform.files.release(got.ref);
 }
-function addFolderInBrowser() {
-  document.querySelectorAll(".file-pick").forEach((n) => n.remove());
-  const input = el("input", { type: "file", multiple: "", webkitdirectory: "", class: "file-pick visually-hidden", tabindex: "-1", "aria-hidden": "true" });
-  document.body.append(input);
-  input.addEventListener("change", async () => {
-    const picked = [...input.files];
-    input.remove();
-    if (!picked.length) return;
-    // "Books/Sci-fi/dune.epub": the folder picked, then the path in it.
-    const root = (picked[0].webkitRelativePath || "").split("/")[0] || t("Folder");
-    const books = picked.filter((f) => WATCH_EXTS.test(f.name));
-    if (!books.length) { toast(t("There's nothing in {root} that Waypage opens.", { root: root })); return; }
-    await addFolderFiles(root, books.map((f) => ({ name: f.name, size: f.size, ref: null,
-      path: (f.webkitRelativePath || f.name).split("/").slice(1).join("/") || f.name, read: async () => f })));
-  });
-  input.click();
+async function addFolderInBrowser() {
+  const picked = await browserPick({ multiple: "", webkitdirectory: "" });
+  if (!picked.length) return;
+  // "Books/Sci-fi/dune.epub": the folder picked, then the path in it.
+  const root = (picked[0].webkitRelativePath || "").split("/")[0] || t("Folder");
+  const books = picked.filter((f) => WATCH_EXTS.test(f.name));
+  if (!books.length) { toast(t("There's nothing in {root} that Waypage opens.", { root: root })); return; }
+  await addFolderFiles(root, books.map((f) => ({ name: f.name, size: f.size, ref: null,
+    path: (f.webkitRelativePath || f.name).split("/").slice(1).join("/") || f.name, read: async () => f })));
 }
 // One card in the library and Downloads, with Pause and Stop, as a
 // watched folder's. Resolves to how many were added.
@@ -3506,7 +3538,7 @@ function watchIntoPick(w) {
     onpick: (v) => {
       if (v !== WATCH_NEW) { set(v); return; }
       const typed = prompt(t("Name the new collection"));
-      if (typed && cleanTag(typed)) set(folderName(typed));
+      if (typed && cleanName(typed)) set(folderName(typed));
       else renderSection();
     } });
 }

@@ -999,11 +999,11 @@ async function changePictures(p, mode, note, redraw) {
 const NEW_PICK = "\u0000new";
 function newField(cls, placeholder, label, then) {
   const input = el("input", { class: "tag-input new-pick " + cls, type: "text", placeholder, "aria-label": label,
-    maxlength: "32", enterkeyhint: "done", autocapitalize: "sentences", hidden: "" });
+    maxlength: String(NAME_MAX), enterkeyhint: "done", autocapitalize: "sentences", hidden: "" });
   input.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
     e.preventDefault();
-    if (cleanTag(input.value)) then(input.value);
+    if (cleanName(input.value)) then(input.value);
   });
   return input;
 }
@@ -1012,7 +1012,7 @@ const NEW_SERIES = "\u0000series";
 function folderRow(p, redraw) {
   let asSeries = false;
   const input = newField("new-collection", t("Name the new collection"), t("New collection"), (v) => {
-    const fresh = !allFolders().some((n) => sameTag(n, cleanTag(v)));
+    const fresh = !allFolders().some((n) => sameTag(n, cleanName(v)));
     return setFolder(p, v).then(async () => {
       if (asSeries && fresh) { markSeries(p.folder, true); await C.store.writeIndex(state.pages); renderLibrary(); }
       redraw();
