@@ -3029,24 +3029,26 @@ function zipOf(files) {
           const ok = (j) => new Response(JSON.stringify(j), { status: 200 });
           if (/\/repos\/me\/waypage-data$/.test(url)) return ok({ name: "waypage-data" });
           if (/contents\/library\.json/.test(url) && method === "GET") return ok({ sha: "lib1", content: b64(JSON.stringify(remote)) });
-          if (method === "PUT") { const path = url.split("/contents/")[1].split("?")[0]; puts.push(path); if (path === "library.json") window.sentLib = JSON.parse(decodeURIComponent(escape(atob(JSON.parse(opts.body).content)))); return ok({ content: { sha: "x" } }); }
+          if (method === "PUT") { const path = url.split("/contents/")[1].split("?")[0]; puts.push(path); const body = JSON.parse(decodeURIComponent(escape(atob(JSON.parse(opts.body).content)))); if (path === "library.json") window.sentLib = body; if (path.startsWith("progress/")) window.sentPlaces = body; return ok({ content: { sha: "x" } }); }
           if (method === "GET") reads.push(url.split("/contents/")[1] || url);
           return new Response("{}", { status: 404 });
         };
         await syncNow(true);
         const p = (id) => state.pages.find((x) => x.id === id);
-        const sent = window.sentLib, s = (id) => sent.pages.find((x) => x.id === id);
+        // Only places differ, so they go in this device's places file, not library.json (2026-11).
+        const sent = window.sentPlaces.places, s = (id) => sent[id];
         return {
           had1: [p("had1").at, p("had1").spot, (p("had1").tags || []).length],
           new1: !!p("new1"),
           puts: puts.sort(),
           readPages: reads.filter((r) => r.startsWith("pages/")).length,
-          up: [s("had1").at, s("had2").at, s("had2").finished, s("had2").spot, !!s("mine1"), Object.keys(sent.files).sort().join()],
+          up: [!!s("had1"), s("had2").at, s("had2").finished, s("had2").spot, !!s("mine1"), !!window.sentLib],
           base: localStorage.getItem("waypage.syncBase"),
         };
       });
-      assert.deepStrictEqual(got, { had1: [0.7, "7/0c", 0], new1: false, puts: ["library.json", "stats/" + got.puts[1].slice(6)], readPages: 0,
-        up: [0.7, 0.8, true, "8/10c", false, "had1,had2,new1"], base: null }, JSON.stringify(got));
+      const dev = got.puts[0].slice(9, 21);
+      assert.deepStrictEqual(got, { had1: [0.7, "7/0c", 0], new1: false, puts: ["progress/" + dev + ".json", "stats/" + dev + ".json"], readPages: 0,
+        up: [false, 0.8, true, "8/10c", false, false], base: null }, JSON.stringify(got));
       await q.context().close();
     });
 

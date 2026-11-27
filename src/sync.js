@@ -521,6 +521,158 @@
     return next;
   }
 
+  // ---- Progress in its own files (2026-11) ----
+  // The first part taken out of library.json (ARCHITECTURE.md, "Sync's
+  // files"): progress/<device>.json, each device writing only its own,
+  // so reading on, listening on or opening Feeds sends a few KB instead
+  // of the whole library. It holds, by clip id or `fp:<fingerprint>` for
+  // a file read from outside, where you are (at, finished, readAt,
+  // readOn, placeAt, spot, and v, the text version a spot names) and
+  // where you are listening (listen: t, tAt, dur), plus `seen`, when
+  // Feeds was last looked at. library.json still has all of it: every
+  // write of it for anything else carries the newest, so a device from
+  // before this still reads it, only later. Only Daniel decides when
+  // library.json stops carrying a part (CONTRIBUTING.md). Read and
+  // written only where the device has an id (stats.js).
+  const PLACES_KEY = "waypage.syncProgressFiles"; // { etag, list: { device: sha }, got: { device: file }, sent }
+  const PLACE_KEYS = READING.concat("spot");
+  const LISTEN_KEYS = ["t", "tAt", "dur"];
+  const placesDevice = () => (C.stats && /^[a-z0-9]{12}$/.test(C.stats.device || "") ? C.stats.device : null);
+  const listenTime = (p) => (p && p.listen && p.listen.tAt) || 0;
+  const placeEntry = (p) => {
+    const o = { v: ver(p) };
+    for (const k of PLACE_KEYS) if (p[k] !== undefined) o[k] = p[k];
+    if (p.listen) { o.listen = {}; for (const k of LISTEN_KEYS) if (p.listen[k] !== undefined) o.listen[k] = p.listen[k]; }
+    return o;
+  };
+  // An entry or page without its progress, to tell whether anything else differs.
+  const bare = (p) => {
+    const o = { ...p };
+    for (const k of PLACE_KEYS) delete o[k];
+    if (o.listen) { o.listen = { ...o.listen }; for (const k of LISTEN_KEYS) delete o.listen[k]; }
+    return o;
+  };
+  // A file as read: { places, seen }; anything else is dropped.
+  const progressFile = (d) => ({ places: (d && d.places && typeof d.places === "object" && !Array.isArray(d.places)) ? d.places : {}, seen: d && typeof d.seen === "number" ? d.seen : 0 });
+  // Every device's progress file, each read again only when its sha moved.
+  async function readPlaces() {
+    const known = load(PLACES_KEY, {}) || {};
+    known.list = known.list || {};
+    known.got = known.got || {};
+    const r = await call(contents("progress") + "?ref=" + encodeURIComponent(cfg.branch), { etag: known.etag });
+    if (r.status !== 304) {
+      if (r.status === 404) { known.list = {}; known.got = {}; delete known.etag; }
+      else if (!r.ok) throw await fail(r);
+      else {
+        const list = {};
+        const got = await r.json();
+        for (const f of Array.isArray(got) ? got : []) {
+          const m = /^([a-z0-9]{12})\.json$/.exec((f && f.name) || "");
+          if (m) list[m[1]] = f.sha;
+        }
+        for (const [d, sha] of Object.entries(list)) {
+          if (known.list[d] === sha && known.got[d]) continue;
+          halt();
+          const f = await readJson("progress/" + d + ".json").catch((e) => { if (e instanceof Paused || !(e instanceof SyntaxError)) throw e; return null; });
+          known.got[d] = progressFile(f && f.data);
+        }
+        for (const d of Object.keys(known.got)) if (!list[d]) delete known.got[d];
+        known.list = list;
+        known.etag = (r.headers && r.headers.get && r.headers.get("ETag")) || "";
+      }
+    }
+    keep(PLACES_KEY, known);
+    return known;
+  }
+  // One entry onto a page or an outside entry: the place moved last wins,
+  // as in mergeEntry, a spot only onto the same version of the text; the
+  // listening place heard last wins, as in mergeListen.
+  function entryOnto(p, e, outside) {
+    let next = p;
+    if (placeTime(e) > placeTime(p)) {
+      next = { ...p };
+      for (const k of READING) { if (e[k] === undefined) delete next[k]; else next[k] = e[k]; }
+      if (e.spot !== undefined && (outside || e.v === ver(next))) next.spot = e.spot; else delete next.spot;
+    }
+    if (e.listen && (e.listen.tAt || 0) > listenTime(p)) {
+      next = next === p ? { ...p } : next;
+      next.listen = { ...(p.listen || {}) };
+      for (const k of LISTEN_KEYS) { if (e.listen[k] === undefined) delete next.listen[k]; else next.listen[k] = e.listen[k]; }
+    }
+    return next;
+  }
+  // Every progress file onto library.json as GitHub has it.
+  function placesOver(data, known) {
+    const pages = data.pages.slice();
+    const by = new Map(pages.map((p, i) => [p.id, i]));
+    const outside = data.outside ? { ...data.outside } : null;
+    let seen = data.feedsSeen || 0;
+    for (const f of Object.values(known.got || {})) {
+      const file = progressFile(f);
+      seen = Math.max(seen, file.seen);
+      for (const [id, e] of Object.entries(file.places)) {
+        if (!e || typeof e !== "object") continue;
+        if (id.startsWith("fp:")) { const fp = id.slice(3); if (outside && outside[fp]) outside[fp] = entryOnto(outside[fp], e, true); continue; }
+        const i = by.get(id);
+        if (i != null) pages[i] = entryOnto(pages[i], e, false);
+      }
+    }
+    const out = { ...data, pages };
+    if (outside) out.outside = outside;
+    if (seen) out.feedsSeen = seen;
+    return out;
+  }
+  // The progress that makes `doc` differ from GitHub's, { places, seen },
+  // or null when anything else differs too (then library.json is
+  // written, as before).
+  function placesOnly(doc, theirs) {
+    for (const k of new Set([...Object.keys(doc), ...Object.keys(theirs)])) if (!["pages", "outside", "feedsSeen"].includes(k) && !same(doc[k], theirs[k])) return null;
+    if ((theirs.feedsSeen || 0) > (doc.feedsSeen || 0)) return null;
+    if (doc.pages.length !== theirs.pages.length) return null;
+    const places = {};
+    const by = new Map(theirs.pages.map((p) => [p.id, p]));
+    for (const p of doc.pages) {
+      const r = by.get(p.id);
+      if (!r) return null;
+      if (same(p, r)) continue;
+      if (!same(bare(p), bare(r))) return null;
+      places[p.id] = placeEntry(p);
+    }
+    const a = doc.outside || {}, b = theirs.outside || {};
+    for (const fp of new Set([...Object.keys(a), ...Object.keys(b)])) {
+      if (same(a[fp], b[fp])) continue;
+      if (!a[fp] || !b[fp] || !same(bare(a[fp]), bare(b[fp]))) return null;
+      places["fp:" + fp] = placeEntry(a[fp]);
+    }
+    return { places, seen: doc.feedsSeen || 0 };
+  }
+  // This device's file: what it had, and what's new, less what
+  // library.json itself says by now (`raw`, GitHub's own library).
+  async function sendPlaces(fresh, raw, known) {
+    const dev = placesDevice();
+    const had = progressFile((known.got || {})[dev]);
+    const pages = new Map(raw.pages.map((p) => [p.id, p]));
+    const ahead = (id, e) => {
+      const p = id.startsWith("fp:") ? raw.outside && raw.outside[id.slice(3)] : pages.get(id);
+      return !!p && (placeTime(e) > placeTime(p) || (e.listen && (e.listen.tAt || 0) > listenTime(p)));
+    };
+    const places = {};
+    for (const [id, e] of Object.entries({ ...had.places, ...fresh.places })) if (ahead(id, e)) places[id] = e;
+    const seen = Math.max(had.seen, fresh.seen);
+    const doc = { v: 1, places };
+    if (seen > (raw.feedsSeen || 0)) doc.seen = seen;
+    const text = JSON.stringify(doc);
+    const h = hashOf(text);
+    if (known.sent === h && known.list[dev]) return;
+    halt();
+    known.list[dev] = await put("progress/" + dev + ".json", text, known.list[dev] || null, "Progress: " + Object.keys(places).length);
+    known.got[dev] = doc;
+    known.sent = h;
+    // The listing moved with this write; read it again next time.
+    delete known.etag;
+    keep(PLACES_KEY, known);
+  }
+
   // A look at the library on GitHub without a sync (1.3.0): for the
   // furthest-read check when a clip opens, and for the poll while the app
   // is in front. Shares the copy above, so an unchanged library is a 304
@@ -1288,9 +1440,15 @@
     // Pages sent this run: { at, sha, was } (was: the sha GitHub had before).
     const sentNow = new Map();
     let merged, remote;
+    // Other devices' places (and this one's) before the merge, so they
+    // read as GitHub's.
+    let places = null;
+    if (placesDevice() && !noClips) try { places = await readPlaces(); } catch (e) { if (e instanceof Paused) throw e; places = null; }
     for (let tries = 0; ; tries++) {
       remote = await readLibraryJson();
       if (remote && (!remote.data || !Array.isArray(remote.data.pages))) throw new SyncError(t("The library.json on GitHub isn't Waypage's. Move it away and sync again."));
+      const raw = remote ? remote.data : null;
+      if (remote && places) remote = { ...remote, data: placesOver(raw, places) };
       await breathe();
       // What GitHub would hold of each page, so the two compare like for
       // like; then the merge, off the main thread where it can be.
@@ -1347,6 +1505,8 @@
         const doc = placesOnto(remoteDoc, merged);
         if (merged.outside) doc.outside = merged.outside;
         if (await sameOff(doc, remoteDoc)) break;
+        const fresh = places && placesOnly(doc, remoteDoc);
+        if (fresh) { await sendPlaces(fresh, raw, places); break; }
         halt();
         try { await writeLibrary(JSON.stringify(doc), remote.sha, "Places: " + merged.pages.length + " pages"); break; } catch (e) {
           if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e;
@@ -1440,6 +1600,8 @@
       }
       await breathe();
       if (remote && await sameOff(merged, remoteDoc)) { keep(SENT_KEY, null); break; }
+      const fresh = remote && places && placesOnly(merged, remoteDoc);
+      if (fresh) { await sendPlaces(fresh, raw, places); keep(SENT_KEY, null); break; }
       halt();
       try {
         await writeLibrary(JSON.stringify(merged), remote && remote.sha, libraryNote(merged.pages.length, printDoc(merged)));
@@ -1901,7 +2063,7 @@
     NOTE_MAX: NOTE_BASE_MAX,
     // A note whose PDF is over the cap stays on its device (2026-11).
     tooBig: (p) => !!(p && p.note && (p.noteBytes || 0) > NOTE_BASE_MAX),
-    merge, mergeTags, mergeMarks, mergeInk, mergeListen, mergeOutside, cleanOutside, outsideOf, outsideOnto, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
+    merge, mergeTags, mergeMarks, mergeInk, mergeListen, mergeOutside, cleanOutside, outsideOf, outsideOnto, mergeFeeds, oneCopyEach, outgoing, incoming, sendBatches, blobSha, progressOver: placesOver, progressOnly: placesOnly, connect, disconnect, run, SyncError, KEY_URL, NEW_REPO_URL, tokenIn, setupLink,
     share, clean, same, urlKey, sameUrl, peek, poll, parseHistory, history, target, printOf, libraryPrint, distinct, revertPlan, revertChanges, inkDiff, noteFilesIn, noteFilesKeep, noteFolders, noteListing, noteTitle, readText, readBytes,
     // This device's name in the commits it writes, and a one-off line for
     // the sync after a put-back (cleared when that sync ends).
