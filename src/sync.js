@@ -522,14 +522,14 @@
   }
 
   // ---- Places in their own files (2026-11) ----
-  // Step 1 of taking library.json apart a part at a time (ARCHITECTURE.md,
-  // "Sync's files"): where you are in a clip goes to places/<device>.json,
+  // Progress: step 1 of taking library.json apart a part at a time (ARCHITECTURE.md,
+  // "Sync's files"): where you are in a clip goes to progress/<device>.json,
   // each device writing only its own, so a place read on is a few KB up
   // instead of the whole library. library.json still has places: every
   // write of it for anything else carries the newest, so a device from
   // before this still reads them, only later. Read and written only where
   // the device has an id (stats.js).
-  const PLACES_KEY = "waypage.syncPlaces"; // { etag, list: { device: sha }, got: { device: places }, sent }
+  const PLACES_KEY = "waypage.syncProgressFiles"; // { etag, list: { device: sha }, got: { device: places }, sent }
   const PLACE_KEYS = READING.concat("spot");
   const placesDevice = () => (C.stats && /^[a-z0-9]{12}$/.test(C.stats.device || "") ? C.stats.device : null);
   // { id: { at, finished, readAt, readOn, placeAt, spot, v } }, v the
@@ -540,7 +540,7 @@
     const known = load(PLACES_KEY, {}) || {};
     known.list = known.list || {};
     known.got = known.got || {};
-    const r = await call(contents("places") + "?ref=" + encodeURIComponent(cfg.branch), { etag: known.etag });
+    const r = await call(contents("progress") + "?ref=" + encodeURIComponent(cfg.branch), { etag: known.etag });
     if (r.status !== 304) {
       if (r.status === 404) { known.list = {}; known.got = {}; delete known.etag; }
       else if (!r.ok) throw await fail(r);
@@ -554,7 +554,7 @@
         for (const [d, sha] of Object.entries(list)) {
           if (known.list[d] === sha && known.got[d]) continue;
           halt();
-          const got = await readJson("places/" + d + ".json").catch((e) => { if (e instanceof Paused || !(e instanceof SyntaxError)) throw e; return null; });
+          const got = await readJson("progress/" + d + ".json").catch((e) => { if (e instanceof Paused || !(e instanceof SyntaxError)) throw e; return null; });
           known.got[d] = (got && got.data && got.data.places) || {};
         }
         for (const d of Object.keys(known.got)) if (!list[d]) delete known.got[d];
@@ -609,7 +609,7 @@
     const h = hashOf(text);
     if (known.sent === h && known.list[dev]) return;
     halt();
-    known.list[dev] = await put("places/" + dev + ".json", text, known.list[dev] || null, "Places: " + Object.keys(places).length);
+    known.list[dev] = await put("progress/" + dev + ".json", text, known.list[dev] || null, "Progress: " + Object.keys(places).length);
     known.got[dev] = places;
     known.sent = h;
     // The listing moved with this write; read it again next time.

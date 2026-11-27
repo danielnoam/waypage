@@ -3029,7 +3029,7 @@ function zipOf(files) {
           const ok = (j) => new Response(JSON.stringify(j), { status: 200 });
           if (/\/repos\/me\/waypage-data$/.test(url)) return ok({ name: "waypage-data" });
           if (/contents\/library\.json/.test(url) && method === "GET") return ok({ sha: "lib1", content: b64(JSON.stringify(remote)) });
-          if (method === "PUT") { const path = url.split("/contents/")[1].split("?")[0]; puts.push(path); const body = JSON.parse(decodeURIComponent(escape(atob(JSON.parse(opts.body).content)))); if (path === "library.json") window.sentLib = body; if (path.startsWith("places/")) window.sentPlaces = body; return ok({ content: { sha: "x" } }); }
+          if (method === "PUT") { const path = url.split("/contents/")[1].split("?")[0]; puts.push(path); const body = JSON.parse(decodeURIComponent(escape(atob(JSON.parse(opts.body).content)))); if (path === "library.json") window.sentLib = body; if (path.startsWith("progress/")) window.sentPlaces = body; return ok({ content: { sha: "x" } }); }
           if (method === "GET") reads.push(url.split("/contents/")[1] || url);
           return new Response("{}", { status: 404 });
         };
@@ -3046,8 +3046,8 @@ function zipOf(files) {
           base: localStorage.getItem("waypage.syncBase"),
         };
       });
-      const dev = got.puts[0].slice(7, 19);
-      assert.deepStrictEqual(got, { had1: [0.7, "7/0c", 0], new1: false, puts: ["places/" + dev + ".json", "stats/" + dev + ".json"], readPages: 0,
+      const dev = got.puts[0].slice(9, 21);
+      assert.deepStrictEqual(got, { had1: [0.7, "7/0c", 0], new1: false, puts: ["progress/" + dev + ".json", "stats/" + dev + ".json"], readPages: 0,
         up: [false, 0.8, true, "8/10c", false, false], base: null }, JSON.stringify(got));
       await q.context().close();
     });

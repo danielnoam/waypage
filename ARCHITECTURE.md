@@ -690,20 +690,24 @@ web copy stay links, as before.
   works, only later. Stopping a field in library.json is its own step,
   decided once every device has the release that reads the new file.
   The plan, in order:
-  1. **Places** (done): `places/<device>.json`, `{ v: 1, places: { id: {
-     at, finished, readAt, readOn, placeAt, spot, v } } }`, `v` the text
-     version a spot names. Each device writes only its own (`sendPlaces`,
-     when the only difference from GitHub is places), keeping just what
-     library.json hasn't caught up with. Every file goes onto
-     library.json's pages before the merge (`placesOver`, newest place
-     wins). Device id from stats.js; without one, as before
-     (`syncplaces.test.js`).
-  2. **Listening places**: a clip's `listen` (`t`, `tAt`) in the same files.
+  1. **Progress** (done): `progress/<device>.json`, `{ v: 1, places: {
+     id: { at, finished, readAt, readOn, placeAt, spot, v } } }`, `v` the
+     text version a spot names. Each device writes only its own
+     (`sendPlaces`, when the only difference from GitHub is progress),
+     keeping just what library.json hasn't caught up with. Every file
+     goes onto library.json's pages before the merge (`placesOver`,
+     newest wins). Device id from stats.js; without one, as before
+     (`syncprogress.test.js`).
+  2. **More progress, same files**: listening (`listen` `t`, `tAt`), and
+     where you are in a file read from outside, keyed `fp:<fingerprint>`
+     (today in library.json's `outside` map, so reading an outside PDF
+     still writes the whole library). The rest of `outside` (its tags,
+     collection, highlights) stays in library.json.
   3. **Highlights and drawings**: `marks`, `ink`, `inkAt` and listen
      bookmarks in `clips/<id>.json`, only for clips that have them.
-  4. **Feeds and newsletters**: `feeds`, `feedsGone`, `feedsSeen` in
-     `feeds.json`.
-  5. **Files read from outside**: the `outside` map in `outside.json`.
+  4. **Feeds and newsletters**, together in `feeds.json` (`feeds`,
+     `feedsGone`, `feedsSeen`): one list, one merge, and they change
+     rarely, so two files would only add a request each sync.
   What stays in library.json: each clip's entry (what it is, its
   collection, tags, favourite), `deleted` and `files`.
 - **Google Drive** (`drive.js`): zipped backups (`backup.js`) in a
@@ -898,7 +902,7 @@ bundle, the three version places and CHANGELOG.md; `contrast.test.js`
 checks every theme for WCAG AA; `csp.test.js` checks the page's Content-Security-Policy through keel's check (ui.test.js fails on anything it blocks); `unused.test.js` fails on a function, top-level name or CSS class in src/ that nothing uses (a class built from pieces is listed in its `BUILT`); `docs.test.js` checks this file names
 every source file, that the app uses only DESIGN.md's moves and that every looping animation has a reduced-motion answer (and `build.test.js` that no two shell files share
 a top-level name); `save.test.js`, `files.test.js`, `imports.test.js`,
-`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `syncdata.test.js`, `syncplaces.test.js`, `synchistory.test.js`, `syncanki.test.js`, `synccatalogs.test.js`, `syncwebdav.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `recover.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) and `zim.test.js` (Kiwix packs, old and new layout, xz and Zstandard, against `test/fixtures/zim/`, which `make.py` builds) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR and on `main`, spread
+`sync.test.js`, `syncbatch.test.js`, `syncdelete.test.js`, `syncrace.test.js`, `syncdata.test.js`, `syncprogress.test.js`, `synchistory.test.js`, `syncanki.test.js`, `synccatalogs.test.js`, `syncwebdav.test.js`, `activity.test.js`, `pptx.test.js`, `ink.test.js`, `recover.test.js`, `listen.test.js`, `anki.test.js` (the scheduler and the decks' engine), `ankiimport.test.js` (reading an Anki deck and writing Anki's text file, against `test/fixtures/anki/collection.anki2`, which `make-collection.py` builds) and `packs.test.js` (the language-pack builder) and `extensions.test.js` (turning extensions on, and downloaded packs) and `zim.test.js` (Kiwix packs, old and new layout, xz and Zstandard, against `test/fixtures/zim/`, which `make.py` builds) test their areas in Node; `worker.test.js` runs the fetch proxy against a faked web. The Tests workflow runs them all on every PR and on `main`, spread
 over four machines: `TEST_SHARD=2/4 node test/run-all.js` runs one
 slice. `ui.test.js` is most of the time, so it is split too
 (`UI_SHARD`): the tests on its first page `p` build on each other and

@@ -1,5 +1,5 @@
-// Places in their own files (2026-11): `node test/syncplaces.test.js`.
-// Reading on writes places/<device>.json, not library.json; other devices
+// Progress in its own files (2026-11): `node test/syncprogress.test.js`.
+// Reading on writes progress/<device>.json, not library.json; other devices
 // take it; library.json carries the newest place whenever it's written for
 // anything else, so a device from before this still gets them.
 const assert = require("assert");
@@ -28,8 +28,8 @@ global.fetch = async (url, opts = {}) => {
     puts.push(path);
     return res(200, { content: { sha: putFile(path, Buffer.from(body.content, "base64").toString("utf8")) } });
   }
-  if (path === "places") {
-    const list = [...gh].filter(([k]) => k.startsWith("places/")).map(([k, f]) => ({ name: k.slice(7), sha: f.sha, type: "file" }));
+  if (path === "progress") {
+    const list = [...gh].filter(([k]) => k.startsWith("progress/")).map(([k, f]) => ({ name: k.slice(9), sha: f.sha, type: "file" }));
     return list.length ? res(200, list) : res(404, { message: "Not Found" });
   }
   const f = gh.get(path);
@@ -70,13 +70,13 @@ async function sync(d) {
 const read = (d, id, at, t) => { const p = lib[d].find((x) => x.id === id); Object.assign(p, { at, readAt: t, placeAt: t, spot: "b3" }); };
 
 (async () => {
-  await test("reading on sends a small places file, not library.json", async () => {
+  await test("reading on sends a small progress file, not library.json", async () => {
     start();
     read("A", "aaaa", 0.4, 1000);
     puts.length = 0;
     await sync("A");
-    assert.deepStrictEqual(puts, ["places/aaaaaaaaaaaa.json"]);
-    const file = JSON.parse(gh.get("places/aaaaaaaaaaaa.json").text);
+    assert.deepStrictEqual(puts, ["progress/aaaaaaaaaaaa.json"]);
+    const file = JSON.parse(gh.get("progress/aaaaaaaaaaaa.json").text);
     assert.strictEqual(file.places.aaaa.at, 0.4);
     assert.ok(!file.places.bbbb);
     // Nothing more to send: a second sync writes nothing.
@@ -114,7 +114,7 @@ const read = (d, id, at, t) => { const p = lib[d].find((x) => x.id === id); Obje
   await test("a device's file keeps only places library.json hasn't caught up with", async () => {
     read("A", "bbbb", 0.2, 3000);
     await sync("A");
-    const file = JSON.parse(gh.get("places/aaaaaaaaaaaa.json").text);
+    const file = JSON.parse(gh.get("progress/aaaaaaaaaaaa.json").text);
     assert.deepStrictEqual(Object.keys(file.places), ["bbbb"]);
   });
 
