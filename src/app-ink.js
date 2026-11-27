@@ -217,8 +217,60 @@ function inkLayout() {
 function inkReveal(el, yes) {
   if (!el) return;
   el._want = yes;
-  if (yes && el.hidden) { el.hidden = false; M.edgeIn(el, "bottom"); }
+  if (yes && el.hidden) { el.hidden = false; if (el === inkMini) inkMiniPlace(); M.edgeIn(el, "bottom"); }
   else if (!yes && !el.hidden) M.edgeOut(el, "bottom").finally(() => { if (!el._want) el.hidden = true; });
+}
+// The round button can be dragged anywhere (2026-11). Let go, it snaps to the
+// nearer side, and the side and height are kept, as the Narrate card does.
+const INK_MINI_KEY = "waypage.inkMini";
+function inkMiniPlace() {
+  if (!inkMini || inkMini.hidden) return;
+  const gap = 16, w = inkMini.offsetWidth, h = inkMini.offsetHeight;
+  const safe = parseFloat(getComputedStyle(inkMini).getPropertyValue("--safe-bottom")) || 0;
+  const head = $("readerView").querySelector(".reader-bar");
+  const topMin = Math.max(gap, head ? head.getBoundingClientRect().bottom + 8 : gap);
+  const topMax = innerHeight - safe - gap - h;
+  const put = load(INK_MINI_KEY, null);
+  const end = document.documentElement.dir === "rtl" ? "left" : "right";
+  const side = put && (put.side === "left" || put.side === "right") ? put.side : end;
+  const top = put && typeof put.y === "number" ? Math.round(put.y * innerHeight) : topMax;
+  inkMini.style.left = (side === "left" ? gap : innerWidth - gap - w) + "px";
+  inkMini.style.top = Math.max(topMin, Math.min(top, topMax)) + "px";
+}
+function inkMiniDrag() {
+  let drag = null;
+  inkMini.addEventListener("pointerdown", (e) => {
+    if (e.button) return;
+    const r = inkMini.getBoundingClientRect();
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, left: r.left, top: r.top, moved: false };
+  });
+  // Moves are heard on the window: a quick drag leaves the button before its first move.
+  addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) < 6) return;
+    if (!drag.moved) { drag.moved = true; inkMini.classList.add("dragging"); }
+    inkMini.style.left = drag.left + dx + "px";
+    inkMini.style.top = drag.top + dy + "px";
+  });
+  const drop = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const was = drag;
+    drag = null;
+    if (!was.moved) return;
+    inkMini.classList.remove("dragging");
+    // A drag isn't a tap: the click that follows it does nothing.
+    inkMini.dataset.dragged = "1";
+    setTimeout(() => delete inkMini.dataset.dragged, 0);
+    const r = inkMini.getBoundingClientRect();
+    store(INK_MINI_KEY, { side: r.left + r.width / 2 < innerWidth / 2 ? "left" : "right", y: Math.max(0, Math.min(1, r.top / innerHeight)) });
+    inkMini.classList.add("snapping");
+    inkMiniPlace();
+    setTimeout(() => inkMini.classList.remove("snapping"), 400);
+  };
+  addEventListener("pointerup", drop);
+  addEventListener("pointercancel", drop);
+  addEventListener("resize", inkMiniPlace);
 }
 function inkSmallSet(on) {
   if (!C.ink.on || inkSmall === on) return;
@@ -270,8 +322,9 @@ function inkBuild() {
   $("readerView").append(inkBar);
   // Hide tools: a tab on the bar's top edge; the round button brings it back.
   inkTab = el("button", { type: "button", class: "ink-tab", "aria-label": t("Hide tools"), title: t("Hide tools"), hidden: true, onclick: () => inkSmallSet(true) }, inkIcon("collapse"));
-  inkMini = el("button", { type: "button", class: "ink-mini", "aria-label": t("Show tools"), title: t("Show tools"), hidden: true, onclick: () => inkSmallSet(false) });
+  inkMini = el("button", { type: "button", class: "ink-mini", "aria-label": t("Show tools"), title: t("Show tools"), hidden: true, onclick: () => { if (!inkMini.dataset.dragged) inkSmallSet(false); } });
   $("readerView").append(inkTab, inkMini);
+  inkMiniDrag();
   // Long press on a colour opens the colour sheet for it (a right click does too).
   const slotOf = (e) => { const b = e.target.closest && e.target.closest('button[data-slot]'); return b && inkBar.contains(b) ? b : null; };
   inkBar.addEventListener("pointerdown", (e) => {

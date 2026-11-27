@@ -4129,6 +4129,22 @@ c("bk1", { at: 0.01 })]);
       assert.strictEqual(await q.evaluate(() => window.Waypage.ink.on), true, "Draw stays on while the bar is small");
       assert.strictEqual(await q.evaluate(() => JSON.parse(localStorage.getItem("waypage.ink")).small), true);
       assert.ok(await q.locator(".ink-mini .ink-dot").count(), "the round button shows the pen's colour");
+      // The button is 35 px, and a drag moves it: it snaps to the nearer side and the bar stays tucked away.
+      assert.strictEqual(await q.evaluate(() => Math.round(document.querySelector(".ink-mini").getBoundingClientRect().width)), 35);
+      const mini = await q.evaluate(() => { const r = document.querySelector(".ink-mini").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+      const strokes = await q.evaluate(() => window.Waypage.ink.strokes(1).length);
+      // A finger's drag, sent as the pointer events it makes.
+      await q.evaluate(([x, y]) => {
+        const btn = document.querySelector(".ink-mini"), id = 7;
+        const ev = (type, px, py) => new PointerEvent(type, { pointerId: id, pointerType: "touch", isPrimary: true, bubbles: true, clientX: px, clientY: py, button: 0 });
+        btn.dispatchEvent(ev("pointerdown", x, y));
+        for (let i = 1; i <= 8; i++) window.dispatchEvent(ev("pointermove", x - i * 40, y - i * 25));
+        window.dispatchEvent(ev("pointerup", x - 320, y - 200));
+      }, [mini.x, mini.y]);
+      await until(q, () => !document.querySelector(".ink-mini").classList.contains("snapping") && document.querySelector(".ink-mini").getBoundingClientRect().left < 40);
+      assert.strictEqual(await q.evaluate(() => JSON.parse(localStorage.getItem("waypage.inkMini")).side), "left");
+      assert.strictEqual(await q.evaluate(() => document.querySelector(".ink-bar").hidden), true, "a drag is not a tap");
+      assert.strictEqual(await q.evaluate(() => window.Waypage.ink.strokes(1).length), strokes, "a drag adds no stroke");
       await q.locator(".ink-mini").click();
       await until(q, () => !document.querySelector(".ink-bar").hidden && document.querySelector(".ink-mini").hidden);
       assert.strictEqual(await q.evaluate(() => JSON.parse(localStorage.getItem("waypage.ink")).small || false), false);

@@ -777,13 +777,21 @@ body.aloud-bar-up .library, body.aloud-bar-up .screen-body { padding-bottom: cal
 }
 .ink-tab::before { content: ""; position: absolute; inset: -9px 0; }
 .ink-tab:active, .ink-mini:active { background-image: linear-gradient(var(--press), var(--press)); }
-/* The bar tucked away: one round button with the tool and its colour. */
+/* The bar tucked away: one round button with the tool and its colour,
+   35 px with a 44 px tap, dragged anywhere and snapped to a side (app-ink.js places it). */
 .ink-mini {
-  inset-inline-end: var(--s-4); width: 52px; height: 52px; border-radius: var(--r-full); color: var(--accent);
-  bottom: calc(var(--s-4) + env(safe-area-inset-bottom));
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  left: 0; top: 0; width: 35px; height: 35px; border-radius: var(--r-full); color: var(--accent);
   box-shadow: 0 8px 24px var(--shadow), 0 1px 4px var(--shadow);
+  touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab;
 }
-.ink-mini-dot { position: absolute; inset-inline-end: 8px; bottom: 8px; width: 12px; height: 12px; box-shadow: 0 0 0 2px var(--surface); }
+.ink-mini::before { content: ""; position: absolute; inset: -5px; border-radius: var(--r-full); }
+.ink-mini svg { width: 16px; height: 16px; }
+.ink-mini.dragging { cursor: grabbing; box-shadow: 0 16px 40px var(--shadow); }
+.ink-mini.snapping { transition: left var(--spring-control-ms, 300ms) var(--spring-control, ease-out), top var(--spring-control-ms, 300ms) var(--spring-control, ease-out); }
+@media (prefers-reduced-motion: reduce) { .ink-mini.snapping { transition: none; } }
+:root[data-motion="off"] .ink-mini.snapping { transition: none; }
+.ink-mini-dot { position: absolute; inset-inline-end: 4px; bottom: 4px; width: 8px; height: 8px; box-shadow: 0 0 0 2px var(--surface); }
 .ink-dot { display: block; width: 22px; height: 22px; border-radius: var(--r-full); background: var(--pen-ink); box-shadow: 0 0 0 1px var(--line); }
 .ink-dot[data-c="red"] { background: var(--pen-red); }
 .ink-dot[data-c="blue"] { background: var(--pen-blue); }
