@@ -526,6 +526,7 @@ function zipOf(files) {
       await q.fill("#menuSheet .tag-input", "Important");
       await q.locator("#menuSheet .tag-save").click();
       await q.locator("#highlights .mark-filters .chip", { hasText: "Important" }).waitFor();
+      await q.locator("#menuSheet").waitFor({ state: "hidden" });
       await hold(q.locator("#highlights .mark-filters .chip", { hasText: "Important" }));
       await q.locator("#menuSheet .row", { hasText: "Remove colour" }).click();
       await q.locator("#menuSheet").waitFor({ state: "hidden" });
