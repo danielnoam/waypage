@@ -762,6 +762,28 @@ body.aloud-bar-up .library, body.aloud-bar-up .screen-body { padding-bottom: cal
 .ink-bar button[aria-pressed="true"] { color: var(--accent); background: var(--line); }
 .ink-bar .ink-gap { flex: 1 1 auto; min-width: var(--s-2); }
 .ink-bar .ink-done { width: auto; padding: 0 var(--s-4); font: 600 var(--fs-label)/1 var(--sans); color: var(--accent); }
+.ink-tab, .ink-mini {
+  position: fixed; z-index: 3; padding: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface); color: var(--muted); border: 1px solid var(--line);
+}
+.ink-tab[hidden], .ink-mini[hidden] { display: none; }
+/* Hide tools: a small tab on the bar's top edge (two 44 px rows and their borders). */
+.ink-tab {
+  left: 0; right: 0; margin-inline: auto; width: 64px; height: 26px;
+  bottom: calc(var(--s-4) + env(safe-area-inset-bottom) + 2 * var(--tap) + 2px);
+  border-bottom: 0; border-radius: var(--r-md, 14px) var(--r-md, 14px) 0 0;
+  box-shadow: 0 -4px 10px var(--shadow);
+}
+.ink-tab::before { content: ""; position: absolute; inset: -9px 0; }
+.ink-tab:active, .ink-mini:active { background-image: linear-gradient(var(--press), var(--press)); }
+/* The bar tucked away: one round button with the tool and its colour. */
+.ink-mini {
+  inset-inline-end: var(--s-4); width: 52px; height: 52px; border-radius: var(--r-full); color: var(--accent);
+  bottom: calc(var(--s-4) + env(safe-area-inset-bottom));
+  box-shadow: 0 8px 24px var(--shadow), 0 1px 4px var(--shadow);
+}
+.ink-mini-dot { position: absolute; inset-inline-end: 8px; bottom: 8px; width: 12px; height: 12px; box-shadow: 0 0 0 2px var(--surface); }
 .ink-dot { display: block; width: 22px; height: 22px; border-radius: var(--r-full); background: var(--pen-ink); box-shadow: 0 0 0 1px var(--line); }
 .ink-dot[data-c="red"] { background: var(--pen-red); }
 .ink-dot[data-c="blue"] { background: var(--pen-blue); }

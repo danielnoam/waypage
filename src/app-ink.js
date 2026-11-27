@@ -23,6 +23,7 @@ const INK_ICONS = {
   cut: '<circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M8.1 8.1L20 20"></path><path d="M20 4L8.1 15.9"></path>',
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V6a2 2 0 0 1 2-2h8"></path>',
   paste: '<rect x="5" y="4" width="14" height="17" rx="2"></rect><path d="M9 4h6v3H9z"></path>',
+  collapse: '<path d="M6 9l6 6 6-6"></path>',
   front: '<path d="M12 19V5"></path><path d="M5 12l7-7 7 7"></path>',
   back: '<path d="M12 5v14"></path><path d="M19 12l-7 7-7-7"></path>',
   trash: '<path d="M4 7h16"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M6 7l1 13h10l1-13"></path><path d="M9 7V4h6v3"></path>',
@@ -37,6 +38,8 @@ const inkIcon = (name) => {
 };
 
 let inkBar = null, inkClipId = null;
+// The bar tucked away into one round button (2026-11), kept for next time.
+let inkSmall = false, inkTab = null, inkMini = null;
 // The colours in the bar, kept: a name is the colour it always was, "#rrggbb" one of your own.
 let inkSlots = null;
 const inkColorOk = (kind, c) => (/^#[0-9a-f]{6}$/.test(c) || INK_COLORS[kind].some((x) => x[0] === c));
@@ -170,6 +173,7 @@ function inkPrefs() {
     const n = INK_COLORS[kind].length, mine = saved.slots && Array.isArray(saved.slots[kind]) ? saved.slots[kind] : [];
     inkSlots[kind] = INK_COLORS[kind].map((x, i) => (typeof mine[i] === "string" && inkColorOk(kind, mine[i]) ? mine[i] : x[0])).slice(0, n);
   }
+  inkSmall = saved.small === true;
   return { tool: ["pen", "highlighter", "eraser", "select"].includes(saved.tool) ? saved.tool : "pen", colors: saved.colors || {}, size: [0, 1, 2, 3, 4].includes(size) ? size : 2,
     style: C.ink.STYLES.includes(saved.style) ? saved.style : "ball",
     finger: typeof saved.finger === "boolean" ? saved.finger : !matchMedia("(pointer: coarse)").matches,
@@ -177,7 +181,7 @@ function inkPrefs() {
 }
 function inkKeep() {
   const s = C.ink.state();
-  store(INK_KEY, { v: 2, tool: s.tool, colors: s.colors, slots: inkSlots || undefined, size: s.size, style: s.style, finger: s.finger, shapes: s.shapes });
+  store(INK_KEY, { v: 2, tool: s.tool, colors: s.colors, slots: inkSlots || undefined, small: inkSmall || undefined, size: s.size, style: s.style, finger: s.finger, shapes: s.shapes });
 }
 // Whether a held line or circle is made straight or round (the Draw tab's switch).
 const inkShapesOn = () => ((load(INK_KEY, {}) || {}).shapes !== false);
@@ -199,15 +203,30 @@ function inkSet(on) {
   if (on) {
     if (!inkBar) inkBuild();
     inkPaint();
-    inkBar.hidden = false;
-    M.edgeIn(inkBar, "bottom");
     hideReadHere();
-  } else if (inkBar && !inkBar.hidden) {
-    inkPopClose(true);
-    if (inkColor) inkColor.close();
-    const bar = inkBar;
-    M.edgeOut(bar, "bottom").finally(() => { if (!C.ink.on) bar.hidden = true; });
   }
+  inkLayout();
+}
+// The full bar with its tab, or the round button, or neither (Draw off).
+function inkLayout() {
+  if (!C.ink.on || inkSmall) { inkPopClose(true); if (inkColor) inkColor.close(); }
+  inkReveal(inkBar, C.ink.on && !inkSmall);
+  inkReveal(inkTab, C.ink.on && !inkSmall);
+  inkReveal(inkMini, C.ink.on && inkSmall);
+}
+function inkReveal(el, yes) {
+  if (!el) return;
+  el._want = yes;
+  if (yes && el.hidden) { el.hidden = false; M.edgeIn(el, "bottom"); }
+  else if (!yes && !el.hidden) M.edgeOut(el, "bottom").finally(() => { if (!el._want) el.hidden = true; });
+}
+function inkSmallSet(on) {
+  if (!C.ink.on || inkSmall === on) return;
+  inkSmall = on;
+  inkKeep();
+  inkLayout();
+  inkPaint();
+  if (document.body.classList.contains("keys")) (on ? inkMini : inkTab).focus();
 }
 
 function inkBuild() {
@@ -249,6 +268,10 @@ function inkBuild() {
     inkKeep();
   });
   $("readerView").append(inkBar);
+  // Hide tools: a tab on the bar's top edge; the round button brings it back.
+  inkTab = el("button", { type: "button", class: "ink-tab", "aria-label": t("Hide tools"), title: t("Hide tools"), hidden: true, onclick: () => inkSmallSet(true) }, inkIcon("collapse"));
+  inkMini = el("button", { type: "button", class: "ink-mini", "aria-label": t("Show tools"), title: t("Show tools"), hidden: true, onclick: () => inkSmallSet(false) });
+  $("readerView").append(inkTab, inkMini);
   // Long press on a colour opens the colour sheet for it (a right click does too).
   const slotOf = (e) => { const b = e.target.closest && e.target.closest('button[data-slot]'); return b && inkBar.contains(b) ? b : null; };
   inkBar.addEventListener("pointerdown", (e) => {
@@ -412,6 +435,11 @@ function inkPaint() {
   for (const b of inkBar.querySelectorAll('[data-act^="tool:"]')) b.setAttribute("aria-pressed", String(b.dataset.act === "tool:" + s.tool));
   inkBar.querySelector('[data-act="undo"]').disabled = !s.canUndo;
   inkBar.querySelector('[data-act="redo"]').disabled = !s.canRedo;
+  // The round button shows the tool and, for a pen, its colour.
+  if (inkMini) {
+    const tc = s.color, mine = typeof tc === "string" && tc[0] === "#";
+    inkMini.replaceChildren(inkIcon(s.tool), ...(s.tool === "pen" || s.tool === "highlighter" ? [el("span", { class: "ink-dot ink-mini-dot", "data-c": mine ? "" : tc, "data-t": s.tool === "highlighter" ? "h" : "p", ...(mine ? { style: "background:" + tc } : {}) })] : []));
+  }
   const row = inkBar.querySelector(".ink-style");
   const hl = s.tool === "highlighter";
   const kind = hl ? "highlighter" : "pen";

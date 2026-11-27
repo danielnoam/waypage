@@ -4123,6 +4123,15 @@ c("bk1", { at: 0.01 })]);
       await until(q, () => !document.querySelector(".ink-bar").hidden);
       // The bar: no step row. Size opens a scale of five, and the pen has a style menu of four.
       assert.strictEqual(await q.locator(".ink-bar .ink-test, .ink-bar [data-act='testdone']").count(), 0);
+      // Hide tools tucks the bar into a round button, Draw stays on, and the choice is kept (2026-11).
+      await q.locator(".ink-tab").click();
+      await until(q, () => document.querySelector(".ink-bar").hidden && !document.querySelector(".ink-mini").hidden && document.querySelector(".ink-tab").hidden);
+      assert.strictEqual(await q.evaluate(() => window.Waypage.ink.on), true, "Draw stays on while the bar is small");
+      assert.strictEqual(await q.evaluate(() => JSON.parse(localStorage.getItem("waypage.ink")).small), true);
+      assert.ok(await q.locator(".ink-mini .ink-dot").count(), "the round button shows the pen's colour");
+      await q.locator(".ink-mini").click();
+      await until(q, () => !document.querySelector(".ink-bar").hidden && document.querySelector(".ink-mini").hidden);
+      assert.strictEqual(await q.evaluate(() => JSON.parse(localStorage.getItem("waypage.ink")).small || false), false);
       await q.locator('.ink-bar [data-act="size"]').click();
       await q.locator(".ink-pop-sizes").waitFor();
       assert.strictEqual(await q.locator(".ink-pop-sizes button").count(), 5);
