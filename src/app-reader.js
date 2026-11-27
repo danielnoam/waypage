@@ -462,6 +462,7 @@ function show(p, html) {
   }).then(() => {
     lostMarks = new Set();
     brightOpen();
+    paintDim();
     volumeWatch();
     paintMarks(p);
     loadTranslation(p).then(() => autoTranslate(p));
@@ -483,6 +484,34 @@ function show(p, html) {
     listenOpened(p);
     lookForNarration(p);
   });
+}
+
+// ---- Dim page ----
+// A slider in Layout (clips and notes) that lays a black layer over the
+// page, 0 to 90 %, for reading in the dark; the bars follow at 60 % of it.
+// One level for the whole app. CSS only, so the web copy has it too.
+const DIM_PAGE_KEY = "waypage.pageDim";
+const DIM_MAX = 0.9;
+const pageDim = () => clamp(Number(load(DIM_PAGE_KEY, 0)) || 0, 0, DIM_MAX);
+const dimText = (v) => (v ? Math.round(v * 100) + "%" : t("Off"));
+function paintDim() {
+  const v = pageDim(), view = $("readerView");
+  if (v) view.style.setProperty("--page-dim", v); else view.style.removeProperty("--page-dim");
+  view.classList.toggle("dimmed", v > 0);
+  document.querySelectorAll('.range[data-pref="pageDim"]').forEach((r) => {
+    r.value = Math.round(v * 100);
+    r.setAttribute("aria-valuetext", dimText(v));
+  });
+  document.querySelectorAll('[data-value="pageDim"]').forEach((n) => { n.textContent = dimText(v); });
+}
+function setDim(v) { store(DIM_PAGE_KEY, clamp(v, 0, DIM_MAX)); paintDim(); }
+function dimRow() {
+  const v = pageDim();
+  const r = slider(t("Dim page"), 0, 90, 5, (n) => setDim(n / 100), "pageDim");
+  r.value = Math.round(v * 100);
+  r.setAttribute("aria-valuetext", dimText(v));
+  return el("div", { class: "rc-row" }, el("span", { class: "rc-label" }, t("Dim page"), el("span", { class: "rc-value", "data-value": "pageDim" }, dimText(v))),
+    el("div", { class: "stepper" }, r));
 }
 
 // ---- Brightness while reading (1.10.0) ----
@@ -2712,6 +2741,7 @@ function readingControls(withTheme) {
       { value: "narrow", label: t("Narrow") }, { value: "normal", label: t("Normal") }, { value: "wide", label: t("Wide") },
     ], r.margins, (v) => set({ margins: v }))),
     ...(brightSwitch(id) || []),
+    dimRow(),
     // Under Layout since 1.47.0: it adds a line to the page, not to the type.
     comic ? null : row(t("Time left in"), seg(id + "-leftIn", t("Time left in"), [
       { value: "part", label: t("Section") }, { value: "clip", label: t("Whole") },
@@ -3882,6 +3912,7 @@ function noteSettings() {
       { value: "narrow", label: t("Narrow") }, { value: "normal", label: t("Normal") }, { value: "wide", label: t("Wide") },
     ], r.margins, (v) => setNoteLook({ margins: v }))),
     ...(brightSwitch(id) || []),
+    dimRow(),
     stack(t("Theme"), seg(id + "-theme", t("Theme"),
       [{ value: "system", label: t("Auto"), swatch: autoSwatch(), auto: true }, ...themeOptions(THEMES)],
       readerThemeOn() ? state.readerTheme : state.theme, (v) => { (readerThemeOn() ? setReaderTheme : setTheme)(v); syncThemeInputs(); }, "themes scroll")),

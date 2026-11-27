@@ -505,6 +505,7 @@ Keel.i18n.strings("he", {
   "Breaks long words at the line's end, in the clip's language": "שובר מילים ארוכות בסוף השורה, בשפה של הקטע",
   "Brightness": "בהירות",
   "Brightness slider": "מחוון בהירות",
+  "Dim page": "עמעום עמוד",
   "Bringing clips back, {i} of {n}": "מחזיר קטעים, {i} מתוך {n}",
   "Bringing clips in, {done} of {total}": "מכניס קטעים, {done} מתוך {total}",
   "Bringing it down, {x}": "מוריד, {x}",
