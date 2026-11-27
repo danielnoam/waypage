@@ -828,14 +828,17 @@ function renderFolder() {
   const showList = folderMode !== "export";
   // The Website sync tab lists its chapters one by one, whatever the look (Daniel 2026-11-25).
   const covers = showList && !folderMode && folderLook(state.folder) === "covers";
+  // Newest first only turns the view around: Continue, Next clip and the
+  // car still go in the collection's own order, and Edit shows that order.
+  const shown = !folderMode && folderNewest(state.folder) ? list.slice().reverse() : list;
   fill($("folderBody"),
     ...top,
     ...(showList && !editing ? insideStrip(state.folder) : []),
-    showList && !editing ? sectionHead(listHead(list)) : null,
-    covers ? el("ol", { class: "folder-covers" }, ...list.map((p) => coverItem(p, p === next && done < list.length))) : null,
+    showList && !editing ? sectionHead(listHead(list), list.length > 1 && !folderMode ? orderButton(state.folder) : null) : null,
+    covers ? el("ol", { class: "folder-covers" }, ...shown.map((p) => coverItem(p, p === next && done < list.length))) : null,
     ordering ? el("div", { class: "group sort-head" }, sortRow(list)) : null,
     showList && !covers ? el("ol", { class: "group folder-list" + (ordering ? " ordering" : "") },
-      ...list.map((p, i) => el("li", folderMode ? { "data-id": p.id } : { "data-id": p.id, "data-ids": p.id },
+      ...shown.map((p, k) => { const i = shown === list ? k : list.length - 1 - k; return el("li", folderMode ? { "data-id": p.id } : { "data-id": p.id, "data-ids": p.id },
         el("button", { class: "row chapter" + (p === next && done < list.length ? " now" : ""), type: "button",
           onclick: () => (folderMode ? null : tapPages([p.id], () => openPage(p.id))) },
           pickMark(),
@@ -846,7 +849,7 @@ function renderFolder() {
             editing ? el("span", { class: "choice-note" }, formatSize(p.bytes || 0))
               : el("span", { class: "choice-note" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, ...liveMark(p), readingLine(p))),
           ordering ? null : chapterMark(p)),
-        ordering ? dragHandle(p, i, list.length) : editing ? null : itemFav(p)))) : null);
+        ordering ? dragHandle(p, i, list.length) : editing ? null : itemFav(p)); })) : null);
   paintFolderBar();
   paintPicks();
   folderFlip(before);
@@ -883,11 +886,33 @@ function setFolderLook(name, look) {
   renderFolder();
 }
 function renameFolderLook(old, name) {
-  const all = load(LOOK_KEY, {});
-  if (!(old in all)) return;
-  all[name] = all[old];
-  delete all[old];
-  store(LOOK_KEY, all);
+  for (const key of [LOOK_KEY, ORDER_KEY]) {
+    const all = load(key, {});
+    if (!(old in all)) continue;
+    all[name] = all[old];
+    delete all[old];
+    store(key, all);
+  }
+}
+
+// A long collection read from its newest end (issue #400): the list shown
+// last to first, kept on this device like its look. The chapter numbers
+// stay their own.
+const ORDER_KEY = "waypage.collectionOrder";
+const folderNewest = (name) => load(ORDER_KEY, {})[name] === "newest";
+function orderButton(name) {
+  const newest = folderNewest(name);
+  const b = el("button", { class: "btn-text order-btn", type: "button",
+    "aria-label": newest ? t("Newest first. Show oldest first") : t("Oldest first. Show newest first"),
+    onclick: () => {
+      const all = load(ORDER_KEY, {});
+      if (newest) delete all[name]; else all[name] = "newest";
+      store(ORDER_KEY, all);
+      renderFolder();
+    } });
+  b.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg>';
+  b.append(el("span", {}, newest ? t("Newest first") : t("Oldest first")));
+  return b;
 }
 
 // One clip as a cover in that view: its picture (or its site's mark),

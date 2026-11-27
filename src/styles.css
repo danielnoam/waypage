@@ -1571,6 +1571,7 @@ span.update-text { cursor: default; }
   min-height: 32px; margin: var(--s-2) 0 calc(-1 * var(--s-1));
 }
 .section-head .overline { margin: 0 0 0 var(--s-1); }
+.section-head .order-btn { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--fs-meta); }
 .dropdown { position: relative; display: inline-flex; }
 .dropdown-btn {
   display: inline-flex; align-items: center; gap: var(--s-1);
