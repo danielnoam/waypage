@@ -11,7 +11,7 @@
 // part, since nothing is tapped until all of them have loaded. The order
 // is index.html's: app (this file: version, helpers, theme, state) first,
 // app-start last, which starts things up.
-const APP_VERSION = "1.69.0";
+const APP_VERSION = "1.70.0";
 window.Waypage.version = APP_VERSION;
 
 const C = window.Waypage;
