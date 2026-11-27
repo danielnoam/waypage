@@ -521,6 +521,102 @@
     return next;
   }
 
+  // ---- Places in their own files (2026-11) ----
+  // Step 1 of taking library.json apart a part at a time (ARCHITECTURE.md,
+  // "Sync's files"): where you are in a clip goes to places/<device>.json,
+  // each device writing only its own, so a place read on is a few KB up
+  // instead of the whole library. library.json still has places: every
+  // write of it for anything else carries the newest, so a device from
+  // before this still reads them, only later. Read and written only where
+  // the device has an id (stats.js).
+  const PLACES_KEY = "waypage.syncPlaces"; // { etag, list: { device: sha }, got: { device: places }, sent }
+  const PLACE_KEYS = READING.concat("spot");
+  const placesDevice = () => (C.stats && /^[a-z0-9]{12}$/.test(C.stats.device || "") ? C.stats.device : null);
+  // { id: { at, finished, readAt, readOn, placeAt, spot, v } }, v the
+  // version of the text a spot names.
+  const placeEntry = (p) => { const o = { v: ver(p) }; for (const k of PLACE_KEYS) if (p[k] !== undefined) o[k] = p[k]; return o; };
+  // Every device's places file, each read again only when its sha moved.
+  async function readPlaces() {
+    const known = load(PLACES_KEY, {}) || {};
+    known.list = known.list || {};
+    known.got = known.got || {};
+    const r = await call(contents("places") + "?ref=" + encodeURIComponent(cfg.branch), { etag: known.etag });
+    if (r.status !== 304) {
+      if (r.status === 404) { known.list = {}; known.got = {}; delete known.etag; }
+      else if (!r.ok) throw await fail(r);
+      else {
+        const list = {};
+        const got = await r.json();
+        for (const f of Array.isArray(got) ? got : []) {
+          const m = /^([a-z0-9]{12})\.json$/.exec((f && f.name) || "");
+          if (m) list[m[1]] = f.sha;
+        }
+        for (const [d, sha] of Object.entries(list)) {
+          if (known.list[d] === sha && known.got[d]) continue;
+          halt();
+          const got = await readJson("places/" + d + ".json").catch((e) => { if (e instanceof Paused || !(e instanceof SyntaxError)) throw e; return null; });
+          known.got[d] = (got && got.data && got.data.places) || {};
+        }
+        for (const d of Object.keys(known.got)) if (!list[d]) delete known.got[d];
+        known.list = list;
+        known.etag = (r.headers && r.headers.get && r.headers.get("ETag")) || "";
+      }
+    }
+    keep(PLACES_KEY, known);
+    return known;
+  }
+  // The places files onto library.json's pages: the place moved last wins,
+  // as in mergeEntry; a spot only onto the same version of the text.
+  function placesOver(pages, known) {
+    const by = new Map(pages.map((p, i) => [p.id, i]));
+    for (const places of Object.values(known.got || {})) {
+      for (const [id, e] of Object.entries(places || {})) {
+        const i = by.get(id);
+        if (i == null || !e || placeTime(e) <= placeTime(pages[i])) continue;
+        const next = { ...pages[i] };
+        for (const k of READING) { if (e[k] === undefined) delete next[k]; else next[k] = e[k]; }
+        if (e.spot !== undefined && e.v === ver(next)) next.spot = e.spot; else delete next.spot;
+        pages[i] = next;
+      }
+    }
+    return pages;
+  }
+  // The places that make `doc` differ from GitHub's, or null when
+  // anything else differs too (then library.json is written, as before).
+  function placesOnly(doc, theirs) {
+    for (const k of new Set([...Object.keys(doc), ...Object.keys(theirs)])) if (k !== "pages" && !same(doc[k], theirs[k])) return null;
+    if (doc.pages.length !== theirs.pages.length) return null;
+    const by = new Map(theirs.pages.map((p) => [p.id, p]));
+    const out = {};
+    const bare = (p) => { const o = { ...p }; for (const k of PLACE_KEYS) delete o[k]; return o; };
+    for (const p of doc.pages) {
+      const r = by.get(p.id);
+      if (!r) return null;
+      if (same(p, r)) continue;
+      if (!same(bare(p), bare(r))) return null;
+      out[p.id] = placeEntry(p);
+    }
+    return out;
+  }
+  // This device's file: what it had, the new places, less what
+  // library.json itself says by now (`raw`, GitHub's own pages).
+  async function sendPlaces(fresh, raw, known) {
+    const dev = placesDevice();
+    const times = new Map(raw.map((p) => [p.id, placeTime(p)]));
+    const places = {};
+    for (const [id, e] of Object.entries({ ...((known.got || {})[dev] || {}), ...fresh })) if (times.has(id) && placeTime(e) > times.get(id)) places[id] = e;
+    const text = JSON.stringify({ v: 1, places });
+    const h = hashOf(text);
+    if (known.sent === h && known.list[dev]) return;
+    halt();
+    known.list[dev] = await put("places/" + dev + ".json", text, known.list[dev] || null, "Places: " + Object.keys(places).length);
+    known.got[dev] = places;
+    known.sent = h;
+    // The listing moved with this write; read it again next time.
+    delete known.etag;
+    keep(PLACES_KEY, known);
+  }
+
   // A look at the library on GitHub without a sync (1.3.0): for the
   // furthest-read check when a clip opens, and for the poll while the app
   // is in front. Shares the copy above, so an unchanged library is a 304
@@ -1288,9 +1384,15 @@
     // Pages sent this run: { at, sha, was } (was: the sha GitHub had before).
     const sentNow = new Map();
     let merged, remote;
+    // Other devices' places (and this one's) before the merge, so they
+    // read as GitHub's.
+    let places = null;
+    if (placesDevice() && !noClips) try { places = await readPlaces(); } catch (e) { if (e instanceof Paused) throw e; places = null; }
     for (let tries = 0; ; tries++) {
       remote = await readLibraryJson();
       if (remote && (!remote.data || !Array.isArray(remote.data.pages))) throw new SyncError(t("The library.json on GitHub isn't Waypage's. Move it away and sync again."));
+      const raw = remote ? remote.data.pages : [];
+      if (remote && places) remote = { ...remote, data: { ...remote.data, pages: placesOver(raw.slice(), places) } };
       await breathe();
       // What GitHub would hold of each page, so the two compare like for
       // like; then the merge, off the main thread where it can be.
@@ -1347,6 +1449,8 @@
         const doc = placesOnto(remoteDoc, merged);
         if (merged.outside) doc.outside = merged.outside;
         if (await sameOff(doc, remoteDoc)) break;
+        const fresh = places && placesOnly(doc, remoteDoc);
+        if (fresh) { await sendPlaces(fresh, raw, places); break; }
         halt();
         try { await writeLibrary(JSON.stringify(doc), remote.sha, "Places: " + merged.pages.length + " pages"); break; } catch (e) {
           if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e;
@@ -1440,6 +1544,8 @@
       }
       await breathe();
       if (remote && await sameOff(merged, remoteDoc)) { keep(SENT_KEY, null); break; }
+      const fresh = remote && places && placesOnly(merged, remoteDoc);
+      if (fresh) { await sendPlaces(fresh, raw, places); keep(SENT_KEY, null); break; }
       halt();
       try {
         await writeLibrary(JSON.stringify(merged), remote && remote.sha, libraryNote(merged.pages.length, printDoc(merged)));
