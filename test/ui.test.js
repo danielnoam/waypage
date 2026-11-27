@@ -4518,8 +4518,8 @@ c("bk1", { at: 0.01 })]);
         renderHighlights(); out.all = has();
         marksTags = ["history"]; renderHighlights(); out.tag = has();
         // (a colour nothing has is dropped when drawn, so the list is asked directly)
-        marksTags = []; marksColor = "pink"; out.pink = marksShown().some((c) => c.notes.length);
-        marksColor = ""; marksQuery = "the date"; renderHighlights(); out.words = has();
+        marksTags = []; marksColors = ["pink"]; out.pink = marksShown().some((c) => c.notes.length);
+        marksColors = []; marksQuery = "the date"; renderHighlights(); out.words = has();
         marksQuery = "nothing like it"; renderHighlights(); out.none = has();
         marksQuery = ""; renderHighlights();
         return out;
