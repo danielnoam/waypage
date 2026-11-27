@@ -2,6 +2,19 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.71.0] - 2026-11-27
+
+### Added
+- Android Auto: the Collections tab is now Collections/Series. It starts with All, every collection and series A to Z (up to 60), then your starred ones, then the 8 latest. One that is only under All opens with its Continue and Newest, not its whole list. Android only.
+- Android Auto, the lock screen and Narrate's notification show a progress bar while Narrate reads, with time gone and time left. The times are estimated from the text's length at the reading speed, and set right at each paragraph. Dragging the bar goes to the start of the paragraph at that point. Android only.
+
+### Changed
+- A collection's order is set in one place: Sort, beside the list's head (Custom, Chapter, Release date, Date added, Title). Pick a sort again to turn it round, so Date added picked twice puts the newest first. Custom brings the handles to drag clips into your own order, with Done to finish. Edit no longer has Sort by or the handles.
+
+### Fixed
+- Website sync no longer counts or saves chapters earlier than the last one you have, even ones you never deleted (a story started part way in). Save earlier still saves them.
+- Sync merges off the main thread again, so a sync with a big library no longer holds up taps while it merges. Since 1.68.0 the merge's background helper failed as it started (logged as "t is not defined"), and every merge ran on the main thread instead.
+
 ## [1.70.0] - 2026-11-27
 
 ### Added

@@ -1170,6 +1170,28 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("Website sync doesn't count or save chapters before the last one you have", async () => {
+      const q = await page(browser, 390);
+      const all = [0, 1, 2, 3, 4, 5].map((i) => "https://example.com/tale/ch" + i);
+      await q.evaluate(async (all) => {
+        const list = [2, 4].map((i, n) => ({ id: "tl" + i, url: all[i], title: "Chapter " + (i + 1), site: "example.com", savedAt: 1000 + n, minutes: 3, mode: "links", at: 0, finished: false, folder: "Story C", folderAt: n, source: "https://example.com/tale" }));
+        await window.Waypage.store.writeIndex(list);
+        localStorage.setItem("waypage.newChapters", JSON.stringify({ "story c": { count: 4, at: Date.now(), all } }));
+      }, all);
+      await q.reload();
+      await until(q, () => state.pages.length === 2);
+      assert.strictEqual(await q.evaluate(() => freshCount("Story C")), 1, "only chapters after the last saved are new");
+      const got = await q.evaluate(async () => {
+        let urls = null;
+        saveAll = async (u) => { urls = u; };
+        saveNewChapters("Story C");
+        return urls;
+      });
+      assert.deepStrictEqual(got, [all[5]]);
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("the sidebar shows the favourites, Favourites, then Collections and Clips (1.14.0)", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {

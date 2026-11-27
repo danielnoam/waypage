@@ -491,6 +491,25 @@ function chapterLinks(name) {
   return gone.size ? entry.all.filter((u) => !gone.has(urlKey(u))) : entry.all;
 }
 
+// Only chapters after the last one saved, saving or deleted are new
+// (2026-11): earlier ones, gaps included, are never counted or saved by
+// sync, so a story started part way in doesn't fill in from chapter 1.
+// "Save earlier" still saves them on purpose. -1 when none is had yet.
+function laterFrom(name) {
+  const entry = newFor(name);
+  if (!entry || !entry.all) return -1;
+  const gone = goneFor(name);
+  let from = -1;
+  entry.all.forEach((u, i) => { if (gone.has(urlKey(u)) || savedAs(u) || savingAs(u)) from = i; });
+  return from;
+}
+function laterChapters(name) {
+  const entry = newFor(name);
+  if (!entry || !entry.all) return [];
+  const gone = goneFor(name);
+  return entry.all.slice(laterFrom(name) + 1).filter((u) => !gone.has(urlKey(u)) && !savedAs(u) && !savingAs(u));
+}
+
 // New chapters with the app closed (2026-11, Android): the phone's feed
 // job also reads each linked collection's contents page every few hours
 // and says when it lists a chapter this device hasn't seen. It can't run
@@ -535,6 +554,7 @@ function chapterWatchList() {
     if (!shape) continue;
     const known = new Set([...entry.all, ...list.map((p) => p.url)].map(chapterKey).filter(Boolean));
     for (const k of goneFor(name)) known.add(chapterKey(k));
+    for (const u of entry.all.slice(0, laterFrom(name) + 1)) known.add(chapterKey(u));
     out.push({ name, url: entry.page || source, ...shape, known: [...known].slice(-STORY_KNOWN_MAX) });
   }
   return out;
@@ -603,11 +623,7 @@ async function keepUp(name) {
     if (room <= 0 || !links.length) return;
     // The next ones: after the last chapter saved or deleted, so earlier
     // chapters never saved (a story started part way in) stay out.
-    const gone = goneFor(name);
-    let from = -1;
-    const all = newFor(name).all;
-    all.forEach((u, i) => { if (gone.has(urlKey(u)) || savedAs(u)) from = i; });
-    const next = all.slice(from + 1).filter((u) => !savedAs(u) && !savingAs(u)).slice(0, room);
+    const next = laterChapters(name).slice(0, room);
     if (next.length) saveAll(next, name, [], undefined, true, undefined, folderSource(list));
   } finally {
     keepingUp.delete(key);
@@ -670,8 +686,8 @@ async function checkNew(name, quiet) {
         await C.store.writeIndex(state.pages);
       }
       const all = found.links.slice(0, 5000);
-      const gone = goneFor(name);
-      count = all.filter((u) => !savedAs(u) && !savingAs(u) && !gone.has(urlKey(u))).length;
+      setNewFor(name, { at: Date.now(), count: 0, all, page: found.page || source });
+      count = laterChapters(name).length;
       setNewFor(name, { at: Date.now(), count, all, page: found.page || source });
       watchFeeds();
       await updateCover(name, found.cover || "");
@@ -713,7 +729,7 @@ const newCountText = (n) => t("{n} new", { n: n >= NEW_MAX ? NEW_MAX + "+" : Str
 function freshCount(name) {
   const entry = newFor(name);
   if (!entry || !entry.count) return 0;
-  if (entry.all) return chapterLinks(name).filter((u) => !savedAs(u) && !savingAs(u)).length;
+  if (entry.all) return laterChapters(name).length;
   const list = folderPages(name);
   const last = list[list.length - 1];
   if (!last || !last.next || savedAs(last.next)) return 0;
