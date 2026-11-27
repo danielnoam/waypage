@@ -1189,7 +1189,7 @@ function savePositions() {
   clearTimeout(positionTimer);
   positionTimer = null;
   updateWidgets();
-  return C.store.writeIndex(state.pages).catch(() => {});
+  return C.store.writeIndexOnly(state.pages).then(placeSoon).catch(() => {});
 }
 
 function closeReader() {
