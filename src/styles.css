@@ -1571,7 +1571,6 @@ span.update-text { cursor: default; }
   min-height: 32px; margin: var(--s-2) 0 calc(-1 * var(--s-1));
 }
 .section-head .overline { margin: 0 0 0 var(--s-1); }
-.section-head .order-btn { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--fs-meta); }
 .dropdown { position: relative; display: inline-flex; }
 .dropdown-btn {
   display: inline-flex; align-items: center; gap: var(--s-1);
@@ -2265,9 +2264,6 @@ span.update-text { cursor: default; }
    as the top row of the chapters' card. */
 .edit-tabs { margin-bottom: var(--s-4); }
 .folder-edit .folder-facts { margin-top: var(--s-4); }
-.sort-head { border-end-start-radius: 0; border-end-end-radius: 0; border-bottom: 0; }
-.sort-head + .folder-list { border-start-start-radius: 0; border-start-end-radius: 0; }
-.sort-head .sort-row { cursor: default; }
 .sort-dir { display: inline-flex; vertical-align: -3px; margin-inline-start: var(--s-1); }
 .folder-list.ordering .row { min-height: 56px; cursor: default; }
 .folder-list.ordering li { background: var(--surface); }
