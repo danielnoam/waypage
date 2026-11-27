@@ -3528,7 +3528,7 @@ body.listen-bar-up .library, body.listen-bar-up .screen-body { padding-bottom: c
 /* Picking highlights (2026-11): a circle on each row, the bar keeping Tags and Delete. */
 .picking-marks .select-bar .select-act:not(#selTags):not(#selDelete) { display: none; }
 .mark-item { position: relative; }
-.picking-marks .mark-item .mark-row { padding-inline-end: var(--s-7); }
+.picking-marks .mark-item .mark-row { padding-inline-end: var(--s-8); }
 .picking-marks .mark-item .pick { top: 50%; margin-top: -12px; inset-inline-end: var(--s-4); }
 .picking-marks .mark-item.picked .mark-row { background: var(--press); }
 .picking-marks .mark-item .mark-edit { display: none; }
