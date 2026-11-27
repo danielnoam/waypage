@@ -473,6 +473,86 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("in Highlights a hold edits a tag or a colour, colours pick several, and a hold on a highlight picks them to tag or delete (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ARTICLE);
+      await q.press("#saveUrl", "Enter");
+      await q.locator(".page-card", { hasText: "The Long Haul Flight" }).first().click();
+      await frameText(q).getByText("oceanic track").waitFor();
+      await q.goBack();
+      await q.evaluate(async () => {
+        const p = state.pages[0];
+        const mk = (id, text, color, tags) => ({ id, block: 1, start: 0, endBlock: 1, end: 3, text, at: Date.now(), ...(color ? { color } : {}), ...(tags ? { tags } : {}) });
+        p.marks = [mk("m1", "alpha words", "", ["quote", "idea"]), mk("m2", "beta words", "green", ["idea"]), mk("m3", "gamma words", "pink", ["quote"])];
+        await window.Waypage.store.writeIndex(state.pages);
+      });
+      await q.click("#sideBtn");
+      await q.locator("#sidebar .side-item", { hasText: "Highlights" }).click();
+      const rows = () => q.locator("#highlights .mark-row").count();
+      const index = () => q.evaluate(async () => (await window.Waypage.store.readIndex()).flatMap((p) => p.marks || []).map((m) => [m.id, m.color || "yellow", (m.tags || []).join(",")]));
+      const hold = async (loc) => { const b = await loc.boundingBox(); await q.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await q.mouse.down(); await q.waitForTimeout(620); await q.mouse.up(); };
+      // Colours pick several, with any or none.
+      await q.locator("#highlights .mark-filters .chip", { hasText: "Green" }).click();
+      await q.locator("#highlights .mark-filters .chip", { hasText: "Pink" }).click();
+      assert.strictEqual(await rows(), 2, "green or pink");
+      await q.locator('#highlights .hl-match[data-kind="colors"]').click();
+      await q.locator("#matchPop .pop-item", { hasText: "None of these colours" }).click();
+      assert.strictEqual(await rows(), 1, "neither green nor pink");
+      await q.locator("#highlights .mark-filters .chip", { hasText: "All" }).click();
+      assert.strictEqual(await rows(), 3);
+      // Holding a tag renames it, and a name another tag has merges the two.
+      await hold(q.locator("#highlights .hl-tags .chip", { hasText: "#quote" }));
+      await q.locator("#menuSheet .tag-input").waitFor();
+      await q.fill("#menuSheet .tag-input", "cite");
+      await q.locator("#menuSheet .tag-save").click();
+      await q.locator("#menuSheet").waitFor({ state: "hidden" });
+      assert.deepStrictEqual(await index(), [["m1", "yellow", "cite,idea"], ["m2", "green", "idea"], ["m3", "pink", "cite"]]);
+      await hold(q.locator("#highlights .hl-tags .chip", { hasText: "#cite" }));
+      await q.fill("#menuSheet .tag-input", "idea");
+      assert.ok(/Merge into #idea/.test(await q.textContent("#menuSheet .tag-save")));
+      await q.locator("#menuSheet .tag-save").click();
+      await q.locator("#menuSheet").waitFor({ state: "hidden" });
+      assert.deepStrictEqual((await index()).map((x) => x[2]), ["idea", "idea", "idea"]);
+      // Delete takes the tag off every highlight and keeps them; Undo puts it back.
+      await hold(q.locator("#highlights .hl-tags .chip", { hasText: "#idea" }));
+      await q.locator("#menuSheet .row", { hasText: "Delete tag" }).click();
+      await q.locator("#menuSheet").waitFor({ state: "hidden" });
+      assert.deepStrictEqual((await index()).map((x) => x[2]), ["", "", ""]);
+      assert.strictEqual(await rows(), 3, "the highlights stay");
+      await q.locator(".toast button", { hasText: "Undo" }).click();
+      assert.deepStrictEqual((await index()).map((x) => x[2]), ["idea", "idea", "idea"]);
+      // A hold on a colour gives it a label of your own; Remove turns its highlights yellow.
+      await hold(q.locator("#highlights .mark-filters .chip", { hasText: "Pink" }));
+      await q.fill("#menuSheet .tag-input", "Important");
+      await q.locator("#menuSheet .tag-save").click();
+      await q.locator("#highlights .mark-filters .chip", { hasText: "Important" }).waitFor();
+      await hold(q.locator("#highlights .mark-filters .chip", { hasText: "Important" }));
+      await q.locator("#menuSheet .row", { hasText: "Remove colour" }).click();
+      await q.locator("#menuSheet").waitFor({ state: "hidden" });
+      assert.deepStrictEqual((await index()).map((x) => x[1]), ["yellow", "green", "yellow"]);
+      // A hold on a highlight picks it; Select all picks every one shown.
+      await hold(q.locator("#highlights .mark-item").first());
+      await q.locator("#selectHead").waitFor();
+      assert.ok(/1 highlight picked/.test(await q.textContent("#selectCount")), await q.textContent("#selectCount"));
+      await q.click("#selectAll");
+      assert.ok(/3 highlights picked/.test(await q.textContent("#selectCount")));
+      await q.click("#selTags");
+      await q.locator("#menuSheet .tag-input").fill("fresh");
+      await q.press("#menuSheet .tag-input", "Enter");
+      await q.locator("#menuSheet .chip.on", { hasText: "fresh" }).waitFor();
+      assert.deepStrictEqual((await index()).map((x) => x[2]), ["idea,fresh", "idea,fresh", "idea,fresh"]);
+      await q.locator("#menuSheet .menu-done").click();
+      await q.locator("#menuSheet").waitFor({ state: "hidden" });
+      assert.ok(await q.locator("#selectHead").isVisible(), "still picking after the sheet");
+      await q.click("#selDelete");
+      await q.locator("#selectHead").waitFor({ state: "hidden" });
+      assert.strictEqual((await index()).length, 0);
+      await q.locator(".toast button", { hasText: "Undo" }).click();
+      assert.strictEqual((await index()).length, 3, "Undo brings them back");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("on a touch screen Highlight is one button: a hold opens the colours under the bar, sliding to one and letting go highlights in it; keys 1 to 5 do too", async () => {
       const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: "block" });
       const q = await ctx.newPage();

@@ -212,6 +212,7 @@ const state = {
   select: null,
   // The library's sheet: { kind: "page" | "tags" | "folder", page }, or null.
   menu: null,
+  markPick: null,
   // Settings' screen up over its menu: "appearance", "saving", "storage" or "updates" (About).
   section: null,
 };

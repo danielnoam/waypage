@@ -1680,7 +1680,7 @@ function openSelColors() {
   if (!readHere || readHere.hidden || readHere.querySelector(".sel-mark").hidden) return;
   if (!selColors) {
     selColors = el("div", { class: "sel-colors", role: "group", "aria-label": t("Highlight colours"), hidden: true },
-      ...MARK_COLORS.map((c) => el("button", { class: "sel-swatch", type: "button", "aria-label": MARK_NAMES[c], title: MARK_NAMES[c], "data-c": c,
+      ...MARK_COLORS.map((c) => el("button", { class: "sel-swatch", type: "button", "aria-label": markName(c), title: markName(c), "data-c": c,
         onclick: () => pickMarkColor(c) }, swatchDot(c))));
     $("readerView").append(selColors);
   }
@@ -1745,6 +1745,10 @@ function markKey(n) {
 // Colours (1.42.0): yellow is a highlight with no `color`.
 const MARK_COLORS = ["yellow", "green", "blue", "pink", "purple"];
 const MARK_NAMES = { yellow: t("Yellow"), green: t("Green"), blue: t("Blue"), pink: t("Pink"), purple: t("Purple") };
+// A colour can carry your own label (2026-11), kept on this device: "Important" in place of "Pink".
+const MARK_LABELS_KEY = "waypage.markNames";
+const markLabels = () => { const v = load(MARK_LABELS_KEY, {}); return v && typeof v === "object" ? v : {}; };
+const markName = (c) => { const v = markLabels()[c]; return typeof v === "string" && v ? v : MARK_NAMES[c]; };
 const MARK_COLOR_KEY = "waypage.markColor";
 const markColor = () => { const c = load(MARK_COLOR_KEY, "yellow"); return MARK_COLORS.includes(c) ? c : "yellow"; };
 const colorOf = (m) => (MARK_COLORS.includes(m.color) ? m.color : "yellow");
@@ -1760,7 +1764,7 @@ function colorChips(list, current, onpick) {
   const chip = (c, label) => el("button", { class: "chip" + (current === c ? " on" : ""), type: "button", "aria-pressed": String(current === c),
     onclick: () => onpick(c && current === c ? "" : c) }, c ? swatchDot(c) : null, label);
   return el("div", { class: "chips mark-filters", role: "group", "aria-label": t("Show highlights by colour") },
-    chip("", t("All")), ...used.map((c) => chip(c, MARK_NAMES[c])));
+    chip("", t("All")), ...used.map((c) => chip(c, markName(c))));
 }
 // Kept on the clip's index entry as `marks`, so they sync, back up and
 // export with it: [{ id, block, start, endBlock, end, text, note, tags, at }].
@@ -1997,7 +2001,7 @@ function marksView(p, back) {
       el("blockquote", { class: "mark-quote big", "data-c": colorOf(m), dir: "auto" }, m.text),
       el("div", { class: "mark-colors", role: "radiogroup", "aria-label": t("Colour") },
         ...MARK_COLORS.map((c) => el("button", { class: "mark-swatch", type: "button", role: "radio", "aria-checked": String(colorOf(m) === c),
-          "aria-label": MARK_NAMES[c], title: MARK_NAMES[c], onclick: () => {
+          "aria-label": markName(c), title: markName(c), onclick: () => {
             if (colorOf(m) === c) return;
             keepNote();
             setMarkColor(m, c);

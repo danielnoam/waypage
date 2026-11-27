@@ -1951,7 +1951,7 @@ function endSelect() {
 let picksPainted = false;
 function paintPicks() {
   const on = !!state.select;
-  document.body.classList.toggle("selecting", on || !!state.feedPick);
+  document.body.classList.toggle("selecting", on || !!state.feedPick || !!state.markPick);
   // Nothing to clear when nothing was picked (1.2.0): every card was
   // visited on every redraw.
   if (!on && !picksPainted) return;
@@ -2102,6 +2102,9 @@ const MENUS = {
   page: { label: t("Clip"), build: () => pageSheet(state.menu.page, "library") },
   tags: { label: t("Tags"), build: tagsSheet },
   folderTags: { label: t("Tags"), build: folderTagsSheet },
+  markTag: { label: t("Tag"), build: () => markTagSheet() },
+  markColor: { label: t("Colour"), build: () => markColorSheet() },
+  markPickTags: { label: t("Tags"), build: () => markPickTagsSheet() },
   folder: { label: t("Collection"), build: folderSheet },
   seriesHost: { label: t("Put in a collection"), build: seriesHostSheet },
   toSeries: { label: t("Make it a series"), build: toSeriesSheet },
@@ -2130,7 +2133,7 @@ function openMenu(kind, page) {
   if (state.menu || !MENUS[kind]) return;
   state.menu = { kind, page };
   history.pushState({ view: "menu", kind, page: page ? page.id : undefined, folder: state.folder || undefined,
-    select: state.select ? true : undefined }, "");
+    select: state.select ? true : undefined, markPick: state.markPick ? true : undefined }, "");
   $("menuBody").replaceChildren(MENUS[kind].build());
   $("menuSheet").setAttribute("aria-label", MENUS[kind].label);
   $("menuCatch").hidden = false;
