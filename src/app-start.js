@@ -19,6 +19,8 @@ function route(s) {
   if (view !== "side") closeSide();
   if (view === "side" && !state.side) history.back();
   if (view !== "select" && !(view === "menu" && s.select)) endSelect();
+  if (view !== "markPick" && !(view === "menu" && s.markPick)) endMarkPick();
+  if (view === "markPick" && !state.markPick) history.back();
   if (view !== "feedPick") endFeedPick();
   if (view === "feedPick" && !state.feedPick) history.back();
   if (view !== "news") closeNews();
@@ -69,7 +71,7 @@ function toLibrary() {
   if (!(history.state && history.state.view)) return Promise.resolve();
   return new Promise((resolve) => {
     addEventListener("popstate", () => resolve(), { once: true });
-    history.go(-[state.folder, state.open, state.sheet, state.image, state.settings, state.section, state.batch, state.news, state.select, state.feedPick, state.menu, state.downloads, state.syncPage, state.side, state.part, state.finding].filter(Boolean).length || -1);
+    history.go(-[state.folder, state.open, state.sheet, state.image, state.settings, state.section, state.batch, state.news, state.select, state.feedPick, state.markPick, state.menu, state.downloads, state.syncPage, state.side, state.part, state.finding].filter(Boolean).length || -1);
   });
 }
 
@@ -79,6 +81,7 @@ fitWidth();
 wide.addEventListener("change", fitWidth);
 pinned.addEventListener("change", fitWidth);
 holdFeeds($("feeds"));
+holdMarks($("highlights"));
 holdFeeds($("newsletters"));
 holdFeeds($("sidebar"));
 swipeToSide($("libraryView"));
@@ -105,14 +108,14 @@ $("sectionBack").addEventListener("click", () => history.back());
 const topBar = $("topBar");
 addEventListener("scroll", () => topBar.classList.toggle("scrolled", scrollY > 0), { passive: true });
 $("selectCancel").addEventListener("click", () => history.back());
-$("selectAll").addEventListener("click", () => (state.feedPick ? pickAllPosts() : selectAll()));
+$("selectAll").addEventListener("click", () => (state.feedPick ? pickAllPosts() : state.markPick ? pickAllMarks() : selectAll()));
 $("selectMore").addEventListener("click", openSelectMenu);
 $("selOpen").addEventListener("click", openPickedPosts);
 $("selSave").addEventListener("click", savePickedPosts);
-$("selTags").addEventListener("click", () => openMenu("tags"));
+$("selTags").addEventListener("click", () => openMenu(state.markPick ? "markPickTags" : "tags"));
 $("selFolder").addEventListener("click", () => openMenu("folder"));
 $("selRead").addEventListener("click", readPicked);
-$("selDelete").addEventListener("click", deletePicked);
+$("selDelete").addEventListener("click", () => (state.markPick ? deleteMarkPicked() : deletePicked()));
 $("selEdit").addEventListener("click", editPicked);
 $("menuCatch").addEventListener("click", () => history.back());
 longPress($("library"));

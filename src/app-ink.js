@@ -66,6 +66,7 @@ async function inkSync(p) {
   penNativeSet({ on: true });
   const { stale } = await C.ink.load(p);
   if (state.open !== p) return;
+  noteSummaryApply(p);
   if (stale) toast(t("This PDF has changed since you drew on it. The drawings may not line up."));
   // A note is for writing: its pen is ready when it opens.
   if (p.note) { inkSet(true); if (!p.thumb) noteCoverSoon(p, 1500); }
@@ -772,7 +773,7 @@ function inkNoteSheet() {
       el("div", { class: "menu-head" }, el("p", { class: "menu-title" }, t("Note"))),
       el("div", { class: "mark-colors", role: "radiogroup", "aria-label": t("Colour") },
         ...MARK_COLORS.map((c) => el("button", { class: "mark-swatch", type: "button", role: "radio", "aria-checked": String(n.c === c),
-          "aria-label": MARK_NAMES[c], title: MARK_NAMES[c], onclick: () => { keep(); store(MARK_COLOR_KEY, c); C.ink.editNote(id, { c }); draw(); } }, swatchDot(c)))),
+          "aria-label": markName(c), title: markName(c), onclick: () => { keep(); store(MARK_COLOR_KEY, c); C.ink.editNote(id, { c }); draw(); } }, swatchDot(c)))),
       area,
       markTagsEditor(null, m, draw, (tags) => { keep(); C.ink.editNote(id, { tags }); }),
       el("div", { class: "group" },
@@ -819,6 +820,35 @@ function inkNotes(p) {
   if (p.ink && typeof p.ink === "object") for (const [n, list] of Object.entries(p.ink)) for (const x of Array.isArray(list) ? list : []) if (x && x.t === "n") out.push(one(x, n, false));
   if (Array.isArray(p.noted)) for (const x of p.noted) if (x && x.id) out.push(one(x, x.n, true));
   return out.sort((a, b) => a.n - b.n);
+}
+// Every bubble of a clip as a holder of tags and a colour (2026-11), so a tag
+// or colour can be renamed or taken off across Highlights. cb({ tags, color,
+// setTags(list), setColor(c), key }). Open, the clip's own bubbles are edited
+// (they save themselves); otherwise the entry's drawings by block, and the
+// summary a file's entry keeps (`noted`), which the file takes when it opens.
+function eachNoteHolder(p, cb) {
+  if (!p) return;
+  if (state.open === p && inkReady()) {
+    for (const nt of C.ink.notes()) cb({ tags: nt.tags, color: nt.c, key: p.id + "|" + nt.id,
+      setTags: (to) => C.ink.editNote(nt.id, { tags: to }), setColor: (c) => C.ink.editNote(nt.id, { c }) });
+    return;
+  }
+  const hold = (x) => ({ tags: Array.isArray(x.tags) ? x.tags : [], color: MARK_COLORS.includes(x.c) ? x.c : "yellow", key: p.id + "|" + x.id,
+    setTags: (to) => { if (to.length) x.tags = to; else delete x.tags; }, setColor: (c) => { x.c = c; } });
+  if (p.ink && typeof p.ink === "object") for (const list of Object.values(p.ink)) for (const x of Array.isArray(list) ? list : []) if (x && x.t === "n") cb(hold(x));
+  if (Array.isArray(p.noted)) for (const x of p.noted) if (x && x.id) cb(hold(x));
+}
+// A file's bubbles take what its entry's summary says once it opens, so a tag
+// or colour changed from Highlights reaches the file itself.
+function noteSummaryApply(p) {
+  if (C.ink.blocks || !Array.isArray(p.noted) || state.open !== p) return;
+  for (const nt of C.ink.notes()) {
+    const s = p.noted.find((x) => x && x.id === nt.id);
+    if (!s) continue;
+    const tags = Array.isArray(s.tags) ? s.tags : [];
+    if (JSON.stringify(tags) !== JSON.stringify(nt.tags)) C.ink.editNote(nt.id, { tags });
+    if (MARK_COLORS.includes(s.c) && s.c !== nt.c) C.ink.editNote(nt.id, { c: s.c });
+  }
 }
 // A bubble's row, laid out as a highlight's: the comment in its colour, its tags,
 // and the pencil to its sheet.

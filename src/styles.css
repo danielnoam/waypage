@@ -3524,3 +3524,13 @@ body.listen-bar-up .library, body.listen-bar-up .screen-body { padding-bottom: c
 .tile-status-word { display: none; }
 [data-layout="list"] .library > .tile .tile-status { display: none; }
 [data-layout="list"] .library > .tile .tile-status-word { display: inline; }
+
+/* Picking highlights (2026-11): a circle on each row, the bar keeping Tags and Delete. */
+.picking-marks .select-bar .select-act:not(#selTags):not(#selDelete) { display: none; }
+.mark-item { position: relative; }
+.picking-marks .mark-item .mark-row { padding-inline-end: var(--s-8); }
+.picking-marks .mark-item .pick { top: 50%; margin-top: -12px; inset-inline-end: var(--s-4); }
+.picking-marks .mark-item.picked .mark-row { background: var(--press); }
+.picking-marks .mark-item .mark-edit { display: none; }
+.hl-colors .hl-tags-row { margin-top: 0; }
+.mark-item, .hl-tags .chip, .hl-colors .chip { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }

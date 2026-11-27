@@ -6,7 +6,7 @@
 // title, the clip highlighted in last first, with a search over the
 // words, the notes and the titles, and chips by colour (1.42.0). A tap
 // opens the clip at the highlight.
-let marksQuery = "", marksColor = "", marksTags = [];
+let marksQuery = "", marksColors = [], marksTags = [];
 // How the picked tags match (2026-11): any of them, all of them, or none.
 const TAG_MATCH_KEY = "waypage.marksMatch";
 let marksHow = ["any", "all", "none"].includes(load(TAG_MATCH_KEY, "any")) ? load(TAG_MATCH_KEY, "any") : "any";
@@ -15,12 +15,17 @@ const tagMatches = (m) => {
   const has = (x) => (m.tags || []).some((y) => sameTag(x, y));
   return marksHow === "all" ? marksTags.every(has) : marksHow === "none" ? !marksTags.some(has) : marksTags.some(has);
 };
+// Colours (2026-11) are picked like tags: several at once, a highlight having
+// one colour, so any of them or none of them.
+const COLOR_MATCH_KEY = "waypage.marksColorMatch";
+let marksColorHow = load(COLOR_MATCH_KEY, "any") === "none" ? "none" : "any";
+const colorOk = (m) => !marksColors.length || marksColors.includes(colorOf(m)) === (marksColorHow !== "none");
 let marksHead = null;
 // Highlights come a screen's worth of clips at a time, the rest as the
 // end nears (1.28.4): two thousand at once took the phone two seconds.
 const MARKS_FIRST = 25, MARKS_MORE = 40;
 let marksUpTo = MARKS_FIRST, marksList = "", marksSeen = null;
-const marksMatch = (p, m, q) => (!marksColor || colorOf(m) === marksColor) && tagMatches(m)
+const marksMatch = (p, m, q) => colorOk(m) && tagMatches(m)
   && (!q || [m.text, m.note || "", p.title, ...(m.tags || [])].some((t) => t.toLowerCase().includes(q)));
 // Drawings (2026-11) are listed with each clip's highlights; a search
 // finds them by the clip's title, and a colour picked shows highlights alone.
@@ -31,7 +36,7 @@ function marksShown() {
   const q = marksQuery.trim().toLowerCase();
   return state.pages.filter((p) => (p.marks || []).length || hasDrawings(p) || hasNotes(p))
     .map((p) => {
-      const ink = !marksColor && !marksTags.length && hasDrawings(p) && (!q || p.title.toLowerCase().includes(q)) ? inkGroups(p) : [];
+      const ink = !marksColors.length && !marksTags.length && hasDrawings(p) && (!q || p.title.toLowerCase().includes(q)) ? inkGroups(p) : [];
       const notes = hasNotes(p) ? inkNotes(p).filter((m) => marksMatch(p, m, q)) : [];
       return { p, ink, notes, last: Math.max(p.inkAt || 0, ...(p.marks || []).map((m) => m.at || 0)), list: (p.marks || []).filter((m) => marksMatch(p, m, q)) };
     })
@@ -52,8 +57,15 @@ const MATCH_WORDS = {
   all: { label: t("All of these tags"), note: t("Has every one"), count: t("all of {n} tags") },
   none: { label: t("None of these tags"), note: t("Has none of them"), count: t("none of {n} tags") },
 };
+const COLOR_MATCH = {
+  any: { label: t("Any of these colours"), note: t("Has one of them"), count: t("any of {n} colours") },
+  none: { label: t("None of these colours"), note: t("Has none of them"), count: t("none of {n} colours") },
+};
+// One menu for both filters: "tags" (any, all or none) or "colors" (any or none).
+let matchKind = "tags";
+const matchBtnOf = () => document.querySelector('.hl-match[data-kind="' + matchKind + '"]');
 function closeMatchMenu(away) {
-  const pop = $("matchPop"), btn = document.querySelector(".hl-match");
+  const pop = $("matchPop"), btn = matchBtnOf();
   removeEventListener("pointerdown", outsideMatch, true);
   if (!pop) return;
   pop.removeAttribute("id");
@@ -62,19 +74,25 @@ function closeMatchMenu(away) {
   if (!away && btn) btn.focus();
 }
 function outsideMatch(e) {
-  const pop = $("matchPop"), btn = document.querySelector(".hl-match");
+  const pop = $("matchPop"), btn = matchBtnOf();
   if (pop && !pop.contains(e.target) && !(btn && btn.contains(e.target))) closeMatchMenu(true);
 }
-function openMatchMenu() {
-  if ($("matchPop")) { closeMatchMenu(); return; }
-  const btn = document.querySelector(".hl-match");
+function openMatchMenu(kind = "tags") {
+  if ($("matchPop")) { const same = matchKind === kind; closeMatchMenu(); if (same) return; }
+  matchKind = kind;
+  const btn = matchBtnOf();
   if (!btn || btn.disabled) return;
-  const pop = el("div", { class: "pop-menu", id: "matchPop", role: "menu", "aria-label": t("How tags match") },
+  const colors = kind === "colors";
+  const words = colors ? COLOR_MATCH : MATCH_WORDS, now = colors ? marksColorHow : marksHow;
+  const pop = el("div", { class: "pop-menu", id: "matchPop", role: "menu", "aria-label": colors ? t("How colours match") : t("How tags match") },
     el("p", { class: "pop-note pop-head" }, t("Show highlights with")),
-    ...Object.entries(MATCH_WORDS).map(([how, w]) => {
-      const on = how === marksHow;
+    ...Object.entries(words).map(([how, w]) => {
+      const on = how === now;
       const b = el("button", { class: "pop-item", type: "button", role: "menuitemradio", "aria-checked": String(on), tabindex: "-1",
-        onclick: () => { marksHow = how; store(TAG_MATCH_KEY, how); marksUpTo = MARKS_FIRST; closeMatchMenu(); renderHighlights(); } },
+        onclick: () => {
+          if (colors) { marksColorHow = how; store(COLOR_MATCH_KEY, how); } else { marksHow = how; store(TAG_MATCH_KEY, how); }
+          marksUpTo = MARKS_FIRST; closeMatchMenu(); renderHighlights();
+        } },
         el("span", { class: "pop-icon", "aria-hidden": "true" }), el("span", { class: "pop-label" }, w.label, el("span", { class: "pop-sub" }, w.note)));
       if (on) b.firstChild.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
       return b;
@@ -96,6 +114,21 @@ function openMatchMenu() {
     else if (e.key === "Tab") closeMatchMenu(true);
   });
   setTimeout(() => addEventListener("pointerdown", outsideMatch, true));
+}
+function markColorRow(list) {
+  const used = MARK_COLORS.filter((c) => list.some((m) => colorOf(m) === c));
+  if (used.length < 2) { marksColors = []; return null; }
+  const toggle = (c) => { marksColors = marksColors.includes(c) ? marksColors.filter((x) => x !== c) : [...marksColors, c]; marksUpTo = MARKS_FIRST; renderHighlights(); };
+  const btn = el("button", { class: "icon-btn hl-match" + (marksColorHow !== "any" ? " changed" : ""), type: "button", "data-kind": "colors", "aria-haspopup": "menu", "aria-expanded": "false",
+    "aria-label": t("How colours match"), onclick: () => openMatchMenu("colors") });
+  btn.disabled = !marksColors.length;
+  btn.append(svgIcon("filter", 22));
+  return el("div", { class: "hl-tags-row" },
+    el("div", { class: "chips mark-filters", role: "group", "aria-label": t("Show highlights by colour") },
+      el("button", { class: "chip" + (!marksColors.length ? " on" : ""), type: "button", "aria-pressed": String(!marksColors.length), onclick: () => { marksColors = []; marksUpTo = MARKS_FIRST; renderHighlights(); } }, t("All")),
+      ...used.map((c) => { const on = marksColors.includes(c);
+        return el("button", { class: "chip" + (on ? " on" : ""), type: "button", "data-color": c, "aria-pressed": String(on), onclick: () => toggle(c) }, swatchDot(c), markName(c)); })),
+    btn);
 }
 function renderHighlights() {
   const root = $("highlights");
@@ -120,9 +153,8 @@ function renderHighlights() {
       el("div", { class: "hl-tags" }));
   }
   const everyMark = [...state.pages.flatMap((p) => p.marks || []), ...everyNote];
-  if (marksColor && !everyMark.some((m) => colorOf(m) === marksColor)) marksColor = "";
-  const chips = colorChips(everyMark, marksColor, (c) => { marksColor = c; marksUpTo = MARKS_FIRST; renderHighlights(); });
-  fill(marksHead.querySelector(".hl-colors"), chips);
+  marksColors = marksColors.filter((c) => everyMark.some((m) => colorOf(m) === c));
+  fill(marksHead.querySelector(".hl-colors"), markColorRow(everyMark));
   const usedTags = allMarkTags();
   marksTags = marksTags.filter((x) => usedTags.some((y) => sameTag(x, y)));
   const pickTag = (x) => {
@@ -131,14 +163,15 @@ function renderHighlights() {
     renderHighlights();
   };
   const matchBtn = el("button", { class: "icon-btn hl-match" + (marksHow !== "any" ? " changed" : ""), type: "button", "aria-haspopup": "menu", "aria-expanded": "false",
-    "aria-label": t("How tags match"), onclick: () => openMatchMenu() });
+    "aria-label": t("How tags match"), onclick: () => openMatchMenu("tags") });
+  matchBtn.dataset.kind = "tags";
   matchBtn.disabled = !marksTags.length;
   matchBtn.append(svgIcon("filter", 22));
   fill(marksHead.querySelector(".hl-tags"), usedTags.length ? el("div", { class: "hl-tags-row" },
     el("div", { class: "chips", role: "group", "aria-label": t("Show highlights by tag") },
       el("button", { class: "chip" + (!marksTags.length ? " on" : ""), type: "button", "aria-pressed": String(!marksTags.length), onclick: () => { marksTags = []; marksUpTo = MARKS_FIRST; renderHighlights(); } }, t("All tags")),
       ...usedTags.map((x) => { const on = marksTags.some((y) => sameTag(x, y));
-        return el("button", { class: "chip" + (on ? " on" : ""), type: "button", "aria-pressed": String(on), dir: "auto", onclick: () => pickTag(x) }, "#" + x); })),
+        return el("button", { class: "chip" + (on ? " on" : ""), type: "button", "data-tag": x, "aria-pressed": String(on), dir: "auto", onclick: () => pickTag(x) }, "#" + x); })),
     matchBtn) : null);
   const clips = marksShown();
   const shown = clips.reduce((n, c) => n + c.list.length, 0), shownNotes = clips.reduce((n, c) => n + c.notes.length, 0);
@@ -146,16 +179,17 @@ function renderHighlights() {
   const more = clips.length > marksUpTo;
   marksHead.hidden = !total && !drawings && !everyNote.length;
   const hl = (n) => tn(n, "1 highlight", "{n} highlights");
-  marksHead.querySelector(".hl-count").textContent = marksQuery.trim() || marksColor || marksTags.length
-    ? t("{hl} found", { hl: [shown || !shownNotes ? hl(shown) : null, shownNotes ? noteWord(shownNotes) : null].filter(Boolean).join(" · ") }) + (marksTags.length && (marksTags.length > 1 || marksHow === "none") ? " · " + MATCH_WORDS[marksHow].count.replace("{n}", marksTags.length) : "")
+  marksHead.querySelector(".hl-count").textContent = marksQuery.trim() || marksColors.length || marksTags.length
+    ? t("{hl} found", { hl: [shown || !shownNotes ? hl(shown) : null, shownNotes ? noteWord(shownNotes) : null].filter(Boolean).join(" · ") }) + (marksTags.length && (marksTags.length > 1 || marksHow === "none") ? " · " + MATCH_WORDS[marksHow].count.replace("{n}", marksTags.length) : "") + (marksColors.length && (marksColors.length > 1 || marksColorHow === "none") ? " · " + COLOR_MATCH[marksColorHow].count.replace("{n}", marksColors.length) : "")
     : t("{what} in {clips}", { what: [total || (!drawings && !everyNote.length) ? hl(total) : null, everyNote.length ? noteWord(everyNote.length) : null, drawings ? inkWord(drawings) : null].filter(Boolean).join(" · "), clips: countLine(clips.length) });
   marksHead.querySelector(".hl-copy").hidden = !shown && !shownNotes;
   const nodes = clips.slice(0, marksUpTo).map(({ p, list, ink, notes }) => {
-    const rows = list.map((m) => ({ at: m.page ? m.page : m.block || 0, row: el("li", { class: "mark-item" },
-      el("button", { class: "row mark-row", type: "button", "aria-label": t("{slice}, in {title}", { slice: m.text.slice(0, 120), title: p.title }), onclick: () => goToMark(p, m.id) },
+    const rows = list.map((m) => ({ at: m.page ? m.page : m.block || 0, row: el("li", { class: "mark-item", "data-mark": p.id + "|" + m.id },
+      el("button", { class: "row mark-row", type: "button", "aria-label": t("{slice}, in {title}", { slice: m.text.slice(0, 120), title: p.title }), onclick: () => (state.markPick ? tapMark(p.id + "|" + m.id) : goToMark(p, m.id)) },
         el("span", { class: "mark-quote", "data-c": colorOf(m), dir: "auto" }, m.text),
         m.note ? el("span", { class: "mark-note", dir: "auto" }, m.note) : null,
-        markTagsLine(m))) }));
+        markTagsLine(m)),
+      el("span", { class: "pick", "aria-hidden": "true" })) }));
     const all = inkOpen.has(p.id);
     for (const nt of notes) rows.push({ at: inkOrder(nt) + 0.25, row: noteRow(p, nt, () => inkNoteGo(p, nt), () => inkNoteGo(p, nt), p.title) });
     for (const g of all ? ink : ink.slice(0, INK_FIRST)) rows.push({ at: inkOrder(g) + 0.5, row: inkRow(p, g, () => inkGoTo(p, g)) });
@@ -179,6 +213,7 @@ function renderHighlights() {
   // The search field stays put, so typing in it keeps its focus.
   if (marksHead.parentNode !== root) root.replaceChildren(marksHead, el("div", { class: "hl-list" }));
   fill(root.querySelector(".hl-list"), ...nodes);
+  paintMarkPicks();
   if (more) {
     if (!marksSeen) marksSeen = new IntersectionObserver((hits) => {
       if (!hits.some((h) => h.isIntersecting) || $("highlights").hidden) return;
@@ -188,6 +223,302 @@ function renderHighlights() {
     marksSeen.disconnect();
     marksSeen.observe(nodes[nodes.length - 1]);
   }
+}
+
+// ---- Editing tags and colours, picking highlights (2026-11) ----
+// Holding a tag chip, a colour chip or a highlight (or right-clicking one)
+// opens what it can do: rename or take away a tag everywhere, give a colour
+// your own label or remove it, or start picking highlights to tag or delete
+// them together. A tag or colour is changed on every highlight and comment
+// bubble that has it; a file's own bubbles take it when the file is opened
+// (app-ink.js noteSummaryApply).
+let markEdit = null; // { tag } or { color }: what the open sheet is about
+const dedupeTags = (list) => list.reduce((out, x) => (out.some((y) => sameTag(x, y)) ? out : [...out, x]), []);
+// Each holder of a tag and a colour: a highlight, or a comment bubble.
+function eachMarkHolder(cb) {
+  const now = Date.now();
+  for (const p of state.pages) {
+    for (const m of p.marks || []) cb({ p, tags: m.tags || [], color: colorOf(m), key: p.id + "|" + m.id,
+      setTags: (to) => { if (to.length) m.tags = to; else delete m.tags; m.at = now; },
+      setColor: (c) => setMarkColor(m, c) });
+    eachNoteHolder(p, (h) => cb({ ...h, p,
+      setTags: (to) => { h.setTags(to); p.inkAt = now; }, setColor: (c) => { h.setColor(c); p.inkAt = now; } }));
+  }
+}
+async function markSaved() {
+  if (state.open) paintMarks(state.open);
+  await C.store.writeIndex(state.pages);
+  syncSoon();
+  renderHighlights();
+}
+function markTagUse(tag) {
+  let hl = 0;
+  const clips = new Set();
+  eachMarkHolder((h) => { if (h.tags.some((x) => sameTag(x, tag))) { hl++; clips.add(h.p.id); } });
+  return t("On {hl} in {clips}", { hl: tn(hl, "1 highlight", "{n} highlights"), clips: countLine(clips.size) });
+}
+// A tag renamed on every highlight; to a name another tag has, the two become one.
+async function renameMarkTag(from, to) {
+  const name = cleanTag(to);
+  if (!name) return null;
+  const into = allMarkTags().find((x) => sameTag(x, name) && !sameTag(x, from)) || name;
+  eachMarkHolder((h) => { if (h.tags.some((x) => sameTag(x, from))) h.setTags(dedupeTags(h.tags.map((x) => (sameTag(x, from) ? into : x)))); });
+  marksTags = dedupeTags(marksTags.map((x) => (sameTag(x, from) ? into : x)));
+  await markSaved();
+  return into;
+}
+// Off every highlight; the highlights stay. Undo puts it back where it was.
+async function deleteMarkTag(tag) {
+  const was = new Map();
+  eachMarkHolder((h) => { if (h.tags.some((x) => sameTag(x, tag))) { was.set(h.key, h.tags.slice()); h.setTags(h.tags.filter((x) => !sameTag(x, tag))); } });
+  await markSaved();
+  toast(t("Deleted #{tag}", { tag }), t("Undo"), async () => {
+    eachMarkHolder((h) => { if (was.has(h.key)) h.setTags(was.get(h.key)); });
+    await markSaved();
+  });
+}
+// A colour taken off: its highlights turn yellow and stay. Undo turns them back.
+async function removeMarkColor(c) {
+  const had = new Set();
+  eachMarkHolder((h) => { if (h.color === c) { had.add(h.key); h.setColor("yellow"); } });
+  marksColors = marksColors.filter((x) => x !== c);
+  await markSaved();
+  toast(t("Colour removed. {n} are yellow.", { n: tn(had.size, "1 highlight", "{n} highlights") }), t("Undo"), async () => {
+    eachMarkHolder((h) => { if (had.has(h.key)) h.setColor(c); });
+    await markSaved();
+  });
+}
+function markTagSheet() {
+  const tag = markEdit.tag;
+  const input = el("input", { class: "tag-input", type: "text", "aria-label": t("Name"), maxlength: "32", enterkeyhint: "done", autocapitalize: "off", spellcheck: "false", dir: "auto" });
+  input.value = tag;
+  const note = el("p", { class: "footnote accent", hidden: true });
+  const go = el("button", { class: "btn-primary tag-save", type: "button", disabled: true });
+  const into = () => {
+    const name = cleanTag(input.value);
+    return { name, other: name && allMarkTags().find((x) => sameTag(x, name) && !sameTag(x, tag)) };
+  };
+  const paint = () => {
+    const { name, other } = into();
+    go.disabled = !name || name === tag;
+    go.textContent = other ? t("Merge into #{tag}", { tag: other }) : t("Rename");
+    note.hidden = !other;
+    if (other) note.textContent = t("#{tag} is already a tag. The two become one, with every highlight of both.", { tag: other });
+  };
+  const save = async () => {
+    if (go.disabled) return;
+    const { other } = into();
+    const now = await renameMarkTag(tag, input.value);
+    history.back();
+    toast(other ? t("Merged into #{tag}", { tag: now }) : t("Renamed to #{tag}", { tag: now }));
+  };
+  input.addEventListener("input", paint);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); save(); } });
+  go.addEventListener("click", save);
+  paint();
+  return el("div", { class: "page-controls" },
+    el("h2", { class: "menu-title", dir: "auto" }, "#" + tag),
+    el("p", { class: "meta tag-use" }, markTagUse(tag)),
+    el("p", { class: "overline" }, t("Name")), input, note, go,
+    el("div", { class: "group" },
+      el("button", { class: "row", type: "button", onclick: () => { marksTags = [tag]; marksUpTo = MARKS_FIRST; history.back(); renderHighlights(); } },
+        el("span", { class: "row-label accent" }, t("Show its highlights"))),
+      el("button", { class: "row", type: "button", onclick: async () => { history.back(); await deleteMarkTag(tag); } },
+        el("span", { class: "row-label warn" }, t("Delete tag")), el("span", { class: "row-value" }, t("Highlights stay")))));
+}
+function markColorSheet() {
+  const c = markEdit.color;
+  const input = el("input", { class: "tag-input", type: "text", "aria-label": t("Label"), maxlength: "24", enterkeyhint: "done", autocapitalize: "sentences", dir: "auto" });
+  input.value = markName(c);
+  const go = el("button", { class: "btn-primary tag-save", type: "button", disabled: true }, t("Rename"));
+  const label = () => input.value.trim().replace(/\s+/g, " ");
+  const paint = () => { go.disabled = !label() || label() === markName(c); };
+  const keep = (name) => {
+    const all = markLabels();
+    if (!name || name === MARK_NAMES[c]) delete all[c]; else all[c] = name;
+    store(MARK_LABELS_KEY, all);
+    history.back();
+    renderHighlights();
+  };
+  input.addEventListener("input", paint);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !go.disabled) { e.preventDefault(); keep(label()); } });
+  go.addEventListener("click", () => keep(label()));
+  const custom = !!markLabels()[c];
+  let n = 0;
+  eachMarkHolder((h) => { if (h.color === c) n++; });
+  return el("div", { class: "page-controls" },
+    el("h2", { class: "menu-title", dir: "auto" }, swatchDot(c), " ", markName(c)),
+    el("p", { class: "meta tag-use" }, tn(n, "1 highlight", "{n} highlights")),
+    el("p", { class: "overline" }, t("Label")), input,
+    el("p", { class: "footnote" }, t("Your label shows wherever the colour's name does. It stays on this device.")), go,
+    el("div", { class: "group" },
+      custom ? el("button", { class: "row", type: "button", onclick: () => keep("") }, el("span", { class: "row-label accent" }, t("Back to {name}", { name: MARK_NAMES[c] }))) : null,
+      c !== "yellow" ? el("button", { class: "row", type: "button", onclick: async () => { history.back(); await removeMarkColor(c); } },
+        el("span", { class: "row-label warn" }, t("Remove colour")), el("span", { class: "row-value" }, t("Highlights turn yellow"))) : null));
+}
+
+// ---- Picking highlights ----
+let lastMarkTap = null;
+const markKeys = () => marksShown().flatMap((c) => c.list.map((m) => c.p.id + "|" + m.id));
+function pickedMarks() {
+  if (!state.markPick) return [];
+  const out = [];
+  for (const key of state.markPick) {
+    const at = key.indexOf("|");
+    const p = state.pages.find((x) => x.id === key.slice(0, at));
+    const m = p && (p.marks || []).find((x) => x.id === key.slice(at + 1));
+    if (m) out.push({ p, m });
+  }
+  return out;
+}
+function startMarkPick(keys) {
+  if (state.markPick || state.select || state.feedPick) return;
+  state.markPick = new Set(keys || []);
+  lastMarkTap = keys && keys.length ? keys[0] : null;
+  history.pushState({ view: "markPick" }, "");
+  document.body.classList.add("selecting", "picking-marks");
+  $("selectHead").hidden = false;
+  $("selectBar").hidden = false;
+  M.edgeIn($("selectHead"), "top");
+  M.edgeIn($("selectBar"), "bottom");
+  closeMatchMenu(true);
+  paintMarkPicks();
+  $("selectCancel").focus({ preventScroll: true });
+}
+function endMarkPick() {
+  if (!state.markPick) return;
+  state.markPick = null;
+  document.body.classList.remove("selecting", "picking-marks");
+  for (const [id, edge] of [["selectHead", "top"], ["selectBar", "bottom"]]) M.edgeOut($(id), edge).then(() => { if (!state.select && !state.feedPick && !state.markPick) $(id).hidden = true; });
+  paintMarkPicks();
+}
+function tapMark(key) {
+  const rows = [...$("highlights").querySelectorAll("[data-mark]")].map((n) => n.dataset.mark);
+  if (shiftTap && lastMarkTap && rows.includes(lastMarkTap) && rows.includes(key)) {
+    const a = rows.indexOf(lastMarkTap), b = rows.indexOf(key);
+    for (const k of rows.slice(Math.min(a, b), Math.max(a, b) + 1)) state.markPick.add(k);
+  } else state.markPick.has(key) ? state.markPick.delete(key) : state.markPick.add(key);
+  lastMarkTap = key;
+  paintMarkPicks();
+}
+// Select all picks every highlight the filters show, drawn yet or not.
+function pickAllMarks(only) {
+  const all = markKeys();
+  const every = all.length && all.every((k) => state.markPick.has(k));
+  for (const k of all) every && !only ? state.markPick.delete(k) : state.markPick.add(k);
+  paintMarkPicks();
+}
+function paintMarkPicks() {
+  const root = $("highlights");
+  const on = !!state.markPick;
+  for (const row of root.querySelectorAll("[data-mark]")) {
+    const isPicked = on && state.markPick.has(row.dataset.mark);
+    row.classList.toggle("picked", isPicked);
+    const b = row.querySelector(".mark-row");
+    if (on) b.setAttribute("aria-pressed", String(isPicked)); else b.removeAttribute("aria-pressed");
+  }
+  if (!on) return;
+  const n = state.markPick.size, all = markKeys();
+  $("selectCount").textContent = n ? tn(n, "1 highlight picked", "{n} highlights picked") : t("Pick highlights");
+  $("selectAll").textContent = all.length && all.every((k) => state.markPick.has(k)) ? t("Pick none") : t("Select all");
+  $("selectMore").hidden = true;
+  for (const id of ["selTags", "selDelete"]) $(id).disabled = !n;
+}
+async function deleteMarkPicked() {
+  const list = pickedMarks();
+  if (!list.length) return;
+  const gone = new Map();
+  for (const { p, m } of list) gone.set(p, [...(gone.get(p) || []), m]);
+  for (const [p, ms] of gone) { p.marks = (p.marks || []).filter((x) => !ms.includes(x)); if (!p.marks.length) delete p.marks; }
+  history.back();
+  await markSaved();
+  renderLibrary();
+  updateWidgets();
+  toast(list.length === 1 ? t("Highlight removed") : t("{n} highlights removed", { n: list.length }), t("Undo"), async () => {
+    for (const [p, ms] of gone) { p.marks = [...(p.marks || []), ...ms].sort(byPlace); }
+    await markSaved();
+    renderLibrary();
+    updateWidgets();
+  });
+}
+// Tags for every picked highlight: a tag on all of them is on, one on some
+// shows how many; a tap puts it on all of them, or takes it off all.
+function markPickTagsSheet() {
+  const box = el("div", { class: "page-controls" });
+  const draw = () => {
+    const list = pickedMarks().map((x) => x.m), n = list.length;
+    const on = (x) => list.filter((m) => (m.tags || []).some((y) => sameTag(y, x))).length;
+    const write = async (change) => {
+      const now = Date.now();
+      for (const m of list) { change(m); if (m.tags && !m.tags.length) delete m.tags; m.at = now; }
+      await markSaved();
+      draw();
+    };
+    const add = (raw) => {
+      const x = cleanTag(raw);
+      if (!x) return;
+      const name = allMarkTags().find((y) => sameTag(y, x)) || x;
+      write((m) => { m.tags = withTags(m.tags, [name]); }).then(() => box.querySelector(".tag-input").focus({ preventScroll: true }));
+    };
+    const input = el("input", { class: "tag-input", type: "text", placeholder: t("New tag"), "aria-label": t("New tag"), maxlength: "32", enterkeyhint: "done", autocapitalize: "off", dir: "auto" });
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); add(input.value); } });
+    const tags = allMarkTags();
+    fill(box,
+      el("h2", { class: "menu-title" }, tn(n, "Tags for 1 highlight", "Tags for {n} highlights")),
+      tags.length ? el("div", { class: "chips" }, ...tags.map((x) => {
+        const k = on(x), all = k === n;
+        return el("button", { class: "chip" + (all ? " on" : k ? " some" : ""), type: "button", "aria-pressed": all ? "true" : k ? "mixed" : "false", dir: "auto",
+          "aria-label": all ? i18n.t("{tag}, on all, remove", { tag: x }) : k ? i18n.t("{tag}, on {k} of {n}, add to all", { tag: x, k, n }) : i18n.t("{tag}, add", { tag: x }),
+          onclick: () => (all ? write((m) => { m.tags = (m.tags || []).filter((y) => !sameTag(y, x)); }) : add(x)) },
+        x, k && !all ? el("span", { class: "chip-n" }, k + "/" + n) : null);
+      })) : null,
+      input,
+      el("button", { class: "btn-primary menu-done", type: "button", onclick: () => history.back() }, t("Done")));
+  };
+  draw();
+  return box;
+}
+addEventListener("keydown", (e) => {
+  if (!state.markPick || state.menu || e.defaultPrevented) return;
+  if (e.target.closest && e.target.closest("input, textarea, [contenteditable]")) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") { e.preventDefault(); pickAllMarks(true); }
+  else if (e.key === "Delete" && state.markPick.size) { e.preventDefault(); deleteMarkPicked(); }
+  else if (e.key === "Escape") { e.preventDefault(); history.back(); }
+});
+
+// ---- Holding in Highlights ----
+// A hold (or right-click) on a tag or colour chip opens its sheet; on a
+// highlight it starts picking with that one picked, and while picking it picks.
+function holdMarks(root) {
+  let timer = null, start = null, fired = false;
+  const cancel = () => { clearTimeout(timer); timer = null; };
+  const target = (e) => e.target.closest("[data-tag], [data-color], .mark-item[data-mark]");
+  const open = (node) => {
+    if (navigator.vibrate) navigator.vibrate(10);
+    if (node.dataset.mark) { if (!state.markPick) startMarkPick([node.dataset.mark]); else tapMark(node.dataset.mark); return; }
+    if (state.markPick || state.menu) return;
+    closeMatchMenu(true);
+    markEdit = node.dataset.tag ? { tag: node.dataset.tag } : { color: node.dataset.color };
+    openMenu(node.dataset.tag ? "markTag" : "markColor");
+  };
+  root.addEventListener("pointerdown", (e) => {
+    fired = false;
+    const node = e.button === 0 && target(e);
+    if (!node) return;
+    start = { x: e.clientX, y: e.clientY };
+    cancel();
+    timer = setTimeout(() => { timer = null; fired = true; open(node); }, 480);
+  });
+  root.addEventListener("pointermove", (e) => { if (timer && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) cancel(); });
+  for (const t of ["pointerup", "pointercancel", "pointerleave"]) root.addEventListener(t, cancel);
+  root.addEventListener("click", (e) => { if (fired) { fired = false; e.preventDefault(); e.stopPropagation(); } }, true);
+  root.addEventListener("contextmenu", (e) => {
+    const node = target(e);
+    if (!node) return;
+    e.preventDefault();
+    cancel();
+    if (!fired) { fired = true; open(node); }
+  });
 }
 
 // ---- Reading (1.39.0) ----
