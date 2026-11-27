@@ -5,6 +5,13 @@
 // or "same" (whether the merge changed the library on GitHub).
 self.window = self;
 self.Waypage = {};
+// sync.js and backup.js build a few messages with t() and tn() as they
+// load (language.js, which needs a document, has them in the page). A
+// merge shows no words, so English is enough; without these the worker
+// threw as it started (1.68.0 to 1.70.0).
+const fill = (s, v) => String(s).replace(/\{(\w+)\}/g, (m, k) => (v && k in v ? v[k] : m));
+const t = (text, vars) => fill(text, vars);
+const tn = (n, one, other, vars) => fill(n === 1 ? one : other, { n, ...vars });
 // ink.js for its stroke check (backup.cleanInk): without it every drawing
 // on a clip dropped out of the merge.
 importScripts("backup.js" + self.location.search, "sync.js" + self.location.search, "ink.js" + self.location.search);
