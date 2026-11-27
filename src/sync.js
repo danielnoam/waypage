@@ -491,24 +491,52 @@
   // A Response from anywhere in the API (`opts.body` an object).
   const call = (url, opts) => worded(gh().request(url, opts));
 
+  // library.json as last read or written here (2026-11), asked for again
+  // with its ETag: an unchanged library is a 304 with no body. Before,
+  // every sync (at least every 5 minutes while open, and after every
+  // pause in reading) downloaded the whole file, a few MB with a big
+  // library. One past 1 MB whose sha is the one written here isn't
+  // fetched again either.
+  let lib = null; // { at: owner/repo, etag, sha, text }
+  const libAt = () => cfg.owner + "/" + cfg.repo;
+  async function readLibrary() {
+    const had = lib && lib.at === libAt() ? lib : null;
+    const r = await call(contents("library.json"), { accept: "application/vnd.github.object+json", etag: had && had.etag });
+    if (r.status === 304 && had) return had;
+    if (r.status === 404) { lib = null; return null; }
+    if (!r.ok) throw await fail(r);
+    const j = await r.json();
+    const b64 = j.content || (had && had.sha === j.sha ? null : j.size ? await worded(gh().blob(j.sha)) : "");
+    const text = b64 == null ? had.text : b64 ? window.Keel.github.b64decode(b64) : "";
+    lib = { at: libAt(), etag: (r.headers && r.headers.get && r.headers.get("ETag")) || "", sha: j.sha, text };
+    return lib;
+  }
+  async function readLibraryJson() {
+    const f = await readLibrary();
+    return f && f.text ? { data: JSON.parse(f.text), sha: f.sha } : null;
+  }
+  async function writeLibrary(text, sha, message) {
+    const next = await write("library.json", text, sha, message);
+    lib = { at: libAt(), etag: "", sha: next, text };
+    return next;
+  }
+
   // A look at the library on GitHub without a sync (1.3.0): for the
   // furthest-read check when a clip opens, and for the poll while the app
-  // is in front. Asked with the ETag of the last answer, so an unchanged
-  // library is a 304 that GitHub doesn't count against the rate limit.
+  // is in front. Shares the copy above, so an unchanged library is a 304
+  // that GitHub doesn't count against the rate limit.
   // Resolves to { pages, text, changed } or null when there is none.
   let peeked = null;
   async function peek() {
     if (!cfg || cfg.paused) return null;
-    const f = await worded(gh().getFile("library.json", { etag: peeked && peeked.etag }));
-    if (f && f.notModified && peeked) return { ...peeked, changed: false };
-    if (!f || f.notModified) { peeked = null; return null; }
-    if (!f.text) return null;
+    const f = await readLibrary();
+    if (!f || !f.text) { peeked = null; return null; }
+    if (peeked && peeked.sha === f.sha) return { ...peeked, changed: false };
     let data;
     try { data = JSON.parse(f.text); } catch (e) { return null; }
     const pages = data && Array.isArray(data.pages) ? data.pages : [];
-    const changed = !peeked || peeked.sha !== f.sha;
-    peeked = { etag: f.etag, sha: f.sha, pages, text: f.text };
-    return { ...peeked, changed };
+    peeked = { sha: f.sha, pages, text: f.text };
+    return { ...peeked, changed: true };
   }
   // Whether the library on GitHub differs from what this device last
   // synced; cheap when nothing moved.
@@ -652,6 +680,7 @@
   }
   function disconnect() {
     cfg = null;
+    lib = peeked = null;
     keep(CFG_KEY, null);
     keep(BASE_KEY, null);
     keep(WAIT_KEY, null);
@@ -1260,7 +1289,7 @@
     const sentNow = new Map();
     let merged, remote;
     for (let tries = 0; ; tries++) {
-      remote = await readJson("library.json");
+      remote = await readLibraryJson();
       if (remote && (!remote.data || !Array.isArray(remote.data.pages))) throw new SyncError(t("The library.json on GitHub isn't Waypage's. Move it away and sync again."));
       await breathe();
       // What GitHub would hold of each page, so the two compare like for
@@ -1293,7 +1322,7 @@
         if (merged.feedsSeen) doc.feedsSeen = merged.feedsSeen;
         if (await sameOff(doc, remoteDoc)) break;
         halt();
-        try { await write("library.json", JSON.stringify(doc), remote.sha, "Feeds: " + (merged.feeds || []).length + withPrint(printDoc(doc))); break; } catch (e) {
+        try { await writeLibrary(JSON.stringify(doc), remote.sha, "Feeds: " + (merged.feeds || []).length + withPrint(printDoc(doc))); break; } catch (e) {
           if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e;
         }
         continue;
@@ -1319,7 +1348,7 @@
         if (merged.outside) doc.outside = merged.outside;
         if (await sameOff(doc, remoteDoc)) break;
         halt();
-        try { await write("library.json", JSON.stringify(doc), remote.sha, "Places: " + merged.pages.length + " pages"); break; } catch (e) {
+        try { await writeLibrary(JSON.stringify(doc), remote.sha, "Places: " + merged.pages.length + " pages"); break; } catch (e) {
           if ((e.status !== 409 && e.status !== 422) || tries >= 3) throw e;
         }
         continue;
@@ -1413,7 +1442,7 @@
       if (remote && await sameOff(merged, remoteDoc)) { keep(SENT_KEY, null); break; }
       halt();
       try {
-        await write("library.json", JSON.stringify(merged), remote && remote.sha, libraryNote(merged.pages.length, printDoc(merged)));
+        await writeLibrary(JSON.stringify(merged), remote && remote.sha, libraryNote(merged.pages.length, printDoc(merged)));
         keep(SENT_KEY, null);
         break;
       } catch (e) {

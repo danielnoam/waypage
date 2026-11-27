@@ -20,6 +20,18 @@ function syncSoon(ms = runs.size ? 20000 : 4000) {
   clearTimeout(syncTimer);
   syncTimer = setTimeout(() => { syncTimer = null; if (C.sync.running) syncSoon(ms); else syncNow(); }, ms);
 }
+// Where you are in a clip (2026-11): sent within a few minutes while you
+// read or Narrate, and at once on leaving the clip or the app. A sync 4 s
+// after every pause in scrolling, or every paragraph Narrate read, sent
+// the whole library.json up each time: the bar's ring hardly stopped,
+// and with a big library it came to hundreds of MB a month.
+const PLACE_EVERY = 5 * 6e4;
+let placeTimer = null;
+function placeSoon() {
+  unsynced = true;
+  if (placeTimer || !C.sync.on || C.sync.paused) return;
+  placeTimer = setTimeout(() => { placeTimer = null; if (unsynced) syncSoon(1000); }, PLACE_EVERY);
+}
 // A change on this device not yet sent (1.21.0), so going to another
 // app sends it even when no sync was due, and one made while a sync ran
 // goes in another right after it.
