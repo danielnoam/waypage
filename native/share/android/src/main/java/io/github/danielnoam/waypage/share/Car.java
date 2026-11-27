@@ -48,7 +48,7 @@ final class Car {
         void toQueueItem(long id);
     }
 
-    static final String ROOT = "root", RECENT = "recent", CONTINUE = "continue", BOOKS = "books", CLIPS = "clips", COLLECTIONS = "collections";
+    static final String ROOT = "root", RECENT = "recent", CONTINUE = "continue", BOOKS = "books", CLIPS = "clips", COLLECTIONS = "collections", ALL = "allcollections";
     // A collection or series to open, and a quick start in one ("q0:" and
     // the item it plays).
     static final String BOOK = "b:", CLIP = "c:", FOLDER = "f:", START = "q";
@@ -186,15 +186,34 @@ final class Car {
             if (list(ctx, CONTINUE).length() > 0) out.add(folder(CONTINUE, word(ctx, "continue", "Continue")));
             if (shown(ctx, BOOKS)) out.add(folder(BOOKS, word(ctx, "books", "Audiobooks")));
             if (shown(ctx, CLIPS)) out.add(folder(CLIPS, word(ctx, "clips", "Up next")));
-            if (list(ctx, COLLECTIONS).length() > 0) out.add(folder(COLLECTIONS, word(ctx, "collections", "Collections")));
+            if (list(ctx, COLLECTIONS).length() > 0) out.add(folder(COLLECTIONS, word(ctx, "collections", "Collections/Series")));
             return out;
         }
         if (catalog(ctx).optBoolean("locked")) return out;
+        // All, then the starred ones and the latest, each under its
+        // heading (issue #400). A list from an older app has neither, and
+        // shows every one as before.
         if (COLLECTIONS.equals(parent)) {
+            JSONArray a = list(ctx, COLLECTIONS);
+            JSONArray starred = catalog(ctx).optJSONArray("starred"), recent = catalog(ctx).optJSONArray("recent");
+            if (starred == null && recent == null) {
+                for (int i = 0; i < a.length(); i++) {
+                    JSONObject o = a.optJSONObject(i);
+                    if (o != null) out.add(shelf(ctx, o, null));
+                }
+                return out;
+            }
+            if (a.length() > 0) out.add(allFolder(ctx));
+            boolean heads = starred != null && starred.length() > 0;
+            shelves(ctx, out, starred, heads ? word(ctx, "starred", "Starred") : null);
+            shelves(ctx, out, recent, heads ? word(ctx, "recent", "Recent") : null);
+            return out;
+        }
+        if (ALL.equals(parent)) {
             JSONArray a = list(ctx, COLLECTIONS);
             for (int i = 0; i < a.length(); i++) {
                 JSONObject o = a.optJSONObject(i);
-                if (o != null) out.add(shelf(ctx, o));
+                if (o != null) out.add(shelf(ctx, o, null));
             }
             return out;
         }
@@ -268,7 +287,7 @@ final class Car {
             MediaBrowser.MediaItem.FLAG_BROWSABLE);
     }
 
-    private static MediaBrowser.MediaItem shelf(Context ctx, JSONObject o) {
+    private static MediaBrowser.MediaItem shelf(Context ctx, JSONObject o, String group) {
         MediaDescription.Builder d = new MediaDescription.Builder()
             .setMediaId(FOLDER + o.optString("name"))
             .setTitle(o.optString("name"))
@@ -277,8 +296,25 @@ final class Car {
         if (b != null) d.setIconBitmap(b);
         Bundle extras = new Bundle();
         extras.putInt(CarService.STYLE_PLAYABLE, CarService.STYLE_LIST);
+        if (group != null) extras.putString(CarService.STYLE_GROUP, group);
         d.setExtras(extras);
         return new MediaBrowser.MediaItem(d.build(), MediaBrowser.MediaItem.FLAG_BROWSABLE);
+    }
+
+    private static void shelves(Context ctx, List<MediaBrowser.MediaItem> out, JSONArray names, String group) {
+        for (int i = 0; names != null && i < names.length(); i++) {
+            JSONObject o = collection(ctx, names.optString(i));
+            if (o != null) out.add(shelf(ctx, o, group));
+        }
+    }
+
+    private static MediaBrowser.MediaItem allFolder(Context ctx) {
+        Bundle extras = new Bundle();
+        extras.putInt(CarService.STYLE_BROWSABLE, CarService.STYLE_LIST);
+        extras.putInt(CarService.STYLE_PLAYABLE, CarService.STYLE_LIST);
+        return new MediaBrowser.MediaItem(new MediaDescription.Builder().setMediaId(ALL)
+            .setTitle(word(ctx, "all", "All")).setSubtitle(word(ctx, "allBy", "")).setExtras(extras).build(),
+            MediaBrowser.MediaItem.FLAG_BROWSABLE);
     }
 
     // A quick start: what it does, then what it plays.
