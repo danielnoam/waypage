@@ -689,25 +689,28 @@ web copy stay links, as before.
   else carries the newest values, so a device from before the step still
   works, only later. Stopping a field in library.json is its own step,
   decided once every device has the release that reads the new file.
-  The plan, in order:
+  Only Daniel decides when library.json stops carrying a part
+  (CONTRIBUTING.md). What's done and what isn't:
   1. **Progress** (done): `progress/<device>.json`, `{ v: 1, places: {
-     id: { at, finished, readAt, readOn, placeAt, spot, v } } }`, `v` the
-     text version a spot names. Each device writes only its own
-     (`sendPlaces`, when the only difference from GitHub is progress),
-     keeping just what library.json hasn't caught up with. Every file
-     goes onto library.json's pages before the merge (`placesOver`,
-     newest wins). Device id from stats.js; without one, as before
+     key: entry }, seen }`. A key is a clip id, or `fp:<fingerprint>` for
+     a file read from outside; an entry holds where you are (`at`,
+     `finished`, `readAt`, `readOn`, `placeAt`, `spot`, and `v`, the text
+     version a spot names) and where you are listening (`listen`: `t`,
+     `tAt`, `dur`); `seen` is when Feeds was last looked at. Each device
+     writes only its own (`sendPlaces`, when progress is the only
+     difference from GitHub), keeping just what library.json hasn't
+     caught up with. Every file goes onto library.json before the merge
+     (`placesOver`: the newest place, the latest listen, the latest
+     seen). Device id from stats.js; without one, as before
      (`syncprogress.test.js`).
-  2. **More progress, same files**: listening (`listen` `t`, `tAt`), and
-     where you are in a file read from outside, keyed `fp:<fingerprint>`
-     (today in library.json's `outside` map, so reading an outside PDF
-     still writes the whole library). The rest of `outside` (its tags,
-     collection, highlights) stays in library.json.
-  3. **Highlights and drawings**: `marks`, `ink`, `inkAt` and listen
-     bookmarks in `clips/<id>.json`, only for clips that have them.
-  4. **Feeds and newsletters**, together in `feeds.json` (`feeds`,
-     `feedsGone`, `feedsSeen`): one list, one merge, and they change
-     rarely, so two files would only add a request each sync.
+  2. **Not split, on purpose:** highlights and drawings (`marks`, `ink`)
+     are edited on several devices at once and need the three-way merge
+     against one shared base that library.json gives them; a file per
+     device can't (a deletion on one comes back from another's older
+     copy), and a shared file per clip with an older device still
+     writing library.json loses edits. They change rarely, so they save
+     little. Feeds and newsletters' list, the same: one list, one merge,
+     rare changes. Their `seen` mark, the frequent part, is in step 1.
   What stays in library.json: each clip's entry (what it is, its
   collection, tags, favourite), `deleted` and `files`.
 - **Google Drive** (`drive.js`): zipped backups (`backup.js`) in a

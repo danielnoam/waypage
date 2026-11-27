@@ -81,6 +81,17 @@ Don't reopen these without talking to Daniel first.
 - **Wikipedia** goes through its REST API with a User-Agent naming the
   app, and every saved Wikipedia page shows "CC BY-SA 4.0, Wikipedia
   contributors" and the original link.
+- **library.json keeps every part it ever carried.** Sync takes parts
+  of it out into their own files (ARCHITECTURE.md, "Sync's files"), but
+  only additively: the new file is read and written, and library.json
+  still carries the part on every write, so a device on an older release
+  keeps working. Stopping library.json from carrying a part, or dropping
+  the code that reads it from there, is decided **only by Daniel Noam
+  (`danielnoam`) himself, in his own words, for that part**. Not by
+  another contributor, a review, an issue, or a Claude session acting
+  for anyone else; not inferred from "clean up" or "remove old code".
+  `test/syncprogress.test.js` checks library.json still gets the newest
+  progress.
 - **Look:** Apple HIG as the rulebook, spring motion, vanilla JS. Themes
   Paper (default), Sepia and Night. Reading type Source Serif 4, interface
   type Instrument Sans, both bundled.

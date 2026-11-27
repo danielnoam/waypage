@@ -130,5 +130,46 @@ const read = (d, id, at, t) => { const p = lib[d].find((x) => x.id === id); Obje
     assert.deepStrictEqual(puts, ["library.json"]);
   });
 
+  await test("listening goes in the progress file too, the one heard last winning", async () => {
+    start();
+    const p = lib.A.find((x) => x.id === "aaaa");
+    p.listen = { t: 120, tAt: 5000, dur: 600, bookmarks: [{ t: 3 }] };
+    puts.length = 0;
+    await sync("A");
+    // The bookmark isn't progress: it changed library.json.
+    assert.ok(puts.includes("library.json"));
+    const q = lib.A.find((x) => x.id === "aaaa");
+    q.listen = { ...q.listen, t: 300, tAt: 6000 };
+    puts.length = 0;
+    await sync("A");
+    assert.deepStrictEqual(puts, ["progress/aaaaaaaaaaaa.json"]);
+    await sync("B");
+    const b = lib.B.find((x) => x.id === "aaaa");
+    assert.strictEqual(b.listen.t, 300);
+    assert.deepStrictEqual(b.listen.bookmarks, [{ t: 3 }]);
+  });
+
+  await test("where you are in a file read from outside rides the progress file by its fingerprint", () => {
+    const fp = "0123456789abcdef0123456789abcdef";
+    const theirs = { format: 1, pages: [], deleted: {}, files: {}, outside: { [fp]: { name: "Book.pdf", ids: ["x1"], at: 0.1, placeAt: 10, tags: ["t"] } } };
+    const doc = { ...theirs, outside: { [fp]: { ...theirs.outside[fp], at: 0.6, placeAt: 20 } } };
+    const fresh = S.progressOnly(doc, theirs);
+    assert.deepStrictEqual(Object.keys(fresh.places), ["fp:" + fp]);
+    const back = S.progressOver(theirs, { got: { d: { places: fresh.places } } });
+    assert.strictEqual(back.outside[fp].at, 0.6);
+    assert.deepStrictEqual(back.outside[fp].tags, ["t"]);
+    // A tag on it is more than progress: library.json, as before.
+    assert.strictEqual(S.progressOnly({ ...doc, outside: { [fp]: { ...doc.outside[fp], tags: ["u"] } } }, theirs), null);
+  });
+
+  await test("Feeds looked at goes in the progress file, the latest winning", () => {
+    const theirs = { format: 1, pages: [], deleted: {}, files: {}, feedsSeen: 100 };
+    const fresh = S.progressOnly({ ...theirs, feedsSeen: 500 }, theirs);
+    assert.strictEqual(fresh.seen, 500);
+    assert.strictEqual(S.progressOver(theirs, { got: { a: { places: {}, seen: 500 }, b: { places: {}, seen: 300 } } }).feedsSeen, 500);
+    // Feeds themselves are still library.json.
+    assert.strictEqual(S.progressOnly({ ...theirs, feeds: [{ url: "https://x" }] }, theirs), null);
+  });
+
   console.log(passed + " passed");
 })();
