@@ -118,7 +118,7 @@ public class SpeechService extends Service {
         @Override public void prev() { step(-1); }
         @Override public void forward() { step(1); }
         @Override public void rewind() { step(-1); }
-        @Override public void seekTo(long ms) {}
+        @Override public void seekTo(long ms) { seekTime(ms); }
         @Override public void stop() { finish("stopped"); }
         @Override public void custom(String action) {
             if (SLEEP_MORE.equals(action)) sleepMore();
@@ -388,6 +388,7 @@ public class SpeechService extends Service {
         if (thinking && job != null && id.equals(generation + ":" + index)) {
             thinking = false;
             if (listener != null) listener.onProgress(job.key, index, state, false);
+            if (session != null && "playing".equals(state)) session.setPlaybackState(playbackState(true));
         }
     }
 
@@ -607,19 +608,56 @@ public class SpeechService extends Service {
         if (job.album != null && !job.album.isEmpty()) meta.putString(MediaMetadata.METADATA_KEY_ALBUM, job.album);
         if (job.track > 0) meta.putLong(MediaMetadata.METADATA_KEY_TRACK_NUMBER, job.track);
         if (job.tracks > 0) meta.putLong(MediaMetadata.METADATA_KEY_NUM_TRACKS, job.tracks);
+        meta.putLong(MediaMetadata.METADATA_KEY_DURATION, msFor(charsBefore(job.items.length)));
         Car.putArt(this, meta, job.cover);
         session.setMetadata(meta.build());
-        session.setPlaybackState(new PlaybackState.Builder()
-            .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE
-                | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_STOP | Car.ACTIONS)
-            .setState(playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, PlaybackState.PLAYBACK_POSITION_UNKNOWN, playing ? 1f : 0f)
-            .addCustomAction(new PlaybackState.CustomAction.Builder(PREV_CLIP, "Previous clip", R.drawable.waypage_prev_item).build())
-            .addCustomAction(new PlaybackState.CustomAction.Builder(NEXT_CLIP, "Next clip", R.drawable.waypage_next_item).build())
-            .addCustomAction(new PlaybackState.CustomAction.Builder(SLEEP_MORE, sleepLabel(), R.drawable.waypage_sleep).build())
-            .build());
+        session.setPlaybackState(playbackState(playing));
         session.setActive(true);
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         nm.notify(NOTE, notification());
+    }
+
+    // What the car, the lock screen and the notification draw, with a place
+    // and a length (issue #400: the car had no bar while Narrate read).
+    // While the next piece is still being made the bar holds still.
+    private PlaybackState playbackState(boolean playing) {
+        return new PlaybackState.Builder()
+            .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE
+                | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_STOP
+                | PlaybackState.ACTION_SEEK_TO | Car.ACTIONS)
+            .setState(playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, msFor(charsBefore(index)), playing && !thinking ? 1f : 0f)
+            .addCustomAction(new PlaybackState.CustomAction.Builder(PREV_CLIP, "Previous clip", R.drawable.waypage_prev_item).build())
+            .addCustomAction(new PlaybackState.CustomAction.Builder(NEXT_CLIP, "Next clip", R.drawable.waypage_next_item).build())
+            .addCustomAction(new PlaybackState.CustomAction.Builder(SLEEP_MORE, sleepLabel(), R.drawable.waypage_sleep).build())
+            .build();
+    }
+
+    // Speech has no clock until it's spoken, so the place and the length are
+    // the text's at a steady pace (about 15 characters a second at 1x), set
+    // right again at each piece.
+    private static final float CHARS_PER_SECOND = 15f;
+    private long msFor(long chars) {
+        float rate = job == null ? 1f : Math.max(0.25f, job.rate);
+        return (long) (chars * 1000f / (CHARS_PER_SECOND * rate));
+    }
+    private long charsBefore(int n) {
+        long c = 0;
+        if (job != null) for (int i = 0; i < n && i < job.items.length; i++) c += job.items[i].length();
+        return c;
+    }
+
+    // The car's bar dragged: the start of the paragraph at that point.
+    private void seekTime(long ms) {
+        if (job == null || job.items.length == 0 || busy()) return;
+        float rate = Math.max(0.25f, job.rate);
+        long want = (long) (Math.max(0, ms) / 1000f * CHARS_PER_SECOND * rate), c = 0;
+        int to = job.items.length - 1;
+        for (int i = 0; i < job.items.length; i++) {
+            c += job.items[i].length();
+            if (c > want) { to = i; break; }
+        }
+        if (job.blocks != null) while (to > 0 && job.blocks[to - 1] == job.blocks[to]) to--;
+        move(to);
     }
 
     private int keptIndex = -1;
