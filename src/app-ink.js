@@ -488,10 +488,10 @@ function inkPaint() {
   for (const b of inkBar.querySelectorAll('[data-act^="tool:"]')) b.setAttribute("aria-pressed", String(b.dataset.act === "tool:" + s.tool));
   inkBar.querySelector('[data-act="undo"]').disabled = !s.canUndo;
   inkBar.querySelector('[data-act="redo"]').disabled = !s.canRedo;
-  // The round button shows the tool and, for a pen, its colour.
+  // The round button is always a pen, with the colour of the tool in use.
   if (inkMini) {
     const tc = s.color, mine = typeof tc === "string" && tc[0] === "#";
-    inkMini.replaceChildren(inkIcon(s.tool), ...(s.tool === "pen" || s.tool === "highlighter" ? [el("span", { class: "ink-dot ink-mini-dot", "data-c": mine ? "" : tc, "data-t": s.tool === "highlighter" ? "h" : "p", ...(mine ? { style: "background:" + tc } : {}) })] : []));
+    inkMini.replaceChildren(inkIcon("pen"), ...(s.tool === "pen" || s.tool === "highlighter" ? [el("span", { class: "ink-dot ink-mini-dot", "data-c": mine ? "" : tc, "data-t": s.tool === "highlighter" ? "h" : "p", ...(mine ? { style: "background:" + tc } : {}) })] : []));
   }
   const row = inkBar.querySelector(".ink-style");
   const hl = s.tool === "highlighter";

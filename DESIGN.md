@@ -881,7 +881,7 @@ the front.
 
 **Hide tools (2026-11).** A small `--surface` tab with a chevron sits on the
 Draw bar's top edge. It tucks the bar into one 35 px round button (44 px to
-tap) in the foot corner (the tool's icon, and a dot in its colour for a pen or highlighter),
+tap) in the foot corner (always a pen, and a dot in the colour for a pen or highlighter),
 which brings the bar back. Draw stays on; the choice is kept on the device.
 The button is dragged anywhere and snaps to the nearer side, its place kept,
 as the Narrate card's is.
