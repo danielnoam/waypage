@@ -597,12 +597,12 @@ function comingEntries() {
   coming.entries = null;
   const fromNotes = () => {
     const body = String(upd.notes || "").split(/\n---\s*\n/)[0];
-    const e = changelogEntries("## [" + latest + "]\n" + body);
+    const e = window.Keel.changelog.parse("## [" + latest + "]\n" + body);
     return e.length && e[0].sections.length ? e : [];
   };
   const repo = C.platform.build && C.platform.build.repo;
   (repo ? C.platform.fetchText("https://raw.githubusercontent.com/" + repo + "/app-v" + latest + "/CHANGELOG.md", { headers: { Accept: "text/plain" } })
-    .then((r) => (r.status === 200 ? changelogEntries(r.text).filter((e) => /^\d+\.\d+\.\d+$/.test(e.version) && isNewerVersion(e.version, APP_VERSION) && !isNewerVersion(e.version, latest)) : []))
+    .then((r) => (r.status === 200 ? window.Keel.changelog.between(window.Keel.changelog.parse(r.text), APP_VERSION, latest) : []))
     : Promise.resolve([]))
     .catch(() => [])
     .then((list) => {
@@ -748,27 +748,6 @@ function previewsSections() { return [previewsSection()]; }
 // ---- What's new ----
 // CHANGELOG.md, bundled with the app, read into versions of headed lists.
 
-function changelogEntries(md) {
-  const out = [];
-  let entry = null, section = null, item = null;
-  for (const line of String(md).split("\n")) {
-    let m;
-    if ((m = line.match(/^## \[([^\]]+)\](?:\s*-\s*(\S+))?/))) { entry = { version: m[1], date: m[2] || "", sections: [] }; out.push(entry); section = item = null; }
-    else if (!entry) continue;
-    else if ((m = line.match(/^### (.+)/))) { section = { title: m[1].trim(), items: [] }; entry.sections.push(section); item = null; }
-    else if ((m = line.match(/^\s*[-*] (.+)/))) {
-      if (!section) { section = { title: "", items: [] }; entry.sections.push(section); }
-      item = m[1].trim();
-      section.items.push(item);
-    } else if (line.trim() && section && section.items.length && /^\s/.test(line)) {
-      section.items[section.items.length - 1] += " " + line.trim();
-    } else if (!line.trim()) item = null;
-  }
-  // Markdown's marks aren't needed to read a line.
-  for (const e of out) for (const sec of e.sections) sec.items = sec.items.map((t) => t.replace(/\*\*|`/g, "").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1"));
-  return out;
-}
-
 function notesView(entries) {
   return entries.flatMap((e) => e.sections.map((sec) => el("div", { class: "news-section" },
     sec.title ? el("h4", { class: "news-kind" }, sec.title) : null,
@@ -778,10 +757,8 @@ function notesView(entries) {
 let changelog = null, changelogLoad = null;
 function readChangelog() {
   if (!changelogLoad || (!changelog && changelogLoad.settled)) {
-    const load = fetch("CHANGELOG.md?v=" + APP_VERSION)
-      .then((res) => { if (!res.ok) throw new Error("HTTP " + res.status); return res.text(); })
-      .then((md) => (changelog = changelogEntries(md)))
-      .catch(() => (changelog = null))
+    const load = window.Keel.changelog.load("CHANGELOG.md?v=" + APP_VERSION)
+      .then((entries) => (changelog = entries))
       .finally(() => { load.settled = true; });
     changelogLoad = load;
   }
@@ -792,8 +769,8 @@ function changelogView() {
   if (!changelog && !(changelogLoad && changelogLoad.settled)) return [el("p", { class: "meta" }, t("Loading…"))];
   // A build of main ships "## [Unreleased]" on top (keel's withPending):
   // what it has beyond its version, so the badge goes there.
-  const ahead = !!(changelog && changelog.length && changelog[0].version === "Unreleased");
-  const mine = (e) => (ahead ? e.version === "Unreleased" : e.version === APP_VERSION);
+  const have = window.Keel.changelog.mine(changelog, APP_VERSION);
+  const mine = (e) => e === have;
   return changelog && changelog.length ? changelog.map((e) => el("section", { class: "news-entry" + (mine(e) ? " now" : "") },
     el("h2", { class: "news-version" }, e.version === "Unreleased" ? t("Not released yet") : e.version, mine(e) ? el("span", { class: "news-you" }, t("You have this")) : null),
     e.date ? el("p", { class: "meta" }, formatDay(e.date)) : null,
