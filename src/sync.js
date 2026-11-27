@@ -44,7 +44,7 @@
   // Every field an index entry can carry through a backup or sync
   // (backup.cleanMeta); anything else on a page stays on its device.
   const SYNCED = new Set(["id", "url", "title", "site", "byline", "licence", "savedAt", "minutes", "lang", "dir", "mode", "images",
-    "at", "finished", "readAt", "readOn", "placeAt", "spot", "comic", "manga", "volume", "turn", "next", "prev", "requested", "tags", "folder", "folderAt", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "statusPick", "folderNoStatus", "file", "marks", "ink", "inkAt", "cut", "archived", "editedAt", "note", "published",
+    "at", "finished", "readAt", "readOn", "placeAt", "spot", "comic", "manga", "volume", "turn", "next", "prev", "requested", "tags", "folder", "folderAt", "folderNo", "source", "series", "fav", "favAt", "folderFav", "folderFavAt", "coverPick", "statusPick", "folderNoStatus", "file", "marks", "ink", "inkAt", "cut", "archived", "editedAt", "note", "published",
     "noShare", "folderNoShare", "folderTagNew", "folderSeries", "folderIn", "movedAt", "live"]);
   // Where the reader is, which goes with whichever device moved it last:
   // placeAt (1.30.2), or readAt on entries from before it. Opening a clip
@@ -52,7 +52,7 @@
   // no longer sends that place everywhere.
   const PLACE = ["at", "finished", "placeAt", "spot"];
   const placeTime = (p) => p.placeAt || p.readAt || 0;
-  const FOLDER = ["folder", "folderAt", "folderFav", "folderFavAt", "folderSeries", "folderIn", "movedAt"];
+  const FOLDER = ["folder", "folderAt", "folderNo", "folderFav", "folderFavAt", "folderSeries", "folderIn", "movedAt"];
   // Which copy of a page's text this is: when it was saved, or edited
   // since in Edit clips (1.22.0), so an edit goes up like a save again.
   const ver = (p) => Math.max(p.savedAt || 0, p.editedAt || 0);
@@ -267,7 +267,7 @@
   // stats add up as one. Drawings go too: `ink` by block, and `pages`,
   // a printed PDF's drawn pages, which live beside the clip (store.readInk)
   // and so come in on the copies outsidePages makes.
-  const OUTSIDE = ["at", "finished", "readAt", "readOn", "placeAt", "spot", "turn", "tags", "folder", "folderAt", "fav", "favAt", "folderFav", "folderFavAt", "marks", "listen", "ink", "inkAt", "noShare", "folderNoShare", "folderTagNew", "folderSeries", "folderIn", "movedAt"];
+  const OUTSIDE = ["at", "finished", "readAt", "readOn", "placeAt", "spot", "turn", "tags", "folder", "folderAt", "folderNo", "fav", "favAt", "folderFav", "folderFavAt", "marks", "listen", "ink", "inkAt", "noShare", "folderNoShare", "folderTagNew", "folderSeries", "folderIn", "movedAt"];
   const FP = /^[0-9a-f]{32}$/;
   const OUT_MAX = 2000;
   // This device's outside files as entries: one a fingerprint, the copy
@@ -357,6 +357,7 @@
       if ((lose.readAt || 0) > (win.readAt || 0)) moveOver(["readAt", "readOn"]);
       if (!win.folder && lose.folder) {
         win.folder = lose.folder; win.folderAt = lose.folderAt;
+        if (lose.folderNo !== undefined) win.folderNo = lose.folderNo;
         if (lose.folderFav) { win.folderFav = true; win.folderFavAt = lose.folderFavAt; }
         if (lose.folderSeries) { win.folderSeries = true; if (lose.folderIn) win.folderIn = lose.folderIn; }
       }

@@ -204,13 +204,15 @@ const PACE_MS = 500;
 // `tagNew`: the collection's later clips take the tags its clips share.
 // `siteTags` ({ site, tags }): the story page's, kept on each of the
 // collection's clips for its Tags sheet to offer.
-async function saveAll(all, folder, tags = [], mode, skipSaved, kind, source, tagNew, siteTags, series) {
+// `order`: the site's whole list, numbering the chapters (sourceNo).
+async function saveAll(all, folder, tags = [], mode, skipSaved, kind, source, tagNew, siteTags, series, order) {
   const name = folder ? folderName(folder) : null;
   const per = typeof tags === "function" ? tags : () => ({ tags });
   const places = skipSaved && name ? placesBetween(all, name) : new Map();
   if (name && tagNew) for (const p of folderPages(name)) p.folderTagNew = true;
   const urls = skipSaved ? all.filter((u) => !savedAs(u)) : all;
-  const jobs = urls.filter((u) => !savingAs(u)).map((u) => ({ ...newJob(u, name), tags: [], ...per(u), mode, kind, source: name ? source : undefined, tagNew: !!(name && tagNew), siteTags: name ? siteTags : undefined, series: !!(name && series) }));
+  const numberOf = (u) => (name && source ? sourceNo(name, u, order) : null);
+  const jobs = urls.filter((u) => !savingAs(u)).map((u) => ({ ...newJob(u, name), tags: [], ...per(u), mode, kind, source: name ? source : undefined, tagNew: !!(name && tagNew), siteTags: name ? siteTags : undefined, series: !!(name && series), folderNo: numberOf(u) ?? undefined }));
   state.saving = state.saving.filter((s) => !(s.error && jobs.some((j) => sameUrl(j.url, s.url))));
   const fresh = jobs.filter((j) => !savedAs(j.url));
   fresh.forEach((j) => { if (places.has(j.url)) j.folderAt = places.get(j.url); });
@@ -226,7 +228,13 @@ async function saveAll(all, folder, tags = [], mode, skipSaved, kind, source, ta
     const existing = savedAs(job.url);
     if (existing) {
       had++;
-      if (name) { joinFav(existing, name); if (tagNew) existing.folderTagNew = true; existing.folder = name; existing.folderAt = Date.now(); if (source) existing.source = source; }
+      if (name) {
+        const kept = existing.folder && sameTag(existing.folder, name) ? existing.folderNo : undefined;
+        if (existing.folder && kept === undefined) keepNumbers([existing]);
+        joinFav(existing, name); if (tagNew) existing.folderTagNew = true; existing.folder = name; existing.folderAt = Date.now(); if (source) existing.source = source;
+        const n = kept ?? numberOf(existing.url);
+        if (n != null) existing.folderNo = n;
+      }
       if (job.tags.length) existing.tags = withTags(existing.tags, job.tags);
       if (name || job.tags.length) { await C.store.writeIndex(state.pages); renderLibrary(); if (state.folder) renderFolder(); }
       continue;
@@ -317,7 +325,7 @@ async function saveOnce(job, opts) {
 
 // What a clip saved again keeps from the copy it replaces: where it is,
 // how it's marked and read. The rest comes from the new copy.
-const AGAIN_KEEP = ["requested", "folder", "folderAt", "folderFav", "folderFavAt", "coverPick", "statusPick", "folderNoStatus", "source", "tags", "at", "finished", "readAt", "readOn", "placeAt", "fav", "favAt", "marks", "noShare", "folderNoShare", "folderTagNew", "folderSeries", "folderIn", "movedAt", "live"];
+const AGAIN_KEEP = ["requested", "folder", "folderAt", "folderNo", "folderFav", "folderFavAt", "coverPick", "statusPick", "folderNoStatus", "source", "tags", "at", "finished", "readAt", "readOn", "placeAt", "fav", "favAt", "marks", "noShare", "folderNoShare", "folderTagNew", "folderSeries", "folderIn", "movedAt", "live"];
 
 async function runJob(job) {
   job.started = Date.now();
@@ -363,7 +371,7 @@ async function runJob(job) {
       syncSoon();
     } else {
       meta.requested = job.url;
-      if (job.folder) { meta.folder = folderName(job.folder); meta.folderAt = job.folderAt || Date.now(); if (job.source) meta.source = job.source; }
+      if (job.folder) { meta.folder = folderName(job.folder); meta.folderAt = job.folderAt || Date.now(); if (job.folderNo != null) meta.folderNo = job.folderNo; if (job.source) meta.source = job.source; }
       if (job.tags && job.tags.length) meta.tags = withTags([], job.tags);
       // A chapter's own page tags aren't the story's: a collection's clips
       // keep the story page's, picked from in Save with options.

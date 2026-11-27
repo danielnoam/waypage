@@ -104,8 +104,8 @@ function carFolders() {
   const rest = by.filter((f) => !starred.includes(f) && !recent.includes(f)).slice(0, Math.max(0, CAR_ALL - starred.length - recent.length));
   return [...starred, ...recent, ...rest].map((f) => {
     const { all } = f, cont = folderNextIndex(all), whole = !rest.includes(f);
-    let newest = 0;
-    all.forEach((p, k) => { if ((p.folderAt || p.savedAt || 0) >= (all[newest].folderAt || all[newest].savedAt || 0)) newest = k; });
+    // The newest is the highest number (2026-11-27), as on the collection's page.
+    const newest = all.length - 1;
     const keep = whole ? new Set([0, 1, newest - 1, newest]) : new Set([cont >= 0 ? cont : 0, newest]);
     for (let k = Math.max(0, cont - 1); whole && cont >= 0 && k < cont + CAR_AHEAD; k++) keep.add(k);
     return { name: f.name, all, cont, newest, pick: all.filter((p, k) => keep.has(k)), starred: starred.includes(f), recent: recent.includes(f) };

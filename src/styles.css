@@ -1493,6 +1493,7 @@ html { -webkit-tap-highlight-color: transparent; }
 .cover-item .tile-thumb .site-mark { width: 100%; height: 100%; border-radius: 0; }
 .cover-item .tile-name { font-size: var(--fs-meta); line-height: var(--lh-meta); font-family: var(--sans); font-weight: 600; }
 .cover-item .tile-meta.accent { color: var(--accent); }
+.cover-item .tile-no { font-weight: 600; font-variant-numeric: tabular-nums; }
 .cover-item.now .tile-name { color: var(--accent); }
 .selecting .folder-covers .picked .cover-item .tile-thumb { outline: 2px solid var(--accent); outline-offset: 3px; }
 .folder-list li + li { border-top: 1px solid var(--line); }
@@ -2280,6 +2281,15 @@ span.update-text { cursor: default; }
 }
 .drag-handle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; color: var(--accent); }
 .lifted .drag-handle { color: var(--accent); cursor: grabbing; }
+/* Custom: each clip's number, typed over (2026-11-27). */
+.chapter-no {
+  flex-shrink: 0; width: 56px; min-height: var(--tap); padding: 0 var(--s-1);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--bg); color: var(--ink); text-align: center;
+  font: 600 var(--fs-meta)/var(--lh-meta) var(--sans); font-variant-numeric: tabular-nums;
+}
+.chapter-no:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+.renumber { font-size: var(--fs-meta); }
 @media (prefers-reduced-motion: reduce) { .folder-list.dragging li { transition: none; } }
 
 .pop-menu {
