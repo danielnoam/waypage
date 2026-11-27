@@ -599,8 +599,13 @@ picture viewer's fallback only, never for a menu, bar or dialog.
   then a system confirm), Cancel.
 - **Find chapters (Now):** in Save several, under the count, a small
   button "Find chapters on this page" while the box holds one link; it
-  reads "Finding chapters…" while it looks, then the box holds the
-  chapters and the collection field the novel's name.
+  reads "Finding chapters…" while it looks, with a 3 px bar and the
+  stage in words under it ("Reading Official: page 12 of 23, 240
+  chapters"; the bar sweeps until it knows how far), then the box holds the
+  chapters and the collection field the novel's name. The same read is a
+  run card in Downloads with Stop, and Android's notification says the same
+  words, so it goes on with the app put away; if the screen was closed, a
+  toast says "Found 510 chapters of …" with Open.
 - **Run card (Now):** a run of saves into a collection is one wide card
   from start to end: the site, the collection's name in the title type, a
   bar for the whole run when its length is known (else the page in

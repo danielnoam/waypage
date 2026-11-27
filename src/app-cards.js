@@ -159,6 +159,7 @@ function stopRun(r) {
   if (r.files) watchStopped = true;
   r.stopped = true;
   r.paused = false;
+  if (r.signal) r.signal.cancel();
   if (typeof keepHalt === "function") keepHalt(r);
   // A file download waiting for Wi-Fi stops now, not once Wi-Fi comes;
   // every other waiter looks again and waits on.
@@ -234,7 +235,7 @@ function runStatus(r) {
   return done + failed + " · " + (r.current && !r.current.waiting ? savingStatus(r.current) : t("Next in a moment"));
 }
 function runCard(r) {
-  return el("div", { class: "card saving run wide", role: "group", "aria-label": r.files ? t("Adding {label}", { label: r.label }) : r.folder ? (r.again ? t("Saving again in {folder}", { folder: r.folder }) : t("Saving into {folder}", { folder: r.folder })) : (r.again ? t("Saving again in the library") : t("Saving into the library")) },
+  return el("div", { class: "card saving run wide", role: "group", "aria-label": r.finding ? t("Finding the chapters of {label}", { label: r.label }) : r.files ? t("Adding {label}", { label: r.label }) : r.folder ? (r.again ? t("Saving again in {folder}", { folder: r.folder }) : t("Saving into {folder}", { folder: r.folder })) : (r.again ? t("Saving again in the library") : t("Saving into the library")) },
     el("span", { class: "card-body" },
       el("span", { class: "card-site" }, r.site, r.again ? t(" · Saving again") : null),
       el("span", { class: "card-title", dir: "auto" }, r.folder || r.label || t("Saving several")),
@@ -243,8 +244,8 @@ function runCard(r) {
       el("span", { class: "card-status accent" },
         el("span", { class: "spinner", "aria-hidden": "true" }),
         el("span", { class: "status-text" }, runStatus(r))),
-      r.files && r.total === 1 && !r.keep ? null : el("span", { class: "card-actions" },
-        el("button", { class: "btn-small run-pause", type: "button", onclick: () => pauseRun(r, !r.paused) }, r.paused ? t("Resume") : t("Pause")),
+      r.files && r.total === 1 && !r.keep && !r.finding ? null : el("span", { class: "card-actions" },
+        r.finding ? null : el("button", { class: "btn-small run-pause", type: "button", onclick: () => pauseRun(r, !r.paused) }, r.paused ? t("Resume") : t("Pause")),
         el("button", { class: "btn-quiet danger", type: "button", onclick: () => stopRun(r) }, t("Stop"))),
       failedList(r)));
 }

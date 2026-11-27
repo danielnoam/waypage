@@ -1515,6 +1515,10 @@ html { -webkit-tap-highlight-color: transparent; }
 .batch-count { margin-top: var(--s-2); }
 .batch-find { margin-top: var(--s-2); }
 .batch-find[hidden] { display: none; }
+/* How Find chapters stands: a bar and the stage in words under its button. */
+.batch-find-bar { margin-top: var(--s-2); }
+.batch-find-bar[hidden], .batch-find-note[hidden] { display: none; }
+.batch-find-note { display: block; margin-top: var(--s-1); overflow-wrap: anywhere; }
 .batch-form .group { margin-top: var(--s-3); }
 .batch-form .group[hidden] { display: none; }
 .batch-site-tags:not(:empty) { margin-bottom: var(--s-3); }

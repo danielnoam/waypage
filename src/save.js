@@ -354,7 +354,11 @@
   // page }; links is [] when nothing looks like chapters, and page is the
   // page they were read from: a chapter's own link leads on to its
   // contents page when it has a link to one.
-  async function findChapters(url, led) {
+  // `opts`: `coverOnly` (a site whose list is slow to read, comix.to's, gives
+  // only the page's cover, tags and status: it's the cover that's wanted);
+  // `known` (the links found last time: a site that can, reads only what is
+  // newer); `onProgress({ text, share })`: how the read stands.
+  async function findChapters(url, led, opts = {}) {
     const site = siteRule(url);
     const res = await get(site && site.fetch ? site.fetch(url) : url, site && site.headers);
     const at = res.url || url;
@@ -364,8 +368,13 @@
     const status = pageStatus(doc, at);
     if (site) {
       const own = (site.contents && await site.contents(doc, at, res.text)) || null;
-      const links = own ? own.links : site.list ? await site.list(doc, at, res.text) : [];
-      if (links.length) return { title: (own && own.title) || readTitle(doc), links, cover, page: url, siteTags, status };
+      // A site's `list` may answer { links, page, title } rather than just
+      // the links: `page` is the address to read the list from next time
+      // (comix.to's, with the group chosen), so Website sync keeps to it.
+      if (opts.coverOnly && site.slowList) return { title: readTitle(doc), links: [], cover, page: url, siteTags, status };
+      const listed = own ? own : site.list ? await site.list(doc, at, res.text, opts) : [];
+      const links = Array.isArray(listed) ? listed : listed.links;
+      if (links.length) return { title: (!Array.isArray(listed) && listed.title) || readTitle(doc), links, cover, page: (!Array.isArray(listed) && listed.page) || url, siteTags, status };
       // A site whose chapters are only ever its own kind of link (a
       // Wikisource work's subpages): no guessing from the page's links.
       if (site.ownChapters) return { title: readTitle(doc), links: [], cover, page: url, siteTags, status };
@@ -602,6 +611,422 @@
   }
 
   const uniqueLinks = (links) => { const seen = new Set(); return links.filter((u) => u && !seen.has(u) && seen.add(u)); };
+
+  // comix.to (1.69.0): every chapter is posted by several scan groups, so
+  // a title's list is read for one group: the group in the address
+  // (?group_id=307), else the more complete of an official one (Official,
+  // or a publisher such as Tapas) and the group that posted the newest, the
+  // official one when it has nine in ten of the other's. Chapters that group
+  // skipped are taken from the other, then from any group (an official one
+  // first). The site fetches its chapters with a token and an encrypted
+  // answer, so the title page is drawn in the hidden browser and walked
+  // there, a page of twenty at a time, by COMIX_WALK. Nothing is read without
+  // that browser (iOS, the web copy).
+  const COMIX_OFFICIAL = /^(official|tapas|webtoon|line webtoon|tappytoon|lezhin|manta|pocket comics|kakao(page| webtoon)?|piccoma|comikey|azuki|inky ?pen|viz|viz media|mangaplus|manga plus|crunchyroll|k ?manga|yen press|kodansha|seven seas)\b/i;
+
+  // Runs in the hidden browser, every 400 ms (PageRender `collect`): reads
+  // the rows of the page of the list on show, then clicks the next page's
+  // number (by script: an ad's overlay takes a real tap).
+  //
+  // The site's firewall turns a list request away (403 captcha_required)
+  // when pages come too fast: after about six in a row at 0.7 s, none at 6 s
+  // each. So turns draw on an allowance, up to 2 at once and one more every
+  // 6 s (`tok`, kept across walks by comixWalk). A turn that was refused is
+  // seen at once, from the request's own status in the page's resource
+  // timing, and sent again by loading that page's address (a second click
+  // sends nothing: the page caches its answers) after 5 s, then 10, then
+  // 20; a fourth refusal notes the page as missed. After a first refusal
+  // the clicks go on being turned away while loads aren't, so every page
+  // after it is loaded by its address too. What it has read is kept
+  // in sessionStorage, so it carries on after that load.
+  // `pages`: how many pages to read; `below`: stops once a page goes under
+  // that chapter number; `above`: a page that starts under it backs up one;
+  // `tokens`: the allowance it starts with. Rows go to window.__wpOut as
+  // [href, group, label]; the reply says how it stands: { done, n, at, last,
+  // wait (seconds until its next move), refused }.
+  function COMIX_WALK(o) {
+    var K = "__wpC", S, now = Date.now(), T = window.__wpTune || {};
+    var DELAY = T.delays || [5000, 10000, 20000], GAP = T.gap || 6000;
+    try { S = JSON.parse(sessionStorage.getItem(K) || "null"); } catch (e) { S = null; }
+    S = S || window.__wpC || { rows: [], seen: {}, read: {}, last: 0, back: 0, missed: [], pending: 0, how: "", mode: "", asked: 0, tries: 0, hold: 0, count: 0, at: 0, born: now, tok: o.tokens == null ? 2 : o.tokens, tokAt: now };
+    window.__wpC = S;
+    S.tok = Math.min(2, S.tok + (now - S.tokAt) / GAP); S.tokAt = now;
+    var save = function () { try { sessionStorage.setItem(K, JSON.stringify(S)); } catch (e) { /* kept in the page only */ } };
+    var out = function (done, wait) {
+      save();
+      window.__wpOut = JSON.stringify({ rows: S.rows, last: S.last, missed: S.missed, done: done, at: S.at, tok: S.tok, count: S.count });
+      return JSON.stringify({ done: done, n: S.rows.length, at: S.at, last: S.last, count: S.count, final: !!S.final, wait: Math.ceil((wait || 0) / 1000), refused: S.hold > 0 });
+    };
+    var rows = document.querySelectorAll(".mchap-row");
+    var act = document.querySelector(".npager__num.is-active");
+    var cur = act ? parseInt(act.textContent, 10) || 1 : parseInt(new URLSearchParams(location.search).get("page"), 10) || 1;
+    var a0 = rows.length && rows[0].querySelector("a.mchap-row__primary");
+    var top = a0 ? a0.getAttribute("href") : "";
+    var numOf = function (h) { var m = /-chapter-(\d+(?:\.\d+)?)/.exec(h || ""); return m ? parseFloat(m[1]) : NaN; };
+    var button = function (n) { return [].filter.call(document.querySelectorAll(".npager__num"), function (x) { return parseInt(x.textContent, 10) === n; })[0]; };
+    // The status the site gave the list request for page n (0: none yet).
+    var status = function (n) {
+      var es = performance.getEntriesByType("resource"), st = 0, re = new RegExp("/chapters\\?(.*&)?page=" + n + "(&|$)");
+      for (var i = 0; i < es.length; i++) if (re.test(es[i].name)) st = es[i].responseStatus || 0;
+      return st;
+    };
+    var known = typeof PerformanceResourceTiming !== "undefined" && "responseStatus" in PerformanceResourceTiming.prototype;
+    // After a refusal the page's own clicks go on being turned away while a
+    // fresh load of a page's address is let through (measured), so from then
+    // on the next page is loaded by its address (`mode` "load").
+    var go = function (n) {
+      var b = button(n);
+      if (S.mode === "load" ? (n > S.last || S.read[n] === 1) : !b) return out(n > S.last || S.read[n] === 1);
+      if (S.tok < 1) return out(false, (1 - S.tok) * GAP);
+      S.tok -= 1;
+      if (S.mode === "load") return load(n, true);
+      S.pending = n; S.how = "click"; S.top = top; S.asked = now; S.tries = 0; S.hold = 0; b.click();
+      return out(false);
+    };
+    var load = function (n, spent) {
+      var u = new URL(location.href); u.searchParams.set("page", n);
+      S.pending = n; S.how = "load"; S.top = ""; S.asked = now; S.hold = 0; if (!spent) { S.tok = 0; S.tokAt = now; }
+      if (!spent) S.tries = S.tries || 0;
+      save();
+      (window.__wpLoad || function (h) { location.replace(h); })(u.href);
+      return out(false);
+    };
+    // The first page itself may be the one turned away: nothing on show.
+    if (!rows.length && !S.pending) { S.pending = cur; S.how = "load"; S.asked = S.born; }
+    if (S.pending) {
+      var come = rows.length && cur === S.pending && (S.how === "load" || top !== S.top);
+      if (!come) {
+        if (S.hold) {
+          if (now < S.hold) return out(false, S.hold - now);
+          return load(S.pending);
+        }
+        var st = status(S.pending);
+        // Turned away (403, 429), or no answer: at once from the status; a
+        // WebView that doesn't give one is waited on for 4 s, and a slow one
+        // for 20.
+        var refused = st >= 400 || (!st && now - S.asked > (known ? 20000 : 4000));
+        if (!refused) return out(false);
+        S.tries++;
+        S.mode = "load";
+        if (S.tries <= DELAY.length) { S.hold = now + DELAY[S.tries - 1]; return out(false, DELAY[S.tries - 1]); }
+        S.missed.push(S.pending); var skip = S.pending; S.pending = 0; S.tries = 0; S.hold = 0;
+        return rows.length ? go(skip + 1) : load(skip + 1);
+      }
+      S.pending = 0; S.tries = 0; S.hold = 0;
+    }
+    var nums = [].map.call(document.querySelectorAll(".npager__num"), function (x) { return parseInt(x.textContent, 10) || 0; });
+    S.last = Math.max.apply(null, [S.last, cur].concat(nums));
+    // The pager shows eight numbers around the page on show, three of them
+    // after it (page 5: 1 to 8): fewer than three after it, and its last is
+    // the list's last (`final`), not just the furthest seen so far.
+    if (S.last - cur < 3) S.final = true;
+    if (!S.read[cur]) {
+      S.read[cur] = 1;
+      S.at = Math.max(S.at, cur);
+      var low = Infinity, high = -Infinity;
+      [].forEach.call(rows, function (r) {
+        var a = r.querySelector("a.mchap-row__primary");
+        if (!a) return;
+        var h = a.getAttribute("href"), n = numOf(h);
+        if (n < low) low = n;
+        if (n > high) high = n;
+        if (S.seen[h]) return;
+        S.seen[h] = 1;
+        var g = r.querySelector("a.mchap-row__group[href]");
+        var gm = g && /\/groups\/(\d+)/.exec(g.getAttribute("href"));
+        var lab = r.querySelector(".mchap-row__ch");
+        S.rows.push([h, gm ? gm[1] : "0", lab ? lab.textContent.replace(/\s+/g, " ").trim() : ""]);
+      });
+      S.count++;
+      // Backing up only until a page reaches `above`: from there it goes on down.
+      if (o.above != null && high >= o.above) S.reached = true;
+      if (o.above != null && !S.reached && high < o.above && cur > 1 && S.back < 40) { S.back++; return go(cur - 1); }
+      if (o.below != null && low < o.below) return out(true);
+      if (o.pages && S.count >= o.pages) return out(true);
+    }
+    return go(cur + 1);
+  }
+
+  // The allowance of page turns the firewall lets through, kept across the
+  // walks of a read (it counts a connection's requests, not a page's).
+  const comixAllowance = { n: 2, at: 0 };
+  const comixTokens = () => Math.min(2, comixAllowance.n + (Date.now() - (comixAllowance.at || Date.now())) / 6000);
+
+  // One walk of a list (`group`, or every group's with null) from page
+  // `start`: { rows: [{ url, n, group, label }], last, missed }, or null
+  // without the hidden browser or when nothing came.
+  // A whole list read stops after COMIX_BUDGET, a safety cap: the walker
+  // retries a refused page in seconds, and the read goes on in the
+  // background (a notification), so a long title just takes its time.
+  const COMIX_BUDGET = 45 * 60000;
+  async function comixWalk(origin, titlePath, group, start, o, until, onStep, signal) {
+    const rows = [], missed = new Set();
+    let last = 1, from = Math.max(1, start || 1), pages = 0;
+    until = until || Date.now() + COMIX_BUDGET;
+    // Pages read, over every render of this walk (it may be carried on).
+    const told = onStep ? (e) => onStep({ ...e, count: pages + (e.count || 0) }) : null;
+    // A walk that stopped short is carried on from the page after the last read.
+    for (let tries = 0; tries < 12 && until - Date.now() > 15000 && !(signal && signal.stopped); tries++) {
+      const a = new URL(origin + titlePath);
+      if (group != null) a.searchParams.set("group_id", group);
+      if (from > 1) a.searchParams.set("page", from);
+      const opts = { ...(o || {}), tokens: comixTokens() };
+      const d = await C.platform.render(a.href, {
+        collect: "(" + COMIX_WALK.toString() + ")(" + JSON.stringify(opts) + ")",
+        maxMs: Math.min(300000, until - Date.now()), retryMs: 5000,
+        onProgress: told,
+        onId: signal ? (id) => { signal.current = id; } : null,
+      });
+      let got = null;
+      try { got = d && d.collected ? JSON.parse(d.collected) : null; } catch (e) { got = null; }
+      if (!got || !Array.isArray(got.rows)) break;
+      if (typeof got.tok === "number") { comixAllowance.n = got.tok; comixAllowance.at = Date.now(); }
+      pages += got.count || 0;
+      rows.push(...got.rows);
+      for (const n of got.missed || []) missed.add(n);
+      last = Math.max(last, got.last || 1);
+      if (got.done || !got.at || got.at < from || got.at >= last) break;
+      from = got.at + 1;
+    }
+    // A page the site kept turning away is read again, on its own.
+    for (const n of [...missed].slice(0, 20)) {
+      if ((o && o.again === false) || until - Date.now() < 15000 || (signal && signal.stopped)) break;
+      const one = await comixWalk(origin, titlePath, group, n, { pages: 1, again: false }, until, null, signal);
+      if (one) { rows.push(...one.raw); missed.delete(n); pages += one.pages; }
+    }
+    if (!rows.length) return null;
+    const seen = new Set();
+    const raw = rows.filter(([h]) => !seen.has(h) && seen.add(h));
+    return {
+      raw, last, pages, missed: [...missed],
+      rows: raw.map(([h, g, label]) => ({
+        url: absolute(h, origin),
+        // From the address: the link's words go on with the chapter's title.
+        n: parseFloat((String(h).match(/-chapter-(\d+(?:\.\d+)?)/) || [])[1]),
+        group: String(g || "0"), label: String(label || ""),
+      })).filter((r) => Number.isFinite(r.n)),
+    };
+  }
+
+  // A group's chapters, one upload a number (the first listed: the newest),
+  // without a whole volume posted as one (its label "Vol.22", no "Ch.").
+  function comixChapters(rows, group) {
+    const mine = rows.filter((r) => group == null || r.group === String(group));
+    const numbered = mine.filter((r) => /\bCh\./i.test(r.label) || !/^Vol\.?\s*\d/i.test(r.label));
+    const keep = numbered.length ? numbered : mine;
+    const by = new Map();
+    for (const r of keep) if (!by.has(r.n)) by.set(r.n, r);
+    return by;
+  }
+
+  // The pages filling gaps reads, every group's list from page `start` down
+  // to chapter `low`: chapters / (chapters a page on the first page), with
+  // half again for the older chapters more groups posted (The Gamer: one
+  // upload a chapter on its first page, two in the middle; 37 pages
+  // expected, 34 read). The same guess before the main list is read and
+  // after, so the bar doesn't wait between them.
+  const gapPages = (latest, low, per, start) => Math.max(2, Math.ceil((latest - low) / Math.max(1, per) * 1.5) - start + 1);
+
+  async function comixList(doc, url, ignored, opts = {}) {
+    if (!C.platform.canRender) return [];
+    const u = new URL(url);
+    const m = u.pathname.match(/^(\/title\/([a-z0-9]+)-[^/]+)(\/|$)/i);
+    if (!m) return [];
+    const titlePath = m[1], hid = m[2];
+    // A chapter's address leads to its title's page, which names the groups.
+    if (u.pathname.replace(/\/$/, "") !== titlePath) {
+      const res = await get(u.origin + titlePath);
+      doc = parse(res.text, res.url || u.origin + titlePath);
+    }
+    let data = {};
+    try { data = JSON.parse(doc.querySelector("#initial-data").textContent).queries || {}; } catch (e) { /* no groups to choose from */ }
+    const groups = (data[JSON.stringify(["manga", "groups", hid])] || []).filter((g) => g && g.name);
+    const detail = data[JSON.stringify(["manga", "detail", hid])] || {};
+    const official = new Set(groups.filter((g) => g.id !== 0 && COMIX_OFFICIAL.test(g.name)).map((g) => String(g.id)));
+    const until = Date.now() + COMIX_BUDGET;
+    // How the read stands, for a progress bar: the share is the page turns
+    // done over the page turns the read is expected to take. `plan` holds a
+    // step each, estimated before it is walked (a group's list: the newest
+    // chapter / 20 pages) and corrected once the walk sees its real end or
+    // ends; the share never goes back, and only "Found" makes it whole.
+    const perList = Math.max(1, Math.ceil((detail.latestChapter || 20) / 20));
+    const plan = { title: { est: 1, done: 1, final: true } };
+    let shown = 0;
+    // Each step weighs its estimate; how far it is goes with the pages read,
+    // straight up to four fifths of the estimate, then easing towards the
+    // whole without reaching it while its end is out of sight: a list longer
+    // than guessed slows the bar instead of stopping it near full.
+    const along = (x) => {
+      if (x.final) return Math.min(1, x.done / Math.max(1, x.est));
+      const k = x.done / Math.max(1, x.est);
+      return k <= 0.8 ? k : 0.8 + 0.2 * (1 - Math.exp(-(k - 0.8) / 0.3));
+    };
+    const shareNow = () => {
+      let d = 0, e = 0;
+      for (const x of Object.values(plan)) { const w = Math.max(1, x.est); d += w * along(x); e += w; }
+      return Math.min(0.99, d / Math.max(1, e));
+    };
+    const say = (text, whole) => {
+      if (!opts.onProgress) return;
+      shown = whole ? 1 : Math.max(shown, shareNow());
+      opts.onProgress({ text, share: shown });
+    };
+    const nameOf = (g) => ((groups.find((x) => String(x.id) === String(g)) || {}).name) || t("every group");
+    const stepFor = (name, key) => !opts.onProgress ? null : (e) => {
+      const x = plan[key] || (plan[key] = { est: perList, done: 0 });
+      x.done = e.count || 0;
+      // Its real end in sight: the estimate becomes the list's length.
+      if (e.final && e.last) { x.est = Math.max(x.done, e.last - (x.from || 1) + 1); x.final = true; }
+      const pages = Math.max(x.est + (x.from || 1) - 1, e.at || 0);
+      say(e.refused
+        ? t("The site asked to slow down. Trying page {page} again in {s} s", { page: (e.at || 0) + 1, s: e.wait })
+        : e.final
+          ? t("Reading {name}: page {at} of {pages}, {n} chapters", { name, at: Math.max(1, e.at || 0), pages: e.last, n: e.n })
+          : t("Reading {name}: page {at} of about {pages}, {n} chapters", { name, at: Math.max(1, e.at || 0), pages, n: e.n }));
+    };
+    // A walk that ended: what it read is what that step was.
+    const ended = (key, w) => { if (plan[key]) { plan[key].done = w ? w.pages : plan[key].done; plan[key].est = plan[key].done; plan[key].final = true; } };
+    // The whole read, estimated before any of it: the groups' first page,
+    // two lists to compare (or the address's group's), and filling gaps.
+    const named = new URL(url).searchParams.get("group_id");
+    if (named == null) Object.assign(plan, { first: { est: 1, done: 0 }, picks: { est: 2 * perList, done: 0 } });
+    else plan["g" + named] = { est: perList, done: 0 };
+    plan.gaps = { est: perList, done: 0 };
+    say(t("Reading the title page"));
+    const walks = new Map();
+    const walk = async (group) => {
+      const k = group == null ? "" : String(group);
+      if (!walks.has(k)) {
+        plan["g" + k] = plan["g" + k] || { est: perList, done: 0 };
+        walks.set(k, await comixWalk(u.origin, titlePath, group, 1, {}, until, stepFor(nameOf(group), "g" + k), opts.signal));
+        ended("g" + k, walks.get(k));
+      }
+      return walks.get(k);
+    };
+
+    // The group: the address's, else the more complete of the official one
+    // and the group of the newest upload.
+    let group = u.searchParams.get("group_id");
+    let main = null;
+    // A check for new chapters of a title read before (the address names its
+    // group): the list is newest first, so only the pages down to the newest
+    // chapter already known are read, and the rest is what was found last time.
+    const nOf = (l) => parseFloat((String(l).match(/-chapter-(\d+(?:\.\d+)?)/) || [])[1]);
+    const known = (opts.known || []).filter((l) => Number.isFinite(nOf(l)));
+    if (group != null && known.length) {
+      const top = Math.max(...known.map(nOf));
+      // The pages down to the newest chapter known: the whole of this read.
+      for (const k of Object.keys(plan)) if (k !== "title") delete plan[k];
+      plan.known = { est: Math.max(1, Math.ceil(((detail.latestChapter || top) - top) / 20) + 1), done: 0 };
+      const w = await comixWalk(u.origin, titlePath, group, 1, { below: top - 0.001 }, until, stepFor(nameOf(group), "known"), opts.signal);
+      const byN = new Map(known.map((l) => [nOf(l), l]));
+      // Chapters the group has newer than the newest known (a decimal one
+      // between known ones is found too: the page that has it is read).
+      for (const r of w ? comixChapters(w.rows, group).values() : []) if (!byN.has(r.n)) byN.set(r.n, r.url);
+      const links = [...byN.entries()].sort((x, y) => x[0] - y[0]).map(([, l]) => l);
+      return { links, title: detail.title || "", page: u.origin + titlePath + "?group_id=" + group };
+    }
+    if (group != null) {
+      main = await walk(group);
+    } else {
+      // The first page of every group's list: who posted the newest.
+      say(t("Comparing the scan groups"));
+      const top = await comixWalk(u.origin, titlePath, null, 1, { pages: 1 }, until, null, opts.signal);
+      walks.set("*", top);
+      Object.assign(plan.first, { done: 1, final: true });
+      // Every group's list is about the newest chapter / (chapters a page)
+      // pages, and filling gaps may read most of it (The Gamer: 31 of 34):
+      // kept whole, so the bar never waits on it; a title with no gaps jumps.
+      const perPage = top ? Math.max(1, new Set(top.rows.map((r) => r.n)).size) : 20;
+      plan.gaps = { est: gapPages(detail.latestChapter || 20, 1, perPage, 1), done: 0 };
+      const newest = top && top.rows.find((r) => r.group !== "0");
+      const off = groups.find((g) => /^official$/i.test(g.name)) || groups.find((g) => official.has(String(g.id)));
+      const sized = [];
+      const picks = [...new Set([off && String(off.id), newest && newest.group].filter(Boolean))];
+      // Both lists to read are in the plan before the first is walked.
+      delete plan.picks;
+      for (const g of picks) plan["g" + g] = { est: perList, done: 0 };
+      for (const g of picks) {
+        const w = await walk(g);
+        if (w) sized.push({ g, w, n: comixChapters(w.rows, g).size });
+      }
+      const most = Math.max(0, ...sized.map((x) => x.n));
+      const pick = sized.find((x) => official.has(x.g) && x.n >= most * 0.9) || sized.find((x) => x.n === most);
+      if (pick) { group = pick.g; main = pick.w; }
+      else if (top) { group = null; main = top; }
+    }
+    if (!main) return [];
+    const chapters = comixChapters(main.rows, group);
+
+    // Whole numbers the group skipped: from the other group read, then
+    // from every group's list, read only from where those numbers are.
+    const latest = Math.max(detail.latestChapter || 0, ...chapters.keys());
+    const lowest = Math.min(1, ...chapters.keys());
+    const want = () => { const w = []; for (let n = Math.max(0, Math.ceil(lowest)); n <= latest; n++) if (!chapters.has(n)) w.push(n); return w; };
+    // How many uploads each group has, over everything read: the busiest
+    // fills a gap when no official group has it.
+    const counts = new Map();
+    const count = (rows) => { for (const r of rows) counts.set(r.group, (counts.get(r.group) || 0) + 1); };
+    for (const w of walks.values()) if (w) count(w.rows);
+    const fill = (rows) => {
+      const byN = new Map();
+      for (const r of rows) {
+        if (r.group === String(group) || !Number.isInteger(r.n) || chapters.has(r.n)) continue;
+        if (!/\bCh\./i.test(r.label) && /^Vol\.?\s*\d/i.test(r.label)) continue;
+        (byN.get(r.n) || byN.set(r.n, []).get(r.n)).push(r);
+      }
+      for (const [n, rs] of byN) {
+        rs.sort((x, y) => (official.has(y.group) - official.has(x.group)) || ((counts.get(y.group) || 0) - (counts.get(x.group) || 0)));
+        chapters.set(n, rs[0]);
+      }
+    };
+    // A whole list read first, the first page of every group's after.
+    for (const [k, w] of walks) if (k !== String(group) && k !== "*" && w) fill(w.rows);
+    if (walks.get("*")) fill(walks.get("*").rows);
+    const gaps = want();
+    if (!gaps.length || until - Date.now() <= 30000) delete plan.gaps;
+    if (gaps.length && until - Date.now() > 30000) {
+      say(tn(gaps.length, "Filling in {n} missing chapter from other groups", "Filling in {n} missing chapters from other groups", { n: gaps.length }));
+      // Every group's list, newest first: a number's page is guessed from
+      // how many uploads a chapter has on the first page, then walked down.
+      const first = walks.get("*") || await comixWalk(u.origin, titlePath, null, 1, { pages: 1 }, until, null, opts.signal);
+      if (first) {
+        const per = Math.max(1, new Set(first.rows.map((r) => r.n)).size);
+        const top = Math.max(...gaps);
+        const start = Math.max(1, Math.floor((latest - top) / per) - 1);
+        // It stops once past the lowest missing number (`below`), 150 pages
+        // at most; the bar expects `gapPages` of it.
+        plan.gaps = { est: gapPages(latest, Math.min(...gaps), per, start), done: 0, from: start };
+        const all = await comixWalk(u.origin, titlePath, null, start, { above: top, below: Math.min(...gaps), pages: 150 }, until, stepFor(nameOf(null), "gaps"), opts.signal);
+        ended("gaps", all);
+        if (all) { count(all.rows); fill(all.rows); }
+      }
+    }
+    const links = [...chapters.entries()].sort((x, y) => x[0] - y[0]).map(([, r]) => r.url);
+    say(tn(links.length, "Found {n} chapter", "Found {n} chapters", { n: links.length }), true);
+    return { links: uniqueLinks(links), title: detail.title || "", page: u.origin + titlePath + (group != null ? "?group_id=" + group : "") };
+  }
+
+  // comix.to gives a title a new id now and then (lly3j-how-to-use-a-returner
+  // became 53qnl-…, 2026-11): the old address and its chapters answer 404.
+  // The title is looked up by its name on the site's search page, drawn in
+  // the hidden browser, and the address rebuilt with the new id; a chapter
+  // keeps its old id there, which the site sends on to the chapter's new one.
+  async function comixMoved(url) {
+    if (!C.platform.canRender) return null;
+    const u = new URL(url);
+    const m = u.pathname.match(/^\/title\/([a-z0-9]+)-([^/]+)(\/.*)?$/i);
+    if (!m) return null;
+    const [, hid, slug, rest] = m;
+    const q = "https://comix.to/browse?q=" + encodeURIComponent(slug.replace(/-/g, " "));
+    const d = await C.platform.render(q, { waitFor: 'a[href*="/title/"]', retryMs: 5000 });
+    if (!d) return null;
+    const found = [...parse(d.text, q).querySelectorAll('a[href*="/title/"]')]
+      .map((a) => (a.getAttribute("href").match(/\/title\/([a-z0-9]+)-([^/?#]+)/i) || []))
+      .find((x) => x[2] === slug && x[1] !== hid);
+    if (!found) return null;
+    return u.origin + "/title/" + found[1] + "-" + slug + (rest || "") + u.search;
+  }
 
   const SITES = [
     {
@@ -1148,6 +1573,46 @@
           byline: text(doc.querySelector("#header_author_text a, .wst-header-author a")),
           next: link("#header_forward_text a, .wst-header-forward a"),
           prev: link("#header_backward_text a, .wst-header-back a, .wst-header-backward a"),
+        };
+      },
+    },
+    {
+      name: "comix",
+      host: /(^|\.)comix\.to$/i,
+      ownChapters: true,
+      list: comixList,
+      slowList: true,
+      moved: comixMoved,
+      // A chapter (1.69.0) is a column of panels the site's reader puts in
+      // as it scrolls (`.rpage-page__img`, five at first, the rest as they
+      // near the screen, and kept), so it is drawn and scrolled like any
+      // comic. Its picture hosts turn away any Referer (the reader sends
+      // none), so downloads send none either (`keep`).
+      noReferer: true,
+      comic: (url) => /^\/title\/[^/]+\/\d+-chapter-[^/]+\/?$/.test(new URL(url).pathname),
+      // The reader makes a slot (`.rpage-page`) for every panel at once but
+      // puts a picture in only the ones the scroll has reached, so it is
+      // scrolled until each slot has its picture (PageRender `expect`/`ready`).
+      // A chapter the firewall turned away shows no slots: loaded again
+      // after 7 s (retryMs). The time runs from the last slot filled, up
+      // to 150 s, so a chapter of 180 pictures on a slow phone finishes.
+      slots: { expect: ".rpage-page", ready: ".rpage-page__img[src^=http]", retryMs: 5000, maxMs: 150000 },
+      panels(doc, url) {
+        return uniqueLinks([...doc.querySelectorAll(".rpage-page__img[src]")]
+          .map((img) => absolute(img.getAttribute("src"), url))
+          .filter((u) => /^https?:/.test(u)));
+      },
+      chapter(doc, url) {
+        if (!this.comic(url)) return null;
+        // "The Perks of Being an S-Class Heroine · Ch.147"
+        const og = doc.querySelector('meta[property="og:title"]');
+        const [series, chapter] = ((og && og.content) || text(doc.querySelector("title"))).split(/\s+·\s+/);
+        const n = new URL(url).pathname.match(/-chapter-(.+?)\/?$/);
+        return {
+          content: null,
+          title: (chapter || (n ? "Ch." + n[1] : "")).trim(),
+          series: (series || "").trim(),
+          byline: "",
         };
       },
     },
@@ -2303,7 +2768,7 @@
     }
   }
 
-  async function get(url, headers) {
+  async function get(url, headers, moved) {
     let res;
     try {
       res = await C.platform.fetchText(url, { headers });
@@ -2321,7 +2786,13 @@
         : t("This browser can't reach that site directly. Save it in Waypage on your phone, then bring it here with a backup."), C.platform.canReadPages);
     }
     if (res.status === 429) throw new SaveError(t("The site asked to slow down. Try again in a few minutes."));
-    if (res.status === 404 || res.status === 410) throw new SaveError(t("That page doesn't exist any more. Check the link."), false, true);
+    if (res.status === 404 || res.status === 410) {
+      // A site that moves its pages (comix.to's new ids) says where to.
+      const rule = !moved && siteRule(url);
+      const to = rule && rule.moved && await rule.moved(url).catch(() => null);
+      if (to && to !== url) return get(to, headers, true);
+      throw new SaveError(t("That page doesn't exist any more. Check the link."), false, true);
+    }
     if (res.status >= 400) throw new SaveError(t("The site answered with an error ({status}). Try again later.", { status: res.status }), res.status >= 500 || res.status === 403, res.status === 403);
     return res;
   }
@@ -2558,7 +3029,17 @@
     // saved copy is the same script-free HTML as any other page's.
     if ((!got || got.check) && C.platform.canRender) {
       if (onDrawing) onDrawing();
-      const drawn = await C.platform.render(finalUrl, { scroll: comic });
+      let drawn = await C.platform.render(finalUrl, { scroll: comic, ...(comic && site && site.slots) });
+      // A site that names its picture slots (comix.to) says how many there
+      // were and how many came: a chapter that came up short is drawn once
+      // more, then fails to be tried again, never kept half done.
+      if (comic && site && site.slots) {
+        const short = (d) => d && d.expected !== undefined && !(d.expected > 0 && d.ready >= d.expected);
+        if (short(drawn)) drawn = await C.platform.render(finalUrl, { scroll: true, ...site.slots });
+        if (short(drawn)) throw new SaveError(drawn.expected > 0
+          ? t("Only {got} of {total} pictures loaded. Try again.", { got: drawn.ready, total: drawn.expected })
+          : t("The pictures didn't load. Try again."), true);
+      }
       if (drawn) {
         finalUrl = drawn.url;
         html = drawn.text;
@@ -2871,8 +3352,10 @@
   // than the screen needs is redrawn smaller (store.shrink). Resolves to
   // { rel, bytes } of the file kept.
   // A full image is made smaller too (1.18.0), unless that's turned off.
+  // A site whose picture hosts refuse a Referer (comix.to) gets none.
   async function keep(id, rel, url, mode, page) {
-    const size = await C.store.download(id, rel, url, page);
+    const rule = siteRule(page);
+    const size = await C.store.download(id, rel, url, rule && rule.noReferer ? null : page);
     if (mode !== "full") return C.store.shrink(id, rel, size, PREVIEW_WIDTH);
     return compress ? C.store.squeeze(id, rel, size, FULL_WIDTH) : { rel, bytes: size };
   }
@@ -3341,7 +3824,7 @@
   C.save = {
     get compress() { return compress; }, set compress(v) { compress = v !== false; }, compressPictures,
     pageSource, preview, rebuild,
-    save, findArchived, unWayback, tidyMail, mailRule, formatDate, publishedAt, SaveError, ContentsPage, cutShort, findChapters, pageImage, siteIcon, keepCover, siteRule, removeHidden, scriptJson, chapterNumber, pickChapters, comicGroup, isPanel, retryMissing, saveFullImages, setPictures, findNext, creditLine, cleanSaved, savedPageHtml, newId, textDir, isNextText, isPrevText, plainText, replaceText,
+    save, COMIX_WALK, findArchived, unWayback, tidyMail, mailRule, formatDate, publishedAt, SaveError, ContentsPage, cutShort, findChapters, pageImage, siteIcon, keepCover, siteRule, removeHidden, scriptJson, chapterNumber, pickChapters, comicGroup, isPanel, retryMissing, saveFullImages, setPictures, findNext, creditLine, cleanSaved, savedPageHtml, newId, textDir, isNextText, isPrevText, plainText, replaceText,
     wikipediaPage, wikimediaThumb, parseSrcset, pickWidth, youtubeId, vimeoId, extOf, isTrackingPixel, readingMinutes, WORDS_PER_MINUTE, siteName,
   };
 })();
