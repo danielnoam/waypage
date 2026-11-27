@@ -23,6 +23,7 @@ public class CarService extends MediaBrowserService {
     static final String STYLE_SUPPORTED = "android.media.browse.CONTENT_STYLE_SUPPORTED";
     static final String STYLE_BROWSABLE = "android.media.browse.CONTENT_STYLE_BROWSABLE_HINT";
     static final String STYLE_PLAYABLE = "android.media.browse.CONTENT_STYLE_PLAYABLE_HINT";
+    static final String STYLE_GROUP = "android.media.browse.CONTENT_STYLE_GROUP_TITLE_HINT";
     static final String COMPLETION = "android.media.extra.PLAYBACK_STATUS";
     static final String PERCENTAGE = "androidx.media.MediaItem.Extras.COMPLETION_PERCENTAGE";
     static final int STYLE_LIST = 1, STYLE_GRID = 2;

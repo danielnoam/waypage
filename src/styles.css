@@ -1515,6 +1515,10 @@ html { -webkit-tap-highlight-color: transparent; }
 .batch-count { margin-top: var(--s-2); }
 .batch-find { margin-top: var(--s-2); }
 .batch-find[hidden] { display: none; }
+/* How Find chapters stands: a bar and the stage in words under its button. */
+.batch-find-bar { margin-top: var(--s-2); }
+.batch-find-bar[hidden], .batch-find-note[hidden] { display: none; }
+.batch-find-note { display: block; margin-top: var(--s-1); overflow-wrap: anywhere; }
 .batch-form .group { margin-top: var(--s-3); }
 .batch-form .group[hidden] { display: none; }
 .batch-site-tags:not(:empty) { margin-bottom: var(--s-3); }
@@ -2260,9 +2264,6 @@ span.update-text { cursor: default; }
    as the top row of the chapters' card. */
 .edit-tabs { margin-bottom: var(--s-4); }
 .folder-edit .folder-facts { margin-top: var(--s-4); }
-.sort-head { border-end-start-radius: 0; border-end-end-radius: 0; border-bottom: 0; }
-.sort-head + .folder-list { border-start-start-radius: 0; border-start-end-radius: 0; }
-.sort-head .sort-row { cursor: default; }
 .sort-dir { display: inline-flex; vertical-align: -3px; margin-inline-start: var(--s-1); }
 .folder-list.ordering .row { min-height: 56px; cursor: default; }
 .folder-list.ordering li { background: var(--surface); }

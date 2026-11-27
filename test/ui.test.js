@@ -2064,36 +2064,35 @@ function zipOf(files) {
       await q.locator('#folderBody li[data-id="rr500"] .item-fav').click();
       await until(q, () => state.pages.find((p) => p.id === "rr500").fav && document.activeElement.matches('li[data-id="rr500"] .item-fav[aria-pressed="true"]'));
       assert.ok(!(await q.evaluate(() => state.pages.find((p) => p.id === "rr100").fav)));
-      await q.click("#folderEdit");
-      assert.strictEqual(await q.locator("#folderBody .item-fav").count(), 0);
-      // A name typed in Edit stays while the order changes under it.
-      await q.fill("#folderBody .book-title-input", "Serial two");
-      // Edit shows no cover or progress at the top: the cover's choices are below.
-      assert.strictEqual(await q.locator("#folderBody .book-head .book-cover, #folderBody .book-head .book-progress, #folderBody .book-head .folder-meta").count(), 0);
       const order = () => q.evaluate(() => folderPages("Serial").map((p) => p.id).join());
-      // Sort by is a drop-down on top of the chapters; picking the same
-      // sort again turns it round, and the face carries ↑ or ↓.
+      // Sort is a drop-down beside the list's head, the one place to put a
+      // collection in order (2026-11-27); picking the same sort again turns
+      // it round, and the face carries ↑ or ↓.
       const sortBy = async (label) => {
-        await q.locator("#folderBody .sort-row .dropdown-btn").click();
+        await q.locator("#folderBody .sort-pick .dropdown-btn").click();
         await q.locator(".dropdown-menu .dropdown-item", { hasText: label }).click();
       };
-      const face = () => q.evaluate(() => { const b = document.querySelector("#folderBody .sort-row .dropdown-btn"); return b && b.getAttribute("aria-label"); });
+      const face = () => q.evaluate(() => { const b = document.querySelector("#folderBody .sort-pick .dropdown-btn"); return b && b.getAttribute("aria-label"); });
       await sortBy("Release date");
       await until(q, () => folderPages("Serial")[0].id === "rr100");
       assert.strictEqual(await order(), "rr100,rr300,rr500");
-      await until(q, () => !!document.querySelector("#folderBody .sort-row .dropdown-face .sort-dir"));
+      await until(q, () => !!document.querySelector("#folderBody .sort-pick .dropdown-face .sort-dir"));
       assert.ok(/Release date$/.test(await face()), await face());
       await sortBy("Release date");
       await until(q, () => folderPages("Serial")[0].id === "rr500");
-      await until(q, () => /Release date, Reversed$/.test(document.querySelector("#folderBody .sort-row .dropdown-btn").getAttribute("aria-label")));
+      await until(q, () => /Release date, Reversed$/.test(document.querySelector("#folderBody .sort-pick .dropdown-btn").getAttribute("aria-label")));
       await sortBy("Title");
       await until(q, () => folderPages("Serial")[0].id === "rr300");
       assert.strictEqual(await order(), "rr300,rr100,rr500");
       await sortBy("Date added");
       await until(q, () => folderPages("Serial")[0].id === "rr100");
       assert.strictEqual(await order(), "rr100,rr300,rr500");
-      // No arrow buttons: the handle takes the arrow keys.
-      assert.strictEqual(await q.locator("#folderBody .move").count(), 0);
+      // Custom brings the handles, on a screen of its own with Done; no
+      // arrow buttons: the handle takes the arrow keys.
+      assert.strictEqual(await q.locator("#folderBody .drag-handle").count(), 0);
+      await sortBy("Custom");
+      await until(q, () => folderMode === "order" && !!document.querySelector("#folderBody .drag-handle"));
+      assert.strictEqual(await q.locator("#folderBody .move, #folderBody .item-fav").count(), 0);
       await q.locator('#folderBody li[data-id="rr100"] .drag-handle').press("ArrowDown");
       // The order changes before the index is written and the list drawn
       // again; the handle gets focus back only after that.
@@ -2101,9 +2100,16 @@ function zipOf(files) {
       assert.strictEqual(await order(), "rr300,rr100,rr500");
       assert.strictEqual(await q.evaluate(() => document.activeElement.closest("li").dataset.id), "rr100");
       // A move into an order it knows shows that one; any other is your own.
-      await until(q, () => /Title$/.test(document.querySelector("#folderBody .sort-row .dropdown-btn").getAttribute("aria-label")));
+      await until(q, () => /Title$/.test(document.querySelector("#folderBody .sort-pick .dropdown-btn").getAttribute("aria-label")));
       assert.strictEqual(await q.evaluate(() => { const l = folderPages("Serial"); return folderSortNow([l[1], l[2], l[0]].map((p, i) => ({ ...p, title: ["b", "c", "a"][i], savedAt: [3, 1, 2][i], published: null, url: "https://x.example/" + i }))); }), null);
-      assert.strictEqual(await q.locator("#folderBody .book-title-input").inputValue(), "Serial two");
+      await q.click("#folderDone");
+      await until(q, () => !folderMode);
+      // Edit has no sorting or handles: only the name, cover and status.
+      await q.click("#folderEdit");
+      assert.strictEqual(await q.locator("#folderBody .item-fav, #folderBody .drag-handle, #folderBody .sort-pick").count(), 0);
+      await q.fill("#folderBody .book-title-input", "Serial two");
+      // Edit shows no cover or progress at the top: the cover's choices are below.
+      assert.strictEqual(await q.locator("#folderBody .book-head .book-cover, #folderBody .book-head .book-progress, #folderBody .book-head .folder-meta").count(), 0);
       // A chapter's line sits on its title's side, in Hebrew too.
       assert.strictEqual(await q.locator('#folderBody .folder-list .choice-text:not([dir="auto"])').count(), 0);
       // The typed name is kept on Website sync's tab, and Done there renames.

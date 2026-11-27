@@ -394,7 +394,7 @@ async function dzSaveStory(s, how = { as: "collection" }) {
   if (!navigator.onLine) { toast(t("You're offline. Save it when you're back online.")); return; }
   toast(t("Finding its chapters…"));
   try {
-    const found = s.serial ? await C.discover.serialChapters(s.url) : noteStatus(await C.save.findChapters(s.url));
+    const found = s.serial ? await C.discover.serialChapters(s.url) : noteStatus(await findWithProgress(s.url));
     const title = found.title || s.title;
     if (how.as === "file") { dzStoryFile(s, found.links.length ? found.links : [s.url], title, how); return; }
     if (!found.links.length) { savePage(s.url); return; }

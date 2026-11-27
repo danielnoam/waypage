@@ -482,4 +482,19 @@ test("a clip moved to two collections ends in the one it was moved to last (2026
   assert.strictEqual(S.merge(base, lib([early]), base, NOW).pages[0].folder, "Trips");
 });
 
+// The worker has no language.js (it needs a document) and the tests' own
+// global t() hid that: it threw "t is not defined" as it loaded.
+test("the merge worker loads and merges without the page's t()", () => {
+  const fs = require("fs"), path = require("path"), vm = require("vm");
+  const dir = path.join(__dirname, "../src");
+  const out = [];
+  const ctx = { location: { search: "" }, postMessage: (m) => out.push(m) };
+  ctx.self = ctx;
+  ctx.importScripts = (...files) => files.forEach((f) => vm.runInContext(fs.readFileSync(path.join(dir, f), "utf8"), ctx, { filename: f }));
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(path.join(dir, "sync-worker.js"), "utf8"), ctx, { filename: "sync-worker.js" });
+  ctx.onmessage({ data: { id: 1, op: "same", a: lib([page("a1b2")]), b: lib([page("a1b2")]) } });
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(out)), [{ id: 1, same: true }]);
+});
+
 console.log("\n" + passed + " passed");

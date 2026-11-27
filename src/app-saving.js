@@ -7,6 +7,31 @@
 
 // `from` is the page read as a list of chapters, which can still be
 // saved as one page; `siteTags` ({ site, tags }) the tags that page gave it.
+// Reading a story's chapter list can take minutes (comix.to's, page by page,
+// with the site slowing it down now and then). It is a run in Downloads like
+// a file coming: a bar, the stage in words and Stop, and Android's
+// notification says the same and keeps it going while Waypage is put away
+// (2026-11, Daniel). `onStatus` is told each stage, for a bar in place.
+async function findWithProgress(url, { opts = {}, onStatus } = {}) {
+  const signal = { stopped: false, current: "", cancel() { this.stopped = true; if (this.current) C.platform.cancelRender(this.current); } };
+  const label = C.save.siteName(url);
+  const run = Object.assign(startRun(null, label, 1), { label, files: true, finding: true, signal, now: t("Reading the title page"), part: null });
+  runChanged();
+  const say = (e) => {
+    run.now = e.text; run.part = e.share;
+    updateRunCard(run);
+    if (onStatus) onStatus(e);
+  };
+  try {
+    return await C.save.findChapters(url, false, { ...opts, signal, onProgress: say });
+  } finally {
+    run.now = null;
+    runs.delete(run);
+    runChanged();
+    paintDownloads();
+  }
+}
+
 function openBatch(text, fromHistory, folder, from, siteTags) {
   if (state.batch) return;
   state.batch = true;
@@ -58,23 +83,42 @@ function renderBatch(text, preset, from, siteTags) {
     maxlength: String(NAME_MAX), enterkeyhint: "done", autocapitalize: "sentences" });
   // One link may be a contents page: its chapters replace it, and the
   // folder takes its name.
+  const findBar = el("span", { class: "progress thin batch-find-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", hidden: true }, el("span", { class: "progress-fill" }));
+  const findNote = el("span", { class: "choice-note batch-find-note", "aria-live": "polite", hidden: true });
+  const findStatus = (e) => {
+    if (!findNote.isConnected) return;
+    findNote.hidden = findBar.hidden = false;
+    findNote.textContent = e.text;
+    findBar.classList.toggle("busy", e.share == null);
+    if (e.share == null) findBar.removeAttribute("aria-valuenow"); else findBar.setAttribute("aria-valuenow", String(Math.round(e.share * 100)));
+    findBar.firstChild.style.transform = "scaleX(" + (e.share || 0) + ")";
+  };
   const finder = el("button", { class: "btn-small batch-find", type: "button", onclick: async () => {
     const url = linksFrom(area.value)[0];
     if (!navigator.onLine) { toast(t("You're offline. Try again when you're back online.")); return; }
     finder.disabled = true;
     finder.textContent = t("Finding chapters…");
+    findStatus({ text: t("Reading the title page"), share: null });
     try {
-      const found = noteStatus(await C.save.findChapters(url));
+      const found = noteStatus(await findWithProgress(url, { onStatus: findStatus }));
       if (found.links.length) {
-        source = found.page || url;
-        area.value = found.links.join("\n");
-        if (found.siteTags) setSiteTags(found.siteTags);
-        if (!folder) choose(folderName(found.title || C.save.siteName(url)));
-        sync();
+        // The screen may have been closed while it read (Waypage put away):
+        // then the chapters wait behind the toast.
+        const fill = () => {
+          source = found.page || url;
+          area.value = found.links.join("\n");
+          if (found.siteTags) setSiteTags(found.siteTags);
+          if (!folder) choose(folderName(found.title || C.save.siteName(url)));
+          sync();
+        };
+        if (finder.isConnected) fill();
+        else toast(tn(found.links.length, "Found {n} chapter of {title}", "Found {n} chapters of {title}", { n: found.links.length, title: found.title || C.save.siteName(url) }), t("Open"),
+          () => openBatch(found.links.join("\n"), false, folderName(found.title || C.save.siteName(url)), found.page || url, found.siteTags || null));
       } else toast(t("Couldn't find a list of chapters on that page."));
     } catch (e) { toast(e instanceof C.save.SaveError ? e.message : t("Couldn't read that page. Try again.")); }
     finder.disabled = false;
     finder.textContent = t("Find chapters on this page");
+    findNote.hidden = findBar.hidden = true;
   } }, t("Find chapters on this page"));
   const sync = () => {
     const links = linksFrom(area.value);
@@ -221,7 +265,7 @@ function renderBatch(text, preset, from, siteTags) {
       ? t("An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3, a zip of them{x}). Everything added here joins {name}. It stays {ON_HERE}.", { x: C.platform.files.canPickFolder ? t(", or a folder of them") : "", name: preset, ON_HERE: ON_HERE })
       : t("An EPUB book, a Markdown or text note, an HTML page, an email (.eml), a CBZ comic, or an audiobook (M4B, MP3, a zip of them{x}). A folder's files are each added on their own, in a collection named after their folder. It stays {ON_HERE}.", { x: C.platform.files.canPickFolder ? t(", or a folder of them") : "", ON_HERE: ON_HERE })));
   const form = el("form", { class: "batch-form" }, asPage, fromFile,
-    el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Links")), area, count, finder, skipRow),
+    el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Links")), area, count, finder, findBar, findNote, skipRow),
     el("section", { class: "settings-section" }, el("h2", { class: "overline" }, t("Save as")),
       seg("batch-kind", t("Save as"), [{ value: "article", label: t("Article") }, { value: "comic", label: t("Comic") }], kind, (v) => {
         kind = v;
@@ -630,7 +674,17 @@ async function checkNew(name, quiet) {
     if (source) {
       // A linked folder reads the story's own chapter list: whatever in
       // it isn't saved is new, wherever it sits.
-      const found = await C.save.findChapters(source);
+      // A site whose list is slow to read (comix.to's) gets the links found
+      // last time: it reads only what is newer than them.
+      const rule = C.save.siteRule(source);
+      const prev = newChapters()[String(name).toLowerCase()];
+      const found = await C.save.findChapters(source, false, rule && rule.slowList && prev && prev.all ? { known: prev.all } : {});
+      // A site that moved the story (comix.to's new ids, 2026-11): the
+      // collection reads it at its new address from now on.
+      if (rule && rule.moved && found.page && found.page !== source) {
+        for (const p of list) if (p.source) p.source = found.page;
+        await C.store.writeIndex(state.pages);
+      }
       const all = found.links.slice(0, 5000);
       setNewFor(name, { at: Date.now(), count: 0, all, page: found.page || source });
       count = laterChapters(name).length;
@@ -783,7 +837,7 @@ function sourceSection(list) {
     link.disabled = true;
     link.textContent = t("Reading…");
     try {
-      const found = await C.save.findChapters(u);
+      const found = await findWithProgress(u);
       if (!found.links.length) { toast(t("Couldn't find a list of chapters on that page.")); return; }
       setSource(name, found.page || u, found.cover || "");
       keepStoryTags(name, found.siteTags);
@@ -828,7 +882,7 @@ async function updateCover(name, url) {
     const key = String(name).toLowerCase();
     if (coverTried.has(key) || !navigator.onLine || list.some((p) => p.cover)) return;
     coverTried.add(key);
-    try { url = (await C.save.findChapters(src)).cover || ""; } catch (e) { return; }
+    try { url = (await C.save.findChapters(src, false, { coverOnly: true })).cover || ""; } catch (e) { return; }
   }
   if (!url || list.some((p) => p.coverFrom === url && p.cover)) return;
   const cover = await C.save.keepCover(url, src);

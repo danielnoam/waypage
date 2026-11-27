@@ -563,6 +563,7 @@ let folderMode = "";
 let folderDraft = null;
 const FOLDER_BARS = {
   edit: { title: t("Edit"), done: t("Done") },
+  order: { title: t("Reorder"), done: t("Done") },
   chapters: { title: t("Edit"), done: t("Done") },
   export: { title: t("Export"), done: t("Done") },
 };
@@ -808,9 +809,11 @@ function renderFolder() {
   const next = folderNext(list);
   const done = list.filter((p) => p.finished).length;
   const editing = folderMode === "edit";
-  const ordering = editing && list.length > 1;
+  // Sort's Custom (Daniel 2026-11-27): the list alone, with handles to drag.
+  const ordering = folderMode === "order" && list.length > 1;
   let top;
-  if (folderMode === "chapters") top = [editTabs(), chaptersPanel(list)];
+  if (folderMode === "order") top = [];
+  else if (folderMode === "chapters") top = [editTabs(), chaptersPanel(list)];
   else if (folderMode === "export") top = [el("div", { class: "folder-actions export-panel" }, exportControls({ pages: list, title: state.folder }, () => setFolderMode("")))];
   // Edit: the name in place of the title, the cover's choices, its status
   // (unless the site sets it, in Website sync), then the chapters with
@@ -830,10 +833,9 @@ function renderFolder() {
   const covers = showList && !folderMode && folderLook(state.folder) === "covers";
   fill($("folderBody"),
     ...top,
-    ...(showList && !editing ? insideStrip(state.folder) : []),
-    showList && !editing ? sectionHead(listHead(list)) : null,
+    ...(showList && !editing && folderMode !== "order" ? insideStrip(state.folder) : []),
+    showList && !editing ? sectionHead(listHead(list), list.length > 1 && (!folderMode || folderMode === "order") ? sortPick(list) : null) : null,
     covers ? el("ol", { class: "folder-covers" }, ...list.map((p) => coverItem(p, p === next && done < list.length))) : null,
-    ordering ? el("div", { class: "group sort-head" }, sortRow(list)) : null,
     showList && !covers ? el("ol", { class: "group folder-list" + (ordering ? " ordering" : "") },
       ...list.map((p, i) => el("li", folderMode ? { "data-id": p.id } : { "data-id": p.id, "data-ids": p.id },
         el("button", { class: "row chapter" + (p === next && done < list.length ? " now" : ""), type: "button",
@@ -1049,21 +1051,26 @@ function folderSortNow(list) {
   }
   return null;
 }
-// Sort by (2026-11, Daniel's ask): a drop-down on top of the chapters;
-// the chosen sort carries ↑ or ↓, and picking it again turns it round.
-function sortRow(list) {
+// Sort (2026-11, Daniel's ask): a drop-down beside the list's head, the
+// one place a collection is put in order (Daniel 2026-11-27: not also in
+// Edit). The chosen sort carries ↑ or ↓, and picking it again turns it
+// round; Custom is any other order, and picking it brings the handles.
+function sortPick(list) {
   const now = folderSortNow(list);
   const mark = (back) => {
     const s = el("span", { class: "sort-dir", "aria-hidden": "true" });
     s.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' + (back ? '<path d="M12 5v14M6 13l6 6 6-6"/>' : '<path d="M12 19V5M6 11l6-6 6 6"/>') + "</svg>";
     return s;
   };
-  const pick = dropdown({ label: t("Sort by"), cls: "field-pick row-pick sort-pick", value: now ? now.how : "", placeholder: t("Your order"), again: true,
-    options: Object.entries(FOLDER_SORTS).map(([key, s]) => ({ value: key, label: s.label,
-      mark: now && now.how === key ? mark(now.back) : null, markLabel: now && now.how === key && now.back ? t("Reversed") : "" })),
-    onpick: (v) => { sortPicked.set(String(state.folder).toLowerCase(), v); sortFolder(folderPages(state.folder), v); } });
-  return el("div", { class: "row pick-row sort-row" },
-    el("span", { class: "choice-text" }, el("span", { class: "choice-label" }, t("Sort by"))), pick);
+  return dropdown({ label: t("Sort by"), cls: "sort-pick", value: now ? now.how : "custom", again: true,
+    options: [{ value: "custom", label: t("Custom") }, ...Object.entries(FOLDER_SORTS).map(([key, s]) => ({ value: key, label: s.label,
+      mark: now && now.how === key ? mark(now.back) : null, markLabel: now && now.how === key && now.back ? t("Reversed") : "" }))],
+    onpick: (v) => {
+      if (v === "custom") { if (folderMode !== "order") setFolderMode("order"); return; }
+      folderMode = "";
+      sortPicked.set(String(state.folder).toLowerCase(), v);
+      sortFolder(folderPages(state.folder), v);
+    } });
 }
 async function sortFolder(list, how) {
   const sort = FOLDER_SORTS[how];

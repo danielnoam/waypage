@@ -2,6 +2,48 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.70.0] - 2026-11-27
+
+### Added
+- New chapters with the app closed: every few hours the phone looks at each linked collection's contents page and, when it lists chapters you haven't got, says so in a notification (one per collection, with how many). A tap opens the collection, which checks itself. Turn it off in Settings › Notifications › New chapters; it follows Check for new chapters and the Wi-Fi only setting for saves. Sites behind Cloudflare are read through a hidden browser. A contents page that lists chapters oldest first over several pages, or a blog's dated posts, still waits for the daily check in the app. Android only; not built for iOS or the web copy.
+- Website sync › Translate chapters: pick a language and each chapter of the collection translates itself on this device as it opens, under the text or instead of it (Show). The languages download when you pick, so it works offline after. Where Translate this clip works (Android, iPhone with iOS 18, Chrome on a computer).
+- Syosetu (Shōsetsuka ni Narō) in Discover › Sites: Japanese web novels posted by their authors, by Popular this week, Top rated, Most bookmarked or Latest updates, and genre, or searched. A serial saves as a collection or series and Website sync follows it (every page of its contents, the author's notes before and after each episode set apart). Pairs with Translate chapters.
+- A collection's Continue button has a Narrate half, the speaker at its end. It narrates the chapter Continue opens, from where you left off, or the first one from its start once the collection is all read. It isn't shown for audiobooks, comics, notes or PDFs shown as pages, nor while that chapter is already being narrated.
+- Find chapters and Website sync read a comix.to title's chapters, every one from chapter 1. Each chapter there is posted by several scan groups, so Waypage reads the most complete one (the group in the link, `?group_id=`, or an official group when it has nearly all) and fills the chapters it skipped from the other groups, so a collection has no holes; a whole volume posted as one "chapter 0" is left out. A title the site gave a new address is found again by its name, and its collection carries on there. The collection stays with its group when it checks for new chapters, and a check reads only the newest page. Android only; not built for iOS or the web copy.
+- A comix.to chapter saves as a comic with all its pictures: every panel is found (the site shows them as you scroll) and kept on the device. A chapter that comes up short says how many pictures loaded and offers Try again, instead of being kept half done. Android only.
+- Find chapters shows how far it is: a bar and the stage in words ("Reading Official: page 12 of about 26, 240 chapters"; "The site asked to slow down. Trying page 13 again in 5 s"), under its button and as a card in Downloads with Stop. On Android the same words and bar are in a notification, and it keeps reading while Waypage is put away; if the screen was closed, a message says "Found 510 chapters of …" with Open.
+- comix.to's firewall turns a request away now and then. Waypage paces its page turns and asks again for a turned-away page within seconds, so a chapter no longer fails to save for it and a long title is read in full. Android only.
+- Continue reading has a Narrate button on the card's far side. It opens the clip where you left off and narrates from there, with the voice you picked for its language. It isn't shown for audiobooks, comics, notes or PDFs shown as pages, nor while that clip is already being narrated.
+- Save the narration on iPhone: a clip or book is spoken into sound files by its Narrate voice (Kokoro, Piper or one of the iPhone's own), to listen to as an audiobook.
+- Show in folder on iPhone opens the Files app where a file read from outside sits.
+- Settings → About → Changelog: an app on a build that isn't a release yet (Unreleased builds, or a test build) lists what it has beyond its version on top, under **Not released yet**, with You have this beside it. English and Hebrew. Android and iOS apps only: the web copy reads CHANGELOG.md as committed, so it shows releases as before. Release builds look as before.
+- Two more covers for a collection: Stacked (two pictures, one above the other) and Side by side.
+
+### Changed
+- A collection's Add is now its own + button in the top bar, beside ⋯, instead of an item in the ⋯ menu.
+- A collection's ⋯ menu now says Add, and it adds what the library's Save with options does: a file (a book, a PDF, a comic, an audiobook…), a folder, an audiobook folder (in the app) or a new note, as well as links. Whatever it brings in joins that collection or series; a folder of audiobook folders becomes its own series inside the collection.
+- On a site's page in Discover › Sites, the All, Sites, Feeds and Newsletters chips step aside to give the site more room; they come back with the site tiles.
+- Discover › Sites opens on every site as a tile, grouped into Web fiction, Fan fiction, Comics and Libraries, each with a line on what it is. A tile opens that site's page: its lists as chips, the genre picker, and its covers without the site's name on each one. Back returns to the tiles.
+- A drop-down list longer than its menu shows a scroll bar on its inner edge and fades out where there's more.
+- Website sync is now Edit's second tab: a collection's Edit has Collection and Website sync tabs, and Website sync left the ⋯ menu (the page's "Save N new chapters" button still saves new ones). On the Website sync tab the link comes first.
+- Edit's Collection tab: the name takes the full width (no cover or progress at the top, since the cover's choices are below), Status sits after the cover and is hidden while "Status from the site" is on.
+- Sort by is a drop-down at the top of the chapters' card in Edit. The chosen sort shows ↑ or ↓; pick it again to turn it round. Any other order says "Your order".
+- The selection menu's Narrate button just says Narrate (Play on a clip with its own sound).
+
+### Fixed
+- Narrating with the clip closed (from the bar on Home) or with the phone locked now keeps your reading place where the voice is, so the clip opens there next time. Before, the place stayed where the page was last on screen.
+- On iPhone, a dark theme no longer flashes the light background while the app starts.
+- In Hebrew, Discover's chapter counts read ".ch 34"; they read "34 ch." again.
+- A mosaic cover kept showing a clip after it was deleted or moved out. Mosaics are drawn again when the clips they show change, and go back to Automatic when fewer than two pictures are left.
+- In Hebrew, a chapter with an English title had its size or time on the other side from its title.
+- A collection, series or feed can have a long name now, up to 200 characters. It was cut at 32. Long names end in "…" on cards, chips and pickers, and the "Previous in" and "Next in" cards in the reader keep them to two lines.
+- Scrolling a long drop-down (Discover's site picker, for one) no longer moves the page behind it, and pulling it down at its top no longer reloads Discover and shuts it.
+- Narrate: pressing next or previous while the next paragraph is still being made (Piper, Kokoro) no longer piles the presses up and skips several paragraphs once the sound comes. A press that can't happen yet is dropped, from the app, the notification, earbuds and the car.
+- Narrate with Piper or Kokoro no longer jumps to the next paragraph on its own a few seconds into one that took a while to make.
+- Piper and Kokoro no longer mumble briefly after a sentence that ends in a quote mark.
+- A collection's Website sync tab lists its chapters one by one, even when the collection is shown as a grid.
+- Catalogs and WebDAV: when a catalog's or server's address is changed on one device to a different server, your other devices no longer keep its old password for the new address. They ask for it again. The same server at a new folder, or moved up to https, keeps it as before.
+
 ## [1.69.0] - 2026-11-21
 
 ### Added

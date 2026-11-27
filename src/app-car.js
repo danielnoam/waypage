@@ -82,29 +82,34 @@ async function carClip(p) {
   };
 }
 
-// Collections and series (2026-11): the eight read or added to last,
-// in their own order, each with quick starts (Continue or Start, and
-// Newest). A long one carries only its first clips, the
+// Collections and series (2026-11): the starred ones and the eight read
+// or added to last, in their own order, each with quick starts (Continue
+// or Start, and Newest). A long one carries only its first clips, the
 // newest and the stretch from where it was left, so the list stays
 // small. The car's Next and Previous clip (and an audiobook's chapter
 // buttons past its ends) go through the collection.
-const CAR_FOLDERS = 8, CAR_AHEAD = 8;
+// All (issue #400): every other one too, up to CAR_ALL in all, carrying
+// only its quick starts, since each clip goes to the car with its text.
+const CAR_FOLDERS = 8, CAR_STARRED = 20, CAR_ALL = 60, CAR_AHEAD = 8;
 const carTextOk = (p) => p && !p.file && !p.link && !p.preview && !p.note;
 const carOk = (p) => carBookOk(p) || carTextOk(p);
 const carAt = (p) => Math.max(p.readAt || 0, p.folderAt || p.savedAt || 0, (p.listen && p.listen.tAt) || 0);
 function carFolders() {
-  return allFolders().map((name) => ({ name, all: folderPages(name).filter(carOk) }))
+  const by = allFolders().map((name) => ({ name, all: folderPages(name).filter(carOk) }))
     .filter((f) => f.all.length)
     .map((f) => ({ ...f, at: Math.max(...f.all.map(carAt)) }))
-    .sort((x, y) => y.at - x.at).slice(0, CAR_FOLDERS)
-    .map((f) => {
-      const { all } = f, cont = folderNextIndex(all);
-      let newest = 0;
-      all.forEach((p, k) => { if ((p.folderAt || p.savedAt || 0) >= (all[newest].folderAt || all[newest].savedAt || 0)) newest = k; });
-      const keep = new Set([0, 1, newest - 1, newest]);
-      for (let k = Math.max(0, cont - 1); cont >= 0 && k < cont + CAR_AHEAD; k++) keep.add(k);
-      return { name: f.name, all, cont, newest, pick: all.filter((p, k) => keep.has(k)) };
-    });
+    .sort((x, y) => y.at - x.at);
+  const starred = by.filter((f) => folderFav(f.name)).slice(0, CAR_STARRED);
+  const recent = by.filter((f) => !starred.includes(f)).slice(0, CAR_FOLDERS);
+  const rest = by.filter((f) => !starred.includes(f) && !recent.includes(f)).slice(0, Math.max(0, CAR_ALL - starred.length - recent.length));
+  return [...starred, ...recent, ...rest].map((f) => {
+    const { all } = f, cont = folderNextIndex(all), whole = !rest.includes(f);
+    let newest = 0;
+    all.forEach((p, k) => { if ((p.folderAt || p.savedAt || 0) >= (all[newest].folderAt || all[newest].savedAt || 0)) newest = k; });
+    const keep = whole ? new Set([0, 1, newest - 1, newest]) : new Set([cont >= 0 ? cont : 0, newest]);
+    for (let k = Math.max(0, cont - 1); whole && cont >= 0 && k < cont + CAR_AHEAD; k++) keep.add(k);
+    return { name: f.name, all, cont, newest, pick: all.filter((p, k) => keep.has(k)), starred: starred.includes(f), recent: recent.includes(f) };
+  });
 }
 const carSigOf = (p) => carBookOk(p) ? [p.id, p.title, placeOf(p), speedOf(p), p.thumb || ""] : [p.id, p.title, p.at || 0, p.finished ? 1 : 0, p.editedAt || p.savedAt, p.thumb || ""];
 
@@ -148,10 +153,12 @@ async function carWrite() {
     const books = locked ? [] : carBooks(), clips = locked ? [] : carClips(), folders = locked ? [] : carFolders();
     const sig = JSON.stringify([locked, load(GO_ON_KEY, false), load(RATE_KEY, 1), load(VOICE_KEY, {}), enginePicks(), load(MIX_KEY, false), aloudVolume(),
       books.map((a) => [a.id, a.title, placeOf(a), speedOf(a), a.thumb || ""]), clips.map((p) => [p.id, p.title, p.at || 0, p.editedAt || p.savedAt, p.thumb || ""]),
-      folders.map((f) => [f.name, isSeriesFolder(f.name), f.cont, f.newest, f.all.length, f.pick.map(carSigOf)]), i18n.lang]);
+      folders.map((f) => [f.name, f.starred, f.recent, isSeriesFolder(f.name), f.cont, f.newest, f.all.length, f.pick.map(carSigOf)]), i18n.lang]);
     if (sig === carSig) return;
     const list = { locked, goOn: !!load(GO_ON_KEY, false), books: [], clips: [], continue: [], collections: [],
-      words: { continue: t("Continue"), books: t("Audiobooks"), clips: t("Up next"), collections: t("Collections") } };
+      starred: folders.filter((f) => f.starred).map((f) => f.name), recent: folders.filter((f) => f.recent).map((f) => f.name),
+      words: { continue: t("Continue"), books: t("Audiobooks"), clips: t("Up next"), collections: t("Collections/Series"),
+        all: t("All"), allBy: "", starred: t("Starred"), recent: t("Recent") } };
     for (const a of books) list.books.push(await carBook(a));
     for (const p of clips) { const c = await carClip(p); if (c) list.clips.push(c); }
     // The book and the clip last listened to or read, the latest first.
@@ -160,6 +167,9 @@ async function carWrite() {
     list.continue = two.sort((x, y) => y.at - x.at).map((x) => x.id);
     const have = new Set([...list.books.map((b) => "b:" + b.id), ...list.clips.map((c) => "c:" + c.id)]);
     for (const f of folders) { const c = await carFolderList(f, list, have); if (c) list.collections.push(c); }
+    // All lists them A to Z.
+    list.collections.sort((x, y) => x.name.localeCompare(y.name, i18n.lang, { numeric: true, sensitivity: "base" }));
+    list.words.allBy = tn(list.collections.length, "1 collection or series", "{n} collections and series");
     if (await CAR.list(list)) carSig = sig;
   } finally {
     carWriting = false;

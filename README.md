@@ -64,6 +64,7 @@ Each section below shows the computer (left) and the phone (right).
 - Collections are ordered folders: chapters in order, "2 of 4 read", Continue. Star a collection, or any clip in it, from its own screen.
 - Sort a collection by chapter, release date, date added or title (pick it again to turn it round), or show it as covers instead of a list. Its cover shows a mark for each kind it holds (clips, files, audiobooks, notes), and can be its site's picture, your own, a clip's, or a mosaic of the first pictures (four, or two stacked or side by side) that keeps up as clips change.
 - Website sync (Edit's second tab): a collection linked to a site's contents page (any site, or one of its chapters) finds new chapters and shows a "+N" to save them.
+- comix.to (Android): Find chapters and Website sync read a title's whole chapter list, from chapter 1, from the most complete scan group and filling in what it skipped from others, with a bar and the stage in words (also in Android's notification, so it carries on with the app put away). A chapter saves as a comic with every picture. A title the site moved to a new address is found again by its name.
 - Files: EPUB, PDF, MOBI, AZW3, FB2, CBZ, Markdown, text and HTML, copied in (a clip like any other) or read from where they are. Books keep their own contents.
 - PDFs mixing Hebrew or Arabic with English keep each line's words in order.
 - Big PDFs are read a piece at a time, never whole in memory.
