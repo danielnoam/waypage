@@ -879,6 +879,13 @@ across two pages, or an item dragged from one to the next, shows over both
 while it moves and is kept on each page it reaches; dropped, it comes to
 the front.
 
+**Hide tools (2026-11).** A small `--surface` tab with a chevron sits on the
+Draw bar's top edge. It tucks the bar into one 35 px round button (44 px to
+tap) in the foot corner (always a pen, and a dot in the colour for a pen or highlighter),
+which brings the bar back. Draw stays on; the choice is kept on the device.
+The button is dragged anywhere and snaps to the nearer side, its place kept,
+as the Narrate card's is.
+
 Pen colours are the same in every theme (`--pen-*`, `--hl-*`): the page
 under them is white paper in every theme, and reader.css re-paints them for
 Dark PDF pages.

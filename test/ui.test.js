@@ -4273,6 +4273,34 @@ c("bk1", { at: 0.01 })]);
       await until(q, () => !document.querySelector(".ink-bar").hidden);
       // The bar: no step row. Size opens a scale of five, and the pen has a style menu of four.
       assert.strictEqual(await q.locator(".ink-bar .ink-test, .ink-bar [data-act='testdone']").count(), 0);
+      // Hide tools tucks the bar into a round button, Draw stays on, and the choice is kept (2026-11).
+      await q.locator(".ink-tab").click();
+      await until(q, () => document.querySelector(".ink-bar").hidden && !document.querySelector(".ink-mini").hidden && document.querySelector(".ink-tab").hidden);
+      assert.strictEqual(await q.evaluate(() => window.Waypage.ink.on), true, "Draw stays on while the bar is small");
+      assert.strictEqual(await q.evaluate(() => JSON.parse(localStorage.getItem("waypage.ink")).small), true);
+      // A pen, clear in the middle, and a small dot in the colour at its corner (not a disc over it).
+      const looks = await q.evaluate(() => { const b = document.querySelector(".ink-mini"), sv = b.querySelector("svg"), d = b.querySelector(".ink-dot"); return { pen: sv ? sv.getBoundingClientRect().width : 0, dot: d ? d.getBoundingClientRect().width : 0 }; });
+      assert.ok(looks.pen >= 16, "the round button shows a pen");
+      assert.strictEqual(Math.round(looks.dot), 8, "the colour dot is small, not over the pen");
+      // The button is 35 px, and a drag moves it: it snaps to the nearer side and the bar stays tucked away.
+      assert.strictEqual(await q.evaluate(() => Math.round(document.querySelector(".ink-mini").getBoundingClientRect().width)), 35);
+      const mini = await q.evaluate(() => { const r = document.querySelector(".ink-mini").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+      const strokes = await q.evaluate(() => window.Waypage.ink.strokes(1).length);
+      // A finger's drag, sent as the pointer events it makes.
+      await q.evaluate(([x, y]) => {
+        const btn = document.querySelector(".ink-mini"), id = 7;
+        const ev = (type, px, py) => new PointerEvent(type, { pointerId: id, pointerType: "touch", isPrimary: true, bubbles: true, clientX: px, clientY: py, button: 0 });
+        btn.dispatchEvent(ev("pointerdown", x, y));
+        for (let i = 1; i <= 8; i++) window.dispatchEvent(ev("pointermove", x - i * 40, y - i * 25));
+        window.dispatchEvent(ev("pointerup", x - 320, y - 200));
+      }, [mini.x, mini.y]);
+      await until(q, () => !document.querySelector(".ink-mini").classList.contains("snapping") && document.querySelector(".ink-mini").getBoundingClientRect().left < 40);
+      assert.strictEqual(await q.evaluate(() => JSON.parse(localStorage.getItem("waypage.inkMini")).side), "left");
+      assert.strictEqual(await q.evaluate(() => document.querySelector(".ink-bar").hidden), true, "a drag is not a tap");
+      assert.strictEqual(await q.evaluate(() => window.Waypage.ink.strokes(1).length), strokes, "a drag adds no stroke");
+      await q.locator(".ink-mini").click();
+      await until(q, () => !document.querySelector(".ink-bar").hidden && document.querySelector(".ink-mini").hidden);
+      assert.strictEqual(await q.evaluate(() => JSON.parse(localStorage.getItem("waypage.ink")).small || false), false);
       await q.locator('.ink-bar [data-act="size"]').click();
       await q.locator(".ink-pop-sizes").waitFor();
       assert.strictEqual(await q.locator(".ink-pop-sizes button").count(), 5);
