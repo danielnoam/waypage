@@ -649,7 +649,7 @@ html.native .reader-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
    sheet stays bright so the slider can be found. Never catches a tap. */
 .page-dim { position: absolute; inset: 0; z-index: 0; pointer-events: none; background: #000; opacity: var(--page-dim, 0); }
 .reader-bar { position: relative; z-index: 1; }
-.reader.dimmed :is(.reader-bar, .read-foot, .bright) { filter: brightness(calc(1 - var(--page-dim, 0) * .6)); }
+.reader.dimmed :is(.reader-bar, .read-foot, .bright, .ink-bar, .ink-mini) { filter: brightness(calc(1 - var(--page-dim, 0) * .6)); }
 /* With Settings opened over the clip (app-settings.js). */
 .reader.under { z-index: 9; }
 .icon-btn[hidden] { display: none; }

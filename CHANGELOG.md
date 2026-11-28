@@ -2,6 +2,24 @@
 
 All notable changes to Carry-on. Newest first.
 
+## [1.72.0] - 2026-11-28
+
+### Added
+- Dim page, in the reader's Layout settings for clips and notes and in Settings › Reading: a slider that darkens the page for reading in the dark, the bars a little less. It works in the app and the web copy.
+- In a note, the Draw bar can be tucked away with the small arrow tab on its top edge. It shrinks to one round button in the corner, showing a pen and your colour, and the pen keeps drawing. Tap the button to bring the bar back. The button is small and can be dragged anywhere; it snaps to the nearer side and stays there. Waypage remembers which you chose.
+- Highlights: hold a tag (or right-click it) to rename it everywhere or delete it. Rename changes the tag on every highlight and comment bubble that has it, and a name another tag already has merges the two. Delete takes the tag off every highlight and keeps the highlights; Undo puts it back. The tag on a bubble inside a PDF or note changes in Highlights at once, and in the file the next time it opens.
+- Highlights: the colour chips work like the tag chips. Pick several colours at once, with a filter button for any of them or none of them. Hold a colour to give it a label of your own (such as "Important", shown wherever the colour's name is, kept on this device and not synced) or to remove it: its highlights turn yellow and stay, with Undo.
+- Highlights: hold a highlight (or right-click it) to pick several. Select all picks every highlight the filters show; Tags adds or removes tags on all picked highlights (a tag on some shows how many); Delete removes them, with Undo. On a computer, Ctrl or ⌘ + A picks all, Shift-click picks a range, Delete deletes and Esc leaves.
+
+### Changed
+- Every clip in a collection now has its own number, and sorting only changes the view: sort by title or date and each one keeps its number. Newest, Continue and Last read always go by the numbers.
+- A new clip gets the number after the highest; a Website sync chapter gets its place in the site's list, so one deleted and saved again comes back as the same number. A clip taken out and put back gets its number back too.
+- Sort's Custom drags clips to new numbers or lets you type one (2.5 sits between 2 and 3; a number that's taken swaps). Edit has Renumber from 1 to close the gaps.
+- Reading on, listening on, reading on in a file opened from outside Waypage, and opening Feeds now sync as a small progress file instead of the whole library, so sync uses much less data. A device on an older Waypage still gets your progress, a little later.
+
+### Fixed
+- Sync uses far less mobile data and no longer looks busy all the time. Every sync downloaded the whole library from GitHub even when nothing had changed (at least every 5 minutes while Waypage was open), and every pause while reading, or every paragraph Narrate read, started a sync that sent the whole library back up. Now an unchanged library costs almost nothing to check, and where you are in a clip goes up within 5 minutes while you read or listen, and at once when you leave the clip or Waypage.
+
 ## [1.71.0] - 2026-11-27
 
 ### Added

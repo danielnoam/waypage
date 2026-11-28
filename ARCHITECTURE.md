@@ -1607,6 +1607,7 @@ area.
 - Words written into `index.html` need `data-t` on them or a wrapper, or they stay English in Hebrew; a button with an icon wraps its word in `<span data-t>`. `i18n.test.js` checks it.
 - `sync-worker.js` loads `sync.js`, `backup.js` and `ink.js` with no `language.js` (it needs a document), so it defines its own English `t()` and `tn()`. A `t()` run as one of those files loads, outside a function, threw there and sent every merge back to the main thread (1.68.0 to 1.70.0); the tests' global `t()` hid it, so `sync.test.js` loads the worker in a bare context.
 - A collection's, series' or feed's name is cut at `NAME_MAX` (200, app-library.js `cleanName`); backup.js `cleanMeta` and `cleanFeed` cut at the same 200, so change them together. Tags stay at 32 (`cleanTag`). A build from 1.68.0 or older cuts a synced name to 32 on its side.
+- Dim page (`app-reader.js`, `paintDim`) is a black `.page-dim` layer in `#readerView` at `--page-dim` (0 to 0.9), one level for the whole app. It must stay `pointer-events: none` and below the bars; the bars, the brightness slider and the Draw bar and its round button darken by `filter: brightness()` at 60 % of it (`.reader.dimmed`), never by a filter on `#readerView` or the frame, which would make a containing block for fixed sheets and repaint the page. `--page-dim` is not the image viewer's `--dim`.
 
 ## The docs
 
