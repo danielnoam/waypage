@@ -83,6 +83,7 @@ Each section below shows the computer (left) and the phone (right).
 - Hold the pen still for half a second at the end of a rough line or circle and it becomes a straight line (its end follows the pen) or a clean circle, which moves with the pen until you lift it. Aa › Draw turns it off.
 - Opening a PDF offers Make a note beside Keep a copy and Read from where it is, and ⋯ › Make a note from it works on any file: a PDF's own pages, a comic's pictures, anything else set as pages. The file stays as it is. A note's card shows its first sheet.
 - Notes show in their own part of the library, above Files, and Show › All notes (there once you have a note) lists them alone. Aa on a note has only Layout (All notes or This note, margins, brightness slider, theme, Dark note) and Auto-scroll, which goes on to the next note.
+- Hide tools tucks a note's Draw bar into one small round button with your pen and colour; drag it to a side, tap it to bring the bar back.
 - ⋯ › Try your pen shows what a pen sends and runs the pen test; ⋯ › Save as PDF makes a PDF of the sheets with what is on them.
 - ⋯ › Page view shows every page of a note in one column: pick pages to copy, paste into this note or another, delete, share, save as PDF or pictures, or give a Blank, Lines or Squares background.
 - Settings › GitHub sync › What this device syncs has Notes: each note goes up whole (sheets, strokes, typed text, pictures and the PDF it was made from, up to 50 MB) and comes down on your other devices; what two devices drew is merged stroke by stroke. A bigger note says Not synced, too big. Notes go into backups too, with their own switch in Google Drive's What goes in.
@@ -121,6 +122,7 @@ Each section below shows the computer (left) and the phone (right).
 - Previous and Next, and the collection's list, inside the reader.
 - Tap the name at the top left of the reader to rename a clip or a note, on a phone too (Enter saves, Escape cancels). The reader's top bar has smaller icons on a phone.
 - Brightness by a swipe on the edge, with Auto.
+- Dim page, in Aa › Layout for clips and notes and in Settings › Reading: a slider from Off to 90 % that darkens the page for reading in the dark, the bars and the Draw tools a little less. It works in the web copy too.
 - Volume buttons turn pages on Android; keyboard shortcuts on a computer.
 - Dark PDF pages: with a PDF open, a switch at the foot of Layout recolours its pages to a dark theme.
 - Highlight words on a PDF read from where it is: select them on its printed pages and tap Mark; they join the clip's other highlights.

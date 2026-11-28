@@ -1,2 +1,0 @@
-### Fixed
-- Sync uses far less mobile data and no longer looks busy all the time. Every sync downloaded the whole library from GitHub even when nothing had changed (at least every 5 minutes while Waypage was open), and every pause while reading, or every paragraph Narrate read, started a sync that sent the whole library back up. Now an unchanged library costs almost nothing to check, and where you are in a clip goes up within 5 minutes while you read or listen, and at once when you leave the clip or Waypage.
