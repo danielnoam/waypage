@@ -4128,7 +4128,10 @@ c("bk1", { at: 0.01 })]);
       await until(q, () => document.querySelector(".ink-bar").hidden && !document.querySelector(".ink-mini").hidden && document.querySelector(".ink-tab").hidden);
       assert.strictEqual(await q.evaluate(() => window.Waypage.ink.on), true, "Draw stays on while the bar is small");
       assert.strictEqual(await q.evaluate(() => JSON.parse(localStorage.getItem("waypage.ink")).small), true);
-      assert.ok(await q.locator(".ink-mini .ink-dot").count(), "the round button shows the pen's colour");
+      // A pen, clear in the middle, and a small dot in the colour at its corner (not a disc over it).
+      const looks = await q.evaluate(() => { const b = document.querySelector(".ink-mini"), sv = b.querySelector("svg"), d = b.querySelector(".ink-dot"); return { pen: sv ? sv.getBoundingClientRect().width : 0, dot: d ? d.getBoundingClientRect().width : 0 }; });
+      assert.ok(looks.pen >= 16, "the round button shows a pen");
+      assert.strictEqual(Math.round(looks.dot), 8, "the colour dot is small, not over the pen");
       // The button is 35 px, and a drag moves it: it snaps to the nearer side and the bar stays tucked away.
       assert.strictEqual(await q.evaluate(() => Math.round(document.querySelector(".ink-mini").getBoundingClientRect().width)), 35);
       const mini = await q.evaluate(() => { const r = document.querySelector(".ink-mini").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
