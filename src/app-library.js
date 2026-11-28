@@ -179,8 +179,10 @@ function tagChips(list, redraw) {
 
 // ---- Folders ----
 // An ordered run of pages, like a web novel's chapters. A page is in at
-// most one, named by `folder` on its index entry, in the order it joined
-// (`folderAt`). Names match like tags, ignoring case.
+// most one, named by `folder` on its index entry. Names match like tags,
+// ignoring case. Each has its own number there (`folderNo`, Daniel
+// 2026-11-27), which sorting never changes: the collection's order is its
+// numbers, and `folderAt` follows them for apps from before numbers.
 
 // The pages of every folder, grouped once and kept while no page moved,
 // came or went (1.2.0). Each redraw of the library asked for every
@@ -188,13 +190,13 @@ function tagChips(list, redraw) {
 // of the time a page landing cost in a big library. The check is a pass
 // over the pages (the same objects, in the same folders, at the same
 // places), so a change made anywhere is seen at the next ask.
-let folderCache = { list: [], f: [], at: [], by: new Map(), names: [] };
+let folderCache = { list: [], f: [], at: [], no: [], by: new Map(), names: [] };
 function folderIndex() {
   const pages = state.pages, c = folderCache;
   let same = c.list.length === pages.length;
   for (let i = 0; same && i < pages.length; i++) {
     const p = pages[i];
-    same = c.list[i] === p && c.f[i] === p.folder && c.at[i] === (p.folderAt || p.savedAt || 0);
+    same = c.list[i] === p && c.f[i] === p.folder && c.at[i] === (p.folderAt || p.savedAt || 0) && c.no[i] === p.folderNo;
   }
   if (same) return c;
   const by = new Map(), names = [];
@@ -205,9 +207,80 @@ function folderIndex() {
     if (!g) { g = []; by.set(k, g); names.push(p.folder); }
     g.push(p);
   }
-  for (const g of by.values()) g.sort((a, b) => (a.folderAt || a.savedAt || 0) - (b.folderAt || b.savedAt || 0));
-  folderCache = { list: pages.slice(), f: pages.map((p) => p.folder), at: pages.map((p) => p.folderAt || p.savedAt || 0), by, names };
+  for (const [k, g] of by) { numberFolder(g, k); g.sort(byNumber); }
+  folderCache = { list: pages.slice(), f: pages.map((p) => p.folder), at: pages.map((p) => p.folderAt || p.savedAt || 0), no: pages.map((p) => p.folderNo), by, names };
   return folderCache;
+}
+
+// A clip's number in its collection, or null.
+const noOf = (p) => (typeof p.folderNo === "number" && Number.isFinite(p.folderNo) && p.folderNo >= 0 ? p.folderNo : null);
+const folderPlace = (p) => p.folderAt || p.savedAt || 0;
+const byNumber = (a, b) => (noOf(a) ?? Infinity) - (noOf(b) ?? Infinity) || folderPlace(a) - folderPlace(b);
+const showNo = (n) => String(n);
+// Numbers for the clips in a collection without one (Daniel 2026-11-27):
+// a collection from before numbers gets 1, 2, 3 in its order (a linked
+// one its site's, where this device has read the list). After that a
+// clip coming in gets the number it had here before it was deleted, if
+// free, else the one after the highest: it never fills a gap. Ones saved
+// in front of all the rest (Save earlier) go before 1 and push the rest
+// up. Two clips with one number (each added on its own device between
+// syncs) keep it for the one there first; the other goes on the end.
+function numberFolder(g, key) {
+  g.sort((a, b) => folderPlace(a) - folderPlace(b));
+  const taken = new Set();
+  for (const p of g) {
+    const n = noOf(p);
+    if (n == null) { delete p.folderNo; continue; }
+    if (taken.has(n)) delete p.folderNo; else taken.add(n);
+  }
+  const fresh = g.filter((p) => p.folderNo === undefined);
+  if (!fresh.length) return;
+  const was = numbersGone(key);
+  if (!taken.size) {
+    const site = typeof sourceNo === "function" && g.some((p) => p.source) ? (p) => sourceNo(g[0].folder, p.url) : () => null;
+    for (const p of g) { const n = site(p); if (n != null && !taken.has(n)) { p.folderNo = n; taken.add(n); } }
+    let top = taken.size ? Math.max(...taken) : 0;
+    for (const p of g) if (p.folderNo === undefined) { p.folderNo = ++top; taken.add(top); }
+    return;
+  }
+  const first = Math.min(...g.filter((p) => p.folderNo !== undefined).map(folderPlace));
+  const before = fresh.filter((p) => folderPlace(p) < first);
+  let top = Math.max(...taken);
+  for (const p of fresh) {
+    if (before.includes(p)) continue;
+    const n = was[numberKey(p)];
+    if (typeof n === "number" && !taken.has(n)) p.folderNo = n;
+    else p.folderNo = ++top;
+    taken.add(p.folderNo);
+    top = Math.max(top, p.folderNo);
+  }
+  if (!before.length) return;
+  const low = Math.ceil(Math.min(...taken));
+  const up = Math.max(0, before.length + 1 - low);
+  if (up) for (const p of g) if (p.folderNo !== undefined) p.folderNo += up;
+  before.forEach((p, i) => { p.folderNo = low + up - before.length + i; });
+}
+
+// The number a deleted clip had, kept on this device so it gets it back
+// when saved again (Daniel 2026-11-27): { [lower-case name]: { key: n } }.
+const NUMBERS_KEY = "waypage.collectionNumbers";
+const NUMBERS_MAX = 2000;
+const numberKey = (p) => p.url || (p.file && p.file.fp) || p.id;
+const numbersGone = (key) => (load(NUMBERS_KEY, {}) || {})[key] || {};
+function keepNumbers(list) {
+  const all = load(NUMBERS_KEY, {}) || {};
+  let changed = false;
+  for (const p of list) {
+    if (!p.folder || noOf(p) == null) continue;
+    const key = p.folder.toLocaleLowerCase();
+    const had = all[key] || {};
+    had[numberKey(p)] = p.folderNo;
+    const keys = Object.keys(had);
+    if (keys.length > NUMBERS_MAX) for (const k of keys.slice(0, keys.length - NUMBERS_MAX)) delete had[k];
+    all[key] = had;
+    changed = true;
+  }
+  if (changed) store(NUMBERS_KEY, all);
 }
 function folderPages(name) {
   const g = folderIndex().by.get(String(name).toLocaleLowerCase());
@@ -241,6 +314,8 @@ function joinFav(p, name) {
   if (status) p.statusPick = status; else delete p.statusPick;
   if (name && folderPages(name).some((x) => x !== p && x.folderNoStatus)) p.folderNoStatus = true; else delete p.folderNoStatus;
   joinSeries(p, name);
+  // Its number comes from the collection it joins (numberFolder).
+  delete p.folderNo;
 }
 
 // A series (2026-11): a collection marked as one, on its clips like a
@@ -404,6 +479,8 @@ function fileSeries(p) {
   p.folderAt = Date.now();
   const n = Number(p.volume);
   if (!Number.isFinite(n) || p.volume == null) return;
+  // Its volume is its number there, when free (2026-11-27).
+  if (n >= 0 && n < 1e7 && !list.some((q) => noOf(q) === n)) p.folderNo = n;
   const i = list.findIndex((q) => q.volume != null && Number.isFinite(Number(q.volume)) && Number(q.volume) > n);
   if (i < 0) return;
   const at = (q) => q.folderAt || q.savedAt || 0;
@@ -414,10 +491,12 @@ async function setFolder(p, name) {
   const clean = name && cleanName(name);
   if (clean) {
     if (p.folder && sameTag(p.folder, clean)) return;
+    keepNumbers([p]);
     p.folder = folderName(clean);
     p.folderAt = p.movedAt = Date.now();
     joinFav(p, p.folder);
   } else {
+    keepNumbers([p]);
     delete p.folder;
     delete p.folderAt;
     p.movedAt = Date.now();
@@ -793,9 +872,9 @@ function renderFolder() {
   // A handle or star with focus keeps it through a draw again (a cover
   // drawn late redraws the list after a move by keys).
   const a = document.activeElement;
-  const had = a && a.matches && a.matches("#folderBody .drag-handle, #folderBody .item-fav")
+  const had = a && a.matches && a.matches("#folderBody .drag-handle, #folderBody .item-fav, #folderBody .chapter-no")
     ? 'li[data-id="' + a.closest("li").dataset.id + '"] .' + a.classList[a.classList.length - 1]
-    : a && a.matches && a.matches("#folderBody .sort-row .dropdown-btn") ? ".sort-row .dropdown-btn" : null;
+    : a && a.matches && a.matches("#folderBody .sort-pick .dropdown-btn") ? ".sort-pick .dropdown-btn" : null;
   const list = folderPages(state.folder);
   if (!list.length) {
     folderMode = "";
@@ -824,24 +903,27 @@ function renderFolder() {
     top = [editTabs(), el("div", { class: "folder-edit" }, ...bookHead(list, next, done),
       sectionHead(t("Cover")), coverPanel(list),
       status || share ? el("div", { class: "group folder-facts" }, status, share) : null,
-      sectionHead(listHead(list)),
+      sectionHead(listHead(list), list.length > 1 ? el("button", { class: "btn-text renumber", type: "button", onclick: () => renumberFolder(state.folder) }, t("Renumber from 1")) : null),
       savedLine(list))];
   // On a big screen the book's cover and facts stand beside its list.
   } else top = [el("div", { class: "book-side" }, ...bookHead(list, next, done))];
   const showList = folderMode !== "export";
   // The Website sync tab lists its chapters one by one, whatever the look (Daniel 2026-11-25).
   const covers = showList && !folderMode && folderLook(state.folder) === "covers";
+  // Sort only changes what's shown (Daniel 2026-11-27): Reorder and Edit
+  // show the numbers' own order.
+  const shown = folderMode ? list : folderShown(list, state.folder);
   fill($("folderBody"),
     ...top,
     ...(showList && !editing && folderMode !== "order" ? insideStrip(state.folder) : []),
     showList && !editing ? sectionHead(listHead(list), list.length > 1 && (!folderMode || folderMode === "order") ? sortPick(list) : null) : null,
-    covers ? el("ol", { class: "folder-covers" }, ...list.map((p) => coverItem(p, p === next && done < list.length))) : null,
+    covers ? el("ol", { class: "folder-covers" }, ...shown.map((p) => coverItem(p, p === next && done < list.length))) : null,
     showList && !covers ? el("ol", { class: "group folder-list" + (ordering ? " ordering" : "") },
-      ...list.map((p, i) => el("li", folderMode ? { "data-id": p.id } : { "data-id": p.id, "data-ids": p.id },
-        el("button", { class: "row chapter" + (p === next && done < list.length ? " now" : ""), type: "button",
+      ...shown.map((p, i) => el("li", folderMode ? { "data-id": p.id } : { "data-id": p.id, "data-ids": p.id },
+        el(ordering ? "div" : "button", { class: "row chapter" + (p === next && done < list.length ? " now" : ""), ...(ordering ? {} : { type: "button" }),
           onclick: () => (folderMode ? null : tapPages([p.id], () => openPage(p.id))) },
           pickMark(),
-          el("span", { class: "chapter-n", "aria-hidden": "true" }, String(i + 1)),
+          ordering ? numberField(p) : el("span", { class: "chapter-n", "aria-hidden": "true" }, showNo(p.folderNo)),
           // Its line under it sits on its title's side (Hebrew app, English title).
           el("span", { class: "choice-text", dir: "auto" },
             el("span", { class: "row-label", dir: "auto" }, p.title),
@@ -885,11 +967,13 @@ function setFolderLook(name, look) {
   renderFolder();
 }
 function renameFolderLook(old, name) {
-  const all = load(LOOK_KEY, {});
-  if (!(old in all)) return;
-  all[name] = all[old];
-  delete all[old];
-  store(LOOK_KEY, all);
+  for (const key of [LOOK_KEY, VIEW_KEY]) {
+    const all = load(key, {});
+    if (!(old in all)) continue;
+    all[name] = all[old];
+    delete all[old];
+    store(key, all);
+  }
 }
 
 // One clip as a cover in that view: its picture (or its site's mark),
@@ -903,7 +987,7 @@ function coverItem(p, now) {
       pickMark(),
       el("span", { class: "tile-thumb" + (src ? "" : " blank") }, src ? el("img", { src, alt: "", loading: "lazy" }) : siteMark(p)),
       el("span", { class: "tile-name", dir: "auto" }, p.title),
-      el("span", { class: "tile-meta" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, ...liveMark(p), readingLine(p))),
+      el("span", { class: "tile-meta" + (p.finished ? "" : p.at > 0.02 ? " accent" : "") }, el("span", { class: "tile-no" }, showNo(p.folderNo)), " · ", ...liveMark(p), readingLine(p))),
     itemFav(p));
 }
 
@@ -974,22 +1058,66 @@ function dragRow(e, handle, p) {
   handle.addEventListener("pointercancel", end);
 }
 
-// Moves a page to `to` in its folder. The folder's places are the
-// pages' own `folderAt`s, made distinct and handed out again in the new
-// order, so nothing else in the folder moves.
+// Moves a page to `to` in its folder: the folder's numbers are handed
+// out again in the new order (Daniel 2026-11-27: dragging renumbers), so
+// a gap stays where it was and nothing outside the move changes.
 async function moveInFolder(p, to) {
   const list = folderPages(p.folder);
   const i = list.indexOf(p);
   if (i < 0 || to === i || to < 0 || to >= list.length) return false;
-  const places = list.map((q) => q.folderAt || q.savedAt || 0);
-  for (let k = 1; k < places.length; k++) if (places[k] <= places[k - 1]) places[k] = places[k - 1] + 1;
+  const nos = list.map(noOf);
   list.splice(i, 1);
   list.splice(to, 0, p);
+  list.forEach((q, k) => { q.folderNo = nos[k]; });
+  await numbersMoved(p.folder);
+  return true;
+}
+
+// After the numbers changed: `folderAt` follows them, the folder's own
+// places handed out again in number order, so an app from before
+// numbers shows the same order.
+async function numbersMoved(name) {
+  const list = folderPages(name);
+  const places = list.map(folderPlace).sort((a, b) => a - b);
+  for (let k = 1; k < places.length; k++) if (places[k] <= places[k - 1]) places[k] = places[k - 1] + 1;
   list.forEach((q, k) => { q.folderAt = places[k]; });
   await C.store.writeIndex(state.pages);
   renderFolder();
   renderLibrary();
-  return true;
+}
+
+// A number typed in Reorder: 0 or more, two decimals at most (2.5 sits
+// between 2 and 3). One another clip has already is swapped with it.
+async function setNumber(p, raw) {
+  const text = String(raw).trim().replace(",", ".");
+  const n = Math.round(Number(text) * 100) / 100;
+  if (!text || !Number.isFinite(n) || n < 0 || n >= 1e7) { toast(t("A number of 0 or more, like 3 or 2.5.")); renderFolder(); return; }
+  if (n === p.folderNo) return;
+  const other = folderPages(p.folder).find((q) => q !== p && q.folderNo === n);
+  if (other) other.folderNo = p.folderNo;
+  p.folderNo = n;
+  await numbersMoved(p.folder);
+  if (other) toast(t("Swapped with “{title}”, now {n}.", { title: other.title, n: showNo(other.folderNo) }));
+}
+function numberField(p) {
+  const f = el("input", { class: "chapter-no", type: "text", inputmode: "decimal", enterkeyhint: "done", autocomplete: "off", dir: "ltr",
+    value: showNo(p.folderNo), "aria-label": t("Number of {title}", { title: p.title }) });
+  f.addEventListener("change", () => setNumber(p, f.value));
+  f.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); f.blur(); } });
+  return f;
+}
+
+// Edit's Renumber from 1: closes the gaps, in the numbers' order, with Undo.
+async function renumberFolder(name) {
+  const list = folderPages(name);
+  if (list.every((p, i) => p.folderNo === i + 1)) { toast(t("Already numbered from 1, with no gaps.")); return; }
+  const was = list.map((p) => p.folderNo);
+  list.forEach((p, i) => { p.folderNo = i + 1; });
+  await numbersMoved(name);
+  toast(t("Numbered 1 to {n}.", { n: list.length }), t("Undo"), async () => {
+    list.forEach((p, i) => { if (p.folder && sameTag(p.folder, name) && p.folderNo === i + 1) p.folderNo = was[i]; });
+    await numbersMoved(name);
+  });
 }
 
 async function movePage(p, step) {
@@ -1007,9 +1135,10 @@ const royalRoadChapter = (url) => {
   return m ? Number(m[1]) : null;
 };
 
-// The ways a collection can be put in order, each a key per clip (null
-// when the clip has none: those keep their place, at the end).
+// The ways a collection can be shown, each a key per clip (null when the
+// clip has none: those go at the end). Number is its own order.
 const FOLDER_SORTS = {
+  number: { label: t("Number"), keys: (list) => list.map(noOf) },
   chapter: { label: t("Chapter"), none: t("These clips don't have chapter numbers to sort by."),
     keys: (list) => list.map((p) => C.save.chapterNumber(p.title, p.url)) },
   released: { label: t("Release date"), none: t("These clips don't say when they came out. Saving one again picks up its date where the site gives one."),
@@ -1017,86 +1146,53 @@ const FOLDER_SORTS = {
   added: { label: t("Date added"), keys: (list) => list.map((p) => p.savedAt || null) },
   title: { label: t("Title"), keys: (list) => list.map((p) => p.title || "") },
 };
-
-// Puts the folder in one of FOLDER_SORTS' orders, oldest (or A) first;
-// sorting again when it's already in that order turns it around. The
-// folder's own places are reused, as in moveInFolder.
 const sortCmp = (x, y) => (typeof x === "string" ? x.localeCompare(y, undefined, { numeric: true, sensitivity: "base" }) : x - y);
-// Whether `keys` run one way (1) or the other (-1), the ones without a key last.
-function inOrder(keys, dir) {
-  let last = null, gap = false;
-  for (const k of keys) {
-    if (k == null) { gap = true; continue; }
-    if (gap) return false;
-    if (last != null && dir * sortCmp(last, k) > 0) return false;
-    last = k;
-  }
-  return true;
+
+// How a collection is shown, kept on this device like its look: { how,
+// back }. Sorting changes only this (Daniel 2026-11-27): the numbers,
+// Continue, Newest and the car keep the numbers' order.
+const VIEW_KEY = "waypage.collectionSort";
+function folderView(name) {
+  const v = load(VIEW_KEY, {})[name];
+  return v && FOLDER_SORTS[v.how] ? { how: v.how, back: !!v.back } : { how: "number", back: false };
 }
-// The order the collection is in now, for Sort by: { how, back }, or
-// null for an order of its own. A list in more than one order (chapter
-// and release date, often) shows the one last picked.
-const sortPicked = new Map();
-function folderSortNow(list) {
-  const last = sortPicked.get(String(state.folder).toLowerCase());
-  const hows = Object.keys(FOLDER_SORTS).sort((a, b) => (b === last) - (a === last));
-  for (const how of hows) {
-    const sort = FOLDER_SORTS[how];
-    const keys = sort.keys(list);
-    const known = keys.filter((k) => k != null);
-    // Clips that all share a date (or have none) aren't in its order.
-    if (known.length < 2 || known.every((k) => sortCmp(k, known[0]) === 0)) continue;
-    if (inOrder(keys, 1)) return { how, back: false };
-    if (inOrder(keys, -1)) return { how, back: true };
-  }
-  return null;
+function setFolderView(name, v) {
+  const all = load(VIEW_KEY, {});
+  if (v.how === "number" && !v.back) delete all[name]; else all[name] = v;
+  store(VIEW_KEY, all);
 }
-// Sort (2026-11, Daniel's ask): a drop-down beside the list's head, the
-// one place a collection is put in order (Daniel 2026-11-27: not also in
-// Edit). The chosen sort carries ↑ or ↓, and picking it again turns it
-// round; Custom is any other order, and picking it brings the handles.
+function folderShown(list, name) {
+  const v = folderView(name);
+  if (v.how === "number") return v.back ? list.slice().reverse() : list;
+  const keys = FOLDER_SORTS[v.how].keys(list), dir = v.back ? -1 : 1;
+  return list.map((p, i) => [p, i]).sort((a, b) => {
+    const x = keys[a[1]], y = keys[b[1]];
+    if (x == null || y == null) return (x == null) - (y == null) || a[1] - b[1];
+    return dir * sortCmp(x, y) || a[1] - b[1];
+  }).map(([p]) => p);
+}
+
+// Sort (2026-11, Daniel's ask): a drop-down beside the list's head. The
+// chosen sort carries ↑ or ↓, and picking it again turns it round;
+// Custom brings the handles and the numbers to change them.
 function sortPick(list) {
-  const now = folderSortNow(list);
+  const name = state.folder, now = folderView(name);
   const mark = (back) => {
     const s = el("span", { class: "sort-dir", "aria-hidden": "true" });
     s.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' + (back ? '<path d="M12 5v14M6 13l6 6 6-6"/>' : '<path d="M12 19V5M6 11l6-6 6 6"/>') + "</svg>";
     return s;
   };
-  return dropdown({ label: t("Sort by"), cls: "sort-pick", value: now ? now.how : "custom", again: true,
-    options: [{ value: "custom", label: t("Custom") }, ...Object.entries(FOLDER_SORTS).map(([key, s]) => ({ value: key, label: s.label,
-      mark: now && now.how === key ? mark(now.back) : null, markLabel: now && now.how === key && now.back ? t("Reversed") : "" }))],
+  return dropdown({ label: t("Sort by"), cls: "sort-pick", value: folderMode === "order" ? "custom" : now.how, again: true,
+    options: [...Object.entries(FOLDER_SORTS).map(([key, s]) => ({ value: key, label: s.label,
+      mark: folderMode !== "order" && now.how === key ? mark(now.back) : null, markLabel: folderMode !== "order" && now.how === key && now.back ? t("Reversed") : "" })),
+    { value: "custom", label: t("Custom") }],
     onpick: (v) => {
       if (v === "custom") { if (folderMode !== "order") setFolderMode("order"); return; }
-      folderMode = "";
-      sortPicked.set(String(state.folder).toLowerCase(), v);
-      sortFolder(folderPages(state.folder), v);
+      const sort = FOLDER_SORTS[v];
+      if (sort.none && sort.keys(list).filter((k) => k != null).length < 2) { toast(sort.none); renderFolder(); return; }
+      setFolderView(name, { how: v, back: folderMode !== "order" && now.how === v ? !now.back : false });
+      if (folderMode === "order") setFolderMode(""); else renderFolder();
     } });
-}
-async function sortFolder(list, how) {
-  const sort = FOLDER_SORTS[how];
-  const keys = sort.keys(list);
-  if (keys.filter((k) => k != null).length < 2) { toast(sort.none); renderFolder(); return; }
-  const order = (dir) => list.map((p, i) => [p, i]).sort((a, b) => {
-    const x = keys[a[1]], y = keys[b[1]];
-    if (x == null || y == null) return (x == null) - (y == null) || a[1] - b[1];
-    return dir * sortCmp(x, y) || a[1] - b[1];
-  }).map(([p]) => p);
-  let sorted = order(1);
-  const back = !sorted.some((p, i) => p !== list[i]);
-  if (back) sorted = order(-1);
-  const places = list.map((q) => q.folderAt || q.savedAt || 0);
-  for (let k = 1; k < places.length; k++) if (places[k] <= places[k - 1]) places[k] = places[k - 1] + 1;
-  sorted.forEach((q, k) => { q.folderAt = places[k]; });
-  await C.store.writeIndex(state.pages);
-  renderFolder();
-  renderLibrary();
-  const missing = keys.filter((k) => k == null).length;
-  const said = how === "title" ? (back ? t("Sorted Z to A.") : t("Sorted A to Z."))
-    : how === "chapter" ? (back ? t("Sorted by chapter, last first.") : t("Sorted by chapter."))
-    : (back ? t("Sorted newest first.") : t("Sorted oldest first."));
-  toast(said + (!missing ? "" : " " + (how === "released"
-    ? tn(missing, "1 clip has no date, so it stays at the end.", "{n} clips have no date, so they stay at the end.")
-    : tn(missing, "1 clip has no number, so it stays at the end.", "{n} clips have no number, so they stay at the end."))));
 }
 
 // ---- The collection's ⋯ menu ----
@@ -1155,10 +1251,10 @@ function openFolderMenu() {
 }
 
 // Quick starts under Continue (Daniel 2026-11-20): the clip read last
-// and the one added last, unless Continue opens it already.
+// and the newest, the highest number (2026-11-27), unless Continue opens
+// it already.
 function quickStarts(list, main) {
-  const at = (p) => p.folderAt || p.savedAt || 0;
-  const newest = list.reduce((a, p) => (at(p) >= at(a) ? p : a), list[0]);
+  const newest = list[list.length - 1];
   const last = list.reduce((a, p) => ((p.readAt || 0) > ((a && a.readAt) || 0) ? p : a), null);
   const shown = new Set([main]);
   const open = (icon, label, p) => {
@@ -1580,7 +1676,7 @@ async function removeFolder(withPages) {
   if (withPages) { forgetWatched(list); releaseLinks(list); }
   for (const p of list) {
     if (withPages) { dropPackFile(p); dropAudioFiles(p); await C.store.removePage(p.id); }
-    else { delete p.folder; delete p.folderAt; delete p.folderFav; delete p.folderFavAt; delete p.coverPick; delete p.statusPick; delete p.folderNoStatus; delete p.folderNoShare; delete p.folderTagNew; delete p.folderSeries; delete p.folderIn; }
+    else { delete p.folder; delete p.folderAt; delete p.folderNo; delete p.folderFav; delete p.folderFavAt; delete p.coverPick; delete p.statusPick; delete p.folderNoStatus; delete p.folderNoShare; delete p.folderTagNew; delete p.folderSeries; delete p.folderIn; }
   }
   // Its series stay, in the library's Series.
   for (const f of inside) for (const p of folderPages(f)) delete p.folderIn;
@@ -1951,7 +2047,7 @@ function endSelect() {
 let picksPainted = false;
 function paintPicks() {
   const on = !!state.select;
-  document.body.classList.toggle("selecting", on || !!state.feedPick);
+  document.body.classList.toggle("selecting", on || !!state.feedPick || !!state.markPick);
   // Nothing to clear when nothing was picked (1.2.0): every card was
   // visited on every redraw.
   if (!on && !picksPainted) return;
@@ -2102,6 +2198,9 @@ const MENUS = {
   page: { label: t("Clip"), build: () => pageSheet(state.menu.page, "library") },
   tags: { label: t("Tags"), build: tagsSheet },
   folderTags: { label: t("Tags"), build: folderTagsSheet },
+  markTag: { label: t("Tag"), build: () => markTagSheet() },
+  markColor: { label: t("Colour"), build: () => markColorSheet() },
+  markPickTags: { label: t("Tags"), build: () => markPickTagsSheet() },
   folder: { label: t("Collection"), build: folderSheet },
   seriesHost: { label: t("Put in a collection"), build: seriesHostSheet },
   toSeries: { label: t("Make it a series"), build: toSeriesSheet },
@@ -2130,7 +2229,7 @@ function openMenu(kind, page) {
   if (state.menu || !MENUS[kind]) return;
   state.menu = { kind, page };
   history.pushState({ view: "menu", kind, page: page ? page.id : undefined, folder: state.folder || undefined,
-    select: state.select ? true : undefined }, "");
+    select: state.select ? true : undefined, markPick: state.markPick ? true : undefined }, "");
   $("menuBody").replaceChildren(MENUS[kind].build());
   $("menuSheet").setAttribute("aria-label", MENUS[kind].label);
   $("menuCatch").hidden = false;
@@ -2224,8 +2323,9 @@ function folderSheet() {
     const target = name && cleanName(name) ? folderName(name) : null;
     const now = Date.now();
     [...list].sort((a, b) => (a.folderAt || a.savedAt || 0) - (b.folderAt || b.savedAt || 0)).forEach((p, i) => {
-      if (!target) { if (p.folder) p.movedAt = now; delete p.folder; delete p.folderAt; joinFav(p, null); return; }
+      if (!target) { if (p.folder) p.movedAt = now; keepNumbers([p]); delete p.folder; delete p.folderAt; joinFav(p, null); return; }
       if (p.folder && sameTag(p.folder, target)) return;
+      keepNumbers([p]);
       joinFav(p, target);
       p.folder = target;
       p.folderAt = now + i;
@@ -3396,6 +3496,7 @@ async function lookInOne(w, said, scan) {
       const to = folderName(w.into);
       for (const p of state.pages) {
         if (p.watched !== w.tree || p.folder === to || (p.folderAt || 0) >= w.intoAt) continue;
+        delete p.folderNo;
         Object.assign(p, { folder: to, folderAt: w.intoAt });
         joined++;
       }

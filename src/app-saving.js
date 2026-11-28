@@ -62,6 +62,8 @@ function renderBatch(text, preset, from, siteTags) {
   let series = false;
   // The page the chapters were read from, kept on the folder (0.26.0).
   let source = from || null;
+  // The site's whole list, which numbers the chapters (Daniel 2026-11-27).
+  let sourceLinks = from ? linksFrom(text) : null;
   let mode = load(IMAGES_KEY, "previews");
   // A comic's folder saves its next chapters as comics too.
   let kind = preset && folderPages(preset).some((p) => p.comic) ? "comic" : "article";
@@ -106,6 +108,7 @@ function renderBatch(text, preset, from, siteTags) {
         // then the chapters wait behind the toast.
         const fill = () => {
           source = found.page || url;
+          sourceLinks = found.links;
           area.value = found.links.join("\n");
           if (found.siteTags) setSiteTags(found.siteTags);
           if (!folder) choose(folderName(found.title || C.save.siteName(url)));
@@ -290,7 +293,7 @@ function renderBatch(text, preset, from, siteTags) {
     if (!urls.length) return;
     if (urls.length > LONG_LIST && !confirm(t("Save {n} clips? They save one at a time, so a list this long takes a while. Pause and Stop are on its card.", { n: urls.length }))) return;
     history.back();
-    saveAll(skipSaved ? all : urls, folder, tags, mode, skipSaved, kind, source, !!(folder && tags.length && tagNew), siteTags || undefined, series && !!folder);
+    saveAll(skipSaved ? all : urls, folder, tags, mode, skipSaved, kind, source, !!(folder && tags.length && tagNew), siteTags || undefined, series && !!folder, source ? sourceLinks : null);
   });
   $("batchBody").replaceChildren(form);
   if (folder) choose(folder);
@@ -467,6 +470,7 @@ const GONE_KEY = "waypage.chaptersGone";
 const GONE_MAX = 5000;
 const goneFor = (name) => new Set((load(GONE_KEY, {}) || {})[String(name).toLowerCase()] || []);
 function noteGone(list) {
+  keepNumbers(list);
   const all = load(GONE_KEY, {}) || {};
   const series = new Map();
   let changed = false;
@@ -482,6 +486,18 @@ function noteGone(list) {
     changed = true;
   }
   if (changed) store(GONE_KEY, all);
+}
+// A chapter's number in a linked collection (Daniel 2026-11-27): its
+// place in the site's list, so one deleted and saved again, or saved
+// after a gap, comes back as the same number. `links` stands in for a
+// list this device hasn't read yet (the one Save with options found).
+const sourceSpots = new WeakMap();
+function sourceNo(name, url, links) {
+  const all = (newFor(name) || {}).all || links;
+  if (!Array.isArray(all) || !url) return null;
+  let at = sourceSpots.get(all);
+  if (!at) { at = new Map(); all.forEach((u, i) => { const k = urlKey(u); if (!at.has(k)) at.set(k, i + 1); }); sourceSpots.set(all, at); }
+  return at.get(urlKey(url)) ?? null;
 }
 // A linked collection's chapter list as last read, less the deleted ones.
 function chapterLinks(name) {

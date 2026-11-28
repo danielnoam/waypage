@@ -645,6 +645,11 @@ html.native .screen-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top
 }
 html.native .reader-bar { padding-top: calc(var(--s-2) + env(safe-area-inset-top)); }
 .reader { z-index: 11; }
+/* Dim page: a black layer over the page; the bars get 60 % of it. The
+   sheet stays bright so the slider can be found. Never catches a tap. */
+.page-dim { position: absolute; inset: 0; z-index: 0; pointer-events: none; background: #000; opacity: var(--page-dim, 0); }
+.reader-bar { position: relative; z-index: 1; }
+.reader.dimmed :is(.reader-bar, .read-foot, .bright) { filter: brightness(calc(1 - var(--page-dim, 0) * .6)); }
 /* With Settings opened over the clip (app-settings.js). */
 .reader.under { z-index: 9; }
 .icon-btn[hidden] { display: none; }
@@ -1524,6 +1529,7 @@ html { -webkit-tap-highlight-color: transparent; }
 .cover-item .tile-thumb .site-mark { width: 100%; height: 100%; border-radius: 0; }
 .cover-item .tile-name { font-size: var(--fs-meta); line-height: var(--lh-meta); font-family: var(--sans); font-weight: 600; }
 .cover-item .tile-meta.accent { color: var(--accent); }
+.cover-item .tile-no { font-weight: 600; font-variant-numeric: tabular-nums; }
 .cover-item.now .tile-name { color: var(--accent); }
 .selecting .folder-covers .picked .cover-item .tile-thumb { outline: 2px solid var(--accent); outline-offset: 3px; }
 .folder-list li + li { border-top: 1px solid var(--line); }
@@ -2311,6 +2317,15 @@ span.update-text { cursor: default; }
 }
 .drag-handle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; color: var(--accent); }
 .lifted .drag-handle { color: var(--accent); cursor: grabbing; }
+/* Custom: each clip's number, typed over (2026-11-27). */
+.chapter-no {
+  flex-shrink: 0; width: 56px; min-height: var(--tap); padding: 0 var(--s-1);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--bg); color: var(--ink); text-align: center;
+  font: 600 var(--fs-meta)/var(--lh-meta) var(--sans); font-variant-numeric: tabular-nums;
+}
+.chapter-no:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+.renumber { font-size: var(--fs-meta); }
 @media (prefers-reduced-motion: reduce) { .folder-list.dragging li { transition: none; } }
 
 .pop-menu {
@@ -3555,3 +3570,13 @@ body.listen-bar-up .library, body.listen-bar-up .screen-body { padding-bottom: c
 .tile-status-word { display: none; }
 [data-layout="list"] .library > .tile .tile-status { display: none; }
 [data-layout="list"] .library > .tile .tile-status-word { display: inline; }
+
+/* Picking highlights (2026-11): a circle on each row, the bar keeping Tags and Delete. */
+.picking-marks .select-bar .select-act:not(#selTags):not(#selDelete) { display: none; }
+.mark-item { position: relative; }
+.picking-marks .mark-item .mark-row { padding-inline-end: var(--s-8); }
+.picking-marks .mark-item .pick { top: 50%; margin-top: -12px; inset-inline-end: var(--s-4); }
+.picking-marks .mark-item.picked .mark-row { background: var(--press); }
+.picking-marks .mark-item .mark-edit { display: none; }
+.hl-colors .hl-tags-row { margin-top: 0; }
+.mark-item, .hl-tags .chip, .hl-colors .chip { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }

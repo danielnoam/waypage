@@ -473,6 +473,87 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("in Highlights a hold edits a tag or a colour, colours pick several, and a hold on a highlight picks them to tag or delete (2026-11)", async () => {
+      const q = await page(browser, 390);
+      await q.fill("#saveUrl", ARTICLE);
+      await q.press("#saveUrl", "Enter");
+      await q.locator(".page-card", { hasText: "The Long Haul Flight" }).first().click();
+      await frameText(q).getByText("oceanic track").waitFor();
+      await q.goBack();
+      await q.evaluate(async () => {
+        const p = state.pages[0];
+        const mk = (id, text, color, tags) => ({ id, block: 1, start: 0, endBlock: 1, end: 3, text, at: Date.now(), ...(color ? { color } : {}), ...(tags ? { tags } : {}) });
+        p.marks = [mk("m1", "alpha words", "", ["quote", "idea"]), mk("m2", "beta words", "green", ["idea"]), mk("m3", "gamma words", "pink", ["quote"])];
+        await window.Waypage.store.writeIndex(state.pages);
+      });
+      await q.click("#sideBtn");
+      await q.locator("#sidebar .side-item", { hasText: "Highlights" }).click();
+      const rows = () => q.locator("#highlights .mark-row").count();
+      const index = () => q.evaluate(async () => (await window.Waypage.store.readIndex()).flatMap((p) => p.marks || []).map((m) => [m.id, m.color || "yellow", (m.tags || []).join(",")]));
+      const hold = async (loc) => { const b = await loc.boundingBox(); await q.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await q.mouse.down(); await q.waitForTimeout(620); await q.mouse.up(); };
+      // Colours pick several, with any or none.
+      await q.locator("#highlights .mark-filters .chip", { hasText: "Green" }).click();
+      await q.locator("#highlights .mark-filters .chip", { hasText: "Pink" }).click();
+      assert.strictEqual(await rows(), 2, "green or pink");
+      await q.locator('#highlights .hl-match[data-kind="colors"]').click();
+      await q.locator("#matchPop .pop-item", { hasText: "None of these colours" }).click();
+      assert.strictEqual(await rows(), 1, "neither green nor pink");
+      await q.locator("#highlights .mark-filters .chip", { hasText: "All" }).click();
+      assert.strictEqual(await rows(), 3);
+      // Holding a tag renames it, and a name another tag has merges the two.
+      await hold(q.locator("#highlights .hl-tags .chip", { hasText: "#quote" }));
+      await q.locator("#menuSheet .tag-input").waitFor();
+      await q.fill("#menuSheet .tag-input", "cite");
+      await q.locator("#menuSheet .tag-save").click();
+      await q.locator("#menuSheet").waitFor({ state: "hidden" });
+      assert.deepStrictEqual(await index(), [["m1", "yellow", "cite,idea"], ["m2", "green", "idea"], ["m3", "pink", "cite"]]);
+      await hold(q.locator("#highlights .hl-tags .chip", { hasText: "#cite" }));
+      await q.fill("#menuSheet .tag-input", "idea");
+      assert.ok(/Merge into #idea/.test(await q.textContent("#menuSheet .tag-save")));
+      await q.locator("#menuSheet .tag-save").click();
+      await q.locator("#menuSheet").waitFor({ state: "hidden" });
+      assert.deepStrictEqual((await index()).map((x) => x[2]), ["idea", "idea", "idea"]);
+      // Delete takes the tag off every highlight and keeps them; Undo puts it back.
+      await hold(q.locator("#highlights .hl-tags .chip", { hasText: "#idea" }));
+      await q.locator("#menuSheet .row", { hasText: "Delete tag" }).click();
+      await q.locator("#menuSheet").waitFor({ state: "hidden" });
+      assert.deepStrictEqual((await index()).map((x) => x[2]), ["", "", ""]);
+      assert.strictEqual(await rows(), 3, "the highlights stay");
+      await q.locator(".toast button", { hasText: "Undo" }).click();
+      assert.deepStrictEqual((await index()).map((x) => x[2]), ["idea", "idea", "idea"]);
+      // A hold on a colour gives it a label of your own; Remove turns its highlights yellow.
+      await hold(q.locator("#highlights .mark-filters .chip", { hasText: "Pink" }));
+      await q.fill("#menuSheet .tag-input", "Important");
+      await q.locator("#menuSheet .tag-save").click();
+      await q.locator("#highlights .mark-filters .chip", { hasText: "Important" }).waitFor();
+      await q.locator("#menuSheet").waitFor({ state: "hidden" });
+      await hold(q.locator("#highlights .mark-filters .chip", { hasText: "Important" }));
+      await q.locator("#menuSheet .row", { hasText: "Remove colour" }).click();
+      await q.locator("#menuSheet").waitFor({ state: "hidden" });
+      assert.deepStrictEqual((await index()).map((x) => x[1]), ["yellow", "green", "yellow"]);
+      // A hold on a highlight picks it; Select all picks every one shown.
+      await hold(q.locator("#highlights .mark-item").first());
+      await q.locator("#selectHead").waitFor();
+      assert.ok(/1 highlight picked/.test(await q.textContent("#selectCount")), await q.textContent("#selectCount"));
+      await q.click("#selectAll");
+      assert.ok(/3 highlights picked/.test(await q.textContent("#selectCount")));
+      await q.click("#selTags");
+      await q.locator("#menuSheet .tag-input").fill("fresh");
+      await q.press("#menuSheet .tag-input", "Enter");
+      await q.locator("#menuSheet .chip.on", { hasText: "fresh" }).waitFor();
+      assert.deepStrictEqual((await index()).map((x) => x[2]), ["idea,fresh", "idea,fresh", "idea,fresh"]);
+      await q.locator("#menuSheet .menu-done").click();
+      await q.locator("#menuSheet").waitFor({ state: "hidden" });
+      assert.ok(await q.locator("#selectHead").isVisible(), "still picking after the sheet");
+      await q.click("#selDelete");
+      await q.locator("#selectHead").waitFor({ state: "hidden" });
+      assert.strictEqual((await index()).length, 0);
+      await q.locator(".toast button", { hasText: "Undo" }).click();
+      assert.strictEqual((await index()).length, 3, "Undo brings them back");
+      assert.deepStrictEqual(q.errors, [], q.errors.join(" | "));
+      await q.context().close();
+    });
+
     await test("on a touch screen Highlight is one button: a hold opens the colours under the bar, sliding to one and letting go highlights in it; keys 1 to 5 do too", async () => {
       const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: "block" });
       const q = await ctx.newPage();
@@ -2039,6 +2120,47 @@ function zipOf(files) {
       await q.context().close();
     });
 
+    await test("a collection's numbers stay put: a new clip goes after the highest, one put back gets its own, Save earlier goes first, a site's list numbers its chapters", async () => {
+      const q = await page(browser, 390);
+      await q.evaluate(async () => {
+        const S = window.Waypage.store;
+        const c = (id, folder, at, extra) => ({ id, url: "https://example.com/" + id, title: "Part " + id, site: "example.com", savedAt: 1000, minutes: 1, mode: "links", at: 0, finished: false, folder, folderAt: at, ...extra });
+        const list = [c("na1", "Shelf", 10), c("na2", "Shelf", 20), c("na3", "Shelf", 30),
+          c("ch3", "Story", 10, { source: "https://story.example/" }), c("ch4", "Story", 20, { source: "https://story.example/" })];
+        await S.writeIndex(list);
+        for (const m of list) await S.writePage(m.id, "<!doctype html><html><body><p>x</p></body></html>", m);
+        localStorage.setItem("waypage.newChapters", JSON.stringify({ story: { at: 1, count: 0, all: ["ch1", "ch2", "ch3", "ch4", "ch5"].map((k) => "https://example.com/" + k) } }));
+      });
+      await q.reload();
+      await q.waitForSelector("#saveUrl");
+      const nos = (name) => q.evaluate((n) => folderPages(n).map((p) => p.id + "=" + p.folderNo).join(), name);
+      // A collection from before numbers: 1, 2, 3 in its order; a linked
+      // one, its place in the site's list.
+      assert.strictEqual(await nos("Shelf"), "na1=1,na2=2,na3=3");
+      assert.strictEqual(await nos("Story"), "ch3=3,ch4=4");
+      // Taken out and put back: its own number again. A new one: after the highest.
+      await q.evaluate(async () => { await setFolder(state.pages.find((p) => p.id === "na2"), ""); });
+      assert.strictEqual(await nos("Shelf"), "na1=1,na3=3");
+      await q.evaluate(async () => {
+        state.pages.push({ id: "na4", url: "https://example.com/na4", title: "Part na4", site: "example.com", savedAt: 2000, minutes: 1, mode: "links", at: 0, finished: false, folder: "Shelf", folderAt: Date.now() });
+        await setFolder(state.pages.find((p) => p.id === "na2"), "Shelf");
+      });
+      assert.strictEqual(await nos("Shelf"), "na1=1,na2=2,na3=3,na4=4");
+      // Saved in front of them all (Save earlier): first, the rest pushed up.
+      await q.evaluate(() => { state.pages.push({ id: "na0", url: "https://example.com/na0", title: "Part na0", site: "example.com", savedAt: 3000, minutes: 1, mode: "links", at: 0, finished: false, folder: "Shelf", folderAt: 1 }); });
+      assert.strictEqual(await nos("Shelf"), "na0=1,na1=2,na2=3,na3=4,na4=5");
+      // A chapter of a linked collection, saved after a gap or again after
+      // it was deleted, takes its place in the site's list.
+      assert.strictEqual(await q.evaluate(() => [sourceNo("Story", "https://example.com/ch5"), sourceNo("Story", "https://example.com/ch1"), sourceNo("Story", "https://example.com/zz")].join()), "5,1,");
+      // Two clips with one number (added on two devices between syncs):
+      // the one there first keeps it, the other goes on the end.
+      await q.evaluate(() => { state.pages.find((p) => p.id === "na4").folderNo = 2; });
+      assert.strictEqual(await nos("Shelf"), "na0=1,na1=2,na2=3,na3=4,na4=5");
+      await q.evaluate(() => { state.pages.find((p) => p.id === "na0").folderNo = 2; });
+      assert.strictEqual(await nos("Shelf"), "na0=2,na2=3,na3=4,na4=5,na1=6");
+      await q.context().close();
+    });
+
     await test("a collection sorts by release date, date added and title, shows as covers, and says what it holds", async () => {
       const q = await page(browser, 390);
       await q.evaluate(async () => {
@@ -2064,48 +2186,76 @@ function zipOf(files) {
       await q.locator('#folderBody li[data-id="rr500"] .item-fav').click();
       await until(q, () => state.pages.find((p) => p.id === "rr500").fav && document.activeElement.matches('li[data-id="rr500"] .item-fav[aria-pressed="true"]'));
       assert.ok(!(await q.evaluate(() => state.pages.find((p) => p.id === "rr100").fav)));
-      const order = () => q.evaluate(() => folderPages("Serial").map((p) => p.id).join());
-      // Sort is a drop-down beside the list's head, the one place to put a
-      // collection in order (2026-11-27); picking the same sort again turns
-      // it round, and the face carries ↑ or ↓.
+      // Each clip has its number in the collection, in the order it was in
+      // (2026-11-27); sorting only changes what's shown, never the numbers.
+      const order = () => q.evaluate(() => folderPages("Serial").map((p) => p.id + "=" + p.folderNo).join());
+      const shown = () => q.evaluate(() => [...document.querySelectorAll("#folderBody .folder-covers li")].map((li) => li.dataset.id + "=" + li.querySelector(".tile-no").textContent).join());
+      assert.strictEqual(await order(), "rr500=1,rr300=2,rr100=3");
       const sortBy = async (label) => {
         await q.locator("#folderBody .sort-pick .dropdown-btn").click();
         await q.locator(".dropdown-menu .dropdown-item", { hasText: label }).click();
       };
       const face = () => q.evaluate(() => { const b = document.querySelector("#folderBody .sort-pick .dropdown-btn"); return b && b.getAttribute("aria-label"); });
+      assert.ok(/Number$/.test(await face()), await face());
       await sortBy("Release date");
-      await until(q, () => folderPages("Serial")[0].id === "rr100");
-      assert.strictEqual(await order(), "rr100,rr300,rr500");
+      await until(q, () => document.querySelector("#folderBody .folder-covers li").dataset.id === "rr100");
+      assert.strictEqual(await shown(), "rr100=3,rr300=2,rr500=1");
       await until(q, () => !!document.querySelector("#folderBody .sort-pick .dropdown-face .sort-dir"));
       assert.ok(/Release date$/.test(await face()), await face());
       await sortBy("Release date");
-      await until(q, () => folderPages("Serial")[0].id === "rr500");
+      await until(q, () => document.querySelector("#folderBody .folder-covers li").dataset.id === "rr500");
       await until(q, () => /Release date, Reversed$/.test(document.querySelector("#folderBody .sort-pick .dropdown-btn").getAttribute("aria-label")));
       await sortBy("Title");
-      await until(q, () => folderPages("Serial")[0].id === "rr300");
-      assert.strictEqual(await order(), "rr300,rr100,rr500");
+      await until(q, () => document.querySelector("#folderBody .folder-covers li").dataset.id === "rr300");
+      assert.strictEqual(await shown(), "rr300=2,rr100=3,rr500=1");
+      // Newest is the highest number, whatever the sort.
+      assert.strictEqual(await q.locator("#folderBody .quick-start", { hasText: "Newest" }).getAttribute("aria-label"), "Newest: alpha 10");
+      assert.strictEqual(await order(), "rr500=1,rr300=2,rr100=3");
+      // The sort is kept for the collection, on this device.
+      await q.evaluate(() => renderFolder());
+      assert.strictEqual(await shown(), "rr300=2,rr100=3,rr500=1");
       await sortBy("Date added");
-      await until(q, () => folderPages("Serial")[0].id === "rr100");
-      assert.strictEqual(await order(), "rr100,rr300,rr500");
+      await until(q, () => document.querySelector("#folderBody .folder-covers li").dataset.id === "rr100");
+      await sortBy("Number");
+      await until(q, () => document.querySelector("#folderBody .folder-covers li").dataset.id === "rr500");
       // Custom brings the handles, on a screen of its own with Done; no
-      // arrow buttons: the handle takes the arrow keys.
+      // arrow buttons: the handle takes the arrow keys. A move hands the
+      // numbers out again in the new order.
       assert.strictEqual(await q.locator("#folderBody .drag-handle").count(), 0);
       await sortBy("Custom");
       await until(q, () => folderMode === "order" && !!document.querySelector("#folderBody .drag-handle"));
       assert.strictEqual(await q.locator("#folderBody .move, #folderBody .item-fav").count(), 0);
-      await q.locator('#folderBody li[data-id="rr100"] .drag-handle').press("ArrowDown");
+      await q.locator('#folderBody li[data-id="rr500"] .drag-handle').press("ArrowDown");
       // The order changes before the index is written and the list drawn
       // again; the handle gets focus back only after that.
-      await until(q, () => folderPages("Serial")[1].id === "rr100" && !!document.activeElement.closest("li"));
-      assert.strictEqual(await order(), "rr300,rr100,rr500");
-      assert.strictEqual(await q.evaluate(() => document.activeElement.closest("li").dataset.id), "rr100");
-      // A move into an order it knows shows that one; any other is your own.
-      await until(q, () => /Title$/.test(document.querySelector("#folderBody .sort-pick .dropdown-btn").getAttribute("aria-label")));
-      assert.strictEqual(await q.evaluate(() => { const l = folderPages("Serial"); return folderSortNow([l[1], l[2], l[0]].map((p, i) => ({ ...p, title: ["b", "c", "a"][i], savedAt: [3, 1, 2][i], published: null, url: "https://x.example/" + i }))); }), null);
+      await until(q, () => folderPages("Serial")[1].id === "rr500" && !!document.activeElement.closest("li"));
+      assert.strictEqual(await order(), "rr300=1,rr500=2,rr100=3");
+      assert.strictEqual(await q.evaluate(() => document.activeElement.closest("li").dataset.id), "rr500");
+      // A number typed over: one already taken swaps, one free leaves a gap.
+      await q.locator('#folderBody li[data-id="rr100"] .chapter-no').fill("1");
+      await q.locator('#folderBody li[data-id="rr100"] .chapter-no').press("Enter");
+      await until(q, () => folderPages("Serial")[0].id === "rr100");
+      assert.strictEqual(await order(), "rr100=1,rr500=2,rr300=3");
+      await q.locator('#folderBody li[data-id="rr500"] .chapter-no').fill("5,5");
+      await q.locator('#folderBody li[data-id="rr500"] .chapter-no').press("Enter");
+      await until(q, () => folderPages("Serial")[2].id === "rr500");
+      assert.strictEqual(await order(), "rr100=1,rr300=3,rr500=5.5");
+      await q.locator('#folderBody li[data-id="rr300"] .chapter-no').fill("x");
+      await q.locator('#folderBody li[data-id="rr300"] .chapter-no').press("Enter");
+      await until(q, () => document.querySelector('#folderBody li[data-id="rr300"] .chapter-no').value === "3");
+      // folderAt follows the numbers, for apps from before them.
+      assert.strictEqual(await q.evaluate(() => folderPages("Serial").every((p, i, l) => !i || p.folderAt > l[i - 1].folderAt)), true);
       await q.click("#folderDone");
       await until(q, () => !folderMode);
-      // Edit has no sorting or handles: only the name, cover and status.
+      // Edit's Renumber from 1 closes the gaps; Undo puts them back.
       await q.click("#folderEdit");
+      await q.locator("#folderBody .renumber").click();
+      await until(q, () => folderPages("Serial").map((p) => p.folderNo).join() === "1,2,3");
+      await q.locator("#toast button", { hasText: "Undo" }).click();
+      await until(q, () => folderPages("Serial").map((p) => p.folderNo).join() === "1,3,5.5");
+      await q.locator("#folderBody .renumber").click();
+      await until(q, () => folderPages("Serial").map((p) => p.folderNo).join() === "1,2,3");
+      // Edit has no sorting or handles: only the name, cover and status.
       assert.strictEqual(await q.locator("#folderBody .item-fav, #folderBody .drag-handle, #folderBody .sort-pick").count(), 0);
       await q.fill("#folderBody .book-title-input", "Serial two");
       // Edit shows no cover or progress at the top: the cover's choices are below.
@@ -4465,8 +4615,8 @@ c("bk1", { at: 0.01 })]);
         renderHighlights(); out.all = has();
         marksTags = ["history"]; renderHighlights(); out.tag = has();
         // (a colour nothing has is dropped when drawn, so the list is asked directly)
-        marksTags = []; marksColor = "pink"; out.pink = marksShown().some((c) => c.notes.length);
-        marksColor = ""; marksQuery = "the date"; renderHighlights(); out.words = has();
+        marksTags = []; marksColors = ["pink"]; out.pink = marksShown().some((c) => c.notes.length);
+        marksColors = []; marksQuery = "the date"; renderHighlights(); out.words = has();
         marksQuery = "nothing like it"; renderHighlights(); out.none = has();
         marksQuery = ""; renderHighlights();
         return out;

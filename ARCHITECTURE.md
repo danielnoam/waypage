@@ -345,7 +345,15 @@ rest of the app doesn't know which.
 
 A clip has any number of tags and is in at most one collection; a
 collection is an ordered set named on its clips (`folder`, `folderAt`),
-with no separate collections file.
+with no separate collections file. Each clip has its own number there
+(`folderNo`, 2026-11-27, synced): the collection's order is its numbers,
+and Sort only changes what the page shows (`folderView`, per device).
+`numberFolder` gives a clip without one the next number after the
+highest (a linked collection: its place in the site's list, `sourceNo`;
+a book: its volume), or the one it had before it was deleted or moved
+out (`waypage.collectionNumbers`, this device). Dragging and typing a
+number move `folderAt` to match, so an app from before numbers shows
+the same order.
 
 ## Reading
 
@@ -398,6 +406,7 @@ A highlight can carry `tags` (2026-11): its own list, never the clips' tags
 edit sets the mark's `at`, so sync takes the later edit like a note;
 `backup.cleanMarks` keeps up to 20 clean tags and `marksBody` writes them
 as `#tags`. The Highlights place filters by several at once (`marksTags`): any of them by default, or all, or none (`marksHow`, kept in `waypage.marksMatch`), picked from the filter button at the end of the tag row.
+Colours are picked the same way (`marksColors`, any or none in `marksColorHow`, kept in `waypage.marksColorMatch`; `markColorRow`). One match menu serves both (`openMatchMenu(kind)`). A colour can carry a label of its own (`markName(c)`, in `waypage.markNames`: this device only, not synced or in the clip index). Holding a tag chip, a colour chip or a highlight (`holdMarks` in app-places.js; 480 ms or a right-click) opens the tag sheet (`markTag`: rename or merge, delete), the colour sheet (`markColor`: label, remove) or starts picking highlights (`state.markPick`, a set of `pageId|markId`, its own `markPick` history entry; it reuses the library's select bar with only Tags and Delete). Tags and colours are edited across every holder through `eachMarkHolder`: highlights (`p.marks`) and comment bubbles (`eachNoteHolder` in app-ink.js: the open clip's own, the entry's `p.ink`, or a file's `p.noted` summary). **Trap:** a file's own bubbles are only rewritten when it opens, from the summary (`noteSummaryApply`), so a tag changed from Highlights shows there at once and in the file later; never write a summary change without it.
 
 Anything can be drawn on (2026-11). Drawing is part of Highlights: Draw in
 the Highlights sheet and on the selection bar (`app-ink.js inkStart`), and
@@ -1230,6 +1239,14 @@ adds a line here.
 - Dialogs (Downloads, Sync, Save with options, Settings) fade in and out,
   the one planned exception to "nothing fades" (Daniel's pick over the
   grow and the zoom).
+- **A collection's numbers on two devices** (2026-11-27): a clip added
+  on each between syncs can get the same number; the one there first
+  keeps it and the other goes on the end. A collection from before
+  numbers is numbered by each device on its own, a linked one by the
+  site's list only where this device has read it, so the first device
+  to sync after the other decides. A deleted clip's number is kept only
+  on the device it was deleted on. An app from before numbers drops them
+  from the clips it changes; those get new ones at the end.
 - **Two devices editing one thing between syncs** (2026-11): highlights,
   tags, drawings (a note's too) and a file's progress merge; the newest
   place wins. A clip's text edited on both keeps the later edit whole and
