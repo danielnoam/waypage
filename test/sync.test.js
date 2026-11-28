@@ -482,6 +482,26 @@ test("a clip moved to two collections ends in the one it was moved to last (2026
   assert.strictEqual(S.merge(base, lib([early]), base, NOW).pages[0].folder, "Trips");
 });
 
+test("a clip's number in its collection syncs, and goes with a move (2026-11-27)", () => {
+  const base = lib([page("a1b2", { folder: "Old", folderAt: 5, folderNo: 3 })]);
+  // A number changed on one side comes over.
+  const renumbered = page("a1b2", { folder: "Old", folderAt: 5, folderNo: 7 });
+  assert.strictEqual(S.merge(base, base, lib([renumbered]), NOW).pages[0].folderNo, 7);
+  assert.strictEqual(S.merge(base, lib([renumbered]), base, NOW).pages[0].folderNo, 7);
+  // Moved on both: the later move's collection and its number there.
+  const early = page("a1b2", { folder: "Trips", folderAt: 10, folderNo: 1, movedAt: 10 });
+  const late = page("a1b2", { folder: "Work", folderAt: 3, movedAt: 20 });
+  for (const [l, r] of [[early, late], [late, early]]) assert.strictEqual(S.merge(base, lib([l]), lib([r]), NOW).pages[0].folderNo, undefined);
+  const lateNo = page("a1b2", { folder: "Work", folderAt: 3, folderNo: 2.5, movedAt: 20 });
+  assert.strictEqual(S.merge(base, lib([early]), lib([lateNo]), NOW).pages[0].folderNo, 2.5);
+  // A backup keeps it, 0 too (a prologue), and drops one that isn't a number.
+  require("../src/backup.js");
+  const C = window.Waypage;
+  assert.strictEqual(C.backup.cleanMeta({ ...page("a1b2"), folder: "Old", folderNo: 0 }, "a1b2").folderNo, 0);
+  assert.strictEqual(C.backup.cleanMeta({ ...page("a1b2"), folder: "Old", folderNo: "4" }, "a1b2").folderNo, undefined);
+  assert.strictEqual(C.backup.cleanMeta({ ...page("a1b2"), folderNo: 4 }, "a1b2").folderNo, undefined);
+});
+
 // The worker has no language.js (it needs a document) and the tests' own
 // global t() hid that: it threw "t is not defined" as it loaded.
 test("the merge worker loads and merges without the page's t()", () => {

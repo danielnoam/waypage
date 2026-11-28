@@ -345,7 +345,15 @@ rest of the app doesn't know which.
 
 A clip has any number of tags and is in at most one collection; a
 collection is an ordered set named on its clips (`folder`, `folderAt`),
-with no separate collections file.
+with no separate collections file. Each clip has its own number there
+(`folderNo`, 2026-11-27, synced): the collection's order is its numbers,
+and Sort only changes what the page shows (`folderView`, per device).
+`numberFolder` gives a clip without one the next number after the
+highest (a linked collection: its place in the site's list, `sourceNo`;
+a book: its volume), or the one it had before it was deleted or moved
+out (`waypage.collectionNumbers`, this device). Dragging and typing a
+number move `folderAt` to match, so an app from before numbers shows
+the same order.
 
 ## Reading
 
@@ -1231,6 +1239,14 @@ adds a line here.
 - Dialogs (Downloads, Sync, Save with options, Settings) fade in and out,
   the one planned exception to "nothing fades" (Daniel's pick over the
   grow and the zoom).
+- **A collection's numbers on two devices** (2026-11-27): a clip added
+  on each between syncs can get the same number; the one there first
+  keeps it and the other goes on the end. A collection from before
+  numbers is numbered by each device on its own, a linked one by the
+  site's list only where this device has read it, so the first device
+  to sync after the other decides. A deleted clip's number is kept only
+  on the device it was deleted on. An app from before numbers drops them
+  from the clips it changes; those get new ones at the end.
 - **Two devices editing one thing between syncs** (2026-11): highlights,
   tags, drawings (a note's too) and a file's progress merge; the newest
   place wins. A clip's text edited on both keeps the later edit whole and

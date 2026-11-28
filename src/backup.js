@@ -76,6 +76,8 @@
     if (tags.length) out.tags = [...new Set(tags)].slice(0, 50);
     const folder = text(m.folder, 200).replace(/\s+/g, " ").trim();
     if (folder) { out.folder = folder; out.folderAt = num(m.folderAt) || out.savedAt; }
+    // Its number there (2026-11-27): 0 for a prologue, 2.5 between two.
+    if (folder && typeof m.folderNo === "number" && isFinite(m.folderNo) && m.folderNo >= 0 && m.folderNo < 1e7) out.folderNo = m.folderNo;
     if (num(m.movedAt)) out.movedAt = num(m.movedAt);
     if (folder && m.folderFav === true) { out.folderFav = true; out.folderFavAt = num(m.folderFavAt) || out.savedAt; }
     // Share reading activity (2026-11): kept out of it, a clip or a
